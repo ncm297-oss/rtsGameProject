@@ -80,6 +80,19 @@ public class MatchStatsTests
         Run(sim, 2);
         Assert.True(w.Gold[0] + w.Wood[0] > goldBefore + woodBefore, "no refund");
         Assert.Equal((0, 0), (w.GatheredGold[0], w.GatheredWood[0]));
+        // M5-H3 (BUG-0850): the House costs wood only, so the site refund's gold line never ran here. An Armory site costs
+        // both (100 / 100): cancelled, both totals rise and neither is gathered.
+        int armory = ResearchMaps.Armory;
+        Assert.True(w.Data.Buildings[armory].CostGold > 0 && w.Data.Buildings[armory].CostWood > 0);
+        sim.Enqueue(Command.Build(0, builder, armory, At(sim, 10, 10)));
+        Run(sim, 2);
+        Assert.True(SiteAt(sim, 10, 10) >= 0, "no Armory site");
+        goldBefore = w.Gold[0];
+        woodBefore = w.Wood[0];
+        sim.Enqueue(Command.Cancel(0, At(sim, 10, 10)));
+        Run(sim, 2);
+        Assert.True(w.Gold[0] > goldBefore && w.Wood[0] > woodBefore, $"refund {w.Gold[0] - goldBefore} gold, {w.Wood[0] - woodBefore} wood");
+        Assert.Equal((0, 0), (w.GatheredGold[0], w.GatheredWood[0]));
     }
 
     // ---------- (b) units trained ----------
@@ -104,6 +117,28 @@ public class MatchStatsTests
         Assert.Equal((units + 1, 1), (w.LiveUnits(0), w.UnitsTrained[0]));
         Run(sim, ticks);
         Assert.Equal((units + 2, 2), (w.LiveUnits(0), w.UnitsTrained[0]));
+    }
+
+    /// <summary>
+    /// M5-H3 (BUG-0850): a summon made by a real cast (<c>SummonSystem</c> through an ability's resolve, not the store seam
+    /// above): the test data's <c>zz_test_summon_brief</c> on a Cadre Mage, 3 Heavy Infantry for 2 s. They live and then
+    /// expire; none counts as trained, and the expiry is no loss.
+    /// </summary>
+    [Fact]
+    public void ASummonFromARealCast_IsNotTrained_AndItsExpiryIsNoLoss()
+    {
+        GameData data = SummonTests.Data;
+        var sim = TestSim.Explored(new Simulation(new SimConfig(1, 2, 64, 512) { Data = data, Combat = false }, LocalMovementTests.Flat(48)));
+        World w = sim.World;
+        EntityHandle caster = CombatScenes.Place(sim, 0, data.FindUnit("malazan_cadre_mage"), CombatScenes.At(sim, 20, 20));
+        sim.Tick();
+        sim.Enqueue(Command.UseAbility(0, caster, 2, CombatScenes.At(sim, 20, 20))); // the mage's third ability: the brief summon
+        AbilityScenes.TickOf(sim, caster, resolved: true);
+        Assert.Equal(3, SummonTests.Summoned(w).Count);
+        Assert.Equal(0, w.UnitsTrained[0]);
+        for (int t = 0; t < 100 && SummonTests.Summoned(w).Count > 0; t++) sim.Tick();
+        Assert.Empty(SummonTests.Summoned(w));
+        Assert.Equal((0, 0, 0), (w.UnitsTrained[0], w.Losses[0], w.UnitLosses[0]));
     }
 
     // ---------- (c) kills and losses, split ----------

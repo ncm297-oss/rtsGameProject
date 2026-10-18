@@ -209,9 +209,10 @@ public class Bug0790FaceProbeQaTests
     /// 4-adjacent ring cells the sim offers, and the free spot nearest the stuck worker. Expected once fixed: no tick past
     /// the bound while a ring cell in reach has a free spot. Seen at 2026-10-16-2036: seed 2, 28 / 28 such ticks (a 0.80 m
     /// clear ring spot at (24.05, 11.2), a corner one 0.51 m from the worker); seed 8, 44 / 44 (a 0.17 m clear ring spot at
-    /// (28.0, 10.6), 1.3 m from the worker, all 84 ticks).
+    /// (28.0, 10.6), 1.3 m from the worker, all 84 ticks). Un-skipped with M5-H3's fix (BUG-0790: corner-cell stand points
+    /// and a free point voiding a cell's crowd cost in <c>EconomySystem.WalkToFootprint</c>): no wedge past the bound.
     /// </summary>
-    [Theory(Skip = "BUG-0790: a worker stands out of reach beside a free stand spot at a crowded one-sided mine")]
+    [Theory]
     [InlineData(2ul)]
     [InlineData(8ul)]
     public void MineOneSide40_NoWorkerWedgedPastTheBound_WhileARingSpotInReachIsFree(ulong seed)

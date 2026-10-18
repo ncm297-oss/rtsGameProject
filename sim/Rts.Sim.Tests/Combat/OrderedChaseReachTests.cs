@@ -117,10 +117,19 @@ public class OrderedChaseReachTests
     /// touches its footprint): the chase walks to the nearest open ground, out of a melee unit's reach. Ten Heavy Infantry
     /// crowd that ground, so some are stopped short every so often and their walk is judged "reaches its goal"; that kept
     /// the order alive for ever (the AI wave on such a hall never ended). The chase's goal must be a standing point in
-    /// reach (<c>StandsInReachAtGoal</c>): every one gives the hall up within 1,500 ticks, and none still walks.
+    /// reach (<c>StandsInReachAtGoal</c>): every one gives the hall up within 2,000 ticks, and none still walks.
+    /// M5-H3 (BUG-0886): the hall is 18 m off, past a Heavy Infantry's sight, so without a spotter the Attack on an unseen
+    /// building was dropped when issued and the asserts held trivially (green before the fix too). A spotter keeps the hall
+    /// seen; the test first asserts the order was taken (every unit held the hall and walked toward the ring) and then that
+    /// every one gave it up (<c>GiveUps</c>), as well as the end state. QA's two red scenes (BUG-0886): 10 units on a ring
+    /// one cell deep, 20 on a ring two deep (at 3ec22ee, before fix round 1, 4 of 10 and 10 of 20 still hold the hall at
+    /// tick 2,000; this test's own rows there: unit 4 and unit 3 never give it up); the dev's first staging (10 units two
+    /// deep, from the south-west) gave the hall up even there, so the army now stands where QA's did, south of the hall.
     /// </summary>
-    [Fact]
-    public void AnOrderedAttackOnAHallRingedByTrees_IsGivenUp_NotPacedForEver()
+    [Theory]
+    [InlineData(1, 10)]
+    [InlineData(2, 20)]
+    public void AnOrderedAttackOnAHallRingedByTrees_IsGivenUp_NotPacedForEver(int depth, int count)
     {
         var sim = new Simulation(TestSim.Config(7, 2, 40, 256), LocalMovementTests.Flat(64));
         World w = sim.World;
@@ -131,24 +140,42 @@ public class OrderedChaseReachTests
             if (w.Data.Buildings[b].Faction == 1 && w.Data.Buildings[b].Slot == Data.BuildingSlot.TownHall) hallType = b;
         Assert.True(w.Buildings.Spawn(1, hallType, 30 * 64 + 40, out EntityHandle hall)); // footprint cells 40-43, 30-33
         int tree = w.Data.FindResource("tree");
-        for (int y = 28; y <= 35; y++)
-            for (int x = 38; x <= 45; x++)
+        for (int y = 30 - depth; y <= 33 + depth; y++)
+            for (int x = 40 - depth; x <= 43 + depth; x++)
             {
                 if (x >= 40 && x <= 43 && y >= 30 && y <= 33) continue;
                 Assert.True(w.Resources.Spawn(tree, y * 64 + x, w.Data.Rules.TreeWood, out _), $"tree ({x}, {y})");
             }
-        var army = new EntityHandle[10];
+        // Outside the ring (cells 46, 37), 7.9 m from the footprint's corner: the hall stays in player 0's sight.
+        Spotter(sim, 0, new Vector2(92.5f, 74.5f));
+        var army = new EntityHandle[count];
+        var start = new Vector2[army.Length];
         for (int k = 0; k < army.Length; k++)
         {
-            army[k] = Place(sim, 0, HeavyInfantry, new Vector2(60f + k % 5, 50f + k / 5));
+            army[k] = Place(sim, 0, HeavyInfantry, new Vector2(78f + k % 5 * 1.2f, 84f + k / 5 * 1.2f)); // QA's staging: south of the hall
+            start[k] = u.Position[army[k].Index];
             sim.Enqueue(Command.Attack(0, army[k], hall, isBuilding: true));
         }
         int hp = w.Buildings.Hp[hall.Index];
-        for (int t = 0; t < 1500; t++) sim.Tick();
-        Assert.Equal(hp, w.Buildings.Hp[hall.Index]); // precondition: nobody can strike it
-        foreach (EntityHandle h in army)
+        var held = new bool[army.Length];
+        var walked = new bool[army.Length];
+        var ring = new Vector2(84f, 64f); // the footprint's centre
+        for (int t = 0; t < 2000; t++)
         {
-            int i = h.Index;
+            sim.Tick();
+            for (int k = 0; k < army.Length; k++)
+            {
+                int i = army[k].Index;
+                if (u.Target[i] == hall) held[k] = true;
+                if (Vector2.Distance(u.Position[i], ring) < Vector2.Distance(start[k], ring) - 8f) walked[k] = true;
+            }
+        }
+        Assert.Equal(hp, w.Buildings.Hp[hall.Index]); // precondition: nobody can strike it
+        for (int k = 0; k < army.Length; k++)
+        {
+            int i = army[k].Index;
+            Assert.True(held[k] && walked[k], $"setup: unit {i} never took the order (held the hall {held[k]}, walked 8 m toward it {walked[k]})");
+            Assert.True(u.GiveUps[i] > 0, $"unit {i} never gave the hall up (give-ups {u.GiveUps[i]})");
             Assert.True(u.Target[i] != hall && u.State[i] != UnitState.Moving,
                 $"unit {i} still holds the hall at tick {sim.TickNumber}: {u.State[i]} at {u.Position[i]}, mode {u.Mode[i]}, stall {u.ChaseStall[i]}");
         }

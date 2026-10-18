@@ -26,16 +26,21 @@ public class CrowdPerfTests
     /// The one-player 2,500 tight blob's budget: the M1-4d-3 target of 4.5 ms, widened to 4.6 ms in M4-1 (BUG-0140,
     /// approved by the Producer in advance): M4-1's per-unit combat checks (a chaser's arrival distance, the Attacking
     /// test in the hard-wall and shove rules, phase 7's per-unit loop) cost about 0.08 ms here, which left the row 0.05 ms
-    /// under 4.5 and failing 1 run in 5-6. See docs/03 "Implementation (M4-1)", Cost.
+    /// under 4.5 and failing 1 run in 5-6. See docs/03 "Implementation (M4-1)", Cost. BUG-0764 (M5-H3, 2026-10-17):
+    /// re-baselined from 4.6 ms to 9.3 ms: measured 7.39-7.46 ms in four Category=Perf runs on an idle PC (base bf8026e
+    /// twice, head twice), the PC's sustained clock (docs/03 "Testing strategy"); +25 % at most.
     /// </summary>
-    private const double TightBlobBudgetMs = 4.6;
+    private const double TightBlobBudgetMs = 9.3;
 
     /// <summary>
     /// Guard for the two-player rows: what they cost before the plug test was cached (BUG-0044: contested
-    /// blob 10.5 ms, 4 points 3.7 ms). Not a design budget; it fails a return of that regression.
+    /// blob 10.5 ms, 4 points 3.7 ms). Not a design budget; it fails a return of that regression. BUG-0764 (M5-H3,
+    /// 2026-10-17): re-baselined, contested blob 10.5 to 14.7 ms (measured 11.75-11.80 ms) and 4 points 3.7 to 6.9 ms
+    /// (measured 5.54-5.57 ms), four Category=Perf runs on an idle PC (base bf8026e twice, head twice); +25 % at most. On
+    /// this PC's sustained clock they no longer sit above the uncached figures, so they guard a 25 % rise, not BUG-0044.
     /// </summary>
-    private const double ContestedBlobBeforeMs = 10.5;
-    private const double FourPointsBeforeMs = 3.7;
+    private const double ContestedBlobBeforeMs = 14.7;
+    private const double FourPointsBeforeMs = 6.9;
 
     private readonly ITestOutputHelper _out;
 

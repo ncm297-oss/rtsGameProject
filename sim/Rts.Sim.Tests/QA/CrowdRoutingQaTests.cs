@@ -231,7 +231,7 @@ public class CrowdRoutingQaTests
     [InlineData(3UL)]
     [InlineData(4UL)]
     [InlineData(5UL)]
-    [InlineData(6UL, Skip = "BUG-0046: walker positions depend on the neighbors' spawn order (Constrain clip order; a slot-free order was measured at M1-9 and left for the Producer, docs/03 Known limits)")]
+    [InlineData(6UL, Skip = "BUG-0046 (closed M5-H3 as a known limit): walker positions depend on the neighbors' spawn order (Constrain clip order); spawn order is not part of the input contract, docs/03 Determinism, the slot-order class")]
     public void DetourPastAMixedEnemyCluster_AnySpawnPermutation_BitEqualWalkerPath(ulong seed)
     {
         const int cluster = 12;
@@ -289,9 +289,9 @@ public class CrowdRoutingQaTests
     /// Walkers interact (sidestep, push, queue, detour round each other's standing units, arrival).
     /// </summary>
     [Theory]
-    [InlineData(11UL, Skip = "BUG-0046: walker positions depend on the neighbors' spawn order (Constrain clip order; a slot-free order was measured at M1-9 and left for the Producer, docs/03 Known limits)")]
-    [InlineData(12UL, Skip = "BUG-0046: walker positions depend on the neighbors' spawn order (Constrain clip order; a slot-free order was measured at M1-9 and left for the Producer, docs/03 Known limits)")]
-    [InlineData(13UL, Skip = "BUG-0046: walker positions depend on the neighbors' spawn order (Constrain clip order; a slot-free order was measured at M1-9 and left for the Producer, docs/03 Known limits)")]
+    [InlineData(11UL, Skip = "BUG-0046 (closed M5-H3 as a known limit): walker positions depend on the neighbors' spawn order (Constrain clip order); spawn order is not part of the input contract, docs/03 Determinism, the slot-order class")]
+    [InlineData(12UL, Skip = "BUG-0046 (closed M5-H3 as a known limit): walker positions depend on the neighbors' spawn order (Constrain clip order); spawn order is not part of the input contract, docs/03 Determinism, the slot-order class")]
+    [InlineData(13UL, Skip = "BUG-0046 (closed M5-H3 as a known limit): walker positions depend on the neighbors' spawn order (Constrain clip order); spawn order is not part of the input contract, docs/03 Determinism, the slot-order class")]
     public void ManyWalkersDetouringAnEnemyCluster_AnySpawnPermutation_BitEqualPositions(ulong seed)
     {
         const int walkers = 16, cluster = 10;

@@ -46,7 +46,10 @@ public class CombatPerfTests
     {
         (double avg, string line) = Brawl(ranks: 10);
         _out.WriteLine(line);
-        Assert.True(avg < BudgetMs, $"avg {avg:F3} ms over the {BudgetMs} ms budget");
+        // BUG-0764 (M5-H3, 2026-10-17): re-baselined from 4 ms (BudgetMs, which the mixed brawl keeps) to 6.9 ms. Measured
+        // 5.503-5.596 ms in four Category=Perf runs on an idle PC (base bf8026e twice, head twice); +25 % at most.
+        const double brawlBudgetMs = 6.9;
+        Assert.True(avg < brawlBudgetMs, $"avg {avg:F3} ms over the {brawlBudgetMs} ms budget");
     }
 
     /// <summary>

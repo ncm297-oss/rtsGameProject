@@ -19,7 +19,8 @@ namespace Rts.Sim.Ai;
 /// player's population cap is the hard cap (<c>popCap</c>).</item>
 /// <item>A command is judged at the first think after it applied (<see cref="PendingOrder"/>); until then the step sends
 /// nothing. A refused one is sent again at a later think (a refused Build's anchor gets a retry mark, so the site search moves
-/// on); a step that can't act (no gold, no site, no building, no worker) simply waits. Never more than one command per step
+/// on); a step that can't act (no gold, no site, no building, no worker) simply waits (one whose site search found nothing
+/// waits <see cref="NoSiteRetryThinks"/> thinks before it searches again, BUG-0791). Never more than one command per step
 /// per think, so a refusal is retried, not spammed.</item>
 /// <item><c>build</c> searches round the player's Town Hall (a camp round the known tree nearest it); <c>expand</c> places a
 /// Town Hall round the known gold mine nearest the player's hall with no own or seen hall within
@@ -64,9 +65,18 @@ internal static class BuildOrderExecutor
                 board.StepDone[i] = true;
                 continue;
             }
+            // BUG-0791: a site search that found nothing is not run again for NoSiteRetryThinks thinks. In a crowded scene the
+            // affordable step's search scanned the whole placement radius at every think (the storms fuzz's think, 0.5 to
+            // 1.6 ms). A site freed meanwhile is taken at most that many thinks late.
+            if (ai.Now < board.StepNoSiteUntil[i]) continue;
+            ai.NoSiteFound = false;
             if (Act(ai, step, ref pending)) ai.ExecutorSent = true;
+            else if (ai.NoSiteFound) board.StepNoSiteUntil[i] = ai.Now + NoSiteRetryThinks * ai.ThinkTicks;
         }
     }
+
+    /// <summary>Thinks a build or expand step waits after its site search found no anchor before it searches again (BUG-0791).</summary>
+    internal const int NoSiteRetryThinks = 5;
 
     /// <summary>Whether <paramref name="step"/>'s trigger holds now.</summary>
     private static bool Triggered(AiPlayer ai, in AiStep step) => step.Trigger switch

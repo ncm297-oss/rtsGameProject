@@ -141,7 +141,9 @@ public class ResourcePlacementStressTests
         World w = NewWorld(seed, full);
         double fullMs = sw.Elapsed.TotalMilliseconds;
         _out.WriteLine($"1024 map seed {seed}: terrain {bareMs:F0} ms, terrain + caps placement {fullMs:F0} ms ({w.ResourcePlacement})");
-        Assert.True(fullMs < 5000, $"{fullMs:F0} ms");
+        // BUG-0764 (M5-H3, 2026-10-17): re-baselined from 5,000 ms to 8,600 ms. Measured 5,075-6,904 ms (seeds 1-2) in four
+        // Category=Perf runs on an idle PC (base bf8026e twice, head twice); +25 % at most. The method's name keeps 5 s.
+        Assert.True(fullMs < 8600, $"{fullMs:F0} ms");
         string? err = ResourceOracle.Check(w, bare, full);
         Assert.True(err == null, err);
     }

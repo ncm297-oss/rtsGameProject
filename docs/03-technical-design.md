@@ -243,6 +243,22 @@ Rules:
   byte-wise FNV-1a (unrolled in M3-1, same output). Derived state is left out:
   the spatial hash, the fields' contents (they follow from the grid and the key), and a unit's
   `Speed`/`Radius` (copied from its `TypeId`'s data) and `PrevFacing` (render interpolation, M3-2).
+- **Slot order is not part of the input contract (the slot-order class; decision 2026-10-17, M5-H3, BUG-0885 with
+  BUG-0046).** The promise is same seed + same commands = same hash, and a replay or save rebuilds the same slots. The
+  same units spawned in another order get other slots, and some outcomes then differ: slice 1's surround claims are taken
+  in slot order (who gets the nearest spot at tick 1), `Constrain` clips a step against several walls in slot order,
+  shoves are summed in walk order, `SqueezeLimit` trims and a shove chain picks members in slot order, and two coincident
+  units push apart by slot (see "Known limits (M1)"). Criterion 1's ten-unit flank scene parts at tick 1 with the melee
+  spawned reversed and at tick 24-28 with only the row reversed, with the flank rule off as well. Making all of these
+  slot-free (a stable sort key per pass) re-rolls every crowd outcome and the bounds fitted to them (M1-9 measured that
+  for the wall clips alone: three crowd bounds broke), for an independence nothing relies on. So it is a documented
+  known limit, not a bug: nothing may build on spawn-order independence (a "re-spawn from snapshot" must keep slots).
+  What new code still owes: a rule that reads a *set* of units (a block, a plug, a flank edge) must not depend on the
+  order it visits them in (min / max / fixed-point sums), with a test that reverses the spawns
+  (`FlankTests.OneFlanker_ReversedRowSpawnOrder_BitEqualPath`, `FlankFixRound1QaTests.LongLine_SpawnedReversed_*`), and
+  every movement change gets a same-order hash twin. QA's `FlankQaTests.Criterion1Scene_BothSpawnOrders_FirstParting`
+  asserts the decision: the same order never parts (rule off or on) and the reversed orders part no earlier with the
+  rule on than off.
 
 ## Entity model
 
@@ -996,7 +1012,8 @@ BUG-0034: the distinct-targets perf row averages 100 ticks, budget unchanged.
   QA's 500-to-4-points sweep (seed 30: 184 arrived, bound 200), the headline cross-map scenario's
   pack check (seed 4: two units 0.356 m apart, bound 0.4) and QA's 64-goal sweep (seed 3: 49, bound
   48). Not landed; whether to land it with bounds re-fitted on wider sweeps is the Producer's call.
-  The QA rows stay skipped under BUG-0046.
+  The QA rows stay skipped under BUG-0046. M5-H3 (2026-10-17): decided, not landed; BUG-0046 is closed as the documented
+  slot-order class ("Determinism") and the rows' skip reasons say so.
 - **Measured (M1-9, Debug, this machine, ms per tick; base 1f533aa and M1-9 alternated, three rounds
   each, one fresh `dotnet test` process per sample; the base matches QA's BUG-0044 figures):**
 
@@ -1036,8 +1053,9 @@ BUG-0034: the distinct-targets perf row averages 100 ticks, budget unchanged.
   hash, but a walker's path can depend on its neighbors' slots where it touches several walls at
   once (`Constrain` clips in slot order), and so can shoves (summed in walk order, (goal cell,
   slot); `SqueezeLimit` trims in slot order; a chain of at most `MaxChainShove` picks members in slot
-  order; two coincident units push apart by slot). Don't build on order independence (e.g. a
-  re-spawn from a snapshot must keep slots).
+  order; two coincident units push apart by slot; since pathing slice 1 the surround claims are taken in slot order).
+  Don't build on order independence (e.g. a re-spawn from a snapshot must keep slots). M5-H3 made this the settled
+  rule (BUG-0885 / BUG-0046 closed as this limit): see "Determinism", the slot-order class.
 - **Plugs:** a cluster of more than 32 hard units is not a plug (units overlapping one may slide
   round it); outside plugs, shoves can press a given-up unit 0.15-0.32 m deeper into a standing enemy
   in one tick (pre-existing, BUG-0045 note). Enemy contact is redefined with combat in M4.
@@ -1450,6 +1468,24 @@ repair loop: `GatherNode` or `BuildTarget` set; every other walk is unchanged, s
   open on one side all work it (three on the points, one behind), and a worker that waited out of reach takes a free
   point on its next retry. The "queue at a mine's edge" stays: with every point taken, a walker stops behind the front
   row and retries every 20 ticks.
+- **M5-H3 (BUG-0790): corner points, and a free point in the worker's own cell.** At `gatherRate` 0.85 / 0.75, 40
+  workers on a mine open on one side wedged out of reach for 68-84 ticks (bound 40) beside a free spot in reach (QA's face
+  probe). Two shapes, both fixed in `EconomySystem.WalkToFootprint`: (1) a worker standing in one of the face's **diagonal
+  corner cells** (out of reach there, 1.7 m off the footprint's corner) was always sent to a 4-adjacent ring cell, behind
+  the queue: the four corner cells are now candidates too, each with one stand point `GoalInset` out from the footprint's
+  corner on both axes (0.18 m off it, in reach); (2) the crowd cost (`CellSize` per unit in a cell) is waived for **the
+  cell the worker stands in** when one of its stand points is free (`PointCrowd` 0), so a worker whose own crowded cell
+  had a free point 1.6 m away is no longer sent past it to an emptier cell behind another queue. The exposure rule
+  (`IsExposed`, 4-adjacent cells) is unchanged. Measured with `GatherPocketStressTests`' wedge rule over 32 seeds (its 8
+  plus 24 more) for the 12- and 40-worker rows of all five pockets: base 9 of 320 seed-rows over the 40-tick bound (worst
+  96 ticks), now 0 (worst 25); seeds 1-8 green in every row. Variants measured and not kept: corners alone 8 of 320; the
+  waiver for every cell (alone 8 of 320; with corners 0 of 320, but on the seed-21 Playable match a free point behind a
+  crowd drew four workers into a one-sided tree's corner and they gridlocked for 5,238 ticks, wood 95); letting a footprint
+  walker walk on past the queue to a free stand point (`QueuesBehind`, a movement change: 4 of 320 with the all-cell
+  waiver, nothing gained with these two). The seed-21 match (`QA/GatherWedgeQaTests`): base worst out-of-reach stand 332
+  ticks, now 478 (bound 600). Cost: up to 3 `PointCrowd` queries for the worker's own cell when it is crowded, and 4 more
+  candidate cells, once per walk to a footprint. Moved: gathering wherever a face is crowded, so the seed-21 replay's
+  checkpoints (see "Implementation (M5-4f)") and the measured `Content/` cells; the golden replay has no gatherer.
 - **Cost** (Debug, this PC, alone, three alternating runs against the base): `GatherPerfTests.TwoHundredGatheringWorkers
   Alone` 0.23 -> 0.32-0.33 ms a tick (its budget is 1 ms), because that scene (50 workers on one tree, 50 on one mine,
   per base) now works more: gold 1,120 -> 1,310 and wood 440 -> 500 by the end of the row (+17% / +14%), with 39% more
@@ -6381,7 +6417,20 @@ acting only through commands. Code: `sim/Rts.Sim/Ai/AiPlayer.cs`, `Blackboard.cs
   - **A refused command is retried at a later think, never spammed**: one command per step per think at most; a refused
     Build's anchor gets a retry mark (the last 16 are kept) so the search moves on; a step that can't act (not enough gold
     or wood left, no site, no free worker, no building that trains or researches it) simply waits and costs nothing. A think
-    never stalls: every loop is bounded by the match's slots and the search radius.
+    never stalls: every loop is bounded by the match's slots and the search radius. **M5-H3 (BUG-0791):** "costs nothing"
+    was not true of a step that could pay but not act. (1) **No worker to send:** in the storms fuzz scene (two Hard seats
+    among ~2,350 units) every worker was busy, and each of 15 due steps (mostly house steps) found a site at every think and
+    then failed on the builder: 0.9 ms of a 0.9 ms think. `TryBuild` now asks `AiPlayer.AnyBuilder` (`PickBuilder`'s rule,
+    any distance) and that the command queue isn't full before it searches: the same outcome, no search
+    (`AiPlayerTests.ABuildStepWithNoWorkerToSend_SearchesForNoSite`: 0 searches in 20 thinks, was 20). The measured row
+    (`Stress/AbilityManagerFuzzStressTests.AThink_WithShippedSandstormsAlive_Measured`, paired, fresh processes): 0 / 8 / 24
+    storms 1.55-1.57 / 1.62-1.64 / 1.66-1.71 ms on base, 0.61-0.62 / 0.64-0.67 / 0.69-0.71 ms now; the gated `AiPerfTests`
+    rows unchanged (0.41-0.42 ms, the 8-storm row 0.35 ms). (2) **No site:** a step whose search found no anchor searched the
+    whole placement radius again at every think. It now waits `BuildOrderExecutor.NoSiteRetryThinks` (5) thinks before it
+    searches again (`Blackboard.StepNoSiteUntil`, AI state, not hashed), so a site freed meanwhile is taken at most 5
+    thinks late (2.5 s on Hard, 5 s on Normal, 10 s on Easy). An engine pacing constant, like the 16 retry marks, not a data
+    knob. `AiPlayer.SiteSearches` counts the searches
+    (`AiPlayerTests.ABuildStepWithNoSite_SearchesOnceEveryNoSiteRetryThinks_NotEveryThink`: 4 in 20 thinks, was 20).
   - `build`: a site found by **`PlayerView.CanPlace`** searched outward from the own Town Hall (its first finished one, else
     its first site; without a hall its first building), a `camp` from the known tree nearest the hall. The search walks
     Chebyshev rings out to `placementSearchRadius` (not at all when a cell-free rule fails: `PlayerView.CanPlaceAnywhere`,
@@ -7133,6 +7182,7 @@ chaser's reach). Code: `MovementSystem` (`PlantedOwners`, `OwnPlantedInWay`, `Fl
   not spawn-order free, with the rule off as well: the surround claims are taken in slot order, and walls clip in slot order
   where a walker touches several (BUG-0046): it parts at tick 1 with the melee spawned in reverse and at tick 12-24 with only the
   row reversed. A lone Raider (0.17 m a tick) parts at tick 12 with the rule off, as it first touches two of the row.
+  M5-H3 settled this as the documented slot-order class (see "Determinism"; BUG-0885 and BUG-0046 closed as that limit).
 - **Moved elsewhere.** Fights between melee groups move too: a back rank stalled behind its own front rank, where that front
   is a block of at most 32 not striking the same building, walks round its end (QA's 40 v 40 brawl, `SimHardeningH2QaTests.
   KeptChase_MeanBound_*`'s gap-10 row: one attack-move order deals 2,988 damage in 400 ticks, 2,043 before, +46 %). Re-printed
@@ -7198,7 +7248,10 @@ chaser's reach). Code: `MovementSystem` (`PlantedOwners`, `OwnPlantedInWay`, `Fl
   - *BUG-0882.* With the same test a building whose every open cell lies out of reach (a hall ringed two cells deep by
     trees) ends an ordered or spot-walking chase: the walk is judged by the nearest open ground, 4 m off the footprint. The
     one Heavy Infantry in BUG-0461's limit cycle by the tree ring was kept for ever by the stopped-short rule (M5-H1), so the
-    AI wave never ended; `Combat/OrderedChaseReachTests.AnOrderedAttackOnAHallRingedByTrees_IsGivenUp_NotPacedForEver`, and
+    AI wave never ended; `Combat/OrderedChaseReachTests.AnOrderedAttackOnAHallRingedByTrees_IsGivenUp_NotPacedForEver` (M5-H3,
+    BUG-0886: as first written it never took the order, the hall unseen; re-staged with a spotter and QA's two scenes, 10
+    units on a ring one deep and 20 on a ring two deep, it asserts the order was taken and every unit gave it up, and is red
+    at 3ec22ee), and
     QA's `AiMilitaryQaTests.AWaveWhoseMembersAllStandByATargetNoneCanStrike_*(10)` and `SimHardeningM5H1QaTests.FencedHall_*(10)`
     are green.
   - *BUG-0883.* The gap-10 spam row is green: one order 2,979 damage in 400 ticks, the spam over intervals 1-20 ticks
@@ -7226,6 +7279,38 @@ chaser's reach). Code: `MovementSystem` (`PlantedOwners`, `OwnPlantedInWay`, `Fl
     5-205 3.37, 3.39, 3.41 / 3.38, 3.35, 3.36; 500 moving 1.11, 1.12, 1.11 / 1.15, 1.12, 1.11; 2,500 tight blob 7.38, 7.45,
     7.36 / 7.43, 7.42, 7.37. Memory: `UnitStore.Flank` and `World.PlannedFlank`, an int a slot each (32,816 bytes on the
     1,024 map's 4,096 slots, inside QA's memory bound's margin, which is not moved). 0 B a tick (the probes above green).
+- **Hardening (M5-H3, 2026-10-17: BUG-0887, BUG-0888).**
+  - *Re-clicked Moves (BUG-0887).* The replacement of a progress step back along the line needed a flank the tick before
+    (and the step against last tick's velocity). A Move re-clicked every 2-3 ticks to two points 2 m apart is a fresh
+    estimate each time whose first steps are progress, so the chain broke and the walker swung along a 24-32 line for 45 s
+    (QA: never arrived, 178-285 turns). Now, while the flank is recent, any progress step that goes across the way to the
+    goal toward the side the flank did not keep (more than the progress margin, `AgainstKeptSide`) is replaced by the flank
+    too, still only for a lone walker (`WalkerNear`). Whether the line still stands between is the flank turn's own test
+    (its block covers the straight way to the goal, else the step stands): the local in-the-way test (`OwnPlantedInWay`,
+    1 m) missed the line when the goal lay past it at a slant, so that clause no longer asks it (the old one still does).
+  - *The far end (BUG-0888).* Round the far end of a line of at least `FlankKeepMinMembers` (the side it wanted had no open
+    ground, or the side it takes reaches more than twice as far across the aim as the other), the walk is the line's length
+    out and back: the members recorded in the flank mark are doubled (so the stride and the memory count the line twice)
+    and kept at that while the walker keeps the side. Only for a walk with no fight in it (combat mode None), as the
+    just-past-a-flank rule: with chases counted too, a melee's back ranks grew patient behind their front (QA's jittered
+    attack-move spam, `AttackMoveRepickQaTests.BrawlSpam_*`, fell to a worst interval of 79 %, bound 80; the 4-point combat
+    row's give-ups rose past the rule-off band, seed 2: 391 against 382 + 5).
+  - *Measured* (QA's rows, un-skipped): the spam grid (`FlankFixRound1QaTests.LongLine_MoveReissuedToAlternatePoints_Arrives`,
+    arrived at tick, turns): 24 / -0.3 / 2: 184, 3; 24 / 1.5 / 2: 193, 3; 32 / 0.2 / 3: 219, 1; 32 / -0.3 / 3: 242, 5;
+    32 / 0.2 / 7: 218, 1 (before: never, never, never, never, 661 after 59 turns); `LineAtAnAngle_*(24, 45, 2)` arrives at 186 with
+    2 turns; the cliff rows (`LongLineAgainstACliff_*`): behind member 1 arrived at tick 321, member 4 at 279 (both gave the
+    Move up at tick 229 before). The dev rows: `FlankTests.LongOwnLine_MoveSpammedToAlternatePoints_Arrives` (4 rows),
+    `LongOwnLineAgainstACliff_WalkerGoesRoundTheFarEnd_AndArrives` (2), and the same-order hash twins
+    `LongOwnLineScenes_HashTwins_EveryTick` (spam and cliff, 400 ticks, equal every tick). The original spam row
+    (`LongOwnLine_MoveReissued_*`): arrived at tick 176 / 167 / 166 (once / every 3 / every 7), 1 turn.
+  - Criterion 1 (the owner's scene, `FlankTests`): Attack on the hall 8 / 10 and 10 / 10, attack-move 9 / 10 and 9 / 10,
+    Move 9 / 10 and 10 / 10 arrived, 0 give-ups everywhere (unchanged). Crowd rows (`FlankCrowdRowsReport`): every
+    combat-off row hash-equal to the rule off; 500 random goals, combat on, seeds 1 / 2: 33 / 25 gave up (off 33 / 29);
+    500 to 4 points, combat on: arrived 52 / 67, gave up 351 / 353 (off 32 / 38, 389 / 382). QA's long rows
+    (`FlankQaTests.LongOwnRow_*`) unchanged (10: 57; 16: 71-72; 20: 85; 24: 99; 32: 125, 1 flip). The jittered spam ratio
+    (`AttackMoveRepickQaTests.BrawlSpam_*`): mean 95.7 %, worst 81 % (85 % before this; bounds 90 / 80).
+  - Not fixed here: BUG-0889 (an ordered chaser on a hall kept Moving for the whole fight: a Crossbowman 1.5 m short of its
+    range behind its own planted Crossbowmen, a Heavy Infantry 0.02 m out of reach), see its file.
 - **Not yet (slice 3):** see slice 1's list; also a flank round a block bigger than 32 (an army's front: its back ranks still
   queue behind it, as before).
 
@@ -7293,7 +7378,12 @@ rules are unchanged.
   scene's "Heavy Infantry panel" step sooner), now at `sim/Rts.Sim.Tests/Replays/seed21_playable.replay` (the M4-V5
   recording stays attached to BUG-0146); `CheckpointPrefixTicks` re-pinned to 7,682 and `SameGameDataHashes` restarted
   from the new recording's hash. The scene runs on frame time, so two recordings differ by a few ticks (a second run:
-  7,671); any one is a valid recording for the row.
+  7,671); any one is a valid recording for the row. **M5-H3 (BUG-0790):** the stand-point change moves this game from
+  tick 19 (the first gather walks take a corner cell), so its checkpoints were re-derived on the M5-H3 tree from the
+  file's own recorded commands (header, seats and every command line unchanged; only the `k` lines and the checksum):
+  the same input played by the new rules, not a fresh scene recording. The row's own bound holds on it (longest
+  out-of-reach stand on a wood loop 478 ticks, bound 600; 332 on the old checkpoints). Re-recording from
+  `M3PlayableTest` stays the way to refresh it after a scene change.
 - **Save state** (outside the hash, like M5-4b's marks; the M6 save stores the Blackboard whole): `DefenderGeneration`,
   `DefendAll`, `DefendAnswer`, `WaveMinHalfPop`, `WaveMinCost`. `DefenseOrder` / `DefenseKey` are per-think scratch.
 - **Memory.** Per AI seat, new: per unit slot two ints and a float (`DefenderGeneration`, `DefenseOrder`, `DefenseKey`),
@@ -7306,15 +7396,18 @@ rules are unchanged.
   went 0.47-0.62 to 1.57-1.64 ms: about 0.1 ms of it is the defense (two seats with 1,170 army units each, under attack
   every think), the rest the build-order executor's site search, which the quicker gathering makes affordable in that
   scene and which fails at every think on its crowded map (reported to the Producer).
-- **Spending re-measured (D20, 2026-10-17, data track: M5-4f's gather rates and sized defense)**
+- **Spending re-measured (D20, 2026-10-17, data track: M5-4f's gather rates and sized defense; re-run M5-H3)**
   (`Content/AiSpendingReportTests.GeneratedNormal_Spending_Report`, the menu's map, Normal against an idle seat): the idle
-  seat falls at malazan seed 1 505 s (136 gold / 15 wood at 5 min), whirlwind seed 1 514 s (316 gold / 117 wood at 5 min),
-  malazan seed 7 556 s (36 gold / 40 wood at 5 min) and whirlwind seed 7 539 s (384 gold / 103 wood at 5 min) (re-printed
-  for pathing slice 2, which moved the waves' fights: 509 s and 540 s before). Across both
-  factions 0 of those 4 marks had wood under 100 with gold at 300 or more, so the report now reads "wood is not the
-  limit" (D-H5, before M5-4f: 1 of 4). D15 C on the same map (`QA/Content/AiHouseRuleReportTests.MenuMapNormal_*`):
-  no house step is skipped, because each order's 12th house is due at a cap of 98, below the hard cap; the faction pages'
-  "Houses at the cap" and "Spending on the menu's map" paragraphs carry these numbers, pinned to the runs.
+  seat falls at malazan seed 1 512 s (156 gold / 25 wood at 5 min), whirlwind seed 1 495 s (336 gold / 97 wood at 5 min),
+  malazan seed 7 536 s (136 gold / 15 wood at 5 min) and whirlwind seed 7 518 s (476 gold / 127 wood at 5 min). Across both
+  factions 1 of those 4 marks had wood under 100 with gold at 300 or more, so the report now reads "wood binds at some
+  marks only, not the limit overall" (the Whirlwind, seed 1). M5-H3's stand-point change (BUG-0790: corner cells, the own
+  cell's free point) moved every number here, and the verdict back from "wood is not the limit" (0 of 4; before it:
+  505 s / 514 s / 556 s / 539 s and 136 / 15, 316 / 117, 36 / 40, 384 / 103; with that one change reverted the run gives
+  those numbers again, so nothing else in M5-H3 moves them). D15 C on the same map
+  (`QA/Content/AiHouseRuleReportTests.MenuMapNormal_*`): no house step is skipped; the faction pages' "Houses at the cap"
+  and "Spending on the menu's map" paragraphs carry these numbers, pinned to the runs (re-printed by the data track for
+  M5-H3, rule 31).
 - **Tests.** `Ai/ProportionalDefenseTests` (a 12-pop wave out with a 6-pop threshold and three home units: one Raider, the
   wave goes on and two home units answer; eight Raiders, every home unit and the six members nearest the hall, the other
   six keep the threshold and the target; twelve Raiders, the whole wave; the hall hit to 0.4 / 0.6 of its hp, the whole
@@ -7502,6 +7595,38 @@ kind, no data or `rules.json` field, nothing hashed. Every counter is per player
   through `TestSeeds.PreMix`, which inverts `SimRng.MixSeed` so they get exactly the old streams.
   New tests use plain seeds.
 - Perf thresholds are generous (they catch 2× regressions, not 5% noise).
+- **Re-baselined for this PC (2026-10-17, M5-H3, BUG-0764; Producer decision, the owner may revisit).** Since 2026-10-15
+  16-18 `Category=Perf` rows were red for every tree on an idle machine. Measured four times, each a whole `dotnet test
+  sim/Rts.Sim.Tests --filter Category=Perf` with no other `dotnet` test or Godot process (base bf8026e twice, M5-H3's head
+  twice): the same rows red on both trees at the same magnitude (head within about 3 % of base), so no regression, the
+  machine. What the PC does: it runs a short burst fast and slows to about 0.6× within a few seconds of sustained load.
+  Every red row passes its old gate run alone in a fresh short process (the tight blob 4.4 ms against 4.6), and reads
+  1.6× higher in the long category run (7.4 ms); a 28 s row in its own process reads the slow figure too (the
+  far-corner scan's blob, 7.4 ms). The gates were calibrated on the fast figure; the category run, which is the check
+  everyone runs, sees the slow one. Each row red on both trees got a new threshold of its largest measured reading plus at
+  most 25 %, rounded down, with the old threshold, the readings, the date and "BUG-0764" in its comment: 
+  `PlayerViewPerfTests` enumerate 0.3 → 0.6 ms (0.466-0.480), interleaved units 1.0 → 1.7 (1.260-1.397) and whole read
+  1.5 → 2.5 (1.943-2.074); `CombatPerfTests.Brawl500v500` 4 → 6.9 (5.503-5.596; the mixed brawl keeps 4, it passes);
+  `ConstructionPerfTests` 500 marchers + 50 builders 1.2 → 1.9 (1.532-1.557); `CrowdPerfTests` tight blob 4.6 → 9.3
+  (7.39-7.46), contested blob 10.5 → 14.7 (11.75-11.80), 4 points 3.7 → 6.9 (5.54-5.57); `GridChangeMovementTests`
+  tree-falls 0.5 → 0.9 (0.703-0.720); `VisionGatePerfTests` 250 v 250 4 → 7.5 (5.91-6.03); `PropsMeasureTests` minimap
+  dots 0.25 → 0.34 (0.267-0.275) and, unmasked behind them, the forced redraw 0.2 → 0.26 (0.201 / 0.210);
+  `SimCoreStressTests` empty tick at 2,500 units 0.55 → 1.1 (0.877-0.883; 500 and 1,000 keep 0.5);
+  `ResourcePlacementStressTests` 1,024-map worst setup 5,000 → 8,600 ms (5,075-6,904); `MinimapQaTests` DotRefresh
+  0.25 → 0.31 (0.2536-0.2549); `ViewHardeningQaTests` DotRefresh edges 0.5 → 0.65 (0.5145-0.5245), spread 0.25 → 0.33
+  (0.2513-0.2648), pile 0.25 → 0.31 (0.2506-0.2510, red in two of four); `CombatScaleQaTests` far-corner scan delta
+  0.25 → 0.64 (0.211-0.515, a difference of two medians of four ~7.4 ms runs: noise the size of the old bound). Not
+  moved: rows red on one tree only (`SimHardeningQaTests.FourHundredUnitsStackedInAKeep_*`, 5.144 ms once on base).
+  Method names that carry a figure (`..._AverageUnder4Ms`) keep it; the comment is the gate. Why not a calibration row
+  (every gate relative to a reference row timed in the same process): 124 Perf rows over 71 files would change, a session
+  of its own. **Next time:** run the category whole, twice on the base and twice on the head, idle; a row red on both is
+  the machine (re-baseline it the same way: largest reading + at most 25 %, itemised in the comment); a row red on the
+  head only is a regression. **Feature tasks still use paired A/B** (base and head alternated, a fresh process per sample,
+  three rounds) to show a change's cost; a threshold says only "not 25 % worse than this PC's slow figure". M5-H3's own
+  pairs (ms, base / head): 500 moving 0.685, 0.705, 0.682 / 0.682, 0.687, 0.714; 2,500 tight blob 4.44, 4.41, 4.40 / 4.45,
+  4.42, 4.45; 500 v 500 brawl ticks 5-205 3.40, 3.39, 3.36 / 3.38, 3.41, 3.39; mixed brawl 2.16, 2.16, 2.13 / 2.10, 2.11,
+  2.11: within noise. The Windows power plan is "Lenovo Default"; the slowdown under sustained load is the owner's to look
+  at (STATE "Waiting on you"), and if it is fixed these gates can come back down.
 - The M1 perf criterion is `PerfCriterionTests.FiveHundredMovingUnits_AverageTickUnder4Ms` (M1-7):
   500 units of every type, two players, on the default 128 map, spawned within 12 path cells of the
   center and sent to the farthest passable cell. It asserts that at least 95% are Moving after every
@@ -7518,11 +7643,14 @@ kind, no data or `rules.json` field, nothing hashed. Every counter is per player
   alternating (both players contest the point) under 10.5 ms, and 2,500 units to 4 points, one player
   per point, seed 1, 600 ticks, under 3.7 ms: what each cost before the plug answers were cached.
   Wall-clock rows are sensitive to other load on the machine: re-run a failure once alone first.
+  M5-H3 (BUG-0764) re-baselined these gates for the PC's sustained clock: the tight blob 9.3 ms, the contested blob
+  14.7 ms, the 4 points 6.9 ms (see "Re-baselined for this PC" above).
 - `Stress/SimCoreStressTests.EmptyTick_WithManyUnits_IsCheap`: 500 and 1,000 units under 500 µs a tick; the 2,500 row
   under 550 µs since M4-H3 (BUG-0451, Producer decision: it had crept from ~481 to 476-502 µs, inside run-to-run noise of
   its 500 µs gate). The profile behind it: target acquisition is three quarters of that tick, mostly scans that find
   nothing because 2,244 of the scene's units spawn off the map and share the corner bucket (BUG-0510, QA's scene); the
-  per-unit passes M4 added (statuses, passives, zones, summons, stealth) cost under 1 µs together.
+  per-unit passes M4 added (statuses, passives, zones, summons, stealth) cost under 1 µs together. M5-H3 (BUG-0764): the 2,500
+  row's gate is 1.1 ms on this PC's sustained clock (see "Re-baselined for this PC" above).
 - Every `Category=Perf` test and every allocation-measuring test is in the xUnit collection
   `SerialCollection` (`DisableParallelization = true`), so it runs alone after the parallel batch;
   classes that also hold heavy unmeasured tests put the measured ones in a nested `Serial` class.
