@@ -1,4 +1,4 @@
-# BUG-1022: A refused row far down Load Game stays picked but the list jumps to the top, so the picked row is off-screen
+# BUG-1030: A refused row far down Load Game stays picked but the list jumps to the top, so the picked row is off-screen
 
 | Field | Value |
 | --- | --- |
@@ -10,7 +10,7 @@
 
 ## Repro
 1. `& $env:GODOT --path game --resolution 1280x720 res://tests/QaM6V15Test.tscn -- --only rows --shots <dir>`, open
-   `qa-v15-refused-bottom.png`; the log prints `QA NOTE: BUG-1022: ... item y 6204-6235, scroll 0, tree height 340`.
+   `qa-v15-refused-bottom.png`; the log prints `QA NOTE: BUG-1030: ... item y 6204-6235, scroll 0, tree height 340`.
 2. By hand: a save folder with ~20 rows and a damaged save (header intact, a byte changed in the body) as the oldest row.
    Scroll to the bottom of Load Game, pick the damaged save, press Load.
 
@@ -27,5 +27,5 @@ see. It is the right file (the refused one), but the screen doesn't show that. A
 
 ## Notes
 Likely fix: `List.ScrollToItem(item)` (or `EnsureCursorIsVisible()`) in `LoadGameScreen.Select`, or in `ShowLoadNote`
-after the select. When fixed, turn the `QA NOTE: BUG-1022` line in `QaM6V15Test.RefusedRows` into a `Check` (the
+after the select. When fixed, turn the `QA NOTE: BUG-1030` line in `QaM6V15Test.RefusedRows` into a `Check` (the
 visibility test is already computed there).

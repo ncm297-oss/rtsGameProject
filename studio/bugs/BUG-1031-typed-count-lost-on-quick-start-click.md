@@ -1,4 +1,4 @@
-# BUG-1023: A count typed into Forests / Gold mines is lost when Start is clicked with press and release in one frame; a blanked box shows nothing
+# BUG-1031: A count typed into Forests / Gold mines is lost when Start is clicked with press and release in one frame; a blanked box shows nothing
 
 | Field | Value |
 | --- | --- |
@@ -10,7 +10,7 @@
 
 ## Repro
 1. `& $env:GODOT --headless --path game res://tests/QaM6V15Test.tscn -- --only setup`; the log prints
-   `QA NOTE: BUG-1023: typed 11 mines then press+release in one frame on Start: the match asks 9 mines`.
+   `QA NOTE: BUG-1031: typed 11 mines then press+release in one frame on Start: the match asks 9 mines`.
 2. The steps: Skirmish, click into Gold mines (it shows 9), type 11 without Enter, then click Start with the mouse
    press and release in the same frame (a touchpad tap, or any click shorter than a frame).
 
@@ -29,5 +29,5 @@ shows '', the pick is 12`).
 
 ## Notes
 Likely fix: call `ForestsSpin.Apply()` / `MinesSpin.Apply()` (Godot 4.3+ `SpinBox.apply()`) at the top of `MatchArgs`
-(or in Start's handler), then read the values. That also redraws the box. When fixed, turn the BUG-1023 note in
+(or in Start's handler), then read the values. That also redraws the box. When fixed, turn the BUG-1031 note in
 `QaM6V15Test.TypedCounts` into a `Check` (want 11).

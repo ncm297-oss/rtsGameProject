@@ -1,4 +1,4 @@
-# BUG-1024: M6-V15 nits: 64 mines on a 128 map places 60-62 with no word; bug index left open; a loose ShellTest row
+# BUG-1032: M6-V15 nits: 64 mines on a 128 map places 60-62 with no word; bug index left open; a loose ShellTest row
 
 | Field | Value |
 | --- | --- |

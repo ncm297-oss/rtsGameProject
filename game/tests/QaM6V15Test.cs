@@ -329,9 +329,9 @@ public partial class QaM6V15Test : Node
                 Rect2 area = item != null ? tree.GetItemAreaRect(item) : new Rect2();
                 Vector2 scroll = tree.GetScroll();
                 bool visible = item != null && area.Position.Y - scroll.Y >= -1 && area.End.Y - scroll.Y <= tree.Size.Y + 1;
-                // BUG-1022 (open): the kept row is not scrolled into view. A note until it is fixed; the fix turns this into a Check.
+                // BUG-1030 (open): the kept row is not scrolled into view. A note until it is fixed; the fix turns this into a Check.
                 await Shot("refused-bottom");
-                if (!visible) GD.Print($"QA NOTE: BUG-1022: after the refused bottom row the picked row is off-screen (item y {area.Position.Y}-{area.End.Y}, scroll {scroll.Y}, tree height {tree.Size.Y})");
+                if (!visible) GD.Print($"QA NOTE: BUG-1030: after the refused bottom row the picked row is off-screen (item y {area.Position.Y}-{area.End.Y}, scroll {scroll.Y}, tree height {tree.Size.Y})");
                 // Two damaged files: the mid one refused after the bottom one keeps the mid one.
                 Check(load.Select(rMid) && !Press(main, load.LoadButton) && load.SelectedIndex == rMid, $"200 rows: refused mid row after the bottom: row {load.SelectedIndex} (want {rMid})");
                 // Refused Watch, then refused Load: each keeps its own row.
@@ -405,7 +405,7 @@ public partial class QaM6V15Test : Node
             _pressFrames = 0;
             await Click(setup.StartButton);
             _pressFrames = 2;
-            GD.Print($"QA NOTE: BUG-1023: typed 11 mines then press+release in one frame on Start: the match asks {main.CurrentMatch?.Simulation?.World.Config.Map.GoldMines} mines");
+            GD.Print($"QA NOTE: BUG-1031: typed 11 mines then press+release in one frame on Start: the match asks {main.CurrentMatch?.Simulation?.World.Config.Map.GoldMines} mines");
             if (main.CurrentMatch != null) { main.QuitToMenu(); await Frames(2); }
             setup.MinesSpin.Value = 9;
             await Click(main.Menu.SkirmishButton);
