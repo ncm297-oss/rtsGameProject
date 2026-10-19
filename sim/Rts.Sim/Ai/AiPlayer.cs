@@ -19,9 +19,10 @@ namespace Rts.Sim.Ai;
 /// <remarks>
 /// Built by the sim for each AI seat with a kept view and its own <see cref="SimRng"/> (seed and player). Its state (the
 /// <see cref="Blackboard"/>, the census, the RNG, the opening pick) is not sim state: not hashed, and a replay plays back without it (the AI's
-/// commands are in the log). Allocates nothing after construction: every buffer is sized from the match here.
+/// commands are in the log); a save stores it whole (M6-S3, <c>AiPlayer.Save.cs</c>). Allocates nothing after construction:
+/// every buffer is sized from the match here.
 /// </remarks>
-internal sealed class AiPlayer
+internal sealed partial class AiPlayer
 {
     private readonly ICommandSink _sink;
     private SimRng _rng;

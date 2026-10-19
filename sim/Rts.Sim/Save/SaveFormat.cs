@@ -8,8 +8,8 @@ namespace Rts.Sim.Save;
 /// </summary>
 public static class SaveFormat
 {
-    /// <summary>The format version this build writes and the only one it reads.</summary>
-    public const int CurrentVersion = 1;
+    /// <summary>The format version this build writes and the only one it reads (2 since M6-S3: the AI seats' section).</summary>
+    public const int CurrentVersion = 2;
 
     /// <summary>Bytes of the magic at offset 0.</summary>
     public const int MagicLength = 8;
@@ -58,6 +58,7 @@ public static class SaveFormat
     internal const uint TagStealth = 0x48544C53;   // "SLTH"
     internal const uint TagEvents = 0x544E5645;    // "EVNT"
     internal const uint TagCommands = 0x53444D43;  // "CMDS"
+    internal const uint TagAi = 0x54534941;        // "AIST" (M6-S3, format 2)
     internal const uint TagEnd = 0x21444E45;       // "END!"
 
     /// <summary>FNV-1a 64 over raw bytes, the replay file's checksum.</summary>

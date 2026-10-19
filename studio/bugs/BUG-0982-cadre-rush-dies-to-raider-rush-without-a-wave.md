@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S3 |
-| Status | open |
+| Status | closed (decided by measurement: keep 18; the behaviour is tracked by BUG-1010) |
 | Found | 2026-10-18-0516, task D21 |
 | System | AI content: `game/data/factions/malazan/ai.json` opening `cadre_rush` (`attack`, Age I mix) |
-| Fixed by | |
+| Fixed by | D-H6 (52e82c9, session 2026-10-18-1236): measured `cadre_rush` v `raider_rush` at 18 / 16 / 14 pop on seeds 7, 8, 14 (QA: 18, 23 too): seed 8 never waves at any of them (the army peaks at 11 pop), Age II is never delayed, so the Producer's rule keeps 18; `ai.json` and the golden unchanged; the malazan page's "This opening can fall to a rush without ever attacking" paragraph + the "Fast Age II against the raider rush" table (pinned by `AiOpeningPairsReportTests.Bug0982_CadreRushVersusRaiderRush_WaveThresholdTable`). QA's `EveryPairing_SecondSeed…` row stays an allowance (printed). The sim-side lever ("send what you have when the base is being lost") is **BUG-1010** (S3) |
 
 ## Repro
 1. `dotnet test sim/Rts.Sim.Tests --filter "FullyQualifiedName~D21OpeningsQaTests.EveryPairing_SecondSeed_BothSidesWaveIn20Minutes" --logger "console;verbosity=detailed"`

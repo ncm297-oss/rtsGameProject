@@ -1,3 +1,5 @@
+using System.Reflection;
+using Rts.Sim.Ai;
 using Rts.Sim.Commands;
 using Rts.Sim.Data;
 using Rts.Sim.Entities;
@@ -57,7 +59,8 @@ internal static class SaveTestRun
         for (int p = 0; p < a.Config.PlayerCount; p++)
         {
             Assert.True(expected.NextSequenceOf(p) == actual.NextSequenceOf(p), $"{at}: player {p}'s next sequence");
-            Assert.True(actual.AiOpening(p) == -1, $"{at}: player {p} has an AI opening");
+            Assert.True(expected.AiOpening(p) == actual.AiOpening(p), $"{at}: player {p}'s AI opening");
+            AssertSameAi(expected.AiOf(p), actual.AiOf(p), $"{at}: player {p}'s AI");
         }
 
         Assert.True(a.SurroundClaim.AsSpan().SequenceEqual(b.SurroundClaim), $"{at}: SurroundClaim");
@@ -121,6 +124,29 @@ internal static class SaveTestRun
         Assert.True(Save(expected).AsSpan().SequenceEqual(Save(actual)), $"{at}: save bytes differ");
     }
 
+    /// <summary>
+    /// M6-S3: two AI seats field for field, by reflection over the seat's own fields (the RNG, the counters, the census and
+    /// scratch, the opening) and the whole <see cref="Blackboard"/>: every array and scalar. The view, the sink, the data and
+    /// the test seam are references to the sim, not the seat's state, and are skipped.
+    /// </summary>
+    internal static void AssertSameAi(AiPlayer? expected, AiPlayer? actual, string at)
+    {
+        Assert.True((expected == null) == (actual == null), $"{at}: one seat has an AI, the other none");
+        if (expected == null || actual == null) return;
+        var diffs = new List<string>();
+        foreach (FieldInfo f in typeof(AiPlayer).GetFields(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic))
+        {
+            if (SkippedAiField(f.FieldType)) continue;
+            foreach (string d in QA.SaveDeepDiff.Diff(f.GetValue(expected)!, f.GetValue(actual)!)) diffs.Add($"{f.Name}: {d}");
+        }
+        Assert.True(diffs.Count == 0, $"{at}: " + string.Join("; ", diffs));
+    }
+
+    /// <summary>The seat's references into the match, not its own state: the view, the sink, the data and its defs, the test seam.</summary>
+    private static bool SkippedAiField(Type t) =>
+        t == typeof(PlayerView) || t == typeof(ICommandSink) || t == typeof(GameData) || typeof(Delegate).IsAssignableFrom(t)
+        || t == typeof(AiDef) || t == typeof(AiOpening) || t == typeof(AiDifficultyDef) || t == typeof(AiRulesDef);
+
     private static int[] Bits(float[] values) => values.Select(BitConverter.SingleToInt32Bits).ToArray();
 
     private static bool SameCommand(in Command x, in Command y) =>
@@ -129,8 +155,11 @@ internal static class SaveTestRun
         && BitConverter.SingleToInt32Bits(x.Position.Y) == BitConverter.SingleToInt32Bits(y.Position.Y)
         && x.Unit == y.Unit && x.Flags == y.Flags && x.Target == y.Target && x.TargetIsBuilding == y.TargetIsBuilding;
 
-    /// <summary>What a round trip saw: per save tick, the save's size, and how many ticks every load matched.</summary>
-    internal sealed record Result(int[] SaveTicks, long[] Bytes, int TicksCompared);
+    /// <summary>
+    /// What a round trip saw: per save tick, the save's size, and how many ticks every load matched; M6-S3: per probe, the
+    /// tick it first held and the run saved at (-1: it never held within the probe window).
+    /// </summary>
+    internal sealed record Result(int[] SaveTicks, long[] Bytes, int TicksCompared, int[] ProbedAt);
 
     /// <summary>
     /// The round trip (criteria 2-4, 8): runs <paramref name="scene"/>'s reference sim; between ticks it asks the script for
@@ -138,17 +167,22 @@ internal static class SaveTestRun
     /// commands, so the pending queue is in the save) it saves, loads into a fresh sim, compares directly, checks save -> load
     /// -> save is byte-identical, and from then on ticks the load beside the reference, comparing the hash every tick and
     /// directly at T + 1 and at T + <paramref name="after"/>. <paramref name="observe"/> sees the reference after each tick
-    /// (a scene's probe: did its subject happen).
+    /// (a scene's probe: did its subject happen). M6-S3: each of <paramref name="probes"/> (read between ticks, at the point a
+    /// save is made) saves too, once, at the first tick before <paramref name="probeUntil"/> it holds, so a scene saves "mid-wave"
+    /// or "during a defense" whenever its run gets there, never at a tick pinned to the shipped data.
     /// </summary>
-    internal static Result RoundTrip(SaveScene scene, int[] saveTicks, int after = 2000, Action<Simulation>? observe = null)
+    internal static Result RoundTrip(SaveScene scene, int[] saveTicks, int after = 2000, Action<Simulation>? observe = null,
+        Func<Simulation, bool>[]? probes = null, int probeUntil = 0)
     {
         Simulation reference = scene.Build();
         GameData data = reference.World.Data;
         var live = new List<(Simulation Sim, int SavedAt)>();
         var bytes = new long[saveTicks.Length];
+        probes ??= Array.Empty<Func<Simulation, bool>>();
+        var probedAt = Enumerable.Repeat(-1, probes.Length).ToArray();
         int end = saveTicks.Max() + after, compared = 0;
         var commands = new List<Command>();
-        while (reference.TickNumber < end)
+        while (reference.TickNumber < end || reference.TickNumber < probeUntil && probedAt.Contains(-1))
         {
             int t = reference.TickNumber;
             commands.Clear();
@@ -159,14 +193,22 @@ internal static class SaveTestRun
                 foreach ((Simulation sim, _) in live) sim.Enqueue(c);
             }
             int k = Array.IndexOf(saveTicks, t);
-            if (k >= 0)
+            bool save = k >= 0;
+            for (int i = 0; i < probes.Length; i++)
+                if (probedAt[i] < 0 && t < probeUntil && probes[i](reference))
+                {
+                    probedAt[i] = t;
+                    save = true;
+                }
+            if (save && live.TrueForAll(l => l.SavedAt != t))
             {
                 byte[] saved = Save(reference);
-                bytes[k] = saved.Length;
+                if (k >= 0) bytes[k] = saved.Length;
                 Simulation loaded = Load(data, saved);
                 AssertSameState(reference, loaded, $"{scene.Name} saved at {t}, at load");
                 Assert.True(saved.AsSpan().SequenceEqual(Save(loaded)), $"{scene.Name} saved at {t}: save -> load -> save differs");
                 live.Add((loaded, t));
+                end = Math.Max(end, t + after);
             }
             reference.Tick();
             observe?.Invoke(reference);
@@ -185,7 +227,7 @@ internal static class SaveTestRun
                 }
             }
         }
-        return new Result(saveTicks, bytes, compared);
+        return new Result(saveTicks, bytes, compared, probedAt);
     }
 }
 

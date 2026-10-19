@@ -34,7 +34,8 @@ public sealed partial class World
     {
         if (!r.Expect(SaveFormat.TagHeightmap)) return null;
         int width = r.ReadInt32In(1, 1024), height = r.ReadInt32In(1, 1024);
-        if (r.Failed) return null;
+        // BUG-0960 item 1: the levels and elevations (5 bytes a cell, after their lengths) must be there before they are allocated.
+        if (r.Failed || !r.Check(r.Remaining >= 5L * width * height + 8)) return null;
         var levels = new byte[width * height];
         var elevations = new float[width * height];
         r.ReadArray(levels);

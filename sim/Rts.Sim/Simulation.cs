@@ -47,41 +47,45 @@ public sealed partial class Simulation : ICommandSink
         World = new World(config, map);
         _commands = new CommandQueue(config.CommandCapacity);
         _nextSequence = new int[config.PlayerCount];
-        _ai = new AiPlayer?[config.PlayerCount];
+        _ai = BuildAis(out _aiSeats);
+    }
+
+    /// <summary>A loaded simulation (M6-S2): the world <see cref="TryLoad"/> read, its AI seats built as a match builds them (M6-S3), the queue and the AI state still to be read.</summary>
+    private Simulation(World world)
+    {
+        World = world;
+        _commands = new CommandQueue(world.Config.CommandCapacity);
+        _nextSequence = new int[world.Config.PlayerCount];
+        _ai = BuildAis(out _aiSeats);
+    }
+
+    /// <summary>Per player its AI (null for a human seat), each picking its opening from the seed at construction, and how many there are.</summary>
+    private AiPlayer?[] BuildAis(out int seats)
+    {
+        SimConfig config = World.Config;
+        var ai = new AiPlayer?[config.PlayerCount];
+        seats = 0;
         for (int p = 0; p < config.PlayerCount; p++)
         {
             PlayerSeat seat = config.SeatOf(p);
             if (seat.Controller != SeatController.Ai) continue;
             // Its own stream: the world's RngStream.Ai(p) seeded alike but never drawn, so the AI's draws move no hashed state.
             var rng = new SimRng(config.Seed, (ulong)RngStream.Ai(p));
-            _ai[p] = new AiPlayer(new PlayerView(World, p), config.Data, config.Data.Ai[seat.Faction], seat.Difficulty, rng, this);
-            _aiSeats++;
+            ai[p] = new AiPlayer(new PlayerView(World, p), config.Data, config.Data.Ai[seat.Faction], seat.Difficulty, rng, this);
+            seats++;
         }
-    }
-
-    /// <summary>A loaded simulation (M6-S2): the world <see cref="TryLoad"/> read, no AI (slice 1 loads human seats only), the queue still to be read.</summary>
-    private Simulation(World world)
-    {
-        World = world;
-        _commands = new CommandQueue(world.Config.CommandCapacity);
-        _nextSequence = new int[world.Config.PlayerCount];
-        _ai = new AiPlayer?[world.Config.PlayerCount];
+        return ai;
     }
 
     /// <summary>
     /// M6-S2: writes this match to <paramref name="stream"/> as a save (docs/03 "Save/load and replays"): call it between
     /// ticks. <see cref="TryLoad"/> of the bytes gives a sim whose <see cref="StateHash"/> equals this one's at every later
-    /// tick fed the same commands. Slice 1: false with <see cref="SaveError.AiSeatsUnsupported"/>, and nothing written, when
-    /// any seat is played by the AI (<see cref="SimConfig.HasAiSeat"/>). A stream that fails to write throws its own exception.
+    /// tick fed the same commands. M6-S3: the AI seats' state is stored too, so this is true (and <paramref name="error"/>
+    /// <see cref="SaveError.None"/>) for every match. A stream that fails to write throws its own exception.
     /// </summary>
     public bool TrySave(Stream stream, out SaveError error)
     {
         ArgumentNullException.ThrowIfNull(stream);
-        if (World.Config.HasAiSeat)
-        {
-            error = SaveError.AiSeatsUnsupported;
-            return false;
-        }
         var w = new SaveWriter();
         SaveHeader.Write(w, this);
         World.WriteHeightmap(w, World.Heightmap);
@@ -89,6 +93,15 @@ public sealed partial class Simulation : ICommandSink
         w.Tag(SaveFormat.TagCommands);
         w.WriteArray(_nextSequence);
         _commands.WriteTo(w);
+        // M6-S3 (format 2): each AI seat, in player order, after every human-visible section.
+        w.Tag(SaveFormat.TagAi);
+        w.Write(_aiSeats);
+        for (int p = 0; p < _ai.Length; p++)
+        {
+            if (_ai[p] == null) continue;
+            w.Write(p);
+            _ai[p]!.WriteTo(w);
+        }
         w.Tag(SaveFormat.TagEnd);
         stream.Write(w.Finish());
         error = SaveError.None;
@@ -100,9 +113,11 @@ public sealed partial class Simulation : ICommandSink
     /// data it was made with. Never throws on bad bytes: false, <paramref name="sim"/> null and the <see cref="SaveError"/>
     /// (checked in that order: <see cref="SaveError.BadMagic"/>, <see cref="SaveError.Truncated"/>,
     /// <see cref="SaveError.FormatVersionMismatch"/>, the length, <see cref="SaveError.ChecksumMismatch"/>,
-    /// <see cref="SaveError.DataMismatch"/>, <see cref="SaveError.InvalidHeader"/>, <see cref="SaveError.AiSeatsUnsupported"/>,
-    /// then <see cref="SaveError.Malformed"/> for the body). The load builds the world on the stored map without generating
-    /// or placing anything, so it draws from no RNG stream. A replay recorder can attach to the loaded sim only while it is
+    /// <see cref="SaveError.DataMismatch"/>, <see cref="SaveError.InvalidHeader"/>, then <see cref="SaveError.Malformed"/> for
+    /// the body; <see cref="SaveError.AiSeatsUnsupported"/> is no longer returned since format 2). The load builds the world
+    /// on the stored map without generating or placing anything, so it draws from no world RNG stream; each AI seat is built
+    /// as a match builds it (its opening pick drawn from its own stream), the pick checked against the stored one and the
+    /// stored stream state and Blackboard written over it (M6-S3). A replay recorder can attach to the loaded sim only while it is
     /// at tick 0 with nothing queued (the recorder's own rule), i.e. only a save made before the first tick.
     /// </summary>
     public static bool TryLoad(GameData data, Stream stream, out Simulation? sim, out SaveError error)
@@ -152,6 +167,8 @@ public sealed partial class Simulation : ICommandSink
         if (header != SaveError.None) return header;
         Heightmap? map = World.ReadHeightmap(r);
         if (map == null || r.Failed) return SaveError.Malformed;
+        // BUG-0960 item 1: a body too short for the header's capacities is refused before the world is allocated for them.
+        if (r.Remaining < SaveHeader.MinBodyBytes(config!, map.Width * map.Height)) return SaveError.Malformed;
         var loaded = new Simulation(World.ForLoad(config!, map));
         loaded.World.TickNumber = tick;
         loaded.World.ReadFrom(r);
@@ -159,6 +176,12 @@ public sealed partial class Simulation : ICommandSink
         r.ReadArray(loaded._nextSequence);
         foreach (int next in loaded._nextSequence) r.Check(next >= 0);
         loaded._commands.ReadFrom(r, config!.PlayerCount);
+        if (!r.Expect(SaveFormat.TagAi) || !r.Check(r.ReadInt32() == loaded._aiSeats)) return SaveError.Malformed;
+        for (int p = 0; p < loaded._ai.Length && !r.Failed; p++)
+        {
+            if (loaded._ai[p] == null) continue;
+            if (r.Check(r.ReadInt32() == p)) loaded._ai[p]!.ReadFrom(r);
+        }
         if (!r.Expect(SaveFormat.TagEnd) || r.Remaining != 0) return SaveError.Malformed;
         sim = loaded;
         return SaveError.None;

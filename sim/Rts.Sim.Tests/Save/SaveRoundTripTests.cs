@@ -1,5 +1,6 @@
 using System.Numerics;
 using Rts.Sim.Commands;
+using Rts.Sim.Data;
 using Rts.Sim.Replays;
 using Xunit.Abstractions;
 
@@ -8,7 +9,8 @@ namespace Rts.Sim.Tests.Save;
 /// <summary>
 /// M6-S2 criteria 2-4 and 8: every scene of S saved at ticks 1, 137 and 1,000, loaded into a fresh sim and ticked beside the
 /// unsaved run on the same commands to T + 2,000, the state hash compared every tick, the state outside the hash compared
-/// directly at T, T + 1 and T + 2,000, and save -> load -> save byte-identical.
+/// directly at T, T + 1 and T + 2,000, and save -> load -> save byte-identical. M6-S3: the same for matches with AI seats,
+/// saved at fixed ticks and at probed moments, the AI seats compared field for field.
 /// </summary>
 public class SaveRoundTripTests
 {
@@ -135,6 +137,66 @@ public class SaveRoundTripTests
         // A save made after a tick loads into a sim the recorder refuses (it can't replay from tick 0).
         Simulation later = SaveTestRun.Load(TestSim.Data, SaveTestRun.Save(fresh));
         Assert.Throws<InvalidOperationException>(() => new ReplayRecorder(later));
+    }
+
+    // ---------- M6-S3: the AI seats ----------
+
+    public static IEnumerable<object[]> AiRows() => AiSaveScenes.Rows();
+
+    /// <summary>
+    /// M6-S3 criterion 1: an AI-v-AI match saved at ticks 1, the first think after the opening one (the load's first tick
+    /// thinks), 137 and 1,000, and at the first tick each probed moment holds (mid-wave, mid-cast, in a no-site wait, during a
+    /// defense), each load ticked beside the unsaved run to T + 2,000 with the hash compared every tick, and the AI seats'
+    /// openings and every field (Blackboard whole, RNG, counters) compared at T, T + 1 and T + 2,000.
+    /// </summary>
+    [Theory]
+    [MemberData(nameof(AiRows))]
+    public void AiMatch_SavedAtFixedTicksAndProbedMoments_FollowsTheUnsavedRun_EveryTick(int seed, int players, AiDifficulty difficulty, bool cramped)
+    {
+        SaveScene scene = AiSaveScenes.AiMatch((ulong)seed, players, difficulty, cramped);
+        Simulation probe = scene.Build();
+        int think = AiSaveScenes.FirstThinkAfterTheOpeningOne(probe);
+        for (int p = 0; p < players; p++) _out.WriteLine($"seat {p}: faction {probe.World.FactionOf(p)}, {probe.World.Config.SeatOf(p).Difficulty}, opening {probe.AiOpening(p)}");
+        int[] ticks = AiSaveScenes.FixedTicks.Append(think).Distinct().Order().ToArray();
+        SaveTestRun.Result r = SaveTestRun.RoundTrip(scene, ticks, probes: AiSaveScenes.Probes(), probeUntil: AiSaveScenes.ProbeWindow);
+        for (int k = 0; k < r.SaveTicks.Length; k++) _out.WriteLine($"{scene.Name}: save at {r.SaveTicks[k]}: {r.Bytes[k]:N0} bytes");
+        for (int i = 0; i < r.ProbedAt.Length; i++) _out.WriteLine($"{scene.Name}: {AiSaveScenes.ProbeNames[i]} first at {r.ProbedAt[i]}");
+        foreach (int i in AiSaveScenes.ExpectedProbes(cramped))
+            Assert.True(r.ProbedAt[i] >= 0, $"{scene.Name}: never {AiSaveScenes.ProbeNames[i]} within {AiSaveScenes.ProbeWindow} ticks");
+        int saves = ticks.Concat(r.ProbedAt.Where(t => t >= 0)).Distinct().Count();
+        Assert.Equal(saves * 2000, r.TicksCompared);
+    }
+
+    /// <summary>M6-S3 criterion 3: the menu's match (a scripted human against a Normal AI) saves and loads and follows the unsaved run.</summary>
+    [Fact]
+    public void TheMenuMatch_HumanVsAi_SavesAndLoads_AndFollowsTheUnsavedRun()
+    {
+        SaveScene scene = AiSaveScenes.HumanVsAi(1);
+        SaveTestRun.Result r = SaveTestRun.RoundTrip(scene, new[] { 1, 137, 1000, 3000 }, probes: AiSaveScenes.Probes(), probeUntil: 3000);
+        for (int k = 0; k < r.SaveTicks.Length; k++) _out.WriteLine($"{scene.Name}: save at {r.SaveTicks[k]}: {r.Bytes[k]:N0} bytes");
+        Assert.True(r.TicksCompared >= 4 * 2000);
+    }
+
+    /// <summary>
+    /// M6-S3: a loaded AI seat drew its pick once, at construction, from the same seed (so its opening is the saved one), and
+    /// carries the saved stream: equal to the unsaved seat's, which no manager has drawn on since the pick (QA's
+    /// <c>ThePick_IsTheOnlyDrawOnTheAisStream</c>).
+    /// </summary>
+    [Fact]
+    public void ALoadedAiSeat_HasTheSavedPickAndStream()
+    {
+        SaveScene scene = AiSaveScenes.AiMatch(2, 2, AiDifficulty.Hard);
+        Simulation sim = scene.Build();
+        for (int t = 0; t < 500; t++) sim.Tick();
+        Simulation loaded = SaveTestRun.Load(TestSim.Data, SaveTestRun.Save(sim));
+        for (int p = 0; p < 2; p++)
+        {
+            Assert.Equal(sim.AiOpening(p), loaded.AiOpening(p));
+            Assert.Equal(sim.AiOf(p)!.Rng.State, loaded.AiOf(p)!.Rng.State);
+            Assert.Equal(sim.AiOf(p)!.Thinks, loaded.AiOf(p)!.Thinks);
+            Assert.True(loaded.AiOf(p)!.Thinks > 0);
+        }
+        SaveTestRun.AssertSameState(sim, loaded, "AI seats at 500");
     }
 
     [Fact]
