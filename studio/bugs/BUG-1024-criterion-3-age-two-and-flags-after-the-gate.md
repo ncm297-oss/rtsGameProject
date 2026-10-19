@@ -3,7 +3,7 @@
 | Field | Value |
 | --- | --- |
 | Severity | S2 (an acceptance criterion not met; the Producer may waive it) |
-| Status | open |
+| Status | open (re-checked after fix round 2, c76bc5f: 4 / 49 live sides without Age II, flags 22 / 58, `DH6ThresholdQaTests` seed 25 still red) |
 | Found | 2026-10-18-1814, task M5-4g re-check after fix round 1 (57dfa22) |
 | System | AI reserve gate (`AiPlayer.MayReserve`, `ai.reserveArmyShare`) together with the gather shift (`AiPlayer.WantedGoldShare`) |
 | Fixed by | |
@@ -57,3 +57,29 @@ These are my own measurements from the 27 twin runs (Normal v Normal, menu map, 
   is closed (the reserve gated, the shift not). The developer says this variant was tried ("the gather shift kept with
   the gate closed") and lists it among the variants that did not bring the no-wave count back to 3. Ask for its numbers
   before choosing.
+
+## Re-check after fix round 2 (c76bc5f)
+My own measurements from the 27 twin runs. They match the developer's table in docs/03 exactly.
+
+| | base f531dd9 | M5-4g | fix round 1 | fix round 2 |
+| --- | --- | --- | --- | --- |
+| live sides at 20:00 without Age II | 23 / 41 | 0 / 43 | 1 / 43 | **4 / 49** |
+| BUG-0981 flags, report seeds (#1) / all 27 runs | 11 / - | 4 / 10 | 9 / 17 | **22 / 58** (31 flagged sides, 12 on the report seeds) |
+
+- The 4 sides without Age II. **None of them reached Age II on the base either.** Each was without it at 20:00 or
+  defeated without it:
+  - `crossbow_push` v `raider_rush` seed 19, Malazan. Unchanged from round 1: `reserveThinks` 0 / 1200 and 910 / 15 at 20:00.
+  - `crossbow_push` v `standard` seed 32, Malazan. Defeated at 15:30 on the base and at 12:35 in round 1. Now it is alive
+    with 794 / 5: wood-starved, the reserve named on 3 thinks only, and the gather shift idle with the gate shut.
+  - Whirlwind `standard`, seeds 9 and 13. Both were defeated without Age II on the base (19:16, 18:24). Now both are alive
+    with 9-11 gold and no gold node known (`expand` flagged with `freeMine=False ungatedGold=False`). Age II was reserved
+    for 43 s and 41 s (8:16-8:59 and 8:54-9:35, short wood). Then the gate shut and production spent the gold.
+- The flags. 29 of 58 are `expand` steps: 21 with no free mine known, 15 of them with no gold node at all. The rest are 17
+  buildings (Cadre Tower 5, Engineers' Yard 5, Wickan Corral 2, Ram Yard 2, others 1 each) and 12 researches
+  (`moranth_supply` 5, `age_ii` 4, `dryjhnas_prophecy` 2, `ranged_weapons_1` 1). The count rises mostly because 49 sides
+  survive (43 before) and the reserve is held on 12.6 % of thinks (21.8 % in round 1).
+- `DH6ThresholdQaTests.CrossbowPushVersusRaiderRush_FourthAndFifthSeeds` is still red: "seed 25: crossbow_push no wave and not
+  defeated".
+- I don't file a new bug for the rise from 1 to 4 Age II misses. Against the base it is no side worse off (23 / 41 -> 4 / 49).
+  Against rounds 0 and 1 it is the measured price of BUG-1025's fix (the developer's variants table: no gate form keeps
+  both). It is still this bug, criterion 3 not met. **The Producer decides whether to waive it or restate the target.**

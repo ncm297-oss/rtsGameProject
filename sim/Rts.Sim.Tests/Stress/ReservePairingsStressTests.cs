@@ -91,7 +91,7 @@ public class ReservePairingsStressTests
     internal sealed class Side
     {
         public int AgeTwo = -1, FirstWave = -1, Waves, Defeated = -1, Switches, GatherSends, ArmyTrained, PeakArmy;
-        public int ReserveThinks, Thinks, LongestHold, ShareFlips;
+        public int ReserveThinks, Thinks, LongestHold, ShareFlips, ReserveWaveOut;
         public string HoldText = "";
         public readonly List<string> Flags = new();
     }
@@ -121,6 +121,7 @@ public class ReservePairingsStressTests
             {
                 s.Thinks++;
                 if (x.ReserveStep >= 0) s.ReserveThinks++;
+                if (x.ReserveStep >= 0 && x.Board.WaveActive) s.ReserveWaveOut++; // re-check 2: the gate counts an army away on a wave
                 bool same = x.ReserveStep >= 0 && x.ReserveStep == lastStep;
                 if (!same) { runFrom = x.Now; runDefending = 0; }
                 run = same ? run + 1 : (x.ReserveStep >= 0 ? 1 : 0);
@@ -184,7 +185,7 @@ public class ReservePairingsStressTests
             double minutes = Ticks / (60.0 * Tps);
             _out.WriteLine($"ROW\t{label}\tseed {seed}\t{side}\tageII {Sec(s.AgeTwo)}\twave {Sec(s.FirstWave)} ({s.Waves})\tdefeated {Sec(s.Defeated)}\tpeakArmy {s.PeakArmy / 2.0}\t" +
                 $"switches/min {s.Switches / minutes:0.00}\tgatherSends/min {s.GatherSends / minutes:0.0}\ttrains {s.ArmyTrained}\t" +
-                $"reserveThinks {s.ReserveThinks}/{s.Thinks}\tlongestHold {s.LongestHold}\tshareFlips {s.ShareFlips}\tflags {s.Flags.Count}\t{string.Join(" ; ", s.Flags)}\tend gold {w.Gold[p]} wood {w.Wood[p]}\thold {s.HoldText}");
+                $"reserveThinks {s.ReserveThinks}/{s.Thinks}\treserveWaveOut {s.ReserveWaveOut}\tlongestHold {s.LongestHold}\tshareFlips {s.ShareFlips}\tflags {s.Flags.Count}\t{string.Join(" ; ", s.Flags)}\tend gold {w.Gold[p]} wood {w.Wood[p]}\thold {s.HoldText}");
         }
         return new Result((a.AiOpening(0), a.AiOpening(1)), sides);
     }

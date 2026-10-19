@@ -49,3 +49,6 @@ walking. Not a correctness bug: a tuning observation for the Producer.
 ## Re-check (2026-10-18-1814, fix round 1, 57dfa22)
 With the reserve gated, it is held on 21.8 % of thinks (39 % in M5-4g). Gatherer kind switches average **3.93 a minute**
 (M5-4g 5.57, base 1.4) and the wanted share changes about **11.8 times a match** (M5-4g 22.4). Still S4, still open.
+
+## Re-check after fix round 2 (c76bc5f)
+- 27 pairing runs: gatherer kind switches 4.04 a minute on average (max 7.25), base 1.40 and round 1 3.93. The wanted share changes 10.6 times a match. Still open, S4.

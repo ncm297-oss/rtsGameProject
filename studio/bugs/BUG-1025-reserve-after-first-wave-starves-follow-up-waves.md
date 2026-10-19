@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S3 |
-| Status | open |
+| Status | fixed (c76bc5f, verified 2026-10-18-1814 re-check 2) |
 | Found | 2026-10-18-1814, task M5-4g re-check after fix round 1 (57dfa22) |
 | System | AI reserve gate (`AiPlayer.MayReserve`: `Board.WavesStarted > 0` opens it permanently) against `DefenseManager` / `MilitaryManager` |
-| Fixed by | |
+| Fixed by | c76bc5f (M5-4g fix round 2: the "wave sent" latch removed; the gate needs the wave's cost as well as its half-pop, and it is shut while `Board.Defending`) |
 
 ## Repro
 1. `dotnet test sim/Rts.Sim.Tests --filter "FullyQualifiedName~ReservePairingsStressTests" --logger "trx"` on the branch.
@@ -57,3 +57,22 @@ Before the first wave too: the gate looks at half-pop only. When it opens during
 - The developer measured "the reserve suspended while defended" on its own (11 sides with no wave). Its combination
   with the gate was not reported. That combination is the obvious next variant to measure, along with closing the gate
   while `Defending` holds or a wave's cost is unmet.
+
+## Verification (re-check 2, c76bc5f)
+Same 27 twin runs, my own numbers, which match the developer's:
+
+| | base f531dd9 | fix round 1 | fix round 2 |
+| --- | --- | --- | --- |
+| Malazan waves (sides with 2+) | 79 (20) | 55 (12) | **81 (20)** |
+| Whirlwind waves | 97 | 86 | 117 |
+| Malazan / Whirlwind defeats | 8 / 5 | 10 / 1 | **5 / 0** |
+| most defending thinks inside a side's longest hold | - | 435 | **0** |
+
+- Of the named sides, `crossbow_push` seeds 12 and 37 now survive (7 and 3 waves), and seed 32 survives too (1 wave, no Age II, see
+  BUG-1024). `standard` v `holy_war` seed 6 is still defeated (15:39, 1 wave). Its reserve held while the first wave was out
+  (BUG-1026). `standard` v `holy_war` seed 4 survives.
+- The defense gate is covered by the developer's `Bug1025_WhileTheBaseIsDefended_NoReserveIsNamed` (0 and 1 waves sent) and by
+  QA's `ReserveQaTests.Gate_AtShareZero_TheDefenseStillShutsIt` (the defense shuts the gate even at `reserveArmyShare` 0). The
+  cost half is covered by `Bug1025_AnArmyUnderTheWavesCost_NamesNoReserve`, and QA's
+  `Gate_LaborersPastTheWavesSize_AreNotAnArmy_NoReserve` checks that workers don't count.
+- Remaining: the gate counts units away on a wave (BUG-1026, S3).

@@ -212,6 +212,74 @@ public class ReserveQaTests
         Assert.True(trainsDue >= trainsNever - 2, $"production starved: {trainsDue} trains v {trainsNever} without the step");
     }
 
+    // ---------- the gate (fix round 2, BUG-1025) ----------
+
+    /// <summary>Age II due at 0:00 with the shipped <c>reserveArmyShare</c> (1): the gate reads the army.</summary>
+    private static readonly Lazy<GameData> s_ageTwoGated = new(() =>
+        Data(AiScenes.BuildOrder(("time", 0, "research", "age_ii", 0)), "malazan_heavy_infantry", ai => ai["reserveArmyShare"] = 1));
+
+    /// <summary>The reserve step a think names with the purse at <paramref name="gold"/> / <paramref name="wood"/> (-2: no think ran).</summary>
+    private static int ThinkStep(Simulation sim, int gold, int wood, out bool defending)
+    {
+        AiPlayer ai = sim.AiOf(0)!;
+        int step = -2;
+        bool def = false;
+        ai.ThoughtForTests = a => (step, def) = (a.ReserveStep, a.Board.Defending);
+        while (sim.TickNumber % ai.ThinkTicks != 0) sim.Tick();
+        BuildMaps.SetTotals(sim, 0, gold, wood);
+        sim.Tick();
+        defending = def;
+        return step;
+    }
+
+    private static void Spawn(Simulation sim, string unit, int count)
+    {
+        int type = sim.World.Data.FindUnit(unit);
+        for (int k = 0; k < count; k++) sim.Enqueue(Command.SpawnUnit(0, type, new System.Numerics.Vector2(14.5f + k % 10, 34.5f + k / 10)));
+        sim.Tick();
+    }
+
+    /// <summary>
+    /// Re-check (fix round 2): workers are not the army. Laborers past both of the wave's measures (half-pop and gold + wood,
+    /// x the difficulty's <c>waveSizeMultiplier</c>) with no soldier: Age II (400 / 200, the purse 300 / 300) is not reserved.
+    /// The same count of Heavy Infantry added: it is.
+    /// </summary>
+    [Fact]
+    public void Gate_LaborersPastTheWavesSize_AreNotAnArmy_NoReserve()
+    {
+        GameData d = s_ageTwoGated.Value;
+        Simulation sim = Scene(d);
+        AiPlayer ai = sim.AiOf(0)!;
+        UnitDef lab = d.Units[d.FindUnit("malazan_laborer")], hi = d.Units[d.FindUnit("malazan_heavy_infantry")];
+        Assert.True(lab.IsWorker && !hi.IsWorker);
+        float m = ai.Knobs.WaveSizeMultiplier;
+        int Need(UnitDef u) => (int)Math.Ceiling(Math.Max(ai.Opening.AttackMinHalfPop * m / u.HalfPop, ai.Opening.AttackMinCost * m / (u.CostGold + u.CostWood)) + 1e-6);
+        Spawn(sim, "malazan_laborer", Need(lab) + 2);
+        Assert.Equal(-1, ThinkStep(sim, 300, 300, out _));
+        Spawn(sim, "malazan_heavy_infantry", Need(hi));
+        Assert.Equal(0, ThinkStep(sim, 300, 300, out _));
+    }
+
+    /// <summary>
+    /// Re-check (fix round 2): the defense shuts the gate even at <c>reserveArmyShare</c> 0 (the scenes with no army). Age II is
+    /// reserved while the base is quiet; four enemy Raiders seen by the hall: the think defends and names no reserve.
+    /// </summary>
+    [Fact]
+    public void Gate_AtShareZero_TheDefenseStillShutsIt()
+    {
+        GameData d = s_ageTwo.Value;
+        Assert.Equal(0f, d.AiRules.ReserveArmyShare);
+        Simulation sim = Scene(d);
+        Assert.Equal(0, ThinkStep(sim, 300, 300, out bool quiet));
+        Assert.False(quiet);
+        (int hx, int hy) = AiScenes.HallAt(0);
+        var near = new System.Numerics.Vector2(hx * MapConstants.CellSize, (hy + 20) * MapConstants.CellSize);
+        int raider = d.FindUnit("whirlwind_raider");
+        for (int k = 0; k < 4; k++) CombatScenes.Spot(sim, 0, CombatScenes.Place(sim, 1, raider, near + new System.Numerics.Vector2(k, 0f)));
+        Assert.Equal(-1, ThinkStep(sim, 300, 300, out bool defending));
+        Assert.True(defending);
+    }
+
     // ---------- save / load while a reserve is held ----------
 
     private static string Fmt(in Command c) =>
