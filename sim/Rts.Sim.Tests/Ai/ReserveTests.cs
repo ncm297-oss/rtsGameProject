@@ -357,17 +357,29 @@ public class ReserveTests
         sim.Tick();
     }
 
-    /// <summary>Heavy Infantry needed for <paramref name="share"/> of the seat's wave (<c>attack.minArmyPop</c> x the difficulty's <c>waveSizeMultiplier</c>), rounded up.</summary>
-    private static int Needed(AiPlayer ai, double share)
+    /// <summary>
+    /// Heavy Infantry needed for <paramref name="share"/> of the seat's wave, rounded up: the more of its half-pop
+    /// (<c>attack.minArmyPop</c>) and its cost (<c>attack.minArmyCost</c>, BUG-1025), each x the difficulty's
+    /// <c>waveSizeMultiplier</c>.
+    /// </summary>
+    private static int Needed(AiPlayer ai, double share) => Math.Max(NeededForPop(ai, share), NeededForCost(ai, share));
+
+    private static int NeededForPop(AiPlayer ai, double share)
     {
         int half = ai.Data.Units[ai.Data.FindUnit("malazan_heavy_infantry")].HalfPop;
         return (int)Math.Ceiling(share * ai.Opening.AttackMinHalfPop * ai.Knobs.WaveSizeMultiplier / half - 1e-6);
     }
 
+    private static int NeededForCost(AiPlayer ai, double share)
+    {
+        UnitDef hi = ai.Data.Units[ai.Data.FindUnit("malazan_heavy_infantry")];
+        return (int)Math.Ceiling(share * ai.Opening.AttackMinCost * ai.Knobs.WaveSizeMultiplier / (hi.CostGold + hi.CostWood) - 1e-6);
+    }
+
     /// <summary>
     /// BUG-1021: with the shipped <c>reserveArmyShare</c> (1) and no wave sent, Age II (400 / 200, the purse 300 / 300) is not
-    /// reserved while the army is one Heavy Infantry short of the opening's wave: production may spend. With the army
-    /// wave-sized it is reserved (400 / 200) and production waits.
+    /// reserved while the army is one Heavy Infantry short of the opening's wave (half-pop and cost, BUG-1025): production may
+    /// spend. With the army wave-sized it is reserved (400 / 200) and production waits.
     /// </summary>
     [Fact]
     public void Bug1021_TheReserve_WaitsForAWaveSizedArmy()
@@ -390,21 +402,75 @@ public class ReserveTests
         Assert.Equal((0, 400, 200), (_last.Step, _last.Gold, _last.Wood));
     }
 
-    /// <summary>BUG-1021: once the opening has sent a wave the reserve is named whatever the army (none here).</summary>
+    /// <summary>
+    /// BUG-1025 (fix round 2): a wave sent no longer opens the gate for good. After the first wave, with no army, Age II is not
+    /// reserved and production trains (round 1 reserved it here and starved the follow-up waves); with the army back at the
+    /// wave's size it is reserved again.
+    /// </summary>
     [Fact]
-    public void Bug1021_AfterTheFirstWave_TheReserveIsNamedWithNoArmy()
+    public void Bug1025_AfterTheFirstWave_TheReserveStillWaitsForAWaveSizedArmy()
     {
         GameData d = s_gate.Value;
         Simulation sim = Scene(d);
         AiPlayer ai = sim.AiOf(0)!;
         List<Command> log = AiScenes.Log(sim, 0);
-        List<Command> sent = Think(sim, log, 300, 300);
-        Assert.Equal(-1, _last.Step);
-        Assert.Contains(sent, c => c.Kind == CommandKind.Train);
         ai.Board.WavesStarted = 1;
+        List<Command> sent = Think(sim, log, 300, 300);
+        Assert.Equal((-1, 0, 0), (_last.Step, _last.Gold, _last.Wood));
+        Assert.Contains(sent, c => c.Kind == CommandKind.Train);
+        SpawnArmy(sim, Needed(ai, 1));
         sent = Think(sim, log, 300, 300);
         Assert.Equal((0, 400, 200), (_last.Step, _last.Gold, _last.Wood));
         Assert.DoesNotContain(sent, c => c.Kind == CommandKind.Train);
+    }
+
+    /// <summary>
+    /// BUG-1025: the gate reads the wave's cost as well as its half-pop (the wave can't start below either). An army with the
+    /// wave's half-pop but under its <c>attack.minArmyCost</c> names no reserve; topped up to the cost, it does.
+    /// </summary>
+    [Fact]
+    public void Bug1025_AnArmyUnderTheWavesCost_NamesNoReserve()
+    {
+        GameData d = s_gate.Value;
+        Simulation sim = Scene(d);
+        AiPlayer ai = sim.AiOf(0)!;
+        List<Command> log = AiScenes.Log(sim, 0);
+        int forPop = NeededForPop(ai, 1), forCost = NeededForCost(ai, 1);
+        Assert.True(forCost > forPop, $"Heavy Infantry for the half-pop {forPop}, for the cost {forCost}"); // the scene's premise
+        SpawnArmy(sim, forPop);
+        Think(sim, log, 300, 300);
+        Assert.Equal(-1, _last.Step);
+        SpawnArmy(sim, forCost - forPop);
+        Think(sim, log, 300, 300);
+        Assert.Equal((0, 400, 200), (_last.Step, _last.Gold, _last.Wood));
+    }
+
+    /// <summary>
+    /// BUG-1025: no reserve while the base is defended, before or after the first wave: with a wave-sized army and an enemy
+    /// army seen by the hall (<c>Board.Defending</c>), Age II is not reserved, so production may spend on the defense.
+    /// </summary>
+    [Theory]
+    [InlineData(0)]
+    [InlineData(1)]
+    public void Bug1025_WhileTheBaseIsDefended_NoReserveIsNamed(int wavesSent)
+    {
+        GameData d = s_gate.Value;
+        Simulation sim = Scene(d);
+        AiPlayer ai = sim.AiOf(0)!;
+        List<Command> log = AiScenes.Log(sim, 0);
+        ai.Board.WavesStarted = wavesSent;
+        SpawnArmy(sim, Needed(ai, 1));
+        Think(sim, log, 300, 300);
+        Assert.Equal(0, _last.Step); // the gate is open while the base is quiet
+        (int hx, int hy) = AiScenes.HallAt(0);
+        var near = new System.Numerics.Vector2(hx * Map.MapConstants.CellSize, (hy + 20) * Map.MapConstants.CellSize);
+        int raider = sim.World.Data.FindUnit("whirlwind_raider");
+        for (int k = 0; k < 4; k++) CombatScenes.Spot(sim, 0, CombatScenes.Place(sim, 1, raider, near + new System.Numerics.Vector2(k, 0f)));
+        bool defending = false, fits = false;
+        Think(sim, log, 300, 300, a => (defending, fits) = (a.Board.Defending, a.CanAffordAboveReserve(54, 20)));
+        Assert.True(defending);
+        Assert.Equal((-1, 0, 0), (_last.Step, _last.Gold, _last.Wood));
+        Assert.True(fits);
     }
 
     /// <summary>

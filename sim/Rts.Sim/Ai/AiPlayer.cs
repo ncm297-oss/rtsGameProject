@@ -238,21 +238,32 @@ internal sealed partial class AiPlayer
     internal bool ReserveShortWood { get; private set; }
 
     /// <summary>
-    /// M5-4g (BUG-1021): whether the build order may name a reserved step this think: once the opening has sent a wave, or
-    /// while the army's half-pop is at least <c>ai.reserveArmyShare</c> of the wave's (<c>attack.minArmyPop</c> times the
-    /// difficulty's <c>waveSizeMultiplier</c>). Before that, army production spends first, as before M5-4g: a reserve held
-    /// from the start cost a quarter of the sides their first wave.
+    /// M5-4g (BUG-1021, BUG-1025): whether the build order may name a reserved step this think: while the base is not
+    /// defended and the army is at least <c>ai.reserveArmyShare</c> of the opening's wave in both the wave's measures, its
+    /// half-pop (<c>attack.minArmyPop</c>) and its gold + wood (<c>attack.minArmyCost</c>), each times the difficulty's
+    /// <c>waveSizeMultiplier</c>. Otherwise army production spends first, as before M5-4g: a reserve held from the start cost
+    /// a quarter of the sides their first wave, and one held for good after the first wave (fix round 1) starved the
+    /// follow-up waves and the defense.
     /// </summary>
-    internal bool MayReserve() =>
-        Board.WavesStarted > 0 || ArmyHalfPop() >= Rules.ReserveArmyShare * Opening.AttackMinHalfPop * Knobs.WaveSizeMultiplier;
-
-    /// <summary>The half-pop of the player's live non-worker units, from this think's census (<see cref="Live"/>).</summary>
-    internal int ArmyHalfPop()
+    internal bool MayReserve()
     {
-        int half = 0;
+        if (Board.Defending) return false;
+        float share = Rules.ReserveArmyShare * Knobs.WaveSizeMultiplier;
+        ArmySize(out int half, out int cost);
+        return half >= share * Opening.AttackMinHalfPop && cost >= share * Opening.AttackMinCost;
+    }
+
+    /// <summary>The half-pop and the gold + wood cost of the player's live non-worker units, from this think's census (<see cref="Live"/>).</summary>
+    internal void ArmySize(out int half, out int cost)
+    {
+        half = cost = 0;
         for (int t = 0; t < Live.Length; t++)
-            if (!IsWorkerType[t]) half += Live[t] * Data.Units[t].HalfPop;
-        return half;
+        {
+            if (IsWorkerType[t] || Live[t] == 0) continue;
+            UnitDef def = Data.Units[t];
+            half += Live[t] * def.HalfPop;
+            cost += Live[t] * (def.CostGold + def.CostWood);
+        }
     }
 
     private void ClearReserve()

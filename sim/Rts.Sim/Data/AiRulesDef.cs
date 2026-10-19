@@ -75,9 +75,10 @@ public sealed class AiRulesDef
     public float ReserveShift { get; init; }
 
     /// <summary>
-    /// M5-4g (BUG-1021): until the opening's first wave has been sent, the build order names a reserved step only while the
-    /// army's half-pop is at least this fraction of the wave's (<c>attack.minArmyPop</c> times the difficulty's
-    /// <c>waveSizeMultiplier</c>): the timing attack is built first (<c>reserveArmyShare</c>, 0-1; 0 reserves from the start).
+    /// M5-4g (BUG-1021, BUG-1025): the build order names a reserved step only while the base is not defended and the army's
+    /// half-pop and gold + wood are each at least this fraction of the wave's (<c>attack.minArmyPop</c> / <c>minArmyCost</c>
+    /// times the difficulty's <c>waveSizeMultiplier</c>): the waves are built first (<c>reserveArmyShare</c>, 0-1; 0 reserves
+    /// whatever the army, the defense aside).
     /// </summary>
     public float ReserveArmyShare { get; init; }
 }

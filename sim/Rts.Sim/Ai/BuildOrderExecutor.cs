@@ -37,7 +37,7 @@ internal static class BuildOrderExecutor
         Blackboard board = ai.Board;
         var steps = ai.Opening.BuildOrder; // M5-8a: the picked opening's
         int slack = ai.Knobs.BuildOrderSlackTicks;
-        bool mayReserve = ai.MayReserve(); // BUG-1021: the opening's first wave comes first
+        bool mayReserve = ai.MayReserve(); // BUG-1021 / BUG-1025: a wave-sized army, the base not defended
         for (int i = 0; i < steps.Length; i++)
         {
             if (board.StepDone[i]) continue;

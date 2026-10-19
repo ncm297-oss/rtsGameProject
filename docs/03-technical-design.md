@@ -7760,16 +7760,21 @@ rules are unchanged.
 BUG-0981 (four of six openings never reached Age II against an active opponent): the build order gets the priority docs/02
 "AI opponent" gives it over army production. Code: `BuildOrderExecutor.Run` / `Reservable`, `AiPlayer.SetReserve` /
 `KnowsNode` / `CanAffordAboveReserve` / `WantedGoldShare` / `TryTrain(..., aboveReserve)`, `ProductionManager.Run`,
-`EconomyManager.Gatherers` / `Rebalance`, `AiRulesDef.ReserveShift`; fix round 1 (BUG-1021, BUG-1023): `AiPlayer.MayReserve` /
-`ArmyHalfPop`, `BuildOrderExecutor.Fillable`, `AiRulesDef.ReserveArmyShare`.
+`EconomyManager.Gatherers` / `Rebalance`, `AiRulesDef.ReserveShift`; fix round 1 (BUG-1021, BUG-1023): `AiPlayer.MayReserve`,
+`BuildOrderExecutor.Fillable`, `AiRulesDef.ReserveArmyShare`; fix round 2 (BUG-1025): `AiPlayer.MayReserve` / `ArmySize`.
 
-- **The first wave comes first** (fix round 1, BUG-1021). A reserve held from the first think cost a quarter of the sides
-  their first wave (11 of 54 sent none, 3 before) and kept holding while the base was being razed. So the executor names
-  a reserved step only on a think when the opening has sent a wave (`Blackboard.WavesStarted` above 0) or the army's
-  half-pop (the census' live non-worker units, `AiPlayer.ArmyHalfPop`) is at least `ai.reserveArmyShare` of the wave's,
-  `attack.minArmyPop` x the difficulty's `waveSizeMultiplier` (`AiPlayer.MayReserve`). Before that, army production
-  spends first, as before M5-4g. Both inputs are saved state (the wave count on the board, the census' `Live` counts),
-  so the save format is unchanged.
+- **The waves come first** (fix round 1, BUG-1021; fix round 2, BUG-1025). A reserve held from the first think cost a
+  quarter of the sides their first wave (11 of 54 sent none, 3 before) and kept holding while the base was being razed.
+  So the executor names a reserved step only on a think when the base is not defended (`Blackboard.Defending`, set by the
+  defense manager earlier in the same think) and the army (the census' live non-worker units, `AiPlayer.ArmySize`) is at
+  least `ai.reserveArmyShare` of the opening's wave in both of the wave's measures: its half-pop against
+  `attack.minArmyPop` and its gold + wood against `attack.minArmyCost`, each x the difficulty's `waveSizeMultiplier`
+  (`AiPlayer.MayReserve`). Otherwise army production spends first, as before M5-4g. Fix round 1 also opened the gate for
+  good once a wave had been sent; that held the reserve through later defenses for 3-8 minutes and cut Malazan's waves
+  from 79 to 55 (BUG-1025), so round 2 dropped it: after a wave the army is rebuilt to the wave's size before the AI saves
+  again. The cost half matters because a wave can't start below either measure: with half-pop alone the gate opened at
+  32 / 32 half-pop with the army's cost 1,233 of 1,235, and the wave waited behind the reserve. All inputs are saved state
+  (the board's defense flag, the census' `Live` counts), so the save format is unchanged.
 - **The reserved step.** Each think the gate allows, as the executor walks the steps in file order (after a step's judging, its done
   checks and its BUG-0791 no-site wait), the first step that is due (trigger reached, slack passed, an expand past
   `expandAfter`), not done, with no pending order, of action `build` / `research` / `expand`, whose cost what is left of the
@@ -7808,7 +7813,9 @@ BUG-0981 (four of six openings never reached Age II against an active opponent):
   `reserveArmyShare` was measured at 0, 0.5, 0.75-0.95 and 1, with and without "or a wave sent", and against other
   gates (the reserve suspended while defended, an age research always reserved, a step's hold capped, a step reserved
   after waiting 2-8 minutes, the gather shift kept with the gate closed): only 1 with "or a wave sent" brought the sides
-  with no wave back to the base's 3 while keeping Age II; suspending the reserve while defended alone left 11.
+  with no wave back to the base's 3 while keeping Age II; suspending the reserve while defended alone left 11. Fix round 2
+  kept the knob at 1 (no new knob, the data hash unchanged) and measured the gate's form on the same 27 runs (the
+  variants and their numbers are in "Measured" below).
 - **State.** The reserve is think scratch on `AiPlayer`, set by the executor and cleared at the start and the end of
   every think, so between thinks (where a save is taken) a seat holds none and a loaded seat equals the saved one field for
   field with nothing stored (`SaveTestRun.AssertSameAi`): no `Blackboard` field, the save format unchanged (version 2).
@@ -7818,21 +7825,47 @@ BUG-0981 (four of six openings never reached Age II against an active opponent):
   `Content/AiOpeningPairsReportTests` and `QA/Content/D21OpeningsQaTests`' second and third seeds; QA's
   `Stress/ReservePairingsStressTests` prints every side):
 
-  | 54 sides, 27 runs | before M5-4g | M5-4g | fix round 1 |
-  | --- | --- | --- | --- |
-  | sides alive at 20:00 without Age II | 23 / 41 | 0 / 43 | 1 / 43 |
-  | sides that sent no wave | 3 | 11 | 3 |
-  | Malazan / Whirlwind defeats | 8 / 5 | 8 / 3 | 10 / 1 |
-  | BUG-0981's long waits (report seeds / all 27) | 11 / - | 4 / 10 | 9 / 17 |
-  | BUG-1010's six seeds: Malazan waves / defeats | 0 / 5 | 0 / 6 | 0 / 3 |
+  | 54 sides, 27 runs | before M5-4g | M5-4g | fix round 1 | fix round 2 |
+  | --- | --- | --- | --- | --- |
+  | sides alive at 20:00 without Age II | 23 / 41 | 0 / 43 | 1 / 43 | 4 / 49 |
+  | sides that sent no wave | 3 | 11 | 3 | 3 |
+  | Malazan / Whirlwind defeats | 8 / 5 | 8 / 3 | 10 / 1 | 5 / 0 |
+  | Malazan waves (sides with 2+) | 79 (20) | - | 55 (12) | 81 (20) |
+  | Whirlwind waves | 97 | - | 86 | 117 |
+  | BUG-0981's long waits (report seeds / all 27) | 11 / - | 4 / 10 | 9 / 17 | 22 / 58 |
+  | thinks holding a reserve | - | 39 % | 21.8 % | 12.6 % |
+  | BUG-1010's six seeds: Malazan waves / defeats | 0 / 5 | 0 / 6 | 0 / 3 | 0 / 3 |
+
+  Fix round 2 measured the gate's form on these 27 runs (Malazan waves; no-wave sides; Malazan / Whirlwind defeats; Age
+  II misses; long waits on the report seeds):
+
+  | gate | waves | no wave | defeats | Age II misses | long waits |
+  | --- | --- | --- | --- | --- | --- |
+  | round 1: half-pop, or a wave sent | 55 | 3 | 10 / 1 | 1 / 43 | 9 |
+  | (a) round 1, none while defended | 53 | 3 | 7 / 2 | 2 / 45 | 10 |
+  | (b) half-pop at all times, none while defended | 75 | 3 | 4 / 0 | 5 / 50 | 22 |
+  | **(c) (b) and the wave's cost (shipped)** | **81** | **3** | **5 / 0** | **4 / 49** | **22** |
+  | (b) / (c) kept while defended | 80 / 84 | 3 / 3 | 5 / 0, 8 / 0 | 3 / 49, 3 / 46 | 17 / 18 |
+  | after a wave: half / 0.75 of the wave (a) | 58-65 | 3 | 8-9 / 2 | 2 / 43-44 | 8-9 |
+  | (c) and Age II reserved after a wave | 71 | 3 | 8 / 0 | 2 / 46 | 22 |
+  | any of these with the gather shift kept while the gate is shut | 44-86 | 2-3 | Whirlwind 5-8 | 1-7 | 2-17 |
+
+  No form brings both the waves back to the base and Age II back to round 1: every think the reserve holds is a think
+  production doesn't, so the measures trade against each other. (c) is the one that meets the wave and defeat targets
+  (Malazan waves 81 against the base's 79, 20 sides with 2+ waves as on the base, Malazan defeats 5 and Whirlwind 0;
+  BUG-1025's `crossbow_push` seeds 12 and 37 now survive, with 7 and 3 waves). It costs Age II and the long waits:
+  - The 4 sides without Age II: `crossbow_push` v `raider_rush` seed 19 (the base's no-wave side, under the wave's size
+    all match, so its reserve never engages: base behaviour); `crossbow_push` v `standard` seed 32, Malazan (alive at
+    20:00 with 794 gold / 5 wood; round 1 had it defeated at 12:35); and two Whirlwind `standard` sides (seeds 9 and 13)
+    that end knowing no gold node at all (9-11 gold), so their Age II is not `Fillable`. The two Whirlwind sides reached
+    Age II in round 1 by giving up their follow-up waves (1 wave each there; 5 and 3 now).
+  - The long waits rise because fewer sides are defeated (49 alive against 43) and the reserve holds a third as often. Of
+    the 58 on all 27 runs, 29 are `expand` steps, 21 of them with no free mine known (15 with no gold node known at all);
+    the rest are Age II-gated buildings and researches (`moranth_supply`, Engineers' Yard, Cadre Tower) and 4 Age II
+    researches.
 
   The three sides with no wave are the base's three, all Malazan against `raider_rush` (BUG-1010: `cadre_rush` seeds 8
-  and 14, `crossbow_push` seed 19); their army never reaches the wave's size, so their reserve never engages. The one
-  side without Age II is that seed 19 side: razed to no population cap by 10:00, rebuilt to 15 pop, 910 gold and 15 wood
-  at 20:00 (M5-4g had it defeated at 10:07). Reserves are held on 22 % of thinks (39 % in M5-4g). Of the 17 long waits,
-  12 are `expand` steps: 7 with no free mine known (`Reservable` leaves an expand unreserved without one, and the report
-  names the short gold before its "no known free mine" reason), 5 with one (another step reserved in its place, or the
-  gate closed). Three are the razed seed 19 side's, two a Whirlwind `standard` side short of wood (seed 13). The
+  and 14, `crossbow_push` seed 19); their army never reaches the wave's size, so their reserve never engages. The
   openings' wave thresholds were set against a production-first AI (a data-track question).
 - **Tests.** `Ai/ReserveTests` (the reserved step is the first due unaffordable step and blocks a later train step and
   production while an earlier train step spends; its own retry is sent once affordable and the next step is reserved;
@@ -7840,9 +7873,11 @@ BUG-0981 (four of six openings never reached Age II against an active opponent):
   house rule unaffected; BUG-0981's `age_ii` case staged (Age II never queued in 6:00 before, queued at 2:37 after); the
   wanted share's four cases and clamps; a shift of 0 is `goldShare` exactly; the rebalance moves one gatherer a think
   toward the lacking kind; a think with a reserve allocates nothing, in `ReserveTests.Serial`, BUG-1020; fix round 1:
-  `Bug1021_TheReserve_WaitsForAWaveSizedArmy`, `Bug1021_AfterTheFirstWave_TheReserveIsNamedWithNoArmy`,
-  `Bug1021_TheArmyShare_IsAFractionOfTheWave`, and the no-node row rewritten for BUG-1023's rule; the scenes with no army
-  set `reserveArmyShare` 0), `DataValidationTests`, `DataContentHashTests`,
+  `Bug1021_TheReserve_WaitsForAWaveSizedArmy`, `Bug1021_TheArmyShare_IsAFractionOfTheWave` (both now count the wave's
+  cost too), and the no-node row rewritten for BUG-1023's rule; the scenes with no army set `reserveArmyShare` 0; fix
+  round 2: `Bug1025_AfterTheFirstWave_TheReserveStillWaitsForAWaveSizedArmy` (replaces round 1's "named with no army
+  after the first wave"), `Bug1025_AnArmyUnderTheWavesCost_NamesNoReserve`,
+  `Bug1025_WhileTheBaseIsDefended_NoReserveIsNamed` before and after a wave), `DataValidationTests`, `DataContentHashTests`,
   `ReplayGoldenTests`, `QA/GatherWedgeQaTests`; `QA/AiSeatQaTests.ImpossibleSteps_SendNothing_AndNeverStall` now holds its
   purse at no wood before every think (the reserve saves for its house step, which production used to spend first).
 

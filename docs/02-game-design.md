@@ -403,13 +403,14 @@ own cues (select, order, refused, building placed or finished, unit or tech read
   above it gives its surplus), and calls the whole wave home only when the raid is worth more than that or its Town Hall
   is hit and below half hp (`rules.json` `ai.defendRatio` / `defendMinValue` / `recallHallHp`; built in M5-4f; wording
   aligned with [03 Implementation (M5-4f)](03-technical-design.md#implementation-m5-4f) on 2026-10-17, BUG-0871).
-- The build order comes before the army once the opening's first wave is built: when a due building, research or
+- The build order comes before the army once the army is wave-sized: when a due building, research or
   expansion step can't be paid yet, the AI keeps its cost in reserve (army production and the build order's later unit
   steps spend only what is above it; earlier steps, houses and the defense are unaffected) and moves its gatherers toward
-  the resource the step lacks (`rules.json` `ai.reserveShift`: 0.25 more, or less, of the workers on gold). Until the
-  opening has sent a wave the reserve is kept only while the army is at least the wave's size (`ai.reserveArmyShare`, 1:
-  the whole wave), so the timing attack still comes. A resource the AI knows no node of is not held back, and a step
-  short of one is not reserved at all (built in M5-4g, BUG-0981, BUG-1021, BUG-1023;
+  the resource the step lacks (`rules.json` `ai.reserveShift`: 0.25 more, or less, of the workers on gold). The reserve
+  is kept only while the army is at least the opening's wave in both pop and cost (`ai.reserveArmyShare`, 1: the whole
+  wave) and the base is not being defended, so every wave, not just the first, is rebuilt before the AI saves, and a
+  raided base spends on its army. A resource the AI knows no node of is not held back, and a step short of one is not
+  reserved at all (built in M5-4g, BUG-0981, BUG-1021, BUG-1023, BUG-1025;
   [03 Implementation (M5-4g)](03-technical-design.md#implementation-m5-4g)).
 - Build orders, army compositions, and attack thresholds are per-faction data (`ai.json`), not code.
 - Each faction's `ai.json` holds one to eight named openings (a build order, an army mix and attack thresholds each);
