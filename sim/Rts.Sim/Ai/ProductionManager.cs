@@ -6,7 +6,8 @@ namespace Rts.Sim.Ai;
 /// The AI's army production (M5-2, docs/03 "Implementation (M5-2)"): when the build order sent nothing this think, it trains
 /// the current age's most under-weighted composition unit (fewest own live + queued half-pop per unit of weight, M5-3:
 /// weights are population shares; composition order on ties) among those a finished own building with an empty queue may train now, if what is left this think pays for it;
-/// else it waits (it doesn't spend on a cheaper unit instead).
+/// else it waits (it doesn't spend on a cheaper unit instead). M5-4g: it spends only above the reserve of the build order's
+/// reserved step (<see cref="AiPlayer.CanAffordAboveReserve"/>).
 /// </summary>
 internal static class ProductionManager
 {
@@ -30,8 +31,8 @@ internal static class ProductionManager
             pickShare = share;
         }
         if (pick < 0) return;
-        // Not judged: the next think simply looks at the queues again.
-        ai.TryTrain(pick, emptyQueueOnly: true, ref ai.Board.ProductionPending);
+        // Not judged: the next think simply looks at the queues again. M5-4g: only above the build order's reserve.
+        ai.TryTrain(pick, emptyQueueOnly: true, ref ai.Board.ProductionPending, aboveReserve: true);
     }
 
     /// <summary>Whether a finished own building with an empty queue and no AI command waiting on it may train <paramref name="type"/> now (its cost aside).</summary>

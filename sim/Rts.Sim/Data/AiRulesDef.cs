@@ -67,4 +67,10 @@ public sealed class AiRulesDef
 
     /// <summary>M5-4f: a hit on the hall that leaves it below this fraction of its max hp calls the whole wave home (<c>recallHallHp</c>, 0-1).</summary>
     public float RecallHallHp { get; init; }
+
+    /// <summary>
+    /// M5-4g: while the build order's reserved step is short of gold only (wood only), the AI's wanted gold share is
+    /// <see cref="GoldShare"/> plus (minus) this, clamped to 0-1 (<c>reserveShift</c>, 0-1; 0 leaves the split alone).
+    /// </summary>
+    public float ReserveShift { get; init; }
 }

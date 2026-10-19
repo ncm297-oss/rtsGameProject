@@ -6799,13 +6799,14 @@ acting only through commands. Code: `sim/Rts.Sim/Ai/AiPlayer.cs`, `Blackboard.cs
   tries the other kind first this think. A node in sight is never marked, and a worker seen at work clears its Gather.
 - **Production manager.** Only on a think the executor sent nothing: the current age's composition unit with the lowest
   `(own live + queued) / weight` (composition order, ascending unit ids, on ties) **among those a finished own building
-  with an empty queue and no AI command waiting on it may train now**; trained if the budget pays, else the think waits (it
-  doesn't spend on a cheaper unit). Builder reading: choosing among the units a free building trains keeps every building
+  with an empty queue and no AI command waiting on it may train now**; trained if the budget pays (since M5-4g: above the
+  build order's reserve, "Implementation (M5-4g)"), else the think waits (it doesn't spend on a cheaper unit). Builder reading: choosing among the units a free building trains keeps every building
   busy; the mix then follows the weights while several buildings are free and the buildings once only one is.
 - **Tunables.** `common/rules.json` `ai` (required; `DataValidationTests` rows): `goldShare` 0.6 (a fraction 0-1),
   `houseWhenPopWithin` 2 (pop, a multiple of 0.5, at most `popCap`), `placementSearchRadius` 32 m, `buildingSpacing` 2 m,
   `expandHallReach` 40 m (meters above 0, at most 64; spacing 0-8; to whole cells rounded up: 16, 1, 20). In `ContentHash`
-  since M5-3, with `ai.json`.
+  since M5-3, with `ai.json`. Later knobs: M5-3, M5-4b, M5-4c, M5-4f (`defendRatio` / `defendMinValue` / `recallHallHp`)
+  and M5-4g (`reserveShift`), each in its own section.
 - **Tests.** `Ai/AiPlayerTests` (criterion 3: the shipped steps of both factions run on every difficulty; a 10-step order
   with time / workers / pop triggers, counts, slack and concurrent steps fires in the documented order on Easy and Hard; a
   Build without wood waits and is sent at the first think after the wood, once; a Build the sim refuses (an enemy unit holding
@@ -7741,7 +7742,7 @@ rules are unchanged.
   9 marks had wood under 100 with gold at 300 or more, so the report reads "wood binds at some marks only, not the limit
   overall". Age II comes in late on every opening (its step due at 5:00-8:00, in at 509-1,098 s; the Whirlwind's Easy run never in 20
   minutes): the AI keeps no reserve for a due step and the production manager spends first ("Implementation (M5-2)";
-  reported to the Producer as a sim-side lever). The faction pages give each opening's runs in its own "Spending" and
+  reported to the Producer as a sim-side lever; since M5-4g it keeps one, "Implementation (M5-4g)"). The faction pages give each opening's runs in its own "Spending" and
   "Houses at the cap" notes (`QA/Content/D20PinQaTests.HouseNote_SaysWhatTheMenuMapRunsShow`); the 12th house step stays
   in every opening (taken out, the cap reaches 100 later on both factions and the house rule places it anyway).
   `Content/AiOpeningPairsReportTests` plays the 9 Malazan × Whirlwind pairings Normal against Normal for 20 minutes
@@ -7753,6 +7754,67 @@ rules are unchanged.
   `Ai/AiPlayerTests.AHouseStep_AtTheHardCap_IsDoneWithoutABuild` (pop cap 10 / 20),
   `Ai/AbilityManagerTests.TwoGroupsEitherSide_TheNearerIsCastOn`, `DataValidationTests` / `DataContentHashTests` (the three
   knobs), `ReplayGoldenTests`, `QA/GatherWedgeQaTests`.
+
+### Implementation (M5-4g)
+
+BUG-0981 (four of six openings never reached Age II against an active opponent): the build order gets the priority docs/02
+"AI opponent" gives it over army production. Code: `BuildOrderExecutor.Run` / `Reservable`, `AiPlayer.SetReserve` /
+`KnowsNode` / `CanAffordAboveReserve` / `WantedGoldShare` / `TryTrain(..., aboveReserve)`, `ProductionManager.Run`,
+`EconomyManager.Gatherers` / `Rebalance`, `AiRulesDef.ReserveShift`.
+
+- **The reserved step.** Each think, as the executor walks the steps in file order (after a step's judging, its done
+  checks and its BUG-0791 no-site wait), the first step that is due (trigger reached, slack passed, an expand past
+  `expandAfter`), not done, with no pending order, of action `build` / `research` / `expand`, whose cost what is left of the
+  think's purse can't pay, is the think's **reserved step**; its gold and wood are the **reserve** (`AiPlayer.ReserveStep`,
+  `ReserveGold`, `ReserveWood`; -1 and 0 / 0 with none). A house build step counts like any step. Builder addition (QA
+  focus a): a step only its cost may hold back qualifies, as far as the type's rules tell: a build's `requires` met
+  (`PlayerView.CanPlaceAnywhere` failing on the cost at most; it checks the cost before the building store, so a full store
+  shows only once the step is affordable) and somewhere to search round (a hall; a camp's known tree); an expand's free
+  mine known; a research's `requires` met at a finished own building that researches it (a full queue is a wait, not a
+  block). A step its rules hold back (a Cadre Tower before Age II is in, an expand with
+  no free mine known, a research with its Forge razed) would bank the purse for nothing and take the reserve from every
+  step after it. A step in its no-site wait is skipped the same way.
+- **Who spends only above it.** The production manager and the executor's `train` steps after the reserved step in file
+  order: a cost fits when each kind it uses leaves at least the reserve's amount of that kind (`CanAffordAboveReserve`;
+  a kind the cost doesn't use isn't checked, so a wood-only cost may still be paid while the reserve waits on gold).
+  **Unaffected:** steps before it in file order (file order is the data's priority), later `build` / `research` /
+  `expand` steps, the reserved step's own retry (it acts the think it can pay), the economy's house rule (a pop block
+  costs more than a late step), the defense, scout and ability managers (they spend nothing).
+- **The no-node guard.** A kind the player knows no node of that a gatherer could be sent to (the gatherers' own rule: not
+  marked dropped, not within `workerFleeRadius` of the defense point while defended; `AiPlayer.KnowsNode`) drops out of the
+  reserve that think: gathering would never fill it, and holding it would starve the other kind's spending.
+- **Gather toward what it lacks.** `ReserveShortGold` / `ReserveShortWood`: the purse (when the step was named) below
+  its cost in that kind, a guarded kind never. The wanted gold share in `Gatherers` (the idle pass) and `Rebalance` is
+  `goldShare + reserveShift` when short of gold only, `goldShare - reserveShift` when short of wood only, `goldShare` when
+  short of both or neither, clamped to 0-1 (`AiPlayer.WantedGoldShare`); `Rebalance` still moves one gatherer a think. With
+  `reserveShift` 0 the share is `goldShare` bit for bit.
+- **Knob.** `common/rules.json` `ai.reserveShift` **0.25** (required, a fraction 0-1; `DataValidationTests` rows at both
+  edges, missing and out of range; in `ContentHash`). The shipped data hash moved `554A3832241A0896` to `89C63D2CF2581A64`;
+  the golden's header and checksum were regenerated, no `k` line moved (no AI seat in it), and `QA/GatherWedgeQaTests` lists
+  the new hash.
+- **State.** The reserve is think scratch on `AiPlayer`, set by the executor and cleared at the start and the end of
+  every think, so between thinks (where a save is taken) a seat holds none and a loaded seat equals the saved one field for
+  field with nothing stored (`SaveTestRun.AssertSameAi`): no `Blackboard` field, the save format unchanged (version 2).
+  Tests see it through the `AiPlayer.ThoughtForTests` seam, called at a think's end before the clear. Nothing allocates: the guard walks the view's nodes once
+  per think at most, the requirement checks the census arrays.
+- **Measured** (Normal v Normal, the menu's map, 20 minutes, the 9 pairings on their three smallest seeds:
+  `Content/AiOpeningPairsReportTests` and `QA/Content/D21OpeningsQaTests`' second and third seeds). Before: 23 of the 41
+  sides alive at 20:00 had not reached Age II. After: every one of the 43 has (Malazan 6:05-10:09, Whirlwind 7:55-10:59
+  on the smallest seeds). The long gold / wood waits went from 11 to 4, all `expand` steps: three on sides that
+  know no gold node by then (the guard leaves them unreserved; the report checks gold before its "no known free mine"
+  reason), one (Whirlwind `standard`, seed 9) behind the house steps above it in file order. The cost is the Malazan army's
+  timing: its first wave comes later (on the smallest seeds 6:05-14:53 or never, before 5:31-9:12), Malazan sides alive
+  at 20:00 with no wave went 1 to 3 (`crossbow_push` v `holy_war` seed 12, `cadre_rush` v `standard` seed 16, `standard` v
+  `standard` seed 22) and sides defeated with no wave 2 to 7; Malazan defeats stayed at 8 of 27. The openings' wave
+  thresholds were set against a production-first AI (a data-track question).
+- **Tests.** `Ai/ReserveTests` (the reserved step is the first due unaffordable step and blocks a later train step and
+  production while an earlier train step spends; its own retry is sent once affordable and the next step is reserved;
+  production above the reserve; 0 / 0 with no step; the no-node guard with every mine marked dropped, and its twin; the
+  house rule unaffected; BUG-0981's `age_ii` case staged (Age II never queued in 6:00 before, queued at 2:37 after); the
+  wanted share's four cases and clamps; a shift of 0 is `goldShare` exactly; the rebalance moves one gatherer a think
+  toward the lacking kind; a think with a reserve allocates nothing), `DataValidationTests`, `DataContentHashTests`,
+  `ReplayGoldenTests`, `QA/GatherWedgeQaTests`; `QA/AiSeatQaTests.ImpossibleSteps_SendNothing_AndNeverStall` now holds its
+  purse at no wood before every think (the reserve saves for its house step, which production used to spend first).
 
 ### Implementation (M6-S1)
 

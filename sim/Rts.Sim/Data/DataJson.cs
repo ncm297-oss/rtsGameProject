@@ -66,6 +66,7 @@ internal sealed class AiRulesJson
     public double? DefendRatio { get; set; } // M5-4f
     public double? DefendMinValue { get; set; }
     public double? RecallHallHp { get; set; }
+    public double? ReserveShift { get; set; } // M5-4g
 }
 
 internal sealed class StealthJson

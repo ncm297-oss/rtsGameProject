@@ -423,7 +423,7 @@ public class DataContentHashTests
         Check(d.AiRules, r => With(d, aiRules: r));
         foreach (string f in new[] { "GoldShare", "HouseHalfPopMargin", "PlacementSearchCells", "SpacingCells", "ExpandReachCells", "ScoutAfterTicks",
             "ScoutRadius", "ScoutReach", "ScoutGrid", "RallyDistance", "RallyReach", "WaveCooldownTicks", "DefendRadius", "DefendForTicks", "WorkerFleeRadius", "CastMinTargets",
-            "DefendRatio", "DefendMinValue", "RecallHallHp" })
+            "DefendRatio", "DefendMinValue", "RecallHallHp", "ReserveShift" })
             Assert.Contains($"AiRulesDef.{f}", checkedFields);
         for (int slot = 0; slot < d.Ai.Length; slot++)
             Check(d.Ai[slot], x => With(d, ai: x, aiSlot: slot));
@@ -570,6 +570,7 @@ public class DataContentHashTests
     [InlineData("defendRatio", 2)] // M5-4f
     [InlineData("defendMinValue", 200)]
     [InlineData("recallHallHp", 0.4)]
+    [InlineData("reserveShift", 0.5)] // M5-4g
     public void AnAiRulesFieldEdit_ChangesTheHash(string field, double value)
     {
         using TestDataDir dir = TestDataDir.CopyOfShipped();

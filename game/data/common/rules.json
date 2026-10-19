@@ -15,5 +15,5 @@
   "ai": { "goldShare": 0.6, "houseWhenPopWithin": 2, "placementSearchRadius": 32, "buildingSpacing": 2, "expandHallReach": 40,
           "scoutAfter": 15, "scoutRadius": 40, "scoutReach": 6, "scoutGrid": 56, "rallyDistance": 12, "rallyReach": 6, "waveCooldown": 60,
           "defendRadius": 48, "defendFor": 20, "workerFleeRadius": 16, "defendRatio": 1.5, "defendMinValue": 150, "recallHallHp": 0.5,
-          "castMinTargets": 2 }
+          "castMinTargets": 2, "reserveShift": 0.25 }
 }

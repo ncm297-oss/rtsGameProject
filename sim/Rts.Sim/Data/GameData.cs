@@ -346,6 +346,7 @@ public sealed class GameData
         h.Add(r.DefendRatio); // M5-4f
         h.Add(r.DefendMinValue);
         h.Add(r.RecallHallHp);
+        h.Add(r.ReserveShift); // M5-4g
         h.Add(Ai.Length);
         foreach (AiDef a in Ai)
         {

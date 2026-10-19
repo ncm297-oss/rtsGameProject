@@ -403,6 +403,11 @@ own cues (select, order, refused, building placed or finished, unit or tech read
   above it gives its surplus), and calls the whole wave home only when the raid is worth more than that or its Town Hall
   is hit and below half hp (`rules.json` `ai.defendRatio` / `defendMinValue` / `recallHallHp`; built in M5-4f; wording
   aligned with [03 Implementation (M5-4f)](03-technical-design.md#implementation-m5-4f) on 2026-10-17, BUG-0871).
+- The build order comes before the army: when a due building, research or expansion step can't be paid yet, the AI
+  keeps its cost in reserve (army production and the build order's later unit steps spend only what is above it; earlier
+  steps, houses and the defense are unaffected) and moves its gatherers toward the resource the step lacks
+  (`rules.json` `ai.reserveShift`, 0.25 of the workers' gold share; a resource the AI knows no node of is not held back;
+  built in M5-4g, BUG-0981; [03 Implementation (M5-4g)](03-technical-design.md#implementation-m5-4g)).
 - Build orders, army compositions, and attack thresholds are per-faction data (`ai.json`), not code.
 - Each faction's `ai.json` holds one to eight named openings (a build order, an army mix and attack thresholds each);
   at match start an Easy AI always plays the first, and a Normal or Hard AI picks one at random from the match seed, so
