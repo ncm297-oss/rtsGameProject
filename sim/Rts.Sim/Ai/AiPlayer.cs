@@ -237,12 +237,35 @@ internal sealed partial class AiPlayer
     /// <summary>See <see cref="ReserveShortGold"/>.</summary>
     internal bool ReserveShortWood { get; private set; }
 
+    /// <summary>
+    /// M5-4g (BUG-1021): whether the build order may name a reserved step this think: once the opening has sent a wave, or
+    /// while the army's half-pop is at least <c>ai.reserveArmyShare</c> of the wave's (<c>attack.minArmyPop</c> times the
+    /// difficulty's <c>waveSizeMultiplier</c>). Before that, army production spends first, as before M5-4g: a reserve held
+    /// from the start cost a quarter of the sides their first wave.
+    /// </summary>
+    internal bool MayReserve() =>
+        Board.WavesStarted > 0 || ArmyHalfPop() >= Rules.ReserveArmyShare * Opening.AttackMinHalfPop * Knobs.WaveSizeMultiplier;
+
+    /// <summary>The half-pop of the player's live non-worker units, from this think's census (<see cref="Live"/>).</summary>
+    internal int ArmyHalfPop()
+    {
+        int half = 0;
+        for (int t = 0; t < Live.Length; t++)
+            if (!IsWorkerType[t]) half += Live[t] * Data.Units[t].HalfPop;
+        return half;
+    }
+
     private void ClearReserve()
     {
         ReserveStep = -1;
         ReserveGold = ReserveWood = 0;
         ReserveShortGold = ReserveShortWood = false;
+        _knowsGold = _knowsWood = 0;
     }
+
+    // KnowsNode's answers this think (0 not walked yet, 1 yes, 2 no): BUG-1023 asks it for every candidate step, and the
+    // answer can't change within a think (the defense, which sets the flee ring, runs before the executor).
+    private byte _knowsGold, _knowsWood;
 
     /// <summary>
     /// M5-4g: names step <paramref name="step"/> (costing <paramref name="gold"/> / <paramref name="wood"/>, more than is left
@@ -263,8 +286,16 @@ internal sealed partial class AiPlayer
     /// M5-4g: whether the player knows a node of <paramref name="kind"/> the economy could send a worker to: one its
     /// gatherers' search would take (not marked dropped, not within <c>ai.workerFleeRadius</c> of the defense point while
     /// the base is defended).
+    /// Walked once a think per kind.
     /// </summary>
     internal bool KnowsNode(ResourceKind kind)
+    {
+        ref byte known = ref kind == ResourceKind.Gold ? ref _knowsGold : ref _knowsWood;
+        if (known == 0) known = WalkForNode(kind) ? (byte)1 : (byte)2;
+        return known == 1;
+    }
+
+    private bool WalkForNode(ResourceKind kind)
     {
         float flee = Board.Defending ? Rules.WorkerFleeRadius * Rules.WorkerFleeRadius : -1f;
         int s = -1;

@@ -73,4 +73,11 @@ public sealed class AiRulesDef
     /// <see cref="GoldShare"/> plus (minus) this, clamped to 0-1 (<c>reserveShift</c>, 0-1; 0 leaves the split alone).
     /// </summary>
     public float ReserveShift { get; init; }
+
+    /// <summary>
+    /// M5-4g (BUG-1021): until the opening's first wave has been sent, the build order names a reserved step only while the
+    /// army's half-pop is at least this fraction of the wave's (<c>attack.minArmyPop</c> times the difficulty's
+    /// <c>waveSizeMultiplier</c>): the timing attack is built first (<c>reserveArmyShare</c>, 0-1; 0 reserves from the start).
+    /// </summary>
+    public float ReserveArmyShare { get; init; }
 }

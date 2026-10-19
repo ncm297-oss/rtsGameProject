@@ -42,6 +42,7 @@ public class ReserveQaTests
         dir.EditJson("common/rules.json", r =>
         {
             r["ai"]!["scoutAfter"] = 3600;
+            r["ai"]!["reserveArmyShare"] = 0; // M5-4g fix round 1 (BUG-1021): no army in these scenes, the reserve named from the start
             rulesAi?.Invoke(r["ai"]!);
         });
     });
@@ -61,8 +62,9 @@ public class ReserveQaTests
 
     /// <summary>
     /// The no-node guard's wood twin (the developer's row drops gold): every tree marked dropped, Age II (400 / 200) due, the
-    /// purse 500 / 190 (short of wood only). Wood drops out of the reserve (gathering would never fill it), so a Heavy Infantry (54 / 20) still
-    /// trains above the gold part (446 &gt;= 400); with the trees known, 170 &lt; 200 wood blocks it.
+    /// purse 500 / 190 (short of wood only). Since M5-4g fix round 1 (BUG-1023 item 2) a step short of a kind no gatherer can
+    /// reach is not reserved at all (it would bank its gold for nothing), so a Heavy Infantry (54 / 20) trains; with the
+    /// trees known, Age II holds 400 / 200 and 170 &lt; 200 wood blocks it.
     /// </summary>
     [Theory]
     [InlineData(true)]
@@ -87,8 +89,8 @@ public class ReserveQaTests
         while (sim.TickNumber % ai.ThinkTicks != 0) sim.Tick();
         BuildMaps.SetTotals(sim, 0, 500, 190);
         sim.Tick();
-        Assert.Equal(0, seen.step);
-        Assert.Equal(woodGone ? (400, 0) : (400, 200), (seen.gold, seen.wood));
+        Assert.Equal(woodGone ? -1 : 0, seen.step);
+        Assert.Equal(woodGone ? (0, 0) : (400, 200), (seen.gold, seen.wood));
         Assert.Equal((false, !woodGone), (seen.shortGold, seen.shortWood));
         Assert.Equal(woodGone ? d.AiRules.GoldShare : d.AiRules.GoldShare - d.AiRules.ReserveShift, seen.share, 5); // a guarded kind is never "short"
         Assert.Equal(woodGone, log.Any(c => c.Kind == CommandKind.Train && c.TypeId == d.FindUnit("malazan_heavy_infantry")));
@@ -194,7 +196,8 @@ public class ReserveQaTests
     }
 
     /// <summary>
-    /// The menu map, Normal v Normal, a pairing's smallest seed: the reference runs 9,000 ticks; at the first three thinks
+    /// The menu map, Normal v Normal, a pairing's smallest seed: the reference runs 14,000 ticks (9,000 before M5-4g fix round
+    /// 1: since BUG-1021 the reserve waits for a wave-sized army or the first wave, the first named at 6:00-6:10 on these seeds); at the first three thinks
     /// that named a reserve (at least 600 ticks apart) it is saved at the think tick (before the think), one tick after it
     /// and one tick before the next think. Each load is ticked beside the reference for 600 ticks: the AI commands
     /// (every field), the reserve each seat names at every think, and the hash, every tick; the seats field for field at the load and at the end.
@@ -217,7 +220,7 @@ public class ReserveQaTests
         var live = new List<(Simulation Sim, List<string> Cmds, List<string> Res, int SavedAt)>();
         int loads = 0, compared = 0, reservesCompared = 0;
         var pendingSaves = new SortedSet<int>();
-        while (reference.TickNumber < 9000 || live.Count > 0)
+        while (reference.TickNumber < 14000 || live.Count > 0)
         {
             int t = reference.TickNumber;
             if (pendingSaves.Remove(t))
@@ -235,7 +238,7 @@ public class ReserveQaTests
             refRes.Clear();
             reference.Tick();
             bool named = refRes.Any(x => !x.Contains("step -1", StringComparison.Ordinal));
-            if (named && t < 8000 && (namedAt.Count == 0 || t - namedAt[^1] >= 600) && namedAt.Count < 3)
+            if (named && t < 13000 && (namedAt.Count == 0 || t - namedAt[^1] >= 600) && namedAt.Count < 3)
             {
                 namedAt.Add(t);
                 pendingSaves.Add(t + 1);
@@ -303,6 +306,8 @@ public class ReserveQaTests
                     }
                 });
             }
+            // M5-4g fix round 1 (BUG-1021): every think names a reserve whatever the army (the reserve's whole path runs).
+            dir.EditJson("common/rules.json", r => r["ai"]!["reserveArmyShare"] = 0);
         });
     });
 

@@ -34,10 +34,12 @@ public class ReserveTests
                 o["compositions"] = JsonNode.Parse($$"""[{ "age": 1, "units": { "{{unit}}": 1 } }, { "age": 2, "units": { "{{unit}}": 1 } }]""");
             }
         });
-        // The scout stays home: its worker would leave the gather counts below.
+        // The scout stays home: its worker would leave the gather counts below. These scenes have no army, so the reserve is
+        // named from the start (reserveArmyShare 0, M5-4g's first rule); the BUG-1021 gate's own rows set it back.
         dir.EditJson("common/rules.json", r =>
         {
             r["ai"]!["scoutAfter"] = 3600;
+            r["ai"]!["reserveArmyShare"] = 0;
             rulesAi?.Invoke(r["ai"]!);
         });
     });
@@ -173,14 +175,16 @@ public class ReserveTests
     }
 
     /// <summary>
-    /// The no-node guard: with every gold mine marked dropped (the gatherers' search finds none), gold drops out of Age II's
-    /// reserve, so production trains above the wood part (300 / 250: Heavy Infantry 54 / 20 leaves 230 wood of the 200
-    /// reserved); the twin with the mines known trains nothing.
+    /// The no-node guard, every gold mine marked dropped (the gatherers' search finds none), Age II (400 / 200) due. Short of
+    /// gold (300 / 250): since BUG-1023 (item 2) the step is not reserved at all (no gathering could pay it, and holding
+    /// its wood would bank it for nothing), so a Heavy Infantry (54 / 20) trains; the twin with the mines known holds
+    /// 400 / 200 and trains nothing. Not short of gold (450 / 150): gold drops out of the reserve, the wood part stands.
     /// </summary>
     [Theory]
-    [InlineData(true)]
-    [InlineData(false)]
-    public void TheNoNodeGuard_DropsAKindWithNoKnownNode(bool goldGone)
+    [InlineData(true, 300, 250)]
+    [InlineData(false, 300, 250)]
+    [InlineData(true, 450, 150)]
+    public void TheNoNodeGuard_AStepShortOfAnUnreachableKindIsNotReserved_AnUnreachableKindDropsOut(bool goldGone, int gold, int wood)
     {
         GameData d = s_ageTwo.Value;
         Simulation sim = Scene(d);
@@ -195,11 +199,26 @@ public class ReserveTests
             }
         Assert.True(!goldGone || mines > 0);
         List<Command> log = AiScenes.Log(sim, 0);
-        List<Command> sent = Think(sim, log, 300, 250);
-        Assert.Equal(0, _last.Step);
-        Assert.Equal(goldGone ? (0, 200) : (400, 200), (_last.Gold, _last.Wood));
-        Assert.Equal((!goldGone, false), (_last.ShortGold, _last.ShortWood));
-        Assert.Equal(goldGone, sent.Any(c => c.Kind == CommandKind.Train && c.TypeId == Unit(d, "malazan_heavy_infantry")));
+        List<Command> sent = Think(sim, log, gold, wood);
+        bool trained = sent.Any(c => c.Kind == CommandKind.Train && c.TypeId == Unit(d, "malazan_heavy_infantry"));
+        if (gold < 400 && goldGone)
+        {
+            Assert.Equal((-1, 0, 0), (_last.Step, _last.Gold, _last.Wood));
+            Assert.Equal((false, false), (_last.ShortGold, _last.ShortWood));
+            Assert.True(trained);
+        }
+        else if (goldGone)
+        {
+            Assert.Equal((0, 0, 200), (_last.Step, _last.Gold, _last.Wood));
+            Assert.Equal((false, true), (_last.ShortGold, _last.ShortWood));
+            Assert.False(trained); // 150 - 20 wood is under the 200 held
+        }
+        else
+        {
+            Assert.Equal((0, 400, 200), (_last.Step, _last.Gold, _last.Wood));
+            Assert.Equal((true, false), (_last.ShortGold, _last.ShortWood));
+            Assert.False(trained);
+        }
     }
 
     /// <summary>
@@ -231,14 +250,19 @@ public class ReserveTests
     [Fact]
     public void Bug0981_AnAgeTwoStepStarvedByProduction_IsResearched()
     {
-        GameData d = AiScenes.DataWith(dir => dir.EditJson("factions/malazan/ai.json", root =>
+        GameData d = AiScenes.DataWith(dir =>
+        {
+            dir.EditJson("factions/malazan/ai.json", root =>
         {
             foreach (JsonNode? o in root["openings"]!.AsArray())
             {
                 o!["buildOrder"] = AiScenes.BuildOrder(("time", 0, "train", "malazan_laborer", 4), ("time", 60, "research", "age_ii", 0));
                 o["compositions"] = JsonNode.Parse("""[{ "age": 1, "units": { "malazan_heavy_infantry": 2, "malazan_crossbowman": 1 } }, { "age": 2, "units": { "malazan_heavy_infantry": 1 } }]""");
             }
-        }));
+        });
+            // The reserve from the start: this row stages the reserve, the BUG-1021 gate has its own rows.
+            dir.EditJson("common/rules.json", r => r["ai"]!["reserveArmyShare"] = 0);
+        });
         Simulation sim = Scene(d);
         AiPlayer ai = sim.AiOf(0)!;
         int ageTwo = d.FindTech("age_ii");
@@ -317,24 +341,119 @@ public class ReserveTests
         for (int k = 1; k < counts.Count; k++) Assert.InRange(counts[k] - counts[k - 1], 0, 1);
     }
 
+    // ---------- BUG-1021: the reserve waits for a wave-sized army or the first wave ----------
+
+    /// <summary>Age II alone, the shipped <c>reserveArmyShare</c> unless <paramref name="share"/> is given.</summary>
+    private static GameData GateData(double? share) => Data(AiScenes.BuildOrder(("time", 0, "research", "age_ii", 0)), "malazan_heavy_infantry",
+        a => a["reserveArmyShare"] = share ?? TestSim.Data.AiRules.ReserveArmyShare);
+
+    private static readonly Lazy<GameData> s_gate = new(() => GateData(null));
+
+    /// <summary>Spawns <paramref name="count"/> Heavy Infantry for player 0 between its hall and its Barracks, and ticks once so they are in.</summary>
+    private static void SpawnArmy(Simulation sim, int count)
+    {
+        int hi = sim.World.Data.FindUnit("malazan_heavy_infantry");
+        for (int k = 0; k < count; k++) sim.Enqueue(Command.SpawnUnit(0, hi, new System.Numerics.Vector2(14.5f + k % 10, 34.5f + k / 10)));
+        sim.Tick();
+    }
+
+    /// <summary>Heavy Infantry needed for <paramref name="share"/> of the seat's wave (<c>attack.minArmyPop</c> x the difficulty's <c>waveSizeMultiplier</c>), rounded up.</summary>
+    private static int Needed(AiPlayer ai, double share)
+    {
+        int half = ai.Data.Units[ai.Data.FindUnit("malazan_heavy_infantry")].HalfPop;
+        return (int)Math.Ceiling(share * ai.Opening.AttackMinHalfPop * ai.Knobs.WaveSizeMultiplier / half - 1e-6);
+    }
+
     /// <summary>
-    /// A think naming a reserve allocates nothing: every step due and unaffordable (the requirement checks, the no-node
-    /// guard's node walk, the shifted gather split and the reserve-bound production all run), 0 B.
+    /// BUG-1021: with the shipped <c>reserveArmyShare</c> (1) and no wave sent, Age II (400 / 200, the purse 300 / 300) is not
+    /// reserved while the army is one Heavy Infantry short of the opening's wave: production may spend. With the army
+    /// wave-sized it is reserved (400 / 200) and production waits.
     /// </summary>
     [Fact]
-    public void AThinkWithAReserve_AllocatesNothing()
+    public void Bug1021_TheReserve_WaitsForAWaveSizedArmy()
     {
-        GameData d = s_order.Value;
+        GameData d = s_gate.Value;
+        Assert.Equal(1f, d.AiRules.ReserveArmyShare);
         Simulation sim = Scene(d);
         AiPlayer ai = sim.AiOf(0)!;
         List<Command> log = AiScenes.Log(sim, 0);
-        for (int k = 0; k < 10; k++) Think(sim, log, 60, 10);
-        Assert.Equal(2, _last.Step); // the Forge research (step 1) held back by its requirement, the Armory (step 2) reserved
-        ai.ThoughtForTests = null;
-        ai.SentForTests = null;
-        while (sim.TickNumber % ai.ThinkTicks != 0) sim.Tick();
-        BuildMaps.SetTotals(sim, 0, 60, 10);
-        AllocationProbe.AssertZero(() => ai.Think(), _out);
+        int need = Needed(ai, 1);
+        Assert.True(need > 1, $"wave {ai.Opening.AttackMinHalfPop} half-pop x {ai.Knobs.WaveSizeMultiplier}");
+        SpawnArmy(sim, need - 1);
+        bool fits = false;
+        Think(sim, log, 300, 300, a => fits = a.CanAffordAboveReserve(54, 20));
+        Assert.Equal((-1, 0, 0), (_last.Step, _last.Gold, _last.Wood));
+        Assert.True(fits); // production may spend (the pop cap, not the reserve, is what stops a train in this scene)
+        Assert.Equal(0, ai.Board.WavesStarted);
+        SpawnArmy(sim, 1);
+        Think(sim, log, 300, 300);
+        Assert.Equal((0, 400, 200), (_last.Step, _last.Gold, _last.Wood));
+    }
+
+    /// <summary>BUG-1021: once the opening has sent a wave the reserve is named whatever the army (none here).</summary>
+    [Fact]
+    public void Bug1021_AfterTheFirstWave_TheReserveIsNamedWithNoArmy()
+    {
+        GameData d = s_gate.Value;
+        Simulation sim = Scene(d);
+        AiPlayer ai = sim.AiOf(0)!;
+        List<Command> log = AiScenes.Log(sim, 0);
+        List<Command> sent = Think(sim, log, 300, 300);
+        Assert.Equal(-1, _last.Step);
+        Assert.Contains(sent, c => c.Kind == CommandKind.Train);
+        ai.Board.WavesStarted = 1;
+        sent = Think(sim, log, 300, 300);
+        Assert.Equal((0, 400, 200), (_last.Step, _last.Gold, _last.Wood));
+        Assert.DoesNotContain(sent, c => c.Kind == CommandKind.Train);
+    }
+
+    /// <summary>
+    /// <c>reserveArmyShare</c> is a fraction of the wave: at 0.5 an army of half the wave (rounded up) names the reserve and
+    /// one Heavy Infantry fewer doesn't; at 0 the reserve is named with no army (M5-4g's first rule).
+    /// </summary>
+    [Theory]
+    [InlineData(0.5, 0, true)]
+    [InlineData(0.5, -1, false)]
+    [InlineData(0.0, 0, true)]
+    public void Bug1021_TheArmyShare_IsAFractionOfTheWave(double share, int extra, bool reserved)
+    {
+        GameData d = GateData(share);
+        Simulation sim = Scene(d);
+        AiPlayer ai = sim.AiOf(0)!;
+        List<Command> log = AiScenes.Log(sim, 0);
+        int count = Needed(ai, share) + extra;
+        if (count > 0) SpawnArmy(sim, count);
+        Think(sim, log, 300, 300);
+        Assert.Equal(reserved ? 0 : -1, _last.Step);
+    }
+
+    /// <summary>The allocation row, in the serial collection (BUG-1020: a count taken next to the parallel batch can be charged another test's JIT).</summary>
+    [Collection(SerialCollection.Name)]
+    public class Serial
+    {
+        private readonly ReserveTests _t;
+
+        public Serial(ITestOutputHelper output) => _t = new ReserveTests(output);
+
+        /// <summary>
+        /// A think naming a reserve allocates nothing: every step due and unaffordable (the requirement checks, the no-node
+        /// guard's node walk, the shifted gather split and the reserve-bound production all run), 0 B.
+        /// </summary>
+        [Fact]
+        public void AThinkWithAReserve_AllocatesNothing()
+        {
+            GameData d = s_order.Value;
+            Simulation sim = Scene(d);
+            AiPlayer ai = sim.AiOf(0)!;
+            List<Command> log = AiScenes.Log(sim, 0);
+            for (int k = 0; k < 10; k++) _t.Think(sim, log, 60, 10);
+            Assert.Equal(2, _t._last.Step); // the Forge research (step 1) held back by its requirement, the Armory (step 2) reserved
+            ai.ThoughtForTests = null;
+            ai.SentForTests = null;
+            while (sim.TickNumber % ai.ThinkTicks != 0) sim.Tick();
+            BuildMaps.SetTotals(sim, 0, 60, 10);
+            AllocationProbe.AssertZero(() => ai.Think(), _t._out);
+        }
     }
 
     /// <summary>Player 0's workers the AI last sent to gold (its gather bookkeeping) that are gathering or returning.</summary>

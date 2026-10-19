@@ -355,7 +355,7 @@ public static partial class DataLoader
     /// to whole cells, rounded up. M5-3: <c>scoutAfter</c> and <c>waveCooldown</c> s (0-3,600, to ticks); <c>scoutRadius</c> and
     /// <c>rallyDistance</c> m (1-64), <c>scoutReach</c> and <c>rallyReach</c> m (1-16), <c>scoutGrid</c> m (16-256, BUG-0593), kept in meters. M5-4b: <c>defendRadius</c> m (8-256), <c>defendFor</c> s (0-600, to
     /// ticks), <c>workerFleeRadius</c> m (1-64). M5-4c: <c>castMinTargets</c> a whole number 1-50. M5-4f: <c>defendRatio</c> 0.5-10,
-    /// <c>defendMinValue</c> gold + wood 0-5,000, <c>recallHallHp</c> a fraction 0-1. M5-4g: <c>reserveShift</c> a fraction 0-1. A refused <c>popCap</c> is reported once: the cap rule is skipped then.
+    /// <c>defendMinValue</c> gold + wood 0-5,000, <c>recallHallHp</c> a fraction 0-1. M5-4g: <c>reserveShift</c> and <c>reserveArmyShare</c> fractions 0-1. A refused <c>popCap</c> is reported once: the cap rule is skipped then.
     /// </summary>
     private static AiRulesDef BuildAiRules(Checker c, AiRulesJson? j, RulesDef? rules)
     {
@@ -388,6 +388,7 @@ public static partial class DataLoader
             DefendMinValue = (float)InRange(c, j.DefendMinValue, "ai.defendMinValue", 0, DataLimits.MaxAiDefendMinValue),
             RecallHallHp = (float)Fraction(c, j.RecallHallHp, "ai.recallHallHp"),
             ReserveShift = (float)Fraction(c, j.ReserveShift, "ai.reserveShift"), // M5-4g
+            ReserveArmyShare = (float)Fraction(c, j.ReserveArmyShare, "ai.reserveArmyShare"), // M5-4g, BUG-1021
         };
     }
 
