@@ -15,9 +15,34 @@ namespace Rts.Sim.Tests.Save;
 public class SaveFormatTests
 {
     [Fact]
-    public void CurrentVersion_Is1()
+    public void CurrentVersion_Is2()
     {
-        Assert.Equal(1, SaveFormat.CurrentVersion);
+        // M6-S3: the AI seats' section bumped the format (rule 36); a version-1 file is refused, not read.
+        Assert.Equal(2, SaveFormat.CurrentVersion);
+    }
+
+    [Fact]
+    public void TheAiSection_ComesAfterTheCommands_AndHoldsEachAiSeatInPlayerOrder()
+    {
+        // A human-only save: the tag and a seat count of 0 right before END!.
+        byte[] human = SaveBytes.Small();
+        int body = human.Length - SaveFormat.ChecksumLength;
+        Assert.Equal("AIST"u8.ToArray(), human.AsSpan(body - 12, 4).ToArray());
+        Assert.Equal(0, BinaryPrimitives.ReadInt32LittleEndian(human.AsSpan(body - 8)));
+
+        // Human, AI, AI: the count, then player 1's entry (its player, its pick) and later player 2's.
+        var seats = System.Collections.Immutable.ImmutableArray.Create(new PlayerSeat(0, SeatController.Human, AiDifficulty.Normal),
+            new PlayerSeat(1, SeatController.Ai, AiDifficulty.Hard), new PlayerSeat(0, SeatController.Ai, AiDifficulty.Easy));
+        var sim = new Simulation(TestSim.Config(3, 3, 64, 64) with { Seats = seats });
+        byte[] bytes = SaveTestRun.Save(sim);
+        int at = SaveBytes.AiSection(bytes);
+        Assert.True(bytes.AsSpan(0, at).LastIndexOf("CMDS"u8) > 0);
+        Assert.Equal(2, BinaryPrimitives.ReadInt32LittleEndian(bytes.AsSpan(at + 4)));
+        Assert.Equal(1, BinaryPrimitives.ReadInt32LittleEndian(bytes.AsSpan(at + 8)));
+        Assert.Equal(sim.AiOpening(1), BinaryPrimitives.ReadInt32LittleEndian(bytes.AsSpan(at + 12)));
+        Assert.Equal(sim.AiOf(1)!.Rng.State, BinaryPrimitives.ReadUInt64LittleEndian(bytes.AsSpan(at + 16)));
+        Assert.Equal(sim.AiOf(1)!.Rng.Increment, BinaryPrimitives.ReadUInt64LittleEndian(bytes.AsSpan(at + 24)));
+        Assert.Equal("END!"u8.ToArray(), bytes.AsSpan(bytes.Length - SaveFormat.ChecksumLength - 4, 4).ToArray());
     }
 
     [Fact]

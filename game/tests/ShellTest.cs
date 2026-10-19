@@ -330,9 +330,12 @@ public partial class ShellTest : Node
         foreach (LoadText k in Enum.GetValues<LoadText>()) keys.Add(("load", UiText.Key(k), _ui.LoadGame(k)));
         // M6-V12: the attack alerts' two texts.
         foreach (AlertText k in Enum.GetValues<AlertText>()) keys.Add(("alert", UiText.Key(k), _ui.Alert(k)));
+        // M6-V14: the save / load texts.
+        foreach (SaveText k in Enum.GetValues<SaveText>()) keys.Add(("save", UiText.Key(k), _ui.Save(k)));
         // settings: 22 since M6-V7 (confine_cursor); keys 15 + hud 2 since M6-V8; setup 17 since M6-V5 (add_slot, remove_slot); menu 5 + load 16 since M6-V9 (18 since M6-VH3: playing, unreadable);
         // match_over 27 since M6-V11 (kills, losses and the two in-hand keys out; nine column labels, not_reached and the graph's three in); alert 2 since M6-V12; match_over 28 since M6-V13 (opening)
-        Check(keys.Count == 5 + 17 + 4 + 22 + 28 + 15 + 2 + 18 + 2, $"{keys.Count} shell keys");
+        // M6-V14: pause 5 (save), load 22 (kind, load, save_tag, replay_tag), save 12
+        Check(keys.Count == 5 + 17 + 5 + 22 + 28 + 15 + 2 + 22 + 2 + 12, $"{keys.Count} shell keys");
         string json = File.ReadAllText(UiText.DefaultPath).Replace("\r\n", "\n");
         foreach ((string section, string key, string text) in keys)
         {
@@ -343,7 +346,7 @@ public partial class ShellTest : Node
             Check(UiText.Parse(root.ToJsonString(), errors) == null && errors.Count == 1 && errors[0].Contains($"{section}.{key}"),
                 $"ui.json without {section}.{key}: [{string.Join("; ", errors)}]");
         }
-        foreach (string section in new[] { "menu", "setup", "pause", "settings", "match_over", "keys", "load", "alert" })
+        foreach (string section in new[] { "menu", "setup", "pause", "settings", "match_over", "keys", "load", "alert", "save" })
         {
             var root = System.Text.Json.Nodes.JsonNode.Parse(json)!.AsObject();
             root.Remove(section);
@@ -380,7 +383,11 @@ public partial class ShellTest : Node
             // M6-VH3 (BUG-0830): the playback mark and an unreadable file's row.
             "load.playing", "load.unreadable",
             // M6-V12: the attack alerts.
-            "alert.base_under_attack", "alert.units_under_attack" };
+            "alert.base_under_attack", "alert.units_under_attack",
+            // M6-V14: Save on the pause menu, Load and the kind tags on Load Game, the save lines and one text per SaveError.
+            "pause.save", "load.load", "load.kind", "load.save_tag", "load.replay_tag", "save.saved", "save.not_recorded", "save.write_failed",
+            "save.read_failed", "save.bad_magic", "save.version_mismatch", "save.data_mismatch", "save.invalid_header", "save.ai_seats_unsupported",
+            "save.truncated", "save.checksum_mismatch", "save.malformed" };
         foreach (string n in named) Check(keys.Any(k => $"{k.Section}.{k.Key}" == n), $"no key {n}");
         // M6-V12: the brief's wording (docs/02 "HUD layout").
         Check(_ui.Alert(AlertText.BaseUnderAttack) == "Your base is under attack" && _ui.Alert(AlertText.UnitsUnderAttack) == "Your units are under attack",
@@ -420,6 +427,26 @@ public partial class ShellTest : Node
         for (int i = 0; i < KeyMap.FirstGroup; i++)
             Check(Enum.TryParse(KeyMap.Actions[i].Replace("_", ""), ignoreCase: true, out KeysText _) && InputMap.HasAction(KeyMap.Actions[i]),
                 $"action {KeyMap.Actions[i]} has no keys text or no input action");
+
+        // M6-V14: save.saved names the clock; every SaveError but None has its own non-empty text, and no two share one.
+        Check(_ui.SavedLine(20 * 75).Contains(_ui.Clock(20 * 75)) && _ui.SavedLine(0) != _ui.SavedLine(20 * 75), $"save.saved: '{_ui.SavedLine(20 * 75)}'");
+        foreach (string bad in new[] { "Saved", "{1}", "{{0}}", "{0} {1}" })
+        {
+            var root = System.Text.Json.Nodes.JsonNode.Parse(json)!.AsObject();
+            root["save"]!["saved"] = bad;
+            var errors = new List<string>();
+            Check(UiText.Parse(root.ToJsonString(), errors) == null && errors.Count == 1 && errors[0].Contains("save.saved"), $"save.saved '{bad}': [{string.Join("; ", errors)}]");
+        }
+        var codeTexts = new List<string>();
+        foreach (Rts.Sim.Save.SaveError e in Enum.GetValues<Rts.Sim.Save.SaveError>())
+        {
+            string t = _ui.SaveErrorText(e);
+            if (e == Rts.Sim.Save.SaveError.None) Check(t.Length == 0 && UiText.SaveTextOf(e) == null, $"SaveError.None has text '{t}'");
+            else Check(t.Length > 0 && UiText.SaveTextOf(e) is SaveText k && t == _ui.Save(k), $"SaveError.{e} has no save.* text");
+            if (t.Length > 0) codeTexts.Add(t);
+        }
+        Check(codeTexts.Distinct().Count() == codeTexts.Count && codeTexts.Count == 8, $"save code texts: {codeTexts.Count}, {codeTexts.Distinct().Count()} distinct");
+        Check(UiText.SaveTextOf(Rts.Sim.Save.SaveError.FormatVersionMismatch) == SaveText.VersionMismatch, "FormatVersionMismatch is not save.version_mismatch");
 
         // M6-V9: the three load formats; one that can't format (or names too little) is one error naming its key.
         Check(_ui.ReplaySeat("Malazan", "AI").Contains("Malazan") && _ui.ReplaySeat("Malazan", "AI").Contains("AI") && _ui.ReplaysSkipped(3).Contains('3')

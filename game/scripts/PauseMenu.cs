@@ -3,10 +3,12 @@ using Godot;
 
 namespace Rts.Game;
 
-/// <summary>The pause menu over a match (M6-V1, docs/02 "Game flow" 3): Resume, Settings (M6-V6), Stats (M6-V4, once the match-over banner has shown) and Quit to menu. Text from <c>ui.json</c> <c>pause</c> (Stats: <c>match_over.stats</c>).</summary>
+/// <summary>The pause menu over a match (M6-V1, docs/02 "Game flow" 3): Resume, Save (M6-V14), Settings (M6-V6), Stats (M6-V4, once the match-over banner has shown) and Quit to menu. Text from <c>ui.json</c> <c>pause</c> (Stats: <c>match_over.stats</c>; the save lines: <c>save</c>).</summary>
 /// <remarks>
 /// It runs while the tree is paused (<see cref="Node.ProcessModeEnum.Always"/>); its backdrop takes every click, so nothing
-/// under it gets one. It only raises events; <see cref="Main"/> pauses, resumes and ends the match.
+/// under it gets one. It only raises events and shows what it is told; <see cref="Main"/> pauses, resumes, saves and ends
+/// the match. M6-V14: under the buttons, <see cref="RecordNote"/> (<c>save.not_recorded</c>, a loaded match) and
+/// <see cref="SaveStatus"/> (the last Save's result: <c>save.saved</c> or the refusal's <c>save.*</c> text).
 /// </remarks>
 public partial class PauseMenu : CanvasLayer
 {
@@ -15,6 +17,9 @@ public partial class PauseMenu : CanvasLayer
 
     /// <summary>Raised by the Resume button.</summary>
     public event Action? ResumePressed;
+
+    /// <summary>Raised by the Save button (M6-V14).</summary>
+    public event Action? SavePressed;
 
     /// <summary>Raised by the Settings button.</summary>
     public event Action? SettingsPressed;
@@ -31,11 +36,20 @@ public partial class PauseMenu : CanvasLayer
     /// <summary>The Resume button.</summary>
     public Button ResumeButton { get; private set; } = null!;
 
+    /// <summary>The Save button (M6-V14); shown by <see cref="Main"/> for a live or loaded match with a save folder, never for a replay.</summary>
+    public Button SaveButton { get; private set; } = null!;
+
     /// <summary>The Settings button.</summary>
     public Button SettingsButton { get; private set; } = null!;
 
     /// <summary>The Quit to menu button.</summary>
     public Button QuitToMenuButton { get; private set; } = null!;
+
+    /// <summary>The line under the buttons with the last Save's result (M6-V14); empty when the menu opens.</summary>
+    public Label SaveStatus { get; private set; } = null!;
+
+    /// <summary>The note that a loaded match is not recorded (<c>save.not_recorded</c>, M6-V14); hidden for a match that records.</summary>
+    public Label RecordNote { get; private set; } = null!;
 
     /// <summary>Builds the screen's controls with <paramref name="ui"/>'s text; hidden until <see cref="Main"/> shows it.</summary>
     public void Build(UiText ui)
@@ -50,6 +64,10 @@ public partial class PauseMenu : CanvasLayer
         ResumeButton = ShellUi.Button("Resume", ui.Pause(PauseText.Resume));
         ResumeButton.Pressed += () => ResumePressed?.Invoke();
         column.AddChild(ResumeButton);
+        SaveButton = ShellUi.Button("Save", ui.Pause(PauseText.Save));
+        SaveButton.Pressed += () => SavePressed?.Invoke();
+        SaveButton.Visible = false;
+        column.AddChild(SaveButton);
         SettingsButton = ShellUi.Button("Settings", ui.Pause(PauseText.Settings));
         SettingsButton.Pressed += () => SettingsPressed?.Invoke();
         column.AddChild(SettingsButton);
@@ -60,5 +78,21 @@ public partial class PauseMenu : CanvasLayer
         QuitToMenuButton = ShellUi.Button("QuitToMenu", ui.Pause(PauseText.QuitToMenu));
         QuitToMenuButton.Pressed += () => QuitToMenuPressed?.Invoke();
         column.AddChild(QuitToMenuButton);
+        SaveStatus = Line("SaveStatus", "", 18);
+        column.AddChild(SaveStatus);
+        RecordNote = Line("RecordNote", ui.Save(SaveText.NotRecorded), 16);
+        RecordNote.Visible = false;
+        column.AddChild(RecordNote);
+    }
+
+    // A centred line wrapped at the buttons' width, so a long refusal text never widens the column (and its buttons).
+    private static Label Line(string name, string text, int size)
+    {
+        Label label = ShellUi.Text(text, size);
+        label.Name = name;
+        label.HorizontalAlignment = HorizontalAlignment.Center;
+        label.AutowrapMode = TextServer.AutowrapMode.WordSmart;
+        label.CustomMinimumSize = new Vector2(ShellUi.ButtonWidth, 0f);
+        return label;
     }
 }

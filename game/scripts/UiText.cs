@@ -8,6 +8,7 @@ using Godot;
 using Rts.Sim.Data;
 using Rts.Sim.Economy;
 using Rts.Sim.Entities;
+using Rts.Sim.Save;
 using Rts.Sim.ViewApi;
 
 namespace Rts.Game;
@@ -19,7 +20,8 @@ namespace Rts.Game;
 /// "placement": { "&lt;reason&gt;": text }, "train": { "&lt;reason&gt;": text }, "research": { "&lt;reason&gt;": text },
 /// "states": { "&lt;state&gt;": text }, "hud": { "&lt;label&gt;": text }, "menu": { "&lt;key&gt;": text }, "setup": { "&lt;key&gt;": text },
 /// "pause": { "&lt;key&gt;": text }, "settings": { "&lt;key&gt;": text }, "match_over": { "&lt;key&gt;": text }, "keys": { "&lt;key&gt;": text },
-/// "load": { "&lt;key&gt;": text }, "alert": { "&lt;key&gt;": text } }</c> (the <c>alert</c> keys those of <see cref="AlertText"/>, M6-V12). Command ids are <see cref="CommandIds"/>;
+/// "load": { "&lt;key&gt;": text }, "alert": { "&lt;key&gt;": text }, "save": { "&lt;key&gt;": text } }</c> (the <c>alert</c> keys those of <see cref="AlertText"/>, M6-V12;
+/// the <c>save</c> keys those of <see cref="SaveText"/>, M6-V14, <c>save.saved</c> a format naming <c>{0}</c>). Command ids are <see cref="CommandIds"/>;
 /// the placement, train and research keys are the snake_case names of every <see cref="PlacementError"/>,
 /// <see cref="TrainError"/> and <see cref="ResearchError"/> member but <c>None</c> (<c>blocked</c>, <c>queue_full</c> ...),
 /// the state keys those of every <see cref="UnitState"/> (M3-V3) plus <see cref="OrderedAttackKey"/> (M4-V2), the hud keys those of <see cref="HudText"/>,
@@ -79,6 +81,7 @@ public sealed class UiText
     private readonly string[] _keys;
     private readonly string[] _load;
     private readonly string[] _alert;
+    private readonly string[] _save;
     private readonly string[] _colourNames = Blank(ColourCount);
     private readonly uint[] _colourRgb = new uint[ColourCount];
 
@@ -97,6 +100,7 @@ public sealed class UiText
         _keys = Blank(Enum.GetValues<KeysText>().Length);
         _load = Blank(Enum.GetValues<LoadText>().Length);
         _alert = Blank(Enum.GetValues<AlertText>().Length);
+        _save = Blank(Enum.GetValues<SaveText>().Length);
         Array.Fill(_names, "");
         Array.Fill(_hints, "");
     }
@@ -169,6 +173,29 @@ public sealed class UiText
 
     /// <summary>An attack alert's text (<c>ui.json</c> <c>alert</c>, M6-V12).</summary>
     public string Alert(AlertText key) => (uint)key < (uint)_alert.Length ? _alert[(int)key] : "";
+
+    /// <summary>A save / load text (<c>ui.json</c> <c>save</c>, M6-V14).</summary>
+    public string Save(SaveText key) => (uint)key < (uint)_save.Length ? _save[(int)key] : "";
+
+    /// <summary>The pause menu's line after a save: <c>save.saved</c> with <see cref="Clock"/> of <paramref name="tick"/> (the match time it was made at) for its <c>{0}</c>.</summary>
+    public string SavedLine(int tick) => string.Format(CultureInfo.InvariantCulture, Save(SaveText.Saved), Clock(tick));
+
+    /// <summary>The <c>save</c> key's text the player is shown for a refused save or load (M6-V14; every code but <c>None</c>, which has none: empty).</summary>
+    public string SaveErrorText(SaveError error) => SaveTextOf(error) is SaveText key ? Save(key) : "";
+
+    /// <summary>The <c>save</c> key of each <see cref="SaveError"/> but <c>None</c> (<c>FormatVersionMismatch</c> is <c>version_mismatch</c>); null for <c>None</c> and a code this build doesn't know.</summary>
+    public static SaveText? SaveTextOf(SaveError error) => error switch
+    {
+        SaveError.BadMagic => SaveText.BadMagic,
+        SaveError.FormatVersionMismatch => SaveText.VersionMismatch,
+        SaveError.DataMismatch => SaveText.DataMismatch,
+        SaveError.InvalidHeader => SaveText.InvalidHeader,
+        SaveError.AiSeatsUnsupported => SaveText.AiSeatsUnsupported,
+        SaveError.Truncated => SaveText.Truncated,
+        SaveError.ChecksumMismatch => SaveText.ChecksumMismatch,
+        SaveError.Malformed => SaveText.Malformed,
+        _ => null,
+    };
 
     /// <summary>A Load Game date cell: <c>load.date_item</c> with <paramref name="when"/> for its <c>{0}</c>.</summary>
     public string ReplayDate(DateTime when) => string.Format(CultureInfo.InvariantCulture, LoadGame(LoadText.DateItem), when);
@@ -310,6 +337,11 @@ public sealed class UiText
             // M6-V9: the Load Game screen and the playback banners; three formats.
             Section<LoadText>(root, "load", ui._load, skipZero: false, forward: false, errors);
             Section<AlertText>(root, "alert", ui._alert, skipZero: false, forward: false, errors); // M6-V12: the HUD's attack alerts
+            // M6-V14: the pause menu's Save line and note, and one text per SaveError.
+            Section<SaveText>(root, "save", ui._save, skipZero: false, forward: false, errors);
+            string saved = ui._save[(int)SaveText.Saved];
+            if (saved.Length > 0 && !IsTextFormat(saved))
+                errors.Add($"ui.json: save.{Key(SaveText.Saved)} must be a format with {{0}} (the match clock) and no other placeholder: '{saved}'");
             string dateItem = ui._load[(int)LoadText.DateItem];
             if (dateItem.Length > 0 && !IsDateFormat(dateItem))
                 errors.Add($"ui.json: load.{Key(LoadText.DateItem)} must be a format with {{0}} (the date) and no other placeholder: '{dateItem}'");

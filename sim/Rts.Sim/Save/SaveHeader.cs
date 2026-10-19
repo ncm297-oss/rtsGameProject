@@ -111,9 +111,8 @@ internal static class SaveHeader
     /// <summary>
     /// Reads the header after the fixed prefix (the caller checked magic, version, length and checksum): the data hash
     /// (<see cref="SaveError.DataMismatch"/> against <paramref name="data"/>), then every field, each in its range
-    /// (<see cref="SaveError.InvalidHeader"/>), then the seats' controllers (<see cref="SaveError.AiSeatsUnsupported"/> for an
-    /// AI seat in slice 1). On success <paramref name="config"/> is the match's config and <paramref name="tick"/> the tick
-    /// number the save was made at.
+    /// (<see cref="SaveError.InvalidHeader"/>, an AI seat whose faction has no <c>ai.json</c> too). On success
+    /// <paramref name="config"/> is the match's config and <paramref name="tick"/> the tick number the save was made at.
     /// </summary>
     public static SaveError TryRead(SaveReader r, GameData data, out SimConfig? config, out int tick)
     {
@@ -129,7 +128,6 @@ internal static class SaveHeader
         if (r.Failed) return SaveError.Malformed;
         if (players < 1 || players > SaveFormat.MaxPlayers) return SaveError.InvalidHeader;
         var seats = ImmutableArray.CreateBuilder<PlayerSeat>(players);
-        bool ai = false;
         for (int p = 0; p < players; p++)
         {
             string? id = r.ReadString();
@@ -138,7 +136,6 @@ internal static class SaveHeader
             int faction = id == "-" ? -1 : data.FindFaction(id);
             if (faction < 0 && (id != "-" || data.Factions.Length > 0)) return SaveError.InvalidHeader;
             if (controller > (byte)SeatController.Ai || difficulty > (byte)AiDifficulty.Hard) return SaveError.InvalidHeader;
-            ai |= controller == (byte)SeatController.Ai;
             seats.Add(new PlayerSeat(faction, (SeatController)controller, (AiDifficulty)difficulty));
         }
         int units = r.ReadInt32(), commands = r.ReadInt32(), resources = r.ReadInt32(), buildings = r.ReadInt32();
@@ -167,12 +164,21 @@ internal static class SaveHeader
             StatsSampleCapacity = sampleCapacity,
             Seats = seats.MoveToImmutable(),
         };
-        // An AI seat's faction needs a loaded ai.json, which the config's check asks; slice 1 refuses AI seats first.
-        if (ai) return SaveError.AiSeatsUnsupported;
+        // An AI seat's faction needs a loaded ai.json, which the config's check asks (M6-S3: AI seats load).
         if (!Valid(built)) return SaveError.InvalidHeader;
         config = built;
         return SaveError.None;
     }
+
+    /// <summary>
+    /// BUG-0960 item 1: a lower bound on the bytes the body after the heightmap must hold for <paramref name="config"/>'s
+    /// capacities on a map of <paramref name="cells"/> cells, so a header asking for huge stores is refused before
+    /// <c>World.ForLoad</c> allocates them. Each term is below what its section writes: the unit store writes over 40 bytes a
+    /// slot (positions, velocity, facings, owner, type, before the rest), the building and resource stores over 16, the nav
+    /// grid 2 a cell (flags and cost).
+    /// </summary>
+    public static long MinBodyBytes(SimConfig config, int cells) =>
+        32L * config.UnitCapacity + 16L * config.BuildingCapacity + 16L * config.ResourceCapacity + 2L * cells;
 
     private static bool InCapacity(int value, int min) => value >= min && value <= SaveFormat.MaxCapacity;
 

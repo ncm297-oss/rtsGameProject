@@ -23,8 +23,8 @@ public enum SaveError
     InvalidHeader = 4,
 
     /// <summary>
-    /// A seat is played by the AI. Slice 1 saves and loads only matches whose seats are all human; slice 2 stores the AI
-    /// state and lifts this.
+    /// A seat is played by the AI: format 1 (slice 1) saved and loaded only matches whose seats were all human. Since format 2
+    /// (M6-S3) the AI seats' state is stored and nothing returns this; the code stays, frozen with the rest.
     /// </summary>
     AiSeatsUnsupported = 5,
 

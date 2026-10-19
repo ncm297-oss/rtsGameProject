@@ -3,23 +3,27 @@ using System.Collections.Immutable;
 using System.Text.Json.Nodes;
 using Rts.Sim.Data;
 using Rts.Sim.Save;
+using Xunit.Abstractions;
 
 namespace Rts.Sim.Tests.Save;
 
 /// <summary>
 /// M6-S2 criterion 5: <see cref="Simulation.TryLoad"/> refuses every bad save with its <see cref="SaveError"/>, no sim and no
-/// exception: a flipped byte at every offset, every truncation, another format version, another data hash, an AI seat, an
-/// unknown faction, a player count of 0 or 17, a 1-byte and an empty stream; and <see cref="Simulation.TrySave"/> refuses
-/// an AI seat.
+/// exception: a flipped byte at every offset, every truncation, another format version, another data hash, an
+/// unknown faction, a player count of 0 or 17, a 1-byte and an empty stream. M6-S3: the sweeps run on a small save with an
+/// AI seat too; a forged opening pick, a forged seat count and a seat's controller forged either way are Malformed; a
+/// version-1 file is refused; and a forged max-capacity header is refused before the world is allocated (BUG-0960 item 1).
 /// </summary>
 public class SaveRefusalTests
 {
     private static GameData Data => TestSim.Data;
 
-    [Fact]
-    public void AFlippedByte_AtEveryOffset_IsRefusedWithTheCodeOfItsPlace()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void AFlippedByte_AtEveryOffset_IsRefusedWithTheCodeOfItsPlace(bool ai)
     {
-        byte[] good = SaveBytes.Small();
+        byte[] good = SaveBytes.Small(ai);
         Assert.True(good.Length < 64 * 1024, $"the small save is {good.Length} bytes");
         Assert.Equal(SaveError.None, SaveTestRun.TryLoad(Data, good));
         for (int i = 0; i < good.Length; i++)
@@ -34,18 +38,22 @@ public class SaveRefusalTests
         }
     }
 
-    [Fact]
-    public void EveryTruncation_IsTruncated()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void EveryTruncation_IsTruncated(bool ai)
     {
-        byte[] good = SaveBytes.Small();
+        byte[] good = SaveBytes.Small(ai);
         for (int n = 0; n < good.Length; n++)
             Assert.True(SaveTestRun.TryLoad(Data, good[..n]) == SaveError.Truncated, $"length {n}");
     }
 
-    [Fact]
-    public void AByteAppended_IsMalformed()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void AByteAppended_IsMalformed(bool ai)
     {
-        byte[] good = SaveBytes.Small();
+        byte[] good = SaveBytes.Small(ai);
         Assert.Equal(SaveError.Malformed, SaveTestRun.TryLoad(Data, good.Append((byte)0).ToArray()));
     }
 
@@ -60,7 +68,8 @@ public class SaveRefusalTests
 
     [Theory]
     [InlineData(0)]
-    [InlineData(2)]
+    [InlineData(1)] // M6-S3: slice 1's format (no AI section) has no reader
+    [InlineData(3)]
     [InlineData(-1)]
     public void AnotherFormatVersion_IsFormatVersionMismatch(int version)
     {
@@ -89,22 +98,77 @@ public class SaveRefusalTests
     }
 
     [Fact]
-    public void AnAiSeat_IsAiSeatsUnsupported_BothWays()
+    public void AnAiSeat_SavesAndLoads_AndNothingReturnsAiSeatsUnsupported()
     {
-        // Saving: refused, nothing written.
+        // M6-S3: the slice-1 refusal is lifted both ways.
         var seats = ImmutableArray.Create(new PlayerSeat(0, SeatController.Human, AiDifficulty.Normal), new PlayerSeat(1, SeatController.Ai, AiDifficulty.Hard));
         var sim = new Simulation(TestSim.Config(2, 2, 64, 64) with { Seats = seats });
         using var stream = new MemoryStream();
-        Assert.False(sim.TrySave(stream, out SaveError error));
-        Assert.Equal(SaveError.AiSeatsUnsupported, error);
-        Assert.Equal(0, stream.Length);
+        Assert.True(sim.TrySave(stream, out SaveError error));
+        Assert.Equal(SaveError.None, error);
+        Assert.True(stream.Length > 0);
+        Simulation loaded = SaveTestRun.Load(Data, stream.ToArray());
+        Assert.Equal(sim.AiOpening(1), loaded.AiOpening(1));
+        Assert.Equal(-1, loaded.AiOpening(0));
+        SaveTestRun.AssertSameState(sim, loaded, "an AI seat at tick 0");
+    }
 
-        // Loading: a human seat forged into an AI one.
+    [Fact]
+    public void AHumanSeatForgedIntoAnAiOne_IsMalformed()
+    {
+        // The header now builds an AI for the seat, whose state the body (no AI section entry) doesn't hold.
         byte[] bad = SaveBytes.Small();
         SaveBytes.Offsets at = SaveBytes.HeaderOffsets(bad);
         Assert.Equal((byte)SeatController.Human, bad[at.Seat0Controller]);
         bad[at.Seat0Controller] = (byte)SeatController.Ai;
-        Assert.Equal(SaveError.AiSeatsUnsupported, SaveTestRun.TryLoad(Data, SaveBytes.Rechecksum(bad)));
+        Assert.Equal(SaveError.Malformed, SaveTestRun.TryLoad(Data, SaveBytes.Rechecksum(bad)));
+    }
+
+    [Fact]
+    public void AnAiSeatForgedIntoAHumanOne_IsMalformed()
+    {
+        byte[] bad = SaveBytes.SmallAi();
+        SaveBytes.Offsets at = SaveBytes.HeaderOffsets(bad);
+        Assert.Equal((byte)SeatController.Ai, bad[at.Seat0Controller]);
+        bad[at.Seat0Controller] = (byte)SeatController.Human;
+        Assert.Equal(SaveError.Malformed, SaveTestRun.TryLoad(Data, SaveBytes.Rechecksum(bad)));
+    }
+
+    [Theory]
+    [InlineData(1)]
+    [InlineData(-1)]
+    [InlineData(1000)]
+    public void AForgedOpeningPick_IsMalformed(int shift)
+    {
+        // The AI section: tag, seat count, then per seat its player and its opening index (which the load's own pick must equal).
+        byte[] good = SaveBytes.SmallAi();
+        int pick = SaveBytes.AiSection(good) + 4 + 4 + 4;
+        int saved = BinaryPrimitives.ReadInt32LittleEndian(good.AsSpan(pick));
+        Assert.Equal(SaveTestRun.Load(Data, good).AiOpening(0), saved);
+        byte[] bad = (byte[])good.Clone();
+        BinaryPrimitives.WriteInt32LittleEndian(bad.AsSpan(pick), saved + shift);
+        Assert.Equal(SaveError.Malformed, SaveTestRun.TryLoad(Data, SaveBytes.Rechecksum(bad)));
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(2)]
+    public void AForgedAiSeatCount_IsMalformed(int seats)
+    {
+        byte[] bad = SaveBytes.SmallAi();
+        BinaryPrimitives.WriteInt32LittleEndian(bad.AsSpan(SaveBytes.AiSection(bad) + 4), seats);
+        Assert.Equal(SaveError.Malformed, SaveTestRun.TryLoad(Data, SaveBytes.Rechecksum(bad)));
+    }
+
+    [Fact]
+    public void TheLengthPreCheck_PassesRealSaves_HumanAndAi_SmallAndLarge()
+    {
+        // The bound is below what each section writes, so a real save is never refused by it.
+        Simulation[] sims =
+        {
+            SaveBytes.SmallSim(), SaveBytes.SmallAiSim(), SaveScenes.Menu(1).Build(), AiSaveScenes.AiMatch(4, 4, AiDifficulty.Normal).Build(),
+        };
+        foreach (Simulation sim in sims) Assert.Equal(SaveError.None, SaveTestRun.TryLoad(Data, SaveTestRun.Save(sim)));
     }
 
     [Fact]
@@ -144,10 +208,12 @@ public class SaveRefusalTests
     /// one). Nothing throws; each either loads or is refused with a code. A load that succeeds must tick without throwing
     /// only where the flipped value is one the format leaves free (a position, a counter), which this sweep doesn't claim.
     /// </summary>
-    [Fact]
-    public void AForgedByte_AtEveryOffset_WithItsChecksumFixed_NeverThrows()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void AForgedByte_AtEveryOffset_WithItsChecksumFixed_NeverThrows(bool ai)
     {
-        byte[] good = SaveBytes.Small();
+        byte[] good = SaveBytes.Small(ai);
         var seen = new Dictionary<SaveError, int>();
         for (int i = SaveFormat.FixedPrefix; i < good.Length - SaveFormat.ChecksumLength; i++)
         {
@@ -160,10 +226,12 @@ public class SaveRefusalTests
         Assert.False(seen.ContainsKey(SaveError.ChecksumMismatch));
     }
 
-    [Fact]
-    public void TheSameBytes_LoadTwice_IntoTwoEqualSims()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void TheSameBytes_LoadTwice_IntoTwoEqualSims(bool ai)
     {
-        byte[] bytes = SaveBytes.Small();
+        byte[] bytes = SaveBytes.Small(ai);
         Simulation a = SaveTestRun.Load(Data, bytes), b = SaveTestRun.Load(Data, bytes);
         Assert.NotSame(a, b);
         SaveTestRun.AssertSameState(a, b, "two loads");
@@ -172,6 +240,39 @@ public class SaveRefusalTests
             a.Tick();
             b.Tick();
             Assert.Equal(a.StateHash(), b.StateHash());
+        }
+    }
+
+    /// <summary>This class's allocation test: runs alone in <see cref="SerialCollection"/>.</summary>
+    [Collection(SerialCollection.Name)]
+    public class Serial
+    {
+        private readonly ITestOutputHelper _out;
+
+        public Serial(ITestOutputHelper output) => _out = output;
+
+        /// <summary>
+        /// BUG-0960 item 1: a header forged to every capacity at the format's maximum over the small save's body is refused
+        /// Malformed by the length pre-check, before the world is built for it (it used to allocate about 1.4 GB first).
+        /// The allocation counted is this thread's.
+        /// </summary>
+        [Fact]
+        public void AForgedMaxCapacityHeader_IsMalformed_BeforeTheWorldIsAllocated()
+        {
+            byte[] bad = SaveBytes.Small();
+            SaveBytes.Offsets at = SaveBytes.HeaderOffsets(bad);
+            int caps = at.Seat0Controller + 2; // controller, difficulty, then unit, command, resource, building, projectile, zone
+            for (int k = 0; k < 6; k++) BinaryPrimitives.WriteInt32LittleEndian(bad.AsSpan(caps + 4 * k), SaveFormat.MaxCapacity);
+            bad = SaveBytes.Rechecksum(bad);
+            Assert.Equal(SaveError.Malformed, SaveTestRun.TryLoad(Data, bad)); // warm-up (the JIT)
+            long before = GC.GetAllocatedBytesForCurrentThread();
+            var sw = System.Diagnostics.Stopwatch.StartNew();
+            SaveError e = SaveTestRun.TryLoad(Data, bad);
+            sw.Stop();
+            long allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+            _out.WriteLine($"max capacities: {e} in {sw.Elapsed.TotalMilliseconds * 1000:F0} us, {allocated:N0} bytes allocated");
+            Assert.Equal(SaveError.Malformed, e);
+            Assert.True(allocated < 1024 * 1024, $"{allocated:N0} bytes allocated");
         }
     }
 }

@@ -4,6 +4,7 @@ using Godot;
 using Rts.Sim;
 using Rts.Sim.Data;
 using Rts.Sim.Replays;
+using Rts.Sim.Save;
 using Rts.Sim.ViewApi;
 
 namespace Rts.Game;
@@ -31,6 +32,11 @@ namespace Rts.Game;
 /// plays one through the match scene (<see cref="WatchReplay"/>): a refused file stays on the Load Game screen with
 /// <c>load.refused</c>; the end of the recording shows the banner ("Replay ended", or the outcome when it fell on the last tick)
 /// and a mismatch "Replay out of sync", both without Continue watching.
+/// M6-V14: the pause menu's Save writes the match to <see cref="SaveDir"/> (<see cref="SaveGame"/>: <see cref="Simulation.TrySave"/>
+/// between ticks, the recording so far beside it) and says how it went; Load Game lists the saves beside the replays, and its
+/// Load (or <c>--load &lt;path&gt;</c>, a shell flag) resumes one (<see cref="LoadSavedGame"/>) at the saved tick with the
+/// views fresh. A loaded match is not recorded (the recorder attaches at tick 0 only): the pause menu says so. A refused
+/// save stays on the Load Game screen with its <c>save.*</c> text.
 /// </remarks>
 public partial class Main : Node3D
 {
@@ -49,6 +55,8 @@ public partial class Main : Node3D
     private bool _noConfine;
     private bool _replayDirSet;
     private string? _replayDir;
+    private bool _saveDirSet;
+    private string? _saveDir;
 
     /// <summary>The shell flag that plays a replay file at boot (M6-V9): <c>--replay &lt;path&gt;</c> (a <c>user://</c> or OS path).</summary>
     public const string ReplayFlag = "--replay";
@@ -67,6 +75,27 @@ public partial class Main : Node3D
             _replayDirSet = true;
         }
     }
+
+    /// <summary>The shell flag that resumes a save file at boot (M6-V14): <c>--load &lt;path&gt;</c> (a <c>user://</c> or OS path).</summary>
+    public const string LoadFlag = "--load";
+
+    /// <summary>
+    /// The folder the pause menu's Save writes to and Load Game lists saves from (M6-V14). Unset, it is
+    /// <see cref="SaveStore.DefaultDir"/> when this node is the scene the game booted, and null (no Save button, no save
+    /// listed) when a test scene hosts the shell, so no test touches the player's folder; tests set their own.
+    /// </summary>
+    public string? SaveDir
+    {
+        get => _saveDirSet ? _saveDir : IsInsideTree() && GetParent() == GetTree().Root ? SaveStore.DefaultDir : null;
+        set
+        {
+            _saveDir = value;
+            _saveDirSet = true;
+        }
+    }
+
+    /// <summary>The file the last successful Save wrote (M6-V14), or null.</summary>
+    public string? LastSavePath { get; private set; }
 
     /// <summary>The file the running (or last) recorded match writes, or null when it records nothing or has no folder.</summary>
     public string? ReplayPath { get; private set; }
@@ -163,9 +192,17 @@ public partial class Main : Node3D
         int replayAt = Array.IndexOf(args, ReplayFlag);
         string? replayPath = replayAt >= 0 && replayAt + 1 < args.Length && !args[replayAt + 1].StartsWith("--", StringComparison.Ordinal) ? args[replayAt + 1] : null;
         if (replayAt >= 0 && replayPath == null) GD.PushWarning($"Ignoring {ReplayFlag} with no path.");
+        // M6-V14: --load <path> resumes the save at once (a refusal shows the Load Game screen with the reason).
+        int loadAt = Array.IndexOf(args, LoadFlag);
+        string? loadPath = loadAt >= 0 && loadAt + 1 < args.Length && !args[loadAt + 1].StartsWith("--", StringComparison.Ordinal) ? args[loadAt + 1] : null;
+        if (loadAt >= 0 && loadPath == null) GD.PushWarning($"Ignoring {LoadFlag} with no path.");
         if (replayPath != null)
         {
             if (!WatchReplay(replayPath, LaunchOptions.Parse(args)) && _load == null) GetTree().Quit(1);
+        }
+        else if (loadPath != null)
+        {
+            if (!LoadSavedGame(loadPath, LaunchOptions.Parse(args)) && _load == null) GetTree().Quit(1);
         }
         else if (options != null) StartMatch(options, record: options.Skirmish);
         else ShowMenu();
@@ -192,11 +229,13 @@ public partial class Main : Node3D
         _load.Build(ui, data);
         _load.BackPressed += ShowMenu;
         _load.WatchPressed += path => WatchReplay(path);
+        _load.LoadPressed += path => LoadSavedGame(path);
 
         _pause = new PauseMenu { Name = "PauseMenu" };
         AddChild(_pause);
         _pause.Build(ui);
         _pause.ResumePressed += Resume;
+        _pause.SavePressed += () => SaveGame();
         _pause.QuitToMenuPressed += QuitToMenu;
         _pause.SettingsPressed += ShowSettings;
         _pause.StatsPressed += ShowStats;
@@ -275,10 +314,99 @@ public partial class Main : Node3D
     {
         if (_menu == null || _load == null) return;
         _menu.Visible = false;
-        _load.Refresh(ReplayDir);
+        _load.Refresh(ReplayDir, SaveDir);
         _load.Visible = true;
-        if (_load.WatchButton.Disabled) _load.BackButton.GrabFocus();
-        else _load.WatchButton.GrabFocus();
+        if (!_load.LoadButton.Disabled) _load.LoadButton.GrabFocus();
+        else if (!_load.WatchButton.Disabled) _load.WatchButton.GrabFocus();
+        else _load.BackButton.GrabFocus();
+    }
+
+    /// <summary>
+    /// What the pause menu's Save does (M6-V14): writes the running match to a new <see cref="SaveStore.NewPath"/> in
+    /// <see cref="SaveDir"/> through <see cref="Simulation.TrySave"/> (between ticks: the tree is paused under the menu), and
+    /// the recording so far beside it (<see cref="SaveStore.ReplayPathOf"/>; a loaded match has none), then shows the result
+    /// on the pause menu: <c>save.saved</c> with the match clock, the refusal code's <c>save.*</c> text, or
+    /// <c>save.write_failed</c>. True when the save file was written. Nothing for a replay or a shell without a save folder.
+    /// </summary>
+    public bool SaveGame()
+    {
+        if (CurrentMatch == null || CurrentMatch.IsPlayback || SaveDir is not string dir) return false;
+        SimRunner runner = CurrentMatch.GetNode<SimRunner>("SimRunner");
+        if (runner.Simulation is not Simulation sim || runner.Ticking) return false;
+        UiText? ui = UiText.Shared;
+        // The wall clock names the file and nothing else (CLAUDE.md rule 2: it never reaches the sim).
+        string path = SaveStore.NewPath(dir, DateTime.Now, sim.World.Config.Seed);
+        bool ok = SaveStore.Write(sim, path, out SaveError refused, out string ioError);
+        string status;
+        if (ok)
+        {
+            LastSavePath = path;
+            status = ui?.SavedLine(sim.TickNumber) ?? "";
+            GD.Print($"Game saved: {path} (tick {sim.TickNumber})");
+            if (runner.Recorder is ReplayRecorder recorder) SaveRecordingBeside(recorder, path);
+        }
+        else if (refused != SaveError.None)
+        {
+            status = ui?.SaveErrorText(refused) ?? "";
+            GD.Print($"Save refused: {refused}");
+        }
+        else
+        {
+            status = ui?.Save(SaveText.WriteFailed) ?? "";
+            GD.PushWarning($"Save not written to {path}: {ioError}");
+        }
+        if (_pause != null) _pause.SaveStatus.Text = status;
+        return ok;
+    }
+
+    // M6-V14 (Requests 42: the sim's save holds no replay): the recording up to the save, beside it; a failure costs only it.
+    private static void SaveRecordingBeside(ReplayRecorder recorder, string savePath)
+    {
+        string path = SaveStore.ReplayPathOf(savePath);
+        try
+        {
+            Replay replay = recorder.ToReplay();
+            if (ReplayStore.Write(replay, path, out string error)) GD.Print($"Replay saved: {path} ({replay.TickCount} ticks)");
+            else GD.PushWarning($"Replay not saved to {path}: {error}");
+        }
+        catch (InvalidOperationException e)
+        {
+            GD.PushWarning($"Replay not saved: {e.Message}");
+        }
+    }
+
+    /// <summary>
+    /// Resumes the save file at <paramref name="path"/> (M6-V14; a <c>user://</c> or OS path) in a new match scene: true when it
+    /// started. A file <see cref="Simulation.TryLoad"/> refuses (or that won't open) starts nothing: the Load Game screen shows
+    /// with the code's <c>save.*</c> text. The match is not recorded. Of <paramref name="options"/> (the boot's args for
+    /// <c>--load</c>) only the view's flags count.
+    /// </summary>
+    public bool LoadSavedGame(string path, LaunchOptions? options = null)
+    {
+        if (_data == null || CurrentMatch != null) return false;
+        string full = ProjectSettings.GlobalizePath(path);
+        Simulation? sim = SaveStore.Load(_data, full, out SaveError error, out bool openFailed);
+        if (sim == null)
+        {
+            GD.Print($"Save refused: {full}: {(openFailed ? "cannot open the file" : error.ToString())}");
+            ShowLoadNote(load => load.ShowSaveRefused(openFailed ? null : error));
+            return false;
+        }
+        if (_menu != null) _menu.Visible = false;
+        if (_setup != null) _setup.Visible = false;
+        if (_load != null) _load.Visible = false;
+        var match = GD.Load<PackedScene>(MatchScenePath).Instantiate<Match>();
+        match.Name = "Match";
+        match.ProcessMode = ProcessModeEnum.Pausable;
+        AddChild(match);
+        BeforeStart?.Invoke(match);
+        match.StartLoaded(_data, sim, options ?? LaunchOptions.Parse(Array.Empty<string>()), full);
+        CurrentMatch = match;
+        ReplayPath = null; // a loaded match records nothing
+        _bannerShown = false;
+        match.Ended += outcome => OnMatchEnded(match, outcome);
+        ApplyCamera();
+        return true;
     }
 
     /// <summary>
@@ -321,16 +449,20 @@ public partial class Main : Node3D
     private bool Refused(string path, ReplayError error)
     {
         GD.Print($"Replay refused: {path}: {error}");
-        if (_load != null && _menu != null)
-        {
-            _menu.Visible = false;
-            if (_setup != null) _setup.Visible = false;
-            _load.Refresh(ReplayDir);
-            _load.ShowRefused();
-            _load.Visible = true;
-            _load.BackButton.GrabFocus();
-        }
+        ShowLoadNote(load => load.ShowRefused());
         return false;
+    }
+
+    // The Load Game screen read afresh with a note set (a refused replay or save), focus on Back.
+    private void ShowLoadNote(Action<LoadGameScreen> note)
+    {
+        if (_load == null || _menu == null) return;
+        _menu.Visible = false;
+        if (_setup != null) _setup.Visible = false;
+        _load.Refresh(ReplayDir, SaveDir);
+        note(_load);
+        _load.Visible = true;
+        _load.BackButton.GrabFocus();
     }
 
     // M6-V9: playback reached the recording's end or stopped on a mismatch: the banner, without Continue watching. The end
@@ -421,6 +553,11 @@ public partial class Main : Node3D
         if (CurrentMatch == null || _pause == null || Paused) return;
         GetTree().Paused = true;
         _pause.StatsButton.Visible = _bannerShown && _stats != null;
+        // M6-V14: Save for a live or loaded match (never greyed for an AI seat: a refusal shows its code's text); a loaded
+        // match says it isn't recorded.
+        _pause.SaveButton.Visible = !CurrentMatch.IsPlayback && SaveDir != null;
+        _pause.SaveStatus.Text = "";
+        _pause.RecordNote.Visible = CurrentMatch.IsLoaded;
         _pause.Visible = true;
         _pause.ResumeButton.GrabFocus();
     }

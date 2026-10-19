@@ -1,7 +1,9 @@
 using System.Buffers.Binary;
+using System.Collections.Immutable;
 using System.Numerics;
 using System.Text;
 using Rts.Sim.Commands;
+using Rts.Sim.Data;
 using Rts.Sim.Save;
 
 namespace Rts.Sim.Tests.Save;
@@ -32,6 +34,39 @@ internal static class SaveBytes
 
     /// <summary>The small sim's save.</summary>
     internal static byte[] Small() => SaveTestRun.Save(SmallSim());
+
+    /// <summary>
+    /// M6-S3: the small sim with an AI seat: one Malazan AI at Normal (so its opening is a draw) with a hall and a worker on
+    /// the flat 16 map, every capacity small, ticked past its first two thinks so its Blackboard holds something.
+    /// </summary>
+    internal static Simulation SmallAiSim()
+    {
+        var config = new SimConfig(5, 1, 2, 8)
+        {
+            Data = TestSim.Data, ResourceCapacity = 1, BuildingCapacity = 2, ZoneCapacity = 1, ProjectileCapacity = 1, StatsSampleCapacity = 0,
+            Seats = ImmutableArray.Create(new PlayerSeat(0, SeatController.Ai, AiDifficulty.Normal)),
+        };
+        var sim = new Simulation(config, LocalMovementTests.Flat(16));
+        sim.Enqueue(Command.SpawnBuilding(0, TestSim.Data.FindBuilding("malazan_garrison_keep"), new Vector2(10f, 10f)));
+        sim.Enqueue(Command.SpawnUnit(0, CombatScenes.Laborer, new Vector2(20f, 20f)));
+        int ticks = 2 * sim.AiOf(0)!.ThinkTicks + 1;
+        for (int t = 0; t < ticks; t++) sim.Tick();
+        return sim;
+    }
+
+    /// <summary>The small AI sim's save.</summary>
+    internal static byte[] SmallAi() => SaveTestRun.Save(SmallAiSim());
+
+    /// <summary>The small save, of the human sim or (<paramref name="ai"/>) the AI one.</summary>
+    internal static byte[] Small(bool ai) => ai ? SmallAi() : Small();
+
+    /// <summary>Offset of the AI section's tag (<c>AIST</c>, the last section before <c>END!</c>) in <paramref name="bytes"/>.</summary>
+    internal static int AiSection(byte[] bytes)
+    {
+        int at = bytes.AsSpan().LastIndexOf("AIST"u8);
+        Assert.True(at > 0, "no AI section");
+        return at;
+    }
 
     /// <summary>A copy of <paramref name="bytes"/> with its trailing checksum recomputed over the (edited) bytes before it.</summary>
     internal static byte[] Rechecksum(byte[] bytes)

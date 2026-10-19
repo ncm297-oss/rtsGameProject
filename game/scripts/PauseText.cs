@@ -11,4 +11,6 @@ public enum PauseText
     Settings,
     /// <summary>The button that ends the match and goes back to the main menu.</summary>
     QuitToMenu,
+    /// <summary>The button that saves the match to a file (M6-V14).</summary>
+    Save,
 }

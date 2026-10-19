@@ -39,4 +39,12 @@ public enum LoadText
     Playing,
     /// <summary>The players cell of a listed file that can't be read (BUG-0830: listed so Delete can remove it).</summary>
     Unreadable,
+    /// <summary>The kind column's heading (M6-V14: a save or a replay).</summary>
+    Kind,
+    /// <summary>The button that resumes the picked save (M6-V14).</summary>
+    Load,
+    /// <summary>The kind cell of a save row (M6-V14).</summary>
+    SaveTag,
+    /// <summary>The kind cell of a replay row (M6-V14).</summary>
+    ReplayTag,
 }

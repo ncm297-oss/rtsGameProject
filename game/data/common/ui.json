@@ -112,7 +112,8 @@
     "title": "Paused",
     "resume": "Resume",
     "settings": "Settings",
-    "quit_to_menu": "Quit to menu"
+    "quit_to_menu": "Quit to menu",
+    "save": "Save"
   },
   "settings": {
     "title": "Settings",
@@ -197,16 +198,34 @@
     "watch": "Watch",
     "delete": "Delete",
     "back": "Back",
-    "empty": "No replays yet. Every match you play is recorded here.",
-    "skipped": "{0} replay file(s) can't be read: pick one and Delete to remove it",
+    "empty": "No saves or replays yet. Save a match from the pause menu; every match you play is recorded here.",
+    "skipped": "{0} file(s) can't be read: pick one and Delete to remove it",
     "refused": "This replay can't be played: it was recorded with different game data, or the file is damaged.",
     "mismatch": "Replay out of sync",
     "ended": "Replay ended",
     "playing": "Replay",
-    "unreadable": "Unreadable file"
+    "unreadable": "Unreadable file",
+    "kind": "Type",
+    "load": "Load",
+    "save_tag": "Save",
+    "replay_tag": "Replay"
   },
   "alert": {
     "base_under_attack": "Your base is under attack",
     "units_under_attack": "Your units are under attack"
+  },
+  "save": {
+    "saved": "Saved at {0}",
+    "not_recorded": "A loaded match is not recorded: no replay is kept from here on.",
+    "write_failed": "The save could not be written: the disk may be full or the folder locked.",
+    "read_failed": "This save can't be opened: the file is gone or in use.",
+    "bad_magic": "This file is not a save.",
+    "version_mismatch": "This save was made by another version of the game and can't be loaded.",
+    "data_mismatch": "This save was made with different game data and can't be loaded.",
+    "invalid_header": "This save is damaged: its match settings are out of range.",
+    "ai_seats_unsupported": "Matches with an AI opponent can't be saved or loaded in this version.",
+    "truncated": "This save is incomplete: the file was cut short.",
+    "checksum_mismatch": "This save is damaged: its contents changed after it was written.",
+    "malformed": "This save is damaged and can't be read."
   }
 }
