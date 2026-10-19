@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S4 |
-| Status | open |
+| Status | open (smaller since fix round 1) |
 | Found | 2026-10-18-1814, task M5-4g (QA) |
 | System | AI economy: `AiPlayer.WantedGoldShare` in `EconomyManager.Gatherers` / `Rebalance` (`ai.reserveShift`) |
-| Fixed by | |
+| Fixed by |  |
 
 ## Repro
 1. `dotnet test sim/Rts.Sim.Tests --filter "FullyQualifiedName~ReservePairingsStressTests.Pairing" --logger "console;verbosity=detailed"`:
@@ -45,3 +45,7 @@ walking. Not a correctness bug: a tuning observation for the Producer.
 - A hysteresis (keep the shifted share until the step is paid or changes, rather than re-deciding from the purse each
   think) or shifting only the idle pass (not `Rebalance`) would likely cut the churn; measure before choosing.
 - The wave losses of BUG-1021 come from the reserve, not the shift: with shift 0 the no-wave count is 12 (11 with it).
+
+## Re-check (2026-10-18-1814, fix round 1, 57dfa22)
+With the reserve gated, it is held on 21.8 % of thinks (39 % in M5-4g). Gatherer kind switches average **3.93 a minute**
+(M5-4g 5.57, base 1.4) and the wanted share changes about **11.8 times a match** (M5-4g 22.4). Still S4, still open.

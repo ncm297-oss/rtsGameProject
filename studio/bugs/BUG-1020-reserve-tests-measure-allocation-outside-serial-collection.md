@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S1 |
-| Status | open |
+| Status | fixed (verified by QA 2026-10-18-1814 re-check) |
 | Found | 2026-10-18-1814, task M5-4g (QA) |
 | System | test suite (sim-owned): allocation-measuring tests |
-| Fixed by | |
+| Fixed by | 57dfa22 (M5-4g fix round 1) |
 
 ## Repro
 1. Fresh clone of `studio/2026-10-18-1814-sim` at 0650492, `dotnet build RtsGame.sln` (0 warnings).
@@ -34,3 +34,8 @@ The developer's report lists 9 red rows, all data-owned / `Content`; this one is
 - Fix pattern used elsewhere (e.g. `QA/AiSaveQaTests.Serial`, `QA/ReserveQaTests.Serial`): move the allocation row into a
   nested `[Collection(SerialCollection.Name)] public class Serial` or put the attribute on the class.
 - S1 by the severity table (a red build); trivial to fix.
+
+## Re-check (2026-10-18-1814, fix round 1, 57dfa22)
+The allocation row moved to the nested `ReserveTests.Serial` (`[Collection(SerialCollection.Name)]`). `SerialCollectionTests`
+2 / 2 green in the worktree's full run, alone, and in a fresh clone of the branch (`simqa1814-head`, 0 warnings).
+`ReserveTests+Serial.AThinkWithAReserve_AllocatesNothing` passes alone (0 B).

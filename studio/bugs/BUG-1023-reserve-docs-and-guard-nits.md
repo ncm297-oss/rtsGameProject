@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S4 |
-| Status | open |
+| Status | open (items 1, 2, 5 fixed in fix round 1; items 3, 4 open) |
 | Found | 2026-10-18-1814, task M5-4g (QA) |
 | System | AI reserve (`BuildOrderExecutor.Reservable`, `AiPlayer.SetReserve`), docs/03 "Implementation (M5-4g)" |
-| Fixed by | |
+| Fixed by | 57dfa22 (items 1, 2, 5) |
 
 ## Repro
 `dotnet test sim/Rts.Sim.Tests --filter "FullyQualifiedName~ReservePairingsStressTests" --logger "console;verbosity=detailed"`:
@@ -42,3 +42,15 @@ each `ROW` prints BUG-0981's flags with, for an `expand`, `freeMine` (the execut
 
 ## Notes
 Group of small findings; none blocks on its own.
+
+## Re-check (2026-10-18-1814, fix round 1, 57dfa22)
+- Item 1 **fixed**: docs/03 "Measured" now gives the reasons correctly. Over the 27 runs, 12 of the 17 flags are `expand`
+  steps: 7 with `freeMine=False` and 5 with `freeMine=True`, which matches the docs.
+- Item 2 **fixed**: `BuildOrderExecutor.Fillable` does not reserve a step that is short of a kind no gatherer can reach.
+  This is covered by the developer's 3-row no-node test, QA's `NoKnownWood_AStepShortOfWoodIsNotReserved_ProductionTrains`
+  (renamed from `..._WoodDropsOutOfTheReserve_ProductionTrainsAboveTheGoldPart` because its expectation now says this),
+  and the new `KnowsNodeAnswer_LastsOneThink_*`. Hard seed 2 Malazan is no longer reserved 150 / 0. It now holds
+  150 / 200 (short of wood, wood reachable) from 13:16 to 20:00 instead.
+- Item 3 **open**: `ExpansionMine` still ignores `Board.NodeDropped`.
+- Item 4 **open**: this is the Producer's restatement of criterion 2. The code is unchanged.
+- Item 5 **fixed**: docs/02 now reads "0.25 more, or less, of the workers on gold".

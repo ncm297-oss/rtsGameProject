@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S2 |
-| Status | open |
+| Status | fixed for the wave criterion (verified by QA 2026-10-18-1814 re-check); the remaining "holds while defending" half is BUG-1025 |
 | Found | 2026-10-18-1814, task M5-4g (QA) |
 | System | AI: build-order reserve (`BuildOrderExecutor` / `AiPlayer.CanAffordAboveReserve` / `ProductionManager`) against the defense |
-| Fixed by | |
+| Fixed by | 57dfa22 (M5-4g fix round 1: `AiPlayer.MayReserve`, `ai.reserveArmyShare` 1) |
 
 ## Repro
 1. `dotnet test sim/Rts.Sim.Tests --filter "FullyQualifiedName~ReservePairingsStressTests" --logger "console;verbosity=detailed"`
@@ -68,3 +68,20 @@ building or an expansion the base can't use while it is being razed converts a b
   no wave and 15 defeats (11 and 11 with the shipped 0.25; BUG-1022).
 - Slice 2 (counter-wave) was built and backed out at 0 / 6 per the developer; not inspected (not in the diff).
 - Not a determinism problem: twins on all 27 runs equal every 50 ticks.
+
+## Re-check (2026-10-18-1814, fix round 1, 57dfa22)
+The reserve is now named only once a wave has been sent or the army's half-pop reaches `reserveArmyShare` (1) x the
+wave's. Measured independently (the same 27 twin runs, base rows rebuilt from f531dd9 with this file under `QA_BASE`):
+
+| | base f531dd9 | M5-4g | fix round 1 |
+| --- | --- | --- | --- |
+| sides that sent no wave | 3 | 11 | **3** (the base's three: `cadre_rush` v `raider_rush` 8 and 14, `crossbow_push` v `raider_rush` 19) |
+| Whirlwind defeated without a wave | 0 | 1 | 0 |
+
+The three sides never reach the wave's size, so their reserve never engages (`reserveThinks` 0 on all three). Criterion 3's
+wave half is met on the brief's seeds, with the existing allowances. BUG-1010's six seeds: 0 waves on all six, 3 defeated
+(base 5, M5-4g 6).
+
+Not fixed, moved to **BUG-1025 (S3)**: after the first wave (the gate stays open for good) the reserve still holds for
+minutes while the base is defended, and follow-up waves drop: Malazan waves 79 -> 55, Malazan defeats 8 -> 10,
+Whirlwind defeats 5 -> 1.

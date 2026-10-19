@@ -69,7 +69,7 @@ public class ReserveQaTests
     [Theory]
     [InlineData(true)]
     [InlineData(false)]
-    public void NoKnownWood_WoodDropsOutOfTheReserve_ProductionTrainsAboveTheGoldPart(bool woodGone)
+    public void NoKnownWood_AStepShortOfWoodIsNotReserved_ProductionTrains(bool woodGone)
     {
         GameData d = s_ageTwo.Value;
         Simulation sim = Scene(d);
@@ -94,6 +94,40 @@ public class ReserveQaTests
         Assert.Equal((false, !woodGone), (seen.shortGold, seen.shortWood));
         Assert.Equal(woodGone ? d.AiRules.GoldShare : d.AiRules.GoldShare - d.AiRules.ReserveShift, seen.share, 5); // a guarded kind is never "short"
         Assert.Equal(woodGone, log.Any(c => c.Kind == CommandKind.Train && c.TypeId == d.FindUnit("malazan_heavy_infantry")));
+    }
+
+    /// <summary>
+    /// Re-check (fix round 1): <c>KnowsNode</c>'s answer is kept for one think only. Age II (400 / 200) due, the purse 500 / 190
+    /// at every think: with the trees known it is reserved; every tree then marked dropped, the next think does not reserve it
+    /// (a stale "known" would keep banking 400 gold); the marks cleared, the think after reserves it again.
+    /// </summary>
+    [Fact]
+    public void KnowsNodeAnswer_LastsOneThink_DroppingAndRestoringTheTrees_FlipsTheReserveNextThink()
+    {
+        GameData d = s_ageTwo.Value;
+        Simulation sim = Scene(d);
+        AiPlayer ai = sim.AiOf(0)!;
+        ResourceStore r = sim.World.Resources;
+        int step = -2;
+        ai.ThoughtForTests = a => step = a.ReserveStep;
+        int Think()
+        {
+            step = -2;
+            while (sim.TickNumber % ai.ThinkTicks != 0) sim.Tick();
+            BuildMaps.SetTotals(sim, 0, 500, 190);
+            sim.Tick();
+            return step;
+        }
+        void Mark(bool dropped)
+        {
+            for (int s = 0; s < r.Capacity; s++)
+                if (r.Alive[s] && d.Resources[r.TypeId[s]].Resource == ResourceKind.Wood) ai.Board.NodeDropped[s] = dropped ? r.Generation[s] : 0;
+        }
+        Assert.Equal(0, Think());
+        Mark(true);
+        Assert.Equal(-1, Think());
+        Mark(false);
+        Assert.Equal(0, Think());
     }
 
     /// <summary>A flat scene like <see cref="Scene"/> with the building store <paramref name="capacity"/> slots (full at 10: player 0's hall, Barracks, Range, six Billets, player 1's hall).</summary>
