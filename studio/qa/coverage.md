@@ -299,3 +299,9 @@ M6-V13 (2026-10-18-0516, view, QA standard): "opened with" stats line, alert Uni
 
 M6-S2 QA (2026-10-18-0516, sim, QA full): new row "Save format & `Simulation` save / load". Attacks on what is restored "equivalently": long runs (T + 6,000), save-tick windows, tick 0, the banner tick, a reload chain, saving as a no-op, SealCheck memo reads on one side, a whole-object-graph reflection diff, forged-checksum fuzz. No divergence found. BUG-0960 (S4). Removed a stale duplicate "Menus, save/load, export" row (an older copy of the row above it).
 
+
+D-H6 (2026-10-18-1236, data, QA standard): BUG-0982 measured (keep 18), the pairs report's wait length, a third seed per pairing.
+- **Wave threshold v rush.** Dev: `Content/AiOpeningPairsReportTests.Bug0982_CadreRushVersusRaiderRush_WaveThresholdTable` (18 / 16 / 14 x seeds 7, 8, 14; rule asserted, page table pinned cell for cell). QA: `QA/Content/DH6ThresholdQaTests.Bug0982_KeepEighteen_HoldsOnTwoMoreSeeds` (the 4th and 5th seeds 18, 23 added; the rule over 5 seeds still picks 18; description's "18 army pop" = `attack.minArmyPop`, cost 1,332 = floor of the Age I mix), `CrossbowPushVersusRaiderRush_FourthAndFifthSeeds` (seeds 25, 38; fails on an unlisted no-wave-and-alive case).
+- **Easy pick in the built sim.** `QA/Content/DH6ThresholdQaTests.Easy_PicksOpeningZero_InTheBuiltSimulation_Seeds1To50` (`Simulation.AiOpening`, not only the test-side mirror).
+- **Pairings, third seed.** Dev: `QA/Content/D21OpeningsQaTests.EveryPairing_ThirdSeed_BothSidesWaveIn20Minutes` (one named allowance, BUG-1010).
+- **Gap.** BUG-1010 (Malazan openings v `raider_rush` without a wave on 6 of 10 seeds; sim-side lever).
