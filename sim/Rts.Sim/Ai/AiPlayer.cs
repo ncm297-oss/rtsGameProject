@@ -58,6 +58,7 @@ internal sealed partial class AiPlayer
         CampType = OfSlot(BuildingSlot.Camp);
         IsWorkerType = new bool[data.Units.Length];
         for (int t = 0; t < data.Units.Length; t++) IsWorkerType[t] = data.Units[t].IsWorker;
+        ClearReserve();
     }
 
     /// <summary>The player it plays.</summary>
@@ -118,6 +119,9 @@ internal sealed partial class AiPlayer
 
     /// <summary>Commands it has had accepted at the door (for tests and tooling).</summary>
     internal int CommandsSent { get; private set; }
+
+    /// <summary>M5-4g test seam: called at the end of every think, before the think's scratch reserve is cleared. Null in a match.</summary>
+    internal Action<AiPlayer>? ThoughtForTests { get; set; }
 
     /// <summary>Test seam: told of every command accepted at the door, stamped with the tick it applies in. Null in a match.</summary>
     internal Action<Command>? SentForTests { get; set; }
@@ -213,6 +217,123 @@ internal sealed partial class AiPlayer
     /// <summary>Whether the build-order executor sent a command this think (the production manager then waits).</summary>
     internal bool ExecutorSent { get; set; }
 
+    // ---------- M5-4g: the reserve, think scratch set by the executor (docs/03 "Implementation (M5-4g)") ----------
+
+    /// <summary>
+    /// M5-4g: the index in the build order of this think's reserved step (<see cref="BuildOrderExecutor"/>), -1 for none.
+    /// Set during a think only: cleared at its start and its end (<see cref="ThoughtForTests"/> sees it).
+    /// </summary>
+    internal int ReserveStep { get; private set; }
+
+    /// <summary>M5-4g: the gold and wood the reserved step costs, a kind with no known node left out (0 / 0 with no reserved step).</summary>
+    internal int ReserveGold { get; private set; }
+
+    /// <summary>See <see cref="ReserveGold"/>.</summary>
+    internal int ReserveWood { get; private set; }
+
+    /// <summary>M5-4g: whether the reserved step was short of gold (wood) when named, a kind with no known node never.</summary>
+    internal bool ReserveShortGold { get; private set; }
+
+    /// <summary>See <see cref="ReserveShortGold"/>.</summary>
+    internal bool ReserveShortWood { get; private set; }
+
+    /// <summary>
+    /// M5-4g (BUG-1021, BUG-1025): whether the build order may name a reserved step this think: while the base is not
+    /// defended and the army is at least <c>ai.reserveArmyShare</c> of the opening's wave in both the wave's measures, its
+    /// half-pop (<c>attack.minArmyPop</c>) and its gold + wood (<c>attack.minArmyCost</c>), each times the difficulty's
+    /// <c>waveSizeMultiplier</c>. Otherwise army production spends first, as before M5-4g: a reserve held from the start cost
+    /// a quarter of the sides their first wave, and one held for good after the first wave (fix round 1) starved the
+    /// follow-up waves and the defense.
+    /// </summary>
+    internal bool MayReserve()
+    {
+        if (Board.Defending) return false;
+        float share = Rules.ReserveArmyShare * Knobs.WaveSizeMultiplier;
+        ArmySize(out int half, out int cost);
+        return half >= share * Opening.AttackMinHalfPop && cost >= share * Opening.AttackMinCost;
+    }
+
+    /// <summary>The half-pop and the gold + wood cost of the player's live non-worker units, from this think's census (<see cref="Live"/>).</summary>
+    internal void ArmySize(out int half, out int cost)
+    {
+        half = cost = 0;
+        for (int t = 0; t < Live.Length; t++)
+        {
+            if (IsWorkerType[t] || Live[t] == 0) continue;
+            UnitDef def = Data.Units[t];
+            half += Live[t] * def.HalfPop;
+            cost += Live[t] * (def.CostGold + def.CostWood);
+        }
+    }
+
+    private void ClearReserve()
+    {
+        ReserveStep = -1;
+        ReserveGold = ReserveWood = 0;
+        ReserveShortGold = ReserveShortWood = false;
+        _knowsGold = _knowsWood = 0;
+    }
+
+    // KnowsNode's answers this think (0 not walked yet, 1 yes, 2 no): BUG-1023 asks it for every candidate step, and the
+    // answer can't change within a think (the defense, which sets the flee ring, runs before the executor).
+    private byte _knowsGold, _knowsWood;
+
+    /// <summary>
+    /// M5-4g: names step <paramref name="step"/> (costing <paramref name="gold"/> / <paramref name="wood"/>, more than is left
+    /// now) the think's reserved step. The no-node guard: a kind the player knows no node of that a gatherer could be sent
+    /// to (<see cref="KnowsNode"/>) drops out of the reserve, since no gathering would ever fill it.
+    /// </summary>
+    internal void SetReserve(int step, int gold, int wood)
+    {
+        bool goldKnown = gold == 0 || KnowsNode(ResourceKind.Gold), woodKnown = wood == 0 || KnowsNode(ResourceKind.Wood);
+        ReserveStep = step;
+        ReserveGold = goldKnown ? gold : 0;
+        ReserveWood = woodKnown ? wood : 0;
+        ReserveShortGold = goldKnown && Gold < gold;
+        ReserveShortWood = woodKnown && Wood < wood;
+    }
+
+    /// <summary>
+    /// M5-4g: whether the player knows a node of <paramref name="kind"/> the economy could send a worker to: one its
+    /// gatherers' search would take (not marked dropped, not within <c>ai.workerFleeRadius</c> of the defense point while
+    /// the base is defended).
+    /// Walked once a think per kind.
+    /// </summary>
+    internal bool KnowsNode(ResourceKind kind)
+    {
+        ref byte known = ref kind == ResourceKind.Gold ? ref _knowsGold : ref _knowsWood;
+        if (known == 0) known = WalkForNode(kind) ? (byte)1 : (byte)2;
+        return known == 1;
+    }
+
+    private bool WalkForNode(ResourceKind kind)
+    {
+        float flee = Board.Defending ? Rules.WorkerFleeRadius * Rules.WorkerFleeRadius : -1f;
+        int s = -1;
+        while (View.NextResource(ref s, out SeenResource node))
+        {
+            if (Data.Resources[node.TypeId].Resource != kind || Board.NodeDropped[s] == node.Handle.Generation) continue;
+            if (Vector2.DistanceSquared(NodeCentre(node.TypeId, node.Cell), Board.DefensePoint) <= flee) continue;
+            return true;
+        }
+        return false;
+    }
+
+    /// <summary>
+    /// M5-4g: the share of gatherers the economy wants on gold: <c>ai.goldShare</c>, plus <c>ai.reserveShift</c> while the
+    /// reserved step is short of gold only, minus it while short of wood only, clamped to 0-1.
+    /// </summary>
+    internal float WantedGoldShare() => WantedGoldShare(Rules.GoldShare, Rules.ReserveShift, ReserveShortGold, ReserveShortWood);
+
+    /// <summary>See <see cref="WantedGoldShare()"/>: <paramref name="goldShare"/> moved by <paramref name="shift"/> toward the one kind short, clamped to 0-1.</summary>
+    internal static float WantedGoldShare(float goldShare, float shift, bool shortGold, bool shortWood)
+    {
+        float share = goldShare;
+        if (shortGold && !shortWood) share += shift;
+        else if (shortWood && !shortGold) share -= shift;
+        return Math.Clamp(share, 0f, 1f);
+    }
+
     /// <summary>
     /// One think if the tick number is a multiple of <see cref="ThinkTicks"/>, at the start of the tick before phase 1 (the
     /// sim calls it every tick for each AI seat in player order); true when it thought.
@@ -225,6 +346,7 @@ internal sealed partial class AiPlayer
         Gold = View.Gold;
         Wood = View.Wood;
         ExecutorSent = false;
+        ClearReserve();
         _queueFull = false;
         _plannedCount = 0;
         Census();
@@ -236,6 +358,10 @@ internal sealed partial class AiPlayer
         MilitaryManager.Run(this);
         AbilityManager.Run(this); // M5-4c: last (docs/03 "AI architecture")
         Thinks++;
+        ThoughtForTests?.Invoke(this);
+        // M5-4g: the reserve lives for the think only, so between thinks (where a save is taken) a seat holds none and a
+        // loaded seat equals the saved one with nothing stored (the AIST layout is unchanged).
+        ClearReserve();
         return true;
     }
 
@@ -416,6 +542,14 @@ internal sealed partial class AiPlayer
     /// <summary>Whether <paramref name="gold"/> and <paramref name="wood"/> fit what is left this think.</summary>
     internal bool CanAfford(int gold, int wood) => Gold >= gold && Wood >= wood;
 
+    /// <summary>
+    /// M5-4g: whether <paramref name="gold"/> and <paramref name="wood"/> fit what is left this think above the reserve
+    /// (<see cref="ReserveGold"/> / <see cref="ReserveWood"/>): a kind the cost doesn't use is not checked, so a wood-only
+    /// unit may still be paid while the reserve waits on gold.
+    /// </summary>
+    internal bool CanAffordAboveReserve(int gold, int wood) =>
+        (gold == 0 || Gold - gold >= ReserveGold) && (wood == 0 || Wood - wood >= ReserveWood) && CanAfford(gold, wood);
+
     /// <summary>Takes a sent command's cost off what is left this think.</summary>
     internal void Spend(int gold, int wood)
     {
@@ -486,13 +620,14 @@ internal sealed partial class AiPlayer
     /// <summary>
     /// Sends a Train of <paramref name="unitType"/> at the own finished building that trains it with room in its queue and no
     /// command of the AI waiting on it, the shortest queue first (slot order on ties); with <paramref name="emptyQueueOnly"/>
-    /// only an empty queue. Fills <paramref name="pending"/> to judge it. False when none can, or not enough is left.
+    /// only an empty queue. Fills <paramref name="pending"/> to judge it. False when none can, or not enough is left (M5-4g:
+    /// with <paramref name="aboveReserve"/>, not enough above the reserve, <see cref="CanAffordAboveReserve"/>).
     /// </summary>
-    internal bool TryTrain(int unitType, bool emptyQueueOnly, ref PendingOrder pending)
+    internal bool TryTrain(int unitType, bool emptyQueueOnly, ref PendingOrder pending, bool aboveReserve = false)
     {
         if ((uint)unitType >= (uint)Data.Units.Length) return false;
         UnitDef def = Data.Units[unitType];
-        if (!CanAfford(def.CostGold, def.CostWood)) return false;
+        if (aboveReserve ? !CanAffordAboveReserve(def.CostGold, def.CostWood) : !CanAfford(def.CostGold, def.CostWood)) return false;
         int best = -1, bestQueue = int.MaxValue;
         for (int k = 0; k < OwnBuildingCount; k++)
         {

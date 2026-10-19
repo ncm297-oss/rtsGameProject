@@ -67,4 +67,18 @@ public sealed class AiRulesDef
 
     /// <summary>M5-4f: a hit on the hall that leaves it below this fraction of its max hp calls the whole wave home (<c>recallHallHp</c>, 0-1).</summary>
     public float RecallHallHp { get; init; }
+
+    /// <summary>
+    /// M5-4g: while the build order's reserved step is short of gold only (wood only), the AI's wanted gold share is
+    /// <see cref="GoldShare"/> plus (minus) this, clamped to 0-1 (<c>reserveShift</c>, 0-1; 0 leaves the split alone).
+    /// </summary>
+    public float ReserveShift { get; init; }
+
+    /// <summary>
+    /// M5-4g (BUG-1021, BUG-1025): the build order names a reserved step only while the base is not defended and the army's
+    /// half-pop and gold + wood are each at least this fraction of the wave's (<c>attack.minArmyPop</c> / <c>minArmyCost</c>
+    /// times the difficulty's <c>waveSizeMultiplier</c>): the waves are built first (<c>reserveArmyShare</c>, 0-1; 0 reserves
+    /// whatever the army, the defense aside).
+    /// </summary>
+    public float ReserveArmyShare { get; init; }
 }

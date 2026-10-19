@@ -16,7 +16,8 @@ namespace Rts.Sim.Ai;
 /// <see cref="StalledThinks"/> thinks gets a worker sent to join it (a Build of its type at its anchor: the idle worker
 /// nearest it, else the nearest gatherer), and such a stalled house site does not hold the house rule off. M5-H2 (BUG-0650):
 /// after <see cref="MaxJoins"/> joins with no rise in the site's hit points (no worker ever got to work it) it is left
-/// alone until they rise.
+/// alone until they rise. M5-4g: the gold share is <see cref="AiPlayer.WantedGoldShare"/>, shifted by <c>ai.reserveShift</c>
+/// toward the kind the build order's reserved step lacks.
 /// </summary>
 internal static class EconomyManager
 {
@@ -149,7 +150,7 @@ internal static class EconomyManager
             return;
         }
         int total = gold + wood + idle;
-        int wantGold = (int)MathF.Floor(ai.Rules.GoldShare * total + 0.5f);
+        int wantGold = (int)MathF.Floor(ai.WantedGoldShare() * total + 0.5f); // M5-4g: toward what the reserve lacks
         // M5-4f: which nodes qualify (kind, not dropped, away from the defense point) doesn't depend on the worker, so a kind
         // with none for one worker has none for the rest this think: not searched again (a defended base whose known nodes
         // all lie by the point left every idle worker scanning every node twice a think).
@@ -196,7 +197,7 @@ internal static class EconomyManager
     /// </summary>
     private static void Rebalance(AiPlayer ai, int gold, int wood)
     {
-        int want = (int)MathF.Floor(ai.Rules.GoldShare * (gold + wood) + 0.5f);
+        int want = (int)MathF.Floor(ai.WantedGoldShare() * (gold + wood) + 0.5f); // M5-4g
         if (gold == want) return;
         byte from = gold > want ? Gold : Wood, to = gold > want ? Wood : Gold;
         Blackboard board = ai.Board;

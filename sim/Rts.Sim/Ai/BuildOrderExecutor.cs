@@ -1,5 +1,6 @@
 using System;
 using Rts.Sim.Data;
+using Rts.Sim.Economy;
 
 namespace Rts.Sim.Ai;
 
@@ -36,6 +37,7 @@ internal static class BuildOrderExecutor
         Blackboard board = ai.Board;
         var steps = ai.Opening.BuildOrder; // M5-8a: the picked opening's
         int slack = ai.Knobs.BuildOrderSlackTicks;
+        bool mayReserve = ai.MayReserve(); // BUG-1021 / BUG-1025: a wave-sized army, the base not defended
         for (int i = 0; i < steps.Length; i++)
         {
             if (board.StepDone[i]) continue;
@@ -70,8 +72,11 @@ internal static class BuildOrderExecutor
             // affordable step's search scanned the whole placement radius at every think (the storms fuzz's think, 0.5 to
             // 1.6 ms). A site freed meanwhile is taken at most that many thinks late.
             if (ai.Now < board.StepNoSiteUntil[i]) continue;
+            // M5-4g: the first step from here on that only its cost holds back is the think's reserved step; the train
+            // steps after it (and the production manager) spend only above its cost.
+            if (mayReserve && ai.ReserveStep < 0 && step.Action != AiStepAction.Train && Reservable(ai, step, out int gold, out int wood)) ai.SetReserve(i, gold, wood);
             ai.NoSiteFound = false;
-            if (Act(ai, step, ref pending)) ai.ExecutorSent = true;
+            if (Act(ai, step, ref pending, ai.ReserveStep >= 0)) ai.ExecutorSent = true;
             else if (ai.NoSiteFound) board.StepNoSiteUntil[i] = ai.Now + NoSiteRetryThinks * ai.ThinkTicks;
         }
     }
@@ -104,13 +109,68 @@ internal static class BuildOrderExecutor
         if (step.Action != AiStepAction.Train || board.StepQueued[i] >= step.Count) board.StepDone[i] = true;
     }
 
-    /// <summary>Sends the step's next command, if it can now; true when one was sent.</summary>
-    private static bool Act(AiPlayer ai, in AiStep step, ref PendingOrder pending)
+    /// <summary>
+    /// M5-4g: whether a due <c>build</c> / <c>research</c> / <c>expand</c> step (<paramref name="gold"/> / <paramref name="wood"/>
+    /// its cost) can't be paid from what is left this think while nothing but its cost holds it back as far as the
+    /// type's rules tell: a build's requires met (<see cref="PlayerView.CanPlaceAnywhere"/> refusing on the cost at most) with
+    /// somewhere to search round; an expand's free mine known; a research's requires met at a finished own building
+    /// that researches it (a full queue is a wait, not a block). A step its rules hold back would keep the purse banked
+    /// for nothing, and take the reserve from the steps after it.
+    /// </summary>
+    private static bool Reservable(AiPlayer ai, in AiStep step, out int gold, out int wood)
+    {
+        gold = wood = 0;
+        GameData d = ai.Data;
+        switch (step.Action)
+        {
+            case AiStepAction.Research:
+                if ((uint)step.Target >= (uint)d.Techs.Length) return false;
+                (gold, wood) = (d.Techs[step.Target].CostGold, d.Techs[step.Target].CostWood);
+                return !ai.CanAfford(gold, wood) && Fillable(ai, gold, wood) && ResearchableSomewhere(ai, step.Target);
+            case AiStepAction.Build:
+                if ((uint)step.Target >= (uint)d.Buildings.Length) return false;
+                (gold, wood) = (d.Buildings[step.Target].CostGold, d.Buildings[step.Target].CostWood);
+                return !ai.CanAfford(gold, wood) && Fillable(ai, gold, wood) && PlaceableButForCost(ai, step.Target) && BuildCentre(ai, step.Target) >= 0;
+            case AiStepAction.Expand:
+                if (ai.TownHallType < 0) return false;
+                (gold, wood) = (d.Buildings[ai.TownHallType].CostGold, d.Buildings[ai.TownHallType].CostWood);
+                return !ai.CanAfford(gold, wood) && Fillable(ai, gold, wood) && PlaceableButForCost(ai, ai.TownHallType) && ExpansionMine(ai) >= 0;
+            default:
+                return false;
+        }
+    }
+
+    /// <summary>
+    /// BUG-1023: whether gathering could fill the purse up to the cost: each kind the purse is short of has a node the
+    /// gatherers could be sent to (<see cref="AiPlayer.KnowsNode"/>). A step short of a kind no gatherer can reach would bank
+    /// its other kind for nothing (Hard seed 2: 150 gold held for 8 minutes for a building with no wood in reach).
+    /// </summary>
+    private static bool Fillable(AiPlayer ai, int gold, int wood) =>
+        (ai.Gold >= gold || ai.KnowsNode(ResourceKind.Gold)) && (ai.Wood >= wood || ai.KnowsNode(ResourceKind.Wood));
+
+    /// <summary>M5-4g: whether only the cost (of the player's whole bank, the view's) can stop a building of <paramref name="type"/> anywhere.</summary>
+    private static bool PlaceableButForCost(AiPlayer ai, int type) =>
+        ai.View.CanPlaceAnywhere(type, out PlacementError why) || why == PlacementError.CannotAfford;
+
+    /// <summary>M5-4g: whether a finished own building may research <paramref name="tech"/> but for its cost or a full queue.</summary>
+    private static bool ResearchableSomewhere(AiPlayer ai, int tech)
+    {
+        for (int k = 0; k < ai.OwnBuildingCount; k++)
+        {
+            if (ai.OwnBuildingSites[k]) continue;
+            if (ai.View.CanResearch(ai.OwnBuildingSlots[k], tech, out ResearchError why)
+                || why is ResearchError.CannotAfford or ResearchError.QueueFull) return true;
+        }
+        return false;
+    }
+
+    /// <summary>Sends the step's next command, if it can now; true when one was sent. M5-4g: a train step after the reserved one spends only above the reserve (<paramref name="aboveReserve"/>).</summary>
+    private static bool Act(AiPlayer ai, in AiStep step, ref PendingOrder pending, bool aboveReserve)
     {
         switch (step.Action)
         {
             case AiStepAction.Train:
-                return ai.TryTrain(step.Target, emptyQueueOnly: false, ref pending);
+                return ai.TryTrain(step.Target, emptyQueueOnly: false, ref pending, aboveReserve);
             case AiStepAction.Research:
                 return ai.TryResearch(step.Target, ref pending);
             case AiStepAction.Build:

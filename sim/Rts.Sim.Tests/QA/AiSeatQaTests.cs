@@ -276,7 +276,13 @@ public class AiSeatQaTests
         List<Command> log = AiScenes.Log(sim, 0);
         AiPlayer ai = sim.AiOf(0)!;
         int think = ai.ThinkTicks;
-        for (int t = 0; t < 100 * think; t++) sim.Tick();
+        // M5-4g: the reserve now saves for the house step (production no longer spends the wood the workers bring), so the
+        // purse is held at no wood before every think to keep the step unpayable, as the scene means.
+        for (int t = 0; t < 100 * think; t++)
+        {
+            if (sim.TickNumber % think == 0) BuildMaps.SetTotals(sim, 0, 100_000, 0);
+            sim.Tick();
+        }
         Assert.Equal(100, ai.Thinks);
         var bad = log.Where(c => c.Kind is CommandKind.Train or CommandKind.Research or CommandKind.Build).ToList();
         foreach (Command c in bad.Take(5)) _out.WriteLine($"{c.Kind} {c.TypeId} at tick {c.Tick} {c.Position}");
