@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S4 |
-| Status | open |
+| Status | open (item 1 fixed; items 2-3 open) |
 | Found | 2026-10-18-0516, task M6-S2 |
 | System | sim: `Save/SaveHeader`, `Simulation.TryLoad`, `Save/SavePerfTests` |
-| Fixed by | |
+| Fixed by | Item 1: M6-S3 (acb71e5, session 2026-10-18-1236): `SaveHeader.MinBodyBytes` + the heightmap length check in `World.Save.cs`; the forged max-capacity header is `Malformed` in 0.2 ms with ~101 KB allocated (`SaveRefusalTests`, QA's `AiSaveQaTests.Serial.AForgedHeader_EveryCapacityAtMax_*`). The bound leaves out the command / projectile / zone capacities: BUG-0990 (S4) |
 
 ## Repro / items
 1. **The header's capacities are trusted before any body byte is checked.** `SaveForgeryQaTests.AForgedHeader_WithEveryCapacityAtTheFormatMaximum_IsRefused_WithoutThrowing`:

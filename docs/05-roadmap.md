@@ -718,7 +718,7 @@ open S1 / S2. Retro below; open S3 / S4 listed there.)_
       by `MatchOverViewTest`, `FreeForAllTest`, `ReplayPlaybackTest`, QA's `QaM6V11Test` (a per-tick oracle over a 17,600-tick 4-seat
       match) and the Producer's own 1280 × 720 screenshots; docs/03 "Implementation (M6-V11)". Ticked at the 2026-10-17-0554 ACCEPT.
       Polish left: BUG-0890 (S4).)
-- [ ] Save/load and replay playback. (M6-V9, 2026-10-16: **replay playback**: every match started from the menu or `--skirmish` is
+- [x] Save/load and replay playback. (M6-V9, 2026-10-16: **replay playback**: every match started from the menu or `--skirmish` is
       recorded (checkpoints every 100 ticks) and written to `user://replays/<yyyyMMdd-HHmmss>-seed<seed>.replay` at the banner, at
       Quit to menu and on window close, the newest 20 kept; Main menu → Load Game lists them (date, seed, players, length) with
       Watch / Delete / Back; Watch replays through `SimRunner.StartPlayback` (every seat human, the logged commands fed before
@@ -730,7 +730,20 @@ open S1 / S2. Retro below; open S3 / S4 listed there.)_
       is hash-equal to the unsaved run every tick on 13 scenes to T + 2,000 and QA's T + 6,000; refuses bad bytes without throwing;
       human-seat matches only (`AiSeatsUnsupported` until slice 2 stores the AI); verified by `Save/SaveRoundTripTests`,
       `SaveRefusalTests`, `SaveFormatTests`, `SavePerfTests` (3.9 MB, 25 / 46 ms) and QA's `SaveRestoreQaTests` / `SaveDeepDiff` /
-      `SaveForgeryQaTests`; docs/03 "Save format (M6-S2)". Left: slice 2 (AI seats) and the view's Save / Load screen.)
+      `SaveForgeryQaTests`; docs/03 "Save format (M6-S2)". M6-S3, 2026-10-18-1236: **slice 2, the AI seats** (format version 2, an `AIST`
+      section per AI seat: the opening pick, the AI's RNG words, its counters and the `Blackboard` whole; a loaded seat is built as a match
+      builds it and the stored pick checked against it; `AiSeatsUnsupported` no longer returned; BUG-0960 item 1's length pre-check); AI-v-AI
+      seeds 1-5 with 2-4 seats at every difficulty, saved at fixed ticks and at probed moments (mid-wave, mid-cast, a no-site wait, a defense),
+      hash-equal to T + 2,000 and every Blackboard field equal; QA's `AiSaveQaTests` compare the loaded and unsaved twins' AI command streams
+      tick by tick (17 probed moments, a 24-reload chain); 4.08 MB, 27-33 / 55-70 ms. M6-V14, 2026-10-18-1236: **the Save / Load screen**:
+      the pause menu's Save writes `user://saves/<yyyyMMdd-HHmmss>-seed<seed>.sav` through `TrySave` with the recording so far beside it
+      and says "Saved at m:ss" or the refusal's reason (`ui.json` `save.*`); Load Game lists saves beside replays (date, seed, players,
+      length, a Save / Replay tag) with Load / Watch / Delete / Back; Load resumes through `SimRunner.StartLoaded` at the saved tick with the
+      HUD, camera, fog, selection and minimap fresh and the seats from the header; a loaded match is not recorded (the pause menu says so);
+      `--load <path>`; verified by `SaveLoadTest` (a human twin saved at 500, loaded, 1,000 ticks hash-equal), QA's `QaM6V14Test` (tick-0 and
+      banner-tick resumes, 200-file folders, locked and junk files) and `SaveSummaryQaTests`; docs/02 "Game flow" 1 + 6, docs/03
+      "Implementation (M6-V14)". Ticked at the 2026-10-18-1236 ACCEPT. Polish left: BUG-1000 (S3: a refused Load highlights another row),
+      BUG-1001 (S3: a loaded match runs at normal speed, undocumented), BUG-1002 (S4), BUG-0990 (S4).)
 - [x] Settings: resolution, window mode, VSync, quality, volumes, keybinds. (M6-V6, 2026-10-13: resolution, window mode,
       VSync, quality presets, master / music / SFX volume and edge-pan speed, from the menu and the pause menu, saved in
       `user://settings.cfg`. M6-V7, 2026-10-14: "Confine cursor to window" (on by default; the cursor stays in the window
