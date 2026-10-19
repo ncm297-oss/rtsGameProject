@@ -378,8 +378,9 @@ public partial class Main : Node3D
     /// <summary>
     /// Resumes the save file at <paramref name="path"/> (M6-V14; a <c>user://</c> or OS path) in a new match scene: true when it
     /// started. A file <see cref="Simulation.TryLoad"/> refuses (or that won't open) starts nothing: the Load Game screen shows
-    /// with the code's <c>save.*</c> text. The match is not recorded. Of <paramref name="options"/> (the boot's args for
-    /// <c>--load</c>) only the view's flags count.
+    /// with the code's <c>save.*</c> text, the refused file's row picked (BUG-1000). The match is not recorded. Of
+    /// <paramref name="options"/> (the boot's args for <c>--load</c>) only the view's flags count. The save holds no game
+    /// speed: from Load Game (no options) the match resumes at Normal, 1x (BUG-1001); a dev <c>--load</c> takes <c>--speed</c>.
     /// </summary>
     public bool LoadSavedGame(string path, LaunchOptions? options = null)
     {
@@ -389,7 +390,7 @@ public partial class Main : Node3D
         if (sim == null)
         {
             GD.Print($"Save refused: {full}: {(openFailed ? "cannot open the file" : error.ToString())}");
-            ShowLoadNote(load => load.ShowSaveRefused(openFailed ? null : error));
+            ShowLoadNote(full, load => load.ShowSaveRefused(openFailed ? null : error));
             return false;
         }
         if (_menu != null) _menu.Visible = false;
@@ -449,17 +450,21 @@ public partial class Main : Node3D
     private bool Refused(string path, ReplayError error)
     {
         GD.Print($"Replay refused: {path}: {error}");
-        ShowLoadNote(load => load.ShowRefused());
+        ShowLoadNote(path, load => load.ShowRefused());
         return false;
     }
 
-    // The Load Game screen read afresh with a note set (a refused replay or save), focus on Back.
-    private void ShowLoadNote(Action<LoadGameScreen> note)
+    // The Load Game screen read afresh with a note set (a refused replay or save), focus on Back. BUG-1000: the refused file's
+    // row stays picked, so the note, Delete and Load all speak of it; a file that isn't listed (gone, or from --load
+    // elsewhere) leaves the refresh's row 0.
+    private void ShowLoadNote(string refusedPath, Action<LoadGameScreen> note)
     {
         if (_load == null || _menu == null) return;
         _menu.Visible = false;
         if (_setup != null) _setup.Visible = false;
         _load.Refresh(ReplayDir, SaveDir);
+        int row = _load.RowOf(refusedPath);
+        if (row >= 0) _load.Select(row);
         note(_load);
         _load.Visible = true;
         _load.BackButton.GrabFocus();

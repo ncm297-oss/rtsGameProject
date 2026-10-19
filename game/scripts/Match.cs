@@ -53,6 +53,9 @@ public partial class Match : Node3D
     /// <summary>Each player's colour (0xRRGGBB) every view draws it in (<see cref="PlayerColours"/>); empty before <see cref="Start"/>.</summary>
     public uint[] PlayerRgb { get; private set; } = Array.Empty<uint>();
 
+    /// <summary>The dev-log line the match printed when it was wired (M6-V15, for tests): "Save loaded: ..." for a loaded match, else "".</summary>
+    public string StartLine { get; private set; } = "";
+
     /// <summary>Starting workers per player this match asked for (<c>--workers</c>, else <c>rules.json</c> <c>startingWorkers</c>).</summary>
     public int WorkersPerPlayer { get; private set; }
 
@@ -285,8 +288,9 @@ public partial class Match : Node3D
         }
         if (loaded)
         {
-            GD.Print($"Save loaded: {SavePath}, seed {unchecked((ulong)_runner.Seed)}, map {map.Width} x {map.Height}, tick {sim.TickNumber}, " +
-                $"speed {_runner.GameSpeed:0.##}x, seats {SeatsText(data, _runner.Seats)}, not recorded");
+            StartLine = $"Save loaded: {SavePath}, seed {unchecked((ulong)_runner.Seed)}, map {map.Width} x {map.Height}, tick {sim.TickNumber}, " +
+                $"speed {_runner.GameSpeed.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)}x, seats {SeatsText(data, _runner.Seats)}, not recorded";
+            GD.Print(StartLine);
             return;
         }
         GD.Print($"Match started: seed {unchecked((ulong)_runner.Seed)}, map {map.Width} x {map.Height}, " +

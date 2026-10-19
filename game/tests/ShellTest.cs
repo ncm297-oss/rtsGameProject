@@ -75,6 +75,7 @@ public partial class ShellTest : Node
             LaunchRows();
             UiRows();
             await Flow();
+            await SpeedAndCounts();
             await SkirmishBoot();
             await FreeForAll();
             await VsyncOverride();
@@ -334,8 +335,8 @@ public partial class ShellTest : Node
         foreach (SaveText k in Enum.GetValues<SaveText>()) keys.Add(("save", UiText.Key(k), _ui.Save(k)));
         // settings: 22 since M6-V7 (confine_cursor); keys 15 + hud 2 since M6-V8; setup 17 since M6-V5 (add_slot, remove_slot); menu 5 + load 16 since M6-V9 (18 since M6-VH3: playing, unreadable);
         // match_over 27 since M6-V11 (kills, losses and the two in-hand keys out; nine column labels, not_reached and the graph's three in); alert 2 since M6-V12; match_over 28 since M6-V13 (opening)
-        // M6-V14: pause 5 (save), load 22 (kind, load, save_tag, replay_tag), save 12
-        Check(keys.Count == 5 + 17 + 5 + 22 + 28 + 15 + 2 + 22 + 2 + 12, $"{keys.Count} shell keys");
+        // M6-V14: pause 5 (save), load 22 (kind, load, save_tag, replay_tag), save 12; M6-V15: setup 23 (speed, speed_slow / normal / fast, forests, mines)
+        Check(keys.Count == 5 + 23 + 5 + 22 + 28 + 15 + 2 + 22 + 2 + 12, $"{keys.Count} shell keys");
         string json = File.ReadAllText(UiText.DefaultPath).Replace("\r\n", "\n");
         foreach ((string section, string key, string text) in keys)
         {
@@ -387,7 +388,9 @@ public partial class ShellTest : Node
             // M6-V14: Save on the pause menu, Load and the kind tags on Load Game, the save lines and one text per SaveError.
             "pause.save", "load.load", "load.kind", "load.save_tag", "load.replay_tag", "save.saved", "save.not_recorded", "save.write_failed",
             "save.read_failed", "save.bad_magic", "save.version_mismatch", "save.data_mismatch", "save.invalid_header", "save.ai_seats_unsupported",
-            "save.truncated", "save.checksum_mismatch", "save.malformed" };
+            "save.truncated", "save.checksum_mismatch", "save.malformed",
+            // M6-V15: the setup's game speed list and the generator's two counts.
+            "setup.speed", "setup.speed_slow", "setup.speed_normal", "setup.speed_fast", "setup.forests", "setup.mines" };
         foreach (string n in named) Check(keys.Any(k => $"{k.Section}.{k.Key}" == n), $"no key {n}");
         // M6-V12: the brief's wording (docs/02 "HUD layout").
         Check(_ui.Alert(AlertText.BaseUnderAttack) == "Your base is under attack" && _ui.Alert(AlertText.UnitsUnderAttack) == "Your units are under attack",
@@ -785,6 +788,91 @@ public partial class ShellTest : Node
         await Colours(c0, c1);
         Check(_main.CurrentMatch != match, "the second match is the first one");
         Check(MatchNodes().Count(n => n.StartsWith(nameof(Match) + " ", StringComparison.Ordinal)) == 1, "not exactly one Match in the tree");
+    }
+
+    // M6-V15 (BUG-1001, M6 criterion 7): the setup's Game speed list (Slow / Normal / Fast from ui.json, default Normal) gives
+    // the match --speed 0.75 / 1 / 1.5 (SimRunner.GameSpeed after Start, kept over Back and a match); Forests and Gold mines
+    // (defaults 12 / 8) give --forests / --mines, clamped to one start forest and the start mines a shown slot, up to the
+    // generator's MaxResourceGroups, and the match places what they say.
+    private async Task SpeedAndCounts()
+    {
+        Main main = NewMain(Array.Empty<string>(), "speed");
+        AddChild(main);
+        await Frames(2);
+        try
+        {
+            SkirmishSetup setup = main.Setup!;
+            await Click(main.Menu!.SkirmishButton);
+            var items = Enumerable.Range(0, setup.SpeedOption.ItemCount).Select(i => setup.SpeedOption.GetItemText(i)).ToArray();
+            Check(items.SequenceEqual(SkirmishSetup.SpeedKeys.Select(_ui.Setup)) && items.SequenceEqual(new[] { "Slow", "Normal", "Fast" })
+                && SkirmishSetup.GameSpeeds.SequenceEqual(new[] { 0.75, 1.0, 1.5 }) && setup.SpeedOption.Selected == 1 && setup.SpeedPick == 1.0,
+                $"speed list: items [{string.Join("|", items)}], picked {setup.SpeedOption.Selected} ({setup.SpeedPick}x)");
+            Check(_ui.Setup(SetupText.Speed) == "Game speed" && _ui.Setup(SetupText.Forests) == "Forests" && _ui.Setup(SetupText.Mines) == "Gold mines"
+                && Labels(setup).Contains(_ui.Setup(SetupText.Speed)) && Labels(setup).Contains(_ui.Setup(SetupText.Forests)) && Labels(setup).Contains(_ui.Setup(SetupText.Mines)),
+                "the speed / forests / mines labels are not ui.json's");
+            int startMines = _data.Rules.StartMineCount;
+            Check(setup.ForestsPick == LaunchOptions.DefaultForests && setup.MinesPick == LaunchOptions.DefaultMines
+                && setup.ForestsSpin.MinValue == 2 && setup.MinesSpin.MinValue == 2 * startMines && setup.ForestsSpin.MaxValue == MapGenParams.MaxResourceGroups
+                && setup.MinesSpin.MaxValue == MapGenParams.MaxResourceGroups,
+                $"counts: {setup.ForestsPick} forests ({setup.ForestsSpin.MinValue}-{setup.ForestsSpin.MaxValue}), {setup.MinesPick} mines ({setup.MinesSpin.MinValue}-{setup.MinesSpin.MaxValue})");
+
+            // The clamps: one past each end, and the floors following the slots.
+            foreach ((double set, int forests, int mines) in new[] { (-1.0, 2, 2 * startMines), (0.0, 2, 2 * startMines), (1.0, 2, 2 * startMines),
+                (64.0, 64, 64), (65.0, 64, 64), (1000.0, 64, 64), (6.5, 6, 6) })
+            {
+                setup.ForestsSpin.Value = set;
+                setup.MinesSpin.Value = set;
+                LaunchOptions o = LaunchOptions.Parse(setup.MatchArgs()!);
+                bool want6 = set == 6.5; // rounds to a whole count (6 or 7); the args carry it
+                Check((want6 ? setup.ForestsPick is 6 or 7 : setup.ForestsPick == forests) && (want6 ? setup.MinesPick is 6 or 7 : setup.MinesPick == mines)
+                    && o.Forests == setup.ForestsPick && o.Mines == setup.MinesPick,
+                    $"counts set to {set}: {setup.ForestsPick} forests / {setup.MinesPick} mines, args --forests {o.Forests} --mines {o.Mines} (want {forests} / {mines})");
+            }
+            setup.ForestsSpin.Value = 3;
+            setup.MinesSpin.Value = 5;
+            setup.AddSlot();
+            setup.AddSlot();
+            Check(setup.ForestsSpin.MinValue == 4 && setup.MinesSpin.MinValue == 4 * startMines && setup.ForestsPick == 4 && setup.MinesPick == 4 * startMines,
+                $"four slots: floors {setup.ForestsSpin.MinValue} / {setup.MinesSpin.MinValue}, picks {setup.ForestsPick} / {setup.MinesPick}");
+            setup.RemoveSlot();
+            setup.RemoveSlot();
+            Check(setup.ForestsSpin.MinValue == 2 && setup.MinesSpin.MinValue == 2 * startMines && setup.ForestsPick == 4 && setup.MinesPick == 4 * startMines,
+                $"back to two slots: floors {setup.ForestsSpin.MinValue} / {setup.MinesSpin.MinValue}, picks {setup.ForestsPick} / {setup.MinesPick} (kept)");
+            Check(SkirmishSetup.MinForestsFor(3) == 3 && SkirmishSetup.MinMinesFor(3, 2) == 6 && SkirmishSetup.MinMinesFor(40, 2) == MapGenParams.MaxResourceGroups,
+                "MinForestsFor / MinMinesFor");
+
+            // Each speed item through Start; Normal also starts on 6 forests and 4 gold mines.
+            for (int i = 0; i < SkirmishSetup.GameSpeeds.Length; i++)
+            {
+                setup.SpeedOption.Select(i);
+                setup.ForestsSpin.Value = i == 1 ? 6 : LaunchOptions.DefaultForests;
+                setup.MinesSpin.Value = i == 1 ? 4 : LaunchOptions.DefaultMines;
+                string[] args = setup.MatchArgs()!;
+                await Click(setup.StartButton);
+                await Frames(2);
+                SimRunner? runner = main.CurrentMatch?.GetNode<SimRunner>("SimRunner");
+                Simulation? sim = runner?.Simulation;
+                Check(runner != null && sim != null && runner.GameSpeed == SkirmishSetup.GameSpeeds[i] && LaunchOptions.Parse(args).Speed == SkirmishSetup.GameSpeeds[i],
+                    $"speed item {i} ({items[i]}): GameSpeed {runner?.GameSpeed} (want {SkirmishSetup.GameSpeeds[i]}), args [{string.Join(' ', args)}]");
+                int wantForests = i == 1 ? 6 : LaunchOptions.DefaultForests, wantMines = i == 1 ? 4 : LaunchOptions.DefaultMines;
+                Check(sim != null && sim.World.Config.Map.Forests == wantForests && sim.World.Config.Map.GoldMines == wantMines
+                    && sim.World.ResourcePlacement.Forests == wantForests && sim.World.ResourcePlacement.Mines == wantMines,
+                    $"speed item {i}: the map asks {sim?.World.Config.Map.Forests} forests / {sim?.World.Config.Map.GoldMines} mines, placed {sim?.World.ResourcePlacement.Forests} / {sim?.World.ResourcePlacement.Mines} (want {wantForests} / {wantMines})");
+                main.QuitToMenu();
+                await Frames(2);
+                await Click(main.Menu.SkirmishButton);
+                Check(setup.Visible && setup.SpeedOption.Selected == i, $"after a match at item {i} the setup shows speed item {setup.SpeedOption.Selected}");
+            }
+            await Click(setup.BackButton);
+            await Click(main.Menu.SkirmishButton);
+            Check(setup.SpeedOption.Selected == SkirmishSetup.GameSpeeds.Length - 1, $"Back lost the speed pick ({setup.SpeedOption.Selected})");
+        }
+        finally
+        {
+            RemoveChild(main);
+            main.QueueFree();
+            await Frames(2);
+        }
     }
 
     // M6-V6: --vsync off over a settings file saying on: off for this run (EffectiveVsync; headless has no window to ask), the

@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S3 |
-| Status | open |
+| Status | fixed |
 | Found | 2026-10-18-1236, task M6-V14 |
 | System | Save / load resume path (view: `Match.StartLoaded`, `Main.LoadSavedGame`) |
-| Fixed by | |
+| Fixed by | M6-V15 (Producer's call): a loaded match resumes at Normal (1x), documented in docs/02 "Game flow" 6 and docs/03 "Implementation (M6-V14)" / "(M6-V15)"; the setup gained the Game speed list. Rows: `SaveLoadTest.GeneratorAndSpeed` (saved at `--speed 1.5`, loaded from Load Game at 1x, `Match.StartLine` says `speed 1x`), `SaveLoadTest.LoadFlag` (`--load --speed 1.5` keeps 1.5), `ShellTest.SpeedAndCounts` (the three items to `GameSpeed` 0.75 / 1 / 1.5). |
 
 ## Repro
 1. `& $env:GODOT --headless --path game res://tests/QaM6V14Test.tscn`: the tick-0 section starts a `--speed 2` match,

@@ -120,10 +120,19 @@ public partial class LoadGameScreen : CanvasLayer
         };
     }
 
-    /// <summary>The display row of the file at <paramref name="path"/> (compared as full paths, ignoring case), or -1.</summary>
+    /// <summary>The display row of the file at <paramref name="path"/> (compared as full paths, ignoring case), or -1 (also for a path that names no file: empty, or bad characters).</summary>
     public int RowOf(string path)
     {
-        string want = System.IO.Path.GetFullPath(path);
+        string want;
+        try
+        {
+            // M6-V15: Main.ShowLoadNote asks with whatever --load / --replay named, an empty path included.
+            want = System.IO.Path.GetFullPath(path);
+        }
+        catch (Exception e) when (e is ArgumentException or NotSupportedException or System.IO.PathTooLongException)
+        {
+            return -1;
+        }
         for (int r = 0; r < _rows.Count; r++)
             if (string.Equals(System.IO.Path.GetFullPath(RowPath(r)!), want, StringComparison.OrdinalIgnoreCase)) return r;
         return -1;

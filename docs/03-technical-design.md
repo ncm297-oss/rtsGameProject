@@ -6490,7 +6490,8 @@ game/tests/SaveLoadTest.tscn         the headless scene (in the scene loop); She
   first frame). Nothing is spawned. The colours are the slot order's (colour p for player p; `--colour` picks are not in
   the save). The camera looks at `Match.LoadedFocus`: the footprint centre of the local player's lowest-slot live building
   (its start Town Hall while that stands), else its units' centre, else the map centre. Ticking resumes at the saved tick
-  on the next frame. The log line is `Save loaded: <path>, seed .., map .., tick .., seats .., not recorded`.
+  on the next frame. The log line is `Save loaded: <path>, seed .., map .., tick .., speed .., seats .., not recorded`.
+  The save holds no game speed: from Load Game the match runs at 1x; only a dev `--load` takes `--speed` (M6-V15, BUG-1001).
 - **A loaded match is not recorded.** A `ReplayRecorder` attaches only to a sim at tick 0 with nothing queued, so
   `Main.ReplayPath` is null for a loaded match: Quit to menu and the banner write no replay, and the pause menu shows
   `save.not_recorded` (`PauseMenu.RecordNote`). Its Save still works and writes a `.sav` with no `.replay` beside it. The
@@ -6514,6 +6515,54 @@ game/tests/SaveLoadTest.tscn         the headless scene (in the scene loop); She
   boots into the match; a missing file shows `save.read_failed`; a hosted shell without a save folder shows no Save.
   `ShellTest`: the 17 new keys (each required), `save.saved` a format naming `{0}` (four bad formats), and every
   `SaveError` but `None` with its own distinct text.
+
+### Implementation (M6-V15)
+
+The skirmish setup's game speed and the map generator's two counts (M6 criterion 7), a load's speed (BUG-1001), the
+refused row on Load Game (BUG-1000), and the save / load scene on a match against the AI. No sim change.
+
+```
+game/scripts/SkirmishSetup.cs      SpeedOption (GameSpeeds 0.75 / 1 / 1.5), ForestsSpin / MinesSpin, MinForestsFor / MinMinesFor
+game/scripts/SetupText.cs, ui.json setup.speed, speed_slow / speed_normal / speed_fast, forests, mines (setup: 23 keys)
+game/scripts/Main.cs               ShowLoadNote(refusedPath, note): the refused file's row stays picked
+game/scripts/LoadGameScreen.cs     RowOf: -1 for a path that names no file (an empty --load path)
+game/scripts/Match.cs              StartLine: the "Save loaded: ..." line, for tests (speed printed invariant)
+game/tests/SaveLoadTest.cs         the BUG-1000 rows, the AI-seat row, the generator / speed row, --load --speed
+game/tests/ShellTest.cs            SpeedAndCounts, the six new keys
+```
+
+- **Game speed.** A list beside the map size: Slow, Normal, Fast (`setup.speed_*`), `SkirmishSetup.GameSpeeds` 0.75 / 1 /
+  1.5 (docs/02 "Game flow" 3), default Normal. `MatchArgs` passes `--speed <x>` (invariant, `0.##`) after `--players`, so
+  `SimRunner.GameSpeed` is the pick. The pick is kept over Back and a match (the screen is built once).
+- **Forests and Gold mines.** Two spin boxes on their own row (`setup.forests`, `setup.mines`), defaults
+  `LaunchOptions.DefaultForests` 12 / `DefaultMines` 8, whole numbers, at most `MapGenParams.MaxResourceGroups` 64. The
+  floor follows the shown slots: `MinForestsFor(players)` = players (the placer gives the start forests only when the count
+  covers every start location) and `MinMinesFor(players, rules.startMines.count)` = players x 2 (below that it shorts every
+  base in whole rounds, M5-H1). Adding a slot raises a count under the new floor to it; removing one keeps the count.
+  Typed or set values outside the range are clamped by the spin box, so `--forests` / `--mines` never carry an invalid
+  count. The counts reach `MapGenParams` through `LaunchOptions`, so the save header and the replay header carry them and a
+  load or a replay rebuilds the same map.
+- **A load's speed (BUG-1001).** The save holds no game speed (frozen format, rule 36). `Main.LoadSavedGame` from Load
+  Game passes no options, so a loaded match runs at **Normal, 1x**, whatever it was saved at; the log line says
+  `speed 1x`. The dev flag `--load <path> --speed <x>` still takes its `--speed` (the view's flags count for `--load`, as
+  for `--replay`). Watching a replay is also 1x from Load Game.
+- **The refused row (BUG-1000).** `ShowLoadNote` refreshes the list, then picks `RowOf(refusedPath)` (the file a refused
+  Load or Watch named) before setting the note; a file that isn't listed any more (deleted, or a `--load` path elsewhere)
+  leaves the refresh's row 0, as does a path that names no file at all (`--load ""`: `RowOf` answers -1 instead of
+  throwing). So the note, Delete and Load all act on the refused file.
+- **Tests.** `SaveLoadTest`: every refused damaged save keeps its own row picked (rows 3 to 9); a refused Load of a
+  damaged save at row 7 then Delete removes exactly it (the good save and the other damaged files stay); refused again
+  with it gone, row 0; the same for a damaged replay (a digit changed past its header) at row 2 refused by Watch; an
+  empty path refused, row 0 with `save.read_failed` (`QaM6V14Test`'s `--load ""` row caught the first cut). The AI
+  row: the default `--skirmish` (slot 2 Normal AI, seed 11) saved at tick 600 from the pause menu ("Saved at 0:30"), quit,
+  loaded from Load Game, then 1,000 ticks hash-equal every tick to an unsaved twin (the recording's header with the AI seat
+  playing itself, fed only player 0's commands and the start spawns) with `AiOpening(1)` equal throughout; the loaded
+  pause menu's note and the stats screen's "opened with" line. The generator row: `--speed 1.5 --forests 6 --mines 4`
+  (seed 5) places 6 forests / 4 mines (4 gold nodes), saves at tick 300, loads from Load Game at 1x (`StartLine` says
+  `speed 1x`) on the same map, 500 ticks hash-equal to its twin, and the Quit's replay watches with the same placement.
+  `--load <save> --speed 1.5` boots at 1.5x. `ShellTest.SpeedAndCounts`: the three items to `GameSpeed` 0.75 / 1 / 1.5
+  after Start, the counts' defaults, floors (2 / 4 at two slots, 4 / 8 at four), clamps at -1, 0, 1, 64, 65 and 1,000,
+  and a Start on 6 / 4 placing them; `UiRows` requires the six new keys.
 
 ## AI architecture
 

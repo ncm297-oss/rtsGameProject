@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Globalization;
 using Godot;
 using Rts.Sim.Data;
+using Rts.Sim.Map;
 
 namespace Rts.Game;
 
@@ -10,7 +11,11 @@ namespace Rts.Game;
 /// The skirmish setup screen (M6-V1, M6-V2, M6-V3, M6-V5; docs/02 "Game flow" 2): the map seed (typed, or Random), the map
 /// size (<see cref="LaunchOptions.MapSizes"/>), and 2 to <see cref="MaxSlots"/> player slots (free-for-all): slot 1 "You"
 /// (player 0, always the local human), each other slot "AI" (player s - 1), each with a faction list and a colour list, the
-/// AI slots with a difficulty list. Add player / Remove player show or hide the last slot. Text from <c>ui.json</c>
+/// AI slots with a difficulty list. Add player / Remove player show or hide the last slot. M6-V15: a game speed list
+/// (<see cref="GameSpeeds"/>, default Normal) and the map generator's forests and gold mines counts (defaults
+/// <see cref="LaunchOptions.DefaultForests"/> / <see cref="LaunchOptions.DefaultMines"/>; floors <see cref="MinForestsFor"/> /
+/// <see cref="MinMinesFor"/> the shown slots, so every base keeps its start forest and mines; cap
+/// <see cref="MapGenParams.MaxResourceGroups"/>). Text from <c>ui.json</c>
 /// <c>setup</c> (the colours' names and swatches from its colour table), faction names from the data's <c>displayName</c>.
 /// </summary>
 /// <remarks>
@@ -34,7 +39,30 @@ public partial class SkirmishSetup : CanvasLayer
     /// <summary>Each difficulty list item's text key, indexed by <see cref="AiDifficulty"/>.</summary>
     public static readonly SetupText[] DifficultyKeys = { SetupText.DifficultyEasy, SetupText.DifficultyNormal, SetupText.DifficultyHard };
 
+    /// <summary>The game speeds the setup offers (M6-V15; docs/02 "Game flow" 3: Slow 0.75x, Normal 1x, Fast 1.5x), passed as <c>--speed</c>.</summary>
+    public static readonly double[] GameSpeeds = { 0.75, 1.0, 1.5 };
+
+    /// <summary>Each game speed list item's text key, indexed like <see cref="GameSpeeds"/>.</summary>
+    public static readonly SetupText[] SpeedKeys = { SetupText.SpeedSlow, SetupText.SpeedNormal, SetupText.SpeedFast };
+
+    /// <summary>The game speed the list shows first: Normal (1x).</summary>
+    public const int DefaultSpeedIndex = 1;
+
+    /// <summary>
+    /// Fewest forests the setup offers for <paramref name="players"/> start locations (M6-V15): one each, so every base gets its
+    /// start forest (the placer gives start forests only when the count covers every location, M5-4a).
+    /// </summary>
+    public static int MinForestsFor(int players) => Math.Clamp(players, 0, MapGenParams.MaxResourceGroups);
+
+    /// <summary>
+    /// Fewest gold mines the setup offers for <paramref name="players"/> start locations (M6-V15): <paramref name="startMines"/>
+    /// (<c>rules.json</c> <c>startMines.count</c>) each, so every base gets its start mines (the placer shorts every base in
+    /// whole rounds below that, M5-H1).
+    /// </summary>
+    public static int MinMinesFor(int players, int startMines) => Math.Clamp(players * Math.Max(startMines, 0), 0, MapGenParams.MaxResourceGroups);
+
     private readonly RandomNumberGenerator _rng = new();
+    private int _startMines;
     private string[] _factionKeys = Array.Empty<string>();
     private readonly Control[][] _rows = new Control[MaxSlots][];
 
@@ -89,6 +117,24 @@ public partial class SkirmishSetup : CanvasLayer
 
     /// <summary>The picked map side in cells.</summary>
     public int MapSize => LaunchOptions.MapSizes[Math.Clamp(MapSizeOption.Selected, 0, LaunchOptions.MapSizes.Length - 1)];
+
+    /// <summary>The game speed list, one item per <see cref="GameSpeeds"/> entry (M6-V15).</summary>
+    public OptionButton SpeedOption { get; private set; } = null!;
+
+    /// <summary>The picked game speed (a <see cref="GameSpeeds"/> entry).</summary>
+    public double SpeedPick => GameSpeeds[Math.Clamp(SpeedOption.Selected, 0, GameSpeeds.Length - 1)];
+
+    /// <summary>The forests count (M6-V15): <see cref="MinForestsFor"/> the shown slots to <see cref="MapGenParams.MaxResourceGroups"/>.</summary>
+    public SpinBox ForestsSpin { get; private set; } = null!;
+
+    /// <summary>The gold mines count (M6-V15): <see cref="MinMinesFor"/> the shown slots to <see cref="MapGenParams.MaxResourceGroups"/>.</summary>
+    public SpinBox MinesSpin { get; private set; } = null!;
+
+    /// <summary>The picked forests count, inside the range the spin box allows.</summary>
+    public int ForestsPick => (int)Math.Clamp(Math.Round(ForestsSpin.Value), ForestsSpin.MinValue, ForestsSpin.MaxValue);
+
+    /// <summary>The picked gold mines count, inside the range the spin box allows.</summary>
+    public int MinesPick => (int)Math.Clamp(Math.Round(MinesSpin.Value), MinesSpin.MinValue, MinesSpin.MaxValue);
 
     /// <summary>The faction id picked for <paramref name="slot"/> (0 = "You"), or -1 with no factions loaded.</summary>
     public int FactionPick(int slot)
@@ -160,6 +206,16 @@ public partial class SkirmishSetup : CanvasLayer
     {
         AddSlotButton.Disabled = SlotCount >= MaxSlots;
         RemoveSlotButton.Disabled = SlotCount <= LaunchOptions.MinPlayers;
+        // M6-V15: the resource counts' floors follow the shown slots (one start forest and the start mines a base); a count
+        // under a raised floor is raised to it, a count kept over a lowered one stays.
+        SetFloor(ForestsSpin, MinForestsFor(SlotCount));
+        SetFloor(MinesSpin, MinMinesFor(SlotCount, _startMines));
+    }
+
+    private static void SetFloor(SpinBox spin, int floor)
+    {
+        spin.MinValue = floor;
+        if (spin.Value < floor) spin.Value = floor;
     }
 
     /// <summary>The first AI slot's (slot 1's) picked difficulty.</summary>
@@ -174,7 +230,8 @@ public partial class SkirmishSetup : CanvasLayer
     /// then per shown slot <c>--colour &lt;slot&gt; &lt;n&gt; --faction &lt;slot&gt; &lt;id&gt;</c>, then per AI slot
     /// <c>--ai &lt;slot&gt; &lt;difficulty&gt;</c>); null while the seed field holds no number. <c>--units 0</c>: the menu's match
     /// opens with a Town Hall and the starting workers a side, no dev army (M6-V3, BUG-0604). A slot with no faction (no
-    /// factions loaded) passes no <c>--faction</c>.
+    /// factions loaded) passes no <c>--faction</c>. M6-V15: <c>--speed &lt;x&gt; --forests &lt;n&gt; --mines &lt;n&gt;</c> after
+    /// <c>--players</c> (the speed list's and the two counts' picks).
     /// </summary>
     public string[]? MatchArgs()
     {
@@ -183,6 +240,8 @@ public partial class SkirmishSetup : CanvasLayer
         {
             "--seed", seed.ToString(CultureInfo.InvariantCulture), "--map-size", MapSize.ToString(CultureInfo.InvariantCulture), "--units", "0",
             "--players", SlotCount.ToString(CultureInfo.InvariantCulture),
+            "--speed", SpeedPick.ToString("0.##", CultureInfo.InvariantCulture),
+            "--forests", ForestsPick.ToString(CultureInfo.InvariantCulture), "--mines", MinesPick.ToString(CultureInfo.InvariantCulture),
         };
         for (int slot = 0; slot < SlotCount; slot++)
         {
@@ -233,8 +292,20 @@ public partial class SkirmishSetup : CanvasLayer
         foreach (int size in LaunchOptions.MapSizes) MapSizeOption.AddItem(ui.MapSizeItem(size));
         MapSizeOption.Select(0);
         grid.AddChild(MapSizeOption);
-        grid.AddChild(new Control());
-        grid.AddChild(new Control());
+        // M6-V15: the game speed beside the map size, the generator's two counts on a row of their own.
+        grid.AddChild(ShellUi.Text(ui.Setup(SetupText.Speed)));
+        SpeedOption = List("Speed");
+        foreach (SetupText key in SpeedKeys) SpeedOption.AddItem(ui.Setup(key));
+        SpeedOption.Select(DefaultSpeedIndex);
+        grid.AddChild(SpeedOption);
+
+        _startMines = data.Rules.StartMineCount;
+        grid.AddChild(ShellUi.Text(ui.Setup(SetupText.Forests)));
+        ForestsSpin = Count("Forests", LaunchOptions.DefaultForests);
+        grid.AddChild(ForestsSpin);
+        grid.AddChild(ShellUi.Text(ui.Setup(SetupText.Mines)));
+        MinesSpin = Count("Mines", LaunchOptions.DefaultMines);
+        grid.AddChild(MinesSpin);
 
         // The slots: a heading row, then one row per slot (all built; the ones past SlotCount hidden, which the grid skips).
         grid.AddChild(new Control());
@@ -323,5 +394,17 @@ public partial class SkirmishSetup : CanvasLayer
         var option = new OptionButton { Name = name, CustomMinimumSize = new Vector2(240f, 40f) };
         option.AddThemeFontSizeOverride("font_size", 20);
         return option;
+    }
+
+    // A whole-number count up to the generator's cap; its floor is set by UpdateSlotButtons.
+    private static SpinBox Count(string name, int value)
+    {
+        var spin = new SpinBox
+        {
+            Name = name, CustomMinimumSize = new Vector2(240f, 40f), MinValue = 0, MaxValue = MapGenParams.MaxResourceGroups, Step = 1,
+            Rounded = true, Value = value,
+        };
+        spin.GetLineEdit().AddThemeFontSizeOverride("font_size", 20);
+        return spin;
     }
 }

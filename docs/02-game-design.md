@@ -421,7 +421,11 @@ own cues (select, order, refused, building placed or finished, unit or tech read
 2. **Skirmish setup:** map, 2-4 player slots (each: human/AI, faction, difficulty, color, team),
    starting resources (standard / high), game speed. Default: free-for-all. Colours are unique per match: a slot can't
    pick a colour another slot holds. Single-player: slot 1 is always the local human, slots 2-4 are AI seats, each with
-   its own difficulty (built in M6-V5: Add player / Remove player, 2-4 slots, free-for-all; teams not yet).
+   its own difficulty (built in M6-V5: Add player / Remove player, 2-4 slots, free-for-all; teams not yet). Built so far:
+   the map seed and size, the slots, a **Game speed** list (Slow / Normal / Fast, default Normal) and the map generator's
+   **Forests** and **Gold mines** counts (defaults 12 / 8; at least one forest and two gold mines per player, so every
+   base keeps its start forest and start mines; at most 64 each) (M6-V15). **Starting resources are not built yet:** the
+   sim has one starting purse for every match (`rules.json`), and a per-match choice needs a sim option first.
 3. **Match.** Pause any time (single-player). Game speeds: Slow 0.75×, Normal 1×, Fast 1.5×.
 4. **Victory/defeat:** a player is out once they have **no unit left and no finished unit-producing building** (a
    hall that trains units: the Town Hall or one of the five unit halls; the Whirlwind's Holy Camp, Raider Camp and Archer
@@ -439,8 +443,10 @@ own cues (select, order, refused, building placed or finished, unit or tech read
    recording so far beside it) and says "Saved at m:ss" or why it couldn't; Load Game's Load resumes it at that moment,
    with the camera on the player's base, nothing selected and the player colours in slot order. **A loaded match is not
    recorded** (a recording starts with the match at tick 0, so a resumed one has none): its pause menu says so, and Quit
-   to menu writes no replay for it; the recording up to the save is the file beside the save. Saves are kept until the
-   player deletes them. **Replays** are recorded for every match (built in M6-V9: every match started
+   to menu writes no replay for it; the recording up to the save is the file beside the save. **A loaded match runs at
+   Normal speed (1×)** whatever speed it was saved at: the save holds no game speed, and the setup's speed belongs to the
+   match it started (M6-V15, BUG-1001). A save that won't load stays picked under its reason, so Delete removes that file
+   (M6-V15, BUG-1000). Saves are kept until the player deletes them. **Replays** are recorded for every match (built in M6-V9: every match started
    from the menu, kept until 20 newer ones push it out; watching one shows the match through player 1's fog, with the
    camera, minimap, selection and pause as in a match, the game speed of the match screen, and no orders).
 7. **Settings:** resolution, window mode (windowed / borderless / fullscreen), VSync, graphics quality

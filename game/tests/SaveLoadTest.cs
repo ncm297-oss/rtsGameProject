@@ -83,6 +83,8 @@ public partial class SaveLoadTest : Node
                 await LoadFlag(save);
             }
             await HostedWithoutFolder();
+            await AiSeat();
+            await GeneratorAndSpeed();
 
             Check(Folder(SaveStore.DefaultDir) == playerSaves && Folder(ReplayStore.DefaultDir) == playerReplays,
                 "the player's user://saves or user://replays folder changed over the run (BUG-0770's rule)");
@@ -300,6 +302,10 @@ public partial class SaveLoadTest : Node
             (P("0101-000007"), PatchLong(bytes, 12, bytes.Length - 1), _ui.SaveErrorText(SaveError.Malformed), true),
         };
         foreach ((string path, byte[] b, _, _) in cases) File.WriteAllBytes(path, b);
+        // M6-V15 (BUG-1000): a replay damaged past its header (listed, refused at Watch), older than every good row.
+        string[] goodReplays = Directory.Exists(_replaysFull) ? Directory.GetFiles(_replaysFull) : Array.Empty<string>();
+        string badReplay = Path.Combine(_replaysFull, "20200101-000009-seed7.replay");
+        if (goodReplays.Length == 1) File.WriteAllBytes(badReplay, BumpDigit(File.ReadAllBytes(goodReplays[0])));
         Main main = NewMain(Array.Empty<string>(), "corrupt");
         AddChild(main);
         await Frames(2);
@@ -323,7 +329,11 @@ public partial class SaveLoadTest : Node
                 bool started = isListed ? Press(main, load.LoadButton) : main.LoadSavedGame(path);
                 Check(!started && main.CurrentMatch == null && load.Visible && load.Note.Text == want && want.Length > 0,
                     $"{Path.GetFileName(path)}: started {started || main.CurrentMatch != null}, note '{load.Note.Text}' (want '{want}')");
+                // BUG-1000: the refused file's row stays picked under its note (it was row 0, the good save).
+                Check(load.SelectedIndex == load.RowOf(path) && load.RowPath(load.SelectedIndex) is string picked && SamePath(picked, path),
+                    $"BUG-1000: after the refused {Path.GetFileName(path)} (row {load.RowOf(path)}) row {load.SelectedIndex} is picked ({load.RowPath(load.SelectedIndex)})");
             }
+            await RefusedRowKept(main, load, good, cases[1].Path, badReplay, cases.Select(c => c.Path).ToArray());
             await Shot("load-refused");
             // Delete an unreadable row; the good save still loads.
             string junk = cases[0].Path;
@@ -341,14 +351,60 @@ public partial class SaveLoadTest : Node
         }
     }
 
+    // BUG-1000: a refused Load and a refused Watch of a file that is not row 0 keep it picked; Delete then removes exactly
+    // it; refused again with the file gone (it isn't listed), row 0 is picked.
+    private async Task RefusedRowKept(Main main, LoadGameScreen load, string good, string badSave, string badReplay, string[] damaged)
+    {
+        int row = load.RowOf(badSave);
+        Check(row > 0 && load.Select(row) && !Press(main, load.LoadButton) && SamePath(load.RowPath(load.SelectedIndex)!, badSave),
+            $"BUG-1000: refused Load of {Path.GetFileName(badSave)} (row {row}): row {load.SelectedIndex} picked");
+        load.DeleteButton.EmitSignal(BaseButton.SignalName.Pressed);
+        Check(!File.Exists(badSave) && File.Exists(good) && damaged.All(d => d == badSave || File.Exists(d)) && load.RowOf(good) == 0,
+            $"BUG-1000: Delete after the refused Load removed something else (bad save left {File.Exists(badSave)}, good left {File.Exists(good)})");
+        Check(!main.LoadSavedGame(badSave) && load.SelectedIndex == 0 && load.Note.Text == _ui.Save(SaveText.ReadFailed),
+            $"BUG-1000: refused Load of the deleted file: row {load.SelectedIndex} picked (want 0), note '{load.Note.Text}'");
+
+        int replayRow = load.RowOf(badReplay);
+        if (!Check(replayRow > 0 && load.KindOf(replayRow) == LoadGameScreen.RowKind.Replay && load.Select(replayRow) && !load.WatchButton.Disabled,
+            $"BUG-1000: the damaged replay is row {replayRow} ({load.KindOf(replayRow)}), Watch disabled {load.WatchButton.Disabled}")) return;
+        Check(!Press(main, load.WatchButton) && load.Note.Text == _ui.LoadGame(LoadText.Refused) && SamePath(load.RowPath(load.SelectedIndex)!, badReplay),
+            $"BUG-1000: refused Watch of row {replayRow}: row {load.SelectedIndex} picked, note '{load.Note.Text}'");
+        int replays = Directory.GetFiles(_replaysFull).Length;
+        load.DeleteButton.EmitSignal(BaseButton.SignalName.Pressed);
+        Check(!File.Exists(badReplay) && Directory.GetFiles(_replaysFull).Length == replays - 1 && File.Exists(good),
+            "BUG-1000: Delete after the refused Watch removed something else");
+        Check(!main.WatchReplay(badReplay) && load.SelectedIndex == 0, $"BUG-1000: refused Watch of the deleted replay: row {load.SelectedIndex} picked (want 0)");
+        // A refused path that names no file at all (--load "" reaches ShowLoadNote too): row 0 and the note, no exception.
+        Check(load.RowOf("") == -1 && !main.LoadSavedGame("") && load.SelectedIndex == 0 && load.Note.Text == _ui.Save(SaveText.ReadFailed),
+            $"BUG-1000: refused Load of an empty path: row {load.SelectedIndex}, note '{load.Note.Text}'");
+        await Frames(1);
+    }
+
+    // A copy with one digit in the middle changed: a replay's header still reads, its checksum no longer matches.
+    private static byte[] BumpDigit(byte[] bytes)
+    {
+        byte[] copy = bytes.ToArray();
+        for (int i = copy.Length / 2; i < copy.Length; i++)
+        {
+            if (copy[i] < (byte)'0' || copy[i] > (byte)'9') continue;
+            copy[i] = copy[i] == (byte)'9' ? (byte)'8' : (byte)(copy[i] + 1);
+            break;
+        }
+        return copy;
+    }
+
     // (3): --load <path> boots into the match; a missing file shows save.read_failed on Load Game.
     private async Task LoadFlag(string good)
     {
-        Main boot = NewMain(new[] { Main.LoadFlag, good, "--mute" }, "flag");
+        Main boot = NewMain(new[] { Main.LoadFlag, good, "--mute", "--speed", "1.5" }, "flag");
         AddChild(boot);
         await Frames(2);
         Check(boot.CurrentMatch is { IsLoaded: true } m && SamePath(m.SavePath!, good) && m.Simulation!.TickNumber >= SaveTick && m.Simulation.TickNumber <= SaveTick + 10
             && boot.Menu is { Visible: false }, $"--load {good}: no loaded match at boot (tick {boot.CurrentMatch?.Simulation?.TickNumber})");
+        // M6-V15 (BUG-1001): the dev flag's --speed counts for --load (docs/03); Load Game's Load resumes at 1x (GeneratorAndSpeed).
+        double flagSpeed = boot.CurrentMatch?.GetNode<SimRunner>("SimRunner").GameSpeed ?? 0;
+        Check(flagSpeed == 1.5 && boot.CurrentMatch!.StartLine.Contains("speed 1.5x", StringComparison.Ordinal),
+            $"--load with --speed 1.5: speed {flagSpeed}, line '{boot.CurrentMatch?.StartLine}'");
         RemoveChild(boot);
         boot.QueueFree();
         await Frames(2);
@@ -379,6 +435,223 @@ public partial class SaveLoadTest : Node
         await Frames(2);
     }
 
+    /// <summary>The tick the AI-seat match saves at (brief M6-V15: ~600).</summary>
+    public const int AiSaveTick = 600;
+
+    /// <summary>The tick the generator-options match saves at, and the ticks it then runs beside its twin.</summary>
+    public const int GenSaveTick = 300, GenMoreTicks = 500;
+
+    // M6-V15 criterion 1: the default --skirmish (slot 2 a Normal AI) saved at tick 600 from the pause menu ("Saved at 0:30",
+    // no refusal), quit, loaded from Load Game, then 1,000 ticks hash-equal every tick to an unsaved twin whose AI plays
+    // itself, the AI's opening equal; the loaded pause menu's note and the stats screen's "opened with" line.
+    private async Task AiSeat()
+    {
+        Main main = NewMain(new[] { "--skirmish", "--seed", "11", "--mute" }, "ai", "ai");
+        AddChild(main);
+        await Frames(2);
+        try
+        {
+            Match? match = main.CurrentMatch;
+            if (!Check(match != null && !match.IsLoaded && !match.IsPlayback, "AI row: --skirmish started no live match")) return;
+            SimRunner runner = match!.GetNode<SimRunner>("SimRunner");
+            Simulation sim = runner.Simulation!;
+            if (!Check(sim.World.Config.HasAiSeat && runner.Seats.Length == 2 && runner.Seats[1].Controller == SeatController.Ai
+                && runner.Seats[1].Difficulty == AiDifficulty.Normal && runner.Recorder != null,
+                $"AI row: seats [{string.Join(", ", runner.Seats)}], recorder {runner.Recorder != null}")) return;
+            await RunTo(sim, AiSaveTick);
+            ulong hash = sim.StateHash();
+            int opening = sim.AiOpening(1);
+            Check(sim.TickNumber == AiSaveTick && opening >= 0, $"AI row: stopped at tick {sim.TickNumber} (want {AiSaveTick}), opening {opening}");
+            Command trainLater = TrainWorker(match);
+
+            main.PauseMatch();
+            PauseMenu pause = main.Pause!;
+            pause.SaveButton.EmitSignal(BaseButton.SignalName.Pressed);
+            await Frames(1);
+            string? path = main.LastSavePath;
+            if (!Check(path != null && File.Exists(path) && pause.SaveStatus.Text == _ui.SavedLine(AiSaveTick) && pause.SaveStatus.Text.Contains("0:30"),
+                $"AI row: Save wrote {path}, status '{pause.SaveStatus.Text}' (want '{_ui.SavedLine(AiSaveTick)}')")) return;
+            Check(sim.TickNumber == AiSaveTick && sim.StateHash() == hash, "AI row: the save moved the sim");
+            ReplayError read = ReplayFormat.TryReadFile(SaveStore.ReplayPathOf(path!), out Replay? recording);
+            if (!Check(read == ReplayError.None && recording != null && recording.TickCount == AiSaveTick, $"AI row: the recording beside the save: {read}")) return;
+            pause.QuitToMenuButton.EmitSignal(BaseButton.SignalName.Pressed);
+            await Frames(2);
+
+            // The unsaved twin: the recording's header with the AI seat playing itself, fed only the view's own commands.
+            Simulation twin = TwinOf(recording!, aiPlays: true);
+            Check(twin.TickNumber == AiSaveTick && twin.StateHash() == hash && twin.AiOpening(1) == opening,
+                $"AI row: the twin at tick {twin.TickNumber}: hash equal {twin.StateHash() == hash}, opening {twin.AiOpening(1)} (want {opening})");
+
+            main.Menu!.LoadButton.EmitSignal(BaseButton.SignalName.Pressed);
+            await Frames(1);
+            LoadGameScreen load = main.LoadScreen!;
+            int row = load.RowOf(path!);
+            if (!Check(row >= 0 && load.KindOf(row) == LoadGameScreen.RowKind.Save && load.Select(row), $"AI row: the save is row {row}")) return;
+            load.LoadButton.EmitSignal(BaseButton.SignalName.Pressed);
+            Match? resumed = main.CurrentMatch;
+            if (!Check(resumed is { IsLoaded: true }, "AI row: Load started no loaded match")) return;
+            SimRunner runner2 = resumed!.GetNode<SimRunner>("SimRunner");
+            Simulation sim2 = runner2.Simulation!;
+            Check(sim2.TickNumber == AiSaveTick && sim2.StateHash() == hash && sim2.AiOpening(1) == opening && runner2.Seats.Length == 2
+                && runner2.Seats[1].Controller == SeatController.Ai && runner2.Seats[1].Difficulty == AiDifficulty.Normal,
+                $"AI row: loaded at tick {sim2.TickNumber}, hash equal {sim2.StateHash() == hash}, opening {sim2.AiOpening(1)}, seats [{string.Join(", ", runner2.Seats)}]");
+            int compared = 0, firstBad = -1, openingBad = -1;
+            runner2.Ticked += s =>
+            {
+                twin.Tick();
+                compared++;
+                if (firstBad < 0 && (twin.TickNumber != s.TickNumber || twin.StateHash() != s.StateHash())) firstBad = s.TickNumber;
+                if (openingBad < 0 && (s.AiOpening(1) != opening || twin.AiOpening(1) != opening)) openingBad = s.TickNumber;
+            };
+            bool trained = false;
+            var clock = System.Diagnostics.Stopwatch.StartNew();
+            while (sim2.TickNumber < AiSaveTick + MoreTicks && clock.Elapsed.TotalSeconds < 180)
+            {
+                await Frames(1);
+                if (!trained && sim2.TickNumber >= 700)
+                {
+                    trained = true;
+                    sim2.Enqueue(trainLater);
+                    twin.Enqueue(trainLater);
+                }
+            }
+            Check(sim2.TickNumber == AiSaveTick + MoreTicks && compared == MoreTicks && firstBad < 0 && openingBad < 0 && trained,
+                $"AI row: loaded match at tick {sim2.TickNumber}, {compared} ticks compared, first differing tick {firstBad}, opening differs at {openingBad}");
+
+            main.PauseMatch();
+            Check(pause.RecordNote.Visible && pause.RecordNote.Text == _ui.Save(SaveText.NotRecorded), "AI row: the loaded pause menu has no not-recorded note");
+            main.ShowStats();
+            MatchStats stats = main.Stats!;
+            int f = sim2.World.FactionOf(1);
+            string want = opening >= 0 && (uint)f < (uint)_data.Ai.Length && opening < _data.Ai[f].Openings.Length
+                ? _ui.OpeningLine(_data.Factions[f].DisplayName, _data.Ai[f].Openings[opening].DisplayName) : "?";
+            Check(stats.Visible && stats.OpeningText(1) == want && stats.OpeningText(0) == "" && stats.OpeningLines.Count == 1,
+                $"AI row: the loaded stats screen's opening line '{stats.OpeningText(1)}' (want '{want}'), {stats.OpeningLines.Count} lines");
+            await Shot("ai-stats");
+            main.CloseStats();
+            pause.QuitToMenuButton.EmitSignal(BaseButton.SignalName.Pressed);
+            await Frames(2);
+            Check(main.CurrentMatch == null, "AI row: Quit to menu after the load");
+        }
+        finally
+        {
+            RemoveChild(main);
+            main.QueueFree();
+            await Frames(2);
+        }
+    }
+
+    // M6-V15 criteria 4 and 5: a --speed 1.5 match on 6 forests and 4 gold mines has those counts; saved, quit and loaded
+    // from Load Game it resumes at 1x (the save holds no speed, BUG-1001) on the same map, hash-equal to an unsaved twin for
+    // 500 ticks; the Quit's replay of it watches.
+    private async Task GeneratorAndSpeed()
+    {
+        Main main = NewMain(new[] { "--skirmish", "--ai", "2", "human", "--seed", "5", "--speed", "1.5", "--forests", "6", "--mines", "4", "--mute" }, "gen", "gen");
+        AddChild(main);
+        await Frames(2);
+        string replaysFull = Path.GetFullPath(ProjectSettings.GlobalizePath($"{_root}/gen/replays"));
+        try
+        {
+            Match? match = main.CurrentMatch;
+            if (!Check(match != null && !match.IsLoaded, "generator row: no live match")) return;
+            SimRunner runner = match!.GetNode<SimRunner>("SimRunner");
+            Simulation sim = runner.Simulation!;
+            var placed = sim.World.ResourcePlacement;
+            Check(runner.GameSpeed == 1.5, $"generator row: --speed 1.5 runs at {runner.GameSpeed}");
+            Check(sim.World.Config.Map.Forests == 6 && sim.World.Config.Map.GoldMines == 4 && placed.Forests == 6 && placed.Mines == 4 && GoldNodes(sim.World) == 4,
+                $"generator row: map asks {sim.World.Config.Map.Forests} forests / {sim.World.Config.Map.GoldMines} mines, placed {placed.Forests} / {placed.Mines}, {GoldNodes(sim.World)} gold nodes");
+            await RunTo(sim, GenSaveTick);
+            ulong hash = sim.StateHash();
+            Command trainLater = TrainWorker(match);
+            main.PauseMatch();
+            main.Pause!.SaveButton.EmitSignal(BaseButton.SignalName.Pressed);
+            await Frames(1);
+            string? path = main.LastSavePath;
+            ReplayError read = ReplayFormat.TryReadFile(path == null ? "" : SaveStore.ReplayPathOf(path), out Replay? recording);
+            if (!Check(path != null && File.Exists(path) && sim.TickNumber == GenSaveTick && read == ReplayError.None && recording != null && recording.Map.Forests == 6
+                && recording.Map.GoldMines == 4, $"generator row: Save at tick {sim.TickNumber} wrote {path}, recording {read}")) return;
+            main.Pause.QuitToMenuButton.EmitSignal(BaseButton.SignalName.Pressed);
+            await Frames(2);
+            string[] quitReplays = Directory.Exists(replaysFull) ? Directory.GetFiles(replaysFull) : Array.Empty<string>();
+            Simulation twin = TwinOf(recording!);
+            Check(twin.StateHash() == hash, "generator row: the twin's hash at the save differs");
+
+            main.Menu!.LoadButton.EmitSignal(BaseButton.SignalName.Pressed);
+            await Frames(1);
+            LoadGameScreen load = main.LoadScreen!;
+            if (!Check(load.Select(load.RowOf(path!)), "generator row: the save is not listed")) return;
+            load.LoadButton.EmitSignal(BaseButton.SignalName.Pressed);
+            Match? resumed = main.CurrentMatch;
+            if (!Check(resumed is { IsLoaded: true }, "generator row: Load started no loaded match")) return;
+            SimRunner runner2 = resumed!.GetNode<SimRunner>("SimRunner");
+            Simulation sim2 = runner2.Simulation!;
+            Check(runner2.GameSpeed == 1.0 && resumed.StartLine.StartsWith("Save loaded: ", StringComparison.Ordinal) && resumed.StartLine.Contains(", speed 1x,", StringComparison.Ordinal),
+                $"BUG-1001: a match saved at 1.5x loads at {runner2.GameSpeed}x, line '{resumed.StartLine}'");
+            Check(sim2.World.Config.Map.Forests == 6 && sim2.World.Config.Map.GoldMines == 4 && GoldNodes(sim2.World) == 4 && sim2.StateHash() == hash,
+                $"generator row: loaded map {sim2.World.Config.Map.Forests} forests / {sim2.World.Config.Map.GoldMines} mines, {GoldNodes(sim2.World)} gold nodes, hash equal {sim2.StateHash() == hash}");
+            int compared = 0, firstBad = -1;
+            runner2.Ticked += s =>
+            {
+                twin.Tick();
+                compared++;
+                if (firstBad < 0 && (twin.TickNumber != s.TickNumber || twin.StateHash() != s.StateHash())) firstBad = s.TickNumber;
+            };
+            bool trained = false;
+            var clock = System.Diagnostics.Stopwatch.StartNew();
+            while (sim2.TickNumber < GenSaveTick + GenMoreTicks && clock.Elapsed.TotalSeconds < 120)
+            {
+                await Frames(1);
+                if (!trained && sim2.TickNumber >= GenSaveTick + 100)
+                {
+                    trained = true;
+                    sim2.Enqueue(trainLater);
+                    twin.Enqueue(trainLater);
+                }
+            }
+            Check(compared == GenMoreTicks && firstBad < 0 && trained, $"generator row: {compared} ticks compared, first differing tick {firstBad}");
+            main.PauseMatch();
+            main.Pause.QuitToMenuButton.EmitSignal(BaseButton.SignalName.Pressed);
+            await Frames(2);
+
+            // The Quit's replay (written before the load) plays the same map.
+            main.Menu.LoadButton.EmitSignal(BaseButton.SignalName.Pressed);
+            await Frames(1);
+            if (!Check(quitReplays.Length == 1 && load.Select(load.RowOf(quitReplays[0])) && !load.WatchButton.Disabled,
+                $"generator row: {quitReplays.Length} replays after Quit, Watch disabled {load.WatchButton.Disabled}")) return;
+            load.WatchButton.EmitSignal(BaseButton.SignalName.Pressed);
+            Match? watched = main.CurrentMatch;
+            if (!Check(watched is { IsPlayback: true }, "generator row: Watch started no playback")) return;
+            SimRunner runner3 = watched!.GetNode<SimRunner>("SimRunner");
+            clock.Restart();
+            while (runner3.Simulation!.TickNumber < 200 && runner3.PlaybackState == PlaybackState.Playing && clock.Elapsed.TotalSeconds < 60) await Frames(1);
+            Simulation sim3 = runner3.Simulation!;
+            Check(sim3.TickNumber >= 200 && runner3.PlaybackState != PlaybackState.Stopped && sim3.World.Config.Map.Forests == 6 && sim3.World.ResourcePlacement.Forests == 6
+                && sim3.World.ResourcePlacement.Mines == 4, $"generator row: the replay at tick {sim3.TickNumber}, {runner3.PlaybackState} ({runner3.PlaybackError}), placed {sim3.World.ResourcePlacement.Forests} / {sim3.World.ResourcePlacement.Mines}");
+        }
+        finally
+        {
+            RemoveChild(main);
+            main.QueueFree();
+            await Frames(2);
+        }
+    }
+
+    private async Task RunTo(Simulation sim, int tick)
+    {
+        var clock = System.Diagnostics.Stopwatch.StartNew();
+        while (sim.TickNumber < tick && clock.Elapsed.TotalSeconds < 120) await Frames(1);
+    }
+
+    // Live gold mine nodes on the map.
+    private static int GoldNodes(World w)
+    {
+        int n = 0;
+        var r = w.Resources;
+        for (int i = 0; i < r.Capacity; i++)
+            if (r.Alive[i] && w.Data.Resources[r.TypeId[i]].Resource == ResourceKind.Gold) n++;
+        return n;
+    }
+
     // Presses a button of `main`'s screens; true when a match runs after it.
     private static bool Press(Main main, Button b)
     {
@@ -386,10 +659,12 @@ public partial class SaveLoadTest : Node
         return main.CurrentMatch != null;
     }
 
-    // A sim built from the recording's header, fed its commands to its last tick, as SimRunner's playback does.
-    private Simulation TwinOf(Replay r)
+    // A sim built from the recording's header, fed its commands to its last tick, as SimRunner's playback does. With
+    // `aiPlays` (M6-V15) an AI seat stays an AI and plays itself: of its player's logged commands only the view's start
+    // spawns are fed (the rest are the AI's own, which it makes again).
+    private Simulation TwinOf(Replay r, bool aiPlays = false)
     {
-        var seats = r.Seats.Select(s => new PlayerSeat(_data.FindFaction(s.Faction), SeatController.Human, s.Difficulty)).ToImmutableArray();
+        var seats = r.Seats.Select(s => new PlayerSeat(_data.FindFaction(s.Faction), aiPlays ? s.Controller : SeatController.Human, s.Difficulty)).ToImmutableArray();
         var sim = new Simulation(new SimConfig(r.Seed, r.PlayerCount, r.UnitCapacity, r.CommandCapacity)
         {
             Data = _data, Map = r.Map, ResourceCapacity = r.ResourceCapacity, Combat = r.Combat, Seats = seats,
@@ -397,7 +672,12 @@ public partial class SaveLoadTest : Node
         int next = 0;
         while (sim.TickNumber < r.TickCount)
         {
-            while (next < r.Commands.Length && r.Commands[next].Tick == sim.TickNumber + 1) sim.Enqueue(r.Commands[next++]);
+            while (next < r.Commands.Length && r.Commands[next].Tick <= sim.TickNumber + 1)
+            {
+                Command c = r.Commands[next++];
+                if (aiPlays && seats[c.Player].Controller == SeatController.Ai && c.Kind is not (CommandKind.SpawnUnit or CommandKind.SpawnBuilding)) continue;
+                sim.Enqueue(c);
+            }
             sim.Tick();
         }
         return sim;
@@ -468,13 +748,14 @@ public partial class SaveLoadTest : Node
         BitConverter.GetBytes(h).CopyTo(copy, copy.Length - 8);
     }
 
-    private Main NewMain(string[] args, string label)
+    // With `folder` the shell saves and records under <root>/<folder>/ (M6-V15's rows keep out of the first rows' list).
+    private Main NewMain(string[] args, string label, string? folder = null)
     {
         var main = GD.Load<PackedScene>("res://scenes/Main.tscn").Instantiate<Main>();
         main.UserArgs = args.Append(Main.NoConfineFlag).ToArray();
         main.SettingsPath = $"{_root}/{label}/settings.cfg"; // BUG-0770: never the player's file
-        main.ReplayDir = _replays;
-        main.SaveDir = _saves;
+        main.ReplayDir = folder == null ? _replays : $"{_root}/{folder}/replays";
+        main.SaveDir = folder == null ? _saves : $"{_root}/{folder}/saves";
         main.BeforeStart = m => m.GetNode<SimRunner>("SimRunner").FixedFrameDelta = FrameSeconds;
         return main;
     }

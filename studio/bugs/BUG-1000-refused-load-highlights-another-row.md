@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S3 |
-| Status | open |
+| Status | fixed |
 | Found | 2026-10-18-1236, task M6-V14 |
 | System | Load Game screen (view: `Main.ShowLoadNote`, `LoadGameScreen.Refresh`) |
-| Fixed by | |
+| Fixed by | M6-V15: `Main.ShowLoadNote` picks `RowOf(refused path)` after the refresh (row 0 when it is gone). Regression rows: `SaveLoadTest.Corrupted` (each refused damaged save keeps its row) and `SaveLoadTest.RefusedRowKept` (refused Load and refused Watch, then Delete removes exactly that file; refused again with it gone, row 0). |
 
 ## Repro
 1. Run `SaveLoadTest` windowed with shots: `& $env:GODOT --path game res://tests/SaveLoadTest.tscn -- --shots <dir>`, open `save-load-refused.png`.

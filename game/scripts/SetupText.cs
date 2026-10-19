@@ -37,4 +37,16 @@ public enum SetupText
     AddSlot,
     /// <summary>The button that removes the last player slot (M6-V5).</summary>
     RemoveSlot,
+    /// <summary>The game speed list's label (M6-V15).</summary>
+    Speed,
+    /// <summary>The Slow game speed's name (0.75x; M6-V15).</summary>
+    SpeedSlow,
+    /// <summary>The Normal game speed's name (1x; M6-V15).</summary>
+    SpeedNormal,
+    /// <summary>The Fast game speed's name (1.5x; M6-V15).</summary>
+    SpeedFast,
+    /// <summary>The forests count's label (M6-V15).</summary>
+    Forests,
+    /// <summary>The gold mines count's label (M6-V15).</summary>
+    Mines,
 }

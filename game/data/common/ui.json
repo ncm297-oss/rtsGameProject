@@ -106,7 +106,13 @@
     "start": "Start",
     "back": "Back",
     "add_slot": "Add player",
-    "remove_slot": "Remove player"
+    "remove_slot": "Remove player",
+    "speed": "Game speed",
+    "speed_slow": "Slow",
+    "speed_normal": "Normal",
+    "speed_fast": "Fast",
+    "forests": "Forests",
+    "mines": "Gold mines"
   },
   "pause": {
     "title": "Paused",
