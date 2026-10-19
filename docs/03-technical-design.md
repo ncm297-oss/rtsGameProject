@@ -7771,8 +7771,12 @@ BUG-0981 (four of six openings never reached Age II against an active opponent):
   `attack.minArmyPop` and its gold + wood against `attack.minArmyCost`, each x the difficulty's `waveSizeMultiplier`
   (`AiPlayer.MayReserve`). Otherwise army production spends first, as before M5-4g. Fix round 1 also opened the gate for
   good once a wave had been sent; that held the reserve through later defenses for 3-8 minutes and cut Malazan's waves
-  from 79 to 55 (BUG-1025), so round 2 dropped it: after a wave the army is rebuilt to the wave's size before the AI saves
-  again. The cost half matters because a wave can't start below either measure: with half-pop alone the gate opened at
+  from 79 to 55 (BUG-1025), so round 2 dropped it: the gate is re-judged every think from the census. **The census
+  counts the whole army, the units away on a wave included** (BUG-1026, QA re-check 2: 77 % of reserve thinks on the 27
+  runs had a wave out), so a wave that is out keeps the gate open and the reserve holds production while it marches;
+  when the wave dies the gate shuts and production rebuilds the army before the AI saves again. The Producer kept this
+  form at the 2026-10-19 ACCEPT (it is the one that meets the wave and defeat targets below; a home-only count is a
+  measured variant for later, BUG-1026 S4) and reworded docs/02 to say so. The cost half matters because a wave can't start below either measure: with half-pop alone the gate opened at
   32 / 32 half-pop with the army's cost 1,233 of 1,235, and the wave waited behind the reserve. All inputs are saved state
   (the board's defense flag, the census' `Live` counts), so the save format is unchanged.
 - **The reserved step.** Each think the gate allows, as the executor walks the steps in file order (after a step's judging, its done

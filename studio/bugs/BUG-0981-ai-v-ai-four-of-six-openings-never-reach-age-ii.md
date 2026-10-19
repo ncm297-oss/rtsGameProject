@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S3 |
-| Status | open |
+| Status | fixed (M5-4g, accepted 2026-10-19 with a residue: 4 of 49 live sides still miss Age II on the 27 pairing runs, none of which had it before; see BUG-1024's waiver) |
 | Found | 2026-10-18-0516, task D21 |
 | System | AI economy / production manager (sim: no reserve for a due step; gather split), seen through D21's openings |
-| Fixed by | |
+| Fixed by | M5-4g (0650492 + fix rounds 57dfa22 / c76bc5f): `BuildOrderExecutor.Reservable` / `Fillable`, `AiPlayer.MayReserve` / `SetReserve` / `CanAffordAboveReserve` / `WantedGoldShare`, `rules.json` `ai.reserveShift` 0.25 + `ai.reserveArmyShare` 1. Proof: `Ai/ReserveTests.Bug0981_AnAgeTwoStepStarvedByProduction_IsResearched` (Age II never queued in 6:00 before, queued at 2:37 after); the 27 pairing runs: sides alive at 20:00 without Age II 23 / 41 → 4 / 49 (QA's `Stress/ReservePairingsStressTests`) |
 
 ## Repro
 1. `dotnet test sim/Rts.Sim.Tests --filter "FullyQualifiedName~AiOpeningPairsReportTests"` (smallest seed per pairing) and

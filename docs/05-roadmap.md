@@ -690,8 +690,12 @@ open S1 / S2. Retro below; open S3 / S4 listed there.)_
       "Holy war"), each ≤ 26 steps with its own compositions and wave threshold, named and described on the faction pages; verified by
       `Content/AiContentTests` (both ways), `Content/AiOpeningPairsReportTests` (the 9 Normal pairings, 20 minutes: both sides wave, no
       dead-end step) and QA's `D21OpeningsQaTests`; M6-V13 shows the pick on the stats screen. Ticked at the 2026-10-18-0516 ACCEPT.
-      Open: BUG-0981 (S3, sim: four openings never reach Age II against an active opponent, no reserve for a due step), BUG-0982 (S3,
-      data: `cadre_rush` can fall to `raider_rush` without a wave on seed 8).)
+      ~~Open: BUG-0981 (S3, sim: four openings never reach Age II against an active opponent, no reserve for a due step), BUG-0982 (S3,
+      data: `cadre_rush` can fall to `raider_rush` without a wave on seed 8).~~ BUG-0982 closed by measurement (D-H6, keep 18); **BUG-0981
+      fixed by M5-4g (2026-10-18-1814): the build order's reserve + the gather shift** (`AiPlayer.MayReserve` / `SetReserve` /
+      `WantedGoldShare`, `BuildOrderExecutor.Reservable` / `Fillable`, `rules.json` `ai.reserveShift` 0.25 / `ai.reserveArmyShare` 1; sides
+      alive at 20:00 without Age II 23 / 41 → 4 / 49 on the 27 pairing runs, waves and defeats not worse; docs/03 "Implementation (M5-4g)").
+      Left: BUG-1010 (S3, the Malazan openings that fall to `raider_rush` without a wave: a defend-then-counter rule, M5-4g's unbuilt slice 2).)
 - [ ] Owner request 2026-10-14 (D14 c): **counter-composition**: the AI shifts its army mix toward what counters the enemy units it has
       seen (fog-limited, decayed memory; strength per difficulty, 0 on Easy); think cost stays inside the 1 ms gate.
 
@@ -767,8 +771,10 @@ open S1 / S2. Retro below; open S3 / S4 listed there.)_
       download, docs/04) and the owner's ear on the clips.)
 - [ ] 3 maps (Raraku, Pale Hills, Vathar Crossing) plus the procedural generator in skirmish setup. (M5-4a, 2026-10-13, pulled
       forward: the generator's mirrored start locations, each with 2 mines and a forest in reach, replay format 6. M5-H1, 2026-10-13:
-      both bases on one level and at least half a map apart. Left: the three hand-made maps, mirrored terrain, the generator's
-      options in the setup.)
+      both bases on one level and at least half a map apart. M6-V15, 2026-10-18-1814: **the generator's options are in the skirmish
+      setup**: Forests and Gold mines counts (defaults 12 / 8, floors one forest and two mines per player, cap 64) beside a Game speed
+      list, carried by the save and replay headers so a load or a replay rebuilds the same map. Left: the three hand-made maps and
+      mirrored terrain (no map format yet).)
 - [ ] `tools/export.ps1` produces a Windows zip that runs on a machine without Godot or .NET installed.
 - [ ] Revisit the .NET version (see [03 Platform](03-technical-design.md#platform-and-versions)).
 - [ ] Playable: a friend can unzip it and play a match without help.

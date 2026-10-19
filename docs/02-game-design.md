@@ -407,10 +407,11 @@ own cues (select, order, refused, building placed or finished, unit or tech read
   expansion step can't be paid yet, the AI keeps its cost in reserve (army production and the build order's later unit
   steps spend only what is above it; earlier steps, houses and the defense are unaffected) and moves its gatherers toward
   the resource the step lacks (`rules.json` `ai.reserveShift`: 0.25 more, or less, of the workers on gold). The reserve
-  is kept only while the army is at least the opening's wave in both pop and cost (`ai.reserveArmyShare`, 1: the whole
-  wave) and the base is not being defended, so every wave, not just the first, is rebuilt before the AI saves, and a
-  raided base spends on its army. A resource the AI knows no node of is not held back, and a step short of one is not
-  reserved at all (built in M5-4g, BUG-0981, BUG-1021, BUG-1023, BUG-1025;
+  is kept only while the army, at home or out on a wave, is at least the opening's wave in both pop and cost
+  (`ai.reserveArmyShare`, 1: the whole wave) and the base is not being defended: the first wave is always built before
+  the AI saves, a wave that dies away has to be rebuilt before it saves again, and a raided base spends on its army.
+  A resource the AI knows no node of is not held back, and a step short of one is not reserved at all (built in M5-4g,
+  BUG-0981, BUG-1021, BUG-1023, BUG-1025; the "at home or out on a wave" wording is BUG-1026, Producer 2026-10-19;
   [03 Implementation (M5-4g)](03-technical-design.md#implementation-m5-4g)).
 - Build orders, army compositions, and attack thresholds are per-faction data (`ai.json`), not code.
 - Each faction's `ai.json` holds one to eight named openings (a build order, an army mix and attack thresholds each);

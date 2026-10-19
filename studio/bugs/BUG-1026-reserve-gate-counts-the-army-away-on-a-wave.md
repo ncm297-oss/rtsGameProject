@@ -2,8 +2,8 @@
 
 | Field | Value |
 | --- | --- |
-| Severity | S3 (docs and behaviour disagree; outcome numbers are fine on the 27 runs) |
-| Status | open |
+| Severity | S4 (was S3: the docs half is fixed; what is left is a tuning question) |
+| Status | open (docs half fixed by the Producer at the 2026-10-19 ACCEPT: docs/02 "AI opponent" and docs/03 "Implementation (M5-4g)" now say the gate counts the whole army, the wave out included, and why that form was kept; the home-only count stays a measured variant for a later tuning pass with the Easy / Hard rows below as its cases) |
 | Found | 2026-10-18-1814, task M5-4g re-check after fix round 2 (c76bc5f) |
 | System | AI reserve gate (`AiPlayer.MayReserve` / `ArmySize`) against `MilitaryManager.TryStart` (wave units) |
 | Fixed by | |

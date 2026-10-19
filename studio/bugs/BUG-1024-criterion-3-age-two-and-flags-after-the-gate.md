@@ -3,7 +3,7 @@
 | Field | Value |
 | --- | --- |
 | Severity | S2 (an acceptance criterion not met; the Producer may waive it) |
-| Status | open (re-checked after fix round 2, c76bc5f: 4 / 49 live sides without Age II, flags 22 / 58, `DH6ThresholdQaTests` seed 25 still red) |
+| Status | **closed by Producer decision (2026-10-19 ACCEPT): criterion 3 waived and restated.** The restated target: no side that reached Age II on the base loses it, the no-wave count stays at the base's 3, and waves / defeats are not worse than the base (met: 4 / 49 without Age II, none of them had it before; waves 81 v 79; defeats 5 / 0 v 8 / 5). The flag count (22 / 58 v 11) is no longer a target: the flags are mostly `expand` steps with no free mine known (not reservable by design) and rise because more sides survive. **The red rows this bug left are BUG-1027** (the 4 `Pairing_Twins_AgeTwoForEverySideAlive` rows restated by the sim's hardening; `DH6ThresholdQaTests` seed 25 by the data re-print) |
 | Found | 2026-10-18-1814, task M5-4g re-check after fix round 1 (57dfa22) |
 | System | AI reserve gate (`AiPlayer.MayReserve`, `ai.reserveArmyShare`) together with the gather shift (`AiPlayer.WantedGoldShare`) |
 | Fixed by | |
