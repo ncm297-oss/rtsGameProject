@@ -100,12 +100,9 @@ public partial class QaM6VH3Test : Node
             int[][] s = Enumerable.Range(0, 4).Select(p => Enumerable.Range(0, samples).Select(k => p == 1 || p == 2 ? 0 : 100 + k).ToArray()).ToArray();
             await Set(g, s, four, 200, span);
             string how = $"span {span} ticks ({_ui.Clock(span)})";
-            foreach (string f in StatsScreenCheck.TimeAxis(g, how))
-            {
-                // Over 16 h the 2 h step gives more than ten labels (as the minute steps did before M6-VH3): a note, not a failure.
-                if (span > 1_152_000) _notes.Add(f);
-                else Check(false, f);
-            }
+            // BUG-0922 item 3 (fixed in M6-VH4, a 3 h step): over 16 h the 2 h step gave more than ten labels (a note then); now
+            // every span is checked.
+            foreach (string f in StatsScreenCheck.TimeAxis(g, how)) Check(false, f);
             var t = g.TimeLabelTicks;
             var clocks = t.Select(x => _ui.Clock(x)).ToList();
             Check(clocks.Distinct().Count() == clocks.Count, $"{how}: repeated clock labels [{string.Join(", ", clocks)}]");
@@ -131,6 +128,15 @@ public partial class QaM6VH3Test : Node
         Color outline = MatchStats.BackdropColour.Lerp(new Color(ArmyValueGraph.OutlineColour, 1f), ArmyValueGraph.OutlineColour.A);
         double ironOnOutline = StatsScreenCheck.Contrast(iron, outline), outlineOnBack = StatsScreenCheck.Contrast(outline, MatchStats.BackdropColour);
         _notes.Add($"Iron line {ironOnBack:F2}:1 on the backdrop, {ironOnOutline:F2}:1 on its outline; the outline {outlineOnBack:F2}:1 on the backdrop");
+        // BUG-0922 item 2 (M6-VH4): the readability rule can fail: of the greys between the backdrop and the outline, those that
+        // stand under 3:1 on the backdrop and under the core contrast on the outline read on neither; Iron passes as a core.
+        int unreadable = 0;
+        for (int i = 0; i <= 100; i++)
+            if (!StatsScreenCheck.LineReadable(MatchStats.BackdropColour.Lerp(outline, i / 100f), out _)) unreadable++;
+        Check(unreadable > 0, "BUG-0922: every colour between the backdrop and the outline passes the contrast rule (it can't fail)");
+        Check(StatsScreenCheck.LineReadable(iron, out string ironWhy), $"the Iron seat's line fails the contrast rule ({ironWhy})");
+        for (int c = 0; c < UiText.ColourCount; c++)
+            Check(StatsScreenCheck.LineReadable(UnitViews.ColorFromRgb(_ui.ColourRgb(c)), out string seatWhy), $"seat colour {_ui.ColourName(c)}: {seatWhy}");
         // The baseline's lowest line (+4.5 px) stays inside the graph control: not drawn over the time labels.
         Rect2 plot = g.PlotRect;
         Check(plot.End.Y + offsets.Max() + 2.5f < plot.End.Y + 19f - 10f, $"the lowest zero line at {plot.End.Y + offsets.Max()} reaches the time labels");

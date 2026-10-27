@@ -97,6 +97,8 @@ public sealed class AttackAlerts
     public int UpgradedCount => _upgradedCount;
 
     /// <summary>The <paramref name="k"/>-th alert the last <see cref="Update"/> upgraded to Base (0 .. <see cref="UpgradedCount"/> - 1), an index as <see cref="New"/>'s.</summary>
+    /// <remarks>BUG-0970: a raise on a full ring replaces the oldest alert this Update did not upgrade, so every index here still
+    /// names its upgraded (Base) alert.</remarks>
     public int Upgraded(int k) => _upgraded[k];
 
     /// <summary>True once any alert was raised; then <see cref="LastIndex"/> is the newest.</summary>
@@ -181,6 +183,7 @@ public sealed class AttackAlerts
                 return;
             }
         }
+        if (_count == _position.Length && IsUpgraded(_next)) KeepUpgradedOldest();
         int slot = _next;
         _next = (_next + 1) % _position.Length;
         if (_count < _position.Length) _count++;
@@ -190,5 +193,52 @@ public sealed class AttackAlerts
         _hits[slot] = 1;
         if (_newCount < _new.Length) _new[_newCount++] = slot;
         Raised++;
+    }
+
+    private bool IsUpgraded(int slot)
+    {
+        for (int k = 0; k < _upgradedCount; k++)
+            if (_upgraded[k] == slot) return true;
+        return false;
+    }
+
+    // BUG-0970: the ring is full and its oldest alert (the slot a raise takes) was upgraded by this Update, so Upgraded(k)
+    // would name the new alert. The oldest alert this Update did not upgrade goes instead: the alerts older than it move up
+    // one slot (oldest-first order kept, New / Upgraded indices moved with them), freeing the raise's slot. If this Update
+    // upgraded every alert, the oldest one goes as before and its Upgraded entry with it.
+    private void KeepUpgradedOldest()
+    {
+        int n = _position.Length, j = 1;
+        while (j < n && IsUpgraded((_next + j) % n)) j++;
+        if (j == n)
+        {
+            Remove(_upgraded, ref _upgradedCount, _next);
+            return;
+        }
+        Remove(_new, ref _newCount, (_next + j) % n);
+        for (int i = j; i > 0; i--)
+        {
+            int to = (_next + i) % n, from = (_next + i - 1) % n;
+            _position[to] = _position[from];
+            _raisedAt[to] = _raisedAt[from];
+            _kind[to] = _kind[from];
+            _hits[to] = _hits[from];
+            Move(_upgraded, _upgradedCount, from, to);
+            Move(_new, _newCount, from, to);
+        }
+    }
+
+    private static void Remove(int[] list, ref int count, int slot)
+    {
+        int w = 0;
+        for (int k = 0; k < count; k++)
+            if (list[k] != slot) list[w++] = list[k];
+        count = w;
+    }
+
+    private static void Move(int[] list, int count, int from, int to)
+    {
+        for (int k = 0; k < count; k++)
+            if (list[k] == from) list[k] = to;
     }
 }

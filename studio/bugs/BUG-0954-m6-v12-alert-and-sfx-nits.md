@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S4 |
-| Status | open (items 1-3 done; item 4 left, a hardening nit) |
+| Status | fixed |
 | Found | 2026-10-17-2344, task M6-V12 |
 | System | view: `AttackAlerts` / `AlertHud`, `game/tests/SfxTest.cs` |
-| Fixed by | item 1: a32445b (M6-V13: a building hit joining a `Units` alert turns it `Base`, `AttackAlerts.Upgraded` / `UpgradedCount`, `AlertHud.ShowUpgrades` re-shows the base text off screen; `ViewApi/AttackAlertsTests` rows red on base, green on head; QA's `M6V13QaTests` upgrade fuzz; the ring-full edge is BUG-0970 S4). Items 2-3: M6-V12 round 1 |
+| Fixed by | item 1: a32445b (M6-V13: a building hit joining a `Units` alert turns it `Base`, `AttackAlerts.Upgraded` / `UpgradedCount`, `AlertHud.ShowUpgrades` re-shows the base text off screen; `ViewApi/AttackAlertsTests` rows red on base, green on head; QA's `M6V13QaTests` upgrade fuzz; the ring-full edge is BUG-0970 S4). Items 2-3: M6-V12 round 1 Item 4: docs/03 "Implementation (M6-V12)" already says "200 ticks, 201 on rare ticks from the float clock's rounding, BUG-0954 item 4" (the bug's second option); QA's `TickClock_HitEveryTick_ReAlertsEvery200Ticks_Or201FromFloatRounding` pins it. Closed in M6-VH4 (2026-10-26-2108) |
 
 ## Repro / items
 1. **Kind is fixed by the first hit.** A raid that hits a worker standing by the Town Hall one frame before it hits the
@@ -38,3 +38,9 @@ None blocks; item 1 is the one a player would notice.
   (2 of 19 gaps from tick 0 in QA's `TickClock_HitEveryTick_ReAlertsEvery200Ticks_Or201FromFloatRounding`). Harmless
   and deterministic; an integer tick clock (`RaisedAtTick`, compare `tick - raised < 200`) or the docs saying "200-201"
   would make the claim exact.
+
+## Item 4 closed (M6-VH4, 2026-10-26-2108, dev)
+The docs half was already in docs/03 ("200 ticks, 201 on rare ticks from the float clock's rounding"), which is the
+bug's own second option, and QA's row pins the 200-or-201. The integer tick clock (the first option) would change
+`AttackAlerts`' public API (`SetNow` / `RaisedAt` in seconds) for no player-visible gain, so it is not done. With items
+1-3 done earlier, the bug is closed.

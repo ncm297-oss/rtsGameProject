@@ -32,8 +32,8 @@ namespace Rts.Game.Tests;
 /// locked says <c>save.read_failed</c>, no match); a save with no <c>.replay</c> beside loads. (5) <c>--load</c> with junk, a
 /// folder, an empty path, a <c>.replay</c>, no value, and a <c>user://</c> path. (6) A save folder that is a file:
 /// <c>save.write_failed</c>, the match paused and unharmed, no <c>.tmp</c> left. No row asserts the AI refusal.
-/// Observations that are not product rules (the loaded game speed, a lone <c>.replay</c> in the save folder) print as
-/// <c>QA NOTE</c> lines.
+/// Observations that are not product rules (the loaded game speed) print as <c>QA NOTE</c> lines. M6-VH4 (BUG-1002): a lone
+/// <c>.replay</c> in the save folder is listed and deleted, and the tick-0 load's camera is on the start location.
 /// </summary>
 /// <remarks>Headless: <c>&amp; $env:GODOT --headless --path game res://tests/QaM6V14Test.tscn</c>; prints "QA M6V14 TEST PASS" or "QA M6V14 TEST FAIL: ..." lines.</remarks>
 public partial class QaM6V14Test : Node
@@ -170,9 +170,12 @@ public partial class QaM6V14Test : Node
             for (int g = 0; g < ControlGroups.Count; g++)
                 Check(sel2.Groups.Items(g).Length == 0 && sel2.Groups.Building(g).Generation == 0, $"loaded control group {g} holds {sel2.Groups.Items(g).Length} units");
             CheckHud(resumed, sim2, "loaded at tick 0");
-            System.Numerics.Vector2 loadedFocus = resumed.GetNode<RtsCamera>("RtsCamera").Focus;
-            if (loadedFocus != startFocus)
-                GD.Print($"QA NOTE: a tick-0 save loads with the camera at {loadedFocus} (the original started at its Town Hall, {startFocus}): the start bases are still queued commands");
+            // BUG-1002 item 2 (M6-VH4): the start bases are still queued commands, so the camera goes to the start location the
+            // hall is centred on (within a cell of the hall's footprint centre).
+            // StartFocus: where the load put the camera (the camera itself may have edge-panned since, the headless cursor
+            // sits in a corner).
+            Check(System.Numerics.Vector2.Distance(resumed.StartFocus, startFocus) <= MapConstants.CellSize * 1.5f,
+                $"BUG-1002: a tick-0 save loads with the camera at {resumed.StartFocus} (the original started at its Town Hall, {startFocus})");
             if (runner2.GameSpeed != speed) GD.Print($"QA NOTE: the match ran at {speed:0.##}x; loaded from Load Game it runs at {runner2.GameSpeed:0.##}x (the speed is not in the save)");
 
             // 300 ticks beside the original's hashes.
@@ -306,20 +309,26 @@ public partial class QaM6V14Test : Node
             clock.Stop();
             GD.Print($"QA NOTE: Load Game with 200 saves opened in {clock.Elapsed.TotalMilliseconds:0} ms");
             LoadGameScreen load = main.LoadScreen!;
-            Check(load.RowCount == 200 && load.Saves.Count == 200 && load.Skipped == 0 && load.SelectedIndex == 0 && !load.LoadButton.Disabled,
+            // BUG-1002 item 1 (M6-VH4): the lone .replay (junk) is listed after the saves as an unreadable row, counted as skipped.
+            Check(load.RowCount == 201 && load.Saves.Count == 200 && load.Skipped == 1 && load.SelectedIndex == 0 && !load.LoadButton.Disabled,
                 $"200 saves: {load.RowCount} rows, {load.Saves.Count} saves, {load.Skipped} skipped, picked {load.SelectedIndex}");
             bool ordered = true;
-            for (int r = 0; r < load.RowCount; r++) ordered &= SamePath(load.RowPath(r)!, Path.Combine(dir, SaveStore.FileName(start.AddMinutes(199 - r), 11)));
+            for (int r = 0; r < 200; r++) ordered &= SamePath(load.RowPath(r)!, Path.Combine(dir, SaveStore.FileName(start.AddMinutes(199 - r), 11)));
             Check(ordered, "200 saves not newest first");
-            Check(load.RowOf(lone) < 0, "a lone .replay in the save folder is listed");
-            if (load.RowOf(lone) < 0) GD.Print("QA NOTE: a .replay in the save folder whose .sav is gone is not listed, so Load Game can't delete it");
+            Check(load.RowOf(lone) == 200 && load.KindOf(200) == LoadGameScreen.RowKind.UnreadableReplay,
+                $"BUG-1002: a .replay in the save folder whose .sav is gone is at row {load.RowOf(lone)} (want 200, an unreadable replay row)");
             // Delete the highlighted middle row.
             string victim = load.RowPath(57)!, next = load.RowPath(58)!, before = load.RowPath(56)!;
             Check(load.Select(57) && load.SelectedIndex == 57, "picking row 57");
             load.DeleteButton.EmitSignal(BaseButton.SignalName.Pressed);
-            Check(!File.Exists(victim) && load.RowCount == 199 && load.RowOf(victim) < 0 && load.RowOf(next) == 57 && load.RowOf(before) == 56
+            Check(!File.Exists(victim) && load.RowCount == 200 && load.RowOf(victim) < 0 && load.RowOf(next) == 57 && load.RowOf(before) == 56
                 && Directory.GetFiles(dir, "*.sav").Length == 199, $"Delete of row 57: {load.RowCount} rows, file gone {!File.Exists(victim)}");
             Check(File.Exists(lone), "Delete removed the lone .replay of another name");
+            // BUG-1002 item 1: the lone .replay's row deletes it, and only it.
+            Check(load.Select(load.RowOf(lone)) && !load.DeleteButton.Disabled, "the lone .replay's row can't be picked for Delete");
+            load.DeleteButton.EmitSignal(BaseButton.SignalName.Pressed);
+            Check(!File.Exists(lone) && load.RowCount == 199 && load.Skipped == 0 && Directory.GetFiles(dir, "*.sav").Length == 199,
+                $"BUG-1002: Delete of the lone .replay: file left {File.Exists(lone)}, {load.RowCount} rows, {Directory.GetFiles(dir, "*.sav").Length} saves");
             // A save with no .replay beside it loads.
             Check(!File.Exists(SaveStore.ReplayPathOf(load.RowPath(0)!)) && load.Select(0), "row 0 has a .replay beside it");
             load.LoadButton.EmitSignal(BaseButton.SignalName.Pressed);

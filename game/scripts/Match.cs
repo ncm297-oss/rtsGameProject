@@ -56,6 +56,13 @@ public partial class Match : Node3D
     /// <summary>The dev-log line the match printed when it was wired (M6-V15, for tests): "Save loaded: ..." for a loaded match, else "".</summary>
     public string StartLine { get; private set; } = "";
 
+    /// <summary>
+    /// BUG-1032 (M6-VH4): the dev-log line a new match prints when the map generator placed fewer forests or gold mines than
+    /// asked (the setup offers up to 64 of each on every map size, and the 128 map fits only about 60 mines at the generator's
+    /// spacing; docs/02 "Game flow" 2), else "".
+    /// </summary>
+    public string ShortfallLine { get; private set; } = "";
+
     /// <summary>Starting workers per player this match asked for (<c>--workers</c>, else <c>rules.json</c> <c>startingWorkers</c>).</summary>
     public int WorkersPerPlayer { get; private set; }
 
@@ -298,6 +305,13 @@ public partial class Match : Node3D
             $"forests {placed.Forests} trees {placed.Trees} mines {placed.Mines}, " +
             $"town halls {Halls(Bases)}, {WorkersPerPlayer} workers per player" + (options.NoCombat ? ", combat off" : "") + (options.NoFog ? ", fog not drawn" : "") +
             $", seats {SeatsText(data, _runner.Seats)}");
+        MapGenParams asked = sim.World.Config.Map;
+        if (placed.Forests < asked.Forests || placed.Mines < asked.GoldMines)
+        {
+            ShortfallLine = $"Map generator: placed {placed.Forests} of {asked.Forests} forests and {placed.Mines} of {asked.GoldMines} gold mines asked " +
+                $"(the {map.Width} x {map.Height} map has no more room at the generator's spacing, {asked.MineSpacing.ToString("0.#", System.Globalization.CultureInfo.InvariantCulture)} m between mines)";
+            GD.Print(ShortfallLine);
+        }
     }
 
     /// <summary>
@@ -319,7 +333,9 @@ public partial class Match : Node3D
 
     /// <summary>
     /// Where a loaded match's camera starts (M6-V14): the footprint centre of <paramref name="player"/>'s lowest-slot live
-    /// building (the start Town Hall while it stands), else the centre of its live units, else the map centre.
+    /// building (the start Town Hall while it stands), else the centre of its live units, else the centre of a Town Hall
+    /// footprint centred on its start location (BUG-1002 item 2: a save made at tick 0 holds the start bases as queued
+    /// commands, and <see cref="StartBase.Plan"/> centres the hall there), else the map centre.
     /// </summary>
     public static System.Numerics.Vector2 LoadedFocus(World w, int player)
     {
@@ -336,7 +352,24 @@ public partial class Match : Node3D
             sum += w.Units.Position[i];
             n++;
         }
-        return n > 0 ? sum / n : new System.Numerics.Vector2(g.Width, g.Height) * MapConstants.CellSize / 2;
+        if (n > 0) return sum / n;
+        ReadOnlySpan<StartLocation> starts = w.StartLocations;
+        if ((uint)player < (uint)starts.Length && (uint)starts[player].Cell < (uint)(g.Width * g.Height))
+        {
+            int cx = starts[player].Cell % g.Width, cy = starts[player].Cell / g.Width;
+            // Where StartBase.Plan centres the hall: the hall's footprint on the location (the queued hall stands there
+            // unless a start unit is in the way).
+            int hallType = StartBase.BuildingOfSlot(w.Data, w.FactionOf(player), BuildingSlot.TownHall);
+            if (hallType >= 0)
+            {
+                BuildingDef hall = w.Data.Buildings[hallType];
+                int sx = cx - hall.FootprintWidth / 2, sy = cy - hall.FootprintHeight / 2;
+                if (sx >= 0 && sy >= 0 && sx + hall.FootprintWidth <= g.Width && sy + hall.FootprintHeight <= g.Height)
+                    return StartBase.FootprintCenter(g, hall, sy * g.Width + sx);
+            }
+            return g.CellCenter(cx, cy);
+        }
+        return new System.Numerics.Vector2(g.Width, g.Height) * MapConstants.CellSize / 2;
     }
 
     /// <summary>

@@ -6177,12 +6177,14 @@ game/tests/StatsScreenCheck.cs    the shared rows: every column v its span, the 
   tick `(k + 1) x StatsSampleTicks` (M6-S1), so its x is that tick over the time span (`max(TickNumber, samples x
   interval)`, at least 1) across the plot; y is the value over the **largest sample of any player** (`MaxValue`), all on
   the baseline when every sample is 0. The value axis shows 0, half and the top; the time axis a tick every 10, 15, 30
-  seconds, 1, 2, 5, 10, 15, 30, 60 or 120 minutes (M6-VH3: seconds below a few minutes; the smallest step with at most nine
-  labels) and the span's end when no step label is within 56 px of it, labelled with `match_over.clock`. Title
+  seconds, 1, 2, 5, 10, 15, 30, 60, 120 or 180 minutes (M6-VH3: seconds below a few minutes; the smallest step with at most nine
+  labels; M6-VH4, BUG-0922: the 180 keeps the replay cap's 24 h at nine, it was 13) and the span's end when no step label is
+  within 56 px of it, labelled with `match_over.clock`. Title
   `army_value`, axis titles `graph_value` and `graph_time`. A player with one sample is a dot (5 px), with none nothing: a
   match shorter than one interval draws the axes and the titles only. Points are laid out again on a resize. Since M6-VH3
   each line is drawn 3 px apart from the others (centred: four seats at -4.5, -1.5, 1.5, 4.5 px) over a light outline, so
-  lines at one value show side by side and the darkest seat colour reads; the points themselves stay exact. Sampling stops
+  lines at one value show side by side and the darkest seat colour reads; the points themselves stay exact. The time axis
+  is drawn after the lines (M6-VH4, BUG-0922: four seats at 0 made a ~16 px band over it; `LinesUnderAxis`). Sampling stops
   at `StatsSampleCapacity` (M6-S1): the line ends there.
 - **Layout.** The heading 34 px, the table 17 px with 15 px headings that wrap to two lines in a 74 px column (each heading
   `ShrinkEnd`, so a one-line heading sits on the row's bottom line: M6-VH3), 10 px apart: four seats, the graph (820 x 220) and Back fit 1152 x 648 (the test window), so 1280 x 720, the smallest resolution
@@ -6249,8 +6251,11 @@ game/export_presets.cfg            exclude assets/models/looktest/*
     `-Filter LoopTimeoutProbe -TimeoutSec 8`: `LoopTimeoutProbe FAIL exit timeout 8.7 s timeout after 8 s (killed)`, no
     Godot process left.
   - `StatsScreenCheck` (every scene that opens the stats screen): the time labels (0 first, rising, at most ten, the last
-    past half the span once it reaches 10 s), every pair of players drawn at least 2 px apart, every line or its outline
-    3:1 against the backdrop (WCAG contrast; Iron `#4B4F55` alone is 2.35:1, Cobalt `#1F3F9F` 2.10:1), and every heading on
+    past half the span once it reaches 10 s), every pair of players drawn at least 2 px apart, every line 3:1 against the
+    backdrop or, with its outline 3:1, the line 1.4:1 against the outline (WCAG contrast; `StatsScreenCheck.LineReadable`,
+    M6-VH4, BUG-0922: the earlier "line or outline" form could not fail; the greys between backdrop and outline that read on
+    neither now fail it; Iron `#4B4F55` alone is 2.35:1 on the backdrop and 1.62:1 on its outline, Violet 2.63:1 and 1.45:1,
+    the palette's weakest core, Cobalt `#1F3F9F` 2.10:1 on the backdrop), the time axis over every line, and every heading on
     the row's bottom line with no slack over its text. Before the fix `FreeForAllTest` failed all four (labels `[0]` over a
     399-tick span; "Player", "Units lost", "Age II at" 35 px above the bottom). `FreeForAllTest`'s three-seat case now has
     player 1 reach Age II (`DefeatStaging.AgeTwo`, moved from `MatchOverViewTest`) and then be razed (all three halls): its
@@ -6316,8 +6321,8 @@ game/tests/SfxTest, AlertTest (new), CombatViewTest, ShellTest, QaM6VH2Test (Spa
   `FileAccess` only (it logs nothing): the source, where present (an exported build has none), must start with `RIFF`
   (a pointer starts `version https://git-lfs`), and the imported file the `.import`'s `path=` names must exist (a
   pointer's import fails and writes none). Only then does `ResourceLoader.Load` run. In a `GIT_LFS_SKIP_SMUDGE=1` clone a
-  match so starts with 12 warnings and no `ERROR`. **Open:** such a clone still fails `tools/qa/smoke.ps1`, for two reasons
-  outside the runtime code. Godot's own `--import` pass logs 3 `ERROR` lines per pointer (48: "Not a WAV file", "Can't
+  match so starts with 12 warnings and no `ERROR`. **Fixed in M6-VH4** (see "Implementation (M6-VH4)"): such a clone
+  failed `tools/qa/smoke.ps1`, for two reasons outside the runtime code. Godot's own `--import` pass logs 3 `ERROR` lines per pointer (48: "Not a WAV file", "Can't
   save empty resource", `get_multiple_md5`) on every run. And smoke matches `ERROR` case-insensitively without skipping
   stack-frame lines, so the `godot_variant_call_error` frame in each warning's backtrace counts too (`scene-loop.ps1` uses
   `-cmatch` and skips `[n]` frames). `LookTest` and `SfxTest`'s clip rows need the LFS objects in any case (BUG-0955, S3: the
@@ -6478,7 +6483,9 @@ game/tests/SaveLoadTest.tscn         the headless scene (in the scene loop); She
   A file whose header doesn't read (junk, a forged player count) is an unreadable row (`load.unreadable`) that only Delete
   acts on, counted in `load.skipped`. Load (or a double-click on a save row) resumes the picked save; Watch plays a replay;
   each is greyed on any other row. Delete of a save also deletes the `.replay` beside it. The `.replay` beside a save is
-  not listed (the Quit's replay in `ReplayDir` holds the same match); `--replay <path>` plays it. `SelectedIndex`,
+  not listed (the Quit's replay in `ReplayDir` holds the same match); `--replay <path>` plays it. A `.replay` in `SaveDir`
+  with no `.sav` of its stem (`SaveStore.LoneReplays`: the save deleted outside the game, or its recording locked during
+  a Delete) is listed as a replay row, or an unreadable one, so Delete reaches it (M6-VH4, BUG-1002). `SelectedIndex`,
   `Select`, `RowPath`, `KindOf` and `RowOf` count in display order; with no save in the list the numbering is M6-V9's.
 - **Load.** `Main.LoadSavedGame(path)` (Load, or `--load <path>`, a shell flag like `--replay`) reads the file with
   `Simulation.TryLoad` (`SaveStore.Load`). A refusal starts nothing and shows the Load Game screen with the code's
@@ -6489,7 +6496,9 @@ game/tests/SaveLoadTest.tscn         the headless scene (in the scene loop); She
   and selection are wired fresh as for a live match (every view reads the stores, so the saved entities appear on the
   first frame). Nothing is spawned. The colours are the slot order's (colour p for player p; `--colour` picks are not in
   the save). The camera looks at `Match.LoadedFocus`: the footprint centre of the local player's lowest-slot live building
-  (its start Town Hall while that stands), else its units' centre, else the map centre. Ticking resumes at the saved tick
+  (its start Town Hall while that stands), else its units' centre, else the centre of a Town Hall footprint centred on its
+  start location, where the queued hall will stand (M6-VH4, BUG-1002: a tick-0 save holds the start bases as queued
+  commands), else the map centre. Ticking resumes at the saved tick
   on the next frame. The log line is `Save loaded: <path>, seed .., map .., tick .., speed .., seats .., not recorded`.
   The save holds no game speed: from Load Game the match runs at 1x; only a dev `--load` takes `--speed` (M6-V15, BUG-1001).
 - **A loaded match is not recorded.** A `ReplayRecorder` attaches only to a sim at tick 0 with nothing queued, so
@@ -6563,6 +6572,46 @@ game/tests/ShellTest.cs            SpeedAndCounts, the six new keys
   `--load <save> --speed 1.5` boots at 1.5x. `ShellTest.SpeedAndCounts`: the three items to `GameSpeed` 0.75 / 1 / 1.5
   after Start, the counts' defaults, floors (2 / 4 at two slots, 4 / 8 at four), clamps at -1, 0, 1, 64, 65 and 1,000,
   and a Start on 6 / 4 placing them; `UiRows` requires the six new keys.
+
+### Implementation (M6-VH4)
+
+View hardening: the two setup / Load Game S3s from M6-V15 and the view's older nits. The one sim file is the view's own
+`ViewApi/AttackAlerts.cs` (BUG-0970).
+
+- **The picked row is on screen (BUG-1030).** `LoadGameScreen.Select` scrolls the row into view (`Tree.ScrollToItem`, and
+  again deferred, after the frame's layout, for a list that was hidden or not sized yet). So a refused row far down the
+  list (`Main.ShowLoadNote` re-picks it after the rebuild, which leaves the scroll at the top) is the highlighted row the
+  player sees above Delete. `QaM6V15Test.RefusedRows` checks the bottom (row 199 of 200) and the middle row.
+- **Typed counts (BUG-1031).** `SkirmishSetup.MatchArgs` first applies both spin boxes (`SpinBox.Apply`, what Enter does),
+  so a number typed without Enter reaches the match even when Start's press and release land in one frame (the box's
+  focus-out comes after Start's `Pressed` then). Each box is redrawn with its value after Enter and after the apply, so an
+  emptied box (or junk) shows the count the match will use. `QaM6V15Test.TypedCounts`: 11 typed, one-frame click, 11 mines.
+- **Fewer resources than asked (BUG-1032).** The counts go up to 64 on every map size; the 128 map fits about 60 gold
+  mines at the generator's 24 m spacing (60-62 measured at 2-4 slots), the larger maps 64. A per-size cap is not derivable
+  without running the placer (it depends on the terrain and the seed), so the setup keeps 64 and a new match whose
+  placement fell short logs `Match.ShortfallLine` ("Map generator: placed 61 of 64 gold mines asked ..."; "" otherwise).
+  Every base still gets its start mines and forest. `QaM6V15Test.GeneratorMatrix` checks the line on all 18 cases.
+  `ShellTest.SpeedAndCounts` pins 6.5 to 7 (Godot's `Range` rounds half away from zero).
+- **Save folder and the pause menu (BUG-1002).** Lone `.replay` files in the save folder are listed (above, Load Game);
+  a tick-0 save loads with the camera on the start location (above, Load). The pause menu's heading, buttons and save
+  lines sit in their own opaque panel (`PauseMenu.Panel`, `PanelColor`), so at 1152 x 648 the lines no longer draw over
+  the HUD's command card under the dim backdrop (`SaveLoadTest`: the lines inside the panel). `QaM6V14Test` checks the
+  lone `.replay` row and its Delete, and the tick-0 camera.
+- **Upgraded alerts on a full ring (BUG-0970).** When a raise would replace the ring's oldest alert and this `Update`
+  upgraded it to Base, `AttackAlerts` replaces the oldest alert it did not upgrade instead: the older alerts move up a slot
+  (oldest-first order kept, `New` / `Upgraded` indices moved with them). If the Update upgraded every alert, the oldest goes
+  and its `Upgraded` entry with it. So every `Upgraded(k)` names an alert that is Base. Rows: QA's
+  `M6V13QaTests.UpgradedSlot_OverwrittenInTheSameUpdate_StillReadsBase` (was skipped), `AttackAlertsTests.FullRing_*` and
+  `RingOfOne_*`.
+- **The stats graph (BUG-0922).** The time axis is drawn after the lines; its steps reach 3 h; the readability rule is
+  `StatsScreenCheck.LineReadable` (see "Implementation (M6-V11)").
+- **smoke.ps1 (BUG-0955).** The log match is `scene-loop.ps1`'s (`-cmatch`, `[n]` frame lines skipped). In a clone without
+  the LFS objects the wav importer fails every pointer clip on every `--import` (Godot writes no result for them); smoke
+  skips exactly those import lines (`Not a WAV file ... found 'vers'`, `Can't save empty resource` naming a clip that is a
+  pointer on disk, and as many unnamed `f.is_null()` md5 lines) and prints a `WARN` with the count. A normal clone has no
+  pointer, so nothing is skipped there. The looktest art's pointers still fail a no-LFS clone's first `--import`, once
+  (their importers record the failure); from the second run smoke passes. The clips keep Godot's own importer (the 2344
+  call); a no-LFS clone stays unsupported for `LookTest` and `SfxTest`'s clip rows.
 
 ## AI architecture
 

@@ -818,14 +818,16 @@ public partial class ShellTest : Node
 
             // The clamps: one past each end, and the floors following the slots.
             foreach ((double set, int forests, int mines) in new[] { (-1.0, 2, 2 * startMines), (0.0, 2, 2 * startMines), (1.0, 2, 2 * startMines),
-                (64.0, 64, 64), (65.0, 64, 64), (1000.0, 64, 64), (6.5, 6, 6) })
+                (64.0, 64, 64), (65.0, 64, 64), (1000.0, 64, 64), (6.5, 7, 7) })
             {
+                // BUG-1032 item 3 (M6-VH4): 6.5 pinned to Godot's rounding (Range with Rounded and step 1 rounds half away
+                // from zero: 7), so a rounding change shows here; the args and the box carry the same count.
                 setup.ForestsSpin.Value = set;
                 setup.MinesSpin.Value = set;
                 LaunchOptions o = LaunchOptions.Parse(setup.MatchArgs()!);
-                bool want6 = set == 6.5; // rounds to a whole count (6 or 7); the args carry it
-                Check((want6 ? setup.ForestsPick is 6 or 7 : setup.ForestsPick == forests) && (want6 ? setup.MinesPick is 6 or 7 : setup.MinesPick == mines)
-                    && o.Forests == setup.ForestsPick && o.Mines == setup.MinesPick,
+                Check(setup.ForestsPick == forests && setup.MinesPick == mines && o.Forests == forests && o.Mines == mines
+                    && setup.ForestsSpin.GetLineEdit().Text == forests.ToString(System.Globalization.CultureInfo.InvariantCulture)
+                    && setup.MinesSpin.GetLineEdit().Text == mines.ToString(System.Globalization.CultureInfo.InvariantCulture),
                     $"counts set to {set}: {setup.ForestsPick} forests / {setup.MinesPick} mines, args --forests {o.Forests} --mines {o.Mines} (want {forests} / {mines})");
             }
             setup.ForestsSpin.Value = 3;

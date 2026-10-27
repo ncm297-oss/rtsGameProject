@@ -37,7 +37,41 @@ $problems = @()
 if ($importExit -ne 0) { $problems += "import exit $importExit" }
 if ($smokeExit -ne 0) { $problems += "smoke exit $smokeExit" }
 if ($matchExit -ne 0) { $problems += "match smoke exit $matchExit" }
-$bad = @($import) + @($smoke) + @($match) | Where-Object { $_ -match 'ERROR|Unhandled|Exception' }
+
+# BUG-0955 (M6-VH4): matched as scene-loop.ps1 does: case-sensitive (Godot's own error lines are upper-case) and
+# backtrace frames ("    [3] ...") skipped, since a warning's frames name functions like godot_variant_call_error.
+function Test-Problem([string]$line) { $line -cmatch 'ERROR|Unhandled|Exception' -and $line -notmatch '^\s+\[\d+\]' }
+
+# BUG-0955: a clone without the LFS objects (unsupported: CLAUDE.md puts every binary through LFS) holds pointer text
+# files where the .wav clips should be. Godot's wav importer writes no .import result for them, so it fails them again on
+# every --import: per clip "Not a WAV file ... found 'vers'", "Can't save empty resource to path
+# 'res://.godot/imported/<clip>.wav-<md5>.sample'" and one unnamed "Condition "f.is_null()" is true". Only those import
+# lines are skipped, only for clips that are pointers on disk, and the skip is printed; a normal clone has no pointers,
+# so nothing changes there. Other pointers (the looktest art) fail the first run only, as before.
+$pointerWavs = @(Get-ChildItem (Join-Path $gamePath 'assets') -Recurse -File -Filter '*.wav' -ErrorAction SilentlyContinue |
+    Where-Object { $_.Length -lt 1024 -and (Get-Content $_.FullName -TotalCount 1) -like 'version https://git-lfs.github.com/spec/*' } |
+    ForEach-Object { $_.Name })
+$skipped = 0
+$unsavedSamples = 0
+$importBad = @()
+foreach ($line in @($import)) {
+    if (-not (Test-Problem $line)) { continue }
+    if ($pointerWavs.Count -gt 0) {
+        if ($line -cmatch "^ERROR: Not a WAV file\. File should start with 'RIFF', but found 'vers'") { $skipped++; continue }
+        if ($line -cmatch "^ERROR: Can't save empty resource to path 'res://\.godot/imported/([^/']+\.wav)-[0-9a-f]+\.sample'" -and
+            $pointerWavs -contains $Matches[1]) { $skipped++; $unsavedSamples++; continue }
+    }
+    $importBad += $line
+}
+# The unnamed md5 condition follows each unsaved sample (the import runs threaded, so it can't be paired by position).
+$nullMd5 = @($importBad | Where-Object { $_ -cmatch '^ERROR: Condition "f\.is_null\(\)" is true\. Continuing\.' })
+$keepNull = [Math]::Max(0, $nullMd5.Count - $unsavedSamples)
+if ($unsavedSamples -gt 0) {
+    $importBad = @($importBad | Where-Object { $_ -cnotmatch '^ERROR: Condition "f\.is_null\(\)" is true\. Continuing\.' }) + @($nullMd5 | Select-Object -First $keepNull)
+    $skipped += $nullMd5.Count - $keepNull
+}
+if ($skipped -gt 0) { Write-Host "WARN: $($pointerWavs.Count) .wav clips are LFS pointers (no 'git lfs pull'): $skipped of their --import error lines skipped (BUG-0955)" }
+$bad = @($importBad) + @(@($smoke) + @($match) | Where-Object { Test-Problem $_ })
 foreach ($line in $bad) { $problems += "log: $line" }
 if (-not ($smoke | Where-Object { $_ -match [regex]::Escape($banner) })) { $problems += "banner '$banner' missing from smoke log" }
 if (-not ($match | Where-Object { $_ -match [regex]::Escape($banner) })) { $problems += "banner '$banner' missing from the match smoke log" }

@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S4 |
-| Status | open |
+| Status | closed (item 1 fixed M5-V1, item 3 fixed M6-VH1, item 2 wontfix: unreachable) |
 | Found | 2026-10-10-2334, task M4-VH3 (QA) |
 | System | view: `game/scripts/GroundDisc.cs`, `sim/Rts.Sim/ViewApi/SeenResources.cs`, `game/scripts/CombatViews.cs` |
-| Fixed by | Item 1: 36248fa (M5-V1), `GroundDisc.Place` clamps the hole before comparing; test `AbilityViewTest.Bug0521Row` (a 0.1 m ring placed 5 times: 1 rebuild; 5 before). Items 2 and 3 open. Verified by QA 2026-10-11-0314 |
+| Fixed by | Item 1: 36248fa (M5-V1), `GroundDisc.Place` clamps the hole before comparing; test `AbilityViewTest.Bug0521Row` (a 0.1 m ring placed 5 times: 1 rebuild; 5 before). Items 2 and 3 open. Verified by QA 2026-10-11-0314 Item 2 closed as wontfix in M6-VH4 (2026-10-26-2108) |
 
 None of these is reachable with the shipped data or the current game paths.
 
@@ -34,3 +34,10 @@ the shared array to the new capacity.
 
 ## Update (2026-10-13-0527 ACCEPT, Producer)
 Item 3 **fixed** in M6-VH1 (650d423): `CombatViews.Bind` replaces a max-hp array shorter than the unit store (`SlotMaxHp.Capacity`). Item 2 (`ViewApi/SeenResources`, a sim file) stays open for a sim hardening, so the bug stays open.
+
+## Close (M6-VH4, 2026-10-26-2108, dev)
+Item 3 was fixed in M6-VH1 (650d423). Item 2 is unreachable: resource nodes are placed only at map setup
+(`ResourcePlacer.Place` from the `World` constructor) and no system frees and reuses a resource slot in play, so a slot
+never holds a new node while the old one is remembered elsewhere. A one-slot copy that keeps both would need a second
+store in `ViewApi/SeenResources` (a sim file) for a case no game path makes. Closed as wontfix; reopen if a mechanic ever
+spawns resource nodes mid-match (then `ViewHardening3QaTests.ReusedSlots_*` is the place to add the new-footprint row).

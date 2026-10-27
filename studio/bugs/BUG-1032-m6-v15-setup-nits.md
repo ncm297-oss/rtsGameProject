@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S4 |
-| Status | open |
+| Status | fixed |
 | Found | 2026-10-18-1814, task M6-V15 |
 | System | Skirmish setup (view: `SkirmishSetup` counts), `studio/bugs/README.md`, `ShellTest.SpeedAndCounts` |
-| Fixed by | |
+| Fixed by | M6-VH4 (2026-10-26-2108): item 1 `Match.ShortfallLine` (logged; docs/02 "Game flow" 2 says it), `QaM6V15Test.GeneratorMatrix` checks it; item 2 done by the Producer at the 1814 ACCEPT; item 3 `ShellTest.SpeedAndCounts` pins 6.5 to 7 |
 
 ## Repro
 1. `& $env:GODOT --headless --path game res://tests/QaM6V15Test.tscn -- --only gen`: the 128-map cap rows print
@@ -22,3 +22,14 @@
 2. Both bug files say `fixed`, but the index still lists them `open` (the index is part of the fix's paperwork).
 3. The row accepts 6 or 7 for a value of 6.5 ("rounds to a whole count"). Godot's SpinBox with `Rounded` gives one exact
    answer, so the row could pin it and catch a rounding change.
+
+## Fix (M6-VH4, 2026-10-26-2108, dev)
+1. A per-map cap isn't derivable without running the placer (it depends on the terrain and the seed: 60, 61, 62 at 4, 2,
+   3 slots), so per the Producer's fallback a new match whose placement fell short logs
+   `Map generator: placed 64 of 64 forests and 61 of 64 gold mines asked (the 128 x 128 map has no more room ...)`
+   (`Match.ShortfallLine`, "" when nothing fell short), and docs/02 "Game flow" 2 says the 128 map fits about 60.
+   `QaM6V15Test.GeneratorMatrix` checks the line on all 18 cases (present with the placed count on the three 128 caps, empty
+   elsewhere).
+2. Already done (the index rows) at the 1814 ACCEPT.
+3. The row now wants exactly 7 forests / 7 mines for 6.5 (Godot's `Range` with `Rounded` and step 1 rounds half away from
+   zero), in the picks, the args and the boxes' text.

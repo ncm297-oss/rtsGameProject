@@ -136,6 +136,29 @@ public static class SaveStore
         }
     }
 
+    /// <summary>
+    /// BUG-1002 item 1 (M6-VH4): the <c>.replay</c> files in save folder <paramref name="dir"/> with no <c>.sav</c> of the same
+    /// stem beside them (the save deleted outside the game, or a Delete that removed the save but not its locked recording),
+    /// unsorted. Load Game lists them with the replays, so Delete reaches them. None for a null or missing folder.
+    /// </summary>
+    public static List<string> LoneReplays(string? dir)
+    {
+        var lone = new List<string>();
+        if (dir == null) return lone;
+        try
+        {
+            string full = Path.GetFullPath(ProjectSettings.GlobalizePath(dir));
+            if (!Directory.Exists(full)) return lone;
+            foreach (string path in Directory.GetFiles(full))
+                if (path.EndsWith(ReplayFormat.FileExtension, StringComparison.OrdinalIgnoreCase) && !File.Exists(Path.ChangeExtension(path, FileExtension)))
+                    lone.Add(path);
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
+        {
+        }
+        return lone;
+    }
+
     /// <summary>Deletes a save file and the recording beside it; false when the save can't be deleted (gone already, locked).</summary>
     public static bool Delete(string path)
     {

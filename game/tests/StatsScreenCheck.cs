@@ -186,6 +186,26 @@ public static class StatsScreenCheck
         return bad;
     }
 
+    /// <summary>
+    /// Contrast a line core needs against its own outline to read as a line inside the halo (BUG-0922 item 2). The shipped
+    /// palette's weakest core is Violet at 1.45:1 (2.63:1 on the backdrop), then Iron at 1.62:1 (2.35:1).
+    /// </summary>
+    public const double CoreOnOutline = 1.4;
+
+    /// <summary>
+    /// BUG-0890 / BUG-0922 item 2: a graph line reads when it stands 3:1 off the stats backdrop, or when its outline does and the
+    /// line stands <see cref="CoreOnOutline"/>:1 off the outline (a darker core in a light halo, the grey seat's case). The first
+    /// form passed whenever the outline alone did, which it always does, so any colour passed.
+    /// </summary>
+    public static bool LineReadable(Color line, out string why)
+    {
+        Color back = MatchStats.BackdropColour;
+        Color outline = back.Lerp(new Color(ArmyValueGraph.OutlineColour, 1f), ArmyValueGraph.OutlineColour.A);
+        double onBack = Contrast(line, back), onOutline = Contrast(line, outline), edge = Contrast(outline, back);
+        why = $"{onBack:F2}:1 on the backdrop, {onOutline:F2}:1 on its outline, the outline {edge:F2}:1 on the backdrop (want 3:1, or 3:1 outline + {CoreOnOutline}:1 core)";
+        return onBack >= 3.0 || (edge >= 3.0 && onOutline >= CoreOnOutline);
+    }
+
     /// <summary>WCAG contrast ratio of two opaque colours (1 to 21).</summary>
     public static double Contrast(Color a, Color b)
     {
@@ -199,8 +219,8 @@ public static class StatsScreenCheck
         return 0.2126 * Lin(c.R) + 0.7152 * Lin(c.G) + 0.0722 * Lin(c.B);
     }
 
-    // BUG-0890: the time axis has a scale on a short match; lines at one value are drawn apart; every line (or its outline) stands
-    // 3:1 off the backdrop; every heading's text sits on the heading row's bottom line.
+    // BUG-0890: the time axis has a scale on a short match; lines at one value are drawn apart; every line reads on the backdrop
+    // (LineReadable); the time axis is drawn over the lines (BUG-0922); every heading's text sits on the heading row's bottom line.
     private static List<string> Readable(MatchStats stats, int players, bool drawn, string how)
     {
         ArmyValueGraph g = stats.Graph;
@@ -209,14 +229,11 @@ public static class StatsScreenCheck
             for (int q = p + 1; q < players; q++)
                 if (Math.Abs(g.DrawOffset(p) - g.DrawOffset(q)) < 2f)
                     bad.Add($"{how}: players {p} and {q} drawn {g.DrawOffset(p)} / {g.DrawOffset(q)} px off their points: equal values would overlap");
-        Color back = MatchStats.BackdropColour;
-        Color outline = back.Lerp(new Color(ArmyValueGraph.OutlineColour, 1f), ArmyValueGraph.OutlineColour.A);
         for (int p = 0; p < players; p++)
-        {
-            double line = Contrast(g.LineColour(p), back), edge = Contrast(outline, back);
-            if (Math.Max(line, edge) < 3.0)
-                bad.Add($"{how}: player {p}'s line {g.LineColour(p).ToHtml(false)} is {line:F2}:1 on the backdrop, its outline {edge:F2}:1 (want 3:1)");
-        }
+            if (!LineReadable(g.LineColour(p), out string why))
+                bad.Add($"{how}: player {p}'s line {g.LineColour(p).ToHtml(false)}: {why}");
+        if (drawn && g.DrawnLines > 0 && g.LinesUnderAxis != g.DrawnLines)
+            bad.Add($"{how}: the time axis was drawn under {g.DrawnLines - g.LinesUnderAxis} of {g.DrawnLines} lines (BUG-0922: a zero band hides it)");
         if (drawn && stats.Headings.Count > 0)
         {
             float bottom = 0f;
