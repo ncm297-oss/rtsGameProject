@@ -128,8 +128,9 @@ public class BuildingSightLoaderTests
     public void ABadBuildingSightRule_IsAnErrorAtTheField(string raw)
     {
         DataLoadResult r = LoadWith(dir => dir.EditJson("common/rules.json", root => root["buildingSight"] = JsonNode.Parse(raw)));
-        Assert.False(r.Ok);
-        Assert.Contains(r.Errors, e => e.File == "common/rules.json" && e.Path.Contains("buildingSight"));
+        // BUG-0915: a failure says which step went wrong (the load passed, or failed elsewhere).
+        Assert.True(!r.Ok && r.Errors.Any(e => e.File == "common/rules.json" && e.Path.Contains("buildingSight")),
+            $"raw {raw}: ok {r.Ok}; errors: {string.Join("; ", r.Errors.Select(e => $"{e.File} {e.Path}: {e.Message}"))}");
     }
 
     [Fact]

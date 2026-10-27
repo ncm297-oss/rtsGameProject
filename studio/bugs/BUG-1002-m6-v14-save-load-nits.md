@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S4 |
-| Status | open |
+| Status | fixed |
 | Found | 2026-10-18-1236, task M6-V14 |
 | System | Save / load (view: `SaveStore`, `LoadGameScreen`, `Match.LoadedFocus`, `PauseMenu`) |
-| Fixed by | |
+| Fixed by | M6-VH4 (2026-10-26-2108): item 1 `SaveStore.LoneReplays` + `LoadGameScreen.AddLoneReplays` (`QaM6V14Test.ManyFiles`); item 2 `Match.LoadedFocus` start-location fallback (`QaM6V14Test.TickZero`); item 3 `PauseMenu.Panel` (`SaveLoadTest.SaveAndResume`) |
 
 ## Repro
 `& $env:GODOT --headless --path game res://tests/QaM6V14Test.tscn` prints `QA NOTE` lines for items 1 and 2; item 3 is in
@@ -30,3 +30,17 @@
 
 ## Notes
 None affects the sim or a resume's correctness (hash-equal runs verified by `QaM6V14Test`).
+
+## Fix (M6-VH4, 2026-10-26-2108, dev)
+1. `SaveStore.LoneReplays(dir)` lists the `.replay` files in the save folder with no `.sav` of their stem;
+   `LoadGameScreen.Refresh` adds them to the replays (header reads: a Replay row, Watch works) or the unreadable replays (a
+   row for Delete, counted in the skipped note). A save folder that is the replay folder adds nothing. `QaM6V14Test.ManyFiles`:
+   the note is a `Check` (the junk lone `.replay` is row 200, an unreadable replay row; failed before: not listed), and its
+   Delete removes it and nothing else.
+2. `Match.LoadedFocus` falls back, before the map centre, to the footprint centre of the local player's Town Hall centred
+   on its start location (where `StartBase.Plan` puts the queued hall). `QaM6V14Test.TickZero` checks the loaded match's
+   `StartFocus` against the original's (failed before: the map centre, ~100 m off; equal now). The camera itself was
+   compared before; it edge-pans toward the headless cursor's corner over the frames waited, so the row reads `StartFocus`.
+3. The pause menu's column sits in its own opaque panel (`PauseMenu.Panel`, `PanelColor` alpha 1, a thin border), so the
+   save lines no longer draw over the HUD's command card through the dim backdrop. `SaveLoadTest`: the panel holds the
+   note, the status line and Quit (rects enclosed); windowed `save-pause-loaded.png`.

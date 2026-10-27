@@ -35,6 +35,8 @@ public partial class QaM6V11Test : Node
     // BUG-0921 (M6-VH3 QA): since M5-P2's flank rule (merged at 63e3a31) seat 0 falls at tick 11,668 and seat 2 first has
     // Age II on tick 21,001 (17:30), so 21,600 runs both rows again (the checks are unchanged; only the match is longer).
     // BUG-0953 (M6-V13): since M5-H3 the AIs never finish seat 0's workers, so its fall is staged (see StageDefeat).
+    // Since M5-H3 seat 2 first has Age II on tick 17,001 (the tick numbers above are history; the rows read the tick live,
+    // and 21,600 still covers it).
     private static int MatchTicks = 21600;
     // BUG-0953 (M6-V13): seat 0 now falls to a staged defeat (StageDefeat), not to the AIs; the match runs on this long past
     // MatchTicks at most for its banner.

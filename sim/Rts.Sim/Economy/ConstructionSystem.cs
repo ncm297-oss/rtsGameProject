@@ -16,8 +16,8 @@ namespace Rts.Sim.Economy;
 /// </summary>
 /// <remarks>
 /// A worker builds or repairs while <see cref="UnitStore.BuildTarget"/> holds a live building: a site under
-/// construction is built, a finished one below its maximum hit points is repaired. It walks to a passable cell
-/// 4-adjacent to the footprint like a gatherer, works while within <see cref="EconomyConstants.Reach"/>
+/// construction is built, a finished one below its maximum hit points is repaired. It walks to a passable cell by the
+/// footprint like a gatherer (a 4-adjacent ring cell or, since M5-H3, a diagonal corner cell), works while within <see cref="EconomyConstants.Reach"/>
 /// (<see cref="UnitState.Building"/>), and standing out of reach walks again every <see cref="EconomyConstants.RetryTicks"/>.
 /// Work is counted per building first (builders in reach, slot order), then applied per building in slot order, so the
 /// result never depends on which builder came first. Bounded scans only: no allocation, no dictionaries.

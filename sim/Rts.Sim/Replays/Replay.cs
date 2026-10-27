@@ -22,7 +22,7 @@ public sealed class Replay
     /// <summary>Largest player count a replay may declare (a format limit that bounds what a file can make the reader allocate).</summary>
     public const int MaxPlayers = 16;
 
-    /// <summary>Largest unit or command capacity a replay may declare (a format limit, as <see cref="MaxPlayers"/>).</summary>
+    /// <summary>Largest unit or resource capacity a replay may declare (a format limit, as <see cref="MaxPlayers"/>); the command capacity's is <see cref="SimConfig.MaxCommandCapacity"/> (BUG-1040).</summary>
     public const int MaxCapacity = 1_000_000;
 
     /// <summary>Largest tick count a replay may declare: 24 hours at 20 Hz, so a small file can't declare a playback of years (BUG-0040).</summary>
@@ -89,7 +89,8 @@ public sealed class Replay
         if (FormatVersion < 6 && Map.StartLocations != 0) return ReplayError.InvalidHeader;
         if (PlayerCount < 1 || PlayerCount > MaxPlayers) return ReplayError.InvalidHeader;
         if (UnitCapacity < 1 || UnitCapacity > MaxCapacity) return ReplayError.InvalidHeader;
-        if (CommandCapacity < 1 || CommandCapacity > MaxCapacity) return ReplayError.InvalidHeader;
+        // BUG-1040: the config's own bound, so a replay that reads also builds its sim (no recorder can write one over it).
+        if (CommandCapacity < 1 || CommandCapacity > SimConfig.MaxCommandCapacity) return ReplayError.InvalidHeader;
         if (ResourceCapacity < 1 || ResourceCapacity > MaxCapacity) return ReplayError.InvalidHeader;
         if (TickCount < 0 || TickCount > MaxTickCount) return ReplayError.InvalidHeader;
         // Not "at most TickCount": the recorder writes replays shorter than one interval (0 checkpoints).

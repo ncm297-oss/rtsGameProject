@@ -171,6 +171,70 @@ public class SaveRefusalTests
         foreach (Simulation sim in sims) Assert.Equal(SaveError.None, SaveTestRun.TryLoad(Data, SaveTestRun.Save(sim)));
     }
 
+    /// <summary>
+    /// BUG-0990: the pre-check's new terms never refuse a real save: an empty world (no unit, building, node, projectile or
+    /// zone alive) at large capacities, the command capacity at the save's bound, saves and loads.
+    /// </summary>
+    [Fact]
+    public void TheLengthPreCheck_PassesARealSaveOfAnEmptyWorld_AtLargeCapacities()
+    {
+        var config = new SimConfig(5, 2, 100_000, SaveFormat.MaxCommandCapacity)
+        {
+            Data = TestSim.Data, ResourceCapacity = 50_000, BuildingCapacity = 50_000, ZoneCapacity = 20_000, ProjectileCapacity = 200_000, StatsSampleCapacity = 0,
+        };
+        var sim = new Simulation(config, LocalMovementTests.Flat(16));
+        sim.Tick();
+        Assert.Equal(SaveError.None, SaveTestRun.TryLoad(Data, SaveTestRun.Save(sim)));
+    }
+
+    /// <summary>
+    /// BUG-0990: a header command capacity over <see cref="SaveFormat.MaxCommandCapacity"/> is refused before the world is
+    /// built; at the bound it loads (configuration, docs/03). BUG-1040: the refusal is InvalidHeader (a capacity outside its
+    /// range, the config's own bound), no longer Malformed, so it is the same bound <see cref="SimConfig.Validate"/> puts on
+    /// every sim and no save a sim writes is refused.
+    /// </summary>
+    [Theory]
+    [InlineData(SaveFormat.MaxCommandCapacity + 1, SaveError.InvalidHeader)]
+    [InlineData(SaveFormat.MaxCapacity, SaveError.InvalidHeader)]
+    [InlineData(int.MaxValue, SaveError.InvalidHeader)]
+    [InlineData(SaveFormat.MaxCommandCapacity, SaveError.None)]
+    public void AForgedCommandCapacity_IsBoundedByTheFormat(int commands, SaveError expected)
+    {
+        byte[] bad = SaveBytes.Small();
+        SaveBytes.Offsets at = SaveBytes.HeaderOffsets(bad);
+        BinaryPrimitives.WriteInt32LittleEndian(bad.AsSpan(at.Seat0Controller + 2 + 4), commands);
+        Assert.Equal(expected, SaveTestRun.TryLoad(Data, SaveBytes.Rechecksum(bad)));
+    }
+
+    /// <summary>
+    /// BUG-0960 item 2: two forged values QA's int32 sweep loaded and then threw on within three ticks. A live unit's goal
+    /// cell off the map (the flow field cache threw) and a player's last visible box past the map (the fog update indexed
+    /// past the grid) are refused Malformed at load. The forged state is written by the sim's own save (the small save's
+    /// walking unit; its fog box), so the bytes are otherwise real.
+    /// </summary>
+    [Theory]
+    [InlineData("goal", int.MaxValue)]
+    [InlineData("goal", -2)]
+    [InlineData("goal", 16 * 16)]
+    [InlineData("box", 16)]
+    [InlineData("box", -1)]
+    public void AForgedGoalCellOrVisibleBox_IsMalformed(string what, int value)
+    {
+        Simulation sim = SaveBytes.SmallSim();
+        if (what == "goal")
+        {
+            Assert.True(sim.World.Units.Alive[0]);
+            sim.World.Units.GoalCell[0] = value;
+        }
+        else
+        {
+            var box = (int[])typeof(Rts.Sim.Vision.FogStore).GetField("_visibleBox", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!.GetValue(sim.World.Fog)!;
+            Assert.NotEqual(int.MaxValue, box[0]); // the unit sees: the box is set
+            box[value < 0 ? 0 : 2] = value; // x0 below the map, or x1 past it
+        }
+        Assert.Equal(SaveError.Malformed, SaveTestRun.TryLoad(Data, SaveTestRun.Save(sim)));
+    }
+
     [Fact]
     public void AnUnknownFactionId_IsInvalidHeader()
     {
@@ -254,7 +318,9 @@ public class SaveRefusalTests
         /// <summary>
         /// BUG-0960 item 1: a header forged to every capacity at the format's maximum over the small save's body is refused
         /// Malformed by the length pre-check, before the world is built for it (it used to allocate about 1.4 GB first).
-        /// The allocation counted is this thread's.
+        /// The allocation counted is this thread's. BUG-1040: the command capacity is forged to its own bound (over it the
+        /// header refuses it InvalidHeader first, <see cref="AForgedCapacity_AloneOrTogether_IsRefused_UnderAMegabyte"/>), so
+        /// this row still reaches the pre-check.
         /// </summary>
         [Fact]
         public void AForgedMaxCapacityHeader_IsMalformed_BeforeTheWorldIsAllocated()
@@ -262,7 +328,8 @@ public class SaveRefusalTests
             byte[] bad = SaveBytes.Small();
             SaveBytes.Offsets at = SaveBytes.HeaderOffsets(bad);
             int caps = at.Seat0Controller + 2; // controller, difficulty, then unit, command, resource, building, projectile, zone
-            for (int k = 0; k < 6; k++) BinaryPrimitives.WriteInt32LittleEndian(bad.AsSpan(caps + 4 * k), SaveFormat.MaxCapacity);
+            for (int k = 0; k < 6; k++)
+                BinaryPrimitives.WriteInt32LittleEndian(bad.AsSpan(caps + 4 * k), k == 1 ? SaveFormat.MaxCommandCapacity : SaveFormat.MaxCapacity);
             bad = SaveBytes.Rechecksum(bad);
             Assert.Equal(SaveError.Malformed, SaveTestRun.TryLoad(Data, bad)); // warm-up (the JIT)
             long before = GC.GetAllocatedBytesForCurrentThread();
@@ -272,6 +339,46 @@ public class SaveRefusalTests
             long allocated = GC.GetAllocatedBytesForCurrentThread() - before;
             _out.WriteLine($"max capacities: {e} in {sw.Elapsed.TotalMilliseconds * 1000:F0} us, {allocated:N0} bytes allocated");
             Assert.Equal(SaveError.Malformed, e);
+            Assert.True(allocated < 1024 * 1024, $"{allocated:N0} bytes allocated");
+        }
+
+        /// <summary>
+        /// BUG-0990: each header capacity forged to the format's maximum alone (unit, command, resource, building, projectile,
+        /// zone), the command, projectile and zone capacities together, all six, and the five other than the command, over the
+        /// small human and AI saves: each is refused with under 1 MB allocated on this thread, Malformed by the length
+        /// pre-check, or (BUG-1040) InvalidHeader by the header's range check when the command capacity is over its bound
+        /// (the config's own). Before the fix the command alone loaded (52 MB), the projectile alone allocated 88 MB, the
+        /// zone 42 MB, the three 182 MB.
+        /// </summary>
+        [Theory]
+        [InlineData(false, "0")]
+        [InlineData(false, "1")]
+        [InlineData(false, "2")]
+        [InlineData(false, "3")]
+        [InlineData(false, "4")]
+        [InlineData(false, "5")]
+        [InlineData(false, "1,4,5")]
+        [InlineData(false, "0,1,2,3,4,5")]
+        [InlineData(false, "0,2,3,4,5")]
+        [InlineData(true, "1")]
+        [InlineData(true, "4")]
+        [InlineData(true, "5")]
+        [InlineData(true, "1,4,5")]
+        [InlineData(true, "0,1,2,3,4,5")]
+        [InlineData(true, "0,2,3,4,5")]
+        public void AForgedCapacity_AloneOrTogether_IsRefused_UnderAMegabyte(bool ai, string which)
+        {
+            byte[] bad = SaveBytes.Small(ai);
+            SaveBytes.Offsets at = SaveBytes.HeaderOffsets(bad);
+            int caps = at.Seat0Controller + 2; // unit, command, resource, building, projectile, zone
+            foreach (string k in which.Split(',')) BinaryPrimitives.WriteInt32LittleEndian(bad.AsSpan(caps + 4 * int.Parse(k)), SaveFormat.MaxCapacity);
+            bad = SaveBytes.Rechecksum(bad);
+            SaveTestRun.TryLoad(Data, bad); // warm-up (the JIT)
+            long before = GC.GetAllocatedBytesForCurrentThread();
+            SaveError e = SaveTestRun.TryLoad(Data, bad);
+            long allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+            _out.WriteLine($"{(ai ? "AI" : "human")} save, capacities {which} at max: {e}, {allocated:N0} bytes allocated");
+            Assert.Equal(Array.IndexOf(which.Split(','), "1") >= 0 ? SaveError.InvalidHeader : SaveError.Malformed, e);
             Assert.True(allocated < 1024 * 1024, $"{allocated:N0} bytes allocated");
         }
     }

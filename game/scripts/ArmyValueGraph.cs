@@ -17,13 +17,16 @@ namespace Rts.Game;
 /// BUG-0890: each line is drawn <see cref="OffsetStep"/> px apart from the others (<see cref="DrawOffset"/>; the points, for
 /// tests, stay exact) over a light outline, so players at one value (three at 0) show as parallel lines and a dark colour
 /// (the grey seat) reads on the backdrop; the time axis steps in seconds below a few minutes and labels the span's end.
+/// BUG-0922 (M6-VH4): the time axis is drawn over the lines (at value 0 they lie on it), and its steps reach 3 h, so even the
+/// replay cap's 24 h has at most nine labels.
 /// </remarks>
 public partial class ArmyValueGraph : Control
 {
     private const int FontSize = 14;
     private const float Left = 64f, Right = 28f, Top = 46f, Bottom = 38f;
     // Label steps in seconds: the smallest with at most eight intervals over the span.
-    private static readonly int[] SecondSteps = { 10, 15, 30, 60, 120, 300, 600, 900, 1800, 3600, 7200 };
+    // BUG-0922 item 3 (M6-VH4): 3 h, so a span up to the replay cap (24 h) keeps at most nine labels.
+    private static readonly int[] SecondSteps = { 10, 15, 30, 60, 120, 300, 600, 900, 1800, 3600, 7200, 10800 };
     // An end label closer than this to the last step label would overlap it.
     private const float EndLabelGap = 56f;
     private const float LineWidth = 2f, OutlineWidth = 5f, DotRadius = 5f;
@@ -71,6 +74,13 @@ public partial class ArmyValueGraph : Control
 
     /// <summary>Times <see cref="_Draw"/> ran (tests wait for a draw after <see cref="SetData"/>).</summary>
     public int DrawCount { get; private set; }
+
+    /// <summary>
+    /// For tests (BUG-0922 item 1): the lines the last <see cref="_Draw"/> had drawn when it drew the time axis; equal to
+    /// <see cref="DrawnLines"/> when the axis goes over every line, so the lines' band at value 0 (four seats' offsets and
+    /// outlines, ~16 px) never hides the baseline.
+    /// </summary>
+    public int LinesUnderAxis { get; private set; }
 
     /// <summary>For tests: the points of player <paramref name="player"/>'s line, one per sample, oldest first (local coordinates).</summary>
     public ReadOnlySpan<Vector2> GraphPoints(int player) => (uint)player < (uint)_points.Length ? _points[player] : ReadOnlySpan<Vector2>.Empty;
@@ -146,6 +156,7 @@ public partial class ArmyValueGraph : Control
     {
         DrawCount++;
         DrawnLines = 0;
+        LinesUnderAxis = 0;
         if (_ui == null) return;
         Font font = GetThemeDefaultFont();
         Rect2 plot = PlotRect;
@@ -172,7 +183,6 @@ public partial class ArmyValueGraph : Control
             DrawString(font, new Vector2(x - 40f, plot.End.Y + 19f), _ui.Clock(t), HorizontalAlignment.Center, 80f, FontSize, AxisColour);
         }
         DrawLine(plot.Position, new Vector2(plot.Position.X, plot.End.Y), AxisColour, 2f);
-        DrawLine(new Vector2(plot.Position.X, plot.End.Y), plot.End, AxisColour, 2f);
 
         // Outlines first, then the lines, each moved by its offset: a later outline never covers an earlier line.
         for (int pass = 0; pass < 2; pass++)
@@ -187,5 +197,8 @@ public partial class ArmyValueGraph : Control
                 if (pass == 1) DrawnLines++;
             }
         DrawSetTransform(Vector2.Zero);
+        // BUG-0922 item 1: the time axis over the lines; at value 0 they lie on it.
+        DrawLine(new Vector2(plot.Position.X, plot.End.Y), plot.End, AxisColour, 2f);
+        LinesUnderAxis = DrawnLines;
     }
 }

@@ -9,9 +9,16 @@ namespace Rts.Sim;
 /// <param name="Seed">The single seed every RNG stream derives from.</param>
 /// <param name="PlayerCount">Number of players (human and AI), indexed from 0.</param>
 /// <param name="UnitCapacity">Maximum number of live units; the unit store never grows past it.</param>
-/// <param name="CommandCapacity">Maximum number of commands that can be pending at once.</param>
+/// <param name="CommandCapacity">Maximum number of commands that can be pending at once (1 to <see cref="MaxCommandCapacity"/>).</param>
 public sealed record SimConfig(ulong Seed, int PlayerCount, int UnitCapacity, int CommandCapacity)
 {
+    /// <summary>
+    /// BUG-0990 / BUG-1040: the largest command queue a sim may have, 16x the game's 4,096. The one bound the save and the
+    /// replay share: the queue's size is configuration, not a length a save's body holds, so the load can't bound it by
+    /// the bytes; a sim that could be built bigger would write saves no load accepts.
+    /// </summary>
+    public const int MaxCommandCapacity = 65_536;
+
     /// <summary>Loaded unit, faction and rules data; every stat the sim uses comes from here (CLAUDE.md rule 6).</summary>
     public required GameData Data { get; init; }
 
@@ -126,7 +133,7 @@ public sealed record SimConfig(ulong Seed, int PlayerCount, int UnitCapacity, in
     {
         if (PlayerCount < 1) throw new ArgumentOutOfRangeException(nameof(PlayerCount));
         if (UnitCapacity < 1) throw new ArgumentOutOfRangeException(nameof(UnitCapacity));
-        if (CommandCapacity < 1) throw new ArgumentOutOfRangeException(nameof(CommandCapacity));
+        if (CommandCapacity < 1 || CommandCapacity > MaxCommandCapacity) throw new ArgumentOutOfRangeException(nameof(CommandCapacity));
         if (ResourceCapacity < 1) throw new ArgumentOutOfRangeException(nameof(ResourceCapacity));
         if (BuildingCapacity < 1) throw new ArgumentOutOfRangeException(nameof(BuildingCapacity));
         if (ProjectileCapacity < 0) throw new ArgumentOutOfRangeException(nameof(ProjectileCapacity));

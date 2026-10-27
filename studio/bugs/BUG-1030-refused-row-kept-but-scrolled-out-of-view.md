@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S3 |
-| Status | open |
+| Status | fixed |
 | Found | 2026-10-18-1814, task M6-V15 |
 | System | Load Game screen (view: `Main.ShowLoadNote`, `LoadGameScreen.Select` / `Refresh`) |
-| Fixed by | |
+| Fixed by | M6-VH4 (2026-10-26-2108): `LoadGameScreen.Select` scrolls the picked row into view (`Tree.ScrollToItem`, again deferred after layout); `QaM6V15Test.RefusedRows` checks the bottom and middle rows |
 
 ## Repro
 1. `& $env:GODOT --path game --resolution 1280x720 res://tests/QaM6V15Test.tscn -- --only rows --shots <dir>`, open
@@ -29,3 +29,11 @@ see. It is the right file (the refused one), but the screen doesn't show that. A
 Likely fix: `List.ScrollToItem(item)` (or `EnsureCursorIsVisible()`) in `LoadGameScreen.Select`, or in `ShowLoadNote`
 after the select. When fixed, turn the `QA NOTE: BUG-1030` line in `QaM6V15Test.RefusedRows` into a `Check` (the
 visibility test is already computed there).
+
+## Fix (M6-VH4, 2026-10-26-2108, dev)
+`LoadGameScreen.Select` calls `List.ScrollToItem(item)` and once more deferred (`ScrollToPicked`), so the refused row that
+`Main.ShowLoadNote` re-picks after the rebuild is on screen. The `QA NOTE: BUG-1030` in `QaM6V15Test.RefusedRows` is a
+`Check` now (failed before the fix: item y 6204-6235 in a 340 px tree), plus a second `Check` for the refused middle row
+(`PickedOnScreen`). Note for QA: `Tree.GetItemAreaRect` is already in the tree's scrolled coordinates, so the note's
+visibility test subtracted the scroll twice (it only showed once the list scrolled); the `Check` compares the rect with
+the tree's height directly. Windowed: `qa-v15-refused-bottom.png` shows the picked row at the bottom of the list.

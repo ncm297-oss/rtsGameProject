@@ -256,6 +256,12 @@ public partial class SaveLoadTest : Node
             main.PauseMatch();
             Check(pause.RecordNote.Visible && pause.RecordNote.Text == _ui.Save(SaveText.NotRecorded) && pause.SaveButton.Visible && pause.SaveStatus.Text == "",
                 $"loaded pause menu: note {pause.RecordNote.Visible} '{pause.RecordNote.Text}', Save {pause.SaveButton.Visible}");
+            await Frames(1);
+            // BUG-1002 item 3 (M6-VH4): the save lines sit inside the menu's opaque panel, not on the HUD's command card.
+            Rect2 panel = pause.Panel.GetGlobalRect();
+            Check(pause.Panel.Visible && pause.Panel.IsVisibleInTree() && PauseMenu.PanelColor.A >= 1f
+                && panel.Encloses(pause.RecordNote.GetGlobalRect()) && panel.Encloses(pause.SaveStatus.GetGlobalRect()) && panel.Encloses(pause.QuitToMenuButton.GetGlobalRect()),
+                $"BUG-1002: pause panel {panel}, note {pause.RecordNote.GetGlobalRect()}, status {pause.SaveStatus.GetGlobalRect()}");
             await Shot("pause-loaded");
             pause.SaveButton.EmitSignal(BaseButton.SignalName.Pressed);
             await Frames(1);

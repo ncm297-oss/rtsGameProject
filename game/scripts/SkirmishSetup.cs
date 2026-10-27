@@ -235,6 +235,10 @@ public partial class SkirmishSetup : CanvasLayer
     /// </summary>
     public string[]? MatchArgs()
     {
+        // BUG-1031: a count typed without Enter is only taken on focus-out, which a one-frame click on Start delivers after
+        // Start's Pressed; take it now, so the match uses the number the box shows.
+        Commit(ForestsSpin);
+        Commit(MinesSpin);
         if (Seed is not ulong seed) return null;
         var args = new List<string>
         {
@@ -404,7 +408,29 @@ public partial class SkirmishSetup : CanvasLayer
             Name = name, CustomMinimumSize = new Vector2(240f, 40f), MinValue = 0, MaxValue = MapGenParams.MaxResourceGroups, Step = 1,
             Rounded = true, Value = value,
         };
-        spin.GetLineEdit().AddThemeFontSizeOverride("font_size", 20);
+        LineEdit edit = spin.GetLineEdit();
+        edit.AddThemeFontSizeOverride("font_size", 20);
+        // BUG-1031 item 2: Enter on an emptied box keeps the value but leaves the box empty; show the count again. Connected
+        // after the SpinBox's own handler, so this runs once it has taken (or refused) the text.
+        edit.TextSubmitted += _ => Redraw(spin);
+        // The SpinBox redraws its text after a value change only later in the frame; MatchArgs' Apply reads the text, so a
+        // value set in code (a floor raised by Add player, a test) is shown at once, or the Apply would put the old one back.
+        spin.ValueChanged += _ => Redraw(spin);
         return spin;
+    }
+
+    // Takes the box's typed text as the value (SpinBox.Apply: what Enter does), then redraws the box.
+    private static void Commit(SpinBox spin)
+    {
+        spin.Apply();
+        Redraw(spin);
+    }
+
+    // The box shows the value it holds (text the SpinBox refused, an empty one included, is replaced).
+    private static void Redraw(SpinBox spin)
+    {
+        LineEdit edit = spin.GetLineEdit();
+        string shown = ((long)Math.Round(spin.Value)).ToString(CultureInfo.InvariantCulture);
+        if (edit.Text != shown) edit.Text = shown;
     }
 }

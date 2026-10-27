@@ -51,6 +51,15 @@ public partial class PauseMenu : CanvasLayer
     /// <summary>The note that a loaded match is not recorded (<c>save.not_recorded</c>, M6-V14); hidden for a match that records.</summary>
     public Label RecordNote { get; private set; } = null!;
 
+    /// <summary>
+    /// The menu's own opaque panel behind the heading, the buttons and the save lines (BUG-1002 item 3, M6-VH4): at 1152 x 648
+    /// the lines reach down to the HUD's command card, which the dim backdrop alone left readable through them.
+    /// </summary>
+    public PanelContainer Panel { get; private set; } = null!;
+
+    /// <summary>The panel's fill (opaque).</summary>
+    public static readonly Color PanelColor = new(0.09f, 0.08f, 0.07f, 1f);
+
     /// <summary>Builds the screen's controls with <paramref name="ui"/>'s text; hidden until <see cref="Main"/> shows it.</summary>
     public void Build(UiText ui)
     {
@@ -58,7 +67,19 @@ public partial class PauseMenu : CanvasLayer
         ProcessMode = ProcessModeEnum.Always;
         Visible = false;
         AddChild(ShellUi.Backdrop(new Color(0f, 0f, 0f, 0.55f)));
-        VBoxContainer column = ShellUi.CentredColumn(this);
+        var centre = new CenterContainer { Name = "Centre", MouseFilter = Control.MouseFilterEnum.Ignore };
+        centre.SetAnchorsPreset(Control.LayoutPreset.FullRect);
+        AddChild(centre);
+        Panel = new PanelContainer { Name = "Panel" };
+        var style = new StyleBoxFlat { BgColor = PanelColor, BorderColor = new Color(0.55f, 0.48f, 0.36f) };
+        style.SetBorderWidthAll(2);
+        style.SetCornerRadiusAll(4);
+        style.SetContentMarginAll(20f);
+        Panel.AddThemeStyleboxOverride("panel", style);
+        centre.AddChild(Panel);
+        var column = new VBoxContainer { Name = "Column" };
+        column.AddThemeConstantOverride("separation", 14);
+        Panel.AddChild(column);
         column.AddChild(ShellUi.Heading(ui.Pause(PauseText.Title), 44));
         column.AddChild(new Control { CustomMinimumSize = new Vector2(0f, 16f) });
         ResumeButton = ShellUi.Button("Resume", ui.Pause(PauseText.Resume));

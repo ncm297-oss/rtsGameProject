@@ -3,7 +3,7 @@
 | Field | Value |
 | --- | --- |
 | Severity | S4 |
-| Status | open (item 1 fixed; items 2-3 open) |
+| Status | open: item 1 fixed (M6-S3); item 2's two named paths fixed (M5-H4), one more forged value still throws; item 3 a record only |
 | Found | 2026-10-18-0516, task M6-S2 |
 | System | sim: `Save/SaveHeader`, `Simulation.TryLoad`, `Save/SavePerfTests` |
 | Fixed by | Item 1: M6-S3 (acb71e5, session 2026-10-18-1236): `SaveHeader.MinBodyBytes` + the heightmap length check in `World.Save.cs`; the forged max-capacity header is `Malformed` in 0.2 ms with ~101 KB allocated (`SaveRefusalTests`, QA's `AiSaveQaTests.Serial.AForgedHeader_EveryCapacityAtMax_*`). The bound leaves out the command / projectile / zone capacities: BUG-0990 (S4) |
@@ -31,3 +31,12 @@
 
 ## Notes
 None blocks: items 1 and 2 need a file whose checksum was recomputed by hand, item 3 is wall-clock contention.
+
+## Item 2 (M5-H4, session 2026-10-26-2108)
+- `World.ReadFrom` refuses a live unit whose `GoalCell` is not -1 or on the map; `FogStore.ReadFrom` refuses a player's
+  `_visibleBox` that is not empty (x0 `int.MaxValue`) or inside the map with x0 <= x1, y0 <= y1. Both `Malformed`, no new code.
+  Regression rows `SaveRefusalTests.AForgedGoalCellOrVisibleBox_IsMalformed` (five: goal `int.MaxValue`, -2, 256 on the
+  16 x 16 map; box x0 -1, x1 16), all five loaded before the fix.
+- QA's `SaveForgeryQaTests.TheSmallSave_AnInterestingInt32AtEveryOffset_NeverThrowsOnLoad`: loaded 47,566, **1** threw within
+  3 ticks (81 before): offset 2525 value -1, `ArgumentOutOfRangeException` in `FlowFieldCache.Get`, a path not looked at here.
+- Item 3 (the save Perf row under a second suite) stays a record.

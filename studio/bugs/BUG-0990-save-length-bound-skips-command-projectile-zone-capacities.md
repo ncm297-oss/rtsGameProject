@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S4 |
-| Status | open |
+| Status | fixed |
 | Found | 2026-10-18-1236, task M6-S3 |
 | System | sim: `Save/SaveHeader.MinBodyBytes`, `Simulation.TryLoad` |
-| Fixed by | |
+| Fixed by | M5-H4, session 2026-10-26-2108 |
 
 ## Repro
 1. `dotnet test sim/Rts.Sim.Tests --filter "FullyQualifiedName~AiSaveQaTests+Serial.AForgedHeader_EveryCapacityAtMax_AndEachOneAlone"`
@@ -40,3 +40,16 @@ Only a hand-forged file (checksum recomputed) gets here, and 182 MB is far below
 this is S4. Possible fix: add terms for the projectile and zone slots to `MinBodyBytes` (anything below what their
 sections write per slot). For the command capacity, either bound it (e.g. no larger than a constant the game uses) or
 accept that it is configuration, not stored state, and say so in docs/03. Related: BUG-0960 items 2-3 (still open).
+
+## Fix (M5-H4, session 2026-10-26-2108)
+- `SaveHeader.MinBodyBytes` adds 48 bytes a projectile slot (the store writes 68) and 24 a zone slot (26 plus the per-player
+  boxes). The command capacity is configuration, not a body length: `SaveFormat.MaxCommandCapacity` = 65,536 (16x the
+  game's 4,096) bounds it, refused `Malformed` with the length pre-check in `Simulation.TryLoad` (no new error code; the
+  frozen signatures unchanged). At or below the bound a forged command capacity loads (at most about 4 MB); docs/03 "Save
+  format (M6-S2)" says so.
+- Tests: `SaveRefusalTests.Serial.AForgedCapacity_AloneOrTogether_IsRefused_UnderAMegabyte` (each capacity alone, the
+  command / projectile / zone three, all six; human and AI saves: `Malformed`, under 1 MB allocated; the command, projectile,
+  zone and three-together rows failed before), `SaveRefusalTests.AForgedCommandCapacity_IsBoundedByTheFormat` (65,537 and
+  1,000,000 refused, 65,536 loads), `SaveRefusalTests.TheLengthPreCheck_PassesARealSaveOfAnEmptyWorld_AtLargeCapacities`
+  (100,000 units, 50,000 buildings and nodes, 200,000 projectiles, 20,000 zones, the command bound: loads). QA's
+  `AiSaveQaTests.Serial.AForgedHeader_*` row is unchanged and green.

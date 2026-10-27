@@ -340,6 +340,59 @@ public class AttackAlertsTests
         Assert.Equal(12.5f, a.Now);
     }
 
+    /// <summary>
+    /// BUG-0970 (M6-VH4): a full ring of three (A, B, D, oldest first); one Update upgrades A (a building hit joins it) and
+    /// raises C far away. C replaces B, the oldest alert not upgraded: Upgraded(0) still names A (Base, at A's spot) and the
+    /// ring keeps its order, A, D, C.
+    /// </summary>
+    [Fact]
+    public void FullRing_ARaiseInTheUpgradesUpdate_ReplacesTheOldestNotUpgraded()
+    {
+        var s = new Stores(4, 1);
+        s.Unit(0, Me, new Vector2(0, 0));
+        s.Unit(1, Me, new Vector2(500, 0));
+        s.Unit(2, Me, new Vector2(2000, 0));
+        s.Unit(3, Me, new Vector2(1000, 0));
+        s.Building(0, Me, new Vector2(10, 0));
+        var a = new AttackAlerts(4, 1, capacity: 3);
+        s.Frame(a);
+        s.UnitHp[0]--;
+        s.UnitHp[1]--;
+        s.UnitHp[2]--;
+        Assert.Equal(3, s.Frame(a, 0.05f)); // A, B, D
+        s.BuildingHp[0]--; // joins A: upgraded
+        s.UnitHp[3]--;     // raises C on the full ring
+        Assert.Equal(1, s.Frame(a, 0.05f));
+        Assert.Equal(1, a.UpgradedCount);
+        Assert.Equal(AttackAlertKind.Base, a.Kind(a.Upgraded(0)));
+        Assert.Equal(new Vector2(0, 0), a.Position(a.Upgraded(0)));
+        Assert.Equal(2, a.HitsOn(a.Upgraded(0)));
+        Assert.Equal(new Vector2(1000, 0), a.Position(a.New(0)));
+        Assert.Equal(a.New(0), a.LastIndex);
+        Vector2[] order = { new(0, 0), new(2000, 0), new(1000, 0) };
+        for (int k = 0; k < 3; k++) Assert.Equal(order[k], a.Position(a.Recent(k)));
+    }
+
+    /// <summary>BUG-0970: with every alert upgraded by the Update (a ring of one), the raise replaces it and Upgraded drops it.</summary>
+    [Fact]
+    public void RingOfOne_UpgradedThenReplaced_ListsNoUpgrade()
+    {
+        var s = new Stores(2, 1);
+        s.Unit(0, Me, new Vector2(0, 0));
+        s.Unit(1, Me, new Vector2(1000, 0));
+        s.Building(0, Me, new Vector2(10, 0));
+        var a = new AttackAlerts(2, 1, capacity: 1);
+        s.Frame(a);
+        s.UnitHp[0]--;
+        Assert.Equal(1, s.Frame(a, 0.05f));
+        s.BuildingHp[0]--;
+        s.UnitHp[1]--;
+        Assert.Equal(1, s.Frame(a, 0.05f));
+        Assert.Equal(0, a.UpgradedCount);
+        Assert.Equal(AttackAlertKind.Units, a.Kind(a.LastIndex));
+        Assert.Equal(new Vector2(1000, 0), a.Position(a.LastIndex));
+    }
+
     [Fact]
     public void AFrame_2000Units256Buildings_AllocatesZeroBytes()
     {

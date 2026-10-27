@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S3 |
-| Status | open |
+| Status | fixed |
 | Found | 2026-10-18-1814, task M6-V15 |
 | System | Skirmish setup (view: `SkirmishSetup.MatchArgs`, `ForestsPick` / `MinesPick`) |
-| Fixed by | |
+| Fixed by | M6-VH4 (2026-10-26-2108): `SkirmishSetup.MatchArgs` applies both boxes first (`Commit`: `SpinBox.Apply` + redraw); Enter and a value change redraw the box; `QaM6V15Test.TypedCounts` checks 11 and the emptied box |
 
 ## Repro
 1. `& $env:GODOT --headless --path game res://tests/QaM6V15Test.tscn -- --only setup`; the log prints
@@ -31,3 +31,11 @@ shows '', the pick is 12`).
 Likely fix: call `ForestsSpin.Apply()` / `MinesSpin.Apply()` (Godot 4.3+ `SpinBox.apply()`) at the top of `MatchArgs`
 (or in Start's handler), then read the values. That also redraws the box. When fixed, turn the BUG-1031 note in
 `QaM6V15Test.TypedCounts` into a `Check` (want 11).
+
+## Fix (M6-VH4, 2026-10-26-2108, dev)
+`MatchArgs` starts with `Commit(ForestsSpin)` / `Commit(MinesSpin)`: `SpinBox.Apply()` (what Enter does) then a redraw of
+the box with its value. Each box also redraws on its own `TextSubmitted` (after the SpinBox's handler, so an emptied box or
+junk shows the count again) and on `ValueChanged` (the SpinBox redraws its text only later in the frame, so without it a
+value set in code, e.g. the floor raised by Add player, was put back by the next `Apply`: `ShellTest.SpeedAndCounts`
+caught that). `QaM6V15Test.TypedCounts`: the one-frame click's note is a `Check` (11 mines; failed before: 9), and the
+"box shows" note for each Enter row is a `Check` too (failed before for `''`).

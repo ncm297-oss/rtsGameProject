@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S4 |
-| Status | open |
+| Status | fixed |
 | Found | 2026-10-17-1624, task M6-VH3 (QA) |
 | System | post-match stats screen (`game/scripts/ArmyValueGraph.cs`), `game/tests/StatsScreenCheck.cs` |
-| Fixed by | |
+| Fixed by | M6-VH4 (2026-10-26-2108): `ArmyValueGraph._Draw` draws the time axis after the lines (`LinesUnderAxis`, checked in `StatsScreenCheck.Readable`); `StatsScreenCheck.LineReadable` (`QaM6VH3Test.TimeAxis` proves it can fail); a 3 h label step (`QaM6VH3Test.TimeAxis` checks the 24 h span) |
 
 ## Repro
 1. `dotnet build RtsGame.sln`
@@ -36,3 +36,16 @@ Three small things, filed together:
 ## Notes
 Found while verifying BUG-0890. None of it hides a seat's line or misreads a value. `QaM6VH3Test` records item 3 as a
 note (spans over 16 h) and prints the contrast numbers.
+
+## Fix (M6-VH4, 2026-10-26-2108, dev)
+1. The time axis line is drawn after every line, so the four seats' band at 0 sits under it, not over it.
+   `ArmyValueGraph.LinesUnderAxis` (lines drawn when the axis was) must equal `DrawnLines` in `StatsScreenCheck.Readable`
+   (every stats scene). Windowed `qa-vh3-stats-20s-1280x720.png` shows the axis through the band.
+2. `StatsScreenCheck.LineReadable`: the line 3:1 on the backdrop, or the outline 3:1 and the line 1.4:1 on the outline (a
+   core in its halo). The first threshold tried, 1.5:1, failed a shipped seat colour: **Violet** is 2.63:1 on the backdrop
+   and 1.45:1 on its outline (Iron 2.35:1 and 1.62:1), so 1.4 is set just under the palette's weakest core and the docs
+   say so. If the Producer wants Violet to read better, that is a palette change in `ui.json` (the owner's taste).
+   `QaM6VH3Test.TimeAxis`: of 101 greys between the backdrop and the outline, some fail the rule (it can fail), Iron and
+   every `ui.json` seat colour pass.
+3. `SecondSteps` gains 3 h: 16 h to 24 h spans now have at most nine labels; `QaM6VH3Test`'s "over 16 h" note is a
+   `Check` for every span.

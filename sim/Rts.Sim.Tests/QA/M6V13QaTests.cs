@@ -266,7 +266,7 @@ public class M6V13QaTests
     /// a new alert that overwrites that slot. <see cref="AttackAlerts.Upgraded"/> then names a slot holding a different,
     /// Units alert (BUG-0970): the HUD would read the new alert's position for an upgrade.
     /// </summary>
-    [Fact(Skip = "BUG-0970: Upgraded(k) can name a slot that a later raise in the same Update overwrote (ring full); needs 32 alerts in 10 s at the default capacity")]
+    [Fact] // BUG-0970, fixed in M6-VH4 (AttackAlerts keeps an alert upgraded this Update when the ring is full)
     public void UpgradedSlot_OverwrittenInTheSameUpdate_StillReadsBase()
     {
         var f = new Field(3, 1);

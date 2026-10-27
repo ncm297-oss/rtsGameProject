@@ -16,7 +16,8 @@ namespace Rts.Game;
 /// each with the date, seed, players (faction and You / Human / the AI's difficulty), length (a save: the match clock it was
 /// made at; a replay: its recording's length, m:ss) and kind (<c>load.save_tag</c> / <c>load.replay_tag</c>), read from each
 /// file's header; files whose header can't be read follow as rows of their own (the file's write time,
-/// <c>load.unreadable</c>), counted in a one-line note (BUG-0830: listed so Delete can remove them). Load resumes the picked
+/// <c>load.unreadable</c>), counted in a one-line note (BUG-0830: listed so Delete can remove them); a recording in the save
+/// folder whose save is gone is listed with the replays (BUG-1002, <see cref="SaveStore.LoneReplays"/>). Load resumes the picked
 /// save, Watch plays the picked replay (each greyed on any other row), Delete deletes the picked file (a save with the
 /// recording beside it), Back returns to the menu. Text from <c>ui.json</c> <c>load</c>, <c>save</c> and faction data.
 /// </summary>
@@ -201,6 +202,7 @@ public partial class LoadGameScreen : CanvasLayer
         _rows.Clear();
         _entries.AddRange(ReplayStore.List(dir, _unreadable, out _));
         _saves.AddRange(SaveStore.List(saveDir, _unreadableSaves));
+        AddLoneReplays(dir, saveDir);
         Skipped = _unreadable.Count + _unreadableSaves.Count;
         // Merge the two newest-first lists (each sorted by date, then path), saves first on a tie.
         for (int r = 0, s = 0; r < _entries.Count || s < _saves.Count;)
@@ -221,6 +223,39 @@ public partial class LoadGameScreen : CanvasLayer
         Note.Text = Skipped > 0 ? _ui.ReplaysSkipped(Skipped) : readable == 0 ? _ui.LoadGame(LoadText.Empty) : "";
         if (readable > 0) Select(0);
         UpdateButtons();
+    }
+
+    // BUG-1002 item 1: a recording in the save folder whose save is gone is listed as a replay (Watch, Delete), or as an
+    // unreadable one; the two lists are sorted again newest first. A save folder that is the replay folder adds nothing.
+    private void AddLoneReplays(string? dir, string? saveDir)
+    {
+        if (saveDir == null || (dir != null && SameFolder(dir, saveDir))) return;
+        List<string> lone = SaveStore.LoneReplays(saveDir);
+        if (lone.Count == 0) return;
+        foreach (string path in lone)
+        {
+            if (ReplayStore.TryReadHeader(path, out ReplayEntry? entry)) _entries.Add(entry!);
+            else _unreadable.Add(path);
+        }
+        _entries.Sort((a, b) => a.When != b.When ? b.When.CompareTo(a.When) : string.CompareOrdinal(b.Path, a.Path));
+        _unreadable.Sort((a, b) =>
+        {
+            DateTime da = ReplayStore.DateOf(a), db = ReplayStore.DateOf(b);
+            return da != db ? db.CompareTo(da) : string.CompareOrdinal(b, a);
+        });
+    }
+
+    private static bool SameFolder(string a, string b)
+    {
+        try
+        {
+            return string.Equals(System.IO.Path.TrimEndingDirectorySeparator(System.IO.Path.GetFullPath(ProjectSettings.GlobalizePath(a))),
+                System.IO.Path.TrimEndingDirectorySeparator(System.IO.Path.GetFullPath(ProjectSettings.GlobalizePath(b))), StringComparison.OrdinalIgnoreCase);
+        }
+        catch (Exception e) when (e is ArgumentException or NotSupportedException or System.IO.PathTooLongException)
+        {
+            return false;
+        }
     }
 
     // a before b in the newest-first order: the later date, then the greater path (ReplayStore.List's tie rule); equal is not before.
@@ -259,13 +294,24 @@ public partial class LoadGameScreen : CanvasLayer
         item.SetMetadata(0, row);
     }
 
-    /// <summary>Picks row <paramref name="index"/> (display order; Load, Watch and Delete act on it); false out of range.</summary>
+    /// <summary>Picks row <paramref name="index"/> (display order; Load, Watch and Delete act on it) and scrolls it into view; false out of range.</summary>
     public bool Select(int index)
     {
         if ((uint)index >= (uint)RowCount || List.GetRoot() is not TreeItem root) return false;
-        root.GetChild(index).Select(0);
+        TreeItem item = root.GetChild(index);
+        item.Select(0);
+        // BUG-1030: a refused row far down stays picked after the rebuild, which leaves the scroll at the top; the player must
+        // see the row Delete removes. Again after the layout, for a list that was hidden or not sized yet (a --load at boot).
+        List.ScrollToItem(item);
+        CallDeferred(MethodName.ScrollToPicked);
         UpdateButtons();
         return true;
+    }
+
+    // Scrolls the picked row into view (deferred from Select: the tree's size is known after the frame's layout).
+    private void ScrollToPicked()
+    {
+        if (List.GetSelected() is TreeItem item) List.ScrollToItem(item);
     }
 
     /// <summary>Shows the refusal note (<c>load.refused</c>): a replay that would not play stays listed for Delete.</summary>

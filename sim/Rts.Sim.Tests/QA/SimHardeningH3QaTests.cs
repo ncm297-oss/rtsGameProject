@@ -589,13 +589,33 @@ public class SimHardeningH3QaTests
     /// M5-H1 a stopped chaser whose goal was dropped is judged by the field of its chase cell (a ResolveTarget a scan) instead
     /// of "unreachable" at once. All must still give the order up within 120 s, scans must allocate nothing (every tick from the 5th to the last give-up),
     /// and the tick cost is reported (wall clock, not asserted).
+    /// BUG-0914 (2,568 B once in two full runs, 0 alone): the window is only ticks 5 to ~43, so the give-up path is first
+    /// reached inside it, and a one-time runtime charge (a first call's JIT or type load that an earlier test on this
+    /// thread may or may not have paid) landed in the count. So the scene runs once unmeasured first, a twin, as
+    /// <see cref="AllocationProbe"/> re-runs a block: a steady allocation shows in the measured run too. The message names
+    /// the first allocating tick and its bytes.
     /// </summary>
     [Fact]
     public void FiveHundredUnits_OrderedOntoAnUnreachableBuilding_AllGiveUp_ZeroBytes()
     {
+        GiveUpRun warm = RunGiveUp();
+        GiveUpRun run = RunGiveUp();
+        _out.WriteLine($"warm-up twin: gave up at tick {warm.AllGone}, {warm.Bytes} B (first at tick {warm.FirstTick}: {warm.FirstBytes} B)");
+        _out.WriteLine($"all gave up at tick {run.AllGone}; still holding {run.Holding}; ticks 5 on allocated {run.Bytes} B; tick mean {run.MeanMs:F2} ms, worst {run.WorstMs:F2} ms (wall clock)");
+        Assert.Equal(warm.AllGone, run.AllGone);
+        Assert.Equal(0, run.Holding);
+        Assert.True(run.Bytes == 0, $"ticks 5 on allocated {run.Bytes} B, the first at tick {run.FirstTick} ({run.FirstBytes} B); the warm-up twin {warm.Bytes} B");
+    }
+
+    private readonly record struct GiveUpRun(int AllGone, int Holding, long Bytes, int FirstTick, long FirstBytes, double MeanMs, double WorstMs);
+
+    /// <summary>The 500-unit unreachable-Tent scene to the last give-up: bytes allocated on this thread from tick 5 on, the first allocating tick.</summary>
+    private static GiveUpRun RunGiveUp()
+    {
         (Simulation sim, EntityHandle tent, EntityHandle[] army) = ChaseScene(500, blockRamp: true);
         UnitStore u = sim.World.Units;
-        long bytes = 0;
+        long bytes = 0, firstBytes = 0;
+        int firstTick = -1;
         double worst = 0, sum = 0;
         int allGone = -1;
         var clock = new System.Diagnostics.Stopwatch();
@@ -605,7 +625,12 @@ public class SimHardeningH3QaTests
             clock.Restart();
             sim.Tick();
             clock.Stop();
-            if (t >= 5) bytes += GC.GetAllocatedBytesForCurrentThread() - before;
+            if (t >= 5)
+            {
+                long tick = GC.GetAllocatedBytesForCurrentThread() - before;
+                if (tick != 0 && firstTick < 0) (firstTick, firstBytes) = (sim.TickNumber, tick);
+                bytes += tick;
+            }
             worst = Math.Max(worst, clock.Elapsed.TotalMilliseconds);
             sum += clock.Elapsed.TotalMilliseconds;
             bool any = false;
@@ -614,9 +639,7 @@ public class SimHardeningH3QaTests
             if (!any) allGone = sim.TickNumber;
         }
         int holding = army.Count(h => u.IsAlive(h) && u.Target[h.Index] == tent);
-        _out.WriteLine($"all gave up at tick {allGone}; still holding {holding}; ticks 5 on allocated {bytes} B; tick mean {sum / Math.Max(1, sim.TickNumber):F2} ms, worst {worst:F2} ms (Debug, wall clock)");
-        Assert.Equal(0, holding);
-        Assert.Equal(0L, bytes);
+        return new GiveUpRun(allGone, holding, bytes, firstTick, firstBytes, sum / Math.Max(1, sim.TickNumber), worst);
     }
 
     /// <summary>

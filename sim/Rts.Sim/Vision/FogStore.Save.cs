@@ -72,5 +72,12 @@ public sealed partial class FogStore
         if (r.Failed) return;
         foreach (NodeMemory m in _nodes)
             if (m.Generation != 0 && !r.Check((uint)m.TypeId < (uint)_data.Resources.Length && (uint)m.Cell < (uint)cells)) return;
+        // BUG-0960 item 2: each player's last visible box is empty (x0 int.MaxValue) or inside the map, x0 <= x1, y0 <= y1;
+        // a forged one made the next update index past the grid.
+        for (int p = 0; p < _players; p++)
+        {
+            int x0 = _visibleBox[4 * p], y0 = _visibleBox[4 * p + 1], x1 = _visibleBox[4 * p + 2], y1 = _visibleBox[4 * p + 3];
+            if (x0 != int.MaxValue && !r.Check(x0 >= 0 && x0 <= x1 && x1 < _width && y0 >= 0 && y0 <= y1 && y1 < _height)) return;
+        }
     }
 }

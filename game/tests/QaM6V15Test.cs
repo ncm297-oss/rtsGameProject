@@ -328,12 +328,16 @@ public partial class QaM6V15Test : Node
                 TreeItem? item = tree.GetSelected();
                 Rect2 area = item != null ? tree.GetItemAreaRect(item) : new Rect2();
                 Vector2 scroll = tree.GetScroll();
-                bool visible = item != null && area.Position.Y - scroll.Y >= -1 && area.End.Y - scroll.Y <= tree.Size.Y + 1;
-                // BUG-1030 (open): the kept row is not scrolled into view. A note until it is fixed; the fix turns this into a Check.
+                // GetItemAreaRect is in the tree's own coordinates, the scroll already taken off (M6-VH4: the note's first
+                // form subtracted the scroll a second time, which only a scrolled list shows).
+                bool visible = item != null && area.Position.Y >= -1 && area.End.Y <= tree.Size.Y + 1;
+                // BUG-1030 (fixed in M6-VH4: LoadGameScreen.Select scrolls the picked row into view).
                 await Shot("refused-bottom");
-                if (!visible) GD.Print($"QA NOTE: BUG-1030: after the refused bottom row the picked row is off-screen (item y {area.Position.Y}-{area.End.Y}, scroll {scroll.Y}, tree height {tree.Size.Y})");
+                Check(visible, $"BUG-1030: after the refused bottom row the picked row is off-screen (item y {area.Position.Y}-{area.End.Y}, scroll {scroll.Y}, tree height {tree.Size.Y})");
                 // Two damaged files: the mid one refused after the bottom one keeps the mid one.
                 Check(load.Select(rMid) && !Press(main, load.LoadButton) && load.SelectedIndex == rMid, $"200 rows: refused mid row after the bottom: row {load.SelectedIndex} (want {rMid})");
+                await Frames(2);
+                Check(PickedOnScreen(load.List, out string mid1030), $"BUG-1030: the refused mid row is off-screen ({mid1030})");
                 // Refused Watch, then refused Load: each keeps its own row.
                 Check(load.Select(rReplay) && !Press(main, load.WatchButton) && load.SelectedIndex == rReplay && load.Note.Text == _ui.LoadGame(LoadText.Refused),
                     $"200 rows: refused Watch: row {load.SelectedIndex} (want {rReplay}), note '{load.Note.Text}'");
@@ -398,14 +402,15 @@ public partial class QaM6V15Test : Node
             var map = m?.Simulation?.World.Config.Map;
             Check(map != null && map.Forests == 7 && map.GoldMines == 9, $"typed 7 / 9 then a click on Start: the match asks {map?.Forests} forests / {map?.GoldMines} mines");
             if (main.CurrentMatch != null) { main.QuitToMenu(); await Frames(2); }
-            // The same with press and release in one frame (a fast click): logged, not asserted.
+            // The same with press and release in one frame (a fast click). BUG-1031 (fixed in M6-VH4: MatchArgs applies the boxes).
             await Click(main.Menu.SkirmishButton);
             await Click(mines);
             mines.Text = "11";
             _pressFrames = 0;
             await Click(setup.StartButton);
             _pressFrames = 2;
-            GD.Print($"QA NOTE: BUG-1031: typed 11 mines then press+release in one frame on Start: the match asks {main.CurrentMatch?.Simulation?.World.Config.Map.GoldMines} mines");
+            int? fastMines = main.CurrentMatch?.Simulation?.World.Config.Map.GoldMines;
+            Check(fastMines == 11, $"BUG-1031: typed 11 mines then press+release in one frame on Start: the match asks {fastMines} mines");
             if (main.CurrentMatch != null) { main.QuitToMenu(); await Frames(2); }
             setup.MinesSpin.Value = 9;
             await Click(main.Menu.SkirmishButton);
@@ -420,7 +425,8 @@ public partial class QaM6V15Test : Node
                 await Frames(1);
                 string[]? args = setup.MatchArgs();
                 int argMines = args == null ? -1 : LaunchOptions.Parse(args).Mines;
-                if (mines.Text.Trim() != want.ToString()) GD.Print($"QA NOTE: mines typed '{text}' + Enter: the box shows '{mines.Text}', the pick is {setup.MinesPick}");
+                // BUG-1031 item 2 (fixed in M6-VH4): the box shows the pick again after Enter, an emptied box included.
+                Check(mines.Text.Trim() == want.ToString(), $"mines typed '{text}' + Enter: the box shows '{mines.Text}', the pick is {setup.MinesPick}");
                 Check(setup.MinesPick == want && argMines == want,
                     $"mines typed '{text}' + Enter: pick {setup.MinesPick}, args {argMines}, box '{mines.Text}' (want {want})");
             }
@@ -534,6 +540,11 @@ public partial class QaM6V15Test : Node
                         string per = PerBase(w, startMines, out bool ok);
                         GD.Print($"QA NOTE: {what}: placed {w.ResourcePlacement.Forests} forests / {w.ResourcePlacement.Mines} mines in {clock.ElapsedMilliseconds} ms; per base {per}");
                         Check(ok, $"{what}: a base is short: {per}");
+                        // BUG-1032 (M6-VH4): a shortfall (64 mines on the 128 map) is said in the log, with the placed count; none otherwise.
+                        bool shortOf = w.ResourcePlacement.Forests < wantF || w.ResourcePlacement.Mines < wantM;
+                        string line = main.CurrentMatch!.ShortfallLine;
+                        Check(shortOf ? line.Contains($"{w.ResourcePlacement.Mines} of {wantM} gold mines", StringComparison.Ordinal) : line.Length == 0,
+                            $"BUG-1032: {what}: placed {w.ResourcePlacement.Forests} / {w.ResourcePlacement.Mines}, shortfall line '{line}'");
                         main.QuitToMenu();
                         await Frames(2);
                     }
@@ -681,6 +692,16 @@ public partial class QaM6V15Test : Node
     }
 
     private static string Full(string path) => Path.GetFullPath(ProjectSettings.GlobalizePath(path));
+
+    // BUG-1030: the picked row lies inside the tree's visible area (as the bottom row's check above computes it).
+    private static bool PickedOnScreen(Tree tree, out string why)
+    {
+        TreeItem? item = tree.GetSelected();
+        Rect2 area = item != null ? tree.GetItemAreaRect(item) : new Rect2();
+        float scroll = tree.GetScroll().Y;
+        why = $"item y {area.Position.Y}-{area.End.Y}, scroll {scroll}, tree height {tree.Size.Y}";
+        return item != null && area.Position.Y >= -1 && area.End.Y <= tree.Size.Y + 1;
+    }
 
     private static bool SamePath(string a, string b) => string.Equals(Path.GetFullPath(a), Path.GetFullPath(b), StringComparison.OrdinalIgnoreCase);
 

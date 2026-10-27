@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S3 |
-| Status | open |
+| Status | fixed |
 | Found | 2026-10-17-2344, task M6-V12 (fix round 1 re-verify; residual of BUG-0950) |
 | System | Godot import of `game/assets/audio/sfx/**/*.wav` pointers; `tools/qa/smoke.ps1` log match |
-| Fixed by | |
+| Fixed by | M6-VH4 (2026-10-26-2108): `tools/qa/smoke.ps1` matches as `scene-loop.ps1` (`-cmatch`, `[n]` frames skipped) and skips only the pointer clips' `--import` lines, with a WARN |
 
 ## Repro
 1. `GIT_LFS_SKIP_SMUDGE=1 git clone --branch studio/2026-10-17-2344-view <repo> nolfs2` (9555c93).
@@ -39,3 +39,17 @@ lines), which by itself would not make the no-LFS run green because of the impor
 could skip lines naming a file that is an LFS pointer (a `git lfs` aware filter in QA tooling); (c) `importer="keep"` for
 the clips plus `AudioStreamWav.LoadFromBuffer` at runtime (a pipeline change, docs/04). Changing smoke's match to
 case-sensitive is a loosening of an existing gate and needs the Producer's call, so QA has not edited it.
+
+## Fix (M6-VH4, 2026-10-26-2108, dev)
+- Option (a), the 2344 decision: `Test-Problem` matches `ERROR|Unhandled|Exception` case-sensitively and skips
+  `^\s+\[\d+\]` backtrace frames, as `scene-loop.ps1` does.
+- The import pass, without an importer change (option (c) stays declined): smoke finds the `.wav` files under
+  `game/assets` that are LFS pointer text, and only when there are any it skips, in the `--import` output only, the lines
+  `ERROR: Not a WAV file ... found 'vers'`, `ERROR: Can't save empty resource to path 'res://.godot/imported/<clip>.wav-<md5>.sample'`
+  naming a pointer clip, and as many unnamed `Condition "f.is_null()" is true` lines as samples it skipped (the import is
+  threaded, so they can't be paired by position). It prints `WARN: 16 .wav clips are LFS pointers ...: 48 of their
+  --import error lines skipped (BUG-0955)`. A normal clone has no pointer and no line is skipped.
+- The looktest art's pointers still fail a fresh no-LFS clone's **first** `--import` (Godot records their failure and
+  doesn't retry); from the second run on smoke passes. That is base's behaviour, left as is: those errors are anonymous
+  (`Condition "!success"`, `ufbx`, glTF) and the state is unsupported.
+- docs/03 "Implementation (M6-V12)" **Open** paragraph now says fixed, and "Implementation (M6-VH4)" describes the skip.

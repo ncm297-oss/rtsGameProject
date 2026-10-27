@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S4 |
-| Status | open (items 1, 2, 5 fixed in fix round 1; items 3, 4 open) |
+| Status | fixed |
 | Found | 2026-10-18-1814, task M5-4g (QA) |
 | System | AI reserve (`BuildOrderExecutor.Reservable`, `AiPlayer.SetReserve`), docs/03 "Implementation (M5-4g)" |
-| Fixed by | 57dfa22 (items 1, 2, 5) |
+| Fixed by | 57dfa22 (items 1, 2, 5); M5-H4, session 2026-10-26-2108 (items 3, 4) |
 
 ## Repro
 `dotnet test sim/Rts.Sim.Tests --filter "FullyQualifiedName~ReservePairingsStressTests" --logger "console;verbosity=detailed"`:
@@ -54,3 +54,16 @@ Group of small findings; none blocks on its own.
 - Item 3 **open**: `ExpansionMine` still ignores `Board.NodeDropped`.
 - Item 4 **open**: this is the Producer's restatement of criterion 2. The code is unchanged.
 - Item 5 **fixed**: docs/02 now reads "0.25 more, or less, of the workers on gold".
+
+## Fix (M5-H4, session 2026-10-26-2108)
+- Item 3: `BuildOrderExecutor.ExpansionMine` passes `skipDropped` to `NearestNode`, which skips a node whose
+  `Board.NodeDropped` mark matches its generation (as `AiPlayer.KnowsNode`), so `Reservable` and the expand's site both
+  ignore a mine the gatherers found gone. Regression test `ReserveTests.Bug1023_AnExpandForADroppedMine_IsNotReservedNorBuilt`
+  (dropped: reserved and built before the fix; the twin unmarked still is). Seed 37 no longer shows the case on this tree
+  (`freeMine=False` before and after); over the 27 pairing runs no outcome moved, only seed 32 Malazan's printed `freeMine`
+  (now false). The stress print reads `ExpansionMine` itself.
+- Item 4, as the Producer restated it: `ReserveTwinTests.AShiftOfZero_WithNoReservableStep_IsHashEqualToTheBaseBuild`, three
+  generated AI matches (2-4 seats, every difficulty), `reserveShift` 0 and `reserveArmyShare` 0, no reservable step (banks
+  topped to 20,000 / 20,000 before every tick, or every step's trigger past the run): the state hash every 500 ticks to
+  6,000 equals the one the same file printed when built on f531dd9 (before M5-4g, `QA_BASE` defined), and no think names a
+  reserve.

@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S4 |
-| Status | open |
+| Status | fixed |
 | Found | 2026-10-18-1236, task D-H6 (QA) |
 | System | docs/factions/malazan.md, QA/Content/D21OpeningsQaTests.cs output and comments |
-| Fixed by | |
+| Fixed by | D-R32, session 2026-10-26-2108 (data): items 1 and 4 in `docs/factions/malazan.md` (the reserve paragraph sits below the line that points to it; "on each of its 9 measured pairing seeds"); items 2, 3 and 5 in `QA/Content/D21OpeningsQaTests` (the section names, `DefeatedWithoutAWave` credits BUG-0982 only for `cadre_rush` v `raider_rush`, `KnownBeatenAlive` names BUG-1010); green in `EveryPairing_*Seed_BothSidesWaveIn20Minutes`; verified by QA (light) |
 
 ## Repro
 Read the lines below at 52e82c9.

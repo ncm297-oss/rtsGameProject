@@ -63,9 +63,10 @@ public class CombatScaleQaTests
     /// <summary>
     /// Brief criterion 8: "scanning in a world with no enemy in sight must be near free". The 2,500 blob with one enemy at
     /// the far corner (so every unit's scan runs, and finds only its own buckets) against the same blob alone: the enemy
-    /// costs at most 0.25 ms a tick, median against median. BUG-0158: a first pair of runs is discarded (the machine slows
-    /// after about two seconds of sustained load, which an alone-first order read as the enemy's cost), then four pairs
-    /// run with the order alternating (alone first, then enemy first), so a slowdown's onset lands on both sides alike.
+    /// costs at most 0.35 ms a tick, median against median. BUG-0158: a first pair of runs is discarded (the machine slows
+    /// after about two seconds of sustained load, which an alone-first order read as the enemy's cost), then eight pairs
+    /// (BUG-0912; four until M5-H4) run with the order alternating (alone first, then enemy first), so a slowdown's onset
+    /// lands on both sides alike.
     /// Also asserts the far enemy is never targeted and the blob's movement is bit-identical to the alone run.
     /// </summary>
     [Fact]
@@ -76,7 +77,7 @@ public class CombatScaleQaTests
         Average(Blob(farEnemy: true), 300);
         var alone = new List<double>();
         var withEnemy = new List<double>();
-        for (int r = 0; r < 4; r++)
+        for (int r = 0; r < 8; r++)
         {
             bool enemyFirst = r % 2 == 1;
             if (enemyFirst) withEnemy.Add(Average(Blob(farEnemy: true), 300));
@@ -99,11 +100,11 @@ public class CombatScaleQaTests
             Assert.Equal(u0.Position[i], u1.Position[i]);
             Assert.Equal(default, u1.Target[i]);
         }
-        // BUG-0764 (M5-H3, 2026-10-17): re-baselined from 0.25 ms to 0.64 ms. In five Category=Perf runs on an idle PC the delta
-        // read 0.312, 0.258 and 0.211 ms (base bf8026e) and under 0.25 twice, then 0.515 ms (head); run alone, 0.20-0.25 ms on
-        // both. A difference of two medians of four ~7.4 ms runs: the noise is about the size of the old bound. +25 % at most
-        // over the largest reading; QA may want more pairs here rather than a wider bound.
-        Assert.True(e - a <= 0.64, $"one enemy at the far corner costs {e - a:F3} ms a tick over the blob alone ({a:F2} ms)");
+        // BUG-0764 (M5-H3, 2026-10-17): re-baselined from 0.25 ms to 0.64 ms from one head reading of 0.515 ms (base 0.211-0.312).
+        // BUG-0912 (M5-H4, 2026-10-26): eight alternated pairs instead of four, so a median is less one run's noise, and the
+        // bound back to 0.35 ms: QA's ten samples read 0.191-0.276 (mean difference base / head +0.011 ms). Readings at M5-H4
+        // with eight pairs are in docs/03 "Re-baselined for this PC".
+        Assert.True(e - a <= 0.35, $"one enemy at the far corner costs {e - a:F3} ms a tick over the blob alone ({a:F2} ms)");
     }
 
     /// <summary>The median of <paramref name="xs"/> (the mean of the middle two for an even count).</summary>
