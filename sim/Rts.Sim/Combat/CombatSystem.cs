@@ -403,8 +403,9 @@ public static class CombatSystem
 
     /// <summary>
     /// Whether unit <paramref name="i"/> may take an explicit Attack on <paramref name="target"/> (M4-2a): combat is on, its
-    /// type can fight in this slice, and the target is a live unit or building (<paramref name="isBuilding"/>) of another
-    /// owner that the attack's <c>attack.targets</c> allows. Otherwise the order is dropped.
+    /// type can fight in this slice, and the target is a live unit or building (<paramref name="isBuilding"/>) of an enemy
+    /// (M6-S4: not its own owner, nor an ally, <see cref="World.IsEnemy"/>) that the attack's <c>attack.targets</c> allows.
+    /// Otherwise the order is dropped.
     /// </summary>
     internal static bool MayAttack(World world, int i, EntityHandle target, bool isBuilding)
     {
@@ -417,15 +418,16 @@ public static class CombatSystem
         {
             BuildingStore b = world.Buildings;
             if (def.Attack.Targets == AttackTargets.Units) return false;
-            if (b.IsAlive(target) && b.Owner[target.Index] != u.Owner[i] && VisionSystem.UnitSeesBuilding(world, i, target.Index)) return true;
+            if (b.IsAlive(target) && world.IsEnemy(u.Owner[i], b.Owner[target.Index]) && VisionSystem.UnitSeesBuilding(world, i, target.Index)) return true;
             // M4-3b: a building on its owner's last-known list is accepted unseen, alive or gone (the player can't tell):
             // the unit walks to it and attacks when it sees it. Gone, with its ground in sight now, it is known gone.
             if (!world.Fog.HasGhost(u.Owner[i], target)) return false;
-            if (b.IsAlive(target)) return b.Owner[target.Index] != u.Owner[i];
+            if (b.IsAlive(target)) return world.IsEnemy(u.Owner[i], b.Owner[target.Index]);
             ref readonly BuildingGhost g = ref world.Fog.GhostAt(u.Owner[i], target.Index);
-            return !VisionSystem.UnitSeesFootprint(world, i, g.TypeId, g.Cell);
+            // M6-S4: an ally's remembered building is no target either (its owner is on the ghost).
+            return world.IsEnemy(u.Owner[i], g.Owner) && !VisionSystem.UnitSeesFootprint(world, i, g.TypeId, g.Cell);
         }
-        return def.Attack.Targets != AttackTargets.Buildings && u.IsAlive(target) && u.Owner[target.Index] != u.Owner[i]
+        return def.Attack.Targets != AttackTargets.Buildings && u.IsAlive(target) && world.IsEnemy(u.Owner[i], u.Owner[target.Index])
             && VisionSystem.UnitSeesUnit(world, i, target.Index);
     }
 
@@ -551,7 +553,8 @@ public static class CombatSystem
         for (int k = 0; k < n; k++)
         {
             int j = found[k];
-            if (!u.Alive[j] || u.Owner[j] == owner) continue;
+            // The hash's sides are phase 1's: a slot freed and refilled since (a summon) may hold an own or allied unit.
+            if (!u.Alive[j] || u.Owner[j] == owner || (world.HasAlliances && world.AreAllied(owner, u.Owner[j]))) continue;
             EntityHandle jt = u.Target[j];
             int tier = (jt.Index == i && jt.Generation == myGen && !u.TargetIsBuilding[j]) || (lastIndex == j && lastGen == u.Generation[j]) ? 0
                 : combatant[u.TypeId[j]] ? 1 : 2;
@@ -623,11 +626,11 @@ public static class CombatSystem
         return Vector2.DistanceSquared(u.Position[i], u.Position[j]) <= radius * radius;
     }
 
-    /// <summary><see cref="PickTarget"/>'s building half: the nearest other owner's building within <paramref name="radius"/> of its footprint (holding, or the one it gave up: within reach), then lowest slot; -1 for none.</summary>
+    /// <summary><see cref="PickTarget"/>'s building half: the nearest enemy building (M6-S4: not an ally's) within <paramref name="radius"/> of its footprint (holding, or the one it gave up: within reach), then lowest slot; -1 for none.</summary>
     private static int PickBuilding(World world, int i, UnitDef def, Vector2 pos, int owner, bool hold, float radius, int ignoredGen, out bool isBuilding)
     {
         isBuilding = false;
-        if (world.CombatBuildingCount - world.CombatBuildingsOf[owner] <= 0) return -1;
+        if (world.CombatBuildingCount - world.CombatBuildingsOf[world.Spatial.SideOf(owner)] <= 0) return -1;
         UnitStore u = world.Units;
         BuildingStore b = world.Buildings;
         int best = -1;
@@ -637,7 +640,7 @@ public static class CombatSystem
         for (int k = 0; k < world.CombatBuildingCount; k++)
         {
             int j = world.CombatBuildings[k];
-            if (b.Owner[j] == owner) continue;
+            if (world.AreAllied(owner, b.Owner[j])) continue;
             float d2 = BuildingDistanceSquared(world, j, pos);
             float limit = hold || (j == ignoredBuilding && b.Generation[j] == ignoredGen) ? def.Attack.Range + u.Radius[i] : radius;
             if (reach < limit) limit = reach;
@@ -654,8 +657,9 @@ public static class CombatSystem
     }
 
     /// <summary>
-    /// Fills the world's list of live building slots (slot order) and the count per owner, for this tick's scans, and for
-    /// each player whether any other owner has a unit or a building at all.
+    /// Fills the world's list of live building slots (slot order) and the count per side (M6-S4: an owner and its allies,
+    /// <see cref="Spatial.SpatialHash.SideOf"/>; the owner itself in a free-for-all), for this tick's scans, and for each
+    /// player whether any enemy has a unit or a building at all.
     /// </summary>
     private static void CollectBuildings(World world)
     {
@@ -669,13 +673,14 @@ public static class CombatSystem
             {
                 if (!b.Alive[j]) continue;
                 world.CombatBuildings[n++] = j;
-                if ((uint)b.Owner[j] < (uint)perOwner.Length) perOwner[b.Owner[j]]++;
+                int side = world.Spatial.SideOf(b.Owner[j]);
+                if ((uint)side < (uint)perOwner.Length) perOwner[side]++;
             }
         }
         world.CombatBuildingCount = n;
         bool[] enemy = world.CombatEnemyExists;
         for (int p = 0; p < enemy.Length; p++)
-            enemy[p] = world.Spatial.OthersThan(p) > 0 || n > perOwner[p];
+            enemy[p] = world.Spatial.OthersThan(p) > 0 || n > perOwner[world.Spatial.SideOf(p)];
     }
 
     /// <summary>Takes <paramref name="target"/> as unit <paramref name="i"/>'s target (a new one loses any swing); an unengaged unit that may move starts a leashed retaliation from where it stands. The chase starts in phase 7.</summary>
@@ -1226,8 +1231,8 @@ public static class CombatSystem
         // A tower's hit (M4-3b) is no unit's attack: a tower is never a LastAttacker (a unit handle) and is not retaliated
         // on; the victim's scans take it like any enemy building (after units, within sight).
         if (hit.AttackerIsBuilding) return;
-        // Friendly fire (M4-2b) is no attack: an own unit is never a last attacker, nor retaliated on.
-        if (!u.IsAlive(hit.Attacker) || u.Owner[hit.Attacker.Index] == u.Owner[v]) return;
+        // Friendly fire (M4-2b) is no attack: an own unit (M6-S4: or an ally's) is never a last attacker, nor retaliated on.
+        if (!u.IsAlive(hit.Attacker) || world.AreAllied(u.Owner[hit.Attacker.Index], u.Owner[v])) return;
         u.LastAttacker[v] = hit.Attacker;
         // Retaliation: a unit that scans and has nothing to fight takes on whoever hit it, now rather than on its next scan.
         // Not one it gave up on (BUG-0137): a melee attacker is in reach, and its next scan takes it there.

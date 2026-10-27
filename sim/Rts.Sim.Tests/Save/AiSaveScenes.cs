@@ -94,6 +94,18 @@ internal static class AiSaveScenes
             raiders: 0, script: script.Run, data: null);
     }
 
+    /// <summary>
+    /// M6-S4: a 2v2 (teams 1, 2, 1, 2): a scripted human (player 0) and three Normal AI seats, two raiders of each seat in the
+    /// next (an enemy's) base.
+    /// </summary>
+    internal static SaveScene TwoVersusTwo(ulong seed)
+    {
+        var script = new MatchScript(1);
+        PlayerSeat[] seats = Enumerable.Range(0, 4)
+            .Select(p => new PlayerSeat(p % 2, p == 0 ? SeatController.Human : SeatController.Ai, AiDifficulty.Normal, p % 2 == 0 ? 1 : 2)).ToArray();
+        return Match($"team_2v2_human_and_ai_seed{seed}", seed, seats, raiders: 2, script: script.Run, data: null);
+    }
+
     private static SaveScene Match(string name, ulong seed, PlayerSeat[] seats, int raiders, Action<Simulation, List<Command>>? script, GameData? data) =>
         new(name, () =>
         {

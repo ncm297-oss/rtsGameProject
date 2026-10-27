@@ -539,11 +539,11 @@ public sealed partial class FogStore
         return m;
     }
 
-    /// <summary>Whether live zone <paramref name="k"/> hides cells from <paramref name="p"/> (M4-4b-2): it blocks vision and is another player's.</summary>
-    private static bool HidesFrom(ZoneStore zones, int k, int p) => zones.Alive[k] && zones.BlocksVision(k) && zones.Owner[k] != p;
+    /// <summary>Whether live zone <paramref name="k"/> hides cells from <paramref name="p"/> (M4-4b-2): it blocks vision and is an enemy's (M6-S4: an ally's Darkness doesn't blind its allies).</summary>
+    private bool HidesFrom(ZoneStore zones, int k, int p) => zones.Alive[k] && zones.BlocksVision(k) && _world.IsEnemy(zones.Owner[k], p);
 
     /// <summary>Whether any live zone hides cells from player <paramref name="p"/> (M4-4b-2).</summary>
-    private static bool BlocksFor(ZoneStore zones, int p)
+    private bool BlocksFor(ZoneStore zones, int p)
     {
         for (int k = 0; k < zones.End; k++)
             if (HidesFrom(zones, k, p)) return true;
@@ -551,7 +551,7 @@ public sealed partial class FogStore
     }
 
     /// <summary>Whether <paramref name="pos"/> (a unit of <paramref name="p"/>) stands inside a zone that hides cells from <paramref name="p"/> (M4-4b-2).</summary>
-    private static bool InsideBlocker(ZoneStore zones, int p, Vector2 pos)
+    private bool InsideBlocker(ZoneStore zones, int p, Vector2 pos)
     {
         for (int k = 0; k < zones.End; k++)
             if (HidesFrom(zones, k, p) && zones.Contains(k, pos)) return true;

@@ -26,6 +26,7 @@ internal static class PlayerViewOracle
         public long OwnBuildings, EnemyBuildingsSeen, Ghosts, GhostsOfDeadBuildings, GhostSites, Resources, ResourcesUnknownAmount, ResourcesRemembered;
         public long QueueItems;
         public long AbilityCooldowns, OwnCasts; // M5-4c
+        public long AlliedUnitsSeen, AlliedStealthSeen; // M6-S4
         public string First = "";
 
         public void Fail(string what)
@@ -37,7 +38,7 @@ internal static class PlayerViewOracle
             $"leaks {Leaks}, misses {Misses}, field mismatches {FieldMismatches}, oracle v fog {OracleDisagreements}; units own {OwnUnits} / enemy seen {EnemyUnitsSeen} / hidden {EnemyUnitsHidden} " +
             $"(stealth hidden {StealthHidden}, detected {StealthDetected}, high-ground revealed {Revealed}, in a storm {InStorm}); buildings own {OwnBuildings} / enemy seen {EnemyBuildingsSeen}; " +
             $"ghosts {Ghosts} (of dead buildings {GhostsOfDeadBuildings}, sites {GhostSites}); resources {Resources} (amount unknown {ResourcesUnknownAmount}, remembered gone {ResourcesRemembered}); queue items {QueueItems}; " +
-            $"own cooldowns running {AbilityCooldowns}, own casts {OwnCasts}";
+            $"own cooldowns running {AbilityCooldowns}, own casts {OwnCasts}; allied units seen {AlliedUnitsSeen} (stealthed {AlliedStealthSeen})";
     }
 
     /// <summary>Compares every answer of <paramref name="view"/> (player <paramref name="p"/>) with the oracle, adding to <paramref name="t"/>.</summary>
@@ -56,6 +57,16 @@ internal static class PlayerViewOracle
             Compare(t, view.IsVisible(c), vis[c] == VisionConstants.Visible, $"{at}: cell {c} visible");
         }
         Compare(t, view.IsExplored(-1) || view.IsExplored(vis.Length) || view.IsVisible(vis.Length) || view.IsVisible(int.MinValue), false, $"{at}: a cell off the map");
+
+        // M6-S4: the sides, from the seats written out again (team 0: its own side; a named team: its seats).
+        for (int q = -1; q <= w.Config.PlayerCount; q++)
+        {
+            Same(t, view.IsEnemy(q) ? 1 : 0, Allied(w, p, q) ? 0 : 1, $"{at}: IsEnemy({q})");
+            Same(t, view.TeamOf(q), (uint)q < (uint)w.Config.PlayerCount ? w.Config.SeatOf(q).Team : 0, $"{at}: TeamOf({q})");
+        }
+        bool hasAlly = false;
+        for (int q = 0; q < w.Config.PlayerCount; q++) hasAlly |= q != p && Allied(w, p, q);
+        Same(t, view.HasAlly ? 1 : 0, hasAlly ? 1 : 0, $"{at}: HasAlly");
 
         // Own economy and techs.
         Same(t, view.Gold, w.Gold[p], $"{at}: gold");
@@ -214,6 +225,16 @@ internal static class PlayerViewOracle
         if (cast >= 0) t.OwnCasts++;
     }
 
+    /// <summary>M6-S4: the alliance rule from the seats: the same player, or both on one named team (team 0 is no team).</summary>
+    internal static bool Allied(World w, int a, int b)
+    {
+        if (a == b) return true;
+        int n = w.Config.PlayerCount;
+        if ((uint)a >= (uint)n || (uint)b >= (uint)n) return false;
+        int ta = w.Config.SeatOf(a).Team;
+        return ta != 0 && ta == w.Config.SeatOf(b).Team;
+    }
+
     /// <summary>The oracle's unit rule for player <paramref name="p"/> and slot <paramref name="j"/>, tallying why.</summary>
     private static bool ExpectUnit(World w, int p, int j, Tally t)
     {
@@ -230,13 +251,17 @@ internal static class PlayerViewOracle
         bool cell = storm ? fog.SeesUnitCell(p, j) : fog.Visibility(p)[fog.CellOf(u.Position[j])] == VisionConstants.Visible;
         bool revealed = fog.Revealed(p, j);
         bool stealthed = w.IsStealthed(j);
-        bool hidden = stealthed && !w.IsDetectedBy(p, j);
+        // M6-S4: stealth hides a unit only from its owner's enemies; an ally sees it wherever its own vision does.
+        bool allied = Allied(w, p, u.Owner[j]);
+        bool hidden = stealthed && !allied && !w.IsDetectedBy(p, j);
         bool sees = !hidden && (cell || revealed);
         if (stealthed && !hidden) t.StealthDetected++;
         if (hidden && (cell || revealed)) t.StealthHidden++;
         if (sees && !cell) t.Revealed++;
         if (sees && storm) t.InStorm++;
         if (sees) t.EnemyUnitsSeen++; else t.EnemyUnitsHidden++;
+        if (sees && allied) t.AlliedUnitsSeen++;
+        if (sees && allied && stealthed) t.AlliedStealthSeen++;
         return sees;
     }
 
@@ -377,10 +402,13 @@ internal static class PlayerViewScene
 
     internal static GameData Data => StealthTests.Data;
 
-    internal static Simulation New(ulong seed)
+    /// <summary>The scene of <paramref name="seed"/>; M6-S4: with <paramref name="teams"/> (one per player) the seats' teams, else every seat team 0.</summary>
+    internal static Simulation New(ulong seed, int[]? teams = null)
     {
         var map = MapGenParams.Default with { Forests = 6, GoldMines = 4 };
-        var sim = new Simulation(new SimConfig(seed, Players, Players * (Infantry + Detectors + Bowmen + Priests + 16) + 8, 2048) { Data = Data, Map = map });
+        var config = new SimConfig(seed, Players, Players * (Infantry + Detectors + Bowmen + Priests + 16) + 8, 2048) { Data = Data, Map = map };
+        if (teams != null) config = config with { Seats = TeamTests.Seats(teams) };
+        var sim = new Simulation(config);
         NavGrid g = sim.World.NavGrid;
         List<int> open = Open(g);
         var rng = new SimRng(seed, 511);

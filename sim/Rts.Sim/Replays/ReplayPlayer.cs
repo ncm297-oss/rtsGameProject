@@ -36,7 +36,8 @@ public static class ReplayPlayer
         if (data.ContentHash() != replay.DataHash) return Refused(ReplayError.DataMismatch);
 
         // M5-2 (format 5): the header's factions, every seat human: the AI's recorded commands play its part, so playback
-        // never runs an AI. A format 3 / 4 replay was recorded with the default seats.
+        // never runs an AI. A format 3 / 4 replay was recorded with the default seats. M6-S4 (format 7): the seats' teams
+        // (0 for formats 5-6), which decide who fights whom.
         ImmutableArray<PlayerSeat> seats = ImmutableArray<PlayerSeat>.Empty;
         if (!replay.Seats.IsDefaultOrEmpty)
         {
@@ -45,7 +46,7 @@ public static class ReplayPlayer
             {
                 int faction = seat.Faction == "-" ? -1 : data.FindFaction(seat.Faction);
                 if (faction < 0 && (seat.Faction != "-" || data.Factions.Length > 0)) return Refused(ReplayError.InvalidHeader);
-                builder.Add(new PlayerSeat(faction, SeatController.Human, seat.Difficulty));
+                builder.Add(new PlayerSeat(faction, SeatController.Human, seat.Difficulty, seat.Team));
             }
             seats = builder.MoveToImmutable();
         }

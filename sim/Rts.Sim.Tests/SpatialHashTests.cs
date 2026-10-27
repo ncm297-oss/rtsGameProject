@@ -296,6 +296,160 @@ public class SpatialHashTests
         Assert.Equal(2, slot);
     }
 
+    // ---------- M6-S4: teams ----------
+
+    /// <summary>The world's alliance table for seats of these teams (<c>World.AreAllied</c>'s rule written out again).</summary>
+    private static bool[] Alliances(params int[] teams)
+    {
+        int n = teams.Length;
+        var t = new bool[n * n];
+        for (int a = 0; a < n; a++)
+            for (int b = 0; b < n; b++)
+                t[a * n + b] = a == b || (teams[a] != 0 && teams[a] == teams[b]);
+        return t;
+    }
+
+    private static SpatialHash Built(UnitStore u, params int[] teams)
+    {
+        var hash = new SpatialHash(u.Capacity, MapCells, MapCells, Alliances(teams), teams.Length);
+        hash.Rebuild(u);
+        return hash;
+    }
+
+    [Fact]
+    public void NearestEnemy_SkipsAnAlly_AsItSkipsAnOwnUnit()
+    {
+        var c = new Vector2(100f, 100f);
+        var positions = new[] { new Vector2(100.5f, 100f), new Vector2(101f, 100f), new Vector2(104f, 100f) };
+        UnitStore u = Store(positions, owners: new[] { 0, 1, 2 });
+        // Teams 1, 1, 2: player 1's unit is an ally of player 0, so the nearest enemy is player 2's.
+        SpatialHash teams = Built(u, 1, 1, 2);
+        Assert.True(teams.NearestEnemy(c, 10f, player: 0, out int slot));
+        Assert.Equal(2, slot);
+        Assert.True(teams.NearestEnemy(c, 10f, player: 2, out slot));
+        Assert.Equal(0, slot);
+        // Free-for-all (every team 0, or no table): the ally is the nearest "enemy" again.
+        Assert.True(Built(u, 0, 0, 0).NearestEnemy(c, 10f, player: 0, out slot));
+        Assert.Equal(1, slot);
+        Assert.True(Built(u).NearestEnemy(c, 10f, player: 0, out slot));
+        Assert.Equal(1, slot);
+    }
+
+    /// <summary>
+    /// A bucket holding only player 0's and its ally's units is one side's: the bucket skip (M4-1) skips it for both, and an
+    /// enemy query there finds nothing; a mixed bucket is read and yields only the enemy.
+    /// </summary>
+    [Fact]
+    public void QueryEnemies_SkipsAllies_AndAnAlliedOnlyBucketIsSkippable()
+    {
+        // Bucket (12, 12): player 0 and player 1 (allies). Bucket (20, 12): player 1 and player 2 (enemies of 0).
+        var allied = new Vector2(12.5f * B, 12.5f * B);
+        var mixed = new Vector2(20.5f * B, 12.5f * B);
+        var positions = new[] { allied, allied + new Vector2(0.5f, 0f), mixed, mixed + new Vector2(0.5f, 0f) };
+        UnitStore u = Store(positions, owners: new[] { 0, 1, 1, 2 });
+        SpatialHash h = Built(u, 1, 1, 0);
+        int alliedBucket = h.BucketY(allied.Y) * h.BucketsX + h.BucketX(allied.X);
+        int mixedBucket = h.BucketY(mixed.Y) * h.BucketsX + h.BucketX(mixed.X);
+        Assert.True(h.SkipsBucketFor(alliedBucket, 0), "an allied-only bucket is read by player 0");
+        Assert.True(h.SkipsBucketFor(alliedBucket, 1), "an allied-only bucket is read by player 1");
+        Assert.False(h.SkipsBucketFor(alliedBucket, 2));
+        Assert.False(h.SkipsBucketFor(mixedBucket, 0));
+        Span<int> found = stackalloc int[8];
+        Assert.Equal(0, h.QueryEnemies(allied, 1f, 0, found));
+        Assert.Equal(0, h.QueryEnemies(allied, 1f, 1, found));
+        int n = h.QueryEnemies(mixed, 1f, 0, found);
+        Assert.Equal(new[] { 3 }, found[..n].ToArray());
+        n = h.QueryEnemies(mixed, 1f, 2, found);
+        Assert.Equal(new[] { 2 }, found[..n].ToArray());
+        // In a free-for-all the same bucket is mixed, read by both, and each finds the other.
+        SpatialHash ffa = Built(u, 0, 0, 0);
+        Assert.False(ffa.SkipsBucketFor(alliedBucket, 0));
+        n = ffa.QueryEnemies(allied, 1f, 0, found);
+        Assert.Equal(new[] { 1 }, found[..n].ToArray());
+    }
+
+    [Fact]
+    public void OthersThan_AnAlliedOnlyMap_IsZero_AndEveryEnemyQueryFindsNothing()
+    {
+        var positions = new[] { new Vector2(10f, 10f), new Vector2(11f, 10f), new Vector2(60f, 60f) };
+        UnitStore u = Store(positions, owners: new[] { 0, 1, 1 });
+        SpatialHash h = Built(u, 3, 3);
+        Assert.Equal(0, h.OthersThan(0));
+        Assert.Equal(0, h.OthersThan(1));
+        Assert.Equal(3, h.OthersThan(5)); // not in the table: its own side, every unit another's
+        Span<int> found = stackalloc int[8];
+        Assert.Equal(0, h.QueryEnemies(new Vector2(10f, 10f), 500f, 0, found));
+        Assert.False(h.NearestEnemy(new Vector2(10f, 10f), 500f, 1, out _));
+        Assert.Equal(2, Built(u, 0, 0).OthersThan(0));
+        Assert.Equal(1, Built(u, 0, 0).OthersThan(1));
+    }
+
+    [Fact]
+    public void SideOf_IsTheLowestAlliedPlayer_ItselfOnTeam0()
+    {
+        UnitStore u = Store(new[] { new Vector2(1f, 1f) });
+        SpatialHash h = Built(u, 2, 0, 2, 1, 1, 0);
+        Assert.Equal(new[] { 0, 1, 0, 3, 3, 5 }, Enumerable.Range(0, 6).Select(h.SideOf).ToArray());
+        Assert.Equal(7, h.SideOf(7));
+        Assert.Equal(-1, h.SideOf(-1));
+        Assert.Equal(new[] { 0, 1, 2 }, Enumerable.Range(0, 3).Select(Built(u).SideOf).ToArray());
+    }
+
+    /// <summary>Random scenes with random teams: NearestEnemy, QueryEnemies and OthersThan equal a brute force that asks the alliance rule of every slot.</summary>
+    [Theory]
+    [InlineData(1UL)]
+    [InlineData(2UL)]
+    [InlineData(3UL)]
+    public void EnemyQueries_WithTeams_EqualTheBruteForce(ulong seed)
+    {
+        var rng = new SimRng(seed, 9);
+        const int players = 6;
+        for (int scene = 0; scene < 20; scene++)
+        {
+            var teams = new int[players];
+            for (int p = 0; p < players; p++) teams[p] = rng.NextInt(0, 3);
+            bool[] table = Alliances(teams);
+            int count = rng.NextInt(1, 200);
+            var positions = new Vector2[count];
+            var owners = new int[count];
+            for (int i = 0; i < count; i++)
+            {
+                // Clustered, so buckets hold one side, two allies, or a mix.
+                positions[i] = new Vector2(30f + rng.NextFloat() * 40f, 30f + rng.NextFloat() * 40f);
+                owners[i] = rng.NextInt(0, players);
+            }
+            UnitStore u = Store(positions, owners);
+            SpatialHash h = Built(u, teams);
+            var found = new int[count];
+            for (int q = 0; q < 40; q++)
+            {
+                var c = new Vector2(25f + rng.NextFloat() * 50f, 25f + rng.NextFloat() * 50f);
+                float r = rng.NextFloat() * 12f;
+                int player = rng.NextInt(0, players);
+                var want = new List<int>();
+                int best = -1;
+                float bestD2 = float.MaxValue;
+                for (int i = 0; i < count; i++)
+                {
+                    if (table[player * players + owners[i]]) continue;
+                    float d2 = Vector2.DistanceSquared(positions[i], c);
+                    if (!(d2 <= r * r)) continue;
+                    want.Add(i);
+                    if (d2 < bestD2 || (d2 == bestD2 && i < best)) (best, bestD2) = (i, d2);
+                }
+                int n = h.QueryEnemies(c, r, player, found);
+                int[] got = found[..n];
+                Array.Sort(got);
+                Assert.Equal(want.ToArray(), got);
+                Assert.Equal(best >= 0, h.NearestEnemy(c, r, player, out int slot));
+                Assert.Equal(best, slot);
+                int others = 0;
+                for (int i = 0; i < count; i++) if (!table[player * players + owners[i]]) others++;
+                Assert.Equal(others, h.OthersThan(player));
+            }
+        }
+    }
+
     // ---------- simulation integration and determinism ----------
 
     private static Simulation SimWithUnits(int count)

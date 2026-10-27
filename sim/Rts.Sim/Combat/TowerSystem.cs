@@ -121,7 +121,7 @@ public static class TowerSystem
         for (int e = 0; e < n; e++)
         {
             int c = found[e];
-            if (!u.Alive[c] || u.Owner[c] == owner) continue;
+            if (!u.Alive[c] || u.Owner[c] == owner || (world.HasAlliances && world.AreAllied(owner, u.Owner[c]))) continue; // M6-S4: as the units' scan
             EntityHandle ct = u.Target[c];
             int tier = ct.Index == j && ct.Generation == gen && u.TargetIsBuilding[c] ? 0 : combatant[u.TypeId[c]] ? 1 : 2;
             if (tier > bestTier) continue;

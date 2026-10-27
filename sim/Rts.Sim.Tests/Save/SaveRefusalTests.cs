@@ -69,7 +69,8 @@ public class SaveRefusalTests
     [Theory]
     [InlineData(0)]
     [InlineData(1)] // M6-S3: slice 1's format (no AI section) has no reader
-    [InlineData(3)]
+    [InlineData(2)] // M6-S4: M6-S3's format (no team byte) has no reader
+    [InlineData(4)]
     [InlineData(-1)]
     public void AnotherFormatVersion_IsFormatVersionMismatch(int version)
     {
@@ -202,7 +203,7 @@ public class SaveRefusalTests
     {
         byte[] bad = SaveBytes.Small();
         SaveBytes.Offsets at = SaveBytes.HeaderOffsets(bad);
-        BinaryPrimitives.WriteInt32LittleEndian(bad.AsSpan(at.Seat0Controller + 2 + 4), commands);
+        BinaryPrimitives.WriteInt32LittleEndian(bad.AsSpan(at.Capacities + 4), commands);
         Assert.Equal(expected, SaveTestRun.TryLoad(Data, SaveBytes.Rechecksum(bad)));
     }
 
@@ -243,6 +244,31 @@ public class SaveRefusalTests
         Assert.Equal("malazan", SaveBytes.StringAt(bad, at.Seat0Faction));
         bad[at.Seat0Faction + 4] = (byte)'x'; // "xalazan"
         Assert.Equal(SaveError.InvalidHeader, SaveTestRun.TryLoad(Data, SaveBytes.Rechecksum(bad)));
+    }
+
+    /// <summary>M6-S4: seat 0's team byte forged past 8 (9, or 255: a -1 written as a byte) is InvalidHeader, human and AI saves; 0-8 load, and the loaded seat has the forged team.</summary>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void AForgedTeam_OutsideZeroToEight_IsInvalidHeader(bool ai)
+    {
+        byte[] good = SaveBytes.Small(ai);
+        SaveBytes.Offsets at = SaveBytes.HeaderOffsets(good);
+        Assert.Equal(0, good[at.Seat0Team]);
+        foreach (byte team in new byte[] { 9, 10, 128, 255 })
+        {
+            byte[] bad = (byte[])good.Clone();
+            bad[at.Seat0Team] = team;
+            Assert.True(SaveTestRun.TryLoad(Data, SaveBytes.Rechecksum(bad)) == SaveError.InvalidHeader, $"team {team}");
+        }
+        foreach (byte team in new byte[] { 1, 8 })
+        {
+            byte[] forged = (byte[])good.Clone();
+            forged[at.Seat0Team] = team;
+            Simulation loaded = SaveTestRun.Load(Data, SaveBytes.Rechecksum(forged));
+            Assert.Equal((int)team, loaded.World.Config.SeatOf(0).Team);
+            Assert.Equal((int)team, loaded.World.TeamOf(0));
+        }
     }
 
     [Theory]
@@ -327,7 +353,7 @@ public class SaveRefusalTests
         {
             byte[] bad = SaveBytes.Small();
             SaveBytes.Offsets at = SaveBytes.HeaderOffsets(bad);
-            int caps = at.Seat0Controller + 2; // controller, difficulty, then unit, command, resource, building, projectile, zone
+            int caps = at.Capacities; // controller, difficulty, then unit, command, resource, building, projectile, zone
             for (int k = 0; k < 6; k++)
                 BinaryPrimitives.WriteInt32LittleEndian(bad.AsSpan(caps + 4 * k), k == 1 ? SaveFormat.MaxCommandCapacity : SaveFormat.MaxCapacity);
             bad = SaveBytes.Rechecksum(bad);
@@ -370,7 +396,7 @@ public class SaveRefusalTests
         {
             byte[] bad = SaveBytes.Small(ai);
             SaveBytes.Offsets at = SaveBytes.HeaderOffsets(bad);
-            int caps = at.Seat0Controller + 2; // unit, command, resource, building, projectile, zone
+            int caps = at.Capacities; // unit, command, resource, building, projectile, zone
             foreach (string k in which.Split(',')) BinaryPrimitives.WriteInt32LittleEndian(bad.AsSpan(caps + 4 * int.Parse(k)), SaveFormat.MaxCapacity);
             bad = SaveBytes.Rechecksum(bad);
             SaveTestRun.TryLoad(Data, bad); // warm-up (the JIT)

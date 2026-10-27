@@ -9,7 +9,7 @@ namespace Rts.Sim.Spatial;
 /// <remarks>
 /// Buckets are <see cref="BucketCells"/> x <see cref="BucketCells"/> nav cells. <see cref="Rebuild"/>
 /// counting-sorts live slots into flat arrays sized once in the constructor, and copies each slot's
-/// position and owner, so queries see the units as they were at the last rebuild. Units outside
+/// position and side (M6-S4: its owner's, <see cref="SideOf"/>), so queries see the units as they were at the last rebuild. Units outside
 /// the map clamp into the nearest edge bucket, so they are still found. Nothing allocates after
 /// construction. Every query lists slots in ascending slot index, the same in every run.
 /// <para>
@@ -29,22 +29,36 @@ public sealed partial class SpatialHash
 
     private readonly int[] _bucketStart; // entries of bucket b are [_bucketStart[b], _bucketStart[b + 1])
     // Per bucket: the fill position during the rebuild; after it (M4-1), the bucket's owner code for QueryEnemies: the one
-    // owner of all its units, EmptyBucket or MixedBucket. The fill positions are spent by then, so this costs no memory.
+    // side (M6-S4: an owner and its allies) of all its units, EmptyBucket or MixedBucket. The fill positions are spent by
+    // then, so this costs no memory.
     private readonly int[] _cursor;
     private const int EmptyBucket = int.MinValue, MixedBucket = int.MinValue + 1; // far from any player index
     private readonly int[] _slotBucket;  // bucket of each slot at the last rebuild, -1 if dead
     private readonly int[] _entrySlot;   // slot of each entry, sorted by bucket then slot
     private readonly Vector2[] _entryPos;
-    private readonly int[] _entryOwner;
+    private readonly int[] _entrySide;   // the side of each entry's owner (SideOf): the owner itself in a free-for-all
     private readonly int[] _scratch;     // matches of the running query, before sorting
-    private readonly int[] _ownerCount = new int[OwnerSlots]; // live units per owner (owners past the last slot share it)
+    private readonly int[] _sideCount = new int[OwnerSlots]; // live units per side (sides past the last slot share it)
     private const int OwnerSlots = 64;
-    // Whether _cursor holds owner codes: not when one owner has every unit (a one-player crowd), where the counts answer
+    // M6-S4: per player, its side: the lowest player it is allied with (itself on team 0). Derived once from the world's
+    // alliance table (taken by reference at construction, never written); empty for a hash built without one, where every
+    // owner is its own side.
+    private readonly int[] _sideOf;
+    // Whether _cursor holds owner codes: not when one side has every unit (a one-player crowd), where the counts answer
     // every query and the pass is skipped.
     private bool _ownerCodes;
 
-    /// <summary>Creates a hash for up to <paramref name="unitCapacity"/> slots over a map of the given size in cells.</summary>
-    public SpatialHash(int unitCapacity, int mapWidthCells, int mapHeightCells)
+    /// <summary>Creates a hash for up to <paramref name="unitCapacity"/> slots over a map of the given size in cells, every owner a side of its own.</summary>
+    public SpatialHash(int unitCapacity, int mapWidthCells, int mapHeightCells) : this(unitCapacity, mapWidthCells, mapHeightCells, null, 0)
+    {
+    }
+
+    /// <summary>
+    /// M6-S4: a hash whose enemy queries skip a player's allies too: <paramref name="allied"/> is the world's flat alliance
+    /// table of <paramref name="players"/> players (<c>allied[a * players + b]</c>, <see cref="World.AreAllied"/>), or null
+    /// for none (every owner its own side).
+    /// </summary>
+    public SpatialHash(int unitCapacity, int mapWidthCells, int mapHeightCells, bool[]? allied, int players)
     {
         if (unitCapacity < 1) throw new ArgumentOutOfRangeException(nameof(unitCapacity));
         if (mapWidthCells < 1) throw new ArgumentOutOfRangeException(nameof(mapWidthCells));
@@ -57,10 +71,30 @@ public sealed partial class SpatialHash
         _slotBucket = new int[unitCapacity];
         _entrySlot = new int[unitCapacity];
         _entryPos = new Vector2[unitCapacity];
-        _entryOwner = new int[unitCapacity];
+        _entrySide = new int[unitCapacity];
         _scratch = new int[unitCapacity];
         Array.Fill(_slotBucket, -1);
+        if (allied == null || players < 1)
+        {
+            _sideOf = Array.Empty<int>();
+            return;
+        }
+        if (allied.Length != players * players) throw new ArgumentException($"an alliance table of {allied.Length} entries for {players} players", nameof(allied));
+        _sideOf = new int[players];
+        for (int a = 0; a < players; a++)
+        {
+            int side = a;
+            for (int b = 0; b < a && side == a; b++)
+                if (allied[a * players + b]) side = b;
+            _sideOf[a] = side;
+        }
     }
+
+    /// <summary>
+    /// M6-S4: <paramref name="player"/>'s side, what the enemy queries compare: the lowest player allied with it (itself on
+    /// no team, so in a free-for-all every owner is its own side); an owner outside the table is its own side.
+    /// </summary>
+    public int SideOf(int player) => (uint)player < (uint)_sideOf.Length ? _sideOf[player] : player;
 
     /// <summary>Buckets along x.</summary>
     public int BucketsX { get; }
@@ -80,7 +114,7 @@ public sealed partial class SpatialHash
         if (units.Capacity > Capacity)
             throw new ArgumentException($"store capacity {units.Capacity} exceeds hash capacity {Capacity}", nameof(units));
         Array.Clear(_bucketStart);
-        Array.Clear(_ownerCount);
+        Array.Clear(_sideCount);
         bool[] alive = units.Alive;
         Vector2[] position = units.Position;
         for (int s = 0; s < units.Capacity; s++)
@@ -107,18 +141,18 @@ public sealed partial class SpatialHash
             int e = _cursor[b]++;
             _entrySlot[e] = s;
             _entryPos[e] = position[s];
-            _entryOwner[e] = owner[s];
-            int o = owner[s];
-            _ownerCount[(uint)o < OwnerSlots - 1 ? o : OwnerSlots - 1]++; // owners past 62 share the last count
+            int o = SideOf(owner[s]);
+            _entrySide[e] = o;
+            _sideCount[(uint)o < OwnerSlots - 1 ? o : OwnerSlots - 1]++; // sides past 62 share the last count
         }
         Count = _bucketStart[_cursor.Length];
-        // The fill positions are spent: _cursor now holds each bucket's owner code (M4-1), unless one owner has them all.
-        _ownerCodes = Count > 0 && OthersThan(_entryOwner[0]) > 0;
+        // The fill positions are spent: _cursor now holds each bucket's side code (M4-1), unless one side has them all.
+        _ownerCodes = Count > 0 && OthersThanSide(_entrySide[0]) > 0;
         if (!_ownerCodes) return;
         Array.Fill(_cursor, EmptyBucket);
         for (int e = 0; e < Count; e++)
         {
-            int b = _slotBucket[_entrySlot[e]], o = _entryOwner[e], was = _cursor[b];
+            int b = _slotBucket[_entrySlot[e]], o = _entrySide[e], was = _cursor[b];
             _cursor[b] = was == EmptyBucket || was == o ? o : MixedBucket;
         }
     }
@@ -174,12 +208,13 @@ public sealed partial class SpatialHash
         return Emit(n, results);
     }
 
-    /// <summary>The closest unit within <paramref name="radius"/> not owned by <paramref name="player"/>; ties go to the lowest slot. False if there is none.</summary>
-    /// <remarks>Uses the <see cref="QueryRadius"/> match rule and compares squared float distances. Any other owner counts as an enemy until teams exist.</remarks>
+    /// <summary>The closest unit within <paramref name="radius"/> of an enemy of <paramref name="player"/> (not its own; M6-S4: nor an ally's); ties go to the lowest slot. False if there is none.</summary>
+    /// <remarks>Uses the <see cref="QueryRadius"/> match rule and compares squared float distances.</remarks>
     public bool NearestEnemy(Vector2 center, float radius, int player, out int slot)
     {
         slot = -1;
         if (!(radius >= 0f) || !float.IsFinite(center.X) || !float.IsFinite(center.Y)) return false;
+        int side = SideOf(player);
         float best = radius * radius;
         GetRadiusRange(center, radius, out int x0, out int y0, out int x1, out int y1);
         for (int by = y0; by <= y1; by++)
@@ -189,7 +224,7 @@ public sealed partial class SpatialHash
                 int b = by * BucketsX + bx;
                 for (int e = _bucketStart[b]; e < _bucketStart[b + 1]; e++)
                 {
-                    if (_entryOwner[e] == player) continue;
+                    if (_entrySide[e] == side) continue;
                     float dx = _entryPos[e].X - center.X, dy = _entryPos[e].Y - center.Y;
                     float d2 = dx * dx + dy * dy;
                     // Written so a NaN distance is skipped, as QueryRadius's "d2 <= r2" skips it (BUG-0016).
@@ -207,17 +242,18 @@ public sealed partial class SpatialHash
     }
 
     /// <summary>
-    /// Slots not owned by <paramref name="player"/> whose point lies within <paramref name="radius"/> meters of
-    /// <paramref name="center"/> (the <see cref="QueryRadius"/> match rule), in bucket order, <b>not</b> sorted by slot;
-    /// returns the match count (truncation as in <see cref="QueryRadius"/>). Buckets holding only the player's own units
-    /// are skipped on one compare (M4-1), so a scan with no enemy near costs a few bucket reads, and one with no other
-    /// owner's unit anywhere costs one compare.
+    /// Slots of <paramref name="player"/>'s enemies (not its own; M6-S4: nor its allies') whose point lies within
+    /// <paramref name="radius"/> meters of <paramref name="center"/> (the <see cref="QueryRadius"/> match rule), in bucket
+    /// order, <b>not</b> sorted by slot; returns the match count (truncation as in <see cref="QueryRadius"/>). Buckets
+    /// holding only the player's side's units are skipped on one compare (M4-1), so a scan with no enemy near costs a few
+    /// bucket reads, and one with no enemy unit anywhere costs one compare.
     /// </summary>
     public int QueryEnemies(Vector2 center, float radius, int player, Span<int> results)
     {
         if (!(radius >= 0f) || !float.IsFinite(center.X) || !float.IsFinite(center.Y)) return 0;
-        // Nobody else on the map: nothing to look at (a one-player crowd's scans cost this test).
-        if (OthersThan(player) == 0) return 0;
+        // No enemy on the map: nothing to look at (a one-player crowd's scans cost this test).
+        int side = SideOf(player);
+        if (OthersThanSide(side) == 0) return 0;
         float r2 = radius * radius;
         GetRadiusRange(center, radius, out int x0, out int y0, out int x1, out int y1);
         int n = 0;
@@ -229,11 +265,11 @@ public sealed partial class SpatialHash
                 if (_ownerCodes)
                 {
                     int o = _cursor[b];
-                    if (o == EmptyBucket || o == player) continue; // empty, or only the player's own units
+                    if (o == EmptyBucket || o == side) continue; // empty, or only the player's side's units
                 }
                 for (int e = _bucketStart[b]; e < _bucketStart[b + 1]; e++)
                 {
-                    if (_entryOwner[e] == player) continue;
+                    if (_entrySide[e] == side) continue;
                     float dx = _entryPos[e].X - center.X, dy = _entryPos[e].Y - center.Y;
                     if (!(dx * dx + dy * dy <= r2)) continue;
                     if (n < results.Length) results[n] = _entrySlot[e];
@@ -244,8 +280,18 @@ public sealed partial class SpatialHash
         return n;
     }
 
-    /// <summary>Live units at the last rebuild not owned by <paramref name="player"/> (M4-1); for players past 62 an upper bound.</summary>
-    public int OthersThan(int player) => (uint)player < OwnerSlots - 1 ? Count - _ownerCount[player] : Count;
+    /// <summary>Live units at the last rebuild of <paramref name="player"/>'s enemies (M4-1: not its own; M6-S4: nor its allies'); for sides past 62 an upper bound.</summary>
+    public int OthersThan(int player) => OthersThanSide(SideOf(player));
+
+    private int OthersThanSide(int side) => (uint)side < OwnerSlots - 1 ? Count - _sideCount[side] : Count;
+
+    /// <summary>Test seam (M6-S4): whether <see cref="QueryEnemies"/> skips bucket <paramref name="bucket"/> for <paramref name="player"/> on its code alone (empty, or holding only the player's side's units).</summary>
+    internal bool SkipsBucketFor(int bucket, int player)
+    {
+        if (!_ownerCodes) return OthersThan(player) == 0 || _bucketStart[bucket] == _bucketStart[bucket + 1];
+        int o = _cursor[bucket];
+        return o == EmptyBucket || o == SideOf(player);
+    }
 
     /// <summary>Bucket column of a world x in meters; outside the map (or NaN) clamps to the nearest edge column.</summary>
     public int BucketX(float x) => Clamp(x / BucketSize, BucketsX);

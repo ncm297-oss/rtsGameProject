@@ -63,6 +63,21 @@ public sealed class PlayerView
     /// <summary>The match's tick number (between ticks: the next tick's).</summary>
     public int TickNumber => _world.TickNumber;
 
+    // ---------- sides (M6-S4) ----------
+
+    /// <summary>
+    /// Whether <paramref name="player"/> is the player's enemy (<see cref="World.IsEnemy"/>): any other player, unless both
+    /// are on one named team. The teams are the match's setup, known to every seat, so this reveals nothing the fog hides.
+    /// An ally's units are still seen only inside the player's own vision (no shared vision yet, M6-S5).
+    /// </summary>
+    public bool IsEnemy(int player) => _world.IsEnemy(_player, player);
+
+    /// <summary>Player <paramref name="player"/>'s team (<see cref="World.TeamOf"/>: 0 no team, 1-8 a named team; 0 for no such player).</summary>
+    public int TeamOf(int player) => _world.TeamOf(player);
+
+    /// <summary>Whether the player has an ally (another player on its named team); false in a free-for-all.</summary>
+    public bool HasAlly => _world.HasAlly(_player);
+
     // ---------- the fog grid ----------
 
     /// <summary>Map width in cells (cells are row-major, <c>y * MapWidth + x</c>).</summary>

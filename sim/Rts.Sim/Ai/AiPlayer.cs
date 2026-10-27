@@ -388,8 +388,9 @@ internal sealed partial class AiPlayer
         {
             if (u.Owner != Player)
             {
-                // The enemy memory: the enemy army seen this think (workers aside).
-                if (IsWorkerType[u.TypeId]) continue;
+                // The enemy memory: the enemy army seen this think (workers aside). M6-S4: an ally's units are neither the
+                // enemy army nor intruders (no defense against them).
+                if (!View.IsEnemy(u.Owner) || IsWorkerType[u.TypeId]) continue;
                 enemies++;
                 sum += u.Position;
                 if (HasHall && Vector2.DistanceSquared(u.Position, hall) <= defend)
@@ -424,7 +425,7 @@ internal sealed partial class AiPlayer
         {
             if (b.Owner != Player)
             {
-                known++;
+                if (View.IsEnemy(b.Owner)) known++; // M6-S4: an ally's building is no enemy building
                 continue;
             }
             if (!b.UnderConstruction && Data.Buildings[b.TypeId].DropOff) HasDropOff = true;
@@ -443,7 +444,8 @@ internal sealed partial class AiPlayer
                 if (View.TryGetQueueItem(s, item, out int type, out bool isTech) && !isTech) Queued[type]++;
         }
         s = -1;
-        while (View.NextGhost(ref s, out _)) known++;
+        while (View.NextGhost(ref s, out Vision.BuildingGhost g))
+            if (View.IsEnemy(g.Owner)) known++;
         Board.KnownEnemyBuildings = known;
     }
 
@@ -455,7 +457,7 @@ internal sealed partial class AiPlayer
 
     /// <summary>
     /// The known enemy building nearest <paramref name="from"/> (its footprint centre; slot order on ties, seen ones before
-    /// ghosts): one the player sees now, or a ghost. False when it knows none.
+    /// ghosts): one the player sees now, or a ghost. False when it knows none. M6-S4: never an ally's.
     /// </summary>
     internal bool NearestEnemyBuilding(Vector2 from, out EntityHandle handle, out int type, out int cell)
     {
@@ -465,7 +467,7 @@ internal sealed partial class AiPlayer
         int s = -1;
         while (View.NextBuilding(ref s, out SeenBuilding b))
         {
-            if (b.Owner == Player) continue;
+            if (!View.IsEnemy(b.Owner)) continue;
             float d = Vector2.DistanceSquared(BuildingCentre(b.TypeId, b.Cell), from);
             if (d >= best) continue;
             best = d;
@@ -474,6 +476,7 @@ internal sealed partial class AiPlayer
         s = -1;
         while (View.NextGhost(ref s, out Vision.BuildingGhost g))
         {
+            if (!View.IsEnemy(g.Owner)) continue;
             float d = Vector2.DistanceSquared(BuildingCentre(g.TypeId, g.Cell), from);
             if (d >= best) continue;
             best = d;
@@ -485,8 +488,8 @@ internal sealed partial class AiPlayer
     /// <summary>Whether enemy building <paramref name="building"/> is still known: seen now (<paramref name="seen"/>) or a ghost of that building.</summary>
     internal bool EnemyBuildingKnown(EntityHandle building, out bool seen)
     {
-        seen = View.TryGetBuilding(building.Index, out SeenBuilding b) && b.Handle == building && b.Owner != Player;
-        return seen || View.TryGetGhost(building.Index, out Vision.BuildingGhost g) && g.Generation == building.Generation;
+        seen = View.TryGetBuilding(building.Index, out SeenBuilding b) && b.Handle == building && View.IsEnemy(b.Owner);
+        return seen || View.TryGetGhost(building.Index, out Vision.BuildingGhost g) && g.Generation == building.Generation && View.IsEnemy(g.Owner);
     }
 
     /// <summary>The centre (m) of the player's Town Hall (as <see cref="BuildOrderExecutor.HallCentre"/> picks it, else its first building); false with no building.</summary>

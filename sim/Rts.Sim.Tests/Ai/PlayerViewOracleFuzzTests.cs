@@ -21,9 +21,26 @@ public class PlayerViewOracleFuzzTests
     [InlineData(1UL)]
     [InlineData(4UL)]
     [InlineData(7UL)]
-    public void EveryAnswer_EveryTick_EqualsTheBruteForceOracle(ulong seed)
+    public void EveryAnswer_EveryTick_EqualsTheBruteForceOracle(ulong seed) => Run(seed, null);
+
+    /// <summary>
+    /// M6-S4 criterion 6: the same scene as 2v2 (teams 1, 1, 2, 2: the two northern bases allies): stealth hides a unit only
+    /// from its owner's enemies, an ally's Sandstorm hides nothing from its allies, and allies are seen only inside the
+    /// player's own vision; every answer still equals the oracle's, which learns the teams from the seats.
+    /// </summary>
+    [Theory]
+    [InlineData(1UL)]
+    [InlineData(4UL)]
+    [InlineData(7UL)]
+    public void WithTeams_EveryAnswer_EveryTick_EqualsTheBruteForceOracle(ulong seed)
     {
-        Simulation sim = PlayerViewScene.New(seed);
+        PlayerViewOracle.Tally tally = Run(seed, new[] { 1, 1, 2, 2 });
+        Assert.True(tally.AlliedUnitsSeen > 0, "no ally's unit was seen");
+    }
+
+    private PlayerViewOracle.Tally Run(ulong seed, int[]? teams)
+    {
+        Simulation sim = PlayerViewScene.New(seed, teams);
         World w = sim.World;
         var kept = new PlayerView[PlayerViewScene.Players];
         for (int p = 0; p < kept.Length; p++) kept[p] = new PlayerView(w, p);
@@ -57,5 +74,6 @@ public class PlayerViewOracleFuzzTests
         Assert.True(tally.QueueItems > 0, "no queue was read");
         Assert.True(tally.ResourcesRemembered > 0, "no node gone out of sight was answered from memory (BUG-0540)");
         Assert.True(tally.AbilityCooldowns > 0 && tally.OwnCasts > 0, "no own cooldown running or no own cast in progress was read (M5-4c)");
+        return tally;
     }
 }

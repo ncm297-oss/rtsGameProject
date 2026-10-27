@@ -58,7 +58,11 @@ public sealed partial class World
         PushedUnits = new int[config.UnitCapacity];
         SpawnCacheCleared = new bool[Plateaus.Count];
         SpawnPlateauFull = new bool[Plateaus.Count];
-        Spatial = new SpatialHash(config.UnitCapacity, NavGrid.Width, NavGrid.Height);
+        // M6-S4: the alliance table, before the hash, which reads it by reference (World.Teams.cs).
+        _teamOf = new int[config.PlayerCount];
+        _allied = AllianceTable(config, _teamOf, out bool alliances);
+        HasAlliances = alliances;
+        Spatial = new SpatialHash(config.UnitCapacity, NavGrid.Width, NavGrid.Height, _allied, config.PlayerCount);
         FlowFields = new FlowFieldCache(NavGrid, FlowFieldCache.CapacityFor(config.UnitCapacity, NavGrid.Width * NavGrid.Height));
         Seal = new SealCheck(NavGrid, FlowFields.BuildScratch);
         NavGrid.ShareScratch(FlowFields.BuildScratch); // the pocket rule's flood (BUG-0093)
@@ -251,10 +255,10 @@ public sealed partial class World
     /// <summary>Number of entries in <see cref="CombatBuildings"/>.</summary>
     internal int CombatBuildingCount { get; set; }
 
-    /// <summary>Scratch for <see cref="CombatSystem"/>: this tick's live buildings per owner, so a scan with no enemy building skips the list; derived, not hashed.</summary>
+    /// <summary>Scratch for <see cref="CombatSystem"/>: this tick's live buildings per side (M6-S4: indexed by <see cref="SpatialHash.SideOf"/>, the owner in a free-for-all), so a scan with no enemy building skips the list; derived, not hashed.</summary>
     internal int[] CombatBuildingsOf { get; }
 
-    /// <summary>Scratch for <see cref="CombatSystem"/>: per player, whether any other owner has a unit or a building this tick (else its units skip their scans); derived, not hashed.</summary>
+    /// <summary>Scratch for <see cref="CombatSystem"/>: per player, whether any enemy (M6-S4: not an ally) has a unit or a building this tick (else its units skip their scans); derived, not hashed.</summary>
     internal bool[] CombatEnemyExists { get; }
 
     /// <summary>Whether any building type in the data has an attack (M4-3b): else <see cref="TowerSystem"/> skips its loops.</summary>

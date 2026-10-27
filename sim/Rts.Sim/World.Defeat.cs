@@ -39,9 +39,10 @@ public sealed partial class World
     private bool _matchOverLatched;
 
     /// <summary>
-    /// True once at most one player that ever built is undefeated while at least two ever built: the match has a winner (or,
-    /// when the last ones fell on the same tick, none). Never true while fewer than two players have built; once true, true
-    /// for good (latched by the defeat check every tick).
+    /// True once every undefeated player that ever built is on one side while at least two sides ever built (M6-S4: a side is
+    /// a named team, or a team-0 player alone, <see cref="AreAllied"/>; in a free-for-all: at most one player that ever built
+    /// stands while at least two built): the match has a winning side (or, when the last ones fell on the same tick, none).
+    /// Never true while fewer than two sides have built; once true, true for good (latched by the defeat check every tick).
     /// </summary>
     public bool MatchOver => _matchOverLatched || HasResult();
 
@@ -50,14 +51,19 @@ public sealed partial class World
 
     private bool HasResult()
     {
-        int built = 0, standing = 0;
+        // Sides are compared to the first player found: alliance is a team match, so "allied with the first" is one side.
+        int firstBuilt = -1, firstStanding = -1;
+        bool twoBuilt = false;
         for (int p = 0; p < _ledger.EverBuilt.Length; p++)
         {
             if (!_ledger.EverBuilt[p]) continue;
-            built++;
-            if (!_ledger.Defeated[p]) standing++;
+            if (firstBuilt < 0) firstBuilt = p;
+            else if (!AreAllied(firstBuilt, p)) twoBuilt = true;
+            if (_ledger.Defeated[p]) continue;
+            if (firstStanding < 0) firstStanding = p;
+            else if (!AreAllied(firstStanding, p)) return false; // two sides still stand
         }
-        return built >= 2 && standing <= 1;
+        return twoBuilt;
     }
 
     /// <summary>Empties <see cref="DefeatEvents"/> (start of a tick).</summary>

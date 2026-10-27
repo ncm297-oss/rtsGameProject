@@ -305,8 +305,8 @@ from `UnitCapacity` and the map size, copying each slot's position and owner; re
 never allocate (2,500 units rebuild in about 0.06 ms). Units outside the map clamp into the nearest
 edge bucket and are still found. Queries: `QueryRadius(center, radius, Span<int>)` (match rule, in
 float: `dx*dx + dy*dy <= radius*radius`), `QueryRect(a, b, Span<int>)` (edges inclusive, corners in
-any order) and `NearestEnemy(center, radius, player, out slot)` (any other owner counts as an
-enemy until teams exist; ties go to the lowest slot). Results are slot indices in ascending order.
+any order) and `NearestEnemy(center, radius, player, out slot)` (an enemy: any other owner, since M6-S4 not an
+ally either, see "Implementation (M6-S4)"; ties go to the lowest slot). Results are slot indices in ascending order.
 A query writes at most `results.Length` slots (the lowest ones) and returns the total match count,
 so a return value above the buffer length means the buffer was too small. Negative or NaN radii
 and non-finite centers match nothing. The hash is derived state and does not feed `StateHash`.
@@ -1422,7 +1422,8 @@ The data hook is the unit's `slot`, never an id. It still counts as a target (ti
 Ram's data says `"buildings"`.
 
 **Cost.** The scan's spatial query skips buckets holding only the scanner's own units (a per-bucket
-owner code) and returns at once when no other owner has a live unit (per-owner counts), so a
+owner code; since M6-S4 a side code, so a bucket of the scanner's and its allies' units is skipped too) and returns at
+once when no other owner has a live unit (per-owner counts; since M6-S4 per side), so a
 one-player crowd's units skip their scans altogether (each tick works out, per player, whether any
 other owner has a unit or building at all). Measured in Debug, same machine, against the M4-1 base
 (three alternating runs): the one-player 2,500 tight blob 4.36 -> 4.42 ms, the M1 500-moving-unit row
@@ -8139,14 +8140,17 @@ M5 criterion 8, the sim half: named AI openings (D14 b). Code: `Data/AiOpening.c
 
 - **Replay file** (M1-6, `Rts.Sim.Replays`): a `Replay` holds a header, the command log, and
   checkpoints.
-  - Header: format version (`Replay.CurrentFormatVersion` = 6 since M5-4a, which added the five `map.start-*` lines (formats
+  - Header: format version (`Replay.CurrentFormatVersion` = 7 since M6-S4, which added each seat's team as a fifth seat
+    token (formats 5-6 read with every team 0; the recorder writes 7 only for a match with a team and keeps a free-for-all at
+    `Replay.TeamlessFormatVersion` = 6, byte for byte as before); 6 since M5-4a, which added the five `map.start-*` lines (formats
     3-5 read with no start locations); 5 since M5-2, which added one seat line per player; 4
     (M4-2a, which added the `combat` line and an attack target on every command line) and 3 (M3-1) still read and play,
     `Replay.OldestFormatVersion` = 3; 2 was M1-7, without the resource lines, 1 was M1-6, without command flags; both are
     refused with `FormatVersionMismatch`),
     `SimInfo.Version` (informational, not checked on playback), data hash (`GameData.ContentHash()`),
     seed, player count, (format 5) every player's seat (`Replay.Seats`: the faction's string id, `human` or `ai`, the
-    difficulty; a format 3 / 4 replay has none and was recorded with the default seats), unit, command and (M3-1) resource
+    difficulty, (format 7) the team, `ReplaySeat.Team`, 0-8; a format 3 / 4 replay has none and was recorded with the
+    default seats), unit, command and (M3-1) resource
     capacity (they decide outcomes: the unit and
     resource capacities are in the state hash and a full store drops spawns), checkpoint interval,
     tick count, (format 4) `combat 0 / 1` (`SimConfig.Combat` when recorded, `Replay.Combat`; a format 3 file has no
@@ -8171,7 +8175,8 @@ M5 criterion 8, the sim half: named AI openings (D14 b). Code: `Data/AiOpening.c
   line per header field in a fixed order (a replay is written in its own `FormatVersion`, so a format 3 or 4 file read
   back writes back byte for byte; the recorder makes format 5; format 5's seat lines,
   `seat <p> <faction> <human|ai> <easy|normal|hard>`, one per player in player order right after `players`, the faction
-  snake_case or `-`), `commands N` then N lines
+  snake_case or `-`; format 7 adds ` <team>`, a canonical integer that `Replay.Validate` holds to 0-8 (`InvalidHeader`
+  outside it, and for a team other than 0 in a format 5-6 replay)), `commands N` then N lines
   `c tick player sequence kind typeId x y unitIndex unitGeneration targetIndex targetGeneration targetIsBuilding flags`
   (13 fields since format 4, the three target fields `0 0 0` on every kind but `Attack`, flags kept last; format 3
   lines have 10, without the target; format 2 added `flags`), `checkpoints N` then N lines
@@ -8260,8 +8265,8 @@ version 2) stores the AI seats too, so every match saves. Code in `sim/Rts.Sim/S
   patterns. Strings are an int32 byte count and printable ASCII (the sim version, snake_case faction ids). An array is its
   int32 length, then its elements; the reader requires the length the header's capacities give. Structs holding a bool
   (commands, ghosts, events) go field by field.
-- **Header**, in order: magic `RTSSAVE\0` (8 bytes); format version (int32, `SaveFormat.CurrentVersion` = 2; version 1 was
-  slice 1's, refused `FormatVersionMismatch`, no reader); total length of the file (int64, checksum included); `SimInfo.Version` (string, informational); `GameData.ContentHash()` (uint64); seed
+- **Header**, in order: magic `RTSSAVE\0` (8 bytes); format version (int32, `SaveFormat.CurrentVersion` = 3 since M6-S4,
+  which added the team byte; version 2 was M6-S3's and version 1 slice 1's, both refused `FormatVersionMismatch`, no reader); total length of the file (int64, checksum included); `SimInfo.Version` (string, informational); `GameData.ContentHash()` (uint64); seed
   (uint64); player count (int32); per player its seat: faction string id (`-` for data without factions), controller
   (byte: 0 human, 1 AI), difficulty (byte); unit, command, resource, building, projectile (the config value, 0 = from the
   data) and zone capacities (int32 each); every `MapGenParams` field in declaration order (`Width`, `Height`,
@@ -8270,7 +8275,8 @@ version 2) stores the AI seats too, so every match saves. Code in `sim/Rts.Sim/S
   `Forests`, `ForestMinTrees`, `ForestMaxTrees`, `GoldMines`, `MineSpacing`, `StartLocations`, `StartClearRadius`,
   `StartEdgeMargin`, `StartMineDistance`, `StartForestDistance`; int32 or float); `Combat` (byte);
   `CastWalkInBlockerRange`, `CastWalkInPatienceSeconds` (float); `StatsSampleTicks`, `StatsSampleCapacity` (int32); the
-  tick number (int32). Every seat is written out (the default ones too), so the loaded config has explicit seats.
+  tick number (int32); (format 3, M6-S4) each seat's team (byte, 0-8), in player order: last, so every format-2 field
+  keeps its offset for a header-only reader (`ViewApi.SaveSummary`, the Load Game list). Every seat is written out (the default ones too), so the loaded config has explicit seats.
 - **Sections**, each opening with a four-letter tag, in this order:
 
   | Tag | Holds |
@@ -8287,7 +8293,7 @@ version 2) stores the AI seats too, so every match saves. Code in `sim/Rts.Sim/S
   | `PROJ` | the projectiles in flight, count and loop bounds |
   | `ZONE` | the live zones, their fog records, counts, loop bound, `BlockerVersion` |
   | `FOG ` | per player the byte map, explored and visible bits, update count; the unit and building reveals; the last-known lists (`BuildingGhost.Site` included); the node memory; the last stamped boxes; the near-blocker mask and its version |
-  | `SPAT` | the spatial hash whole (bucket order and owner codes: phase 1's commands and every read between ticks see the last tick's index) |
+  | `SPAT` | the spatial hash whole (bucket order and owner codes, since M6-S4 side codes: phase 1's commands and every read between ticks see the last tick's index) |
   | `FLOW` | the flow-field cache whole: clock, count, build count, LRU stamps, cell-to-slot index, step masks and their grid version, then every used slot's field |
   | `SURR` | `SurroundClaim`, `SurroundHolder` |
   | `SLTH` | the stealth detection mask |
@@ -8350,7 +8356,7 @@ version 2) stores the AI seats too, so every match saves. Code in `sim/Rts.Sim/S
   declared length; an empty stream); `FormatVersionMismatch`; `Malformed` for a declared length out of range or bytes past
   it; `ChecksumMismatch`; `DataMismatch` (another `ContentHash`, so any data edit refuses a save, as a replay);
   `InvalidHeader` (a player count outside 1-16, a capacity outside its range, a faction id the data lacks, an unknown
-  controller or difficulty, a map parameter or config value `SimConfig.Validate` refuses, an AI seat whose faction has no
+  controller or difficulty, a team outside 0-8 (M6-S4), a map parameter or config value `SimConfig.Validate` refuses, an AI seat whose faction has no
   `ai.json`); `Malformed` for a body too short for the header's capacities (the
   pre-check) or that doesn't parse (a tag out
   of place, an AI seat count or player that doesn't match the header's seats, a stored opening pick other than the load's, an array of the wrong length, a count past its capacity, a
@@ -8379,6 +8385,98 @@ version 2) stores the AI seats too, so every match saves. Code in `sim/Rts.Sim/S
   tick to T + 2,000 and each AI seat field for field (reflection over the seat and its whole Blackboard) at T, T + 1 and
   T + 2,000, plus the human-against-AI menu match; `SaveRefusalTests` runs its sweeps on a small AI save too and forges
   the opening pick, the AI seat count, a seat's controller either way, a version-1 file and the max-capacity header.
+
+### Implementation (M6-S4)
+
+Teams, slice 1 (M6 criterion 1's "team", docs/02 "Game flow" 2 and 4). Shared vision between allies is slice 2 (M6-S5).
+
+- **The seat field.** `PlayerSeat.Team` (`int`, default 0): 0 is no team (the seat is a side of its own), 1-8
+  (`PlayerSeat.MaxTeam`) a named team. `SimConfig.Validate` refuses a team outside 0-8. Team is configuration: it is in the
+  save and replay headers, never in `StateHash`, so a free-for-all (every team 0, the default) is bit-identical to before.
+- **The predicate** (`World.Teams.cs`). Built once at `World` construction into a flat `bool[players x players]`:
+  `World.AreAllied(a, b)` = `a == b || (Team[a] != 0 && Team[a] == Team[b])` (an unknown player is allied only with itself);
+  `World.IsEnemy` is its negation; `World.TeamOf(p)` and `World.HasAlly(p)` are public for the view. No per-tick work.
+- **The spatial hash** takes the table by reference at construction (`new SpatialHash(cap, w, h, allied, players)`) and
+  derives each player's *side*, the lowest player it is allied with (`SpatialHash.SideOf`; the player itself on team 0, so in
+  a free-for-all side = owner and every array holds what it held before). Each entry stores its owner's side; the per-bucket
+  code (M4-1) is the one side of the bucket's units, so a bucket holding only a player's and its allies' units is skipped on
+  one compare; `OthersThan` counts units of other sides (0 on a map of allies only); `NearestEnemy` / `QueryEnemies` skip
+  the side. The `SPAT` save section holds the same arrays (sides instead of owners), so the save layout is unchanged.
+- **The result.** `World.HasResult`: over when at least two sides ever built and every undefeated player that ever built is
+  on one side (team-0 players are one-player sides). `IsDefeated`, `DefeatEvents` and the `MatchOver` latch are unchanged.
+- **Save format 3**: one team byte per seat, in player order, after the tick (the header's last field); format 2 reads
+  `FormatVersionMismatch`; a team byte over 8 is `InvalidHeader`. The brief placed the byte after each seat's difficulty;
+  it went last instead so that `ViewApi.SaveSummary` (the view's header-only reader for the Load Game list, which this
+  slice may not touch) still finds every field where it was. `SaveSummary` reports team 0 until the view reads the bytes.
+- **Replay format 7**: the `seat` line's fifth token; formats 3-6 read as team 0; playback builds the seats with the
+  header's teams. The recorder writes format 7 only when a seat has a team: a free-for-all is still written as format 6
+  (`Replay.TeamlessFormatVersion`), byte for byte as before, so every format-6 reader keeps working (the game's replay
+  list, `ReplayStore.TryReadHeader`, reads four-token seat lines only, and `SimRunner`'s playback builds seats without a
+  team; both learn format 7 with the view's team column). Rule 36: new versions, no new signature or error code. The golden
+  replays stay format 6 and play; `data-hash` is untouched (no data changed).
+- **The AI** (through `PlayerView.IsEnemy(player)`, `TeamOf`, `HasAlly`: the match setup, known to every seat, so nothing
+  hidden leaks). The census counts only enemies as the enemy army and as intruders (so an ally's army by the hall never sets
+  `Defending`); `KnownEnemyBuildings`, `NearestEnemyBuilding` and `EnemyBuildingKnown` skip an ally's buildings and ghosts
+  (the wave and the rally aim at the nearest *enemy* building; the scout's sweep ends only on an enemy's);
+  `AbilityManager.SeeEnemies` lists enemies only and a friendly-fire cast also avoids an ally's units the player sees now.
+  Allied units are seen only inside the AI's own vision (the fog is unchanged).
+- **Not in this slice:** shared vision (M6-S5), starting resources, allied pushing / formations (movement treats an ally's
+  unit as another player's), resource or tech sharing, AI cooperation, diplomacy, the view's team column.
+
+Every `Owner == / !=` site in `sim/Rts.Sim`, classified: **allied-as-own** (an ally is treated as the player itself, through
+`AreAllied` / `IsEnemy` or the hash's side), **allied-as-other** (an ally is another player, as before), **untouched** (the
+site means the very same player: ownership, queues, groupmates).
+
+| File | Site | Meaning | Class |
+| --- | --- | --- | --- |
+| `Spatial/SpatialHash.cs` | `NearestEnemy`, `QueryEnemies`, the bucket code, `OthersThan` | enemy units | allied-as-own (side) |
+| `Combat/CombatSystem.cs` | `MayAttack` (unit, building, live and remembered) | explicit Attack target | allied-as-own: dropped like an own target |
+| `Combat/CombatSystem.cs` | `PickTarget` (via `QueryEnemies`), `PickBuilding`, `CollectBuildings` (per-side counts, `CombatEnemyExists`) | scan targets | allied-as-own |
+| `Combat/CombatSystem.cs` | `HitUnit` retaliation / last attacker | friendly fire is no attack | allied-as-own |
+| `Combat/CombatSystem.cs` | `FriendFightsTarget` (the `QueryEnemies` around the target, then `Owner[j] != owner`) | the chaser's own fighting line | untouched (same player; the query is side-aware) |
+| `Combat/CombatSystem.cs` | `QueuedBehindOwnLine` | own planted line (flank rule) | untouched |
+| `Combat/SurroundRule.cs` | `HoldsSpot`, `Occupied` | own spot holders / own blockers | untouched |
+| `Combat/TowerSystem.cs` | `OthersThan`, `Pick` (via `QueryEnemies`) | tower targets | allied-as-own |
+| `Combat/ProjectileSystem.cs` | `Splash` units / buildings | friendly fire | allied-as-own: an ally's unit takes the 50 % share, an ally's building nothing |
+| `Abilities/AbilitySystem.cs` | `Resolve` units (`affects`, friendly fire) and buildings | ability targets | allied-as-own |
+| `Abilities/ZoneSystem.cs` | `Apply` | zone statuses (`affects`) | allied-as-own |
+| `Abilities/PassiveSystem.cs` | `OnDeath` | the owner's listed units (Martyrdom) | allied-as-own |
+| `Abilities/StealthSystem.cs` | `Detect` (units via `QueryEnemies`, buildings) | who must detect | allied-as-own: an ally never needs to |
+| `World.Stealth.cs` | `HiddenFrom` | stealth hides from | allied-as-own: only enemies |
+| `Vision/FogStore.cs` | `HidesFrom` (and `BlocksFor`, `InsideBlocker`) | a Darkness / Sandstorm blocks | allied-as-own: only enemy viewers |
+| `Vision/VisionSystem.cs` | `ZoneHides`, `BlockerNear`, `OnHit` | zone hiding, high-ground reveal | allied-as-own |
+| `Vision/FogStore.cs` | `CanSeeUnit`, `NextSeenUnit`, `CanSeeBuilding`, `Update` stamps | the player's own eyes | untouched (no shared vision) |
+| `Vision/FogStore.cs` | `UpdateGhosts` | remembered buildings | allied-as-other (an ally's building is remembered; slice 2 shares vision) |
+| `World.Defeat.cs` | `HasResult` | the winning side | allied-as-own |
+| `World.Defeat.cs` | `Collapse` | the player's own buildings | untouched |
+| `Orders/OrderSystem.cs` | the command's unit is the player's | ownership | untouched |
+| `Economy/*` (`ConstructionSystem`, `EconomySystem`, `ProductionSystem`), `Entities/BuildingStore.cs` | sites, drop-offs, queues, push-out, footprints | ownership | untouched (an ally's unit in a footprint blocks it, as another player's) |
+| `Movement/MovementSystem.cs` | groupmates, own fighting line, shoves, walls | the same player | untouched (allied pushing is out of scope) |
+| `Data/DataLoader.Techs.cs` | a tech's owner faction | data | untouched |
+| `Ai/AiPlayer.cs` | census (enemy army, intruders, known enemy buildings and ghosts), `NearestEnemyBuilding`, `EnemyBuildingKnown` | enemies | allied-as-own (`View.IsEnemy`) |
+| `Ai/AiPlayer.cs` | own buildings, own producers | ownership | untouched |
+| `Ai/AbilityManager.cs` | `SeeEnemies`, `NearestEnemyBuilding`, friendly-fire avoidance | enemies / friends | allied-as-own |
+| `Ai/BuildOrderExecutor.cs` | `HallNear` (an expansion keeps clear of every other hall) | occupied ground | allied-as-other |
+| `Ai/ScoutManager.cs`, `Ai/PlayerView.cs` (`IsOwnUnit`, `IsOwnBuilding`, cargo, casts) | the scout, own-only answers | ownership | untouched |
+| `ViewApi/*` | the view's own-player answers | ownership | untouched (`ViewApi/**` not changed) |
+
+`TeamArchitectureTests.NoRawOwnerCompareMeaningEnemy_InCombat` holds `Combat/` to this table: a raw owner compare there is
+allowed only at the four listed same-player sites, or as the fast first half of a predicate test on the same line (the scan,
+tower and detection loops keep `u.Owner[j] == owner || (world.HasAlliances && world.AreAllied(...))`: the hash's sides are
+phase 1's, and a slot freed and refilled since, by a summon, may hold an own or allied unit).
+
+- **Tests:** `TeamTests` (the predicate pinned; a mixed 2v2 brawl over 2,000 ticks with no allied target or last
+  attacker; towers skip allies; a Catapult's splash at 50 % on an ally's unit and 0 on its building; an explicit Attack on an
+  ally dropped; an AttackMove through an allied army striking the enemy beyond; a stealthed ally seen inside the ally's
+  vision only; an ally's Sandstorm neither blinding nor hiding; the result for 2v2, FFA, 2v1, 1v1v2 and allies-only);
+  `SpatialHashTests` allied rows (the allied-only bucket skip, `OthersThan` 0, `SideOf`, a brute-force fuzz with random
+  teams); `SeatConfigTests` team range; `SaveFormatTests` / `SaveRefusalTests` / `SaveRoundTripTests` format-3 rows (the
+  team byte, a forged team refused, a 2v2 human + AI save at 500 following the unsaved run for 1,000 ticks);
+  `ReplayFormatTests` format 7 and format 6 compatibility, a forged team refused, a 2v2 AI replay playing to every checkpoint
+  (and diverging with its teams edited to 0); `AiTeamTests` (2v2 AI, seeds 1-3, 2,500 ticks: no Attack, AttackMove, cast or
+  wave at an ally; a tick allocation-free), `AiDeterminismTests` 2v2 twins, `MilitaryManagerTests` / `DefenseManagerTests` /
+  `ScoutManagerTests` allied rows; `PlayerViewOracleFuzzTests` with teams (the oracle learns the alliance rule from the
+  seats).
 
 ## Testing strategy
 

@@ -15,7 +15,7 @@ namespace Rts.Sim.Replays;
 /// <remarks>
 /// One <c>key value</c> line per header field in a fixed order (format 4 adds <c>combat 0 / 1</c> after <c>ticks</c>; format 5
 /// one <c>seat p faction human|ai easy|normal|hard</c> line per player right after <c>players</c>; format 6 five
-/// <c>map.start-*</c> lines after <c>map.mine-spacing</c>),
+/// <c>map.start-*</c> lines after <c>map.mine-spacing</c>; format 7, M6-S4, the seat's team as a fifth seat token),
 /// then <c>commands N</c> and N <c>c</c> lines (format 4: 13 fields, the attack target's index, generation and
 /// building flag before the flags; format 3: 10), <c>checkpoints N</c> and N <c>k</c> lines, <c>end</c>, and last a
 /// <c>checksum</c> line: the FNV-1a 64 hash of every byte before it, so any changed byte is caught.
@@ -53,7 +53,9 @@ public static class ReplayFormat
                 ReplaySeat seat = replay.Seats[p];
                 sb.Append("seat ").Append(Int(p)).Append(' ').Append(seat.Faction).Append(' ')
                     .Append(seat.Controller == SeatController.Ai ? "ai" : "human").Append(' ')
-                    .Append(Data.DataLimits.AiDifficultyIds[(int)seat.Difficulty]).Append('\n');
+                    .Append(Data.DataLimits.AiDifficultyIds[(int)seat.Difficulty]);
+                if (replay.FormatVersion >= 7) sb.Append(' ').Append(Int(seat.Team)); // M6-S4
+                sb.Append('\n');
             }
         Line(sb, "unit-capacity", Int(replay.UnitCapacity));
         Line(sb, "command-capacity", Int(replay.CommandCapacity));
@@ -206,14 +208,17 @@ public static class ReplayFormat
             var builder = ImmutableArray.CreateBuilder<ReplaySeat>(players);
             for (int p = 0; p < players; p++)
             {
-                if (!r.Fields("seat", 4, out f) || !TryInt(f[0], out int seatPlayer) || seatPlayer != p || !Replay.IsFactionToken(f[1])) return ReplayError.Malformed;
+                // M6-S4 (format 7): a fifth token, the team (range-checked by Validate); formats 5-6 read as team 0.
+                int team = 0;
+                if (!r.Fields("seat", version >= 7 ? 5 : 4, out f) || !TryInt(f[0], out int seatPlayer) || seatPlayer != p || !Replay.IsFactionToken(f[1])
+                    || (version >= 7 && !TryInt(f[4], out team))) return ReplayError.Malformed;
                 SeatController controller;
                 if (f[2] == "human") controller = SeatController.Human;
                 else if (f[2] == "ai") controller = SeatController.Ai;
                 else return ReplayError.Malformed;
                 int difficulty = Data.DataLimits.AiDifficultyIds.IndexOf(f[3]);
                 if (difficulty < 0) return ReplayError.Malformed;
-                builder.Add(new ReplaySeat(f[1], controller, (Data.AiDifficulty)difficulty));
+                builder.Add(new ReplaySeat(f[1], controller, (Data.AiDifficulty)difficulty, team));
             }
             seats = builder.MoveToImmutable();
         }

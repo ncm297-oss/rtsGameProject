@@ -78,7 +78,17 @@ internal static class SaveBytes
     }
 
     /// <summary>Offsets of the header fields a refusal test forges, read from <paramref name="bytes"/> in the format table's order.</summary>
-    internal sealed record Offsets(int SimVersion, int DataHash, int Seed, int Players, int Seat0Faction, int Seat0Controller);
+    internal sealed record Offsets(int SimVersion, int DataHash, int Seed, int Players, int Seat0Faction, int Seat0Controller)
+    {
+        /// <summary>The capacities (unit, command, resource, building, projectile, zone) of a one-seat save, after seat 0's controller and difficulty bytes.</summary>
+        public int Capacities => Seat0Controller + 2;
+
+        /// <summary>
+        /// M6-S4 (format 3): seat 0's team byte in a one-seat save, after the tick: past the six capacities, the 26 map fields,
+        /// combat (1 byte), the two cast walk-in floats, the two stats ints and the tick.
+        /// </summary>
+        public int Seat0Team => Capacities + 4 * 6 + 4 * 26 + 1 + 4 * 4 + 4;
+    }
 
     internal static Offsets HeaderOffsets(byte[] bytes)
     {

@@ -184,7 +184,7 @@ public static class AbilitySystem
         {
             int j = found[e];
             if (!u.Alive[j] || Vector2.DistanceSquared(u.Position[j], point) > r2) continue;
-            bool own = u.Owner[j] == owner;
+            bool own = world.AreAllied(owner, u.Owner[j]); // M6-S4: an ally's unit takes what an own one does
             bool affected = a.Affects == AbilityAffects.EnemyUnits ? !own : a.Affects != AbilityAffects.OwnUnits || own;
             EntityHandle victim = new(j, u.Generation[j]);
             foreach (AbilityEffect fx in a.Effects)
@@ -212,8 +212,8 @@ public static class AbilitySystem
         ReadOnlySpan<bool> alive = b.Alive;
         for (int j = 0; j < alive.Length; j++)
         {
-            // Never an own building (docs/02 "Splash and friendly fire").
-            if (!alive[j] || b.Owner[j] == owner || CombatSystem.BuildingDistanceSquared(world, j, point) > r2) continue;
+            // Never an own building (docs/02 "Splash and friendly fire"), nor an ally's (M6-S4).
+            if (!alive[j] || world.AreAllied(owner, b.Owner[j]) || CombatSystem.BuildingDistanceSquared(world, j, point) > r2) continue;
             EntityHandle victim = b.HandleOf(j);
             int armor = data.Buildings[b.TypeId[j]].Armor;
             foreach (AbilityEffect fx in a.Effects)

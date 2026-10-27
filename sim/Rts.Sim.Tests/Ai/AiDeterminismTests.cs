@@ -107,4 +107,26 @@ public class AiDeterminismTests
         Assert.Equal(sim.AiOf(0)!.CommandsSent - sent, sim.PendingCommandCount - pending);
         if (sim.PendingCommandCount == pending) Assert.Equal(before, sim.StateHash());
     }
+
+    /// <summary>M6-S4 criterion 5: two runs of the 2v2 AI match (teams 1, 2, 1, 2; <see cref="AiTeamTests.Match"/>) hash equal after every tick, with the same commands and thinks per seat.</summary>
+    [Theory]
+    [InlineData(1UL)]
+    [InlineData(2UL)]
+    [InlineData(3UL)]
+    public void TwoVersusTwo_TwoRuns_SameHashEveryTick(ulong seed)
+    {
+        Simulation a = AiTeamTests.Match(seed), b = AiTeamTests.Match(seed);
+        for (int t = 0; t < 2000; t++)
+        {
+            a.Tick();
+            b.Tick();
+            Assert.True(a.StateHash() == b.StateHash(), $"seed {seed}: the runs differ after tick {a.TickNumber}");
+        }
+        for (int p = 0; p < 4; p++)
+        {
+            Assert.True(a.AiOf(p)!.CommandsSent > 0, $"seed {seed}: AI {p} sent nothing");
+            Assert.Equal(a.AiOf(p)!.CommandsSent, b.AiOf(p)!.CommandsSent);
+            Assert.Equal(a.AiOf(p)!.Thinks, b.AiOf(p)!.Thinks);
+        }
+    }
 }

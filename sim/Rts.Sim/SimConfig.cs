@@ -128,7 +128,7 @@ public sealed record SimConfig(ulong Seed, int PlayerCount, int UnitCapacity, in
         }
     }
 
-    /// <summary>Throws if any size is out of range, or (M5-2) a seat is bad: a count other than the players', an unknown faction, controller or difficulty, or an AI seat whose faction has no loaded <c>ai.json</c>.</summary>
+    /// <summary>Throws if any size is out of range, or (M5-2) a seat is bad: a count other than the players', an unknown faction, controller or difficulty, (M6-S4) a team outside 0 to <see cref="PlayerSeat.MaxTeam"/>, or an AI seat whose faction has no loaded <c>ai.json</c>.</summary>
     public void Validate()
     {
         if (PlayerCount < 1) throw new ArgumentOutOfRangeException(nameof(PlayerCount));
@@ -160,6 +160,7 @@ public sealed record SimConfig(ulong Seed, int PlayerCount, int UnitCapacity, in
             if (!factionOk) throw new ArgumentOutOfRangeException(nameof(Seats), $"Seat {p}: unknown faction id {s.Faction}.");
             if (s.Controller is not (SeatController.Human or SeatController.Ai)) throw new ArgumentOutOfRangeException(nameof(Seats), $"Seat {p}: unknown controller {(int)s.Controller}.");
             if (s.Difficulty is not (AiDifficulty.Easy or AiDifficulty.Normal or AiDifficulty.Hard)) throw new ArgumentOutOfRangeException(nameof(Seats), $"Seat {p}: unknown difficulty {(int)s.Difficulty}.");
+            if ((uint)s.Team > PlayerSeat.MaxTeam) throw new ArgumentOutOfRangeException(nameof(Seats), $"Seat {p}: team {s.Team} outside 0-{PlayerSeat.MaxTeam}.");
             if (s.Controller == SeatController.Ai && (s.Faction < 0 || s.Faction >= Data.Ai.Length || Data.Ai[s.Faction] == null))
                 throw new ArgumentException($"Seat {p}: an AI seat of faction {s.Faction}, which has no loaded ai.json.", nameof(Seats));
         }

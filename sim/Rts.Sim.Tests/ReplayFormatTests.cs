@@ -77,7 +77,7 @@ public class ReplayFormatTests
         string text = Text(Small);
         Assert.DoesNotContain('\r', text);
         Assert.All(text, ch => Assert.True(ch == '\n' || (ch >= ' ' && ch <= '~')));
-        Assert.StartsWith($"rts-replay {Replay.CurrentFormatVersion}\nsim-version " + SimInfo.Version + "\n", text);
+        Assert.StartsWith($"rts-replay {Small.FormatVersion}\nsim-version " + SimInfo.Version + "\n", text);
         Assert.Contains("\nmap.min-passable-fraction 3F000000\n", text); // 0.5f
         Assert.Contains($" {(uint)BitConverter.SingleToInt32Bits(float.NaN):X8} ", text); // the NaN Move's x, as its bits (FFC00000)
         Assert.EndsWith("\n", text);
@@ -210,17 +210,17 @@ public class ReplayFormatTests
         Assert.Throws<ArgumentException>(() => ReplayFormat.Write(bad)); // the writer won't write it either
     }
 
-    /// <summary>M1-7: format 2 added the flags field; M3-1: format 3 the resource lines; M4-2a: format 4 the combat line and attack targets; M5-2: format 5 the seat lines. M5-4a: format 6 the start-location lines. Any version but 3 to 6 is refused by version first.</summary>
+    /// <summary>M1-7: format 2 added the flags field; M3-1: format 3 the resource lines; M4-2a: format 4 the combat line and attack targets; M5-2: format 5 the seat lines. M5-4a: format 6 the start-location lines. M6-S4: format 7 the seats' teams. Any version but 3 to 7 is refused by version first.</summary>
     [Theory]
     [InlineData(1)]
     [InlineData(2)]
-    [InlineData(7)]
+    [InlineData(8)]
     [InlineData(0)]
     public void OtherFormatVersion_IsRefusedAsVersionMismatch(int version)
     {
-        Assert.Equal(6, Replay.CurrentFormatVersion);
+        Assert.Equal(7, Replay.CurrentFormatVersion);
         Assert.Equal(3, Replay.OldestFormatVersion);
-        string text = Text(Small).Replace($"rts-replay {Replay.CurrentFormatVersion}\n", $"rts-replay {version}\n");
+        string text = Text(Small).Replace($"rts-replay {Small.FormatVersion}\n", $"rts-replay {version}\n");
         Assert.Equal(ReplayError.FormatVersionMismatch, Read(Reseal(text)));
     }
 
@@ -297,7 +297,7 @@ public class ReplayFormatTests
     public void Format4_HasTheCombatLine_AndThirteenFieldCommandLines()
     {
         string text = Text(Small);
-        Assert.StartsWith("rts-replay 6\n", text); // M5-2 / M5-4a: formats 5 and 6 keep format 4's combat line and command lines
+        Assert.StartsWith("rts-replay 6\n", text); // M5-2 / M5-4a: formats 5 and 6 keep format 4's combat line and command lines (M6-S4: a match without teams is still format 6)
         string[] lines = text.Split('\n');
         Assert.Equal("combat 1", lines[Array.FindIndex(lines, l => l.StartsWith("ticks ", StringComparison.Ordinal)) + 1]);
         Assert.All(lines.Where(l => l.StartsWith("c ", StringComparison.Ordinal)), l => Assert.Equal(14, l.Split(' ').Length));
@@ -600,7 +600,7 @@ public class ReplayFormatTests
     public void Format5_HasOneSeatLinePerPlayer_RightAfterPlayers()
     {
         string text = Text(Small);
-        Assert.StartsWith("rts-replay 6\n", text); // M5-4a: format 6 keeps the seat lines
+        Assert.StartsWith("rts-replay 6\n", text); // M5-4a: format 6 keeps the seat lines (M6-S4: a match without teams is still format 6)
         Assert.Contains("\nplayers 2\nseat 0 malazan human normal\nseat 1 whirlwind human normal\nunit-capacity ", text);
         Assert.Equal(new[] { new ReplaySeat("malazan", SeatController.Human, AiDifficulty.Normal), new ReplaySeat("whirlwind", SeatController.Human, AiDifficulty.Normal) }, Small.Seats.ToArray());
     }
@@ -756,5 +756,106 @@ public class ReplayFormatTests
         string text = Text(Small);
         Assert.Contains(find, text);
         Assert.NotEqual(ReplayError.None, Read(Reseal(text.Replace(find, replace))));
+    }
+
+    // ---------- M6-S4: format 7 (each seat's team); formats 5-6 read with team 0 ----------
+
+    /// <summary>A short recording of a 4-player match (every seat human) whose seats have these teams.</summary>
+    private static Replay Teams(params int[] teams)
+    {
+        SimConfig config = TestSim.Config(Seed: 6, PlayerCount: teams.Length, UnitCapacity: 16, CommandCapacity: 16)
+            with { Seats = TeamTests.Seats(teams) };
+        var sim = new Simulation(config);
+        var rec = new ReplayRecorder(sim, checkpointInterval: 10);
+        for (int t = 0; t < 20; t++) sim.Tick();
+        return rec.ToReplay();
+    }
+
+    [Fact]
+    public void Format7_EachSeatLineEndsWithItsTeam_AndReadsBackByteForByte()
+    {
+        Replay r = Teams(1, 2, 0, 8);
+        Assert.Equal(7, r.FormatVersion);
+        Assert.Equal(6, Teams(0, 0, 0, 0).FormatVersion); // every seat team 0: written as before teams, format 6
+        Assert.Equal(new[] { 1, 2, 0, 8 }, r.Seats.Select(s => s.Team).ToArray());
+        string text = Text(r);
+        Assert.Contains("\nseat 0 malazan human normal 1\nseat 1 whirlwind human normal 2\nseat 2 malazan human normal 0\nseat 3 whirlwind human normal 8\n", text);
+        Assert.Equal(ReplayError.None, ReplayFormat.TryRead(Encoding.ASCII.GetBytes(text), out Replay? back));
+        Assert.Equal(r.Seats.ToArray(), back!.Seats.ToArray());
+        Assert.Equal(Encoding.ASCII.GetBytes(text), ReplayFormat.Write(back));
+        ReplayResult played = ReplayPlayer.Run(back, TestSim.Data);
+        Assert.True(played.Ok, played.ToString());
+    }
+
+    /// <summary>A format 6 replay (no team token) reads with every team 0, writes back as format 6 byte for byte, and plays.</summary>
+    [Fact]
+    public void Format6_ReadsWithTeam0_WritesBackByteForByte_AndPlays()
+    {
+        Replay r6 = ReplayTestRun.With(Small, formatVersion: 6);
+        Assert.Equal(6, Small.FormatVersion); // the recorder's own choice for a match without teams
+        string text = Text(r6);
+        Assert.StartsWith("rts-replay 6\n", text);
+        Assert.Contains("\nseat 0 malazan human normal\nseat 1 whirlwind human normal\nunit-capacity ", text);
+        Assert.Equal(ReplayError.None, ReplayFormat.TryRead(Encoding.ASCII.GetBytes(text), out Replay? back));
+        Assert.All(back!.Seats, s => Assert.Equal(0, s.Team));
+        Assert.Equal(Encoding.ASCII.GetBytes(text), ReplayFormat.Write(back));
+        Assert.True(ReplayPlayer.Run(back, TestSim.Data).Ok);
+        // A team token in a format 6 file is a field too many; the same seats as format 7 carry the token.
+        Assert.Contains("\nseat 0 malazan human normal 0\nseat 1 whirlwind human normal 0\nunit-capacity ", Text(ReplayTestRun.With(Small, formatVersion: 7)));
+        Assert.Equal(ReplayError.Malformed, Read(Reseal(text.Replace("seat 0 malazan human normal\n", "seat 0 malazan human normal 0\n"))));
+    }
+
+    /// <summary>A team token that isn't a canonical integer is Malformed; a missing one, or one in a format 6 file, too.</summary>
+    [Theory]
+    [InlineData("seat 1 whirlwind human normal 2\n", "seat 1 whirlwind human normal 02\n", "a non-canonical team")]
+    [InlineData("seat 1 whirlwind human normal 2\n", "seat 1 whirlwind human normal two\n", "a team not a number")]
+    [InlineData("seat 1 whirlwind human normal 2\n", "seat 1 whirlwind human normal +2\n", "a signed team")]
+    [InlineData("seat 1 whirlwind human normal 2\n", "seat 1 whirlwind human normal\n", "the team missing")]
+    [InlineData("seat 1 whirlwind human normal 2\n", "seat 1 whirlwind human normal 2 2\n", "a field too many")]
+    [InlineData("rts-replay 7\n", "rts-replay 6\n", "a team token in a format 6 file")]
+    public void AHostileTeamToken_IsMalformed(string find, string replace, string what)
+    {
+        string text = Text(Teams(1, 2, 0, 8));
+        Assert.Contains(find, text);
+        Assert.Equal(ReplayError.Malformed, Read(Reseal(text.Replace(find, replace))));
+        _ = what;
+    }
+
+    /// <summary>A forged team past 8 or below 0 is InvalidHeader, read or validated; a format 5-6 replay can only say team 0.</summary>
+    [Theory]
+    [InlineData(9)]
+    [InlineData(-1)]
+    [InlineData(255)]
+    [InlineData(int.MaxValue)]
+    public void AForgedTeam_OutsideZeroToEight_IsInvalidHeader(int team)
+    {
+        string text = Text(ReplayTestRun.With(Small, formatVersion: 7));
+        Assert.StartsWith("rts-replay 7\n", text);
+        Assert.Equal(ReplayError.InvalidHeader, Read(Reseal(text.Replace("seat 1 whirlwind human normal 0\n", $"seat 1 whirlwind human normal {team}\n"))));
+        Assert.Equal(ReplayError.InvalidHeader, ReplayTestRun.With(Small, formatVersion: 7, seats: new[] { Small.Seats[0], Small.Seats[1] with { Team = team } }).Validate());
+        Assert.Equal(ReplayError.None, ReplayTestRun.With(Small, formatVersion: 7, seats: new[] { Small.Seats[0], Small.Seats[1] with { Team = 8 } }).Validate());
+        Assert.Equal(ReplayError.InvalidHeader, ReplayTestRun.With(Small, formatVersion: 6, seats: new[] { Small.Seats[0], Small.Seats[1] with { Team = 1 } }).Validate());
+    }
+
+    /// <summary>
+    /// M6-S4 criterion 4: a 2v2 AI match recorded for 1,500 ticks plays back to every checkpoint through the text. Its teams
+    /// are 1, 1, 2, 2, so half the raiders (each seat's, in the next seat's base) stand among allies; with the teams edited to
+    /// 0 (a free-for-all) those fight and the same log diverges, so playback does build the teams.
+    /// </summary>
+    [Fact]
+    public void A2v2AiReplay_PlaysToEveryCheckpoint_AndTheTeamsDecideIt()
+    {
+        PlayerSeat[] seats = AiTeamTests.TwoVersusTwo().Select((s, p) => s with { Team = p < 2 ? 1 : 2 }).ToArray();
+        Simulation sim = AiScenes.Generated(seats, 2, record: true, out ReplayRecorder? rec, units: 600, raiders: 3);
+        for (int t = 0; t < 1500; t++) sim.Tick();
+        Replay replay = rec!.ToReplay();
+        Assert.Equal(new[] { 1, 1, 2, 2 }, replay.Seats.Select(s => s.Team).ToArray());
+        string text = Text(replay);
+        Assert.Equal(ReplayError.None, ReplayFormat.TryRead(Encoding.ASCII.GetBytes(text), out Replay? back));
+        ReplayResult played = ReplayPlayer.Run(back!, TestSim.Data);
+        Assert.True(played.Ok, played.ToString());
+        Assert.Equal(15, back!.Checkpoints.Length);
+        Replay ffa = ReplayTestRun.With(back, seats: back.Seats.Select(s => s with { Team = 0 }));
+        Assert.Equal(ReplayError.CheckpointMismatch, ReplayPlayer.Run(ffa, TestSim.Data).Error);
     }
 }

@@ -15,10 +15,40 @@ namespace Rts.Sim.Tests.Save;
 public class SaveFormatTests
 {
     [Fact]
-    public void CurrentVersion_Is2()
+    public void CurrentVersion_Is3()
     {
-        // M6-S3: the AI seats' section bumped the format (rule 36); a version-1 file is refused, not read.
-        Assert.Equal(2, SaveFormat.CurrentVersion);
+        // M6-S3: the AI seats' section bumped the format to 2 (rule 36); M6-S4: a team byte per seat to 3. Older files are
+        // refused, not read.
+        Assert.Equal(3, SaveFormat.CurrentVersion);
+    }
+
+    /// <summary>M6-S4: each seat's team is one byte, in player order, after the tick (0 for no team); every format-2 field keeps its offset.</summary>
+    [Fact]
+    public void Header_HoldsEachSeatsTeam_AfterTheTick()
+    {
+        var seats = System.Collections.Immutable.ImmutableArray.Create(new PlayerSeat(0, SeatController.Human, AiDifficulty.Normal, 3),
+            new PlayerSeat(1, SeatController.Ai, AiDifficulty.Hard, 8), new PlayerSeat(0, SeatController.Human, AiDifficulty.Easy));
+        var sim = new Simulation(TestSim.Config(3, 3, 64, 64) with { Seats = seats });
+        byte[] bytes = SaveTestRun.Save(sim);
+        using var r = new BinaryReader(new MemoryStream(bytes), Encoding.ASCII);
+        r.ReadBytes(8);
+        Assert.Equal(3, r.ReadInt32());
+        r.ReadInt64();
+        ReadString(r);
+        r.ReadUInt64();
+        r.ReadUInt64();
+        Assert.Equal(3, r.ReadInt32());
+        for (int p = 0; p < 3; p++)
+        {
+            Assert.Equal(TestSim.Data.Factions[seats[p].Faction].Key, ReadString(r));
+            Assert.Equal((byte)seats[p].Controller, r.ReadByte());
+            Assert.Equal((byte)seats[p].Difficulty, r.ReadByte());
+        }
+        Assert.Equal(64, r.ReadInt32()); // the unit capacity follows the seats, as in format 2
+        r.ReadBytes(4 * 5 + 4 * 26 + 1 + 4 * 4); // the other capacities, the map, combat, the cast floats, the stats ints
+        Assert.Equal(0, r.ReadInt32()); // the tick
+        Assert.Equal(new byte[] { 3, 8, 0 }, r.ReadBytes(3));
+        Assert.Equal("HMAP"u8.ToArray(), r.ReadBytes(4));
     }
 
     [Fact]
@@ -94,6 +124,7 @@ public class SaveFormatTests
         Assert.Equal(150, r.ReadInt32());
         Assert.Equal(77, r.ReadInt32());
         Assert.Equal(2, r.ReadInt32()); // the tick
+        Assert.Equal(new byte[] { 0, 0 }, r.ReadBytes(2)); // M6-S4: each seat's team, none
         Assert.Equal("HMAP"u8.ToArray(), r.ReadBytes(4)); // the first section: the stored heightmap
         Assert.Equal(config.Map.Width, r.ReadInt32());
         Assert.Equal(config.Map.Height, r.ReadInt32());

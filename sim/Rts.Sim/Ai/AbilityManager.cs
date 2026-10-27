@@ -152,13 +152,13 @@ internal static class AbilityManager
         return ai.View.TryGetAbilityReady(slot, board.RecentCastIndex[k], out int ready) && ready <= board.RecentCastReadyAt[k];
     }
 
-    /// <summary>Fills <see cref="Blackboard.SeenEnemies"/> with the enemy units the player sees now.</summary>
+    /// <summary>Fills <see cref="Blackboard.SeenEnemies"/> with the enemy units the player sees now (M6-S4: no ally's).</summary>
     private static void SeeEnemies(AiPlayer ai)
     {
         Blackboard board = ai.Board;
         int n = 0, s = -1;
         while (ai.View.NextUnit(ref s, out SeenUnit u))
-            if (u.Owner != ai.Player) board.SeenEnemies[n++] = u.Position;
+            if (ai.View.IsEnemy(u.Owner)) board.SeenEnemies[n++] = u.Position;
         board.SeenEnemyCount = n;
     }
 
@@ -229,9 +229,19 @@ internal static class AbilityManager
         return n;
     }
 
-    /// <summary>Whether an own live unit stands within √<paramref name="r2"/> of <paramref name="p"/>.</summary>
+    /// <summary>Whether an own live unit, or (M6-S4) an ally's the player sees now, stands within √<paramref name="r2"/> of <paramref name="p"/>.</summary>
     private static bool OwnWithin(AiPlayer ai, Vector2 p, float r2) =>
-        OwnWithin(ai, ai.ArmySlots, ai.ArmyCount, p, r2) || OwnWithin(ai, ai.WorkerSlots, ai.WorkerCount, p, r2);
+        OwnWithin(ai, ai.ArmySlots, ai.ArmyCount, p, r2) || OwnWithin(ai, ai.WorkerSlots, ai.WorkerCount, p, r2) || AllyWithin(ai, p, r2);
+
+    /// <summary>M6-S4: whether a unit of an ally the player sees now stands within √<paramref name="r2"/> of <paramref name="p"/> (friendly fire hits it too).</summary>
+    private static bool AllyWithin(AiPlayer ai, Vector2 p, float r2)
+    {
+        if (!ai.View.HasAlly) return false;
+        int s = -1;
+        while (ai.View.NextUnit(ref s, out SeenUnit u))
+            if (u.Owner != ai.Player && !ai.View.IsEnemy(u.Owner) && Vector2.DistanceSquared(u.Position, p) <= r2) return true;
+        return false;
+    }
 
     private static bool OwnWithin(AiPlayer ai, int[] slots, int count, Vector2 p, float r2)
     {
@@ -248,7 +258,7 @@ internal static class AbilityManager
         int s = -1;
         while (ai.View.NextBuilding(ref s, out SeenBuilding b))
         {
-            if (b.Owner == ai.Player) continue;
+            if (!ai.View.IsEnemy(b.Owner)) continue;
             Vector2 c = ai.BuildingCentre(b.TypeId, b.Cell);
             float d = Vector2.DistanceSquared(c, at);
             if (d > reach2 || d >= best) continue;

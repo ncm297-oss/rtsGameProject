@@ -217,7 +217,7 @@ internal sealed class MatchScript
         float bestD = within * within;
         for (int j = 0; j < u.Capacity; j++)
         {
-            if (!u.Alive[j] || u.Owner[j] == p) continue;
+            if (!u.Alive[j] || !w.IsEnemy(p, u.Owner[j])) continue; // M6-S4: not an ally's either
             float d = Vector2.DistanceSquared(u.Position[j], from);
             if (d <= bestD)
             {

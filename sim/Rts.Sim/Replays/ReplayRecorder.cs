@@ -124,14 +124,19 @@ public sealed class ReplayRecorder
         SimConfig config = _sim.World.Config;
         // M5-2: every player's seat as played (the defaults written out), faction by string id.
         var seats = ImmutableArray.CreateBuilder<ReplaySeat>(config.PlayerCount);
+        bool teams = false;
         for (int p = 0; p < config.PlayerCount; p++)
         {
             PlayerSeat seat = config.SeatOf(p);
             string faction = seat.Faction >= 0 ? config.Data.Factions[seat.Faction].Key : "-";
-            seats.Add(new ReplaySeat(faction, seat.Controller, seat.Difficulty));
+            seats.Add(new ReplaySeat(faction, seat.Controller, seat.Difficulty, seat.Team));
+            teams |= seat.Team != 0;
         }
         return new Replay
         {
+            // M6-S4: a match with a team is format 7; a free-for-all stays format 6, byte for byte as before (every reader of
+            // format 6, the game's replay list among them, keeps reading it).
+            FormatVersion = teams ? Replay.CurrentFormatVersion : Replay.TeamlessFormatVersion,
             Seats = seats.MoveToImmutable(),
             SimVersion = SimInfo.Version,
             DataHash = _dataHash,

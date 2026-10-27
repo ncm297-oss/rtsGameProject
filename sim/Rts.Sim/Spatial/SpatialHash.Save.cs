@@ -7,7 +7,7 @@ namespace Rts.Sim.Spatial;
 // restores it as it was instead of rebuilding it from the units' current positions.
 public sealed partial class SpatialHash
 {
-    /// <summary>Writes every index array, the owner counts and codes, and the count (M6-S2).</summary>
+    /// <summary>Writes every index array, the side counts and codes (M6-S4: the owners' sides, the owners themselves in a free-for-all), and the count (M6-S2).</summary>
     internal void WriteTo(SaveWriter w)
     {
         w.Tag(SaveFormat.TagSpatial);
@@ -17,8 +17,8 @@ public sealed partial class SpatialHash
         w.WriteArray(_slotBucket);
         w.WriteArray(_entrySlot);
         w.WriteArray(_entryPos);
-        w.WriteArray(_entryOwner);
-        w.WriteArray(_ownerCount);
+        w.WriteArray(_entrySide);
+        w.WriteArray(_sideCount);
         w.Write(_ownerCodes);
         w.Write(Count);
     }
@@ -32,8 +32,8 @@ public sealed partial class SpatialHash
         r.ReadArray(_slotBucket);
         r.ReadArray(_entrySlot);
         r.ReadArray(_entryPos);
-        r.ReadArray(_entryOwner);
-        r.ReadArray(_ownerCount);
+        r.ReadArray(_entrySide);
+        r.ReadArray(_sideCount);
         _ownerCodes = r.ReadBool();
         Count = r.ReadInt32In(0, Capacity);
         if (r.Failed) return;

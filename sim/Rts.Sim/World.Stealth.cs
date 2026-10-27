@@ -42,7 +42,7 @@ public sealed partial class World
     /// <paramref name="player"/> and one of the player's units stood within <c>stealth.proximity</c> of it or one of its
     /// detectors (a unit's or finished building's <c>detector</c>) within that radius. False for a unit with no stealth, a
     /// summoned unit even with a Stealthed status (it can't be stealthed, so everyone sees it; see <see cref="IsStealthed"/>),
-    /// the unit's own owner (who never needs to), a dead slot, or an unknown player. Derived, not hashed.
+    /// the unit's own owner or (M6-S4) an ally of it (who never need to), a dead slot, or an unknown player. Derived, not hashed.
     /// </summary>
     public bool IsDetectedBy(int player, int slot)
     {
@@ -53,13 +53,14 @@ public sealed partial class World
 
     /// <summary>
     /// The vision rule's stealth half (M4-5): whether live unit slot <paramref name="slot"/> is hidden from
-    /// <paramref name="player"/> by stealth: an enemy's, stealthed (<see cref="IsStealthed"/>), and not detected by the
-    /// player. Callers on the hot path test <see cref="StatusStore.StealthedUnits"/> first.
+    /// <paramref name="player"/> by stealth: an enemy's (M6-S4: never an ally's, <see cref="IsEnemy"/>), stealthed
+    /// (<see cref="IsStealthed"/>), and not detected by the player. Callers on the hot path test
+    /// <see cref="StatusStore.StealthedUnits"/> first.
     /// </summary>
     internal bool HiddenFrom(int player, int slot)
     {
         UnitStore u = Units;
-        return u.Statuses.StealthedUnits != 0 && u.Statuses.HasStealth(slot) && u.Owner[slot] != player && !u.IsSummoned(slot)
+        return u.Statuses.StealthedUnits != 0 && u.Statuses.HasStealth(slot) && IsEnemy(u.Owner[slot], player) && !u.IsSummoned(slot)
             && !DetectedBit(player, slot) && !HasRevealed(slot);
     }
 

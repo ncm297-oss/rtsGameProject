@@ -45,6 +45,10 @@ internal static class SaveHeader
         w.Write(c.StatsSampleTicks);
         w.Write(c.StatsSampleCapacity);
         w.Write(sim.TickNumber);
+        // Format 3 (M6-S4): each seat's team (0-8), one byte per seat in player order, after the tick: the header's last
+        // field, so every format-2 field before it keeps its offset (a header-only reader, ViewApi.SaveSummary, reads up to the
+        // tick).
+        for (int p = 0; p < c.PlayerCount; p++) w.Write((byte)c.SeatOf(p).Team);
     }
 
     /// <summary>Every <see cref="MapGenParams"/> field, in declaration order.</summary>
@@ -111,7 +115,8 @@ internal static class SaveHeader
     /// <summary>
     /// Reads the header after the fixed prefix (the caller checked magic, version, length and checksum): the data hash
     /// (<see cref="SaveError.DataMismatch"/> against <paramref name="data"/>), then every field, each in its range
-    /// (<see cref="SaveError.InvalidHeader"/>, an AI seat whose faction has no <c>ai.json</c> too). On success
+    /// (<see cref="SaveError.InvalidHeader"/>, an AI seat whose faction has no <c>ai.json</c> too, and since format 3 a team
+    /// outside 0 to <see cref="PlayerSeat.MaxTeam"/>). On success
     /// <paramref name="config"/> is the match's config and <paramref name="tick"/> the tick number the save was made at.
     /// </summary>
     public static SaveError TryRead(SaveReader r, GameData data, out SimConfig? config, out int tick)
@@ -145,6 +150,14 @@ internal static class SaveHeader
         float blockerRange = r.ReadFloat(), patience = r.ReadFloat();
         int sampleTicks = r.ReadInt32(), sampleCapacity = r.ReadInt32();
         tick = r.ReadInt32();
+        // Format 3 (M6-S4): the seats' teams, after the tick.
+        for (int p = 0; p < players; p++)
+        {
+            byte team = r.ReadByte();
+            if (r.Failed) return SaveError.Malformed;
+            if (team > PlayerSeat.MaxTeam) return SaveError.InvalidHeader;
+            seats[p] = seats[p] with { Team = team };
+        }
         if (r.Failed) return SaveError.Malformed;
         // BUG-1040: the command capacity's range is the config's own (1 to SaveFormat.MaxCommandCapacity), so a header over
         // it is InvalidHeader before anything is built, as every other capacity out of range.

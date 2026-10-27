@@ -72,6 +72,21 @@ public class SeatConfigTests
         Config(1, human with { Controller = SeatController.Ai }).Validate();
     }
 
+    /// <summary>M6-S4: a seat's team is 0 (no team) to <see cref="PlayerSeat.MaxTeam"/> (8); -1, 9 and the extremes are refused, and a world isn't built.</summary>
+    [Fact]
+    public void Validate_RefusesATeamOutside0To8()
+    {
+        var human = new PlayerSeat(0, SeatController.Human, AiDifficulty.Normal);
+        Assert.Equal(0, human.Team);
+        Assert.Equal(8, PlayerSeat.MaxTeam);
+        for (int team = 0; team <= 8; team++) Config(1, human with { Team = team }).Validate();
+        foreach (int team in new[] { -1, 9, int.MinValue, int.MaxValue })
+        {
+            Assert.Throws<ArgumentOutOfRangeException>(() => Config(1, human with { Team = team }).Validate());
+            Assert.Throws<ArgumentOutOfRangeException>(() => new Simulation(Config(1, human with { Team = team })));
+        }
+    }
+
     /// <summary>An AI seat needs its faction's ai.json loaded: data without it (hand-built, no <c>Ai</c>) is refused, and a world isn't built.</summary>
     [Fact]
     public void Validate_RefusesAnAiSeat_WithoutALoadedAiJson()

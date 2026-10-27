@@ -97,7 +97,7 @@ public static class VisionSystem
 
     /// <summary>
     /// M4-4b-2: whether a live zone hides what stands at <paramref name="target"/> (m) from a viewer of
-    /// <paramref name="viewerOwner"/> at <paramref name="viewer"/>: a zone that blocks vision, of another owner, whose circle
+    /// <paramref name="viewerOwner"/> at <paramref name="viewer"/>: a zone that blocks vision, of an enemy (M6-S4: not an ally's), whose circle
     /// holds <paramref name="target"/> itself (BUG-0360: the point, the statuses' test, not its cell's centre), with the
     /// viewer outside it (its center not within the radius; a building, <paramref name="viewerIsUnit"/> false, never views
     /// from inside). Live zones, not the last fog update's: the rule holds from the tick a zone is made to the tick it is
@@ -111,14 +111,14 @@ public static class VisionSystem
         if (z.BlockerCount == 0) return false;
         for (int k = 0; k < z.End; k++)
         {
-            if (!z.Alive[k] || !z.BlocksVision(k) || z.Owner[k] == viewerOwner || !z.Contains(k, target)) continue;
+            if (!z.Alive[k] || !z.BlocksVision(k) || world.AreAllied(viewerOwner, z.Owner[k]) || !z.Contains(k, target)) continue;
             if (!viewerIsUnit || !z.Contains(k, viewer)) return true;
         }
         return false;
     }
 
     /// <summary>
-    /// BUG-0363 item 1: whether a live zone that blocks vision, of another owner than <paramref name="viewerOwner"/>, reaches
+    /// BUG-0363 item 1: whether a live zone that blocks vision, of an enemy of <paramref name="viewerOwner"/> (M6-S4), reaches
     /// within <paramref name="radius"/> m of <paramref name="at"/> (its circle and that disc overlap or touch). When none does,
     /// nothing within the disc stands in such a zone, so <see cref="ZoneHides"/> is false for every target in it.
     /// </summary>
@@ -127,7 +127,7 @@ public static class VisionSystem
         ZoneStore z = world.Zones;
         for (int k = 0; k < z.End; k++)
         {
-            if (!z.Alive[k] || !z.BlocksVision(k) || z.Owner[k] == viewerOwner) continue;
+            if (!z.Alive[k] || !z.BlocksVision(k) || world.AreAllied(viewerOwner, z.Owner[k])) continue;
             float reach = radius + z.Radius(k);
             if (Vector2.DistanceSquared(at, z.Center[k]) <= reach * reach) return true;
         }
@@ -152,11 +152,12 @@ public static class VisionSystem
         if (attackerIsBuilding)
         {
             BuildingStore b = world.Buildings;
-            if (b.IsAlive(attacker) && b.Owner[attacker.Index] != victimOwner) world.Fog.RevealBuilding(attacker, victimOwner, until);
+            if (b.IsAlive(attacker) && world.IsEnemy(b.Owner[attacker.Index], victimOwner)) world.Fog.RevealBuilding(attacker, victimOwner, until);
             return;
         }
+        // M6-S4: friendly fire from an ally reveals nothing, as an own unit's doesn't.
         UnitStore u = world.Units;
-        if (!u.IsAlive(attacker) || u.Owner[attacker.Index] == victimOwner) return;
+        if (!u.IsAlive(attacker) || world.AreAllied(u.Owner[attacker.Index], victimOwner)) return;
         world.Fog.Reveal(attacker, victimOwner, until);
     }
 }

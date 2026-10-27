@@ -307,4 +307,59 @@ public class MilitaryManagerTests
         Assert.All(moves, c => Assert.Equal(rally, c.Position));
         Assert.All(moves, c => Assert.Equal(moves[0].Tick, c.Tick)); // one think, one each
     }
+
+    /// <summary>
+    /// M6-S4: player 0 (AI, team 1) sees its ally's hall (player 2, team 1, north, the nearer) and the enemy's (player 1, team
+    /// 2, east) through two billets of its own, or (<paramref name="ghost"/>) remembers both: the rally points toward the
+    /// enemy's hall and the wave attack-moves to it; the ally's building is never a target and never counted as an enemy's.
+    /// </summary>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void AnAllysNearerHall_IsNeitherTheRallyNorTheWaveTarget(bool ghost)
+    {
+        GameData data = s_four.Value;
+        PlayerSeat[] seats = AiScenes.Seats(AiDifficulty.Normal, SeatController.Ai, SeatController.Human, SeatController.Human)
+            .Select((s, p) => s with { Team = p == 1 ? 2 : 1 }).ToArray();
+        Simulation sim = AiScenes.Flat(seats, data);
+        World w = sim.World;
+        int billetType = data.FindBuilding("malazan_billet");
+        Assert.True(w.Buildings.Spawn(0, billetType, 31 * AiScenes.FlatSize + 47, out EntityHandle eastBillet));
+        Assert.True(w.Buildings.Spawn(0, billetType, 14 * AiScenes.FlatSize + 30, out EntityHandle northBillet));
+        EntityHandle enemyHall = default, allyHall = default;
+        for (int k = 0; k < w.Buildings.Capacity; k++)
+        {
+            if (!w.Buildings.Alive[k] || data.Buildings[w.Buildings.TypeId[k]].Slot != BuildingSlot.TownHall) continue;
+            if (w.Buildings.Owner[k] == 1) enemyHall = w.Buildings.HandleOf(k);
+            if (w.Buildings.Owner[k] == 2) allyHall = w.Buildings.HandleOf(k);
+        }
+        sim.Tick();
+        AiPlayer ai = sim.AiOf(0)!;
+        Assert.True(ai.View.TryGetBuilding(allyHall.Index, out _), "setup: the AI doesn't see its ally's hall");
+        Assert.True(ai.View.TryGetBuilding(enemyHall.Index, out _), "setup: the AI doesn't see the enemy's hall");
+        Assert.True(ai.TryHallPoint(out Vector2 own));
+        Assert.True(Vector2.Distance(own, Centre(sim, allyHall)) < Vector2.Distance(own, Centre(sim, enemyHall)), "setup: the ally's hall is not the nearer");
+        Assert.Equal(1, ai.Board.KnownEnemyBuildings);
+        if (ghost)
+        {
+            Assert.True(w.Buildings.Free(eastBillet) && w.Buildings.Free(northBillet));
+            do sim.Tick(); while (sim.TickNumber % 4 != 2);
+            Assert.True(ai.View.TryGetGhost(enemyHall.Index, out _) && ai.View.TryGetGhost(allyHall.Index, out _), "setup: both halls are ghosts");
+            NextThink(sim);
+            Assert.Equal(1, ai.Board.KnownEnemyBuildings);
+        }
+        Assert.True(ai.NearestEnemyBuilding(own, out EntityHandle nearest, out _, out _));
+        Assert.Equal(enemyHall, nearest);
+        Assert.True(ai.EnemyBuildingKnown(enemyHall, out _));
+        Assert.False(ai.EnemyBuildingKnown(allyHall, out _));
+        List<Command> log = AiScenes.Log(sim, 0);
+        List<EntityHandle> army = Army(sim, 4);
+        NextThink(sim);
+        Vector2 toward = Vector2.Normalize(Centre(sim, enemyHall) - own);
+        Assert.InRange(Vector2.Dot(Vector2.Normalize(ai.Board.Rally - own), toward), 0.9999f, 1.0001f);
+        List<Command> attacks = log.Where(c => c.Kind == CommandKind.AttackMove).ToList();
+        Assert.Equal(army.OrderBy(h => h.Index), attacks.Select(c => c.Unit));
+        Assert.All(attacks, c => Assert.Equal(Centre(sim, enemyHall), c.Position));
+        Assert.Equal(enemyHall, ai.Board.WaveTarget);
+    }
 }

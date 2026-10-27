@@ -178,6 +178,23 @@ public class SaveRoundTripTests
     }
 
     /// <summary>
+    /// M6-S4 criterion 4: a 2v2 (a scripted human and three AI seats, teams 1, 2, 1, 2) saved at tick 500 loads with its teams
+    /// and follows the unsaved run hash for hash for 1,000 ticks.
+    /// </summary>
+    [Fact]
+    public void A2v2_HumanAndAi_SavedAt500_LoadsWithItsTeams_AndFollowsTheUnsavedRun()
+    {
+        SaveScene scene = AiSaveScenes.TwoVersusTwo(1);
+        Simulation sim = scene.Build();
+        for (int t = 0; t < 500; t++) sim.Tick();
+        Simulation loaded = SaveTestRun.Load(TestSim.Data, SaveTestRun.Save(sim));
+        Assert.Equal(new[] { 1, 2, 1, 2 }, Enumerable.Range(0, 4).Select(loaded.World.TeamOf).ToArray());
+        Assert.True(loaded.World.AreAllied(0, 2) && loaded.World.AreAllied(1, 3) && !loaded.World.AreAllied(0, 1));
+        SaveTestRun.Result r = SaveTestRun.RoundTrip(scene, new[] { 500 }, after: 1000);
+        Assert.Equal(1000, r.TicksCompared);
+    }
+
+    /// <summary>
     /// M6-S3: a loaded AI seat drew its pick once, at construction, from the same seed (so its opening is the saved one), and
     /// carries the saved stream: equal to the unsaved seat's, which no manager has drawn on since the pick (QA's
     /// <c>ThePick_IsTheOnlyDrawOnTheAisStream</c>).

@@ -102,7 +102,7 @@ public static class StealthSystem
         for (int k = 0; k < n; k++)
         {
             int q = found[k];
-            if (!u.Alive[q] || u.Owner[q] == owner) continue;
+            if (!u.Alive[q] || u.Owner[q] == owner || (world.HasAlliances && world.AreAllied(owner, u.Owner[q]))) continue; // M6-S4: an ally never needs to detect it
             float d2 = Vector2.DistanceSquared(pos, u.Position[q]);
             float detector = data.Units[u.TypeId[q]].Detector;
             if (!(d2 <= proximity2) && !(detector > 0f && d2 <= detector * detector)) continue;
@@ -115,7 +115,7 @@ public static class StealthSystem
             int slot = buildingCount >= 0 ? world.DetectorBuildings[k] : k;
             if (buildingCount < 0 && (!b.Alive[slot] || b.UnderConstruction[slot])) continue;
             int bOwner = b.Owner[slot];
-            if (bOwner == owner) continue;
+            if (world.AreAllied(owner, bOwner)) continue; // M6-S4: its owner's allies see it anyway
             float detector = data.Buildings[b.TypeId[slot]].Detector;
             if (!(detector > 0f) || !(Vector2.DistanceSquared(CombatSystem.BuildingCentre(world, slot), pos) <= detector * detector)) continue;
             Mark(world, fog, j, bOwner, ref done);

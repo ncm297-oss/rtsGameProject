@@ -221,4 +221,30 @@ public class ScoutManagerTests
             if (ai.Data.Resources[n.TypeId].Resource == ResourceKind.Wood) return true;
         return false;
     }
+
+    /// <summary>
+    /// M6-S4: the flat scene's other seat is the AI's ally (teams 1 / 1). The scout sees the ally's hall early on its sweep, but
+    /// an ally's building is no enemy building: the sweep never ends on it (the enemy-building count stays 0); it ends only
+    /// when every waypoint is visited.
+    /// </summary>
+    [Fact]
+    public void TheSweep_NeverEndsOnAnAllysHall()
+    {
+        PlayerSeat[] seats = AiScenes.Seats(AiDifficulty.Hard, SeatController.Ai, SeatController.Human).Select(s => s with { Team = 1 }).ToArray();
+        Simulation sim = AiScenes.Flat(seats, s_quiet.Value);
+        AiPlayer ai = sim.AiOf(0)!;
+        int allyHall = -1;
+        for (int k = 0; k < sim.World.Buildings.Capacity; k++)
+            if (sim.World.Buildings.Alive[k] && sim.World.Buildings.Owner[k] == 1) allyHall = k;
+        bool sawAlly = false;
+        while (sim.TickNumber < 12000 && ai.Board.ScoutPhase != 2)
+        {
+            sim.Tick();
+            sawAlly |= ai.Board.ScoutPhase == 1 && ai.View.TryGetBuilding(allyHall, out _);
+            Assert.Equal(0, ai.Board.KnownEnemyBuildings);
+        }
+        Assert.True(sawAlly, "setup: the scout never saw the ally's hall");
+        Assert.Equal(2, ai.Board.ScoutPhase);
+        Assert.All(ai.Board.ScoutVisited, v => Assert.True(v, "the sweep ended before every waypoint was visited"));
+    }
 }

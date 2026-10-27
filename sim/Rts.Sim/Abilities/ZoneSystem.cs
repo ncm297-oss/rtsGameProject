@@ -69,7 +69,7 @@ public static class ZoneSystem
         {
             int j = found[e];
             if (!u.Alive[j] || !z.Contains(k, u.Position[j])) continue;
-            bool own = u.Owner[j] == owner;
+            bool own = world.AreAllied(owner, u.Owner[j]); // M6-S4: an ally's unit takes what an own one does
             bool affected = a.Affects == AbilityAffects.EnemyUnits ? !own : a.Affects != AbilityAffects.OwnUnits || own;
             if (!affected) continue;
             foreach (ZoneStatus s in fx.ZoneStatuses)

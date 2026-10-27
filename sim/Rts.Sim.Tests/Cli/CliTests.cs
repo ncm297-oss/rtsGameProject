@@ -329,7 +329,7 @@ public sealed class CliTests : IDisposable
         Assert.Equal("1", m.Groups[5].Value); // M3-5: no research in this run, still Age I
 
         Assert.Equal(ReplayError.None, ReplayFormat.TryReadFile(path, out Replay? replay));
-        Assert.Equal(Replay.CurrentFormatVersion, replay!.FormatVersion);
+        Assert.Equal(Replay.TeamlessFormatVersion, replay!.FormatVersion); // M6-S4: no teams, so format 6
         Assert.Contains(replay.Commands, c => c.Kind == CommandKind.SpawnBuilding);
         Assert.Equal(10, replay.Commands.Count(c => c.Kind == CommandKind.Gather));
         CliResult played = Cli("play", path, "--data", TestDataDir.Shipped);

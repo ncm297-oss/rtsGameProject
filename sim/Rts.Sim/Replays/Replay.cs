@@ -13,8 +13,15 @@ namespace Rts.Sim.Replays;
 /// </remarks>
 public sealed class Replay
 {
-    /// <summary>The format version this build writes (6 since M5-4a: the map's start-location fields; 5 since M5-2: one <see cref="Seats"/> line per player; 4 since M4-2a: the <see cref="Combat"/> switch in the header and an attack target on every command line; 3 since M3-1: the resource capacity and the resource placer's map fields; 2 since M1-7: command lines carry <see cref="Command.Flags"/>).</summary>
-    public const int CurrentFormatVersion = 6;
+    /// <summary>The format version this build writes (7 since M6-S4: each seat's team, <see cref="ReplaySeat.Team"/>; 6 since M5-4a: the map's start-location fields; 5 since M5-2: one <see cref="Seats"/> line per player; 4 since M4-2a: the <see cref="Combat"/> switch in the header and an attack target on every command line; 3 since M3-1: the resource capacity and the resource placer's map fields; 2 since M1-7: command lines carry <see cref="Command.Flags"/>).</summary>
+    public const int CurrentFormatVersion = 7;
+
+    /// <summary>
+    /// M6-S4: the format a recording of a free-for-all (every seat team 0) is written in: 6, the newest without team tokens,
+    /// so such a file is byte for byte what the build before teams wrote. A match with a team is written in
+    /// <see cref="CurrentFormatVersion"/>.
+    /// </summary>
+    public const int TeamlessFormatVersion = 6;
 
     /// <summary>The oldest format version this build still reads and plays: 3 (M3-1), which has no combat line (combat on) and no attack targets.</summary>
     public const int OldestFormatVersion = 3;
@@ -101,7 +108,9 @@ public sealed class Replay
             if (Seats.IsDefault || Seats.Length != PlayerCount) return ReplayError.InvalidHeader;
             foreach (ReplaySeat seat in Seats)
                 if (!IsFactionToken(seat.Faction) || seat.Controller is not (SeatController.Human or SeatController.Ai)
-                    || seat.Difficulty is not (Data.AiDifficulty.Easy or Data.AiDifficulty.Normal or Data.AiDifficulty.Hard))
+                    || seat.Difficulty is not (Data.AiDifficulty.Easy or Data.AiDifficulty.Normal or Data.AiDifficulty.Hard)
+                    // M6-S4: a team 0-8, and formats 5-6 have no team token: they can only say 0.
+                    || (uint)seat.Team > PlayerSeat.MaxTeam || (FormatVersion < 7 && seat.Team != 0))
                     return ReplayError.InvalidHeader;
         }
         else if (!Seats.IsDefaultOrEmpty) return ReplayError.InvalidHeader;

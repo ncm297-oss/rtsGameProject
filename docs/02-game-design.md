@@ -184,8 +184,8 @@ ground-targeted lobs (12 m/s) that always explode at the impact point.
 ### Splash and friendly fire
 
 Splash damage is 100% within 40% of the radius and falls off linearly to 50% at the edge. Attacks
-flagged **friendly fire** (Sappers, Catapults) also hit own units in the radius, at 50% damage
-(alliances arrive with M5). Friendly fire never damages buildings.
+flagged **friendly fire** (Sappers, Catapults) also hit own units in the radius, at 50% damage, and an
+ally's units the same way (M6-S4). Friendly fire never damages buildings, own or an ally's.
 
 ### Flying units
 
@@ -272,7 +272,11 @@ whether the zone's statuses take it and whether the zone hides it (the ground is
 - Enemy buildings seen once stay visible as "last known" ghosts in explored fog until the cell is
   seen again.
 - Vision modifiers: Darkness and Sandstorm zones hide their contents from enemies outside them
-  and blind enemies inside them. High ground limits vision from below (next section).
+  and blind enemies inside them; an ally's zone neither hides nor blinds (M6-S4). High ground limits vision from below
+  (next section).
+- **Allies do not share vision yet** (M6-S4; shared vision is M6-S5): a player sees an ally's units and buildings only
+  inside its own sight, as any other player's, and remembers an ally's buildings as last-known ghosts the same way. A
+  stealthed unit hides only from enemies: its owner's allies see it wherever their own sight reaches.
 
 ### High ground
 
@@ -431,7 +435,10 @@ own cues (select, order, refused, building placed or finished, unit or tech read
 2. **Skirmish setup:** map, 2-4 player slots (each: human/AI, faction, difficulty, color, team),
    starting resources (standard / high), game speed. Default: free-for-all. Colours are unique per match: a slot can't
    pick a colour another slot holds. Single-player: slot 1 is always the local human, slots 2-4 are AI seats, each with
-   its own difficulty (built in M6-V5: Add player / Remove player, 2-4 slots, free-for-all; teams not yet). Built so far:
+   its own difficulty (built in M6-V5: Add player / Remove player, 2-4 slots, free-for-all; teams not yet on the setup
+   screen). A slot's team is 0 (no team: a side of its own, the free-for-all default) or 1-8; slots on one team are allies:
+   they never attack each other, their friendly fire treats each other's units as their own, and the AI never targets an
+   ally (the sim's half, M6-S4; shared vision is M6-S5). Built so far:
    the map seed and size, the slots, a **Game speed** list (Slow / Normal / Fast, default Normal) and the map generator's
    **Forests** and **Gold mines** counts (defaults 12 / 8; at least one forest and two gold mines per player, so every
    base keeps its start forest and start mines; at most 64 each) (M6-V15). The smallest map (128) fits only about 60 gold
@@ -443,7 +450,9 @@ own cues (select, order, refused, building placed or finished, unit or tech read
    hall that trains units: the Town Hall or one of the five unit halls; the Whirlwind's Holy Camp, Raider Camp and Archer
    Camp are such halls). Houses, the drop-off camp (Quartermaster's Depot / Supply Cache), the Forge, towers and
    unfinished sites don't need to fall. A summoned unit counts while it lives. A player that never had a building is never defeated
-   (sandboxes). The last player or team standing wins. (Owner decision 2026-10-14; until then: no buildings left.) A
+   (sandboxes). The last player or team standing wins: the match is over once every player still in is on one side (a
+   team, or a player with no team) and at least two sides ever built (M6-S4). (Owner decision 2026-10-14; until then: no
+   buildings left.) A
    player that is out loses its remaining buildings on that tick: they collapse like razed ones (rubble, the ground opens,
    queued research and training go with them), and a collapse is **neither a kill nor a loss** in the stats, which count
    only what an enemy destroyed (Producer decisions 2026-10-14 and 2026-10-16, BUG-0703; built in M5-H2).

@@ -288,4 +288,46 @@ public class DefenseManagerTests
         Assert.Equal(army.OrderBy(h => h.Index), pulls.Skip(3).Select(c => c.Unit));
         Assert.All(pulls.Skip(3), c => Assert.Equal(Centroid(sim, enemies), c.Position));
     }
+
+    /// <summary>
+    /// M6-S4: an ally's army (player 1, human, teams 1 / 1) parked beside the AI's hall for 2,000 ticks never sets
+    /// <see cref="Blackboard.Defending"/>; the same army of an enemy (team 0) does at once (the scene's control).
+    /// </summary>
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void AnAlliedArmyBesideTheHall_NeverTriggersTheDefense(bool allied)
+    {
+        PlayerSeat[] seats = AiScenes.Seats(AiDifficulty.Normal, SeatController.Ai, SeatController.Human)
+            .Select(s => s with { Team = allied ? 1 : 0 }).ToArray();
+        Simulation sim = AiScenes.Flat(seats, combat: true);
+        World w = sim.World;
+        (int hx, int hy) = AiScenes.HallAt(0);
+        int line = Rts.Sim.ViewApi.StartBase.UnitOfSlot(w.Data, w.FactionOf(1), UnitSlot.Line);
+        var army = new List<EntityHandle>();
+        for (int k = 0; k < 8; k++)
+        {
+            EntityHandle h = CombatScenes.Place(sim, 1, line, w.NavGrid.CellCenter(hx + 5 + k % 4, hy - 3 + k / 4));
+            w.Units.Hold[h.Index] = true;
+            army.Add(h);
+        }
+        AiPlayer ai = sim.AiOf(0)!;
+        bool everDefending = false;
+        int livingArmy = 0;
+        for (int t = 0; t < 2000; t++)
+        {
+            sim.Tick();
+            everDefending |= ai.Board.Defending;
+            if (!allied && everDefending) break;
+        }
+        foreach (EntityHandle h in army) if (w.Units.IsAlive(h)) livingArmy++;
+        if (allied)
+        {
+            Assert.False(everDefending, "an ally's army beside the hall set Defending");
+            Assert.Equal(0, ai.Board.Defenses);
+            Assert.Equal(8, livingArmy);
+            Assert.Equal(0, ai.IntruderCount);
+        }
+        else Assert.True(everDefending, "control: an enemy army beside the hall never set Defending");
+    }
 }

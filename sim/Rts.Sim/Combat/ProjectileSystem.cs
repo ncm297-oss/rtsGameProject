@@ -170,9 +170,10 @@ public static class ProjectileSystem
     /// <summary>
     /// The splash of <paramref name="attack"/> (a unit type's, or a tower's: <paramref name="attackerIsBuilding"/>, M4-3b)
     /// with <paramref name="attackBonus"/> points of techs, owned by <paramref name="owner"/>, landing at
-    /// <paramref name="at"/> (nothing when the attack has none): every other owner's unit whose center is within the
-    /// radius, and with friendly fire every own unit (the attacker too) at <see cref="CombatConstants.FriendlyFireFactor"/>;
-    /// every other owner's building whose footprint is within it, as structure; never an own building. Damage per victim
+    /// <paramref name="at"/> (nothing when the attack has none): every enemy unit whose center is within the radius, and
+    /// with friendly fire every own unit (the attacker too) and (M6-S4) every ally's at
+    /// <see cref="CombatConstants.FriendlyFireFactor"/>; every enemy building whose footprint is within it, as structure;
+    /// never an own or an ally's building. Damage per victim
     /// is <see cref="DamageCalc.Compute(DamageTable, AttackDef, int, int, int)"/> with its class and armor, times
     /// <see cref="Falloff"/>, rounded half up, at least 1. <paramref name="skip"/> (the direct target an aimed or melee
     /// hit already struck) is left out. Units in slot order, then buildings in slot order. <paramref name="attackerLevel"/>
@@ -194,7 +195,7 @@ public static class ProjectileSystem
             if (!u.Alive[j] || (!skipIsBuilding && skip.Index == j && skip.Generation == u.Generation[j])) continue;
             float d = Vector2.Distance(u.Position[j], at);
             if (!(d <= radius)) continue;
-            bool friend = u.Owner[j] == owner;
+            bool friend = world.AreAllied(owner, u.Owner[j]);
             if (friend && !attack.FriendlyFire) continue;
             float factor = Falloff(d, radius) * (friend ? CombatConstants.FriendlyFireFactor : 1f);
             UnitDef vdef = data.Units[u.TypeId[j]];
@@ -208,8 +209,8 @@ public static class ProjectileSystem
         for (int k = 0; k < world.CombatBuildingCount; k++)
         {
             int j = world.CombatBuildings[k];
-            // Friendly fire never damages buildings (docs/02).
-            if (!b.Alive[j] || b.Owner[j] == owner || (skipIsBuilding && skip.Index == j && skip.Generation == b.Generation[j])) continue;
+            // Friendly fire never damages buildings (docs/02), an ally's neither (M6-S4).
+            if (!b.Alive[j] || world.AreAllied(owner, b.Owner[j]) || (skipIsBuilding && skip.Index == j && skip.Generation == b.Generation[j])) continue;
             float d = MathF.Sqrt(CombatSystem.BuildingDistanceSquared(world, j, at));
             if (!(d <= radius)) continue;
             int damage = Scale(DamageCalc.Compute(data.DamageTable, attack, attackBonus, structure, data.Buildings[b.TypeId[j]].Armor), Falloff(d, radius));

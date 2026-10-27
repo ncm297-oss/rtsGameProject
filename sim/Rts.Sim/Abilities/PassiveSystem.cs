@@ -95,7 +95,8 @@ public static class PassiveSystem
         for (int e = 0; e < n; e++)
         {
             int j = found[e];
-            if (j == v || !u.Alive[j] || u.Owner[j] != owner || Vector2.DistanceSquared(u.Position[j], at) > r2) continue;
+            // M6-S4: an ally's listed unit takes it too (allies get friendly effects).
+            if (j == v || !u.Alive[j] || !world.AreAllied(owner, u.Owner[j]) || Vector2.DistanceSquared(u.Position[j], at) > r2) continue;
             if (!Listed(p, u.TypeId[j])) continue;
             StatusSystem.Apply(world, j, p.Status, p.Magnitude, p.DurationTicks, owner);
         }
