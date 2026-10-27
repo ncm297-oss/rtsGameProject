@@ -7785,17 +7785,20 @@ rules are unchanged.
 - **Spending per opening (D21, 2026-10-18, data track: three openings per faction)**
   (`Content/AiSpendingReportTests.GeneratedNormal_Spending_Report`, the menu's map against an idle seat, 20 minutes: one
   Normal run per opening on the smallest seed in 1-50 whose Normal pick it is, plus Easy on seed 1): the idle seat falls
-  at malazan standard Normal seed 1 498 s, malazan crossbow_push Normal seed 5 474 s, malazan cadre_rush Normal seed 7
-  619 s, malazan standard Easy seed 1 497 s, whirlwind standard Normal seed 1 495 s, whirlwind raider_rush Normal seed 2
-  416 s, whirlwind holy_war Normal seed 3 573 s and whirlwind standard Easy seed 1 518 s. Across both factions 2 of those
+  at malazan standard Normal seed 1 489 s, malazan crossbow_push Normal seed 5 474 s, malazan cadre_rush Normal seed 7
+  615 s, malazan standard Easy seed 1 497 s, whirlwind standard Normal seed 1 494 s, whirlwind raider_rush Normal seed 2
+  408 s, whirlwind holy_war Normal seed 3 574 s and whirlwind standard Easy seed 1 506 s. Across both factions 2 of those
   9 marks had wood under 100 with gold at 300 or more, so the report reads "wood binds at some marks only, not the limit
-  overall". Age II comes in late on every opening (its step due at 5:00-8:00, in at 509-1,098 s; the Whirlwind's Easy run never in 20
-  minutes): the AI keeps no reserve for a due step and the production manager spends first ("Implementation (M5-2)";
-  reported to the Producer as a sim-side lever; since M5-4g it keeps one, "Implementation (M5-4g)"). The faction pages give each opening's runs in its own "Spending" and
-  "Houses at the cap" notes (`QA/Content/D20PinQaTests.HouseNote_SaysWhatTheMenuMapRunsShow`); the 12th house step stays
-  in every opening (taken out, the cap reaches 100 later on both factions and the house rule places it anyway).
-  `Content/AiOpeningPairsReportTests` plays the 9 Malazan × Whirlwind pairings Normal against Normal for 20 minutes
-  (50-110 s in all, Debug, the machine shared): both sides send a wave in every pairing and no step is a dead end.
+  overall". Re-printed 2026-10-26 (data track, D-R32) for M5-4g's reserve: Age II is now in at 509-616 s on every run
+  (its step due at 5:00-8:00), Easy's too; before it, with no reserve and the production manager spending first, it came
+  in at 509-1,098 s and the Whirlwind's Easy run never in 20 minutes (the idle seat fell at 498 / 474 / 619 / 497 s and
+  495 / 416 / 573 / 518 s; the verdict did not move). The faction pages give each opening's runs in its own "Spending"
+  and "Houses at the cap" notes (`QA/Content/D20PinQaTests.HouseNote_SaysWhatTheMenuMapRunsShow`); the 12th house step
+  stays in every opening (since M5-4g the Malazan run skips it at the hard cap, the second Keep standing, and the
+  Whirlwind run's cap is 92 with it and 84 without it at 20:00). `Content/AiOpeningPairsReportTests` plays the 9 Malazan
+  × Whirlwind pairings Normal against Normal for 20 minutes (50-110 s in all, Debug, the machine shared): no step is a
+  dead end, both sides send a wave in every pairing on its smallest seed, and every side's Age II is pinned to the faction
+  pages' "Age II against ..." tables (with `QA/Content/D21OpeningsQaTests`' 2nd and 3rd seeds).
 - **Tests.** `Ai/ProportionalDefenseTests` (a 12-pop wave out with a 6-pop threshold and three home units: one Raider, the
   wave goes on and two home units answer; eight Raiders, every home unit and the six members nearest the hall, the other
   six keep the threshold and the target; twelve Raiders, the whole wave; the hall hit to 0.4 / 0.6 of its hp, the whole

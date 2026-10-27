@@ -115,7 +115,8 @@ AI always plays opening 1, `standard`**; a Normal or Hard AI picks one of the th
 (18 in Age I, 26 in Age II) than the Malazan, spending on the army first. The AI starts with 5 Camp Followers, 3 on gold
 and 2 on wood. `Content/AiContentTests` pins the openings table, every opening's step table, composition table and wave
 line, and the retreat line below to the file, both ways; `Content/AiOpeningPairsReportTests` plays the 9 pairings
-against the Malazan openings (malazan.md).
+against the Malazan openings (malazan.md), and with `QA/Content/D21OpeningsQaTests` (each pairing's 2nd and 3rd seeds)
+pins every side's Age II to "Age II against the Malazans" at the end of this page.
 
 | # | Id | Name (shown to the player) | Description (shown to the player) |
 | --- | --- | --- | --- |
@@ -124,10 +125,19 @@ against the Malazan openings (malazan.md).
 | 3 | `holy_war` | Holy war | An early Age II, the Shrine at once and Dryjhna's Prophecy for Zealots and Priests. No Horse Lines; the first wave waits for 20 army pop. |
 
 Not in the file, because the schema has no field for it (requests to the sim track): the sketch's first raid at ~4:30
-(6 Raiders + 2 Horse Raiders against the workers; the standard opening's first wave goes at 14 army pop, below), the 3 :
-2 gold / wood split (the economy manager's `goldShare`, a common rule), and a reserve for a due step (the AI saves
-nothing for Age II, so it comes in minutes after its step is due: each opening's spending note). The sketch's
-expansion at ~9:00 is now the step at 8:00, Normal's `expandAfter`.
+(6 Raiders + 2 Horse Raiders against the workers; the standard opening's first wave goes at 14 army pop, below) and the
+3 : 2 gold / wood split (the economy manager's `goldShare`, a common rule). The sketch's expansion at ~9:00 is now the
+step at 8:00, Normal's `expandAfter`.
+
+**The reserve (BUG-0981, fixed by the sim's M5-4g; re-printed 2026-10-26).** Until M5-4g the AI saved nothing for a
+due step, so production spent first and Age II came in minutes after its step was due (791-1,098 s on the menu's map
+against an idle seat, never on Easy). Now a due step's cost is kept in reserve while the army is at least the opening's
+wave and the base is not being defended (malazan.md "The reserve", docs/02 "AI opponent"): against an idle seat every
+opening's Age II is in at 561-616 s, Easy's at 599 s (each opening's spending note). Against the Malazans it comes at
+7:35-17:39 (the table at the end of this page); 2 of the 27 Whirlwind sides never get it (`standard` seeds 9 and 13,
+both standing at 20:00, knowing no gold node, so their Age II is not reservable: docs/03 "Implementation (M5-4g)"). No
+Whirlwind side was defeated in the 27 runs. The residue on the Malazan side is BUG-1010 (malazan.md "Fast Age II
+against the raider rush").
 
 - **Retreat:** a wave that has lost 50% falls back; a unit under 30% hp counts as wounded (`retreat`, shared by the
   openings; Hard pulls it back).
@@ -186,18 +196,23 @@ its name and description.
 
 **Houses at the cap (D21, 2026-10-18, D15 C's parked finding measured; `QA/Content/AiHouseRuleReportTests.MenuMapNormal_HouseSources_Report` and `MenuMapNormal_TwelfthHouse_Report`).**
 Since M5-4f the executor skips a house step once the population cap is the hard cap (100): the step is done with no
-command sent and no Tent placed. On the menu's map (20 minutes, the other seat idle): Normal, seed 1: the cap reaches 100
-at 683 s; the last Tent step (step 19) is done at a cap of 98; skipped at the hard cap: none; 12 Tents stand at 20:00, 0
-past the cap. The 12th Tent leaves 6 of its 8 pop unused, so D21 measured taking it out: without the 12th Tent step
-(step 19) on the same seed, the cap reaches 100 at 827 s, and 12 Tents stand at 20:00, 0 past the cap. The economy
-manager's house rule places the 12th Tent anyway, only later, so the step stays, in every opening.
+command sent and no Tent placed. On the menu's map (20 minutes, the other seat idle): Normal, seed 1: the cap stays
+below 100 (92 at 20:00); the last Tent step (step 19) is done at a cap of 84; skipped at the hard cap: none; 12 Tents
+stand at 20:00, 0 past the cap. The 12th Tent can leave 6 of its 8 pop unused, so D21 measured taking it out: without
+the 12th Tent step (step 19) on the same seed, the cap stays below 100, and 11 Tents stand at 20:00, 0 past the cap.
+Re-printed 2026-10-26 for M5-4g (the reserve): wood runs short on this seed (0-50 in hand from 13:00 while the gold
+piles up), so three Tents are still sites at 20:00 and the cap is 92 with the 12th Tent step and 84 without it, where
+the population sits from 17:00. Before M5-4g the cap reached 100 at 683 s with the step and 827 s without it (12 Tents
+both times, the house rule placing the 12th anyway). The step stays in every opening.
 
 **Spending on the menu's map (D21, 2026-10-18, gathering gold 0.85 / wood 0.75 a second; `Content/AiSpendingReportTests.GeneratedNormal_Spending_Report`).**
 Against an idle seat, 12 forests and 8 mines (the menu's), 20 minutes. Normal, seed 1 (the smallest seed in 1-50 whose
-Normal pick is this opening): the idle base falls at 495 s; in hand at 5 min 336 gold / 97 wood; the first wave at 372
-s; Age II in at 1098 s. Easy, seed 1 (Easy always plays the first opening): the idle base falls at 518 s; in hand at 5
-min 458 gold / 29 wood; the first wave at 356 s; no Age II in 20 minutes. D20's two-seed note (495 s / 518 s, seeds 1
-and 7) measured both seeds; the runs are now one per opening.
+Normal pick is this opening): the idle base falls at 494 s; in hand at 5 min 336 gold / 97 wood; the first wave at 372
+s; Age II in at 561 s. Easy, seed 1 (Easy always plays the first opening): the idle base falls at 506 s; in hand at 5
+min 458 gold / 29 wood; the first wave at 356 s; Age II in at 599 s. Re-printed 2026-10-26 for M5-4g (the reserve,
+above): before it Age II came in at 1098 s on Normal and never in 20 minutes on Easy, and the idle base fell at 495 s
+and 518 s; the 5-minute banks and the first waves did not move. D20's two-seed note (495 s / 518 s, seeds 1 and 7)
+measured both seeds; the runs are now one per opening.
 
 **Army composition (`compositions`), weights by pop.** All three Age I units can be trained in Age I; their weights sum
 to 65.
@@ -251,14 +266,16 @@ Smithy waits for pop 24 and Age II for 8:00.
 | 25 | time 600 | research | `dryjhnas_prophecy` | 1 | The faction upgrade, at the Smithy |
 
 **Houses at the cap (D21, 2026-10-18; `QA/Content/AiHouseRuleReportTests.MenuMapNormal_HouseSources_Report`).** On the
-menu's map (20 minutes, the other seat idle): Normal, seed 2: the cap reaches 100 at 928 s; the last Tent step (step 19)
-is done at a cap of 90; skipped at the hard cap: none; 12 Tents stand at 20:00, 2 past the cap (the expansion's Holy
-Camp stands on this seed).
+menu's map (20 minutes, the other seat idle): Normal, seed 2: the cap reaches 100 at 887 s; the last Tent step (step 19)
+is done at a cap of 98; skipped at the hard cap: none; 12 Tents stand at 20:00, 2 past the cap (the expansion's Holy
+Camp stands on this seed). Re-printed 2026-10-26 for M5-4g: before it the cap reached 100 at 928 s and step 19 was done
+at a cap of 90.
 
 **Spending on the menu's map (D21, 2026-10-18, gathering gold 0.85 / wood 0.75 a second; `Content/AiSpendingReportTests.GeneratedNormal_Spending_Report`).**
 Against an idle seat, the menu's map, 20 minutes. Normal, seed 2 (the smallest seed in 1-50 whose Normal pick is this
-opening): the idle base falls at 416 s; in hand at 5 min 36 gold / 37 wood; the first wave at 287 s; Age II in at 957 s.
-The quickest wave and the quickest win of the six openings.
+opening): the idle base falls at 408 s; in hand at 5 min 132 gold / 119 wood; the first wave at 287 s; Age II in at 616 s.
+The quickest wave and the quickest win of the six openings. Re-printed 2026-10-26 for M5-4g: before it the idle base
+fell at 416 s, the 5-minute bank was 36 gold / 37 wood and Age II came in at 957 s.
 
 **Army composition (`compositions`), weights by pop.** Age I is the two units the Age I steps train, so its weights sum
 to 70.
@@ -311,13 +328,16 @@ wave waits for 20 army pop, the latest Whirlwind wave.
 | 25 | time 570 | build | `whirlwind_ram_yard` | 1 | Battering Rams |
 
 **Houses at the cap (D21, 2026-10-18; `QA/Content/AiHouseRuleReportTests.MenuMapNormal_HouseSources_Report`).** On the
-menu's map (20 minutes, the other seat idle): Normal, seed 3: the cap reaches 100 at 1184 s; the last Tent step (step 18)
-is done at a cap of 90; skipped at the hard cap: none; 12 Tents stand at 20:00, 1 past the cap.
+menu's map (20 minutes, the other seat idle): Normal, seed 3: the cap reaches 100 at 799 s; the last Tent step (step 18)
+is done at a cap of 98; skipped at the hard cap: none; 12 Tents stand at 20:00, 2 past the cap. Re-printed 2026-10-26
+for M5-4g: before it the cap reached 100 at 1184 s, step 18 was done at a cap of 90 and 1 Tent stood past the cap.
 
 **Spending on the menu's map (D21, 2026-10-18, gathering gold 0.85 / wood 0.75 a second; `Content/AiSpendingReportTests.GeneratedNormal_Spending_Report`).**
 Against an idle seat, the menu's map, 20 minutes. Normal, seed 3 (the smallest seed in 1-50 whose Normal pick is this
-opening): the idle base falls at 573 s; in hand at 5 min 478 gold / 101 wood; the first wave at 485 s; Age II in at 791
-s. The earliest Whirlwind Age II (the others: 1098 s and 957 s).
+opening): the idle base falls at 574 s; in hand at 5 min 478 gold / 101 wood; the first wave at 485 s; Age II in at 574
+s. Its Age II step is the earliest (6:30), but since M5-4g the standard opening's Age II comes in first (561 s; the
+raider rush 616 s). Re-printed 2026-10-26 for M5-4g: before it the idle base fell at 573 s and Age II came in at 791 s, the
+earliest Whirlwind Age II then (the others: 1098 s and 957 s).
 
 **Army composition (`compositions`), weights by pop.** Age I is the two units the Age I steps train (no Horse Lines), so
 its weights sum to 50.
@@ -417,3 +437,24 @@ to 31.2 s, the Ram 13.8 s to 13.7 s); the Ram still razes the Billet about 2.3×
 `Content/BuildingKillTimeReportTests`, re-run after the sim's M5-H2 merge): 20 Raiders raze a lone Malazan House,
 infantry hall and Town Hall in 9.8 / 19.5 / 35.8 s (the band is 20 / 60 / 120 s; the hall was 19.4 s before M5-H2's
 movement change), 10 Raiders in 13.8 / 33.0 / 62.6 s.
+
+## Age II against the Malazans (M5-4g, 2026-10-26)
+
+When each Whirlwind side's Age II was in, Normal against Normal on the menu's map (12 forests, 8 mines), 20 minutes, for
+every Whirlwind opening against every Malazan opening on the pairing's three smallest seeds in 1-500, "never" if not in
+20 minutes (no Whirlwind side fell in these runs). The 1st seed is `Content/AiOpeningPairsReportTests`' run, the 2nd
+and 3rd `QA/Content/D21OpeningsQaTests`'; each run pins its cell here and on malazan.md's twin table ("Age II against
+the Whirlwind"). The two sides without Age II (`standard` against `crossbow_push` seed 9 and against `cadre_rush` seed
+13) are standing at 20:00 knowing no gold node, so their Age II can't be reserved (docs/03 "Implementation (M5-4g)").
+
+| Whirlwind opening | Malazan opening | 1st seed | 2nd seed | 3rd seed |
+| --- | --- | --- | --- | --- |
+| `standard` | `standard` | seed 1: 9:20 | seed 22: 17:39 | seed 26: 10:40 |
+| `standard` | `crossbow_push` | seed 9: never | seed 32: 10:10 | seed 37: 9:20 |
+| `standard` | `cadre_rush` | seed 13: never | seed 16: 10:10 | seed 17: 9:46 |
+| `raider_rush` | `standard` | seed 2: 9:47 | seed 10: 9:46 | seed 21: 12:14 |
+| `raider_rush` | `crossbow_push` | seed 5: 13:13 | seed 11: 14:07 | seed 19: 10:34 |
+| `raider_rush` | `cadre_rush` | seed 7: 9:52 | seed 8: 10:00 | seed 14: 9:53 |
+| `holy_war` | `standard` | seed 3: 9:14 | seed 4: 10:39 | seed 6: 10:22 |
+| `holy_war` | `crossbow_push` | seed 12: 9:20 | seed 45: 7:35 | seed 71: 10:04 |
+| `holy_war` | `cadre_rush` | seed 20: 9:16 | seed 24: 9:10 | seed 27: 8:46 |

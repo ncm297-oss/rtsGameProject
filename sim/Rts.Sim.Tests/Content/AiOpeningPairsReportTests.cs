@@ -14,8 +14,11 @@ namespace Rts.Sim.Tests.Content;
 /// yet, its gold or wood not in hand, no known free mine, its building razed). Everything else
 /// is printed for the owner: the first wave, Age II, the defeat, the steps done. D-H6: a step waiting on gold or wood also
 /// prints since when it has been due, how long it waited and the banks at the end; a wait over 5:00 is marked as
-/// BUG-0981's pattern (printed, not failed: the AI keeps no reserve for a due step, the sim's M5-4g). The BUG-0982 row
-/// measures <c>cadre_rush</c>'s wave threshold against <c>raider_rush</c>.
+/// BUG-0981's pattern (printed, not failed: since the sim's M5-4g the AI reserves for a due step, but only while its army
+/// is wave-sized and the base is not defended, so long waits remain, docs/03 "Implementation (M5-4g)"). The BUG-0982 row
+/// measures <c>cadre_rush</c>'s wave threshold against <c>raider_rush</c>. D-R32 (2026-10-26): each pairing run also pins
+/// its cells of both pages' "Age II against ..." table (<see cref="AssertAgeTwoCells"/>; the 2nd and 3rd seeds are
+/// <c>QA/Content/D21OpeningsQaTests</c>' runs).
 /// <para>
 /// Reads the AI through its internals (<c>InternalsVisibleTo</c>): <c>Simulation.AiOf</c>, <c>AiPlayer.Opening</c>,
 /// <c>AiPlayer.HouseType</c>, <c>Blackboard.WavesStarted</c>, <c>StepDueTick</c>, <c>StepDone</c>. Everything else is world state.
@@ -29,7 +32,7 @@ public class AiOpeningPairsReportTests
     /// <summary>D-H6: a step due this long and still short of gold or wood is printed as BUG-0981's pattern (5 minutes).</summary>
     internal const int LongWaitTicks = 5 * 60 * Tps;
 
-    /// <summary>The mark a long gold / wood wait carries in the output (a report, not a failure: the fix is the sim's M5-4g).</summary>
+    /// <summary>The mark a long gold / wood wait carries in the output (a report, not a failure: M5-4g's reserve is gated, docs/03 "Implementation (M5-4g)").</summary>
     internal const string LongWaitFlag = "BUG-0981 pattern: waited over 5:00 for gold or wood";
 
     private readonly ITestOutputHelper _out;
@@ -114,10 +117,68 @@ public class AiOpeningPairsReportTests
             }
             _out.WriteLine($"  {side}: steps done {done} / {ai.Opening.BuildOrder.Length}; waiting: {(waiting.Count == 0 ? "none" : string.Join("; ", waiting))}");
             int longWaits = waiting.Count(x => x.Contains(LongWaitFlag, StringComparison.Ordinal));
-            if (longWaits > 0) _out.WriteLine($"  {side}: {longWaits} step(s) due over 5:00 and still short of gold or wood at 20:00 (BUG-0981's pattern, the sim's M5-4g; not a failure)");
+            if (longWaits > 0) _out.WriteLine($"  {side}: {longWaits} step(s) due over 5:00 and still short of gold or wood at 20:00 (BUG-0981's pattern, left by M5-4g's gated reserve; not a failure)");
             if (ai.Board.WavesStarted == 0) deadEnds.Add($"{side} ({ai.Opening.Id}) sent no wave in 20 minutes on seed {seed}");
         }
         Assert.True(deadEnds.Count == 0, string.Join("\n", deadEnds));
+        AssertAgeTwoCells(malazan, whirlwind, 1, seed, ageTwo, defeated);
+    }
+
+    /// <summary>
+    /// D-R32 (2026-10-26, M5-4g's reserve): the section, one per page, whose table gives that faction's Age II per pairing
+    /// and seed: one row per (own opening, other opening), one column per seed (the pairing's 1st, 2nd and 3rd smallest in
+    /// 1-500: this report's run and <c>QA/Content/D21OpeningsQaTests</c>' two).
+    /// </summary>
+    internal static string AgeTwoSection(string faction) =>
+        faction == "malazan" ? "Age II against the Whirlwind (M5-4g, 2026-10-26)" : "Age II against the Malazans (M5-4g, 2026-10-26)";
+
+    /// <summary>The Age II table's header on <paramref name="faction"/>'s page.</summary>
+    internal static string[] AgeTwoHeader(string faction) => faction == "malazan"
+        ? new[] { "Malazan opening", "Whirlwind opening", "1st seed", "2nd seed", "3rd seed" }
+        : new[] { "Whirlwind opening", "Malazan opening", "1st seed", "2nd seed", "3rd seed" };
+
+    /// <summary>A side's cell: "seed 4: 15:19 (defeated 19:53)", "seed 19: never".</summary>
+    internal static string AgeTwoCell(ulong seed, int ageTwoTick, int defeatedTick) =>
+        $"seed {seed}: {Sec(ageTwoTick)}{(defeatedTick >= 0 ? $" (defeated {Sec(defeatedTick)})" : "")}";
+
+    /// <summary>
+    /// Both pages' cell for this pairing's <paramref name="nth"/> seed equals the run (player 0 Malazan, player 1 Whirlwind):
+    /// a sim or data change that moves an Age II or a defeat fails here, naming the page, row and seed, until it is re-printed.
+    /// </summary>
+    internal static void AssertAgeTwoCells(int malazan, int whirlwind, int nth, ulong seed, int[] ageTwo, int[] defeated)
+    {
+        string[] factions = { "malazan", "whirlwind" };
+        int[] openings = { malazan, whirlwind };
+        for (int p = 0; p < 2; p++)
+        {
+            string faction = factions[p];
+            string own = TestSim.Data.Ai[TestSim.Data.FindFaction(faction)].Openings[openings[p]].Id;
+            string other = TestSim.Data.Ai[TestSim.Data.FindFaction(factions[1 - p])].Openings[openings[1 - p]].Id;
+            (string[] header, List<string[]> rows) = PageTables.NamedTable(PageTables.FactionLines(faction), AgeTwoSection(faction), faction + ".md");
+            Assert.Equal(AgeTwoHeader(faction), header);
+            string[]? row = rows.FirstOrDefault(r => r.Length == 5 && r[0] == own && r[1] == other);
+            Assert.True(row != null, $"{faction}.md '{AgeTwoSection(faction)}' has no row {own} v {other}");
+            string want = AgeTwoCell(seed, ageTwo[p], defeated[p]);
+            Assert.True(row![1 + nth] == want,
+                $"{faction}.md '{AgeTwoSection(faction)}' row {own} v {other}, seed #{nth}, reads \"{row[1 + nth]}\"; the run gives \"{want}\" (re-print it from the run)");
+        }
+    }
+
+    /// <summary>Each page's Age II table has one row per pairing, own opening outer, so no row goes unpinned.</summary>
+    [Theory]
+    [InlineData("malazan")]
+    [InlineData("whirlwind")]
+    public void AgeTwoTable_OneRowPerPairing(string faction)
+    {
+        string otherFaction = faction == "malazan" ? "whirlwind" : "malazan";
+        var own = TestSim.Data.Ai[TestSim.Data.FindFaction(faction)].Openings;
+        var other = TestSim.Data.Ai[TestSim.Data.FindFaction(otherFaction)].Openings;
+        (string[] header, List<string[]> rows) = PageTables.NamedTable(PageTables.FactionLines(faction), AgeTwoSection(faction), faction + ".md");
+        Assert.Equal(AgeTwoHeader(faction), header);
+        var want = new List<string>();
+        foreach (AiOpening a in own)
+            foreach (AiOpening b in other) want.Add($"{a.Id} v {b.Id}");
+        Assert.Equal(want, rows.Select(r => $"{r[0]} v {r[1]}"));
     }
 
     /// <summary>The malazan page's section holding the BUG-0982 measurement (its first table is pinned to the row below).</summary>
@@ -214,8 +275,8 @@ public class AiOpeningPairsReportTests
     /// Why a step that is not done is legitimately waiting at the end, or null for a dead end (see the type's summary). The
     /// reasons, in the order tried: the side is out; a <c>pop</c> trigger never reached; a house step at the hard cap; a
     /// tech or building it requires not had yet (the step that gives it is itself waiting); its gold or wood not in hand
-    /// now (the AI keeps no reserve for a due step: production spends first, a known sim-side limit, docs/03 "Implementation
-    /// (M5-2)"; the wait's length is printed and one over <see cref="LongWaitTicks"/> marked, BUG-0981); an <c>expand</c> with no known free mine (the AI's own view, as the executor asks it); a step whose
+    /// now (since M5-4g the AI reserves for a due step only while its army is wave-sized and the base is not defended, so
+    /// production can still spend first, docs/03 "Implementation (M5-4g)"; the wait's length is printed and one over <see cref="LongWaitTicks"/> marked, BUG-0981); an <c>expand</c> with no known free mine (the AI's own view, as the executor asks it); a step whose
     /// building stands no more (a <c>build</c> step completes once; a razed Forge leaves its research waiting).
     /// </summary>
     private static string? WhyWaiting(Simulation sim, AiPlayer ai, AiStep s, int i, int defeatedAt)

@@ -210,9 +210,13 @@ public class D21OpeningsQaTests
     /// <summary>
     /// The 9 pairings again on a second seed each (the second-smallest in 1-500 making the pair; the report used the
     /// smallest): two Normal AI seats on the menu's map for 20 minutes, both send a wave. A side defeated without a wave
-    /// still passes, printed: BUG-0982 was settled by measurement as "keep 18" (D-H6, the malazan page's "Fast Age II can
-    /// fall without attacking"), so <c>cadre_rush</c> v <c>raider_rush</c> seed 8 dies at 13:14 with no wave by design;
-    /// the row turns strict (<c>first[p] &gt;= 0</c>) only if a later change makes that opening wave under pressure.
+    /// still passes, printed with the bug that covers it (<see cref="DefeatedWithoutAWave"/>): BUG-0982 was settled by
+    /// measurement as "keep 18" (D-H6; the malazan page's "This opening can fall to a rush without ever attacking", and the
+    /// section "Fast Age II against the raider rush (BUG-0982, D-H6, 2026-10-18)"), so <c>cadre_rush</c> v
+    /// <c>raider_rush</c> seed 8 dies with no wave by design; BUG-1010 tracks that pattern on every Malazan opening. The row
+    /// turns strict (<c>first[p] &gt;= 0</c>) only if a later change makes those openings wave under pressure. Since D-R32
+    /// (2026-10-26) each run also pins its cells of both pages' Age II tables
+    /// (<c>Content/AiOpeningPairsReportTests.AssertAgeTwoCells</c>).
     /// </summary>
     [Theory]
     [Trait("Category", "Stress")]
@@ -261,26 +265,41 @@ public class D21OpeningsQaTests
         _out.WriteLine($"seed {seed} (#{nth} of the pairing): {Side(0)}; {Side(1)}; peak army pop {peakArmy[0] / 2.0} / {peakArmy[1] / 2.0}");
         for (int p = 0; p < 2; p++)
         {
-            if (first[p] < 0 && fell[p] >= 0) _out.WriteLine($"  allowed: player {p} ({sim.AiOf(p)!.Opening.Id}) was defeated without a wave (BUG-0982, kept by measurement)");
+            if (first[p] < 0 && fell[p] >= 0) _out.WriteLine($"  allowed: player {p} ({sim.AiOf(p)!.Opening.Id}) was defeated without a wave ({DefeatedWithoutAWave(p, malazan, whirlwind)})");
             bool known = Array.IndexOf(KnownBeatenAlive, (malazan, whirlwind, seed, p)) >= 0;
             if (known && first[p] < 0 && fell[p] < 0)
             {
-                _out.WriteLine($"  KNOWN (D-H6 finding): player {p} ({sim.AiOf(p)!.Opening.Id}) sent no wave and was beaten but not defeated (BUG-0982's pattern on another opening); see KnownBeatenAlive");
+                _out.WriteLine($"  KNOWN (D-H6 finding, BUG-1010): player {p} ({sim.AiOf(p)!.Opening.Id}) sent no wave and was beaten but not defeated (BUG-0982's pattern on another opening); see KnownBeatenAlive");
                 continue;
             }
-            if (known) _out.WriteLine($"  the known case seed {seed} player {p} now passes the rule: take it out of KnownBeatenAlive");
+            if (known) _out.WriteLine($"  the known case seed {seed} player {p} now passes the rule: take it out of KnownBeatenAlive (BUG-1010)");
             Assert.True(first[p] >= 0 || sim.World.IsDefeated(p), $"seed {seed}: player {p} ({sim.AiOf(p)!.Opening.Id}) sent no wave in 20 minutes and was not defeated");
         }
+        Rts.Sim.Tests.Content.AiOpeningPairsReportTests.AssertAgeTwoCells(malazan, whirlwind, nth, seed, ageTwo, fell);
+    }
+
+    /// <summary>
+    /// BUG-1011 item 3: the bug a side defeated without a wave is credited to. BUG-0982's "keep 18" covers only
+    /// <c>cadre_rush</c> (Malazan opening 2) against <c>raider_rush</c> (Whirlwind opening 1); BUG-1010 tracks any Malazan
+    /// opening beaten by <c>raider_rush</c> without a wave. Any other case names no bug, so the printed line says to report it.
+    /// </summary>
+    private static string DefeatedWithoutAWave(int player, int malazan, int whirlwind)
+    {
+        if (player == 0 && whirlwind == 1 && malazan == 2) return "BUG-0982, kept by measurement; BUG-1010";
+        if (player == 0 && whirlwind == 1) return "BUG-1010, a Malazan opening beaten by raider_rush without a wave";
+        return "no bug covers this case yet: report it";
     }
 
     /// <summary>
     /// D-H6's third seed found one case the "defeated" allowance doesn't cover, listed here by (Malazan opening, Whirlwind
     /// opening, seed, player) instead of loosening the rule for every row: <c>crossbow_push</c> v <c>raider_rush</c> seed 19.
-    /// The Malazan army peaks at 8 pop (under its 14-pop wave), the base is held under the raids (222 thinks defending),
-    /// and at 20:00 it is down to 6 pop / cap 16 with 670 gold and 60 wood, still standing. A lower wave would not reach
-    /// it either. It is BUG-0982's pattern (a Malazan opening falls to the raider rush without attacking), on another
-    /// opening, with the last buildings not yet razed. Reported to the Producer (a new bug, the sim-side lever: send what
-    /// you have when the base is being lost); remove the entry when the row passes the rule (the run prints so).
+    /// Re-measured after M5-4g's reserve (D-R32, 2026-10-26): the Malazan army peaks at 7 pop (under its 14-pop wave), the
+    /// base is held under the raids (282 thinks defending), and at 20:00 it is at 15 pop / cap 24 with 910 gold and 15
+    /// wood, no Age II, still standing (D-H6 read peak 8, 222 thinks, 6 pop / cap 16, 670 / 60). A lower wave would not
+    /// reach it either: the reserve waits for a wave-sized army, so it never engages here. It is BUG-0982's pattern (a
+    /// Malazan opening falls to the raider rush without attacking) on another opening, tracked as BUG-1010 (the sim-side
+    /// lever: send what you have when the base is being lost). Take the entry out when the row passes the rule (the run
+    /// prints so). <c>DH6ThresholdQaTests</c> carries the pairing's 5th seed (25) the same way.
     /// </summary>
     private static readonly (int Malazan, int Whirlwind, ulong Seed, int Player)[] KnownBeatenAlive = { (1, 1, 19, 0) };
 
