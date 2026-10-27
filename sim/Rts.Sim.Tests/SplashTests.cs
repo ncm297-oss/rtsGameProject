@@ -180,8 +180,12 @@ public class SplashTests
         Assert.Equal(full, u.Hp[enemy.Index]);
     }
 
+    /// <summary>
+    /// A friendly-fire kill: the death event names the shooter's owner, the victim's owner counts a loss, and (M6-S5, BUG-1044
+    /// item 1: "count only what an enemy destroyed") nobody counts a kill; the survivors don't retaliate.
+    /// </summary>
     [Fact]
-    public void FriendlyFireKills_CountForTheShootersOwner_AndAreNotRetaliatedOn()
+    public void FriendlyFireKills_AreALoss_AndNobodysKill_AndAreNotRetaliatedOn()
     {
         Simulation sim = Flat();
         World w = sim.World;
@@ -202,7 +206,7 @@ public class SplashTests
         ProjectileTests.RunUntilImpact(sim);
         Assert.False(u.IsAlive(own));
         Assert.Contains(w.Deaths.ToArray(), e => e.Victim == own && e.VictimOwner == 0 && e.KillerOwner == 0);
-        Assert.Equal(1, w.Kills[0]);
+        Assert.Equal(0, w.Kills[0]);
         Assert.Equal(1, w.Losses[0]);
         Assert.True(u.Hp[survivor.Index] < full, "setup: the survivor was not in the splash");
         Assert.Equal(default, u.LastAttacker[survivor.Index]);

@@ -14,7 +14,9 @@ namespace Rts.Sim.Tests;
 /// The oracle walks the world's stores slot by slot and decides each answer from the rule written out again (docs/03
 /// "Vision, detection, fog"): the fog's byte map (the view's copy of the hashed bits PlayerView reads), the stealth rule from
 /// the public <c>IsStealthed</c> / <c>IsDetectedBy</c>, the zone rule and the two high-ground reveals; and it cross-checks its
-/// unit and building answers against <c>Fog.CanSeeUnit</c> / <c>CanSeeBuilding</c>.
+/// unit and building answers against <c>Fog.CanSeeUnit</c> / <c>CanSeeBuilding</c>. M6-S5 (shared vision): the union rule
+/// written out again: a player sees what any ally sees by its own eyes (each ally's own byte map, own zone rule, reveals and
+/// detection, OR-ed over the seats' teams), an ally's units and buildings always, and never remembers an ally's building.
 /// </summary>
 internal static class PlayerViewOracle
 {
@@ -27,6 +29,7 @@ internal static class PlayerViewOracle
         public long QueueItems;
         public long AbilityCooldowns, OwnCasts; // M5-4c
         public long AlliedUnitsSeen, AlliedStealthSeen; // M6-S4
+        public long SeenThroughAlly; // M6-S5: an enemy unit the player sees only by an ally's eyes
         public string First = "";
 
         public void Fail(string what)
@@ -38,14 +41,16 @@ internal static class PlayerViewOracle
             $"leaks {Leaks}, misses {Misses}, field mismatches {FieldMismatches}, oracle v fog {OracleDisagreements}; units own {OwnUnits} / enemy seen {EnemyUnitsSeen} / hidden {EnemyUnitsHidden} " +
             $"(stealth hidden {StealthHidden}, detected {StealthDetected}, high-ground revealed {Revealed}, in a storm {InStorm}); buildings own {OwnBuildings} / enemy seen {EnemyBuildingsSeen}; " +
             $"ghosts {Ghosts} (of dead buildings {GhostsOfDeadBuildings}, sites {GhostSites}); resources {Resources} (amount unknown {ResourcesUnknownAmount}, remembered gone {ResourcesRemembered}); queue items {QueueItems}; " +
-            $"own cooldowns running {AbilityCooldowns}, own casts {OwnCasts}; allied units seen {AlliedUnitsSeen} (stealthed {AlliedStealthSeen})";
+            $"own cooldowns running {AbilityCooldowns}, own casts {OwnCasts}; allied units seen {AlliedUnitsSeen} (stealthed {AlliedStealthSeen}); enemy units seen only through an ally {SeenThroughAlly}";
     }
 
     /// <summary>Compares every answer of <paramref name="view"/> (player <paramref name="p"/>) with the oracle, adding to <paramref name="t"/>.</summary>
     internal static void Check(World w, PlayerView view, int p, Tally t, string at)
     {
         FogStore fog = w.Fog;
-        ReadOnlySpan<byte> vis = fog.Visibility(p);
+        byte[] vis = UnionVisibility(w, p);
+        // M6-S5: the fog's own team byte map (the view's texture) is the union too.
+        Field(t, fog.Visibility(p).SequenceEqual(vis), $"{at}: the fog's byte map is not the union of the allies' own maps");
         UnitStore u = w.Units;
         BuildingStore b = w.Buildings;
         ResourceStore r = w.Resources;
@@ -111,13 +116,13 @@ internal static class PlayerViewOracle
         int bCursor = -1, gCursor = -1;
         for (int k = 0; k < b.Capacity; k++)
         {
-            bool expected = b.Alive[k] && (b.Owner[k] == p || FootprintVisible(w, vis, b.TypeId[k], b.Cell[k]) || fog.BuildingRevealed(p, k));
+            bool expected = b.Alive[k] && (Allied(w, p, b.Owner[k]) || FootprintVisible(w, vis, b.TypeId[k], b.Cell[k]) || AnyAlly(w, p, q => fog.BuildingRevealed(q, k)));
             if (expected != fog.CanSeeBuilding(p, k))
             {
                 t.OracleDisagreements++;
                 t.Fail($"{at}: the oracle says {expected} for building {k}, Fog.CanSeeBuilding {!expected}");
             }
-            if (expected && b.Owner[k] == p) t.OwnBuildings++;
+            if (expected && Allied(w, p, b.Owner[k])) t.OwnBuildings++;
             else if (expected) t.EnemyBuildingsSeen++;
             bool got = view.TryGetBuilding(k, out SeenBuilding sb);
             Compare(t, got, expected, $"{at}: building {k}");
@@ -137,7 +142,7 @@ internal static class PlayerViewOracle
                 t.Ghosts++;
                 if (!b.Alive[k] || b.Generation[k] != g.Generation) t.GhostsOfDeadBuildings++;
                 if (g.Site) t.GhostSites++;
-                Field(t, g.Owner != p, $"{at}: player {p} has a ghost of its own building {k}");
+                Field(t, !Allied(w, p, g.Owner), $"{at}: player {p} has a ghost of its own or an ally's building {k}");
             }
             bool gotGhost = view.TryGetGhost(k, out BuildingGhost vg);
             Compare(t, gotGhost, ghost, $"{at}: ghost {k}");
@@ -235,7 +240,12 @@ internal static class PlayerViewOracle
         return ta != 0 && ta == w.Config.SeatOf(b).Team;
     }
 
-    /// <summary>The oracle's unit rule for player <paramref name="p"/> and slot <paramref name="j"/>, tallying why.</summary>
+    /// <summary>
+    /// The oracle's unit rule for player <paramref name="p"/> and slot <paramref name="j"/>, tallying why. M6-S5: an ally's unit
+    /// is seen as an own one (stealthed too); an enemy's is seen when any ally of <paramref name="p"/> (itself included) sees it
+    /// by its own eyes: its cell in that ally's own byte map (with a blocking zone: that ally's own zone rule), or revealed to
+    /// that ally; never while stealthed and detected by none of them.
+    /// </summary>
     private static bool ExpectUnit(World w, int p, int j, Tally t)
     {
         UnitStore u = w.Units;
@@ -245,27 +255,57 @@ internal static class PlayerViewOracle
             t.OwnUnits++;
             return true;
         }
+        if (Allied(w, p, u.Owner[j]))
+        {
+            t.AlliedUnitsSeen++;
+            if (w.IsStealthed(j)) t.AlliedStealthSeen++;
+            return true;
+        }
         FogStore fog = w.Fog;
         bool storm = w.Zones.BlockerCount > 0;
-        // Without a blocking zone, the unit's cell in the byte map; with one, the fog's zone rule by the unit's own centre.
-        bool cell = storm ? fog.SeesUnitCell(p, j) : fog.Visibility(p)[fog.CellOf(u.Position[j])] == VisionConstants.Visible;
-        bool revealed = fog.Revealed(p, j);
+        // Without a blocking zone, the unit's cell in an ally's own byte map; with one, its own zone rule by the unit's centre.
+        int c = fog.CellOf(u.Position[j]);
+        bool cell = AnyAlly(w, p, q => storm ? fog.SeesUnitCellOwn(q, j) : fog.OwnVisibility(q)[c] == VisionConstants.Visible);
+        bool revealed = AnyAlly(w, p, q => fog.Revealed(q, j));
         bool stealthed = w.IsStealthed(j);
-        // M6-S4: stealth hides a unit only from its owner's enemies; an ally sees it wherever its own vision does.
-        bool allied = Allied(w, p, u.Owner[j]);
-        bool hidden = stealthed && !allied && !w.IsDetectedBy(p, j);
+        bool hidden = stealthed && !AnyAlly(w, p, q => w.IsDetectedBy(q, j));
         bool sees = !hidden && (cell || revealed);
         if (stealthed && !hidden) t.StealthDetected++;
         if (hidden && (cell || revealed)) t.StealthHidden++;
         if (sees && !cell) t.Revealed++;
         if (sees && storm) t.InStorm++;
         if (sees) t.EnemyUnitsSeen++; else t.EnemyUnitsHidden++;
-        if (sees && allied) t.AlliedUnitsSeen++;
-        if (sees && allied && stealthed) t.AlliedStealthSeen++;
+        bool ownCell = storm ? fog.SeesUnitCellOwn(p, j) : fog.OwnVisibility(p)[c] == VisionConstants.Visible;
+        if (sees && !ownCell && !revealed) t.SeenThroughAlly++;
         return sees;
     }
 
-    private static bool NodeVisible(World w, ReadOnlySpan<byte> vis, int type, int anchor)
+    /// <summary>M6-S5: whether <paramref name="test"/> holds for any ally of <paramref name="p"/> (by the seats), <paramref name="p"/> itself included.</summary>
+    private static bool AnyAlly(World w, int p, Func<int, bool> test)
+    {
+        for (int q = 0; q < w.Config.PlayerCount; q++)
+            if (Allied(w, p, q) && test(q)) return true;
+        return false;
+    }
+
+    /// <summary>
+    /// M6-S5: the byte map <paramref name="p"/> sees, from the rule: per cell the best state of the own byte maps of
+    /// <paramref name="p"/> and its allies (visible over explored over unexplored).
+    /// </summary>
+    internal static byte[] UnionVisibility(World w, int p)
+    {
+        var union = new byte[w.Fog.Width * w.Fog.Height];
+        for (int q = 0; q < w.Config.PlayerCount; q++)
+        {
+            if (!Allied(w, p, q)) continue;
+            ReadOnlySpan<byte> own = w.Fog.OwnVisibility(q);
+            for (int c = 0; c < union.Length; c++)
+                if (own[c] > union[c]) union[c] = own[c];
+        }
+        return union;
+    }
+
+    private static bool NodeVisible(World w, byte[] vis, int type, int anchor)
     {
         ResourceDef def = w.Data.Resources[type];
         for (int dy = 0; dy < def.FootprintHeight; dy++)
@@ -310,7 +350,7 @@ internal static class PlayerViewOracle
                 t.Fail($"{at}: the node oracle missed a fog update (version {_version[p]} to {version})");
             }
             _version[p] = version;
-            ReadOnlySpan<byte> vis = w.Fog.Visibility(p);
+            byte[] vis = UnionVisibility(w, p); // M6-S5: what the team sees
             ResourceStore r = w.Resources;
             for (int k = 0; k < _slots; k++)
             {
@@ -328,7 +368,7 @@ internal static class PlayerViewOracle
         }
     }
 
-    private static bool FootprintVisible(World w, ReadOnlySpan<byte> vis, int type, int anchor)
+    private static bool FootprintVisible(World w, byte[] vis, int type, int anchor)
     {
         BuildingDef def = w.Data.Buildings[type];
         for (int dy = 0; dy < def.FootprintHeight; dy++)

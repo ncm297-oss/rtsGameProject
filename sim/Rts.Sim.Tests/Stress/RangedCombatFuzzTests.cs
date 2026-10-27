@@ -49,7 +49,7 @@ public class RangedCombatFuzzTests
             if (field.CostAt(c) <= 18f) near.Add(c);
         int[][] rosters = { Roster(0), Roster(1) };
         var rng = new SimRng(seed, 808);
-        long deaths = 0;
+        long deaths = 0, enemyKills = 0; // M6-S5 (BUG-1044 item 1): a friendly-fire death is a loss and nobody's kill
         int hits = 0, misses = 0, maxInFlight = 0, friendlyKills = 0;
         for (int t = 0; t < Ticks; t++)
         {
@@ -82,7 +82,7 @@ public class RangedCombatFuzzTests
                     Both(a, b, c);
                 }
             }
-            int killsBefore = w.Kills[0] + w.Kills[1];
+            int killsBefore = w.Kills[0] + w.Kills[1], killsNow = 0;
             a.Tick();
             b.Tick();
             Assert.True(a.StateHash() == b.StateHash(), $"seed {seed}: twins differ after tick {t}");
@@ -91,10 +91,15 @@ public class RangedCombatFuzzTests
             {
                 deaths++;
                 if (e.KillerOwner == e.VictimOwner) friendlyKills++;
+                else
+                {
+                    enemyKills++;
+                    killsNow++;
+                }
                 Assert.False(e.IsBuilding ? w.Buildings.IsAlive(e.Victim) : u.IsAlive(e.Victim));
             }
-            Assert.Equal(killsBefore + w.Deaths.Length, w.Kills[0] + w.Kills[1]);
-            Assert.Equal(deaths, (long)w.Kills[0] + w.Kills[1]);
+            Assert.Equal(killsBefore + killsNow, w.Kills[0] + w.Kills[1]);
+            Assert.Equal(enemyKills, (long)w.Kills[0] + w.Kills[1]);
             Assert.Equal(deaths, (long)w.Losses[0] + w.Losses[1]);
             foreach (ProjectileImpact e in w.Impacts)
             {

@@ -311,10 +311,11 @@ public class AbilitySystemTests
 
     /// <summary>
     /// Cast 2 m from itself the Sapper takes half its own hit (60 - 1 = 59, half 29.5 rounds to 30); an own unit it kills is
-    /// the caster owner's kill and loss (the splash convention); an enemy Keep brought to 0 is destroyed the normal way.
+    /// the caster owner's loss and (M6-S5, BUG-1044 item 1) nobody's kill; an enemy Keep brought to 0 is destroyed the normal
+    /// way, the caster owner's kill.
     /// </summary>
     [Fact]
-    public void Cusser_HurtsTheSapperItself_CreditsAnOwnKillToItsOwner_AndDestroysABuildingAt0()
+    public void Cusser_HurtsTheSapperItself_AnOwnKillIsALossAndNoKill_AndDestroysABuildingAt0()
     {
         Simulation sim = NoFights();
         World w = sim.World;
@@ -339,7 +340,7 @@ public class AbilitySystemTests
         Assert.Contains(deaths, d => d.Victim == hall && d.IsBuilding && d.KillerOwner == 0 && d.VictimOwner == 1);
         Assert.False(w.Buildings.IsAlive(hall));
         Assert.NotEqual(navVersion, w.NavGrid.Version); // its cells reopened
-        Assert.Equal((2, 1), (w.Kills[0], w.Losses[0])); // the Keep and its own Crossbowman; the Crossbowman
+        Assert.Equal((1, 1), (w.Kills[0], w.Losses[0])); // the Keep is a kill; its own Crossbowman a loss, no kill
         Assert.Equal(1, w.Losses[1]);
     }
 }

@@ -35,6 +35,13 @@ namespace Rts.Sim.Vision;
 /// derived (BUG-0215): a save (M6) stores them. Derived and not hashed: the byte map (the two bit sets per cell, for the
 /// view), <see cref="Version"/> and the stamp boxes.
 /// </para>
+/// <para>
+/// M6-S5, shared vision (<c>FogStore.Teams.cs</c>): the above is each player's own eyes. After every update the allies' own
+/// bits are OR-ed into a team map, and everything that answers what a player sees (<see cref="IsVisible"/>,
+/// <see cref="IsExplored"/>, <see cref="Visibility"/>, <see cref="CanSeeUnit"/>, <see cref="CanSeeBuilding"/>, the
+/// footprint tests, the ghosts and node memories) reads the team's; the high-ground reveals and the detection bits are set
+/// for the whole team. The team maps are derived from the own bits: not hashed, not saved, rebuilt after a load.
+/// </para>
 /// </remarks>
 public sealed partial class FogStore
 {
@@ -135,6 +142,14 @@ public sealed partial class FogStore
         _nodes = new NodeMemory[players * _resourceSlots];
         for (int i = 0; i < cells; i++)
             if (_levels[i] > 0) MultiLevel = true;
+        // M6-S5: the teams' shared vision (FogStore.Teams.cs).
+        _mates = new int[players][];
+        _teamVisible = new ulong[players][];
+        _teamExplored = new ulong[players][];
+        _teamVisibility = new byte[players][];
+        _teamVisibilityVersion = new int[players];
+        _teamBox = new int[4 * players];
+        Sharing = BuildTeams(world);
 
         // One mask per distinct radius (sights, and the lip cut to each sight), ascending, so a bigger index covers a smaller one.
         // No cell is farther than the map's diagonal, so a bigger circle adds nothing (BUG-0216: not its longer side).
@@ -180,18 +195,18 @@ public sealed partial class FogStore
     /// empty for no such player.
     /// </summary>
     public ReadOnlySpan<byte> Visibility(int player) =>
-        (uint)player < (uint)_players ? _visibility[player] : ReadOnlySpan<byte>.Empty;
+        (uint)player >= (uint)_players ? ReadOnlySpan<byte>.Empty : _mates[player].Length == 1 ? _visibility[player] : TeamVisibility(player);
 
     /// <summary>How many fog updates ran for <paramref name="player"/> (+1 each): a view re-uploads its texture when it moves. Derived, not hashed; 0 for no such player.</summary>
     public int Version(int player) => (uint)player < (uint)_players ? _version[player] : 0;
 
-    /// <summary>Whether <paramref name="cell"/> was inside one of <paramref name="player"/>'s sight circles at the last update; false out of range.</summary>
+    /// <summary>Whether <paramref name="cell"/> was inside one of the sight circles of <paramref name="player"/> or (M6-S5) an ally at the last update; false out of range.</summary>
     public bool IsVisible(int player, int cell) =>
-        (uint)player < (uint)_players && (uint)cell < (uint)_levels.Length && Bit(_visible[player], cell);
+        (uint)player < (uint)_players && (uint)cell < (uint)_levels.Length && Bit(_teamVisible[player], cell);
 
-    /// <summary>Whether <paramref name="player"/> has ever seen <paramref name="cell"/> (explored or visible); false out of range.</summary>
+    /// <summary>Whether <paramref name="player"/> or (M6-S5) an ally has ever seen <paramref name="cell"/> (explored or visible); false out of range.</summary>
     public bool IsExplored(int player, int cell) =>
-        (uint)player < (uint)_players && (uint)cell < (uint)_levels.Length && Bit(_explored[player], cell);
+        (uint)player < (uint)_players && (uint)cell < (uint)_levels.Length && Bit(_teamExplored[player], cell);
 
     /// <summary>
     /// Whether <paramref name="player"/> sees live unit slot <paramref name="slot"/>: its own, its cell visible at the last
@@ -200,12 +215,13 @@ public sealed partial class FogStore
     /// vision is seen only through the eyes of <paramref name="player"/>'s units inside that zone, whatever its cell's
     /// centre; one outside every such zone is seen where <paramref name="player"/>'s circles covered its cell, also a cell
     /// the zone hides. M4-5: an enemy's stealthed unit the player doesn't detect is not seen (<see cref="World.HiddenFrom"/>),
-    /// whatever its cell or a reveal. False for a dead slot or no such player.
+    /// whatever its cell or a reveal. False for a dead slot or no such player. M6-S5 (shared vision): an ally's unit is seen
+    /// as an own one, and the player sees whatever an ally sees (the cells, the zone rule and the reveals are the team's).
     /// </summary>
     public bool CanSeeUnit(int player, int slot)
     {
         if ((uint)player >= (uint)_players || (uint)slot >= (uint)_units.Capacity || !_units.Alive[slot]) return false;
-        if (_units.Owner[slot] == player) return true;
+        if (_units.Owner[slot] == player || (_world.HasAlliances && _world.AreAllied(player, _units.Owner[slot]))) return true;
         if (_units.Statuses.StealthedUnits != 0 && _world.HiddenFrom(player, slot)) return false;
         return SeesUnit(player, slot);
     }
@@ -232,14 +248,14 @@ public sealed partial class FogStore
         int[] owner = u.Owner;
         int[] generation = u.Generation;
         Vector2[] position = u.Position;
-        ulong[] visible = _visible[player];
+        ulong[] visible = _teamVisible[player]; // M6-S5: the team's
         int[] revealUntil = _revealUntil, revealGeneration = _revealGeneration;
         int tick = _world.TickNumber, players = _players, width = _width, height = _height;
         bool stealth = u.Statuses.StealthedUnits != 0;
         for (int s = from; s < n; s++)
         {
             if (!alive[s]) continue;
-            if (owner[s] == player) return s;
+            if (owner[s] == player || (_world.HasAlliances && _world.AreAllied(player, owner[s]))) return s; // M6-S5: an ally's as an own
             Vector2 at = position[s];
             int x = (int)(at.X / MapConstants.CellSize), y = (int)(at.Y / MapConstants.CellSize);
             if (!(x >= 0)) x = 0;
@@ -283,11 +299,15 @@ public sealed partial class FogStore
         }
     }
 
-    /// <summary>Whether <paramref name="player"/> sees live building slot <paramref name="slot"/>: its own, any footprint cell visible at the last update, or (BUG-0270) a tower revealed to it by a hit from high ground. False for a dead slot or no such player.</summary>
+    /// <summary>
+    /// Whether <paramref name="player"/> sees live building slot <paramref name="slot"/>: its own (M6-S5: or an ally's), any
+    /// footprint cell visible to its team at the last update, or (BUG-0270) a tower revealed to it by a hit from high ground.
+    /// False for a dead slot or no such player.
+    /// </summary>
     public bool CanSeeBuilding(int player, int slot)
     {
         if ((uint)player >= (uint)_players || (uint)slot >= (uint)_buildings.Capacity || !_buildings.Alive[slot]) return false;
-        return _buildings.Owner[slot] == player || SeesBuildingCells(player, slot);
+        return _buildings.Owner[slot] == player || (_world.HasAlliances && _world.AreAllied(player, _buildings.Owner[slot])) || SeesBuildingCells(player, slot);
     }
 
     /// <summary>
@@ -311,10 +331,10 @@ public sealed partial class FogStore
     /// <summary><paramref name="player"/>'s entry for building slot <paramref name="slot"/> (both in range).</summary>
     internal ref readonly BuildingGhost GhostAt(int player, int slot) => ref _ghosts[player * _buildingSlots + slot];
 
-    /// <summary>Whether any cell of a footprint of type <paramref name="typeId"/> anchored at <paramref name="anchor"/> is visible to <paramref name="player"/>.</summary>
+    /// <summary>Whether any cell of a footprint of type <paramref name="typeId"/> anchored at <paramref name="anchor"/> is visible to <paramref name="player"/> (M6-S5: to its team).</summary>
     internal bool SeesFootprint(int player, int typeId, int anchor)
     {
-        ulong[] vis = _visible[player];
+        ulong[] vis = _teamVisible[player];
         BuildingDef def = _data.Buildings[typeId];
         for (int dy = 0; dy < def.FootprintHeight; dy++)
             for (int dx = 0; dx < def.FootprintWidth; dx++)
@@ -333,16 +353,17 @@ public sealed partial class FogStore
     /// <summary>Resource slots in the node memory (the resource store's capacity).</summary>
     internal int ResourceSlots => _resourceSlots;
 
-    /// <summary>Whether any cell of a resource footprint of type <paramref name="typeId"/> anchored at <paramref name="anchor"/> is visible to <paramref name="player"/>.</summary>
+    /// <summary>Whether any cell of a resource footprint of type <paramref name="typeId"/> anchored at <paramref name="anchor"/> is visible to <paramref name="player"/> (M6-S5: to its team).</summary>
     internal bool SeesNodeFootprint(int player, int typeId, int anchor)
     {
         ResourceDef def = _data.Resources[typeId];
-        int vb = 4 * player, bx0 = _visibleBox[vb];
+        int[] box = Sharing ? _teamBox : _visibleBox;
+        int vb = 4 * player, bx0 = box[vb];
         if (bx0 == int.MaxValue) return false; // nothing stamped at the last update: nothing visible
         int ax = anchor % _width, ay = anchor / _width;
         // Every visible cell lies in the last update's box; a footprint outside it sees nothing (most nodes, cheaply).
-        if (ax + def.FootprintWidth - 1 < bx0 || ax > _visibleBox[vb + 2] || ay + def.FootprintHeight - 1 < _visibleBox[vb + 1] || ay > _visibleBox[vb + 3]) return false;
-        ulong[] vis = _visible[player];
+        if (ax + def.FootprintWidth - 1 < bx0 || ax > box[vb + 2] || ay + def.FootprintHeight - 1 < box[vb + 1] || ay > box[vb + 3]) return false;
+        ulong[] vis = _teamVisible[player];
         for (int dy = 0; dy < def.FootprintHeight; dy++)
             for (int dx = 0; dx < def.FootprintWidth; dx++)
                 if (Bit(vis, anchor + dy * _width + dx)) return true;
@@ -370,6 +391,7 @@ public sealed partial class FogStore
                 if (_resources.Alive[j]) _nodes[head + j] = new NodeMemory(_resources.Generation[j], _resources.TypeId[j], _resources.Cell[j]);
             _version[p]++;
         }
+        if (Sharing) MergeTeams();
     }
 
     /// <summary>True when any cell of the map is above level 0: else the high-ground compares are skipped.</summary>
@@ -390,7 +412,7 @@ public sealed partial class FogStore
     internal bool SeesUnitCell(int player, int slot)
     {
         if (_world.Zones.BlockerCount > 0) return SeesUnitCellNearZones(player, slot);
-        return Bit(_visible[player], CellOf(_units.Position[slot]));
+        return Bit(_teamVisible[player], CellOf(_units.Position[slot]));
     }
 
     /// <summary>Any footprint cell of building slot <paramref name="slot"/> is visible to <paramref name="player"/>, or (BUG-0270) the building is revealed to it.</summary>
@@ -411,12 +433,15 @@ public sealed partial class FogStore
         return _buildingRevealGeneration[k] == _buildings.Generation[slot] ? _buildingRevealUntil[k] : 0;
     }
 
-    /// <summary>Reveals building <paramref name="attacker"/> (a tower) to <paramref name="player"/> until tick <paramref name="until"/> (a later hit refreshes it).</summary>
+    /// <summary>Reveals building <paramref name="attacker"/> (a tower) to <paramref name="player"/> (M6-S5: and its allies) until tick <paramref name="until"/> (a later hit refreshes it).</summary>
     internal void RevealBuilding(EntityHandle attacker, int player, int until)
     {
-        int k = attacker.Index * _players + player;
-        _buildingRevealUntil[k] = until;
-        _buildingRevealGeneration[k] = attacker.Generation;
+        foreach (int q in _mates[player])
+        {
+            int k = attacker.Index * _players + q;
+            _buildingRevealUntil[k] = until;
+            _buildingRevealGeneration[k] = attacker.Generation;
+        }
     }
 
     /// <summary>Bit <paramref name="cell"/> of a packed cell set (64 cells a word).</summary>
@@ -438,12 +463,15 @@ public sealed partial class FogStore
         return _revealGeneration[k] == _units.Generation[slot] ? _revealUntil[k] : 0;
     }
 
-    /// <summary>Reveals unit <paramref name="attacker"/> to <paramref name="player"/> until tick <paramref name="until"/> (a later hit refreshes it).</summary>
+    /// <summary>Reveals unit <paramref name="attacker"/> to <paramref name="player"/> (M6-S5: and its allies) until tick <paramref name="until"/> (a later hit refreshes it).</summary>
     internal void Reveal(EntityHandle attacker, int player, int until)
     {
-        int k = attacker.Index * _players + player;
-        _revealUntil[k] = until;
-        _revealGeneration[k] = attacker.Generation;
+        foreach (int q in _mates[player])
+        {
+            int k = attacker.Index * _players + q;
+            _revealUntil[k] = until;
+            _revealGeneration[k] = attacker.Generation;
+        }
     }
 
     /// <summary>The cell holding <paramref name="p"/> (m), clamped onto the map.</summary>
@@ -522,6 +550,12 @@ public sealed partial class FogStore
             if (blocked) MarkBlocked(zones, p, vis, inside, insideCount);
             Combine(p, blocked ? zones : null);
             if (blocked) ClearBlocked(zones, p, vis);
+        }
+        // M6-S5: every player's own fog first, then the teams' unions, then the memories from what each team sees. A player's
+        // ghosts and nodes read only its own team's bits, so a free-for-all gets exactly what the old per-player order gave.
+        if (Sharing) MergeTeams();
+        for (int p = 0; p < _players; p++)
+        {
             UpdateGhosts(p);
             UpdateNodes(p);
         }
@@ -636,6 +670,16 @@ public sealed partial class FogStore
     /// </summary>
     private bool SeesUnitCellNearZones(int player, int slot)
     {
+        int[] mates = _mates[player];
+        if (mates.Length == 1) return SeesUnitCellNearZonesOwn(player, slot);
+        foreach (int q in mates) // M6-S5: what any ally sees by its own eyes
+            if (SeesUnitCellNearZonesOwn(q, slot)) return true;
+        return false;
+    }
+
+    /// <summary><see cref="SeesUnitCellNearZones"/> by <paramref name="player"/>'s own eyes: its own visible bits and its own zone records.</summary>
+    private bool SeesUnitCellNearZonesOwn(int player, int slot)
+    {
         ZoneStore zones = _world.Zones;
         Vector2 pos = _units.Position[slot];
         int c = CellOf(pos);
@@ -730,7 +774,7 @@ public sealed partial class FogStore
         for (int j = 0; j < _buildingSlots; j++)
         {
             ref BuildingGhost g = ref _ghosts[head + j];
-            bool enemy = alive[j] && owner[j] != p;
+            bool enemy = alive[j] && owner[j] != p && !(_world.HasAlliances && _world.AreAllied(p, owner[j])); // M6-S5: an ally's building is always seen
             if (enemy && (SeesFootprint(p, type[j], cell[j]) || BuildingRevealed(p, j))) // BUG-0270: a revealed tower is seen
             {
                 if (g.Generation == 0) _ghostCount[p]++;

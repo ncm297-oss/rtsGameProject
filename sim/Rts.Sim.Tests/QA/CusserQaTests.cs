@@ -48,11 +48,12 @@ public class CusserQaTests
     }
 
     /// <summary>
-    /// A Cusser thrown on the Sapper's own feet: the Sapper dies to its own half hit (killer and victim its owner, one kill
-    /// and one loss), the enemy Keep beside it still takes the full 358 after the caster is gone, and twins hash-equal.
+    /// A Cusser thrown on the Sapper's own feet: the Sapper dies to its own half hit (killer and victim its owner on the death
+    /// event; M6-S5, BUG-1044 item 1: a friendly-fire death is a loss and nobody's kill, so no kill and one loss), the enemy
+    /// Keep beside it still takes the full 358 after the caster is gone, and twins hash-equal.
     /// </summary>
     [Fact]
-    public void Cusser_OnItsOwnPosition_KillsTheSapper_CreditsItsOwner_StillHitsTheKeep_TwinsEqual()
+    public void Cusser_OnItsOwnPosition_KillsTheSapper_CreditsNoKill_StillHitsTheKeep_TwinsEqual()
     {
         Simulation a = SelfKillScene(out EntityHandle sapper, out EntityHandle hall);
         Simulation b = SelfKillScene(out _, out _);
@@ -71,7 +72,7 @@ public class CusserQaTests
         DeathEvent d = Assert.Single(deaths);
         Assert.Equal((sapper, false, 0, 0), (d.Victim, d.IsBuilding, d.KillerOwner, d.VictimOwner));
         Assert.False(a.World.Units.IsAlive(sapper));
-        Assert.Equal((1, 1, 0, 0), (a.World.Kills[0], a.World.Losses[0], a.World.Kills[1], a.World.Losses[1]));
+        Assert.Equal((0, 1, 0, 0), (a.World.Kills[0], a.World.Losses[0], a.World.Kills[1], a.World.Losses[1]));
         Assert.Equal(hallHp - 358, a.World.Buildings.Hp[hall.Index]);
         // The freed slot's cooldown doesn't leak into the next unit there.
         EntityHandle next = Place(a, 0, Sapper, new Vector2(10f, 10f));

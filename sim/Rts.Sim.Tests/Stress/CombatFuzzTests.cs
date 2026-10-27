@@ -77,7 +77,7 @@ public class CombatFuzzTests
         var wasHolding = new bool[cap];
         var lastPos = new Vector2[cap];
         var lastGen = new int[cap];
-        long deaths = 0;
+        long deaths = 0, enemyKills = 0; // M6-S5 (BUG-1044 item 1): a friendly-fire death is a loss and nobody's kill
         var lossesSeen = new long[2];
         int attackingTicks = 0, holdingChecks = 0, buildingDeaths = 0, attackOrders = 0, orderedTicks = 0;
 
@@ -158,10 +158,11 @@ public class CombatFuzzTests
                 // seed 2 saw player 0 defeated at tick 2,912 on its first version).
                 if (e.Collapsed || e.Expired) continue;
                 deaths++;
+                if (w.IsEnemy(e.KillerOwner, e.VictimOwner)) enemyKills++;
                 lossesSeen[e.VictimOwner]++;
                 if (e.IsBuilding) buildingDeaths++;
             }
-            Assert.Equal(deaths, (long)w.Kills[0] + w.Kills[1]);
+            Assert.Equal(enemyKills, (long)w.Kills[0] + w.Kills[1]);
             Assert.Equal(deaths, (long)w.Losses[0] + w.Losses[1]);
             Assert.Equal(lossesSeen[0], w.Losses[0]);
             Assert.Equal(lossesSeen[1], w.Losses[1]);

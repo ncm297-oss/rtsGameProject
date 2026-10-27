@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S3 |
-| Status | open |
+| Status | fixed (M6-S5, pending QA) |
 | Found | 2026-10-27-0158, task M6-S4 |
 | System | AI (ScoutManager, MilitaryManager) with teams |
-| Fixed by | |
+| Fixed by | M6-S5: shared vision (an enemy building the ally sees is known) + `ScoutManager` drops a head waypoint at an ally's base and sweeps the grid farthest from the ally first; `AiTeamTests.MirrorAllies_TheScout_SkipsTheAllysBase_AndSweepsFarthestFromItFirst`; the soak's wave check strict on every row |
 
 ## Repro
 1. Four AI seats, teams **1, 1, 2, 2** (player p faction p mod 2, difficulty (p + seed) mod 3), on a 256 map with 4 start
@@ -61,3 +61,24 @@ sweep continues from the unexplored grid points farthest from the ally's known b
 an enemy building the ally sees counts as known, so a wave can start on it; (c) only if cheap: a seat with a wave-sized army and no
 known enemy building attack-moves toward the nearest unexplored start-location candidate. The soak rows' skipped wave check
 becomes strict with the fix.
+
+## Fix (M6-S5, dev)
+- **(b) Shared vision.** An enemy building any ally sees is in the player's `PlayerView` (seen, or a ghost), so the census's
+  `KnownEnemyBuildings` and `NearestEnemyBuilding` count it and a wave can start on it.
+- **(a) The scout.** A seat with an ally drops every head waypoint within `ai.scoutRadius` of an ally's building without
+  walking there (the hall's mirror is the ally's start on this layout), and past the head picks the unvisited grid point
+  farthest from the ally's buildings (largest distance to the nearest one; list order on ties). Ground the ally explored is
+  skipped like its own. A free-for-all sweeps as before (hash-pinned).
+- **(c) Not built**: with (a) and (b) every seat knows an enemy building from the first thousand ticks on the repro.
+- Regression: `AiTeamTests.MirrorAllies_TheScout_SkipsTheAllysBase_AndSweepsFarthestFromItFirst` (seeds 1-2, no raiders so the
+  scouts go out): fails on the pre-fix scout ("seat 3's scout walks to its ally's base (the mirror waypoint)" at tick 1,561 /
+  1,571). `AiTeamTests.AnEnemyHall_OnlyTheAllySees_IsAKnownEnemyBuilding_ForTheAi` (the census half).
+- The repro after the fix (`Stress/TeamAiSoakStressTests`, `adjacent: true`, 12,000 ticks): every seat knows an enemy building
+  (from tick 1,000 on); waves seed 1: 0, 1, 1, 0; seed 2: 0, 1, 0, 1; seed 3: 0, 1, 0, 0. Every seat that did not wave is
+  starved: its army never reached its opening's wave size (`attackMinHalfPop` / `attackMinCost` x `waveSizeMultiplier`) on a
+  tick it was not defending, e.g. seed 2 seat 2 (Hard) holds 2-4 workers and 0-40 gold the whole run, seed 1 seat 0 (Hard)
+  peaks at 24 / 40 half-pop. These are the seats whose own raider stands in the ally's base while an enemy raider works in
+  theirs (the economy collapse the Actual section describes); the soak's strict check now asserts "knew an enemy building" for
+  every seat and "waved" for every seat whose army reached wave size, on every row. The starvation itself (no army at home
+  against one raider for minutes; a 2-worker seat that never mines gold again) is an AI economy / defense matter, not vision;
+  noted for the Producer, not fixed here.

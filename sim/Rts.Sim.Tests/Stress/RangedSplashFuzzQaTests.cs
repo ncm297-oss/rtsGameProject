@@ -64,7 +64,7 @@ public class RangedSplashFuzzQaTests
         int[][] buildings = { BuildingsOf(0), BuildingsOf(1) };
         int capacity = w.Projectiles.Capacity;
         var rng = new SimRng(seed, 4242);
-        long deaths = 0;
+        long deaths = 0, enemyKills = 0; // M6-S5 (BUG-1044 item 1): a friendly-fire death is a loss and nobody's kill
         int hits = 0, misses = 0, maxInFlight = 0, friendly = 0, buildingDeaths = 0, peakUnits = 0;
         // Round 1 (BUG-0183): shots re-led in flight (same shot, impact point moved) and the longest step a led shot takes.
         var lastAim = new Vector2[capacity];
@@ -133,8 +133,9 @@ public class RangedSplashFuzzQaTests
                 deaths++;
                 if (e.IsBuilding) buildingDeaths++;
                 if (e.KillerOwner == e.VictimOwner) friendly++;
+                else enemyKills++;
             }
-            Assert.Equal(deaths, (long)w.Kills[0] + w.Kills[1]);
+            Assert.Equal(enemyKills, (long)w.Kills[0] + w.Kills[1]);
             Assert.Equal(deaths, (long)w.Losses[0] + w.Losses[1]);
             Assert.True(w.Impacts.Length <= capacity);
             foreach (ProjectileImpact e in w.Impacts)

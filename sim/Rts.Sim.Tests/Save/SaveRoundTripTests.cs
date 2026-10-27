@@ -195,6 +195,36 @@ public class SaveRoundTripTests
     }
 
     /// <summary>
+    /// M6-S5 criterion 5: shared vision's team maps are derived, not saved. A 2v2 (the same scene, seed 2) saved at tick 500:
+    /// right after the load every player's team answers (every cell's visible and explored state, the team byte map, every
+    /// unit and building seen) equal the unsaved run's, before any fog update rebuilt them; then 1,000 ticks hash-equal.
+    /// </summary>
+    [Fact]
+    public void A2v2_SavedAt500_TheSharedFogIsRebuiltAtLoad_AndFollowsTheUnsavedRun()
+    {
+        SaveScene scene = AiSaveScenes.TwoVersusTwo(2);
+        Simulation sim = scene.Build();
+        for (int t = 0; t < 500; t++) sim.Tick();
+        Simulation loaded = SaveTestRun.Load(TestSim.Data, SaveTestRun.Save(sim));
+        World a = sim.World, b = loaded.World;
+        int cells = a.Fog.Width * a.Fog.Height, seenThroughAlly = 0;
+        for (int p = 0; p < 4; p++)
+        {
+            Assert.True(a.Fog.Visibility(p).SequenceEqual(b.Fog.Visibility(p)), $"player {p}'s team byte map");
+            for (int c = 0; c < cells; c++)
+            {
+                Assert.True(a.Fog.IsVisible(p, c) == b.Fog.IsVisible(p, c) && a.Fog.IsExplored(p, c) == b.Fog.IsExplored(p, c), $"player {p} cell {c}");
+                if (a.Fog.IsVisible(p, c) && a.Fog.OwnVisibility(p)[c] != Vision.VisionConstants.Visible) seenThroughAlly++;
+            }
+            for (int s = 0; s < a.Units.Capacity; s++) Assert.True(a.Fog.CanSeeUnit(p, s) == b.Fog.CanSeeUnit(p, s), $"player {p} unit {s}");
+            for (int s = 0; s < a.Buildings.Capacity; s++) Assert.True(a.Fog.CanSeeBuilding(p, s) == b.Fog.CanSeeBuilding(p, s), $"player {p} building {s}");
+        }
+        Assert.True(seenThroughAlly > 0, "setup: no cell was visible only through an ally");
+        SaveTestRun.Result r = SaveTestRun.RoundTrip(scene, new[] { 500 }, after: 1000);
+        Assert.Equal(1000, r.TicksCompared);
+    }
+
+    /// <summary>
     /// M6-S3: a loaded AI seat drew its pick once, at construction, from the same seed (so its opening is the saved one), and
     /// carries the saved stream: equal to the unsaved seat's, which no manager has drawn on since the pick (QA's
     /// <c>ThePick_IsTheOnlyDrawOnTheAisStream</c>).
