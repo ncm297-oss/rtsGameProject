@@ -205,9 +205,10 @@ internal static class BuildOrderExecutor
     /// <summary>
     /// The anchor cell of the known node of <paramref name="kind"/> nearest <paramref name="fromCell"/> (squared cell distance,
     /// slot order on ties); with <paramref name="clearOfHalls"/> &gt;= 0 only one with no own or seen Town Hall within that many
-    /// cells. -1 for none.
+    /// cells; with <paramref name="skipDropped"/> not one the gatherers marked dropped (<c>Board.NodeDropped</c>, as
+    /// <see cref="AiPlayer.KnowsNode"/> reads it). -1 for none.
     /// </summary>
-    internal static int NearestNode(AiPlayer ai, ResourceKind kind, int fromCell, int clearOfHalls)
+    internal static int NearestNode(AiPlayer ai, ResourceKind kind, int fromCell, int clearOfHalls, bool skipDropped = false)
     {
         int w = ai.View.MapWidth, fx = fromCell % w, fy = fromCell / w;
         int best = -1;
@@ -216,6 +217,7 @@ internal static class BuildOrderExecutor
         while (ai.View.NextResource(ref s, out SeenResource node))
         {
             if (ai.Data.Resources[node.TypeId].Resource != kind) continue;
+            if (skipDropped && ai.Board.NodeDropped[s] == node.Handle.Generation) continue;
             long dx = node.Cell % w - fx, dy = node.Cell / w - fy, d = dx * dx + dy * dy;
             if (d >= bestDistance) continue;
             if (clearOfHalls >= 0 && HallNear(ai, node.Cell, clearOfHalls)) continue;
@@ -225,12 +227,16 @@ internal static class BuildOrderExecutor
         return best;
     }
 
-    /// <summary>The known gold mine an expand step builds by: the nearest the player's hall with no own or seen hall within reach; -1 for none.</summary>
-    private static int ExpansionMine(AiPlayer ai)
+    /// <summary>
+    /// The known gold mine an expand step builds by: the nearest the player's hall with no own or seen hall within reach and
+    /// not marked dropped by its gatherers (BUG-1023 item 3: a mine they found gone was still reserved for and built by);
+    /// -1 for none.
+    /// </summary>
+    internal static int ExpansionMine(AiPlayer ai)
     {
         if (ai.TownHallType < 0) return -1;
         int hall = HallCentre(ai);
-        return hall < 0 ? -1 : NearestNode(ai, ResourceKind.Gold, hall, ai.Rules.ExpandReachCells);
+        return hall < 0 ? -1 : NearestNode(ai, ResourceKind.Gold, hall, ai.Rules.ExpandReachCells, skipDropped: true);
     }
 
     /// <summary>Whether an own Town Hall, or an enemy one the player sees or remembers, stands within <paramref name="reach"/> cells (Chebyshev, anchor to anchor) of <paramref name="cell"/>.</summary>

@@ -169,6 +169,9 @@ public sealed partial class World
         Resources.ReadFrom(r, cells);
         Buildings.ReadFrom(r, Config.PlayerCount, cells);
         Units.ReadFrom(r, Config.PlayerCount, Data.Units.Length, Data.Statuses.Length);
+        // BUG-0960 item 2: a live unit's goal cell is -1 (none) or on the map; a forged one made the flow field cache throw.
+        for (int i = 0; i < Units.Capacity && !r.Failed; i++)
+            if (Units.Alive[i] && !r.Check(Units.GoalCell[i] >= -1 && Units.GoalCell[i] < cells)) return;
         _ledger.ReadFrom(r);
         Techs.ReadFrom(r);
         Projectiles.ReadFrom(r, Data.Projectiles.Length, Data.Units.Length, Data.Buildings.Length);

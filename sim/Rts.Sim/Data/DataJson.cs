@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace Rts.Sim.Data;
 
@@ -352,10 +353,32 @@ internal sealed class AiFileJson
     public AiRetreatJson? Retreat { get; set; }
 
     // M5-8a: the pre-openings top-level fields, read as any JSON only to refuse them with one clear error each ("moved into
-    // openings[]") instead of the unknown-field error, so a stale file can't half-load.
-    public JsonElement? BuildOrder { get; set; }
-    public JsonElement? Compositions { get; set; }
-    public JsonElement? Attack { get; set; }
+    // openings[]") instead of the unknown-field error, so a stale file can't half-load. BUG-0940: as Present, so a field
+    // set to null is seen too (a JsonElement? reads a JSON null as absent).
+    public Present? BuildOrder { get; set; }
+    public Present? Compositions { get; set; }
+    public Present? Attack { get; set; }
+}
+
+/// <summary>BUG-0940: a field whose presence alone matters: any value, null included, reads as <see cref="Instance"/>.</summary>
+[JsonConverter(typeof(PresentConverter))]
+internal sealed class Present
+{
+    internal static readonly Present Instance = new();
+}
+
+/// <summary>Reads any JSON value (null too: <see cref="HandleNull"/>) as <see cref="Present.Instance"/>, skipping its content.</summary>
+internal sealed class PresentConverter : JsonConverter<Present>
+{
+    public override bool HandleNull => true;
+
+    public override Present Read(ref Utf8JsonReader reader, System.Type typeToConvert, JsonSerializerOptions options)
+    {
+        reader.Skip();
+        return Present.Instance;
+    }
+
+    public override void Write(Utf8JsonWriter writer, Present value, JsonSerializerOptions options) => writer.WriteNullValue();
 }
 
 internal sealed class AiOpeningJson

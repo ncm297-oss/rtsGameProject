@@ -31,7 +31,7 @@ public sealed class TestDataDir : IDisposable
         {
             string target = System.IO.Path.Combine(path, System.IO.Path.GetRelativePath(Shipped, file));
             Directory.CreateDirectory(System.IO.Path.GetDirectoryName(target)!);
-            System.IO.File.Copy(file, target);
+            RetryOnce(() => System.IO.File.Copy(file, target, overwrite: true));
         }
         return new TestDataDir(path);
     }
@@ -42,9 +42,10 @@ public sealed class TestDataDir : IDisposable
     /// <summary>Parses a JSON file, lets <paramref name="edit"/> change it, and writes it back.</summary>
     public void EditJson(string rel, Action<JsonObject> edit)
     {
-        JsonObject root = JsonNode.Parse(System.IO.File.ReadAllText(FullPath(rel)))!.AsObject();
+        JsonObject root = JsonNode.Parse(RetryOnce(() => System.IO.File.ReadAllText(FullPath(rel))))!.AsObject();
         edit(root);
-        System.IO.File.WriteAllText(FullPath(rel), root.ToJsonString());
+        string text = root.ToJsonString();
+        RetryOnce(() => System.IO.File.WriteAllText(FullPath(rel), text));
     }
 
     /// <summary>Sets (or with <paramref name="rawJson"/> null, removes) a dotted field of one unit.</summary>
@@ -62,10 +63,40 @@ public sealed class TestDataDir : IDisposable
         });
     }
 
-    /// <inheritdoc/>
+    /// <summary>
+    /// Deletes the copy. BUG-0915: a file the OS won't let go of (held a moment by an indexer or virus scanner, or
+    /// read-only) throws <see cref="UnauthorizedAccessException"/> on Windows, not only <see cref="IOException"/>; either
+    /// is retried once and then left behind (a temp folder), never failing the test that used the copy.
+    /// </summary>
     public void Dispose()
     {
-        try { Directory.Delete(Path, recursive: true); }
-        catch (IOException) { /* temp folder; leaving it behind is harmless */ }
+        for (int attempt = 0; attempt < 2; attempt++)
+        {
+            try
+            {
+                Directory.Delete(Path, recursive: true);
+                return;
+            }
+            catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+            {
+                if (attempt == 0) Thread.Sleep(50);
+            }
+        }
+    }
+
+    /// <summary>BUG-0915: a file step under disk contention (another process holding a just-written file) is tried once more after a short wait.</summary>
+    private static void RetryOnce(Action io) => RetryOnce(() => { io(); return 0; });
+
+    private static T RetryOnce<T>(Func<T> io)
+    {
+        try
+        {
+            return io();
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            Thread.Sleep(100);
+            return io();
+        }
     }
 }

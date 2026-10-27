@@ -3,7 +3,7 @@
 | Field | Value |
 | --- | --- |
 | Severity | S4 |
-| Status | open (smaller since fix round 1) |
+| Status | open (measured in M5-H4, not shipped: the Producer's tuning call) |
 | Found | 2026-10-18-1814, task M5-4g (QA) |
 | System | AI economy: `AiPlayer.WantedGoldShare` in `EconomyManager.Gatherers` / `Rebalance` (`ai.reserveShift`) |
 | Fixed by |  |
@@ -52,3 +52,22 @@ With the reserve gated, it is held on 21.8 % of thinks (39 % in M5-4g). Gatherer
 
 ## Re-check after fix round 2 (c76bc5f)
 - 27 pairing runs: gatherer kind switches 4.04 a minute on average (max 7.25), base 1.40 and round 1 3.93. The wanted share changes 10.6 times a match. Still open, S4.
+
+## Measured (M5-H4, session 2026-10-26-2108)
+The brief: ship a variant only if gathering by 10:00 recovers without losing Age II or waves. The 27 pairing runs (shipped
+data, `ROW` lines now print `gathered10` / `gathered20`), each variant a scratch build, nothing of it kept:
+
+| 54 sides | shipped | shift off | idle pass only | band (no reserve: rebalance only back into goldShare ± shift) |
+| --- | --- | --- | --- | --- |
+| gathered by 10:00, avg | 5,068 | 5,179 | 5,176 | 5,076 |
+| gathered by 20:00, avg | 9,693 | 9,735 | 9,861 | 9,747 |
+| switches / min | 4.04 | 1.45 | 3.03 | 2.78 |
+| shareFlips | 10.6 | 9.9 | 10.1 | 10.1 |
+| alive without Age II | 4 / 49 | 6 / 49 | 2 / 49 | 3 / 49 (2 new) |
+| Age II vs shipped, paired | - | +16.8 s | +14.3 s | -10.4 s |
+| no wave; Malazan / Whirlwind waves | 3; 81 / 117 | 4; 83 / 116 | 3; 83 / 128 | 3; 85 / 123 |
+| defeats M / W | 5 / 0 | 4 / 1 | 5 / 0 | 5 / 0 |
+
+The idle-pass-only variant recovers the 10:00 economy fully and the waves rise, but Age II comes 14 s later on average
+(most of the shift's gain); the band keeps Age II but recovers no gathering. Neither passes the rule, so nothing shipped.
+A hysteresis across thinks needs a saved field (format change), not tried. Table also in docs/03 "Implementation (M5-4g)".

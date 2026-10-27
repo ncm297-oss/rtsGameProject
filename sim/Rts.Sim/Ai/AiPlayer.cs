@@ -584,6 +584,9 @@ internal sealed partial class AiPlayer
         if (!CanAfford(def.CostGold, def.CostWood)) return false;
         // BUG-0791: no worker to send (or the queue full) fails the Build whatever the site, so don't search for one. In the
         // storms fuzz scene every worker was busy and each of 15 due steps found a site at every think (0.9 of a 0.9 ms think).
+        // BUG-0941: a rule no cell can pass (a full building store, requires unmet) fails here as in FindSite, before
+        // AnyBuilder walks the workers: a blocked step costs one check a think. Same answer, no wait set either way.
+        if (!View.CanPlaceAnywhere(type, out _)) return false;
         if (_queueFull || !AnyBuilder()) return false;
         int searchesBefore = SiteSearches;
         int anchor = FindSite(type, centreCell);

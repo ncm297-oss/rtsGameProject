@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S4 |
-| Status | open |
+| Status | fixed (items 1-5); item 6 a note; item 7 the owner's call |
 | Found | 2026-10-17-1624, task M5-H3 (QA, full tier) |
 | System | economy (`EconomySystem.WalkToFootprint` / `FaceCell`), construction docs, docs/03 "Economy implementation", AI pacing constant |
-| Fixed by | |
+| Fixed by | M5-H4, session 2026-10-26-2108 (items 1-5) |
 
 ## Repro / items
 1. **Orphaned doc comment.** In `sim/Rts.Sim/Economy/EconomySystem.cs` (l. 328-347), `RingCell`'s old `/// <summary>` now
@@ -37,3 +37,11 @@ Comments and docs say what the code does. Measured costs on gated rows are named
 
 ## Notes
 None of these change a test outcome.
+
+## Fix (M5-H4, session 2026-10-26-2108)
+- Items 1-2: `RingCell` has its own summary back; `FaceCell`'s comment names the corners in `RingCell`'s terms (above-left,
+  above-right, below-left, below-right).
+- Item 3: `ConstructionSystem`'s summary says the stand cell is a 4-adjacent ring cell or, since M5-H3, a corner cell.
+- Items 4-5: docs/03's BUG-0790 paragraph says every footprint walk can move (gather, drop-off, build, repair) and quotes
+  QA's measure of `GatherPerfTests.TwoHundredGatheringWorkersAlone` (+20 %, gate 1 ms).
+- Item 6 is a note for the next gather change (no code). Item 7 (`NoSiteRetryThinks` in C#) is the owner's call; not moved.

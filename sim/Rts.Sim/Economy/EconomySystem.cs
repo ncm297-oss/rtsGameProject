@@ -325,11 +325,11 @@ public static class EconomySystem
         return crowd;
     }
 
-    /// <summary>The <paramref name="k"/>-th cell (0 to 2 (w + h) - 1) 4-adjacent to the footprint: the row above, the row below, the column left, the column right.</summary>
     /// <summary>
     /// Cell <paramref name="k"/> of the cells a footprint walk may stand in: the <c>2 (fw + fh)</c> 4-adjacent ring cells
-    /// (<see cref="RingCell"/>), then the four diagonal corner cells SW, SE, NW, NE (BUG-0790: a worker stood in a corner
-    /// cell out of reach while the corner's own spot in reach stayed free, since no stand point was ever offered there).
+    /// (<see cref="RingCell"/>), then the four diagonal corner cells in <see cref="RingCell"/>'s terms: above-left,
+    /// above-right, below-left, below-right (lower y first; BUG-0790: a worker stood in a corner cell out of reach while the
+    /// corner's own spot in reach stayed free, since no stand point was ever offered there).
     /// </summary>
     private static void FaceCell(int x0, int y0, int fw, int fh, int k, out int x, out int y)
     {
@@ -344,6 +344,7 @@ public static class EconomySystem
         y = k < 2 ? y0 - 1 : y0 + fh;
     }
 
+    /// <summary>The <paramref name="k"/>-th cell (0 to 2 (w + h) - 1) 4-adjacent to the footprint: the row above, the row below, the column left, the column right.</summary>
     private static void RingCell(int x0, int y0, int fw, int fh, int k, out int x, out int y)
     {
         if (k < fw) { x = x0 + k; y = y0 - 1; return; }

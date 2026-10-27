@@ -99,7 +99,7 @@ public class AiOpeningsQaTests
     /// A stale field written as JSON null at the top level is still the old field: refused, not silently loaded (an unknown
     /// field set to null is an error everywhere else). Skipped with its bug id: the loader reads it as absent.
     /// </summary>
-    [Theory(Skip = "BUG-0940: a top-level \"buildOrder\": null (or compositions / attack) loads with no error")]
+    [Theory] // BUG-0940: fixed in M5-H4 (the three fields read as Present, null included)
     [InlineData("buildOrder")]
     [InlineData("compositions")]
     [InlineData("attack")]

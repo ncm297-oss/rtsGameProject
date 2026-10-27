@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S3 |
-| Status | open |
+| Status | fixed |
 | Found | 2026-10-17-1624, task M5-H3 (QA, full tier) |
 | System | tests: Perf gates (`Stress/CombatScaleQaTests`, `Vision/VisionGatePerfTests`, `CombatPerfTests`), docs/03 "Testing strategy" |
-| Fixed by | |
+| Fixed by | M5-H4, session 2026-10-26-2108 |
 
 ## Repro
 1. QA ran the whole `dotnet test sim/Rts.Sim.Tests --filter Category=Perf` four times on an idle PC: base bf8026e, head
@@ -45,3 +45,13 @@ comment says as much: "QA may want more pairs here rather than a wider bound". T
 - The dev's own remark that the gates "would pass a ~1.6x slower change in a short run" holds. In a short fresh process
   the tight blob reads 4.4 ms against its new 9.3 ms gate (2.1×). Only the category run, the check everyone runs, keeps
   the 25 % margin.
+
+## Fix (M5-H4, session 2026-10-26-2108)
+- `Stress/CombatScaleQaTests.TightBlob2500_OneEnemyAtTheFarCorner_ScansNearFree`: eight alternated pairs after the discarded
+  warm-up pair (four before), bound 0.64 -> 0.35 ms. Readings: +0.135 and +0.130 ms (blob 4.5-5.1 ms). Under another track's
+  full test run on the same PC it read +1.2 to +2.0 ms (blob 8-24 ms): only a quiet machine's reading counts, as for every
+  Perf row.
+- The design budget: `VisionGatePerfTests.Brawl250v250_DesignBudget_FreshProcessShortRun_Under4Ms` runs three fresh `dotnet
+  test` children of the assembly (the row with `RTS_PERF_FRESH_CHILD=1`), each timing the 250 v 250 vision brawl (300 ticks
+  after 10 warm-up), and gates the best under 4 ms. Measured 3.73-3.90 ms: green, but with under 10 % margin.
+- docs/03 "Re-baselined for this PC" says both.
