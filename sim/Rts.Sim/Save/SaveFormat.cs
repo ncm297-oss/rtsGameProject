@@ -35,6 +35,14 @@ public static class SaveFormat
     /// <summary>Largest capacity a save may declare (as a replay).</summary>
     internal const int MaxCapacity = 1_000_000;
 
+    /// <summary>
+    /// BUG-0990: largest command capacity a save may declare. The queue's capacity is configuration, not a length the body
+    /// holds (the <c>CMDS</c> section is a count and the commands), so the length pre-check can't bound it; this does, so a
+    /// forged one allocates at most about 4 MB. BUG-1040: it is <see cref="SimConfig.MaxCommandCapacity"/>, the bound
+    /// <see cref="SimConfig.Validate"/> puts on every sim, so every save a sim writes is under it.
+    /// </summary>
+    internal const int MaxCommandCapacity = SimConfig.MaxCommandCapacity;
+
     /// <summary>Longest string field (sim version, faction id), in UTF-8 bytes.</summary>
     internal const int MaxString = 256;
 

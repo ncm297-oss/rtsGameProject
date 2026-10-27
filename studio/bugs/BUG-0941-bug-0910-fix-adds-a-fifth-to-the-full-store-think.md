@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S4 |
-| Status | open |
+| Status | fixed |
 | Found | 2026-10-17-2344, task M5-8a (QA, full tier) |
 | System | AI: `AiPlayer.TryBuild` (BUG-0910 fix), `BuildOrderExecutor` |
-| Fixed by | |
+| Fixed by | M5-H4, session 2026-10-26-2108 |
 
 ## Repro
 1. Paired runs, same PC, quiet machine (no other track's test host), alternating base b30462a and head 13d9ad6:
@@ -38,3 +38,17 @@ and every gate stays far under its 1 ms budget, so this is polish, not a budget 
   `_queueFull || !AnyBuilder()` line of `TryBuild` gets back about half (0.179 / 0.178 and 0.198 / 0.187). Behaviour is the
   same, because `FindSite` would return -1 at the same test, and it sets no wait either way.
 - The rest is the executor walking the blocked steps at every think, which is what BUG-0910 asks for.
+
+## Fix (M5-H4, session 2026-10-26-2108)
+QA's probe, shipped: `AiPlayer.TryBuild` returns false on `!View.CanPlaceAnywhere(type, out _)` before the
+`_queueFull || !AnyBuilder()` line (`FindSite` fails at the same test and sets no wait, so the answer is the same; the
+think's purse is at most the bank, so a cost the purse pays passes the view's cost check too). Measured with
+`QA/AiThinkCostQaTests`, three alternated pairs on one build tree (the line toggled), avg ms a think:
+
+| Row | without | with |
+| --- | --- | --- |
+| forests 12 | 0.219 / 0.218 / 0.217 | 0.200 / 0.208 / 0.188 |
+| forests 6 | 0.214 / 0.212 / 0.216 | 0.195 / 0.208 / 0.195 |
+
+Commands sent identical on both sides (3,720 / 4,765). The behaviour guard is the existing AI suites (`ReserveTests`,
+`AiPlayerTests`, the replay and twin rows), green; no regression test of its own (a cost, not a rule).

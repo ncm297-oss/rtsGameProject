@@ -222,6 +222,61 @@ public class ReserveTests
     }
 
     /// <summary>
+    /// BUG-1023 item 3 (pair (1,0) seed 37 <c>crossbow_push</c>: an expand reserved as 0 / 275 for a mine its gatherers had
+    /// found gone): <c>ExpansionMine</c> honours <c>Board.NodeDropped</c> as <c>KnowsNode</c> does. The flat scene's middle
+    /// mine and player 1's (every mine clear of player 0's hall) marked dropped: the due expand is not reserved with the purse
+    /// short, and with the purse full no hall is placed by it; unmarked (the twin), it is reserved and then placed.
+    /// </summary>
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void Bug1023_AnExpandForADroppedMine_IsNotReservedNorBuilt(bool dropped)
+    {
+        GameData d = s_expand.Value;
+        Simulation sim = AiScenes.Flat(AiScenes.Seats(AiDifficulty.Hard, SeatController.Ai, SeatController.Human), d, expansionMine: true);
+        AiPlayer ai = sim.AiOf(0)!;
+        ResourceStore r = sim.World.Resources;
+        // Every mine clear of player 0's hall: the middle one and player 1's two (the explored scene shows the map, not the
+        // enemy's hall, so an unmarked enemy mine would be the next choice).
+        int marked = 0;
+        for (int s = 0; s < r.Capacity; s++)
+            if (r.Alive[s] && d.Resources[r.TypeId[s]].Resource == ResourceKind.Gold && r.Cell[s] % AiScenes.FlatSize > 20)
+            {
+                if (dropped) ai.Board.NodeDropped[s] = r.Generation[s];
+                marked++;
+            }
+        Assert.Equal(3, marked);
+        // NodeMarks stays 0, as in the no-node guard's row: the explored scene sees the mine, and the seen-again pass would clear the mark.
+        BuildingDef hall = d.Buildings[ai.TownHallType];
+        List<Command> log = AiScenes.Log(sim, 0);
+        Think(sim, log, hall.CostGold, hall.CostWood - 1); // short of wood only, wood known: Fillable
+        Assert.Equal(dropped ? -1 : 0, _last.Step);
+        List<Command> sent = new();
+        for (int k = 0; k < 40 && !sent.Any(c => c.Kind == CommandKind.Build && c.TypeId == ai.TownHallType); k++)
+            sent = Think(sim, log, 5000, 5000);
+        Assert.Equal(!dropped, sent.Any(c => c.Kind == CommandKind.Build && c.TypeId == ai.TownHallType));
+    }
+
+    /// <summary>An expand due at once (every difficulty's <c>expandAfter</c> 0), the scout home, the reserve from the start.</summary>
+    private static readonly Lazy<GameData> s_expand = new(() => AiScenes.DataWith(dir =>
+    {
+        dir.EditJson("factions/malazan/ai.json", root =>
+        {
+            foreach (JsonNode? o in root["openings"]!.AsArray())
+            {
+                o!["buildOrder"] = AiScenes.BuildOrder(("time", 0, "expand", null, 0));
+                o["compositions"] = JsonNode.Parse("""[{ "age": 1, "units": { "malazan_heavy_infantry": 1 } }, { "age": 2, "units": { "malazan_heavy_infantry": 1 } }]""");
+            }
+            foreach (string k in new[] { "easy", "normal", "hard" }) root["difficulties"]![k]!["expandAfter"] = 0;
+        });
+        dir.EditJson("common/rules.json", r =>
+        {
+            r["ai"]!["scoutAfter"] = 3600;
+            r["ai"]!["reserveArmyShare"] = 0;
+        });
+    }));
+
+    /// <summary>
     /// The economy's house rule is unaffected: with the population within <c>houseWhenPopWithin</c> of the cap and Age II
     /// reserved (400 / 200 of 100 / 60), a Billet (0 / 50) is still placed.
     /// </summary>

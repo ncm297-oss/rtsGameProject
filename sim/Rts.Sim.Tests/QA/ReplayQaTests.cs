@@ -507,7 +507,11 @@ public class ReplayQaTests
     public void HugeDeclaredCapacities_AtTheFormatLimit_ReadButOverItRefused()
     {
         string text = Text(Fuzz);
-        Assert.Equal(ReplayError.None, Read(Reseal(text.Replace("command-capacity 200\n", "command-capacity 1000000\n"))));
+        // BUG-1040: the command capacity's limit is the config's (SimConfig.MaxCommandCapacity), not the format's 1,000,000,
+        // so a replay that reads also builds its sim; at that bound it reads, over it (1,000,000 included) it is refused.
+        Assert.Equal(ReplayError.None, Read(Reseal(text.Replace("command-capacity 200\n", $"command-capacity {SimConfig.MaxCommandCapacity}\n"))));
+        Assert.Equal(ReplayError.InvalidHeader, Read(Reseal(text.Replace("command-capacity 200\n", $"command-capacity {SimConfig.MaxCommandCapacity + 1}\n"))));
+        Assert.Equal(ReplayError.InvalidHeader, Read(Reseal(text.Replace("command-capacity 200\n", "command-capacity 1000000\n"))));
         Assert.Equal(ReplayError.InvalidHeader, Read(Reseal(text.Replace("unit-capacity 96\n", "unit-capacity 1000001\n"))));
         Assert.Equal(ReplayError.InvalidHeader, Read(Reseal(text.Replace("command-capacity 200\n", "command-capacity 2147483647\n"))));
         Assert.Equal(ReplayError.InvalidHeader, Read(Reseal(text.Replace("players 3\n", "players 2147483647\n"))));

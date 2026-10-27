@@ -158,7 +158,8 @@ clamps its `GameSpeed` to 0.25-8.
 `Simulation.Enqueue` always stamps `TickNumber + 1` plus a per-player sequence number, whether it
 is called between ticks (input) or during one (AI think), so a command never changes the tick in
 progress. The cost is at most one tick (50 ms) of input latency. Pending commands live in a
-fixed-capacity `CommandQueue` (size from `SimConfig.CommandCapacity`) that is insertion-sorted in
+fixed-capacity `CommandQueue` (size from `SimConfig.CommandCapacity`, 1 to `SimConfig.MaxCommandCapacity` = 65,536,
+16x the game's 4,096; `Validate` refuses more, BUG-1040) that is insertion-sorted in
 place each tick, so applying commands does not allocate. `Enqueue` on a full queue throws and
 leaves state unchanged (the sequence counter advances only once the command is accepted). Since
 M1-9 (BUG-0054) `Enqueue` also refuses a command that isn't well formed (`Command.IsWellFormed()`:
@@ -1484,8 +1485,13 @@ repair loop: `GatherNode` or `BuildTarget` set; every other walk is unchanged, s
   walker walk on past the queue to a free stand point (`QueuesBehind`, a movement change: 4 of 320 with the all-cell
   waiver, nothing gained with these two). The seed-21 match (`QA/GatherWedgeQaTests`): base worst out-of-reach stand 332
   ticks, now 478 (bound 600). Cost: up to 3 `PointCrowd` queries for the worker's own cell when it is crowded, and 4 more
-  candidate cells, once per walk to a footprint. Moved: gathering wherever a face is crowded, so the seed-21 replay's
-  checkpoints (see "Implementation (M5-4f)") and the measured `Content/` cells; the golden replay has no gatherer.
+  candidate cells, once per walk to a footprint. Moved: any footprint walk (gather, drop-off, build, repair), crowded or
+  not, since a corner cell's centre is the nearest candidate for a worker coming in on a diagonal (BUG-0913: the seed-21
+  replay parts at tick 19, its first gather walks; its wood at the end 235 -> 895), so the seed-21 replay's checkpoints
+  (see "Implementation (M5-4f)") and the measured `Content/` cells; the golden replay has no gatherer. QA's measure of
+  the gated row (BUG-0913): `GatherPerfTests.TwoHundredGatheringWorkersAlone` 0.709-0.726 -> 0.857-0.868 ms (+20 %,
+  three paired fresh processes and both category runs; gate 1 ms), the scene gathering more (gold 1,400 -> 1,570, wood
+  490 -> 640).
 - **Cost** (Debug, this PC, alone, three alternating runs against the base): `GatherPerfTests.TwoHundredGatheringWorkers
   Alone` 0.23 -> 0.32-0.33 ms a tick (its budget is 1 ms), because that scene (50 workers on one tree, 50 on one mine,
   per base) now works more: gold 1,120 -> 1,310 and wood 440 -> 500 by the end of the row (+17% / +14%), with 39% more
@@ -7982,6 +7988,39 @@ BUG-0981 (four of six openings never reached Age II against an active opponent):
   `Bug1025_WhileTheBaseIsDefended_NoReserveIsNamed` before and after a wave), `DataValidationTests`, `DataContentHashTests`,
   `ReplayGoldenTests`, `QA/GatherWedgeQaTests`; `QA/AiSeatQaTests.ImpossibleSteps_SendNothing_AndNeverStall` now holds its
   purse at no wood before every think (the reserve saves for its house step, which production used to spend first).
+- **M5-H4 (hardening).** Criterion 3 as restated after the waiver (BUG-1024, BUG-1027): `Stress/ReservePairingsStressTests`
+  asserts every side alive at 20:00 has Age II **except a named allowance** (`KnownNoAgeTwo`: the four sides above, each
+  with its state at 20:00 in a comment; one that passes prints "take it out", `TheAllowance_SetToAPassingSide_PrintsTakeItOut`)
+  and, once all 27 runs are in, the totals: no-wave sides = 3, Malazan waves at least the base's 79, Malazan / Whirlwind
+  defeats at most the base's 8 / 5 (measured 3, 81, 5 / 0). The twin, hash-every-50-ticks and command-count checks are
+  unchanged. Criterion 2 as restated (BUG-1023 item 4): `ReserveTwinTests` runs three generated AI matches (2-4 seats, every
+  difficulty) with `reserveShift` 0 and the gate open (`reserveArmyShare` 0) where no step is reservable (every bank topped
+  up to 20,000 / 20,000 before each tick, or every step's trigger past the run) and compares the state hash every 500 ticks
+  to 6,000 with hashes printed by the same file built on f531dd9 (the tree before M5-4g): equal, and no think names a
+  reserve. BUG-1023 item 3: `BuildOrderExecutor.ExpansionMine` (and so `Reservable` and the expand's site) skips a mine
+  its gatherers marked dropped, as `KnowsNode` does (`ReserveTests.Bug1023_AnExpandForADroppedMine_IsNotReservedNorBuilt`);
+  no outcome of the 27 runs moved (only seed 32 Malazan's printed `freeMine`, now false).
+- **The gather shift's churn, measured and left (M5-H4, BUG-1022).** Each `ROW` now prints `gathered10` / `gathered20`
+  (`World.GatheredGold` + `GatheredWood` at 10:00 and 20:00). Two stateless variants were measured on the 27 runs against
+  the shipped rule and the shift turned off in both passes (a hysteresis that keeps the shifted share until the step is
+  paid would need a field across thinks, so a save format change: not tried):
+
+  | 54 sides, 27 runs | shipped (both passes) | shift off | idle pass only | rebalance holds a ±shift band with no reserve |
+  | --- | --- | --- | --- | --- |
+  | gathered by 10:00, avg a side | 5,068 | 5,179 | 5,176 | 5,076 |
+  | gathered by 20:00 | 9,693 | 9,735 | 9,861 | 9,747 |
+  | gatherer kind switches a minute | 4.04 | 1.45 | 3.03 | 2.78 |
+  | wanted-share changes a match (`shareFlips`) | 10.6 | 9.9 | 10.1 | 10.1 |
+  | alive at 20:00 without Age II | 4 / 49 | 6 / 49 | 2 / 49 | 3 / 49 (2 not in the allowance) |
+  | Age II, paired against shipped (sides with it in both) | - | +16.8 s (45) | +14.3 s (47) | -10.4 s (44) |
+  | no-wave sides; Malazan / Whirlwind waves | 3; 81 / 117 | 4; 83 / 116 | 3; 83 / 128 | 3; 85 / 123 |
+  | Malazan / Whirlwind defeats | 5 / 0 | 4 / 1 | 5 / 0 | 5 / 0 |
+
+  Shifting only the idle pass gets the 10:00 economy back (to the shift-off figure) and a quarter of the churn, with more
+  waves and fewer Age II misses, but reaches Age II 14 s later on average: it gives back most of what the shift is for.
+  The band keeps the Age II gain and cuts churn a third but recovers no gathering, and two new sides miss Age II. Neither
+  meets "gathering recovers without losing Age II", so the shipped rule stays (a tuning call for the Producer; the numbers
+  are here). `shareFlips` counts the reserve's wanted share, which no variant changes.
 
 ### Implementation (M6-S1)
 
@@ -8055,7 +8094,7 @@ M5 criterion 8, the sim half: named AI openings (D14 b). Code: `Data/AiOpening.c
   may name the opening), so they live in data only. `buildOrder`, `compositions` and `attack` keep the M5-1 rules unchanged,
   reported at `openings[i].buildOrder[j].id`, `openings[i].compositions[k]...`, `openings[i].attack.minArmyPop`. No list, an
   empty one, or more than 8 is one error at `openings`. The pre-M5-8a top-level `buildOrder`, `compositions` and `attack`
-  are each one error ("moved into openings[]"), so a stale file can't half-load. Age-agnostic: no new age-keyed field (the
+  are each one error ("moved into openings[]"), so a stale file can't half-load (set to `null` too since M5-H4, BUG-0940: they read as a presence marker). Age-agnostic: no new age-keyed field (the
   compositions keep their per-age form). The shipped files hold one opening, `standard` (`Standard` / "The faction's standard
   build"), equal step for step to the old top-level order; the data track writes the real openings (D21). **D21
   (2026-10-18):** three per faction, `standard` first (Easy plays it): Malazan `standard` / `crossbow_push` / `cadre_rush`,
@@ -8079,7 +8118,11 @@ M5 criterion 8, the sim half: named AI openings (D14 b). Code: `Data/AiOpening.c
   standard openings' names and descriptions, the Malazan standard wave 20 / 1,544 to 16 / 1,235); header and checksum
   regenerated again, no `k` line moved.
 - **BUG-0910** (folded in, same executor code): the BUG-0791 no-site wait applies only after a ring search ran (see
-  "Implementation (M5-2)", the executor).
+  "Implementation (M5-2)", the executor). M5-H4 (BUG-0941): that sent each blocked build step through `TryBuild` every
+  think, where `AnyBuilder` walked the workers before `FindSite`'s cell-free test; `TryBuild` now asks
+  `PlayerView.CanPlaceAnywhere` first (the same answer, no wait set either way). `QA/AiThinkCostQaTests`, three alternated
+  pairs: forests 12 0.217-0.219 -> 0.188-0.208 ms a think, forests 6 0.212-0.216 -> 0.195-0.208, the commands identical
+  (3,720 / 4,765).
 - **Tests.** `Ai/AiOpeningPickTests` (the shipped `standard` equals the old order, numbers and ids; Easy 0 on seeds 1-50;
   Normal and Hard hit each of 3 openings over seeds 1-200 and equal the stream's first draw; same seed same pick; no hash
   moved; a Normal replay plays back and the same setup picks again; the executor sends the picked opening's first step;
@@ -8140,7 +8183,8 @@ M5 criterion 8, the sim half: named AI openings (D14 b). Code: `Data/AiOpening.c
   (M1-9), and an attack target only on an `Attack` (M4-2a), the rule `Enqueue` applies; a format 3 replay can
   hold no `Attack` and no combat-off header), no tick has more commands than the
   command capacity, and the checkpoints are exactly the interval's multiples. Format limits: at
-  most 16 players, capacities up to 1,000,000, and (M1-4d-3, BUG-0040) a tick count and checkpoint
+  most 16 players, unit and resource capacities up to 1,000,000, the command capacity up to the config's own
+  `SimConfig.MaxCommandCapacity` (65,536, BUG-1040: so a replay that reads also builds its sim), and (M1-4d-3, BUG-0040) a tick count and checkpoint
   interval of at most 1,728,000 (24 h at 20 Hz), so a small file can't declare years of playback.
   The interval may exceed the tick count: the recorder writes replays shorter than one interval.
 - **Playback** (`ReplayPlayer.Run(replay, data)`): refuses before any tick with
@@ -8281,7 +8325,20 @@ version 2) stores the AI seats too, so every match saves. Code in `sim/Rts.Sim/S
   `SaveHeader.MinBodyBytes` (32 bytes a unit slot, 16 a building and a resource slot, 2 a grid cell: each below what its
   section writes), and the heightmap's arrays must fit the bytes left before they are allocated, so a header forged to
   every capacity at the format maximum is refused `Malformed` in well under a millisecond with about 100 KB allocated
-  (it used to build a 1.4 GB world first).
+  (it used to build a 1.4 GB world first). M5-H4 (BUG-0990): the projectile store counts 48 bytes a slot (it writes 68)
+  and the zone store 24 (it writes 26 plus its per-player boxes), so a header forged to either alone is refused the same
+  way (they allocated 88 and 42 MB first). The command queue's capacity is configuration, not a length the body holds
+  (`CMDS` is a count and the commands), so no length bounds it: `SaveFormat.MaxCommandCapacity` does, 65,536 (16x the
+  game's 4,096); at or below it a forged capacity loads and the sim has that queue size (at most about 4 MB).
+  BUG-1040: that bound is `SimConfig.MaxCommandCapacity`, which `SimConfig.Validate` puts on every sim, so the save and
+  the load agree and every save a sim writes loads (a real save of a capacity over 65,536 used to save and then be
+  refused at load). Chosen over the alternatives because a body can't bound it (an empty queue at 1,000,000 slots
+  writes the same bytes as a forged header, so a load that accepted real ones would allocate 52 MB for forged ones) and
+  a `TrySave` refusal would hand the player a sim that can never be saved; standing rule 36 holds (no signature or code added).
+  A header over it is `InvalidHeader` (a capacity outside its range, as every other), refused before the heightmap. `SaveRefusalTests`: each capacity forged alone and together, refused with under 1 MB
+  allocated (`InvalidHeader` when the command capacity is among them); an empty world at large capacities (the command
+  capacity at the bound) still loads; a config over the bound throws in `Validate`
+  (`SimHardeningM5H4QaTests.ARealSave_WithACommandCapacityAboveTheLoadBound_Loads`).
 - **Not stored**: per-tick scratch (the movement, combat, production and fog-stamp buffers, rewritten before they are read
   within a tick); the never-seal check's memo (`SealCheck`, BUG-0096), a cache of an answer that follows from the grid
   alone, which reads between ticks (`CanPlace`) also write; the replay recorder.
@@ -8291,9 +8348,11 @@ version 2) stores the AI seats too, so every match saves. Code in `sim/Rts.Sim/S
   it; `ChecksumMismatch`; `DataMismatch` (another `ContentHash`, so any data edit refuses a save, as a replay);
   `InvalidHeader` (a player count outside 1-16, a capacity outside its range, a faction id the data lacks, an unknown
   controller or difficulty, a map parameter or config value `SimConfig.Validate` refuses, an AI seat whose faction has no
-  `ai.json`); `Malformed` for a body too short for the header's capacities (the pre-check) or that doesn't parse (a tag out
+  `ai.json`); `Malformed` for a body too short for the header's capacities (the
+  pre-check) or that doesn't parse (a tag out
   of place, an AI seat count or player that doesn't match the header's seats, a stored opening pick other than the load's, an array of the wrong length, a count past its capacity, a
-  live entity's type, owner or cell out of range, a bad enum or bool byte, a flow field whose directions leave the map or
+  live entity's type, owner or cell out of range, a live unit's goal cell off the map or a player's last visible fog box
+  outside it (M5-H4, BUG-0960 item 2: the two values QA's sweep loaded and then threw on), a bad enum or bool byte, a flow field whose directions leave the map or
   cycle, a pending command `Enqueue` would refuse, bytes after `END!`). A save whose checksum holds is trusted past these
   structure checks: a forged file can load into a sim whose later ticks misbehave.
 - **Size and time** (Perf row `SavePerfTests`, Debug build): the menu's match at tick 12,000 is about 3.9 MB, saves in about
@@ -8385,7 +8444,14 @@ version 2) stores the AI seats too, so every match saves. Code in `sim/Rts.Sim/S
   500-unit design budget on this PC's sustained clock any more**; until the clock is looked at or a short fresh-process gate row
   is added (the next sim hardening), the paired A/B is the only guard of that budget. The far-corner scan's 0.64 ms gate was set
   from one head reading (QA: base never over 0.25 in five samples, the mean difference +0.011 ms): the next sim hardening gives
-  that row more pairs and a bound near 0.35 ms (BUG-0912).
+  that row more pairs and a bound near 0.35 ms (BUG-0912). **Done in M5-H4 (BUG-0912):** the far-corner row runs eight
+  alternated pairs (four before) and is gated at 0.35 ms (readings with eight pairs: +0.130 and +0.135 ms, the blob 4.6-4.9
+  ms; under another track's full test run beside it the blob read 8-24 ms and the delta 1.2-2.0 ms, so that row is only
+  meaningful on a quiet machine, as every Perf row). The 4 ms design budget has its own row again:
+  `VisionGatePerfTests.Brawl250v250_DesignBudget_FreshProcessShortRun_Under4Ms` starts three fresh `dotnet test` processes
+  of this assembly (the row itself, `RTS_PERF_FRESH_CHILD=1`), each timing the 250 v 250 vision brawl's 300 ticks after 10
+  warm-up, about a second of load, and gates the best under 4 ms: 3.73-3.90 ms measured, under 10 % of margin, so a
+  regression of that size fails it. The sustained-clock gates above stay as they are.
 - The M1 perf criterion is `PerfCriterionTests.FiveHundredMovingUnits_AverageTickUnder4Ms` (M1-7):
   500 units of every type, two players, on the default 128 map, spawned within 12 path cells of the
   center and sent to the farthest passable cell. It asserts that at least 95% are Moving after every

@@ -146,7 +146,9 @@ internal static class SaveHeader
         int sampleTicks = r.ReadInt32(), sampleCapacity = r.ReadInt32();
         tick = r.ReadInt32();
         if (r.Failed) return SaveError.Malformed;
-        if (!InCapacity(units, 1) || !InCapacity(commands, 1) || !InCapacity(resources, 1) || !InCapacity(buildings, 1)
+        // BUG-1040: the command capacity's range is the config's own (1 to SaveFormat.MaxCommandCapacity), so a header over
+        // it is InvalidHeader before anything is built, as every other capacity out of range.
+        if (!InCapacity(units, 1) || commands < 1 || commands > SaveFormat.MaxCommandCapacity || !InCapacity(resources, 1) || !InCapacity(buildings, 1)
             || !InCapacity(projectiles, 0) || !InCapacity(zones, 1) || tick < 0 || tick == int.MaxValue)
             return SaveError.InvalidHeader;
         var built = new SimConfig(seed, players, units, commands)
@@ -175,10 +177,14 @@ internal static class SaveHeader
     /// capacities on a map of <paramref name="cells"/> cells, so a header asking for huge stores is refused before
     /// <c>World.ForLoad</c> allocates them. Each term is below what its section writes: the unit store writes over 40 bytes a
     /// slot (positions, velocity, facings, owner, type, before the rest), the building and resource stores over 16, the nav
-    /// grid 2 a cell (flags and cost).
+    /// grid 2 a cell (flags and cost); BUG-0990: the projectile store 68 a slot (four vectors, four ints, two handles, three
+    /// flags and a level), counted as 48, and the zone store 26 (alive, owner, centre, ability, ticks, radius, blocks-vision) plus its
+    /// per-player boxes, counted as 24. The command capacity is not a length the body holds:
+    /// the header's range check (<see cref="SaveFormat.MaxCommandCapacity"/>, BUG-1040) bounds it instead.
     /// </summary>
     public static long MinBodyBytes(SimConfig config, int cells) =>
-        32L * config.UnitCapacity + 16L * config.BuildingCapacity + 16L * config.ResourceCapacity + 2L * cells;
+        32L * config.UnitCapacity + 16L * config.BuildingCapacity + 16L * config.ResourceCapacity + 2L * cells
+        + 48L * config.ProjectileCapacity + 24L * config.ZoneCapacity;
 
     private static bool InCapacity(int value, int min) => value >= min && value <= SaveFormat.MaxCapacity;
 

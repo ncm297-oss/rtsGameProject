@@ -46,3 +46,6 @@ are new data for the page: "two of three" understates a 4-of-5 pattern, and the 
   rule), likely folding into M5-4g with BUG-0981. Data alternative if the owner wants it: a stronger Age I defence
   in these two openings (e.g. a second Barracks earlier), measured against these 10 seeds.
 - Page fix (data track, cheap): quote the 5-seed counts and name seed 25.
+
+## Update (D-R32, 2026-10-26-2108, after M5-4g's reserve)
+`cadre_rush` sends no wave on 4 of 5 seeds (8, 14, 23 defeated at 13:25 / 12:33 / 15:36; 18 alive at 20:00, peak 6 pop); `crossbow_push` on 2 of 5 (19 and 25, both alive and beaten down: seed 19 at 15 pop / cap 24 with 910 gold and no Age II, seed 25 at 1 pop; before the reserve seed 25 was defeated at 11:26). Seed 25 is a named allowance in `DH6ThresholdQaTests.KnownBeatenAlive`; seed 19 still needs `D21OpeningsQaTests.KnownBeatenAlive`. The keep-18 rule re-derived on the new table still picks 18, so the lever stays sim-side (M5-4g's defend-then-counter slice was built and backed out: 0 / 6 seeds waved). The malazan page quotes the 5-seed counts and names seed 25 (its page line is done).

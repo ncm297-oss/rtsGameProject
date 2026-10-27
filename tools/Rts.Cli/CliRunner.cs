@@ -94,7 +94,10 @@ public static class CliRunner
 
         var map = new MapGenParams { Forests = forests, GoldMines = mines };
         // Room for the march, the workers and (with --workers) one Town Hall command per player.
-        int capacity = units + workers * players, commands = economy ? capacity + players : units;
+        // BUG-1040: the queue is capped at the config's bound; every spawn is enqueued in one tick, but a player's block on
+        // the 128 x 128 map (16,384 cells) holds far fewer than 65,536 units, so the cap never drops a command --units asks for.
+        int capacity = units + workers * players;
+        int commands = Math.Min(economy ? capacity + players : units, SimConfig.MaxCommandCapacity);
         var sim = new Simulation(new SimConfig(seed, players, capacity, commands) { Data = data, Map = map });
         // Before any enqueue: a replay must see every command from tick 0 (docs/03 "Save/load and replays").
         ReplayRecorder? recorder = recordPath == null ? null

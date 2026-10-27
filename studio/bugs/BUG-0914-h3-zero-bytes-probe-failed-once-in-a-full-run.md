@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S3 (failed a second full run, 2026-10-18-1814 re-check 2) |
-| Status | open |
+| Status | fixed |
 | Found | 2026-10-17-1624, the data track's D-R31 full run on the merged tree (sim M5-H3 + the re-print); filed by the Producer |
 | System | tests: `QA/SimHardeningH3QaTests` (an M4-H3 allocation probe: 500 units ordered onto an unreachable Tent, `GC.GetAllocatedBytesForCurrentThread` summed over ticks 5 on, asserted 0) |
-| Fixed by | |
+| Fixed by | M5-H4, session 2026-10-26-2108 |
 
 ## Repro
 1. `dotnet test sim/Rts.Sim.Tests --filter Category!=Perf` on the merged 1624 tree (sim d048a21 / c91926f + data ba56348): the row
@@ -38,3 +38,14 @@ of a path first reached mid-run), (b) something the M5-H3 changes allocate on a 
   allocation, not something this task introduced.
 - Per this bug's own rule (S3 on a second failure), it is raised to S3. The next sim hardening should print the first
   allocating tick (see Notes above).
+
+## Fix (M5-H4, session 2026-10-26-2108)
+- The probe's window is ticks 5 to 43 only (all 500 give up at tick 43), so the give-up path is first reached inside it: a
+  first call's JIT or type load that an earlier test on the same thread may or may not have paid lands in the sum, which
+  fits "2,568 B in a full run, 0 alone". The row now runs the scene once unmeasured (a twin, as `AllocationProbe` re-runs a
+  block: a steady allocation shows in the measured run too), asserts the twin gives up at the same tick, and names the first
+  allocating tick and its bytes in the message. Not reproduced here to confirm the cause.
+- Proof: 10 / 10 green runs of a 395-test batch (every `Data/` loader test, `QA/DataLoaderQaTests`, `QA/AiLoaderQaTests`,
+  `TestDataDirTests`, the H3 probe: the copies of `game/data` in parallel) with the 27-run pairing stress test running beside
+  it as load; and the full non-Perf suite on the M5-H4 tree (7,443 passed, the 5 failures BUG-1027's data-owned rows).
+  Ten full-suite runs (27 min each) were not done.

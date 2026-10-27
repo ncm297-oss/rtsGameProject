@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S2 (red rows on `main`; the cause is known and both fixes are the next session's first items) |
-| Status | open |
+| Status | fixed |
 | Found | 2026-10-18-1814, Producer at the ACCEPT (M5-4g merged with criterion 3 waived, BUG-1024) |
 | System | Data-owned pinned rows (rule 31) and QA's `Stress/ReservePairingsStressTests` |
-| Fixed by | |
+| Fixed by | rows 6-9: M5-H4 (`KnownNoAgeTwo` + the totals), rows 1-5: D-R32 (the re-print), both session 2026-10-26-2108; the Producer's full non-Perf run on the sim branch and QA's runs on each branch were green except the other track's half, so the merged tree is green |
 
 ## The rows
 
@@ -43,3 +43,13 @@ ACCEPT because no gate form keeps both every Age II and every wave (docs/03 "Imp
 - Filed by the Producer so the state of `main` is on record: nine known-red rows, nothing else (BUG-0914 is a separate flake).
 - Not a regression in the game: every number moved in the direction BUG-0981 asked for or stayed (BUG-1024's table).
 - Closes when both the data re-print and the sim restatement are on `main` and the full non-Perf suite is green.
+
+## Sim half (M5-H4, session 2026-10-26-2108)
+`Stress/ReservePairingsStressTests.Pairing_Twins_AgeTwoForEverySideAlive` asserts the restated criterion: every side alive at
+20:00 has Age II except `KnownNoAgeTwo` (rows 6-9's four sides, each with its 20:00 state quoted in a comment); a listed side
+that passes prints "take it out" (`TheAllowance_SetToAPassingSide_PrintsTakeItOut`, and seen live in the BUG-1022 variant runs).
+The row that completes the 27 asserts the totals: no-wave sides 3, Malazan waves 81 (>= 79), defeats 5 / 0 (<= 8 / 5). The
+twin, hash-every-50-ticks and command-count checks are unchanged. 27 / 27 green.
+
+## Data half (D-R32, session 2026-10-26-2108)
+Rows 1-5 re-printed from the rows' output (both pages' spending paragraphs, house notes, the BUG-0982 table, 54 new "Age II against ..." cells pinned by `AiOpeningPairsReportTests.AssertAgeTwoCells`); `DH6ThresholdQaTests.KnownBeatenAlive` = {25} (BUG-1010). The keep-18 rule re-derived on the new table still picks 18: no data change, golden unmoved. Closed by the Producer at the ACCEPT: both halves on `main` after the merge.
