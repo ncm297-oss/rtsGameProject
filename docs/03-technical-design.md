@@ -158,7 +158,8 @@ clamps its `GameSpeed` to 0.25-8.
 `Simulation.Enqueue` always stamps `TickNumber + 1` plus a per-player sequence number, whether it
 is called between ticks (input) or during one (AI think), so a command never changes the tick in
 progress. The cost is at most one tick (50 ms) of input latency. Pending commands live in a
-fixed-capacity `CommandQueue` (size from `SimConfig.CommandCapacity`) that is insertion-sorted in
+fixed-capacity `CommandQueue` (size from `SimConfig.CommandCapacity`, 1 to `SimConfig.MaxCommandCapacity` = 65,536,
+16x the game's 4,096; `Validate` refuses more, BUG-1040) that is insertion-sorted in
 place each tick, so applying commands does not allocate. `Enqueue` on a full queue throws and
 leaves state unchanged (the sequence counter advances only once the command is accepted). Since
 M1-9 (BUG-0054) `Enqueue` also refuses a command that isn't well formed (`Command.IsWellFormed()`:
@@ -8133,7 +8134,8 @@ M5 criterion 8, the sim half: named AI openings (D14 b). Code: `Data/AiOpening.c
   (M1-9), and an attack target only on an `Attack` (M4-2a), the rule `Enqueue` applies; a format 3 replay can
   hold no `Attack` and no combat-off header), no tick has more commands than the
   command capacity, and the checkpoints are exactly the interval's multiples. Format limits: at
-  most 16 players, capacities up to 1,000,000, and (M1-4d-3, BUG-0040) a tick count and checkpoint
+  most 16 players, unit and resource capacities up to 1,000,000, the command capacity up to the config's own
+  `SimConfig.MaxCommandCapacity` (65,536, BUG-1040: so a replay that reads also builds its sim), and (M1-4d-3, BUG-0040) a tick count and checkpoint
   interval of at most 1,728,000 (24 h at 20 Hz), so a small file can't declare years of playback.
   The interval may exceed the tick count: the recorder writes replays shorter than one interval.
 - **Playback** (`ReplayPlayer.Run(replay, data)`): refuses before any tick with
@@ -8278,9 +8280,16 @@ version 2) stores the AI seats too, so every match saves. Code in `sim/Rts.Sim/S
   and the zone store 24 (it writes 26 plus its per-player boxes), so a header forged to either alone is refused the same
   way (they allocated 88 and 42 MB first). The command queue's capacity is configuration, not a length the body holds
   (`CMDS` is a count and the commands), so no length bounds it: `SaveFormat.MaxCommandCapacity` does, 65,536 (16x the
-  game's 4,096), refused `Malformed` with the pre-check; at or below it a forged capacity loads and the sim has that
-  queue size (at most about 4 MB). `SaveRefusalTests`: each capacity forged alone and together, refused with under 1 MB
-  allocated; an empty world at large capacities (the command capacity at the bound) still loads.
+  game's 4,096); at or below it a forged capacity loads and the sim has that queue size (at most about 4 MB).
+  BUG-1040: that bound is `SimConfig.MaxCommandCapacity`, which `SimConfig.Validate` puts on every sim, so the save and
+  the load agree and every save a sim writes loads (a real save of a capacity over 65,536 used to save and then be
+  refused at load). Chosen over the alternatives because a body can't bound it (an empty queue at 1,000,000 slots
+  writes the same bytes as a forged header, so a load that accepted real ones would allocate 52 MB for forged ones) and
+  a `TrySave` refusal would hand the player a sim that can never be saved; standing rule 36 holds (no signature or code added).
+  A header over it is `InvalidHeader` (a capacity outside its range, as every other), refused before the heightmap. `SaveRefusalTests`: each capacity forged alone and together, refused with under 1 MB
+  allocated (`InvalidHeader` when the command capacity is among them); an empty world at large capacities (the command
+  capacity at the bound) still loads; a config over the bound throws in `Validate`
+  (`SimHardeningM5H4QaTests.ARealSave_WithACommandCapacityAboveTheLoadBound_Loads`).
 - **Not stored**: per-tick scratch (the movement, combat, production and fog-stamp buffers, rewritten before they are read
   within a tick); the never-seal check's memo (`SealCheck`, BUG-0096), a cache of an answer that follows from the grid
   alone, which reads between ticks (`CanPlace`) also write; the replay recorder.
@@ -8290,7 +8299,7 @@ version 2) stores the AI seats too, so every match saves. Code in `sim/Rts.Sim/S
   it; `ChecksumMismatch`; `DataMismatch` (another `ContentHash`, so any data edit refuses a save, as a replay);
   `InvalidHeader` (a player count outside 1-16, a capacity outside its range, a faction id the data lacks, an unknown
   controller or difficulty, a map parameter or config value `SimConfig.Validate` refuses, an AI seat whose faction has no
-  `ai.json`); `Malformed` for a body too short for the header's capacities or a command capacity over its bound (the
+  `ai.json`); `Malformed` for a body too short for the header's capacities (the
   pre-check) or that doesn't parse (a tag out
   of place, an AI seat count or player that doesn't match the header's seats, a stored opening pick other than the load's, an array of the wrong length, a count past its capacity, a
   live entity's type, owner or cell out of range, a live unit's goal cell off the map or a player's last visible fog box

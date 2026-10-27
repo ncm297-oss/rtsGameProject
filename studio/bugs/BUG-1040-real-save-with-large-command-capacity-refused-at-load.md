@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S2 (the brief's BUG-0990 item: "never refuses a real save of an empty world at large capacities"; a regression from a840d45) |
-| Status | open |
+| Status | fixed |
 | Found | 2026-10-26-2108, task M5-H4 (QA, full) |
 | System | save / load: `Simulation.Load` pre-check, `SaveFormat.MaxCommandCapacity`, `SimConfig.Validate` |
-| Fixed by | |
+| Fixed by | M5-H4 fix round 1 (session 2026-10-26-2108): the config is rejected up front |
 
 ## Repro
 1. `dotnet test sim/Rts.Sim.Tests --filter "FullyQualifiedName~SimHardeningM5H4QaTests.ARealSave_WithACommandCapacityAboveTheLoadBound_Loads"`
@@ -34,3 +34,27 @@ file that can never be loaded.
   this one capacity bound returns `Malformed`.
 - Regression row: `QA/SimHardeningM5H4QaTests.ARealSave_WithACommandCapacityAboveTheLoadBound_Loads` (skipped with this id;
   un-skip with the fix).
+
+## Fix (M5-H4 fix round 1)
+- Option picked: one bound, the config's. `SimConfig.MaxCommandCapacity` = 65,536 (public const); `SimConfig.Validate`
+  throws `ArgumentOutOfRangeException` over it, so a sim whose save can't load can't be made. `SaveFormat.MaxCommandCapacity`
+  is that constant. Why: the body can't bound it (an empty queue at 1,000,000 slots writes the same bytes as a forged
+  header, so a load that took real ones would allocate ~52 MB for forged ones), and a `TrySave` refusal would leave a sim
+  that can never be saved. No signature or `SaveError` code added (standing rule 36).
+- The S4 note: the header now range-checks the command capacity (1 to the bound) with the other capacities, so a forged one
+  is `InvalidHeader` (as docs/03 says for a capacity outside its range), before the heightmap; the `Malformed` clause in
+  `Simulation.Load`'s pre-check is gone.
+- Replays share the bound: `Replay.Validate` refuses a command capacity over `SimConfig.MaxCommandCapacity` (`InvalidHeader`),
+  so a replay that reads also builds its sim (`ReplayPlayer.Run` and the game's `SimRunner` would otherwise throw from
+  `Validate`). No recorder can write one over it.
+- The CLI (`tools/Rts.Cli/CliRunner.cs`) sized its queue to `--units` (up to 100,000); it now caps it at the bound (a block
+  on the 128 x 128 map holds far fewer spawns). `QA/CliQaTests.Run_UnitsAboveWhatTheBlockHolds_SpawnsWhatFits_AndExits0`
+  failed on the bound alone and passes with the cap.
+- Tests: `QA/SimHardeningM5H4QaTests.ARealSave_WithACommandCapacityAboveTheLoadBound_Loads` un-skipped and restated (the
+  config over the bound is refused by `Validate` / the `Simulation` constructor; at the bound the sim's own save loads);
+  `Save/SaveRefusalTests.AForgedCommandCapacity_IsBoundedByTheFormat` (over the bound now `InvalidHeader`, `int.MaxValue` row
+  added); `SaveRefusalTests.Serial.AForgedCapacity_AloneOrTogether_IsRefused_UnderAMegabyte` (rows with the command capacity
+  expect `InvalidHeader`, new rows "0,2,3,4,5" human and AI keep the pre-check's `Malformed`; all under 1 MB);
+  `SaveRefusalTests.Serial.AForgedMaxCapacityHeader_IsMalformed_BeforeTheWorldIsAllocated` (command capacity forged to its
+  bound so the row still reaches the pre-check); `QA/ReplayQaTests.HugeDeclaredCapacities_AtTheFormatLimit_ReadButOverItRefused`
+  (command capacity reads at 65,536, refused at 65,537 and 1,000,000).

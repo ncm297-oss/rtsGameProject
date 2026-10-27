@@ -187,10 +187,16 @@ public class SaveRefusalTests
         Assert.Equal(SaveError.None, SaveTestRun.TryLoad(Data, SaveTestRun.Save(sim)));
     }
 
-    /// <summary>BUG-0990: a header command capacity over <see cref="SaveFormat.MaxCommandCapacity"/> is Malformed (with the length pre-check, before the world is built); at the bound it loads (configuration, docs/03).</summary>
+    /// <summary>
+    /// BUG-0990: a header command capacity over <see cref="SaveFormat.MaxCommandCapacity"/> is refused before the world is
+    /// built; at the bound it loads (configuration, docs/03). BUG-1040: the refusal is InvalidHeader (a capacity outside its
+    /// range, the config's own bound), no longer Malformed, so it is the same bound <see cref="SimConfig.Validate"/> puts on
+    /// every sim and no save a sim writes is refused.
+    /// </summary>
     [Theory]
-    [InlineData(SaveFormat.MaxCommandCapacity + 1, SaveError.Malformed)]
-    [InlineData(SaveFormat.MaxCapacity, SaveError.Malformed)]
+    [InlineData(SaveFormat.MaxCommandCapacity + 1, SaveError.InvalidHeader)]
+    [InlineData(SaveFormat.MaxCapacity, SaveError.InvalidHeader)]
+    [InlineData(int.MaxValue, SaveError.InvalidHeader)]
     [InlineData(SaveFormat.MaxCommandCapacity, SaveError.None)]
     public void AForgedCommandCapacity_IsBoundedByTheFormat(int commands, SaveError expected)
     {
@@ -312,7 +318,9 @@ public class SaveRefusalTests
         /// <summary>
         /// BUG-0960 item 1: a header forged to every capacity at the format's maximum over the small save's body is refused
         /// Malformed by the length pre-check, before the world is built for it (it used to allocate about 1.4 GB first).
-        /// The allocation counted is this thread's.
+        /// The allocation counted is this thread's. BUG-1040: the command capacity is forged to its own bound (over it the
+        /// header refuses it InvalidHeader first, <see cref="AForgedCapacity_AloneOrTogether_IsRefused_UnderAMegabyte"/>), so
+        /// this row still reaches the pre-check.
         /// </summary>
         [Fact]
         public void AForgedMaxCapacityHeader_IsMalformed_BeforeTheWorldIsAllocated()
@@ -320,7 +328,8 @@ public class SaveRefusalTests
             byte[] bad = SaveBytes.Small();
             SaveBytes.Offsets at = SaveBytes.HeaderOffsets(bad);
             int caps = at.Seat0Controller + 2; // controller, difficulty, then unit, command, resource, building, projectile, zone
-            for (int k = 0; k < 6; k++) BinaryPrimitives.WriteInt32LittleEndian(bad.AsSpan(caps + 4 * k), SaveFormat.MaxCapacity);
+            for (int k = 0; k < 6; k++)
+                BinaryPrimitives.WriteInt32LittleEndian(bad.AsSpan(caps + 4 * k), k == 1 ? SaveFormat.MaxCommandCapacity : SaveFormat.MaxCapacity);
             bad = SaveBytes.Rechecksum(bad);
             Assert.Equal(SaveError.Malformed, SaveTestRun.TryLoad(Data, bad)); // warm-up (the JIT)
             long before = GC.GetAllocatedBytesForCurrentThread();
@@ -335,9 +344,10 @@ public class SaveRefusalTests
 
         /// <summary>
         /// BUG-0990: each header capacity forged to the format's maximum alone (unit, command, resource, building, projectile,
-        /// zone), the command, projectile and zone capacities together, and all six, over the small human and AI saves: each
-        /// is refused Malformed by the length pre-check (the command capacity by its bound there) with under 1 MB
-        /// allocated on this thread. Before the fix the command alone loaded (52 MB), the projectile alone allocated 88 MB, the
+        /// zone), the command, projectile and zone capacities together, all six, and the five other than the command, over the
+        /// small human and AI saves: each is refused with under 1 MB allocated on this thread, Malformed by the length
+        /// pre-check, or (BUG-1040) InvalidHeader by the header's range check when the command capacity is over its bound
+        /// (the config's own). Before the fix the command alone loaded (52 MB), the projectile alone allocated 88 MB, the
         /// zone 42 MB, the three 182 MB.
         /// </summary>
         [Theory]
@@ -349,11 +359,13 @@ public class SaveRefusalTests
         [InlineData(false, "5")]
         [InlineData(false, "1,4,5")]
         [InlineData(false, "0,1,2,3,4,5")]
+        [InlineData(false, "0,2,3,4,5")]
         [InlineData(true, "1")]
         [InlineData(true, "4")]
         [InlineData(true, "5")]
         [InlineData(true, "1,4,5")]
         [InlineData(true, "0,1,2,3,4,5")]
+        [InlineData(true, "0,2,3,4,5")]
         public void AForgedCapacity_AloneOrTogether_IsRefused_UnderAMegabyte(bool ai, string which)
         {
             byte[] bad = SaveBytes.Small(ai);
@@ -366,7 +378,7 @@ public class SaveRefusalTests
             SaveError e = SaveTestRun.TryLoad(Data, bad);
             long allocated = GC.GetAllocatedBytesForCurrentThread() - before;
             _out.WriteLine($"{(ai ? "AI" : "human")} save, capacities {which} at max: {e}, {allocated:N0} bytes allocated");
-            Assert.Equal(SaveError.Malformed, e);
+            Assert.Equal(Array.IndexOf(which.Split(','), "1") >= 0 ? SaveError.InvalidHeader : SaveError.Malformed, e);
             Assert.True(allocated < 1024 * 1024, $"{allocated:N0} bytes allocated");
         }
     }

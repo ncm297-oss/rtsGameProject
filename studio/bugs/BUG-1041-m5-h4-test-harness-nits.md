@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S4 |
-| Status | open |
+| Status | fixed |
 | Found | 2026-10-26-2108, task M5-H4 (QA, full) |
 | System | tests: `Vision/VisionGatePerfTests`, `Stress/ReservePairingsStressTests` |
-| Fixed by | |
+| Fixed by | M5-H4 fix round 1 (session 2026-10-26-2108) |
 
 ## Repro
 1. `VisionGatePerfTests.Brawl250v250_DesignBudget_FreshProcessShortRun_Under4Ms` (`RunFreshChild`): `p.StandardOutput.ReadToEnd()`
@@ -29,3 +29,12 @@ As above. Both are green on this tree (Perf alone: fresh rows 3.51 / 3.50 / 3.53
 - Also noted, not a defect: the brief named the allowance tuples `(1,0,1)` seed 32 Malazan and `(1,0,2)` Whirlwind seed 9; the
   pairing's seeds are the other way round (`pair 1x0 #1` is seed 9, `#2` is seed 32), and the code's `(1,0,2,0)` / `(1,0,1,1)`
   are the correct ones.
+
+## Fix (M5-H4 fix round 1)
+- `Vision/VisionGatePerfTests.Brawl250v250_DesignBudget_FreshProcessShortRun_Under4Ms` (`RunFreshChild`): both streams read
+  asynchronously and `WaitForExit(ChildTimeoutMs)` (120 s); on timeout the child's process tree is killed and the row fails
+  with "the fresh child dotnet test did not exit within 120 s and was killed" plus its output.
+- `Stress/ReservePairingsStressTests.Pairing_Twins_AgeTwoForEverySideAlive`: a row that doesn't complete the 27 prints
+  "TOTALS not asserted (yet): k of 27 rows have run in this process; only the row that completes the 27 asserts them".
+- Harness-only changes (no regression test can fail first for a missing timeout); checked by running the Perf row (3.50 /
+  3.51 / 3.51 ms) and a one-row pairing run (prints "1 of 27").

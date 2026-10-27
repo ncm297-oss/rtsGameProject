@@ -80,7 +80,8 @@ public class ReservePairingsStressTests
     /// The twins agree (state hash every 50 ticks, the AI command counts at the end), no bank goes negative, and every side
     /// alive at 20:00 reached Age II except <see cref="KnownNoAgeTwo"/> (BUG-1027's restatement). When all 27 rows have run
     /// in this process, the totals are printed and asserted: no-wave sides = <see cref="NoWaveSides"/>, Malazan waves at
-    /// least <see cref="MinMalazanWaves"/> (the base's), Malazan / Whirlwind defeats at most 8 / 5 (the base's).
+    /// least <see cref="MinMalazanWaves"/> (the base's), Malazan / Whirlwind defeats at most 8 / 5 (the base's). Until then
+    /// (a filtered or partial run) each row prints that the totals were not asserted (BUG-1041).
     /// </summary>
     [Theory]
     [Trait("Category", "Stress")]
@@ -91,11 +92,15 @@ public class ReservePairingsStressTests
         Result r = Run(seed, AiDifficulty.Normal, twins: true, label: $"pair {malazan}x{whirlwind} #{nth}");
         Assert.Equal((malazan, whirlwind), r.Openings);
         Totals? totals = null;
+        int ran;
         lock (s_pairings)
         {
             s_pairings[(malazan * 3 + whirlwind) * 4 + nth] = r;
-            if (s_pairings.Count == 27) totals = Totals.Of(s_pairings.Values);
+            ran = s_pairings.Count;
+            if (ran == 27) totals = Totals.Of(s_pairings.Values);
         }
+        // BUG-1041: a filtered or partial run asserts no total; say so, so a green partial run doesn't read as "totals held".
+        if (ran < 27) _out.WriteLine($"TOTALS not asserted (yet): {ran} of 27 rows have run in this process; only the row that completes the 27 asserts them");
         string missing = AgeTwoMisses(malazan, whirlwind, nth, seed, r, KnownNoAgeTwo, _out.WriteLine);
         Assert.True(missing.Length == 0, missing);
         if (totals is not { } t) return;

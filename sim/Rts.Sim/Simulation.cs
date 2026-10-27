@@ -167,10 +167,9 @@ public sealed partial class Simulation : ICommandSink
         if (header != SaveError.None) return header;
         Heightmap? map = World.ReadHeightmap(r);
         if (map == null || r.Failed) return SaveError.Malformed;
-        // BUG-0960 item 1: a body too short for the header's capacities is refused before the world is allocated for them;
-        // BUG-0990: so is a command capacity over the format's bound (no length in the body bounds it).
-        if (r.Remaining < SaveHeader.MinBodyBytes(config!, map.Width * map.Height) || config!.CommandCapacity > SaveFormat.MaxCommandCapacity)
-            return SaveError.Malformed;
+        // BUG-0960 item 1: a body too short for the header's capacities is refused before the world is allocated for them
+        // (BUG-1040: the command capacity, which no length bounds, is range-checked with the header instead).
+        if (r.Remaining < SaveHeader.MinBodyBytes(config!, map.Width * map.Height)) return SaveError.Malformed;
         var loaded = new Simulation(World.ForLoad(config!, map));
         loaded.World.TickNumber = tick;
         loaded.World.ReadFrom(r);

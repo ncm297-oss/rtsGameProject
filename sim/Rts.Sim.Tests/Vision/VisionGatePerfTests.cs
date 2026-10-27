@@ -91,6 +91,9 @@ public class VisionGatePerfTests
         Assert.True(best < TickBudgetMs, $"best of three fresh short runs {best:F2} ms (docs/03: < {TickBudgetMs} ms for 500 units)");
     }
 
+    /// <summary>BUG-1041: how long one fresh child <c>dotnet test</c> may take (it runs about 10 s) before it is killed and the row fails.</summary>
+    private const int ChildTimeoutMs = 120_000;
+
     /// <summary>Runs <see cref="Brawl250v250_DesignBudget_FreshProcessShortRun_Under4Ms"/> as a child <c>dotnet test</c> of this assembly; its average.</summary>
     private static double RunFreshChild()
     {
@@ -106,8 +109,17 @@ public class VisionGatePerfTests
         info.Environment[ChildVariable] = "1";
         using Process p = Process.Start(info)!;
         System.Threading.Tasks.Task<string> err = p.StandardError.ReadToEndAsync();
-        string output = p.StandardOutput.ReadToEnd();
-        p.WaitForExit();
+        System.Threading.Tasks.Task<string> outTask = p.StandardOutput.ReadToEndAsync();
+        // BUG-1041: a child that hangs (a locked DLL, a discovery stall) must not hang the parent: bound it, kill it, say so.
+        if (!p.WaitForExit(ChildTimeoutMs))
+        {
+            try { p.Kill(entireProcessTree: true); } catch (InvalidOperationException) { } // it exited meanwhile
+            p.WaitForExit(5_000);
+            string partial = outTask.Wait(5_000) ? outTask.Result : "(no output)";
+            Assert.Fail($"the fresh child dotnet test did not exit within {ChildTimeoutMs / 1000} s and was killed; its output: {partial}");
+        }
+        p.WaitForExit(); // the redirected streams have drained
+        string output = outTask.Result;
         int at = output.IndexOf(ChildLine, StringComparison.Ordinal);
         Assert.True(at >= 0, $"the child printed no reading (exit {p.ExitCode}): {output} {err.Result}");
         int from = at + ChildLine.Length, to = output.IndexOf(" ms", from, StringComparison.Ordinal);

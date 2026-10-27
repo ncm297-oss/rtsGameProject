@@ -19,22 +19,28 @@ public class SimHardeningM5H4QaTests
     private static GameData Data => TestSim.Data;
 
     /// <summary>
-    /// BUG-1040: <see cref="SimConfig.Validate"/> accepts any command capacity of at least 1, <c>TrySave</c> writes it, and
-    /// the header's own range is 1 to 1,000,000, but the load refuses one over <c>SaveFormat.MaxCommandCapacity</c>
-    /// (65,536) as Malformed: the sim's own save of an empty match does not load.
+    /// BUG-1040: <see cref="SimConfig.Validate"/> used to accept any command capacity of at least 1, <c>TrySave</c> wrote
+    /// it, but the load refused one over <c>SaveFormat.MaxCommandCapacity</c> (65,536) as Malformed: the sim's own save of
+    /// an empty match did not load. Restated with the fix (the config is rejected up front; docs/03 "Save format"): the
+    /// bound is the config's, so such a sim can't be made (refused by the existing path, <see cref="SimConfig.Validate"/>'s
+    /// <see cref="ArgumentOutOfRangeException"/>, which the save header maps to InvalidHeader), and at the bound the sim's
+    /// own save loads.
     /// </summary>
-    [Theory(Skip = "BUG-1040: a real save with a command capacity over 65,536 saves but is refused Malformed at load")]
+    [Theory]
     [InlineData(65_537)]
     [InlineData(100_000)]
     [InlineData(1_000_000)]
     public void ARealSave_WithACommandCapacityAboveTheLoadBound_Loads(int commands)
     {
         var config = new SimConfig(5, 2, 64, commands) { Data = Data, StatsSampleCapacity = 0 };
-        var sim = new Simulation(config, LocalMovementTests.Flat(16));
-        sim.Tick();
-        Assert.True(sim.TrySave(new MemoryStream(), out SaveError saved), "the save itself is refused");
+        Assert.Throws<ArgumentOutOfRangeException>(() => config.Validate());
+        Assert.Throws<ArgumentOutOfRangeException>(() => new Simulation(config, LocalMovementTests.Flat(16)));
+
+        var atBound = new Simulation(config with { CommandCapacity = SaveFormat.MaxCommandCapacity }, LocalMovementTests.Flat(16));
+        atBound.Tick();
+        Assert.True(atBound.TrySave(new MemoryStream(), out SaveError saved), "the save itself is refused");
         Assert.Equal(SaveError.None, saved);
-        Assert.Equal(SaveError.None, SaveTestRun.TryLoad(Data, SaveTestRun.Save(sim)));
+        Assert.Equal(SaveError.None, SaveTestRun.TryLoad(Data, SaveTestRun.Save(atBound)));
     }
 
     /// <summary>
