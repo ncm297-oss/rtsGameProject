@@ -1,3 +1,4 @@
+using System.Collections.Immutable;
 using System.Diagnostics;
 using Rts.Sim.Ai;
 using Rts.Sim.Data;
@@ -25,11 +26,14 @@ public class AiThinkCostQaTests
     public AiThinkCostQaTests(ITestOutputHelper output) => _out = output;
 
     /// <summary>The gate's scene (eight bands of a generated 128 map, a hall, barracks, range and house each, 2,500 units, pop over the cap) with the building store exactly full.</summary>
-    private static (Simulation Sim, AiPlayer[] Ais) FullStoreScene(int forests)
+    private static (Simulation Sim, AiPlayer[] Ais) FullStoreScene(int forests, bool teams = false)
     {
         GameData d = TestSim.Data;
         var map = MapGenParams.Default with { Forests = forests, GoldMines = 4 };
-        var sim = new Simulation(new SimConfig(3, Players, Units + 400, 4096) { Data = d, Map = map, Combat = false, BuildingCapacity = Players * 4 });
+        var config = new SimConfig(3, Players, Units + 400, 4096) { Data = d, Map = map, Combat = false, BuildingCapacity = Players * 4 };
+        // M6-S4 QA: four teams of two (the default seats, each with team 1 + p mod 4), so every seat has an ally in sight.
+        if (teams) config = config with { Seats = Enumerable.Range(0, Players).Select(p => config.SeatOf(p) with { Team = 1 + p % 4 }).ToImmutableArray() };
+        var sim = new Simulation(config);
         NavGrid g = sim.World.NavGrid;
         var open = new List<int>();
         for (int c = 0; c < g.Width * g.Height; c++)
@@ -70,11 +74,12 @@ public class AiThinkCostQaTests
 
     [Theory]
     [Trait("Category", "Perf")]
-    [InlineData(6)]
-    [InlineData(12)]
-    public void EightAiSeats_FullBuildingStore_AThinkUnder1Ms(int forests)
+    [InlineData(6, false)]
+    [InlineData(12, false)]
+    [InlineData(12, true)] // M6-S4 QA: the same with teams (the ally checks in the census and the ability manager)
+    public void EightAiSeats_FullBuildingStore_AThinkUnder1Ms(int forests, bool teams)
     {
-        (Simulation sim, AiPlayer[] ais) = FullStoreScene(forests);
+        (Simulation sim, AiPlayer[] ais) = FullStoreScene(forests, teams);
         var sw = new Stopwatch();
         var times = new List<double>();
         int think = ais[0].ThinkTicks;
@@ -91,7 +96,7 @@ public class AiThinkCostQaTests
             sim.Tick();
         }
         double avg = times.Average(), worst = times.Max();
-        _out.WriteLine($"forests {forests}: {sim.World.Resources.Count} nodes; {times.Count} thinks, avg {avg:F3} ms, worst {worst:F3} ms; {ais.Sum(a => a.CommandsSent)} commands sent");
+        _out.WriteLine($"forests {forests} teams {teams}: {sim.World.Resources.Count} nodes; {times.Count} thinks, avg {avg:F3} ms, worst {worst:F3} ms; {ais.Sum(a => a.CommandsSent)} commands sent");
         Assert.True(avg < BudgetMs, $"avg {avg:F3} ms over the {BudgetMs} ms budget (full building store)");
     }
 }

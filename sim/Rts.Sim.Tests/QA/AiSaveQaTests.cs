@@ -207,6 +207,21 @@ public class AiSaveQaTests
         Assert.True(r.CommandsCompared > 0);
     }
 
+    /// <summary>
+    /// M6-S4 QA: the 2v2 (a scripted human and three Normal AI seats, teams 1, 2, 1, 2, raiders in the enemy's base), saved at
+    /// the probed moments: the loaded twin's AI command stream and hash equal the unsaved one's, tick for tick.
+    /// </summary>
+    [Theory]
+    [InlineData(1)]
+    [InlineData(2)]
+    public void TwoVersusTwo_LoadedTwin_SendsTheSameAiCommands_EveryTick(int seed)
+    {
+        SaveScene scene = AiSaveScenes.TwoVersusTwo((ulong)seed);
+        TwinResult r = Twin(scene, window: 6000, after: 600, perProbe: 2);
+        Print(scene.Name, r);
+        Assert.True(r.CommandsCompared > 0);
+    }
+
     /// <summary>AI and human seats interleaved (AI, human, AI, human): the AIST entries skip the human players.</summary>
     [Fact]
     public void InterleavedSeats_AiHumanAiHuman_LoadedTwin_SendsTheSameAiCommands()
