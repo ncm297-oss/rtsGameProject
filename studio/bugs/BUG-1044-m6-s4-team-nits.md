@@ -43,3 +43,24 @@ See Repro.
 - QA added tests for the other reverted sites that survived the developer's suite: `FogStore.HidesFrom`, `AbilitySystem.Resolve`'s
   ally-as-own unit and building rules (Cusser, Tela's Fire), Martyrdom, and the AI ability manager's two ally rules (`QA/TeamQaTests`,
   `QA/TeamAiQaTests`).
+
+## Round 1 (QA, 2026-10-27-0158, fix 0a2b9e2): partly fixed, still open
+- Item 2 **fixed**: docs/03 now lists `UnitPicker.ResolveEnemy` and `MinimapRaster.DrawnEnemyDotAt` as enemy sites, allied-as-other,
+  view follow-ups.
+- Item 3's last line **fixed**: `TeamArchitectureTests.NoRawOwnerCompareMeaningEnemy_InTheEnemySiteFolders` scans `Combat/`,
+  `Abilities/`, `Vision/`, `Ai/` and root `World*.cs`. QA reviewed the 14 new allow-list lines in context: FogStore (own eyes,
+  `Update` stamps), AiPlayer (gates whose bodies ask `View.IsEnemy`; own producer check), BuildOrderExecutor `HallNear`
+  (allied-as-other, documented), PlayerView / ScoutManager (own-only), `World.Defeat.Collapse` (own buildings). None is an
+  enemy site wrongly allowed. Planting raw compares in AbilitySystem, VisionSystem.OnHit and AiPlayer makes the scan fail with
+  all three named.
+- **Still open**: item 1 (an ally's friendly-fire kill credited; Producer's call) and item 3's untested sites (the stale-slot
+  re-checks, `ZoneHides`, the stealth building-detector skip, `CollectBuildings`, `OnHit`).
+- **New nits (round 1):**
+  - The scan's regex misses a compare through a lower-case indexed alias (`int[] owner = u.Owner; ... owner[j] != p`).
+    Two such lines exist today, both acceptable: `FogStore` `NextSeenUnit` (`owner[s] == player`, own eyes) and
+    `FogStore.UpdateGhosts` (`bool enemy = alive[j] && owner[j] != p;`, allied-as-other in docs/03). A new enemy test
+    written that way would pass the scan. QA's `QA/TeamArchitectureQaTests` pins the aliased set to those two.
+  - A line that also calls `AreAllied(` / `IsEnemy(` is skipped whole, so a raw enemy compare sharing a line with an unrelated
+    predicate call is not seen.
+  - `TeamArchitectureTests`' class summary still says "the four listed below" (now 18), and `s_samePlayer` holds
+    `BuildOrderExecutor.HallNear`, which docs/03 classes as allied-as-other, not same-player.

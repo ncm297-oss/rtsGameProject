@@ -48,3 +48,7 @@ without an enemy army near the hall or a damaged building.
   to be an ally's, sweep the grid farthest-from-the-ally first, or let a seat with an army and no known enemy building wave
   toward the map centre or an unexplored quadrant.
 - Not reachable in the shipped game yet: the setup screen has no team column (view follow-up).
+
+## Round 1 (QA, 2026-10-27-0158)
+Not changed by 0a2b9e2 (left for the Producer as an AI / scout design call). The mirror-layout soak rows still skip the wave
+check. Still open.
