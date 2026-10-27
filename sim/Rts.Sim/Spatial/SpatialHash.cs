@@ -248,15 +248,24 @@ public sealed partial class SpatialHash
     /// holding only the player's side's units are skipped on one compare (M4-1), so a scan with no enemy near costs a few
     /// bucket reads, and one with no enemy unit anywhere costs one compare.
     /// </summary>
-    public int QueryEnemies(Vector2 center, float radius, int player, Span<int> results)
+    public int QueryEnemies(Vector2 center, float radius, int player, Span<int> results) =>
+        QueryEnemies(center, radius, player, results, out _);
+
+    /// <summary>
+    /// Test seam (M6-S4, BUG-1043): <see cref="QueryEnemies(Vector2, float, int, Span{int})"/>, also giving the buckets whose
+    /// entries it walked (those its bucket skip did not skip). The public query runs this very code, so a regressed skip
+    /// shows in the count; nothing is stored, so the hash holds no state a load would have to restore.
+    /// </summary>
+    internal int QueryEnemies(Vector2 center, float radius, int player, Span<int> results, out int bucketsRead)
     {
+        bucketsRead = 0;
         if (!(radius >= 0f) || !float.IsFinite(center.X) || !float.IsFinite(center.Y)) return 0;
         // No enemy on the map: nothing to look at (a one-player crowd's scans cost this test).
         int side = SideOf(player);
         if (OthersThanSide(side) == 0) return 0;
         float r2 = radius * radius;
         GetRadiusRange(center, radius, out int x0, out int y0, out int x1, out int y1);
-        int n = 0;
+        int n = 0, read = 0;
         for (int by = y0; by <= y1; by++)
         {
             for (int bx = x0; bx <= x1; bx++)
@@ -267,6 +276,7 @@ public sealed partial class SpatialHash
                     int o = _cursor[b];
                     if (o == EmptyBucket || o == side) continue; // empty, or only the player's side's units
                 }
+                read++;
                 for (int e = _bucketStart[b]; e < _bucketStart[b + 1]; e++)
                 {
                     if (_entrySide[e] == side) continue;
@@ -277,6 +287,7 @@ public sealed partial class SpatialHash
                 }
             }
         }
+        bucketsRead = read;
         return n;
     }
 
@@ -284,14 +295,6 @@ public sealed partial class SpatialHash
     public int OthersThan(int player) => OthersThanSide(SideOf(player));
 
     private int OthersThanSide(int side) => (uint)side < OwnerSlots - 1 ? Count - _sideCount[side] : Count;
-
-    /// <summary>Test seam (M6-S4): whether <see cref="QueryEnemies"/> skips bucket <paramref name="bucket"/> for <paramref name="player"/> on its code alone (empty, or holding only the player's side's units).</summary>
-    internal bool SkipsBucketFor(int bucket, int player)
-    {
-        if (!_ownerCodes) return OthersThan(player) == 0 || _bucketStart[bucket] == _bucketStart[bucket + 1];
-        int o = _cursor[bucket];
-        return o == EmptyBucket || o == SideOf(player);
-    }
 
     /// <summary>Bucket column of a world x in meters; outside the map (or NaN) clamps to the nearest edge column.</summary>
     public int BucketX(float x) => Clamp(x / BucketSize, BucketsX);

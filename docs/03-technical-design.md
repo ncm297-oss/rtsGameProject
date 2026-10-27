@@ -8458,10 +8458,13 @@ site means the very same player: ownership, queues, groupmates).
 | `Ai/AbilityManager.cs` | `SeeEnemies`, `NearestEnemyBuilding`, friendly-fire avoidance | enemies / friends | allied-as-own |
 | `Ai/BuildOrderExecutor.cs` | `HallNear` (an expansion keeps clear of every other hall) | occupied ground | allied-as-other |
 | `Ai/ScoutManager.cs`, `Ai/PlayerView.cs` (`IsOwnUnit`, `IsOwnBuilding`, cargo, casts) | the scout, own-only answers | ownership | untouched |
-| `ViewApi/*` | the view's own-player answers | ownership | untouched (`ViewApi/**` not changed) |
+| `ViewApi/UnitPicker.cs` | `ResolveEnemy` (`unitOwner[unit] == localPlayer`, `buildings.Owner[building] == localPlayer`: the right-click attack pick) | enemy | allied-as-other, not changed (view track; BUG-1044): a right-click on an ally resolves as an Attack, which `MayAttack` drops, so the click does nothing; view follow-up: ask `World.IsEnemy` |
+| `ViewApi/MinimapRaster.cs` | `DrawnEnemyDotAt` (`_centreOwner[k] == localPlayer`) | enemy | allied-as-other, not changed (view track; BUG-1044); view follow-up with the team colours |
+| `ViewApi/*` (the rest) | the view's own-player answers | ownership | untouched (`ViewApi/**` not changed) |
 
-`TeamArchitectureTests.NoRawOwnerCompareMeaningEnemy_InCombat` holds `Combat/` to this table: a raw owner compare there is
-allowed only at the four listed same-player sites, or as the fast first half of a predicate test on the same line (the scan,
+`TeamArchitectureTests.NoRawOwnerCompareMeaningEnemy_InTheEnemySiteFolders` holds `Combat/`, `Abilities/`, `Vision/`, `Ai/`
+and the root `World*.cs` partials to this table (widened from `Combat/` alone by BUG-1044): a raw owner compare there is
+allowed only at the listed same-player sites (its allow-list, each in a table row above), or as the fast first half of a predicate test on the same line (the scan,
 tower and detection loops keep `u.Owner[j] == owner || (world.HasAlliances && world.AreAllied(...))`: the hash's sides are
 phase 1's, and a slot freed and refilled since, by a summon, may hold an own or allied unit).
 
@@ -8469,7 +8472,8 @@ phase 1's, and a slot freed and refilled since, by a summon, may hold an own or 
   attacker; towers skip allies; a Catapult's splash at 50 % on an ally's unit and 0 on its building; an explicit Attack on an
   ally dropped; an AttackMove through an allied army striking the enemy beyond; a stealthed ally seen inside the ally's
   vision only; an ally's Sandstorm neither blinding nor hiding; the result for 2v2, FFA, 2v1, 1v1v2 and allies-only);
-  `SpatialHashTests` allied rows (the allied-only bucket skip, `OthersThan` 0, `SideOf`, a brute-force fuzz with random
+  `SpatialHashTests` allied rows (the allied-only bucket skip, read through the query's own count of buckets walked,
+  the internal `QueryEnemies(..., out bucketsRead)` overload the public query runs, so a skip reverted to the owner compare fails, BUG-1043; `OthersThan` 0, `SideOf`, a brute-force fuzz with random
   teams); `SeatConfigTests` team range; `SaveFormatTests` / `SaveRefusalTests` / `SaveRoundTripTests` format-3 rows (the
   team byte, a forged team refused, a 2v2 human + AI save at 500 following the unsaved run for 1,000 ticks);
   `ReplayFormatTests` format 7 and format 6 compatibility, a forged team refused, a 2v2 AI replay playing to every checkpoint

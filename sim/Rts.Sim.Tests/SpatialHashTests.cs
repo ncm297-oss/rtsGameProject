@@ -348,24 +348,30 @@ public class SpatialHashTests
         var positions = new[] { allied, allied + new Vector2(0.5f, 0f), mixed, mixed + new Vector2(0.5f, 0f) };
         UnitStore u = Store(positions, owners: new[] { 0, 1, 1, 2 });
         SpatialHash h = Built(u, 1, 1, 0);
-        int alliedBucket = h.BucketY(allied.Y) * h.BucketsX + h.BucketX(allied.X);
-        int mixedBucket = h.BucketY(mixed.Y) * h.BucketsX + h.BucketX(mixed.X);
-        Assert.True(h.SkipsBucketFor(alliedBucket, 0), "an allied-only bucket is read by player 0");
-        Assert.True(h.SkipsBucketFor(alliedBucket, 1), "an allied-only bucket is read by player 1");
-        Assert.False(h.SkipsBucketFor(alliedBucket, 2));
-        Assert.False(h.SkipsBucketFor(mixedBucket, 0));
+        // A 1 m query at a bucket's centre touches that one bucket only; "read" is the query's own count of the buckets it
+        // walked, so it shows whether QueryEnemies' skip (not a copy of it) held (BUG-1043).
         Span<int> found = stackalloc int[8];
-        Assert.Equal(0, h.QueryEnemies(allied, 1f, 0, found));
-        Assert.Equal(0, h.QueryEnemies(allied, 1f, 1, found));
-        int n = h.QueryEnemies(mixed, 1f, 0, found);
+        Assert.Equal(0, h.QueryEnemies(allied, 1f, 0, found, out int read));
+        Assert.Equal(0, read);
+        // Player 1 is not its side's lowest player: an owner compare (o == player) would read this bucket.
+        Assert.Equal(0, h.QueryEnemies(allied, 1f, 1, found, out read));
+        Assert.Equal(0, read);
+        int n = h.QueryEnemies(allied, 1f, 2, found, out read);
+        Assert.Equal(1, read);
+        Assert.Equal(new[] { 0, 1 }, found[..n].ToArray());
+        n = h.QueryEnemies(mixed, 1f, 0, found, out read);
+        Assert.Equal(1, read);
         Assert.Equal(new[] { 3 }, found[..n].ToArray());
         n = h.QueryEnemies(mixed, 1f, 2, found);
         Assert.Equal(new[] { 2 }, found[..n].ToArray());
         // In a free-for-all the same bucket is mixed, read by both, and each finds the other.
         SpatialHash ffa = Built(u, 0, 0, 0);
-        Assert.False(ffa.SkipsBucketFor(alliedBucket, 0));
-        n = ffa.QueryEnemies(allied, 1f, 0, found);
+        n = ffa.QueryEnemies(allied, 1f, 0, found, out read);
+        Assert.Equal(1, read);
         Assert.Equal(new[] { 1 }, found[..n].ToArray());
+        n = ffa.QueryEnemies(allied, 1f, 1, found, out read);
+        Assert.Equal(1, read);
+        Assert.Equal(new[] { 0 }, found[..n].ToArray());
     }
 
     [Fact]

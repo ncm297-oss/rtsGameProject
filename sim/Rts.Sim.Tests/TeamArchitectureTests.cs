@@ -3,7 +3,8 @@ using System.Text.RegularExpressions;
 namespace Rts.Sim.Tests;
 
 /// <summary>
-/// M6-S4: every "is this an enemy" site in <c>sim/Rts.Sim/Combat/</c> asks the one alliance predicate
+/// M6-S4: every "is this an enemy" site in <c>sim/Rts.Sim/</c>'s <c>Combat/</c>, <c>Abilities/</c>, <c>Vision/</c>, <c>Ai/</c>
+/// and the <c>World*.cs</c> partials (BUG-1044: the scan began with <c>Combat/</c> only) asks the one alliance predicate
 /// (<see cref="World.AreAllied"/> / <see cref="World.IsEnemy"/>, or the spatial hash's enemy queries, which take the same
 /// table). A raw owner compare is allowed only where it means "the same player" (docs/03 "Implementation (M6-S4)"'s
 /// table): the four listed below, or as the fast first half of a predicate test on the same line
@@ -22,13 +23,35 @@ public class TeamArchitectureTests
         ("CombatSystem.cs", "if (j == i || !u.Alive[j] || u.Owner[j] != owner || u.State[j] != UnitState.Attacking || u.TargetIsBuilding[j] || u.Target[j] != target) continue;"),
         ("SurroundRule.cs", "if (!u.Alive[h] || u.Owner[h] != u.Owner[i] || world.SurroundClaim[h] != key || !u.TargetIsBuilding[h]) return false;"),
         ("SurroundRule.cs", "if (u.Owner[j] != owner && !(u.TargetIsBuilding[j] && u.Target[j] == u.Target[i])) continue;"),
+        // Vision: the player's own eyes (no shared vision in slice 1).
+        ("FogStore.cs", "if (_units.Owner[slot] == player) return true;"),
+        ("FogStore.cs", "return _buildings.Owner[slot] == player || SeesBuildingCells(player, slot);"),
+        ("FogStore.cs", "if (!u.Alive[i] || u.Owner[i] != p) continue;"),
+        ("FogStore.cs", "if (!bAlive[j] || bOwner[j] != p) continue;"),
+        // Ai: "not the AI's own" gates whose bodies ask View.IsEnemy next (the census), and own-only answers.
+        ("AiPlayer.cs", "if (u.Owner != Player)"),
+        ("AiPlayer.cs", "if (b.Owner != Player)"),
+        ("AiPlayer.cs", "if (!View.TryGetBuilding(p.Slot, out SeenBuilding b) || b.Owner != Player || b.Handle.Generation != p.Generation) return false;"),
+        // An expansion keeps clear of every other player's hall, an ally's too (allied-as-other in docs/03's table).
+        ("BuildOrderExecutor.cs", "if (b.Owner != ai.Player && ai.Data.Buildings[b.TypeId].Slot == BuildingSlot.TownHall && Near(b.Cell, x, y, reach, w)) return true;"),
+        ("PlayerView.cs", "if ((uint)slot >= (uint)_units.Capacity || !_units.Alive[slot] || _units.Owner[slot] != _player)"),
+        ("PlayerView.cs", "if ((uint)slot >= (uint)_units.Capacity || !_units.Alive[slot] || _units.Owner[slot] != _player) return false;"),
+        ("PlayerView.cs", "private bool IsOwnUnit(int slot) => (uint)slot < (uint)_units.Capacity && _units.Alive[slot] && _units.Owner[slot] == _player;"),
+        ("PlayerView.cs", "(uint)slot < (uint)_buildings.Capacity && _buildings.Alive[slot] && _buildings.Owner[slot] == _player;"),
+        ("PlayerView.cs", "_buildings.Owner[k] == _player || _fog.CanSeeBuilding(_player, k) || _fog.Ghosts(_player)[k].Generation == _buildings.Generation[k];"),
+        ("ScoutManager.cs", "if (!ai.View.TryGetUnit(slot, out SeenUnit u) || u.Owner != ai.Player || u.Handle.Generation != board.ScoutGeneration)"),
+        // World.Defeat: a collapse destroys the player's own buildings.
+        ("World.Defeat.cs", "if (!b.Alive[k] || b.Owner[k] != player) continue;"),
     };
 
-    /// <summary>The raw owner compares in the code (comments stripped) of every <c>Combat/</c> file, as (file, trimmed line).</summary>
-    internal static List<(string File, string Code)> RawOwnerCompares(string dir)
+    /// <summary>The scanned folders under <c>sim/Rts.Sim/</c> (every <c>*.cs</c>), besides the root's <c>World*.cs</c>.</summary>
+    private static readonly string[] s_scannedDirs = { "Combat", "Abilities", "Vision", "Ai" };
+
+    /// <summary>The raw owner compares in the code (comments stripped) of every <paramref name="pattern"/> file in <paramref name="dir"/>, as (file, trimmed line).</summary>
+    internal static List<(string File, string Code)> RawOwnerCompares(string dir, string pattern = "*.cs")
     {
         var found = new List<(string, string)>();
-        foreach (string path in Directory.GetFiles(dir, "*.cs").OrderBy(f => f, StringComparer.Ordinal))
+        foreach (string path in Directory.GetFiles(dir, pattern).OrderBy(f => f, StringComparer.Ordinal))
             foreach (string line in File.ReadAllLines(path))
             {
                 int comment = line.IndexOf("//", StringComparison.Ordinal);
@@ -42,12 +65,13 @@ public class TeamArchitectureTests
     }
 
     [Fact]
-    public void NoRawOwnerCompareMeaningEnemy_InCombat()
+    public void NoRawOwnerCompareMeaningEnemy_InTheEnemySiteFolders()
     {
-        string dir = Path.Combine(TestDataDir.RepoRoot(), "sim", "Rts.Sim", "Combat");
-        List<(string File, string Code)> found = RawOwnerCompares(dir);
+        string root = Path.Combine(TestDataDir.RepoRoot(), "sim", "Rts.Sim");
+        var found = new List<(string File, string Code)>(RawOwnerCompares(root, "World*.cs"));
+        foreach (string d in s_scannedDirs) found.AddRange(RawOwnerCompares(Path.Combine(root, d)));
         var unexpected = found.Where(f => !s_samePlayer.Contains(f)).ToList();
-        Assert.True(unexpected.Count == 0, "a raw owner compare in Combat/ (ask World.AreAllied / IsEnemy, or list it as same-player in docs/03 and here):\n"
+        Assert.True(unexpected.Count == 0, "a raw owner compare (ask World.AreAllied / IsEnemy, or list it as same-player in docs/03 and here):\n"
             + string.Join("\n", unexpected.Select(f => $"{f.File}: {f.Code}")));
         // The allow-list is live: each listed site still exists, so a removed one is struck from it.
         Assert.All(s_samePlayer, s => Assert.Contains(s, found));
