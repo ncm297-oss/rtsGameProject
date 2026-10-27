@@ -52,3 +52,12 @@ without an enemy army near the hall or a damaged building.
 ## Round 1 (QA, 2026-10-27-0158)
 Not changed by 0a2b9e2 (left for the Producer as an AI / scout design call). The mirror-layout soak rows still skip the wave
 check. Still open.
+
+## Producer triage (2026-10-27-0158 ACCEPT)
+S3, **planned as the first criterion of the next sim task (M6-S5, teams slice 2)**, not a hardening item: the view's team column
+(M6-V16) lands next session, and a human picking "slot 1 and 2 on team 1" on the 4-start map puts its AI ally at the mirror start,
+which is exactly this case. Direction for the brief: (a) a head waypoint whose base turns out to be an ally's is dropped and the
+sweep continues from the unexplored grid points farthest from the ally's known buildings; (b) with shared vision (slice 2's rule)
+an enemy building the ally sees counts as known, so a wave can start on it; (c) only if cheap: a seat with a wave-sized army and no
+known enemy building attack-moves toward the nearest unexplored start-location candidate. The soak rows' skipped wave check
+becomes strict with the fix.

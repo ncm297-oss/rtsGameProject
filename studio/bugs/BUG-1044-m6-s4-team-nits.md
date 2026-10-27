@@ -64,3 +64,14 @@ See Repro.
     predicate call is not seen.
   - `TeamArchitectureTests`' class summary still says "the four listed below" (now 18), and `s_samePlayer` holds
     `BuildOrderExecutor.HallNear`, which docs/03 classes as allied-as-other, not same-player.
+
+## Producer triage (2026-10-27-0158 ACCEPT)
+S4, open. **Item 1 decided (Producer decision, owner may revisit, docs/01 change log 2026-10-27):** a friendly-fire kill, by an
+own unit or an ally's, is a loss for the victim's owner and **no kill for anyone** (docs/02 "Game flow" 4's "count only what an
+enemy destroyed", applied to the kill side as well). This moves the own case too (`QA/CusserQaTests.Cusser_OnItsOwnPosition_*`
+pins Kills[0] = 1 today; the pin moves with the fix). Built as a rider of the next sim task (M6-S5): `World.cs:234` passes the
+killer only when `IsEnemy(attackerOwner, victimOwner)`; docs/02 gets one sentence. Items 3 (the five untested sites: a
+stale-slot summon case, `ZoneHides` on its own, the detector skip through `IsDetectedBy`, `CollectBuildings`' per-side count
+through a bucket-walk probe, `OnHit` from high ground), the regex blind spots (lower-case aliases; a line that mixes a raw
+compare with a predicate call), the "four listed below" summary and the `s_samePlayer` / `HallNear` misfiling go to the next sim
+hardening (M6-SH1), or ride M6-S5 if the dev touches those files.

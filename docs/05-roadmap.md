@@ -708,8 +708,15 @@ open S1 / S2. Retro below; open S3 / S4 listed there.)_
       `ui.json`'s 8-colour table, and the menu's match opens as docs/02 says (a Town Hall and 5 workers a side). M6-V5,
       2026-10-16: 2-4 slots (Add player / Remove player; slot 1 the local human, slots 2-4 AI seats each with its own faction,
       difficulty and colour; `--players 2..4`, per-slot `--ai`; four bases on the generator's four start locations; the
-      N-seat Victory / Defeat / Draw and stats; verified by `ShellTest`, `FreeForAllTest` and QA's `QaM6V5Test`). Left: team
-      (STATE Requests 38, sim).)
+      N-seat Victory / Defeat / Draw and stats; verified by `ShellTest`, `FreeForAllTest` and QA's `QaM6V5Test`). M6-S4,
+      2026-10-27-0158: **the sim's team** (`PlayerSeat.Team` 0-8, `World.AreAllied` / `IsEnemy` / `TeamOf`; allies never auto-acquire,
+      tower-target or explicitly attack each other, splash treats an ally's units as own and spares its buildings, an ally's zone
+      neither hides nor blinds, stealth hides only from enemies; the match is over when every player still in is on one side;
+      the AI treats its ally as a non-enemy; save format 3, replay format 7 (a free-for-all still writes 6); free-for-all hash-equal
+      to before on five scenes × 3,000 ticks; verified by `TeamTests`, `SpatialHashTests`, `AiTeamTests`, QA's `TeamQaTests` /
+      `TeamAiQaTests` / `TeamAiSoakStressTests` / `TeamScaleStressTests`; docs/03 "Implementation (M6-S4)"). Left: the setup's team
+      column and the view's format-7 / team readers (M6-V16), shared vision (M6-S5), BUG-1042 (S3: an AI ally at the mirror start
+      never attacks).)
 - [x] Victory/defeat detection and post-match stats screen. (M5-4b, 2026-10-13: the sim's detection, `World.IsDefeated` /
       `DefeatEvents` / `Simulation.MatchOver`. M6-V4, 2026-10-13: the Victory / Defeat / Draw banner through the pause path
       and the stats screen with what the sim counted then (kills, losses, gold / wood in hand, length, defeat times). M6-S1,
