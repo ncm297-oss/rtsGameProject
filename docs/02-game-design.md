@@ -452,7 +452,10 @@ own cues (select, order, refused, building placed or finished, unit or tech read
    unfinished sites don't need to fall. A summoned unit counts while it lives. A player that never had a building is never defeated
    (sandboxes). The last player or team standing wins: the match is over once every player still in is on one side (a
    team, or a player with no team) and at least two sides ever built (M6-S4). (Owner decision 2026-10-14; until then: no
-   buildings left.) A
+   buildings left.) The end-of-match banner is about the local player's **side**: it reads Victory when the match is over
+   and the local player's team still stands (even if the local player itself was knocked out earlier and its ally won),
+   Defeat once the local player's whole side is out, and Draw when nobody stands; the stats screen groups its rows by
+   team (Producer default 2026-10-27, M6-V16). A
    player that is out loses its remaining buildings on that tick: they collapse like razed ones (rubble, the ground opens,
    queued research and training go with them), and a collapse is **neither a kill nor a loss** in the stats, which count
    only what an enemy destroyed (Producer decisions 2026-10-14 and 2026-10-16, BUG-0703; built in M5-H2).
