@@ -1,11 +1,20 @@
 # Handoff: brief for the next session
 
+**Current session: 2026-10-26-2108** (a one-off run dispatched by the owner, not a chain; the first session since 2026-10-18-1814, so
+**2026-10-26 is at 0 / 8** at the PLAN). Base `9f17b08` = `origin/main`. Re-confirmed at this PLAN (2026-10-26): inbox **New** empty; build
+0 warnings (13 s); the non-Perf suite on `main` **7,411 / 9 / 14 of 7,434 in 21 m 15 s, the 9 red = BUG-1027's rows exactly**; the briefs
+below stand as written on 2026-10-19
+with these refinements: **bug ids: sim from BUG-1040, view from BUG-1060, data from BUG-1080** (the earlier "sim from 1028" collided with the
+view's 1030-1032; put the allotment in every QA brief verbatim); `tools/qa/smoke.ps1` is the **view's** to edit this session (BUG-0955), so
+the sim's hardening leaves `tools/**` alone; the data track must not touch `Stress/**` and the sim must not touch `Content/` or `QA/Content/`.
+The two uncommitted incident notes from the owner's checkout (2026-10-08-1435, 2026-10-13-0527: lock overlaps) are copied into
+`studio/sessions/` by this PLAN; the lock-window question they raise is the owner's (listed under Wanted in STATE at the ACCEPT).
+
 Written by the Producer at the ACCEPT of session **2026-10-18-1814** (on 2026-10-19; the third full session of 2026-10-18, so **2026-10-19
 starts at 0 / 8**). Base for the next session: `origin/main` after the conductor merges sim (2bbe236 + the Producer's studio commit) then view
 (021b157). **Counters: sim 4 / 4, view 4 / 4, data 0 / 4 → the sim's and the view's next sessions are hardening; the data track's next task
 is the rule-31 re-print (D-R32).** Open S1 / S2: **BUG-1027 (S2)**, the nine known-red rows on `main` after the M5-4g merge; it outranks
-everything and both halves are the first items below. Bug ids: **sim from BUG-1028, view from BUG-1033, data from BUG-1040** (put the
-allotment in the QA briefs verbatim: this session the view's QA used 1022-1024, colliding with the sim's).
+everything and both halves are the first items below.
 
 ## Where we are
 
@@ -75,7 +84,8 @@ pre-check); "Re-baselined for this PC" (the gates); each bug file.
 proofs (10 runs under load), the churn table in docs/03.
 
 **Constraints.** No per-tick allocation; no `Dictionary` iteration; the AI reads `PlayerView` only; `Tick()` untouched; no Godot; rule 36 (the
-save signatures and codes); files: `sim/**` except `Content/` and `QA/Content/`, docs/03, the bug files.
+save signatures and codes); files: `sim/**` except `Content/` and `QA/Content/`, docs/03, the bug files; **not `tools/**`** (the view edits
+`tools/qa/smoke.ps1` this session for BUG-0955).
 
 ### QA focus (sim)
 
@@ -233,5 +243,5 @@ the golden; nothing outside the track's files.
 - `studio/bugs/README.md`, `studio/qa/coverage.md`, docs/02, docs/03: each track appends its own rows; the conductor unions them.
 - Three tracks run this time: three test hosts; wall-clock Perf and scene rows flake under load; rerun alone before filing. A Perf failure
   counts only when it fails again alone.
-- Bug ids: sim from 1028, view from 1033, data from 1040; QA briefs quote the allotment.
+- Bug ids (re-allotted at the 2026-10-26-2108 PLAN): **sim from 1040, view from 1060, data from 1080**; QA briefs quote the allotment.
 - The owner's old recordings refuse to play since E108AB2A7C66C58D (the two new `rules.json` fields); the seed-21 golden was regenerated.
