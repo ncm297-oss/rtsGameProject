@@ -387,8 +387,9 @@ public partial class Match : Node3D
     }
 
     // M6-V4: after every tick (several a frame at speed), read-only. Each DefeatEvent prints the dev line and stamps the stats'
-    // defeat time; then the local result, latched: Draw when the match is over and nobody stands (the last ones fell on one
-    // tick), else Defeat the moment the local player is defeated (others may stand on), else Victory when the match is over.
+    // defeat time; then the local result, latched (ResultFor): Draw when the match is over and nobody stands (the last ones fell
+    // on one tick), else Defeat the moment the local player's side is out (others may stand on), else Victory when the match is
+    // over. M6-V16: the side is the local player and its allies, so a local player out while an ally fights on gets no banner yet.
     private void OnTicked(Simulation sim)
     {
         World w = sim.World;
@@ -405,13 +406,27 @@ public partial class Match : Node3D
         Ended?.Invoke(now);
     }
 
-    /// <summary>The local result the sim's state gives now (<see cref="Outcome"/>'s rule, unlatched): Draw, Defeat, Victory or None.</summary>
+    /// <summary>
+    /// The local result the sim's state gives now (<see cref="Outcome"/>'s rule, unlatched): Draw, Defeat, Victory or None.
+    /// M6-V16 (docs/02 "Game flow" 4, the banner speaks for the local player's side): Draw when the match is over and nobody
+    /// stands; Defeat once the local player is defeated and no ally of it stands (in a free-for-all: the moment it is defeated,
+    /// as before); Victory when the match is over and its side stands, even if the local player itself fell earlier; else None
+    /// (the local player out while an ally fights on: no banner yet).
+    /// </summary>
     public static MatchOutcome ResultFor(World w, int local)
     {
         bool over = w.MatchOver;
         if (over && Standing(w) == 0) return MatchOutcome.Draw;
-        if (w.IsDefeated(local)) return MatchOutcome.Defeat;
+        if (w.IsDefeated(local) && !AllyStands(w, local)) return MatchOutcome.Defeat;
         return over ? MatchOutcome.Victory : MatchOutcome.None;
+    }
+
+    // An ally of `local` (another player on its team) that ever built and still stands: the side is not out yet.
+    private static bool AllyStands(World w, int local)
+    {
+        for (int p = 0; p < w.Config.PlayerCount; p++)
+            if (p != local && w.AreAllied(local, p) && w.EverBuilt(p) && !w.IsDefeated(p)) return true;
+        return false;
     }
 
     // Players that ever built and still stand (the sim's MatchOver counts the same ones).
@@ -436,6 +451,7 @@ public partial class Match : Node3D
             if (faction >= 0) _runner.SlotFactions[slot] = faction;
             else GD.PushWarning($"Ignoring --faction with bad or missing value '{slot + 1} {id}'.");
         }
+        for (int slot = 0; slot < LaunchOptions.SlotCount; slot++) _runner.SlotTeams[slot] = options.TeamOf(slot); // M6-V16
         for (int slot = 0; slot < LaunchOptions.SlotCount; slot++)
         {
             AiDifficulty? ai = _runner.SlotAi[slot] = options.AiOf(slot);

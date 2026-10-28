@@ -10,7 +10,10 @@ namespace Rts.Game;
 /// The post-match stats screen (M6-V4, docs/02 "Game flow" 5): the match length, then one row per seat (colour swatch, faction
 /// name, "You" or the AI's difficulty) with the sim's M6-S1 counters (<see cref="Columns"/>), and under the table the army
 /// value graph (<see cref="Graph"/>, M6-V11); between them, one "opened with" line per AI seat (<see cref="OpeningLines"/>,
-/// M6-V13). Text from <c>ui.json</c> <c>match_over</c> and <c>setup</c>, faction and opening names from data.
+/// M6-V13). Text from <c>ui.json</c> <c>match_over</c> and <c>setup</c>, faction and opening names from data. M6-V16 (docs/02 "Game
+/// flow" 4): in a match with teams the rows are grouped by team, each group under a label row (<c>match_over.team</c>, "Team 1"),
+/// teams in number order, and the seats with no team after them, ungrouped; a free-for-all shows the seats in player order with
+/// no label, as before.
 /// </summary>
 /// <remarks>
 /// Opened from the banner's Stats and, once the banner has shown, from the pause menu's; the tree is paused under it, so the
@@ -63,6 +66,8 @@ public partial class MatchStats : CanvasLayer
     private readonly List<Label> _seatLabels = new();
     private readonly List<ColorRect> _swatches = new();
     private readonly List<Label> _headings = new();
+    private readonly List<Label> _teamLabels = new();
+    private readonly List<int> _order = new();
     private VBoxContainer _openings = null!;
     private readonly List<Label> _openingLines = new();
     private readonly List<string> _openingText = new();
@@ -84,6 +89,25 @@ public partial class MatchStats : CanvasLayer
 
     /// <summary>The text of player <paramref name="row"/>'s cell in data column <paramref name="column"/> (<see cref="Columns"/> order).</summary>
     public string Cell(int row, int column) => _cells[row][column].Text;
+
+    /// <summary>M6-V16: the players in the order the table shows their rows (grouped by team; player order in a free-for-all). The row accessors (<see cref="Cell"/>, <see cref="SeatName"/> ...) stay indexed by player.</summary>
+    public IReadOnlyList<int> DisplayOrder => _order;
+
+    /// <summary>M6-V16: the team label rows (one per team that has a seat, in team order; none in a free-for-all), for layout checks.</summary>
+    public IReadOnlyList<Label> TeamLabels => _teamLabels;
+
+    /// <summary>M6-V16: the order the table shows the players of <paramref name="w"/> in: each team's players (teams 1, 2, ..., players in order inside one), then the players with no team; all of them in player order when nobody has a team.</summary>
+    public static int[] RowOrder(World w)
+    {
+        int players = w.Config.PlayerCount;
+        var order = new List<int>(players);
+        for (int team = 1; team <= PlayerSeat.MaxTeam; team++)
+            for (int p = 0; p < players; p++)
+                if (w.TeamOf(p) == team) order.Add(p);
+        for (int p = 0; p < players; p++)
+            if (w.TeamOf(p) == 0) order.Add(p);
+        return order.ToArray();
+    }
 
     /// <summary>The faction name shown in <paramref name="row"/>.</summary>
     public string FactionName(int row) => _names[row].Text;
@@ -179,6 +203,8 @@ public partial class MatchStats : CanvasLayer
         _seatLabels.Clear();
         _swatches.Clear();
         _headings.Clear();
+        _teamLabels.Clear();
+        _order.Clear();
         foreach (Node child in _openings.GetChildren())
         {
             _openings.RemoveChild(child);
@@ -198,6 +224,7 @@ public partial class MatchStats : CanvasLayer
         int players = w.Config.PlayerCount;
         var samples = new int[players][];
         var colours = new Color[players];
+        var cells = new Control[players][];
         for (int p = 0; p < players; p++)
         {
             var who = new HBoxContainer();
@@ -213,16 +240,17 @@ public partial class MatchStats : CanvasLayer
             int faction = w.FactionOf(p);
             Label name = ShellUi.Text(faction >= 0 && faction < _data.Factions.Length ? _data.Factions[faction].DisplayName : "", 17);
             who.AddChild(name);
-            _grid.AddChild(who);
             Label seat = ShellUi.Text(SeatText(p, p < seats.Length ? seats[p] : default), 17);
-            _grid.AddChild(seat);
             var row = new Label[Columns.Length];
+            cells[p] = new Control[2 + Columns.Length];
+            cells[p][0] = who;
+            cells[p][1] = seat;
             for (int c = 0; c < Columns.Length; c++)
             {
                 row[c] = ShellUi.Text(Columns[c].Cell(match, w, _ui, p), 17);
                 row[c].HorizontalAlignment = HorizontalAlignment.Right;
                 row[c].CustomMinimumSize = new Vector2(ColumnWidth, 0f);
-                _grid.AddChild(row[c]);
+                cells[p][2 + c] = row[c];
             }
             _cells.Add(row);
             _names.Add(name);
@@ -231,9 +259,33 @@ public partial class MatchStats : CanvasLayer
             samples[p] = w.ArmyValueSamples(p).ToArray(); // a copy: the span is valid until the next tick only
             AddOpening(sim, p, p < seats.Length ? seats[p] : default, name.Text, colours[p]);
         }
+        // M6-V16: the rows in team order, a label row before each team's first seat (none for the seats with no team).
+        int shownTeam = 0;
+        foreach (int p in RowOrder(w))
+        {
+            int team = w.TeamOf(p);
+            if (team != 0 && team != shownTeam)
+            {
+                shownTeam = team;
+                AddTeamLabel(team);
+            }
+            foreach (Control cell in cells[p]) _grid.AddChild(cell);
+            _order.Add(p);
+        }
         Graph.SetData(samples, colours, w.StatsSampleTicks, sim.TickNumber);
         Visible = true;
         BackButton.GrabFocus();
+    }
+
+    // A team's label row: "Team n" in the player column, the other cells empty (a grid has no spans).
+    private void AddTeamLabel(int team)
+    {
+        Label label = ShellUi.Text(_ui.TeamLabel(team), 16);
+        label.Name = $"Team{team}";
+        label.AddThemeColorOverride("font_color", new Color(1f, 0.93f, 0.75f));
+        _grid.AddChild(label);
+        for (int c = 0; c < 1 + Columns.Length; c++) _grid.AddChild(new Control());
+        _teamLabels.Add(label);
     }
 
     // M6-V13: an AI seat's "<faction> opened with <displayName>" line under the table, behind its swatch (two seats of one

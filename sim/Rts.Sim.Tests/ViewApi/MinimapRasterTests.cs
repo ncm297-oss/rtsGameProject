@@ -65,6 +65,45 @@ public class MinimapRasterTests
 
     private static byte Byte(float c) => (byte)MathF.Round(c * 255f);
 
+    /// <summary>
+    /// M6-V16 (BUG-1044 item 2's view follow-up): with the alliances (<see cref="EnemyTable"/>) an ally's dot is no enemy dot,
+    /// for the drawn pick (the minimap's right-click) and the live rule alike: a click on it is a Move; an enemy's dot beside it is
+    /// still picked. Players 0 and 1 allies, 2 an enemy.
+    /// </summary>
+    [Fact]
+    public void AnAllysDot_IsNoEnemyDot_WithTheAlliances()
+    {
+        Heightmap map = LocalMovementTests.Flat(48);
+        var raster = new MinimapRaster(map, new NavGrid(map), new uint[] { 0x4B4F55, 0xC8892E, 0xB82633 }, 8);
+        Vector2[] pos = { new(21f, 21f), new(41f, 41f), new(61f, 61f), new(45f, 41f) };
+        int[] owner = { 0, 1, 2, 2 };
+        bool[] shown = { true, true, true, true };
+        bool[] enemies = { false, false, true };
+        bool[] fromTwo = { true, true, false };
+        Assert.Equal(4, raster.DrawDots(shown, pos, owner));
+        int Drawn(Vector2 p, int viewer, bool[] table)
+        {
+            int k = raster.DrawnEnemyDotAt(p, viewer, table);
+            return k < 0 ? -1 : raster.DrawnSlot(k);
+        }
+        // (39.5, 41) lies in the ally's dot block only; (42.5, 41) in both blocks, nearer the ally.
+        Assert.Equal(-1, Drawn(new Vector2(39.5f, 41f), 0, enemies)); // the ally's dot: a Move
+        Assert.Equal(1, Drawn(new Vector2(39.5f, 41f), 0, Array.Empty<bool>())); // the free-for-all rule picks it
+        Assert.Equal(1, raster.DrawnSlot(raster.DrawnEnemyDotAt(new Vector2(39.5f, 41f), 0))); // as the old overload
+        Assert.Equal(3, Drawn(new Vector2(42.5f, 41f), 0, enemies)); // the enemy's dot beside it, though the ally's is nearer
+        Assert.Equal(1, Drawn(new Vector2(42.5f, 41f), 0, Array.Empty<bool>()));
+        Assert.Equal(2, Drawn(new Vector2(61f, 61f), 0, enemies));
+        Assert.Equal(-1, Drawn(new Vector2(21f, 21f), 0, enemies)); // own
+        Assert.Equal(-1, raster.EnemyDotAt(new Vector2(39.5f, 41f), shown, pos, owner, 0, enemies));
+        Assert.Equal(3, raster.EnemyDotAt(new Vector2(42.5f, 41f), shown, pos, owner, 0, enemies));
+        Assert.Equal(1, raster.EnemyDotAt(new Vector2(42.5f, 41f), shown, pos, owner, 0));
+        // From player 2's side both team-1 dots are enemies and its own is not.
+        Assert.Equal(1, Drawn(new Vector2(39.5f, 41f), 2, fromTwo));
+        Assert.Equal(0, Drawn(new Vector2(21f, 21f), 2, fromTwo));
+        Assert.Equal(-1, Drawn(new Vector2(61f, 61f), 2, fromTwo));
+        // Allocation-free: ViewApiAllocationTests.EnemyPickers_WithTheAllianceTable_2000Units_AllocateZeroBytes (a serial class).
+    }
+
     [Fact]
     public void Constructor_DoesNotChangeTheSim()
     {

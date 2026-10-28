@@ -200,6 +200,9 @@ public partial class FreeForAllTest : Node
         World w = match.Simulation!.World;
         int col = Array.FindIndex(MatchStats.Columns, c => c.Label == MatchOverText.DefeatedAt);
         Check(stats.Visible && stats.RowCount == players, $"{how}: stats visible {stats.Visible}, {stats.RowCount} rows (want {players})");
+        // M6-V16: a free-for-all has no team label and keeps the player order.
+        Check(stats.TeamLabels.Count == 0 && stats.DisplayOrder.SequenceEqual(Enumerable.Range(0, players)),
+            $"{how}: {stats.TeamLabels.Count} team labels, rows [{string.Join(", ", stats.DisplayOrder)}] in a free-for-all");
         for (int p = 0; p < Math.Min(players, stats.RowCount); p++)
         {
             DefeatEvent? e = _events.Where(x => x.Player == p).Select(x => (DefeatEvent?)x).FirstOrDefault();

@@ -59,4 +59,6 @@ public enum MatchOverText
     Back,
     /// <summary>M6-V13: an AI seat's line under the stats table, a format naming <c>{0}</c> (the seat's faction name) and <c>{1}</c> (the opening's <c>displayName</c>).</summary>
     Opening,
+    /// <summary>M6-V16: a team's label row in the stats table, a format naming <c>{0}</c> (the team number).</summary>
+    Team,
 }

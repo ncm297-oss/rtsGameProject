@@ -1,4 +1,5 @@
 using System.Numerics;
+using Rts.Sim.Commands;
 using Rts.Sim.Entities;
 using Rts.Sim.Map;
 using Rts.Sim.ViewApi;
@@ -59,6 +60,72 @@ public class UnitPickerTests
         // No unit passed: its NaN entry changes nothing.
         Assert.True(Resolve(u, -1, float.NaN, b, tent, 9f, inf, 0, out target, out isB));
         Assert.True(isB);
+    }
+
+    // ---- M6-V16: the alliances (teams) ----
+
+    /// <summary>The table the view builds (<c>SelectionController.Enemies</c>): per player, <see cref="World.IsEnemy"/> from <paramref name="viewer"/>.</summary>
+    internal static bool[] EnemiesOf(World w, int viewer)
+    {
+        var enemies = new bool[w.Config.PlayerCount];
+        for (int p = 0; p < enemies.Length; p++) enemies[p] = w.IsEnemy(viewer, p);
+        return enemies;
+    }
+
+    /// <summary>
+    /// M6-V16 (BUG-1044 item 2's view follow-up): with <see cref="EnemyTable"/>'s answer an ally's unit or building in front is no
+    /// Attack target, as an own one, so the right-click falls through to a Move; an enemy's is. Players 0 and 1 are on team 1,
+    /// player 2 on team 2, player 3 on no team. Without the table (the free-for-all overload) every other player is an enemy,
+    /// as before.
+    /// </summary>
+    [Fact]
+    public void ResolveEnemy_WithTheAlliances_AnAllysUnitOrBuildingIsNoTarget_AnEnemysIs()
+    {
+        var sim = new Simulation(TestSim.Config(Seed: 1, PlayerCount: 4, UnitCapacity: 16, CommandCapacity: 64) with { Seats = TeamTests.Seats(1, 1, 2, 0) },
+            LocalMovementTests.Flat(64));
+        int laborer = CombatScenes.Laborer, barracks = TestSim.Data.FindBuilding("malazan_barracks");
+        EntityHandle[] units = CombatScenes.Spawn(sim, (0, laborer, CombatScenes.At(sim, 6, 6)), (1, laborer, CombatScenes.At(sim, 8, 6)),
+            (2, laborer, CombatScenes.At(sim, 10, 6)), (3, laborer, CombatScenes.At(sim, 12, 6)));
+        BuildingStore b = sim.World.Buildings;
+        for (int p = 0; p < 4; p++) sim.Enqueue(Command.SpawnBuilding(p, barracks, CombatScenes.At(sim, 8 + 12 * p, 30)));
+        sim.Tick();
+        sim.Tick();
+        var hall = new int[4];
+        Array.Fill(hall, -1);
+        for (int i = 0; i < b.Capacity; i++) if (b.Alive[i]) hall[b.Owner[i]] = i;
+        Assert.True(hall.All(h => h >= 0), $"halls [{string.Join(", ", hall)}]");
+        bool[] enemies = EnemiesOf(sim.World, 0);
+        Assert.Equal(new[] { false, false, true, true }, enemies);
+        UnitStore u = sim.World.Units;
+        float inf = float.PositiveInfinity;
+        bool Unit(int k, bool[] table, out EntityHandle t) =>
+            UnitPicker.ResolveEnemy(u.Alive, u.Owner, u.Generation, units[k].Index, 2f, b, hall[2], 9f, inf, 0, table, out t, out _);
+        Assert.False(Unit(0, enemies, out _), "own unit");
+        Assert.False(Unit(1, enemies, out EntityHandle target), "an ally's unit in front of an enemy's building is no target (a Move)");
+        Assert.Equal(default, target);
+        Assert.True(Unit(2, enemies, out target) && target == units[2], "an enemy team's unit");
+        Assert.True(Unit(3, enemies, out target) && target == units[3], "a no-team player's unit");
+        Assert.True(Unit(1, Array.Empty<bool>(), out target) && target == units[1], "the free-for-all rule: any other player");
+        Assert.True(Resolve(u, units[1].Index, 2f, b, hall[2], 9f, inf, 0, out target, out _) && target == units[1], "the old overload is the free-for-all rule");
+        for (int p = 0; p < 4; p++)
+        {
+            bool hit = UnitPicker.ResolveEnemy(u.Alive, u.Owner, u.Generation, -1, inf, b, hall[p], 3f, inf, 0, enemies, out target, out bool isB);
+            Assert.True(hit == (p >= 2), $"player {p}'s building: {hit}");
+            if (hit) Assert.True(isB && target.Index == hall[p]);
+        }
+        // Seen from player 2 (team 2): both team-1 players are enemies, the no-team player too.
+        bool[] fromTwo = EnemiesOf(sim.World, 2);
+        Assert.Equal(new[] { true, true, false, true }, fromTwo);
+        Assert.True(UnitPicker.ResolveEnemy(u.Alive, u.Owner, u.Generation, units[1].Index, 2f, b, -1, inf, inf, 2, fromTwo, out _, out _));
+        Assert.False(UnitPicker.ResolveEnemy(u.Alive, u.Owner, u.Generation, units[2].Index, 2f, b, -1, inf, inf, 2, fromTwo, out _, out _));
+        Assert.Equal(new[] { false, false, true, true }, EnemiesOf(sim.World, 1));
+        // An owner past the table's end is no target; the empty table is the free-for-all rule.
+        Assert.False(EnemyTable.IsEnemyOwner(4, 0, enemies));
+        Assert.False(EnemyTable.IsEnemyOwner(-1, 0, enemies));
+        Assert.True(EnemyTable.IsEnemyOwner(4, 0, ReadOnlySpan<bool>.Empty));
+        Assert.False(EnemyTable.IsEnemyOwner(0, 0, ReadOnlySpan<bool>.Empty));
+        // A free-for-all world's table is the old rule.
+        Assert.Equal(new[] { false, true, true }, EnemiesOf(CombatScenes.Flat(players: 3).World, 0));
     }
 
     // ---- The capsule ----

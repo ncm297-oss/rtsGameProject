@@ -323,7 +323,9 @@ public partial class LoadGameScreen : CanvasLayer
 
     /// <summary>
     /// The players cell for <paramref name="seats"/>: each seat <c>load.seat</c> with the faction's name and You (player 0, a
-    /// human), the AI's difficulty or Human, joined by <c>load.seat_separator</c>.
+    /// human), the AI's difficulty or Human, joined by <c>load.seat_separator</c>. M6-V16: a seat on a team is
+    /// <c>load.seat_team</c> of that text and its team ("Malazan Empire (You) (T1)"); a seat with none (every seat of a
+    /// free-for-all, and of a replay before format 7) shows no mark.
     /// </summary>
     public string SeatsText(ImmutableArray<ReplaySeat> seats)
     {
@@ -337,7 +339,8 @@ public partial class LoadGameScreen : CanvasLayer
             string faction = f >= 0 ? _data.Factions[f].DisplayName : seat.Faction;
             string kind = seat.Controller == SeatController.Ai ? _ui.Setup(SkirmishSetup.DifficultyKeys[(int)seat.Difficulty])
                 : p == SelectionController.LocalPlayer ? _ui.Setup(SetupText.SlotHuman) : _ui.MatchOver(MatchOverText.Human);
-            sb.Append(_ui.ReplaySeat(faction, kind));
+            string text = _ui.ReplaySeat(faction, kind);
+            sb.Append(seat.Team > 0 ? _ui.SeatOnTeam(text, seat.Team) : text);
         }
         return sb.ToString();
     }

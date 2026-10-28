@@ -139,7 +139,7 @@ public static class ReplayStore
     /// <summary>
     /// The list entry of the replay at <paramref name="path"/> from its header alone (BUG-0830: the list no longer reads whole
     /// files): the lines <c>rts-replay</c> (a format this build reads) through <c>ticks</c> in the writer's order, the seat
-    /// lines of format 5 on, and a last line that is a <c>checksum</c> line (a cut file has none). The commands, checkpoints and
+    /// lines of format 5 on (format 7's with the team as a fifth token, 0-8; M6-V16), and a last line that is a <c>checksum</c> line (a cut file has none). The commands, checkpoints and
     /// the checksum itself are checked when the replay is watched (<see cref="ReplayFormat.TryReadFile"/>), so a file damaged past
     /// its header is listed and then refused. False for anything else, and for a file that can't be opened.
     /// </summary>
@@ -170,9 +170,12 @@ public static class ReplayStore
                 {
                     if (!Fields(reader, "seat", out string seatLine)) return false;
                     string[] f = seatLine.Split(' ');
-                    int difficulty = f.Length == 4 ? DataLimits.AiDifficultyIds.IndexOf(f[3]) : -1;
+                    // M6-V16: format 7 (M6-S4) adds the team as a fifth token; formats 5-6 have four and read as team 0.
+                    int tokens = version >= 7 ? 5 : 4, team = 0;
+                    int difficulty = f.Length == tokens ? DataLimits.AiDifficultyIds.IndexOf(f[3]) : -1;
                     if (difficulty < 0 || f[0] != p.ToString(CultureInfo.InvariantCulture) || f[1].Length == 0 || f[2] is not ("human" or "ai")) return false;
-                    builder.Add(new ReplaySeat(f[1], f[2] == "ai" ? SeatController.Ai : SeatController.Human, (AiDifficulty)difficulty));
+                    if (tokens == 5 && !TryTeam(f[4], out team)) return false;
+                    builder.Add(new ReplaySeat(f[1], f[2] == "ai" ? SeatController.Ai : SeatController.Human, (AiDifficulty)difficulty, team));
                 }
                 seats = builder.MoveToImmutable();
             }
@@ -193,6 +196,11 @@ public static class ReplayStore
             return false;
         }
     }
+
+    // A format-7 seat line's team token: a canonical integer from 0 to PlayerSeat.MaxTeam ("01", "+1", "9" are junk, as the sim's Validate holds).
+    private static bool TryTeam(string token, out int team) =>
+        int.TryParse(token, NumberStyles.None, CultureInfo.InvariantCulture, out team) && team <= PlayerSeat.MaxTeam
+        && team.ToString(CultureInfo.InvariantCulture) == token;
 
     // The next line is `key value...`; the value is the rest of the line after one space.
     private static bool Fields(StreamReader reader, string key, out string value)

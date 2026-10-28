@@ -8,6 +8,6 @@ namespace Rts.Game;
 /// <param name="Path">The file's absolute path.</param>
 /// <param name="When">The local time it was saved (from the file name; the file's write time for a name without one).</param>
 /// <param name="Seed">The header's seed.</param>
-/// <param name="Seats">The header's seats (faction id, human / AI, difficulty), one per player.</param>
+/// <param name="Seats">The header's seats (faction id, human / AI, difficulty, team: format 3's, M6-V16), one per player.</param>
 /// <param name="Tick">The tick the save was made at (50 ms each): the match clock it resumes at.</param>
 public sealed record SaveEntry(string Path, DateTime When, ulong Seed, ImmutableArray<ReplaySeat> Seats, int Tick);

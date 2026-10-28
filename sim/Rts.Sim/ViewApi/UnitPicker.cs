@@ -76,7 +76,19 @@ public static class UnitPicker
     /// <c>Owner</c> and <c>Generation</c>.
     /// </summary>
     public static bool ResolveEnemy(ReadOnlySpan<bool> unitAlive, ReadOnlySpan<int> unitOwner, ReadOnlySpan<int> unitGeneration, int unit, float unitT,
-        BuildingStore buildings, int building, float buildingT, float nodeT, int localPlayer, out EntityHandle target, out bool isBuilding)
+        BuildingStore buildings, int building, float buildingT, float nodeT, int localPlayer, out EntityHandle target, out bool isBuilding) =>
+        ResolveEnemy(unitAlive, unitOwner, unitGeneration, unit, unitT, buildings, building, buildingT, nodeT, localPlayer, ReadOnlySpan<bool>.Empty,
+            out target, out isBuilding);
+
+    /// <summary>
+    /// As <see cref="ResolveEnemy(ReadOnlySpan{bool}, ReadOnlySpan{int}, ReadOnlySpan{int}, int, float, BuildingStore, int, float, float, int, out EntityHandle, out bool)"/>,
+    /// with the alliances (M6-V16, teams): the nearest unit or building is a target only when <paramref name="enemies"/> marks
+    /// its owner (<see cref="EnemyTable"/>: <c>World.IsEnemy(localPlayer, owner)</c> per player). An ally's unit or building in
+    /// front is no target, as an own one (the click then means a Move, not an Attack the sim would drop); an owner past the
+    /// table is no target. An empty table is the free-for-all rule: every owner but <paramref name="localPlayer"/>. Allocates nothing.
+    /// </summary>
+    public static bool ResolveEnemy(ReadOnlySpan<bool> unitAlive, ReadOnlySpan<int> unitOwner, ReadOnlySpan<int> unitGeneration, int unit, float unitT,
+        BuildingStore buildings, int building, float buildingT, float nodeT, int localPlayer, ReadOnlySpan<bool> enemies, out EntityHandle target, out bool isBuilding)
     {
         target = default;
         isBuilding = false;
@@ -87,13 +99,13 @@ public static class UnitPicker
         if (float.IsNaN(nodeT)) nodeT = 0f;
         if ((uint)unit < (uint)unitAlive.Length && unit < unitOwner.Length && unit < unitGeneration.Length && unitAlive[unit] && unitT <= buildingT && unitT <= nodeT)
         {
-            if (unitOwner[unit] == localPlayer) return false;
+            if (!EnemyTable.IsEnemyOwner(unitOwner[unit], localPlayer, enemies)) return false;
             target = new EntityHandle(unit, unitGeneration[unit]);
             return true;
         }
         if ((uint)building < (uint)buildings.Capacity && buildings.Alive[building] && buildingT <= nodeT)
         {
-            if (buildings.Owner[building] == localPlayer) return false;
+            if (!EnemyTable.IsEnemyOwner(buildings.Owner[building], localPlayer, enemies)) return false;
             target = new EntityHandle(building, buildings.Generation[building]);
             isBuilding = true;
             return true;

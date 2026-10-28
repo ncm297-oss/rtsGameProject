@@ -112,7 +112,10 @@
     "speed_normal": "Normal",
     "speed_fast": "Fast",
     "forests": "Forests",
-    "mines": "Gold mines"
+    "mines": "Gold mines",
+    "team": "Team",
+    "team_none": "None",
+    "team_item": "Team {0}"
   },
   "pause": {
     "title": "Paused",
@@ -173,7 +176,8 @@
     "standing": "Standing",
     "human": "Human",
     "back": "Back",
-    "opening": "{0} opened with {1}"
+    "opening": "{0} opened with {1}",
+    "team": "Team {0}"
   },
   "keys": {
     "tab_general": "General",
@@ -214,7 +218,8 @@
     "kind": "Type",
     "load": "Load",
     "save_tag": "Save",
-    "replay_tag": "Replay"
+    "replay_tag": "Replay",
+    "seat_team": "{0} (T{1})"
   },
   "alert": {
     "base_under_attack": "Your base is under attack",

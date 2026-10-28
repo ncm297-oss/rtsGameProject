@@ -335,7 +335,7 @@ public partial class Minimap : Control
             FogView? fog = Fog?.Refreshed(world);
             // Picked among the dots as drawn, at their drawn positions (BUG-0281 item 3); an Attack only while that unit is
             // still live and shown, since the sim drops an Attack on an unseen unit (a dot that went dark gives a Move).
-            int dot = Raster.DrawnEnemyDotAt(point, SelectionController.LocalPlayer);
+            int dot = Raster.DrawnEnemyDotAt(point, SelectionController.LocalPlayer, _selection.Enemies(world)); // M6-V16: an ally's dot is a Move
             if (dot >= 0)
             {
                 var enemy = new EntityHandle(Raster.DrawnSlot(dot), _dotGeneration[dot]);

@@ -144,6 +144,15 @@ public sealed class UiText
     /// <summary>One map size list item: <c>setup.map_size_item</c> with <paramref name="size"/> (cells a side) for its <c>{0}</c> (M6-V2).</summary>
     public string MapSizeItem(int size) => string.Format(CultureInfo.InvariantCulture, Setup(SetupText.MapSizeItem), size);
 
+    /// <summary>One named team's list item (M6-V16): <c>setup.team_item</c> with <paramref name="team"/> (1 and up) for its <c>{0}</c>.</summary>
+    public string TeamItem(int team) => string.Format(CultureInfo.InvariantCulture, Setup(SetupText.TeamItem), team);
+
+    /// <summary>A team's label row in the stats table (M6-V16): <c>match_over.team</c> with <paramref name="team"/> for its <c>{0}</c>.</summary>
+    public string TeamLabel(int team) => string.Format(CultureInfo.InvariantCulture, MatchOver(MatchOverText.Team), team);
+
+    /// <summary>A seat on a team in a Load Game players cell (M6-V16): <c>load.seat_team</c> with <paramref name="seat"/> (the <see cref="ReplaySeat"/> text) for <c>{0}</c> and <paramref name="team"/> for <c>{1}</c>.</summary>
+    public string SeatOnTeam(string seat, int team) => string.Format(CultureInfo.InvariantCulture, LoadGame(LoadText.SeatTeam), seat, team);
+
     /// <summary>The <c>setup</c> key of player colour <paramref name="index"/> (0-based): <c>colour_1</c> .. <c>colour_8</c>.</summary>
     public static string ColourKey(int index) => $"colour_{index + 1}";
 
@@ -326,6 +335,10 @@ public sealed class UiText
             string sizeItem = ui._setup[(int)SetupText.MapSizeItem];
             if (sizeItem.Length > 0 && !IsSizeFormat(sizeItem))
                 errors.Add($"ui.json: setup.{Key(SetupText.MapSizeItem)} must be a format with {{0}} (the map side) and no other placeholder: '{sizeItem}'");
+            // M6-V16: the team list's item and the stats table's team label name the team number.
+            string teamItem = ui._setup[(int)SetupText.TeamItem];
+            if (teamItem.Length > 0 && !IsSizeFormat(teamItem))
+                errors.Add($"ui.json: setup.{Key(SetupText.TeamItem)} must be a format with {{0}} (the team number) and no other placeholder: '{teamItem}'");
             ReadColours(root, ui, errors);
             Section<PauseText>(root, "pause", ui._pause, skipZero: false, forward: false, errors);
             Section<SettingsText>(root, "settings", ui._settings, skipZero: false, forward: false, errors);
@@ -346,6 +359,7 @@ public sealed class UiText
             if (dateItem.Length > 0 && !IsDateFormat(dateItem))
                 errors.Add($"ui.json: load.{Key(LoadText.DateItem)} must be a format with {{0}} (the date) and no other placeholder: '{dateItem}'");
             TwoArgs(ui._load[(int)LoadText.Seat], $"load.{Key(LoadText.Seat)}", "the faction", "the seat", errors);
+            TwoArgs(ui._load[(int)LoadText.SeatTeam], $"load.{Key(LoadText.SeatTeam)}", "the seat", "the team", errors); // M6-V16
             string skipped = ui._load[(int)LoadText.Skipped];
             if (skipped.Length > 0 && !IsSizeFormat(skipped))
                 errors.Add($"ui.json: load.{Key(LoadText.Skipped)} must be a format with {{0}} (the count) and no other placeholder: '{skipped}'");
@@ -361,6 +375,9 @@ public sealed class UiText
             if (length.Length > 0 && !IsTextFormat(length))
                 errors.Add($"ui.json: match_over.{Key(MatchOverText.MatchLength)} must be a format with {{0}} (the clock) and no other placeholder: '{length}'");
             TwoArgs(ui._matchOver[(int)MatchOverText.Opening], $"match_over.{Key(MatchOverText.Opening)}", "the seat's faction", "the opening", errors); // M6-V13
+            string teamLabel = ui._matchOver[(int)MatchOverText.Team];
+            if (teamLabel.Length > 0 && !IsSizeFormat(teamLabel))
+                errors.Add($"ui.json: match_over.{Key(MatchOverText.Team)} must be a format with {{0}} (the team number) and no other placeholder: '{teamLabel}'");
             string clock = ui._matchOver[(int)MatchOverText.Clock];
             if (clock.Length > 0 && !IsResolutionFormat(clock))
                 errors.Add($"ui.json: match_over.{Key(MatchOverText.Clock)} must be a format with {{0}} (the minutes) and {{1}} (the seconds) and no other placeholder: '{clock}'");

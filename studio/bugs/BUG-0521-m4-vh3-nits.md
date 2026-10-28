@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S4 |
-| Status | closed (item 1 fixed M5-V1, item 3 fixed M6-VH1, item 2 wontfix: unreachable) |
+| Status | wontfix |
 | Found | 2026-10-10-2334, task M4-VH3 (QA) |
 | System | view: `game/scripts/GroundDisc.cs`, `sim/Rts.Sim/ViewApi/SeenResources.cs`, `game/scripts/CombatViews.cs` |
-| Fixed by | Item 1: 36248fa (M5-V1), `GroundDisc.Place` clamps the hole before comparing; test `AbilityViewTest.Bug0521Row` (a 0.1 m ring placed 5 times: 1 rebuild; 5 before). Items 2 and 3 open. Verified by QA 2026-10-11-0314 Item 2 closed as wontfix in M6-VH4 (2026-10-26-2108) |
+| Fixed by | Item 1: 36248fa (M5-V1), `GroundDisc.Place` clamps the hole before comparing; test `AbilityViewTest.Bug0521Row` (a 0.1 m ring placed 5 times: 1 rebuild; 5 before). Items 2 and 3 open. Verified by QA 2026-10-11-0314 Item 2 closed as wontfix in M6-VH4 (2026-10-26-2108). Item 3: 650d423 (M6-VH1). Status word set to `wontfix` in M6-V16 (BUG-1060 item 2): items 1 and 3 fixed, item 2 wontfix for the reason in "Close (M6-VH4)" below |
 
 None of these is reachable with the shipped data or the current game paths.
 

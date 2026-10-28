@@ -118,6 +118,36 @@ public class ViewApiAllocationTests
         int runs = AllocationProbe.AssertZero(block, _out);
         _out.WriteLine($"Minimap dots (2,000 units) + transform: 0 bytes (runs {runs}), checksum {sum + count}");
     }
+    /// <summary>M6-V16: the right-click's enemy pick and the minimap's enemy dot pick, read with the alliance table (<see cref="EnemyTable"/>), over 2,000 units of four players on two teams.</summary>
+    [Fact]
+    public void EnemyPickers_WithTheAllianceTable_2000Units_AllocateZeroBytes()
+    {
+        var sim = new Simulation(TestSim.Config(Seed: 1, PlayerCount: 4, UnitCapacity: 2000, CommandCapacity: 64) with { Seats = TeamTests.Seats(1, 2, 1, 2) },
+            LocalMovementTests.Flat(64));
+        UnitStore u = sim.World.Units;
+        for (int i = 0; i < 2000; i++)
+            Assert.True(u.TrySpawn(i % 4, CombatScenes.Laborer, TestSim.Data.Units[CombatScenes.Laborer], new Vector2(4f + i % 40 * 3f, 4f + i / 40 * 2.4f), out _));
+        bool[] enemies = UnitPickerTests.EnemiesOf(sim.World, 0);
+        Heightmap map = sim.World.Heightmap;
+        var raster = new MinimapRaster(map, sim.World.NavGrid, new uint[] { 0x3366CC, 0xE08020, 0x2EA35A, 0xB82633 }, 2000);
+        raster.DrawDots(u.Alive, u.Position, u.Owner);
+        int count = 0;
+        Action block = () =>
+        {
+            for (int k = 0; k < 64; k++)
+            {
+                var p = new Vector2(4f + k * 1.9f, 4f + k * 1.7f);
+                count += raster.DrawnEnemyDotAt(p, 0, enemies);
+                count += raster.EnemyDotAt(p, u.Alive, u.Position, u.Owner, 0, enemies);
+                if (UnitPicker.ResolveEnemy(u.Alive, u.Owner, u.Generation, k * 31, 2f, sim.World.Buildings, -1, float.PositiveInfinity, float.PositiveInfinity, 0, enemies, out _, out _)) count++;
+            }
+        };
+        block();
+        int runs = AllocationProbe.AssertZero(block, _out);
+        Assert.True(count > 0);
+        _out.WriteLine($"Enemy pickers with the alliance table (2,000 units, 2v2): 0 bytes (runs {runs}), checksum {count}");
+    }
+
     [Fact]
     public void DebugOverlay_NavRefill_Arrows_Counts_Ring_2000Units_AllocateZeroBytes()
     {

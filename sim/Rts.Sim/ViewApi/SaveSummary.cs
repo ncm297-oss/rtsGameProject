@@ -14,17 +14,25 @@ namespace Rts.Sim.ViewApi;
 /// <see cref="Simulation.TrySave"/>, docs/03 "Save format (M6-S2)"): the format version, the seed, the seats and the tick it
 /// was made at. Read-only and never throws on bad bytes; it checks the shape of the header, not the version, the checksum or
 /// the data hash: <see cref="Simulation.TryLoad"/> does that when the save is loaded, and its <see cref="SaveError"/> is what
-/// the player is told. So a save damaged past its header is listed, then refused on Load.
+/// the player is told. So a save damaged past its header is listed, then refused on Load. M6-V16: from format 3 (M6-S4) the
+/// header ends with one team byte per seat after the tick; they are read into <see cref="Teams"/> and each seat's
+/// <see cref="ReplaySeat.Team"/> (a byte over <see cref="PlayerSeat.MaxTeam"/> is no save header); before format 3 every team is 0.
 /// </summary>
 /// <param name="FormatVersion">The header's format version (any; only <see cref="SaveFormat.CurrentVersion"/> loads).</param>
 /// <param name="Seed">The match's seed.</param>
-/// <param name="Seats">One per player: the faction id (<c>-</c> for none), human or AI, the difficulty.</param>
+/// <param name="Seats">One per player: the faction id (<c>-</c> for none), human or AI, the difficulty, the team (M6-V16).</param>
 /// <param name="MapWidth">The map's side in cells (its width).</param>
 /// <param name="Tick">The tick number the save was made at (50 ms each).</param>
 public sealed record SaveSummary(int FormatVersion, ulong Seed, ImmutableArray<ReplaySeat> Seats, int MapWidth, int Tick)
 {
     /// <summary>Bytes read at most from a file's start: the longest header (16 seats with 256-byte ids) is under 5 KB.</summary>
     public const int MaxHeaderBytes = 8192;
+
+    /// <summary>The first format whose header holds the seats' team bytes (M6-S4: after the tick, one per seat in player order).</summary>
+    public const int FirstTeamVersion = 3;
+
+    /// <summary>M6-V16: each player's team, in player order (0 = no team; 1 to <see cref="PlayerSeat.MaxTeam"/> a named team); all 0 before format <see cref="FirstTeamVersion"/>.</summary>
+    public ImmutableArray<int> Teams { get; init; } = ImmutableArray<int>.Empty;
 
     // MapGenParams fields the header writes (SaveHeader.WriteMap), each four bytes; the width is the first.
     private const int MapFields = 26;
@@ -82,7 +90,21 @@ public sealed record SaveSummary(int FormatVersion, ulong Seed, ImmutableArray<R
         if (!Take(bytes, ref at, 1 + 4 + 4 + 4 + 4, out _) || !Take(bytes, ref at, 4, out int tickAt)) return false;
         int tick = BinaryPrimitives.ReadInt32LittleEndian(bytes[tickAt..]);
         if (tick < 0 || width < 1) return false;
-        summary = new SaveSummary(version, seed, seats.MoveToImmutable(), width, tick);
+        // M6-V16: format 3's team bytes, the header's last field; each seat takes its team.
+        var teams = ImmutableArray.CreateBuilder<int>(players);
+        if (version >= FirstTeamVersion)
+        {
+            if (!Take(bytes, ref at, players, out int teamsAt)) return false;
+            for (int p = 0; p < players; p++)
+            {
+                byte team = bytes[teamsAt + p];
+                if (team > PlayerSeat.MaxTeam) return false;
+                teams.Add(team);
+                seats[p] = seats[p] with { Team = team };
+            }
+        }
+        else for (int p = 0; p < players; p++) teams.Add(0);
+        summary = new SaveSummary(version, seed, seats.MoveToImmutable(), width, tick) { Teams = teams.MoveToImmutable() };
         return true;
     }
 

@@ -32,7 +32,9 @@ namespace Rts.Game;
 /// (slot 2 to <see cref="SlotCount"/>; slot 1 is always the local human; M6-V5), or <c>--ai &lt;slot&gt; human</c> / <c>--ai human</c> (dev /
 /// tests, M6-V14: that slot stays a human seat, also under <c>--skirmish</c>; the save / load scenes' human twin) and <c>--colour &lt;slot&gt; &lt;n&gt;</c> (slot 1 to
 /// <see cref="SlotCount"/> is drawn in player colour n, 1 to <see cref="UiText.ColourCount"/>, of <c>ui.json</c>'s table; without it
-/// slot s takes colour s; M6-V3; a slot on a colour an earlier slot holds keeps its default, or the first free colour, M6-VH1, M6-V5). A slot past
+/// slot s takes colour s; M6-V3; a slot on a colour an earlier slot holds keeps its default, or the first free colour, M6-VH1, M6-V5) and
+/// <c>--team &lt;slot&gt; &lt;n&gt;</c> (slot 1 to <see cref="SlotCount"/> plays on team n, 0 (no team, the default: a side of its own) to
+/// <see cref="MaxTeam"/>; slots on one team are allies; M6-V16). A slot past
 /// the match's players is warned about and unused. Any of these flags
 /// on the command line skips the main menu (<see cref="HasMatchFlag"/>), so every dev and test run starts its match as
 /// before M6-V1. Bad values are warned about and ignored; a token starting with <c>--</c> is never taken as a value (BUG-0041).
@@ -68,7 +70,7 @@ public sealed class LaunchOptions
     {
         "--seed", "--speed", "--screenshot", "--screenshot-after", "--units", "--workers", "--forests", "--mines", "--zoom", "--bench",
         "--vsync", "--no-hud", "--debug-overlay", "--mute", "--no-bases", "--no-combat", "--no-fog", "--map-size", "--skirmish",
-        "--faction", "--ai", "--colour", "--players",
+        "--faction", "--ai", "--colour", "--players", "--team",
     };
 
     /// <summary>Whether <paramref name="args"/> holds any of <see cref="MatchFlags"/>: the boot then starts the match at once instead of showing the main menu (M6-V1).</summary>
@@ -85,10 +87,14 @@ public sealed class LaunchOptions
     /// <summary>Fewest players <c>--players</c> accepts (and the match's default).</summary>
     public const int MinPlayers = 2;
 
+    /// <summary>The highest team <c>--team</c> and the setup's team list offer (M6-V16): teams 1-4, one per slot at most; 0 is no team.</summary>
+    public const int MaxTeam = SlotCount;
+
     private readonly string?[] _factionIds = new string?[SlotCount];
     private readonly int?[] _colours = new int?[SlotCount];
     private readonly AiDifficulty?[] _ai = new AiDifficulty?[SlotCount];
     private readonly bool[] _human = new bool[SlotCount];
+    private readonly int[] _teams = new int[SlotCount];
     private readonly System.Collections.Generic.List<string> _colourWarnings = new();
 
     /// <summary>The dev-log warnings <see cref="Parse"/> gave for colour collisions (one per moved slot of the match), for tests.</summary>
@@ -99,6 +105,9 @@ public sealed class LaunchOptions
 
     /// <summary>The player colour <c>--colour &lt;slot&gt; &lt;n&gt;</c> picked for slot <paramref name="slot"/> (0-based), as a 0-based index into <c>ui.json</c>'s colour table (<see cref="UiText.ColourRgb"/>), or null for the default (slot s: colour s).</summary>
     public int? ColourIndex(int slot) => (uint)slot < (uint)SlotCount ? _colours[slot] : null;
+
+    /// <summary>The team <c>--team &lt;slot&gt; &lt;n&gt;</c> put slot <paramref name="slot"/> (0-based) on (M6-V16): 0 (no team, the default) to <see cref="MaxTeam"/>; 0 out of range.</summary>
+    public int TeamOf(int slot) => (uint)slot < (uint)SlotCount ? _teams[slot] : 0;
 
     /// <summary>Player 1's AI difficulty (<c>--ai</c>; <see cref="DefaultAi"/> under <c>--skirmish</c>), or null when slot 2 is a human seat (every dev run and test before M6-V2).</summary>
     public AiDifficulty? Ai => _ai[1];
@@ -289,6 +298,16 @@ public sealed class LaunchOptions
                     if (n != null) i++;
                     break;
                 }
+                case "--team":
+                {
+                    // M6-V16: two values, the slot then the team (one digit, 0 to MaxTeam: "01" or "+1" are junk); neither a flag (BUG-0041).
+                    string? n = SecondValue(args, i, hasValue);
+                    int slot = Slot(value);
+                    if (slot >= 0 && n is { Length: 1 } && n[0] >= '0' && n[0] <= '0' + MaxTeam) o._teams[slot] = n[0] - '0';
+                    else Warn(flag, n == null ? value : $"{value} {n}");
+                    if (n != null) i++;
+                    break;
+                }
                 case "--skirmish":
                     o.Skirmish = true;
                     continue; // takes no value
@@ -323,8 +342,8 @@ public sealed class LaunchOptions
         for (int s = 1; s < players && o.Skirmish; s++)
             if (!o._human[s]) o._ai[s] ??= DefaultAi;
         for (int s = players; s < SlotCount; s++)
-            if (o._factionIds[s] != null || o._colours[s] != null || o._ai[s] != null)
-                GD.PushWarning($"Ignoring slot {s + 1}'s --faction / --colour / --ai: the match has {players} players (--players).");
+            if (o._factionIds[s] != null || o._colours[s] != null || o._ai[s] != null || o._teams[s] != 0)
+                GD.PushWarning($"Ignoring slot {s + 1}'s --faction / --colour / --ai / --team: the match has {players} players (--players).");
         // Colours are unique per match (docs/02 "Game flow" 2, BUG-0631 item 3), slot by slot: one on a colour an earlier slot
         // holds is warned about and keeps its default (slot s: colour s), or takes the first free colour when an earlier slot
         // holds that too. Slots past the match are moved the same way, unwarned (they are unused).

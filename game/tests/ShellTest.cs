@@ -336,7 +336,8 @@ public partial class ShellTest : Node
         // settings: 22 since M6-V7 (confine_cursor); keys 15 + hud 2 since M6-V8; setup 17 since M6-V5 (add_slot, remove_slot); menu 5 + load 16 since M6-V9 (18 since M6-VH3: playing, unreadable);
         // match_over 27 since M6-V11 (kills, losses and the two in-hand keys out; nine column labels, not_reached and the graph's three in); alert 2 since M6-V12; match_over 28 since M6-V13 (opening)
         // M6-V14: pause 5 (save), load 22 (kind, load, save_tag, replay_tag), save 12; M6-V15: setup 23 (speed, speed_slow / normal / fast, forests, mines)
-        Check(keys.Count == 5 + 23 + 5 + 22 + 28 + 15 + 2 + 22 + 2 + 12, $"{keys.Count} shell keys");
+        // M6-V16: setup 26 (team, team_none, team_item), match_over 29 (team), load 23 (seat_team)
+        Check(keys.Count == 5 + 26 + 5 + 22 + 29 + 15 + 2 + 23 + 2 + 12, $"{keys.Count} shell keys");
         string json = File.ReadAllText(UiText.DefaultPath).Replace("\r\n", "\n");
         foreach ((string section, string key, string text) in keys)
         {
@@ -476,6 +477,22 @@ public partial class ShellTest : Node
         }
         Check(UiText.Parse(json.Replace("\"{0} × {0}\"", "\"{{0}} × {0}\""), new List<string>()) is UiText partial && partial.MapSizeItem(128) == "{0} × 128",
             "a format naming the size once, beside a literal '{0}', was refused");
+
+        // M6-V16: the team formats: setup.team_item and match_over.team name the team number, load.seat_team the seat and the team.
+        foreach ((string section, string key, string[] bads) in new[]
+        {
+            ("setup", "team_item", new[] { "Team", "{1}", "{0", "{{0}}", "{0} {1}" }),
+            ("match_over", "team", new[] { "Team", "{1}", "{0", "{{0}}" }),
+            ("load", "seat_team", new[] { "{0}", "{1}", "{0} {2}", "{0", "{{0}} {{1}}" }),
+        })
+            foreach (string bad in bads)
+            {
+                var root = System.Text.Json.Nodes.JsonNode.Parse(json)!.AsObject();
+                root[section]![key] = bad;
+                var errors = new List<string>();
+                Check(UiText.Parse(root.ToJsonString(), errors) == null && errors.Count == 1 && errors[0].Contains($"{section}.{key}"),
+                    $"{section}.{key} '{bad}': [{string.Join("; ", errors)}]");
+            }
 
         // M6-V6: the resolution item names the width and the height; anything else is one error naming the key.
         Check(_ui.ResolutionItem(1920, 1080).Contains("1920") && _ui.ResolutionItem(1920, 1080).Contains("1080"), $"resolution item '{_ui.ResolutionItem(1920, 1080)}'");

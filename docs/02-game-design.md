@@ -435,10 +435,11 @@ own cues (select, order, refused, building placed or finished, unit or tech read
 2. **Skirmish setup:** map, 2-4 player slots (each: human/AI, faction, difficulty, color, team),
    starting resources (standard / high), game speed. Default: free-for-all. Colours are unique per match: a slot can't
    pick a colour another slot holds. Single-player: slot 1 is always the local human, slots 2-4 are AI seats, each with
-   its own difficulty (built in M6-V5: Add player / Remove player, 2-4 slots, free-for-all; teams not yet on the setup
-   screen). A slot's team is 0 (no team: a side of its own, the free-for-all default) or 1-8; slots on one team are allies:
-   they never attack each other, their friendly fire treats each other's units as their own, and the AI never targets an
-   ally (the sim's half, M6-S4; shared vision is M6-S5). Built so far:
+   its own difficulty (built in M6-V5: Add player / Remove player, 2-4 slots). A slot's team is 0 (no team: a side of its
+   own, the free-for-all default) or 1-8; slots on one team are allies: they never attack each other, their friendly fire
+   treats each other's units as their own, and the AI never targets an ally (the sim's half, M6-S4; shared vision is M6-S5).
+   The setup's **Team** list per slot offers None (the default) and Team 1-4, so a 2v2, a 1v1v2 or a 2v1 is set up from the
+   menu; colours stay per slot, not per team (built in M6-V16; the Load Game list marks each seat's team, "(T1)"). Built so far:
    the map seed and size, the slots, a **Game speed** list (Slow / Normal / Fast, default Normal) and the map generator's
    **Forests** and **Gold mines** counts (defaults 12 / 8; at least one forest and two gold mines per player, so every
    base keeps its start forest and start mines; at most 64 each) (M6-V15). The smallest map (128) fits only about 60 gold

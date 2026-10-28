@@ -15,7 +15,8 @@ namespace Rts.Game;
 /// (<see cref="GameSpeeds"/>, default Normal) and the map generator's forests and gold mines counts (defaults
 /// <see cref="LaunchOptions.DefaultForests"/> / <see cref="LaunchOptions.DefaultMines"/>; floors <see cref="MinForestsFor"/> /
 /// <see cref="MinMinesFor"/> the shown slots, so every base keeps its start forest and mines; cap
-/// <see cref="MapGenParams.MaxResourceGroups"/>). Text from <c>ui.json</c>
+/// <see cref="MapGenParams.MaxResourceGroups"/>). M6-V16: a team list per slot (None, Team 1 to <see cref="LaunchOptions.MaxTeam"/>;
+/// default None, the free-for-all; slots on one team are allies), passed as <c>--team</c>. Text from <c>ui.json</c>
 /// <c>setup</c> (the colours' names and swatches from its colour table), faction names from the data's <c>displayName</c>.
 /// </summary>
 /// <remarks>
@@ -61,6 +62,9 @@ public partial class SkirmishSetup : CanvasLayer
     /// </summary>
     public static int MinMinesFor(int players, int startMines) => Math.Clamp(players * Math.Max(startMines, 0), 0, MapGenParams.MaxResourceGroups);
 
+    // The team lists are narrower than the others, so five columns fit the 1152 px window (M6-V16).
+    private const float TeamListWidth = 160f;
+
     private readonly RandomNumberGenerator _rng = new();
     private int _startMines;
     private string[] _factionKeys = Array.Empty<string>();
@@ -92,6 +96,12 @@ public partial class SkirmishSetup : CanvasLayer
 
     /// <summary>Slot 1's (the first AI slot's) difficulty list.</summary>
     public OptionButton DifficultyOption => DifficultyOptions[1]!;
+
+    /// <summary>Each slot's team list (M6-V16): item 0 None (no team), item n Team n, up to <see cref="LaunchOptions.MaxTeam"/>; default None.</summary>
+    public OptionButton[] TeamOptions { get; } = new OptionButton[MaxSlots];
+
+    /// <summary>The team picked for <paramref name="slot"/> (M6-V16): 0 for None (no team), else 1 to <see cref="LaunchOptions.MaxTeam"/>.</summary>
+    public int TeamPick(int slot) => Math.Clamp(TeamOptions[slot].Selected, 0, LaunchOptions.MaxTeam);
 
     /// <summary>Each slot's name label ("You", "AI").</summary>
     public Label[] SlotLabels { get; } = new Label[MaxSlots];
@@ -231,7 +241,8 @@ public partial class SkirmishSetup : CanvasLayer
     /// <c>--ai &lt;slot&gt; &lt;difficulty&gt;</c>); null while the seed field holds no number. <c>--units 0</c>: the menu's match
     /// opens with a Town Hall and the starting workers a side, no dev army (M6-V3, BUG-0604). A slot with no faction (no
     /// factions loaded) passes no <c>--faction</c>. M6-V15: <c>--speed &lt;x&gt; --forests &lt;n&gt; --mines &lt;n&gt;</c> after
-    /// <c>--players</c> (the speed list's and the two counts' picks).
+    /// <c>--players</c> (the speed list's and the two counts' picks). M6-V16: <c>--team &lt;slot&gt; &lt;n&gt;</c> after the slot's
+    /// colour and faction, only for a slot on a team (None passes nothing: team 0 is the default).
     /// </summary>
     public string[]? MatchArgs()
     {
@@ -253,6 +264,12 @@ public partial class SkirmishSetup : CanvasLayer
             args.Add("--colour");
             args.Add(slotArg);
             args.Add((ColourPick(slot) + 1).ToString(CultureInfo.InvariantCulture));
+            if (TeamPick(slot) > 0)
+            {
+                args.Add("--team");
+                args.Add(slotArg);
+                args.Add(TeamPick(slot).ToString(CultureInfo.InvariantCulture));
+            }
             int f = FactionPick(slot);
             if (f < 0 || f >= _factionKeys.Length) continue;
             args.Add("--faction");
@@ -276,7 +293,7 @@ public partial class SkirmishSetup : CanvasLayer
         VBoxContainer column = ShellUi.CentredColumn(this, 20);
         column.AddChild(ShellUi.Heading(ui.Setup(SetupText.Title)));
 
-        var grid = new GridContainer { Name = "Grid", Columns = 4 };
+        var grid = new GridContainer { Name = "Grid", Columns = 5 }; // M6-V16: the slots' team column is the fifth
         grid.AddThemeConstantOverride("h_separation", 16);
         grid.AddThemeConstantOverride("v_separation", 12);
         column.AddChild(grid);
@@ -290,6 +307,7 @@ public partial class SkirmishSetup : CanvasLayer
         RandomButton.Pressed += RandomSeed;
         grid.AddChild(RandomButton);
         grid.AddChild(new Control());
+        grid.AddChild(new Control());
 
         grid.AddChild(ShellUi.Text(ui.Setup(SetupText.MapSize)));
         MapSizeOption = List("MapSize");
@@ -302,6 +320,7 @@ public partial class SkirmishSetup : CanvasLayer
         foreach (SetupText key in SpeedKeys) SpeedOption.AddItem(ui.Setup(key));
         SpeedOption.Select(DefaultSpeedIndex);
         grid.AddChild(SpeedOption);
+        grid.AddChild(new Control());
 
         _startMines = data.Rules.StartMineCount;
         grid.AddChild(ShellUi.Text(ui.Setup(SetupText.Forests)));
@@ -310,12 +329,14 @@ public partial class SkirmishSetup : CanvasLayer
         grid.AddChild(ShellUi.Text(ui.Setup(SetupText.Mines)));
         MinesSpin = Count("Mines", LaunchOptions.DefaultMines);
         grid.AddChild(MinesSpin);
+        grid.AddChild(new Control());
 
         // The slots: a heading row, then one row per slot (all built; the ones past SlotCount hidden, which the grid skips).
         grid.AddChild(new Control());
         grid.AddChild(ShellUi.Text(ui.Setup(SetupText.Faction), 16));
         grid.AddChild(ShellUi.Text(ui.Setup(SetupText.Colour), 16));
         grid.AddChild(ShellUi.Text(ui.Setup(SetupText.Difficulty), 16));
+        grid.AddChild(ShellUi.Text(ui.Setup(SetupText.Team), 16));
         _factionKeys = new string[data.Factions.Length];
         for (int f = 0; f < _factionKeys.Length; f++) _factionKeys[f] = data.Factions[f].Key;
         for (int slot = 0; slot < MaxSlots; slot++)
@@ -341,7 +362,14 @@ public partial class SkirmishSetup : CanvasLayer
                 DifficultyOptions[slot] = list;
                 difficulty = list;
             }
-            _rows[slot] = new Control[] { SlotLabels[slot], FactionOptions[slot], ColourOptions[slot], difficulty };
+            // M6-V16: the team list, None (team 0, the free-for-all default) then Team 1 .. MaxTeam.
+            OptionButton team = List($"Team{slot}");
+            team.CustomMinimumSize = new Vector2(TeamListWidth, 40f);
+            team.AddItem(ui.Setup(SetupText.TeamNone));
+            for (int t = 1; t <= LaunchOptions.MaxTeam; t++) team.AddItem(ui.TeamItem(t));
+            team.Select(0);
+            TeamOptions[slot] = team;
+            _rows[slot] = new Control[] { SlotLabels[slot], FactionOptions[slot], ColourOptions[slot], difficulty, team };
             foreach (Control cell in _rows[slot])
             {
                 cell.Visible = slot < SlotCount;

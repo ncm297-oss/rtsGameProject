@@ -47,4 +47,6 @@ public enum LoadText
     SaveTag,
     /// <summary>The kind cell of a replay row (M6-V14).</summary>
     ReplayTag,
+    /// <summary>M6-V16: a seat on a team in the players cell, a format naming <c>{0}</c> (the seat's <see cref="Seat"/> text) and <c>{1}</c> (the team number).</summary>
+    SeatTeam,
 }

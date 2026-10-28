@@ -16,13 +16,16 @@ namespace Rts.Sim.Tests.QA;
 /// </summary>
 public class SaveSummaryQaTests
 {
-    public static IEnumerable<object[]> Names() => SaveScenes.Names();
+    // M6-V16: the save scenes, plus a format-3 row with teams (a 2v2 human and AI, teams 1, 2, 1, 2).
+    private static readonly SaveScene s_twoVersusTwo = AiSaveScenes.TwoVersusTwo(1);
+
+    public static IEnumerable<object[]> Names() => SaveScenes.Names().Append(new object[] { s_twoVersusTwo.Name });
 
     [Theory]
     [MemberData(nameof(Names))]
     public void TheSummary_MatchesTheSavedConfig_AtSeveralTicks_AndReadingItChangesNothing(string scene)
     {
-        SaveScene s = SaveScenes.Named(scene);
+        SaveScene s = scene == s_twoVersusTwo.Name ? s_twoVersusTwo : SaveScenes.Named(scene);
         Simulation sim = s.Build();
         var commands = new List<Command>();
         int[] at = { 0, 1, 137 };
@@ -54,6 +57,8 @@ public class SaveSummaryQaTests
                     Assert.Equal(id, summary.Seats[p].Faction);
                     Assert.Equal(seat.Controller, summary.Seats[p].Controller);
                     Assert.Equal(seat.Difficulty, summary.Seats[p].Difficulty);
+                    Assert.Equal(seat.Team, summary.Seats[p].Team); // M6-V16: format 3's team byte
+                    Assert.Equal(seat.Team, summary.Teams[p]);
                 }
             }
             // Read-only: the sim is where it was, and saves the same bytes again.
@@ -88,8 +93,8 @@ public class SaveSummaryQaTests
                 if (!SaveSummary.TryParse(bad, out SaveSummary? s)) continue;
                 Assert.True(s!.Seats.Length is >= 1 and <= 16 && s.Tick >= 0 && s.MapWidth >= 1, $"offset {i} mask {mask:x2}: {s}");
                 foreach (var seat in s.Seats)
-                    Assert.True(seat.Faction.Length > 0 && (byte)seat.Controller <= (byte)SeatController.Ai && (byte)seat.Difficulty <= (byte)AiDifficulty.Hard,
-                        $"offset {i} mask {mask:x2}: seat {seat}");
+                    Assert.True(seat.Faction.Length > 0 && (byte)seat.Controller <= (byte)SeatController.Ai && (byte)seat.Difficulty <= (byte)AiDifficulty.Hard
+                        && seat.Team is >= 0 and <= PlayerSeat.MaxTeam, $"offset {i} mask {mask:x2}: seat {seat}");
             }
         }
     }
@@ -144,14 +149,15 @@ public class SaveSummaryQaTests
         Assert.Null(s);
     }
 
-    // The offset just past the header's tick field: the first byte the summary never reads.
+    // The offset just past the header's last field: the first byte the summary never reads. M6-V16: since format 3 (M6-S4) that
+    // is the team bytes after the tick, one per seat, which the summary now reads.
     private static int HeaderEnd(byte[] bytes)
     {
         SaveBytes.Offsets o = SaveBytes.HeaderOffsets(bytes);
         int players = BinaryPrimitives.ReadInt32LittleEndian(bytes.AsSpan(o.Players));
         int at = o.Players + 4;
         for (int p = 0; p < players; p++) at += 4 + BinaryPrimitives.ReadInt32LittleEndian(bytes.AsSpan(at)) + 2;
-        return at + 4 * 6 + 4 * 26 + 1 + 4 + 4 + 4 + 4 + 4;
+        return at + 4 * 6 + 4 * 26 + 1 + 4 + 4 + 4 + 4 + 4 + players;
     }
 
     private static byte[] With(byte[] bytes, int at, int value)

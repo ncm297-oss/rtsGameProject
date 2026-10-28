@@ -73,6 +73,10 @@ public partial class SelectionController : Node
     // Per unit type: in the worker slot (gathers on a right click on a node).
     private bool[] _isWorkerType = Array.Empty<bool>();
 
+    // M6-V16: per player, whether it is the local player's enemy (World.IsEnemy), built once for the world it was read from.
+    private bool[] _enemies = Array.Empty<bool>();
+    private World? _enemiesOf;
+
     // Per-slot projection scratch, filled on each click or box release.
     private System.Numerics.Vector2[] _screen = Array.Empty<System.Numerics.Vector2>();
     private float[] _radiusPx = Array.Empty<float>();
@@ -903,10 +907,26 @@ public partial class SelectionController : Node
     /// <summary>
     /// The enemy under screen point <paramref name="screen"/> (M4-V2): what the camera ray meets first among unit bodies
     /// (<see cref="UnitPicker.PickRay"/>), building boxes (<see cref="BuildingPicker.PickRay(BuildingStore, System.Collections.Immutable.ImmutableArray{BuildingDef}, Rts.Sim.Map.NavGrid, Rts.Sim.Map.Heightmap, int, System.Numerics.Vector3, System.Numerics.Vector3, float, float, out float)"/>)
-    /// and resource props, when it is another player's live unit or building: its handle in <paramref name="target"/>,
-    /// <paramref name="isBuilding"/> for a building. False when the first thing hit is own, a prop, or nothing (the click
-    /// then means what it meant before). Allocation-free.
+    /// and resource props, when it is an enemy's live unit or building (M6-V16: <see cref="Enemies"/>, so not an ally's): its
+    /// handle in <paramref name="target"/>, <paramref name="isBuilding"/> for a building. False when the first thing hit is own,
+    /// an ally's, a prop, or nothing (the click then means what it meant before: a Move). Allocation-free.
     /// </summary>
+    /// <summary>
+    /// M6-V16: per player, whether it is the local player's enemy (<c>World.IsEnemy</c>; read through <see cref="EnemyTable"/>), for the
+    /// enemy pickers (<see cref="EnemyAt"/>, the minimap's right-click). Teams are fixed for a match: built on the first read of
+    /// <paramref name="world"/>, then reused (no allocation per click).
+    /// </summary>
+    public ReadOnlySpan<bool> Enemies(World world)
+    {
+        if (!ReferenceEquals(_enemiesOf, world))
+        {
+            _enemies = new bool[world.Config.PlayerCount];
+            for (int p = 0; p < _enemies.Length; p++) _enemies[p] = world.IsEnemy(LocalPlayer, p);
+            _enemiesOf = world;
+        }
+        return _enemies;
+    }
+
     public bool EnemyAt(Vector2 screen, out EntityHandle target, out bool isBuilding)
     {
         target = default;
@@ -924,15 +944,18 @@ public partial class SelectionController : Node
             so, sd, BuildingViews.BoxHeight, BuildingViews.SiteMinHeight, fog != null ? fog.BuildingShown : ReadOnlySpan<bool>.Empty, out float buildingT);
         ResourceStore r = world.Resources;
         ResourcePicker.PickRay(world.NavGrid, world.Data.Resources, r.Alive, r.TypeId, r.Cell, world.Heightmap, so, sd, PropsView.Shape, out float nodeT);
-        // A ghost (M4-V5) met before anything drawn is an Attack on the remembered building; the sim accepts the handle.
+        // A ghost (M4-V5) met before anything drawn is an Attack on the remembered building; the sim accepts the handle. M6-V16:
+        // an ally's remembered building in front is no target (the sim would drop the Attack), as an ally's drawn one.
+        ReadOnlySpan<bool> enemies = Enemies(world);
         int ghost = PickGhost(world, fog, so, sd, out float ghostT);
         if (ghost >= 0 && ghostT < unitT && ghostT < buildingT && ghostT <= nodeT)
         {
-            target = fog!.GhostHandle(ghost);
+            if (!EnemyTable.IsEnemyOwner(fog!.Ghosts[ghost].Owner, LocalPlayer, enemies)) return false;
+            target = fog.GhostHandle(ghost);
             isBuilding = true;
             return true;
         }
-        return UnitPicker.ResolveEnemy(units, u.Owner, u.Generation, unit, unitT, world.Buildings, building, buildingT, nodeT, LocalPlayer, out target, out isBuilding);
+        return UnitPicker.ResolveEnemy(units, u.Owner, u.Generation, unit, unitT, world.Buildings, building, buildingT, nodeT, LocalPlayer, enemies, out target, out isBuilding);
     }
 
     // The ghost (FogView.GhostShown) whose box the ray meets first, or -1 (no fog, or none).

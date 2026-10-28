@@ -100,6 +100,9 @@ public partial class SimRunner : Node
     /// <summary>Per player 0 to 3, its AI difficulty (the setup's AI slots, <c>--ai</c>; M6-V5), or null for a human seat; set before <see cref="Start"/>. Player 0 is the local human whatever this holds.</summary>
     public AiDifficulty?[] SlotAi { get; } = new AiDifficulty?[LaunchOptions.SlotCount];
 
+    /// <summary>Per player 0 to 3, its team (the setup's Team column, <c>--team</c>; M6-V16): 0 for no team (the default, free-for-all), 1 and up a named team whose seats are allies; set before <see cref="Start"/>.</summary>
+    public int[] SlotTeams { get; } = new int[LaunchOptions.SlotCount];
+
     /// <summary>Player 1's AI difficulty (<see cref="SlotAi"/>[1]; the setup's AI slot, <c>--ai</c>; M6-V2), or null for a human seat; set before <see cref="Start"/>.</summary>
     public AiDifficulty? Player1Ai
     {
@@ -147,7 +150,7 @@ public partial class SimRunner : Node
     /// <summary>Creates the simulation from loaded data on a <see cref="MapSize"/> map (the generator's other defaults) with <see cref="Forests"/> and <see cref="GoldMines"/> and explicit <see cref="Seats"/>; ticking starts on the next frame.</summary>
     public void Start(GameData data)
     {
-        Seats = SeatsFor(PlayerCount, data.Factions.Length, SlotFactions, SlotAi);
+        Seats = SeatsFor(PlayerCount, data.Factions.Length, SlotFactions, SlotAi, SlotTeams);
         var config = new SimConfig(unchecked((ulong)Seed), PlayerCount, UnitCapacity, CommandCapacity)
         {
             Data = data,
@@ -191,8 +194,8 @@ public partial class SimRunner : Node
     /// Starts playing <paramref name="replay"/> (M6-V9). Refuses before any sim exists, returning the code, when it breaks
     /// <see cref="Replay.Validate"/>, was recorded with other data (<see cref="ReplayError.DataMismatch"/>: <c>ContentHash</c>
     /// differs) or names a faction the data lacks (<see cref="ReplayError.InvalidHeader"/>). Otherwise builds the sim from the
-    /// header (seed, players, capacities, map, combat) with every seat human on the header's faction (no AI runs: its commands
-    /// are in the log), attaches a fresh <see cref="Recorder"/>, queues the commands stamped for tick 1 and returns
+    /// header (seed, players, capacities, map, combat) with every seat human on the header's faction and team (no AI runs: its
+    /// commands are in the log; the team since M6-V16, format 7), attaches a fresh <see cref="Recorder"/>, queues the commands stamped for tick 1 and returns
     /// <see cref="ReplayError.None"/>; ticking starts on the next frame.
     /// </summary>
     public ReplayError StartPlayback(GameData data, Replay replay)
@@ -211,8 +214,9 @@ public partial class SimRunner : Node
             {
                 int faction = seat.Faction == "-" ? -1 : data.FindFaction(seat.Faction);
                 if (faction < 0 && (seat.Faction != "-" || data.Factions.Length > 0)) return ReplayError.InvalidHeader;
-                human.Add(new PlayerSeat(faction, SeatController.Human, seat.Difficulty));
-                asPlayed.Add(new PlayerSeat(faction, seat.Controller, seat.Difficulty));
+                // M6-V16: the header's team (format 7; 0 before it) in both lists: the alliances decide targets and the result.
+                human.Add(new PlayerSeat(faction, SeatController.Human, seat.Difficulty, seat.Team));
+                asPlayed.Add(new PlayerSeat(faction, seat.Controller, seat.Difficulty, seat.Team));
             }
             seats = human.MoveToImmutable();
             played = asPlayed.MoveToImmutable();
@@ -312,16 +316,18 @@ public partial class SimRunner : Node
     /// <summary>
     /// One seat per player (M6-V5): player p plays <paramref name="slotFactions"/>[p] when it is set (not -1), else faction
     /// <c>p mod factions</c>; player p &gt; 0 is an AI of <paramref name="slotAi"/>[p] when that is set; every other seat (player 0
-    /// always, the local human) is human, difficulty Normal. With no factions every seat's faction is -1.
+    /// always, the local human) is human, difficulty Normal. With no factions every seat's faction is -1. M6-V16: player p is on
+    /// team <paramref name="slotTeams"/>[p] when given (0, no team, past its end or without it).
     /// </summary>
-    public static ImmutableArray<PlayerSeat> SeatsFor(int playerCount, int factionCount, int[] slotFactions, AiDifficulty?[] slotAi)
+    public static ImmutableArray<PlayerSeat> SeatsFor(int playerCount, int factionCount, int[] slotFactions, AiDifficulty?[] slotAi, int[]? slotTeams = null)
     {
         var seats = ImmutableArray.CreateBuilder<PlayerSeat>(Math.Max(0, playerCount));
         for (int p = 0; p < playerCount; p++)
         {
             int faction = factionCount == 0 ? -1 : p < slotFactions.Length && slotFactions[p] >= 0 ? slotFactions[p] : p % factionCount;
             AiDifficulty? ai = p > 0 && p < slotAi.Length ? slotAi[p] : null;
-            seats.Add(new PlayerSeat(faction, ai != null ? SeatController.Ai : SeatController.Human, ai ?? AiDifficulty.Normal));
+            int team = slotTeams != null && p < slotTeams.Length ? slotTeams[p] : 0;
+            seats.Add(new PlayerSeat(faction, ai != null ? SeatController.Ai : SeatController.Human, ai ?? AiDifficulty.Normal, team));
         }
         return seats.MoveToImmutable();
     }

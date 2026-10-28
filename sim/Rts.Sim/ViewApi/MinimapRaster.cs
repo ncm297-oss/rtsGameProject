@@ -213,7 +213,15 @@ public sealed class MinimapRaster
     /// <param name="shown">Per unit slot, whether its dot is drawn (<see cref="FogView.UnitShown"/>).</param>
     /// <param name="positions">The unit store's <c>Position</c>.</param>
     /// <param name="owners">The unit store's <c>Owner</c>.</param>
-    public int EnemyDotAt(Vector2 point, ReadOnlySpan<bool> shown, ReadOnlySpan<Vector2> positions, ReadOnlySpan<int> owners, int localPlayer)
+    public int EnemyDotAt(Vector2 point, ReadOnlySpan<bool> shown, ReadOnlySpan<Vector2> positions, ReadOnlySpan<int> owners, int localPlayer) =>
+        EnemyDotAt(point, shown, positions, owners, localPlayer, ReadOnlySpan<bool>.Empty);
+
+    /// <summary>
+    /// As <see cref="EnemyDotAt(Vector2, ReadOnlySpan{bool}, ReadOnlySpan{Vector2}, ReadOnlySpan{int}, int)"/>, with the alliances
+    /// (M6-V16): only a unit whose owner <paramref name="enemies"/> marks (<see cref="EnemyTable"/>) is an enemy dot, so an
+    /// ally's dot is passed over like an own one; an empty table is the free-for-all rule. Allocates nothing.
+    /// </summary>
+    public int EnemyDotAt(Vector2 point, ReadOnlySpan<bool> shown, ReadOnlySpan<Vector2> positions, ReadOnlySpan<int> owners, int localPlayer, ReadOnlySpan<bool> enemies)
     {
         if (!TryPixelOf(point, out int px, out int py)) return -1;
         int n = Math.Min(shown.Length, Math.Min(positions.Length, owners.Length));
@@ -221,7 +229,7 @@ public sealed class MinimapRaster
         float bestD = float.PositiveInfinity;
         for (int s = 0; s < n; s++)
         {
-            if (!shown[s] || owners[s] == localPlayer || (uint)owners[s] >= (uint)_ownerRgb.Length) continue;
+            if (!shown[s] || !EnemyTable.IsEnemyOwner(owners[s], localPlayer, enemies) || (uint)owners[s] >= (uint)_ownerRgb.Length) continue;
             Vector2 p = positions[s];
             if (!float.IsFinite(p.X) || !float.IsFinite(p.Y)) continue;
             int c = CentreOf(p);
@@ -250,14 +258,21 @@ public sealed class MinimapRaster
     /// click acts on what the minimap shows rather than on units and positions that moved since. Returns the dot's index
     /// (<see cref="DrawnSlot"/> gives its unit), or -1. Allocates nothing.
     /// </summary>
-    public int DrawnEnemyDotAt(Vector2 point, int localPlayer)
+    public int DrawnEnemyDotAt(Vector2 point, int localPlayer) => DrawnEnemyDotAt(point, localPlayer, ReadOnlySpan<bool>.Empty);
+
+    /// <summary>
+    /// As <see cref="DrawnEnemyDotAt(Vector2, int)"/>, with the alliances (M6-V16, BUG-1044 item 2's view follow-up): only a dot
+    /// whose owner <paramref name="enemies"/> marks (<see cref="EnemyTable"/>) is an enemy dot, so a right-click on an ally's
+    /// dot is a Move; an empty table is the free-for-all rule. Allocates nothing.
+    /// </summary>
+    public int DrawnEnemyDotAt(Vector2 point, int localPlayer, ReadOnlySpan<bool> enemies)
     {
         if (!TryPixelOf(point, out int px, out int py)) return -1;
         int best = -1;
         float bestD = float.PositiveInfinity;
         for (int k = 0; k < _drawn; k++)
         {
-            if (_centreOwner[k] == localPlayer) continue;
+            if (!EnemyTable.IsEnemyOwner(_centreOwner[k], localPlayer, enemies)) continue;
             int c = _centre[k];
             int cy = c / Width, cx = c - cy * Width;
             if (px < cx - 1 || px > cx + 2 || py < cy - 1 || py > cy + 2) continue;

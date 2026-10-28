@@ -6618,7 +6618,82 @@ View hardening: the two setup / Load Game S3s from M6-V15 and the view's older n
   pointer on disk, and as many unnamed `f.is_null()` md5 lines) and prints a `WARN` with the count. A normal clone has no
   pointer, so nothing is skipped there. The looktest art's pointers still fail a no-LFS clone's first `--import`, once
   (their importers record the failure); from the second run smoke passes. The clips keep Godot's own importer (the 2344
-  call); a no-LFS clone stays unsupported for `LookTest` and `SfxTest`'s clip rows.
+  call); a no-LFS clone stays unsupported for `LookTest` and `SfxTest`'s clip rows. (M6-V16, BUG-1060 item 3: that stays;
+  "from the second run" is enough.)
+
+### Implementation (M6-V16)
+
+The view's half of teams (docs/02 "Game flow" 2, 4 and 5; the sim's half is "Implementation (M6-S4)"): the setup's Team
+column, the banner per side, the stats grouped by team, and every view reader of the sim's team field. No sim change outside
+`ViewApi/` and no format bump.
+
+```
+game/scripts/SkirmishSetup.cs      TeamOptions / TeamPick (None, Team 1-4), a fifth grid column; MatchArgs: --team <slot> <n>
+game/scripts/LaunchOptions.cs      --team <slot> <n> (0-4, MaxTeam = SlotCount), TeamOf(slot); in MatchFlags
+game/scripts/SimRunner.cs          SlotTeams; SeatsFor(..., slotTeams); StartPlayback builds both seat lists with seat.Team
+game/scripts/Match.cs              PickSeats copies the teams; ResultFor: the banner per side (AllyStands)
+game/scripts/MatchStats.cs         RowOrder, DisplayOrder, TeamLabels: rows grouped by team under a label row
+game/scripts/ReplayStore.cs        TryReadHeader: five-token seat lines in format 7 (team 0-8), four before it
+game/scripts/LoadGameScreen.cs     SeatsText: load.seat_team around a seat on a team, "(T1)"
+game/scripts/SelectionController.cs, Minimap.cs   Enemies(world): the alliance table for the enemy pickers
+sim/Rts.Sim/ViewApi/EnemyTable.cs  IsEnemyOwner(owner, viewer, table): the pickers' read of the view's alliance table
+sim/Rts.Sim/ViewApi/UnitPicker.cs, MinimapRaster.cs   ResolveEnemy / EnemyDotAt / DrawnEnemyDotAt overloads taking the table
+sim/Rts.Sim/ViewApi/SaveSummary.cs Teams (and each seat's Team): format 3's team bytes after the tick
+ui.json                            setup.team, team_none, team_item; match_over.team; load.seat_team
+```
+
+- **Setup.** Each slot row gets a fifth cell, a Team list 160 px wide (the other lists are 240, so five columns fit the
+  1152 px window): item 0 `setup.team_none` ("None", team 0), items 1-4 `setup.team_item` ("Team {0}"). Default None, so a
+  match set up as before is a free-for-all. `MatchArgs` adds `--team <slot> <n>` after the slot's `--colour` only for a slot
+  on a team. The setup offers teams 1-4 (`LaunchOptions.MaxTeam`, one per slot at most); the sim takes 0-8. Nothing stops
+  every slot picking one team: that match never ends (the sim's rule needs two sides that built), as in the sim.
+- **`--team <slot> <n>`.** Two values like `--colour`: slot 1-4, team one digit 0-4 ("01", "+1", "5" are junk, warned and
+  ignored; a flag is never taken as a value, BUG-0041); the last good value for a slot wins; a slot past `--players` is
+  warned about with the other per-slot flags and unused. `Match.PickSeats` copies `LaunchOptions.TeamOf` into
+  `SimRunner.SlotTeams`, and `SeatsFor` builds each `PlayerSeat(..., Team)`.
+- **The banner per side** (docs/02 "Game flow" 4, Producer default 2026-10-27). `Match.ResultFor(w, local)`: Draw when the
+  match is over and nobody stands (unchanged); Defeat when the local player is defeated and no ally of it (`AreAllied`, another
+  player) that ever built still stands; Victory when the match is over otherwise (its side won, even if the local player fell
+  earlier); else None. In a free-for-all there is no ally, so the rule is the old one (`FreeForAllTest` unchanged). While the
+  local player is out and an ally fights on there is no banner and no outcome yet; the match runs on (the local player has
+  nothing left to order) and the banner comes when the match ends. Defeat before the match is over still offers Continue
+  watching (a 1v1v2 whose side is out while the others fight).
+- **Stats grouped by team.** `MatchStats.RowOrder(world)`: the players of team 1, then team 2 ... (player order inside a
+  team), then the players with no team. Before each team's first row a label row (`match_over.team`, "Team 1", in the
+  heading colour, the other cells empty). With no team in the match the order is the player order and there is no label: the
+  free-for-all screen is unchanged. The row accessors (`Cell`, `SeatName`, `FactionName`, `Swatch`, `OpeningText`) stay
+  indexed by player; `DisplayOrder` and `TeamLabels` say what the grid shows. The opening lines stay in seat order.
+- **Load Game.** `ReplayStore.TryReadHeader` takes five tokens on a format-7 seat line (the team a canonical integer 0-8, as
+  `Replay.Validate` holds) and four before format 7 (team 0); any other count is an unreadable header. `SaveSummary` reads
+  the team bytes after the tick when the header's version is 3 or more (a byte over 8 is no header; before 3, every team 0)
+  into `Teams` and each seat's `ReplaySeat.Team`, so `SaveEntry` and `ReplayEntry` carry the teams the same way. The players
+  cell shows a seat on a team as `load.seat_team` ("{0} (T{1})": the seat text and the team, "Malazan Empire (You) (T1)");
+  a seat with no team (every seat of a free-for-all and of a format-6 replay) has no mark.
+- **Playback.** `SimRunner.StartPlayback` builds the playback seats (all human) and the played seats with the header's team,
+  so a watched 2v2 has its alliances and plays to every checkpoint; a format-6 replay plays with every team 0, as before.
+- **The enemy pickers** (BUG-1044 item 2's view follow-up). `SelectionController.Enemies(world)` builds a `bool[players]` of
+  `World.IsEnemy(local, p)` once per world (teams are fixed for a match; ViewApi code may not name `World`, QA's source scan)
+  and passes it as a span, read through `ViewApi/EnemyTable.IsEnemyOwner`, so the pickers stay delegate- and allocation-free. `UnitPicker.ResolveEnemy`,
+  `MinimapRaster.EnemyDotAt` and `DrawnEnemyDotAt` have overloads taking it: an ally's unit, building or dot is no target,
+  as an own one, so the right-click falls through to a Move (and A + click to an Attack-move on the ground); an owner past
+  the table is no target; an empty table is the old rule (every other player). A remembered building (ghost) of an ally in
+  front of the cursor is no target either. An ability aimed at an ally's unit aims at the ground behind it, as at an own unit.
+  The old overloads are kept (free-for-all callers, QA suites).
+- **Not in this slice:** team colours (colours stay per slot), starting resources, the fog's shared vision (M6-S5), any
+  format change.
+- **Tests.** `game/tests/TeamsTest.tscn`: the setup's four Team lists (items, default None, no `--team` by default, layout),
+  slots 1 + 2 / 3 + 4 round-tripping through `MatchArgs` and `Parse` and Start giving `TeamOf` 1, 1, 2, 2; `--team 1 1 --team
+  2 1`; junk `--team` values; `SeatsFor` with teams; the 2v2 banners (teams 1, 2, 1, 2: the local player razed by an
+  executioner seat that never builds, no banner while its ally stands, then Victory when the ally razes the enemy; teams 1, 1,
+  2, 2: Defeat once both team-1 halls fall), each with the grouped stats (labels, rows, counters, graph, fits 1152 x 648);
+  `RowOrder` of a 1v1v2. `game/tests/TeamFilesTest.tscn`: the two fixtures (`game/tests/fixtures/teams`, format 6 and 7,
+  header-valid and sealed) read by `TryReadHeader` and the sim's reader alike, hostile seat lines refused, teams 0 and 8 read;
+  a 2v2 saved at tick 300 and recorded to 600 (format 7), its Load Game rows with "(T1)" / "(T2)" beside the fixtures, Watch
+  to all 6 checkpoints with the teams, Load resuming with `TeamOf` 1, 1, 2, 2. `FreeForAllTest`: no team label, player order.
+  xUnit: `ViewApi/UnitPickerTests.ResolveEnemy_WithTheAlliances_*`, `ViewApi/MinimapRasterTests.AnAllysDot_IsNoEnemyDot_*`,
+  `ViewApiAllocationTests.EnemyPickers_WithTheAllianceTable_2000Units_AllocateZeroBytes`, `ViewApi/SaveSummaryTests` (a
+  format-3 2v2, a free-for-all, a pre-3 header, team bytes 0 / 8 / 9 / 255), `QA/SaveSummaryQaTests` with a 2v2 row (its
+  header end now includes the team bytes).
 
 ## AI architecture
 
@@ -8458,8 +8533,8 @@ site means the very same player: ownership, queues, groupmates).
 | `Ai/AbilityManager.cs` | `SeeEnemies`, `NearestEnemyBuilding`, friendly-fire avoidance | enemies / friends | allied-as-own |
 | `Ai/BuildOrderExecutor.cs` | `HallNear` (an expansion keeps clear of every other hall) | occupied ground | allied-as-other |
 | `Ai/ScoutManager.cs`, `Ai/PlayerView.cs` (`IsOwnUnit`, `IsOwnBuilding`, cargo, casts) | the scout, own-only answers | ownership | untouched |
-| `ViewApi/UnitPicker.cs` | `ResolveEnemy` (`unitOwner[unit] == localPlayer`, `buildings.Owner[building] == localPlayer`: the right-click attack pick) | enemy | allied-as-other, not changed (view track; BUG-1044): a right-click on an ally resolves as an Attack, which `MayAttack` drops, so the click does nothing; view follow-up: ask `World.IsEnemy` |
-| `ViewApi/MinimapRaster.cs` | `DrawnEnemyDotAt` (`_centreOwner[k] == localPlayer`) | enemy | allied-as-other, not changed (view track; BUG-1044); view follow-up with the team colours |
+| `ViewApi/UnitPicker.cs` | `ResolveEnemy` (`unitOwner[unit] == localPlayer`, `buildings.Owner[building] == localPlayer`: the right-click attack pick) | enemy | allied-as-own since M6-V16 (the overload taking `ViewApi/EnemyTable`, `World.IsEnemy`): a right-click on an ally is a Move; see "Implementation (M6-V16)" |
+| `ViewApi/MinimapRaster.cs` | `DrawnEnemyDotAt` (`_centreOwner[k] == localPlayer`) | enemy | allied-as-own since M6-V16 (the overload taking `ViewApi/EnemyTable`); dot colours stay per slot |
 | `ViewApi/*` (the rest) | the view's own-player answers | ownership | untouched (`ViewApi/**` not changed) |
 
 `TeamArchitectureTests.NoRawOwnerCompareMeaningEnemy_InTheEnemySiteFolders` holds `Combat/`, `Abilities/`, `Vision/`, `Ai/`

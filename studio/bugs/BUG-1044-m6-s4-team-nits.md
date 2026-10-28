@@ -75,3 +75,12 @@ stale-slot summon case, `ZoneHides` on its own, the detector skip through `IsDet
 through a bucket-walk probe, `OnHit` from high ground), the regex blind spots (lower-case aliases; a line that mixes a raw
 compare with a predicate call), the "four listed below" summary and the `s_samePlayer` / `HallNear` misfiling go to the next sim
 hardening (M6-SH1), or ride M6-S5 if the dev touches those files.
+
+## M6-V16 (2026-10-27, dev, view): item 2's view follow-up built
+The two ViewApi enemy pickers now take the alliance answer: `UnitPicker.ResolveEnemy` and `MinimapRaster.DrawnEnemyDotAt` /
+`EnemyDotAt` have overloads reading an alliance table (per player, `World.IsEnemy(local, p)`, built once per match by
+`SelectionController.Enemies`, read through `ViewApi/EnemyTable.IsEnemyOwner`), and `SelectionController` / `Minimap` call them, so a right-click on an ally's unit, building, remembered building or minimap dot is
+a Move, not an Attack the sim drops. Tests: `ViewApi/UnitPickerTests.ResolveEnemy_WithTheAlliances_*`,
+`ViewApi/MinimapRasterTests.AnAllysDot_IsNoEnemyDot_WithTheAlliances`, `ViewApiAllocationTests.EnemyPickers_WithTheAllianceTable_*`.
+The old overloads (no table: every other player is an enemy) are kept for the free-for-all callers and QA's suites. Items 1 and 3
+are the sim's, unchanged.

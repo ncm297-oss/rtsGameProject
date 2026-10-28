@@ -49,4 +49,10 @@ public enum SetupText
     Forests,
     /// <summary>The gold mines count's label (M6-V15).</summary>
     Mines,
+    /// <summary>The team column's heading (M6-V16).</summary>
+    Team,
+    /// <summary>The team list's "no team" item (team 0: the slot is a side of its own; M6-V16).</summary>
+    TeamNone,
+    /// <summary>One named team's list item: a format whose <c>{0}</c> is the team number (M6-V16).</summary>
+    TeamItem,
 }
