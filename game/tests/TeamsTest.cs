@@ -149,6 +149,7 @@ public partial class TeamsTest : Node
         await Shot("setup-teams");
         int[] picks = { 1, 1, 2, 2 };
         for (int s = 0; s < 4; s++) setup.TeamOptions[s].Select(picks[s]);
+        await Shot("setup-2v2");
         string[] args = setup.MatchArgs()!;
         string joined = string.Join(' ', args);
         Check(joined.Contains("--team 1 1") && joined.Contains("--team 2 1") && joined.Contains("--team 3 2") && joined.Contains("--team 4 2"), $"MatchArgs: {joined}");

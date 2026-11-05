@@ -27,7 +27,8 @@ namespace Rts.Game.Tests;
 /// </summary>
 /// <remarks>
 /// Headless: <c>&amp; $env:GODOT --headless --path game res://tests/TeamFilesTest.tscn</c>; prints "TEAM FILES TEST PASS" or
-/// "TEAM FILES TEST FAIL: ..." lines. Per-process folders under <c>user://</c> (BUG-0770's rule), removed at the end.
+/// "TEAM FILES TEST FAIL: ..." lines. Per-process folders under <c>user://</c> (BUG-0770's rule), removed at the end. Windowed
+/// with <c>-- --shots &lt;dir&gt;</c> it also saves the Load Game list (team-files-load-game.png).
 /// </remarks>
 public partial class TeamFilesTest : Node
 {
@@ -42,6 +43,7 @@ public partial class TeamFilesTest : Node
     private GameData _data = null!;
     private UiText _ui = null!;
     private string _root = "", _replays = "", _saves = "";
+    private string? _shots;
 
     public override async void _Ready()
     {
@@ -49,6 +51,8 @@ public partial class TeamFilesTest : Node
         try
         {
             GetTree().Root.Size = new Vector2I(1152, 648);
+            string[] args = OS.GetCmdlineUserArgs();
+            for (int i = 0; i + 1 < args.Length; i++) if (args[i] == "--shots") _shots = args[i + 1];
             await Frames(1);
             DataLoadResult loaded = DataLoader.LoadAll(ProjectSettings.GlobalizePath("res://data"));
             if (!loaded.Ok) throw new InvalidOperationException("data failed to load");
@@ -175,6 +179,7 @@ public partial class TeamFilesTest : Node
             CheckRow(load, savePath!, factions, kinds, Teams);
             Check(!load.SeatsText(load.Entries.First(e => e.Path.EndsWith(Format6, StringComparison.Ordinal)).Seats).Contains("(T", StringComparison.Ordinal),
                 "the format-6 row shows a team mark");
+            await Shot("load-game");
 
             // Watch the 2v2 through the screen: every checkpoint equal, with the teams.
             int row = load.RowOf(replayPath!);
@@ -271,6 +276,16 @@ public partial class TeamFilesTest : Node
     private async Task Frames(int n)
     {
         for (int i = 0; i < n; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+    }
+
+    // Windowed with `-- --shots <dir>` (M6-V16): the viewport as team-files-<name>.png (the Load Game rows with "(T1)").
+    private async Task Shot(string name)
+    {
+        if (_shots == null || DisplayServer.GetName() == "headless") return;
+        for (int i = 0; i < 3; i++) await ToSignal(RenderingServer.Singleton, RenderingServer.SignalName.FramePostDraw);
+        string path = $"{_shots}/team-files-{name}.png";
+        GetViewport().GetTexture().GetImage().SavePng(path);
+        GD.Print($"  screenshot {path}");
     }
 
     private bool Check(bool ok, string message)

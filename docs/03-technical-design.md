@@ -6689,7 +6689,9 @@ ui.json                            setup.team, team_none, team_item; match_over.
   `RowOrder` of a 1v1v2. `game/tests/TeamFilesTest.tscn`: the two fixtures (`game/tests/fixtures/teams`, format 6 and 7,
   header-valid and sealed) read by `TryReadHeader` and the sim's reader alike, hostile seat lines refused, teams 0 and 8 read;
   a 2v2 saved at tick 300 and recorded to 600 (format 7), its Load Game rows with "(T1)" / "(T2)" beside the fixtures, Watch
-  to all 6 checkpoints with the teams, Load resuming with `TeamOf` 1, 1, 2, 2. `FreeForAllTest`: no team label, player order.
+  to all 6 checkpoints with the teams, Load resuming with `TeamOf` 1, 1, 2, 2. Both scenes run windowed with `-- --shots <dir>`
+  write the setup (all None, then 1 / 1 / 2 / 2), the grouped stats after the ally's win and the Load Game list as PNGs.
+  `FreeForAllTest`: no team label, player order.
   xUnit: `ViewApi/UnitPickerTests.ResolveEnemy_WithTheAlliances_*`, `ViewApi/MinimapRasterTests.AnAllysDot_IsNoEnemyDot_*`,
   `ViewApiAllocationTests.EnemyPickers_WithTheAllianceTable_2000Units_AllocateZeroBytes`, `ViewApi/SaveSummaryTests` (a
   format-3 2v2, a free-for-all, a pre-3 header, team bytes 0 / 8 / 9 / 255), `QA/SaveSummaryQaTests` with a 2v2 row (its
@@ -8535,7 +8537,7 @@ site means the very same player: ownership, queues, groupmates).
 | `Ai/ScoutManager.cs`, `Ai/PlayerView.cs` (`IsOwnUnit`, `IsOwnBuilding`, cargo, casts) | the scout, own-only answers | ownership | untouched |
 | `ViewApi/UnitPicker.cs` | `ResolveEnemy` (`unitOwner[unit] == localPlayer`, `buildings.Owner[building] == localPlayer`: the right-click attack pick) | enemy | allied-as-own since M6-V16 (the overload taking `ViewApi/EnemyTable`, `World.IsEnemy`): a right-click on an ally is a Move; see "Implementation (M6-V16)" |
 | `ViewApi/MinimapRaster.cs` | `DrawnEnemyDotAt` (`_centreOwner[k] == localPlayer`) | enemy | allied-as-own since M6-V16 (the overload taking `ViewApi/EnemyTable`); dot colours stay per slot |
-| `ViewApi/*` (the rest) | the view's own-player answers | ownership | untouched (`ViewApi/**` not changed) |
+| `ViewApi/*` (the rest) | the view's own-player answers | ownership | untouched (no owner compare changed; M6-V16 added `EnemyTable` and `SaveSummary`'s team bytes, read-only) |
 
 `TeamArchitectureTests.NoRawOwnerCompareMeaningEnemy_InTheEnemySiteFolders` holds `Combat/`, `Abilities/`, `Vision/`, `Ai/`
 and the root `World*.cs` partials to this table (widened from `Combat/` alone by BUG-1044): a raw owner compare there is

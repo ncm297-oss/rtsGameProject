@@ -905,13 +905,6 @@ public partial class SelectionController : Node
     }
 
     /// <summary>
-    /// The enemy under screen point <paramref name="screen"/> (M4-V2): what the camera ray meets first among unit bodies
-    /// (<see cref="UnitPicker.PickRay"/>), building boxes (<see cref="BuildingPicker.PickRay(BuildingStore, System.Collections.Immutable.ImmutableArray{BuildingDef}, Rts.Sim.Map.NavGrid, Rts.Sim.Map.Heightmap, int, System.Numerics.Vector3, System.Numerics.Vector3, float, float, out float)"/>)
-    /// and resource props, when it is an enemy's live unit or building (M6-V16: <see cref="Enemies"/>, so not an ally's): its
-    /// handle in <paramref name="target"/>, <paramref name="isBuilding"/> for a building. False when the first thing hit is own,
-    /// an ally's, a prop, or nothing (the click then means what it meant before: a Move). Allocation-free.
-    /// </summary>
-    /// <summary>
     /// M6-V16: per player, whether it is the local player's enemy (<c>World.IsEnemy</c>; read through <see cref="EnemyTable"/>), for the
     /// enemy pickers (<see cref="EnemyAt"/>, the minimap's right-click). Teams are fixed for a match: built on the first read of
     /// <paramref name="world"/>, then reused (no allocation per click).
@@ -927,6 +920,13 @@ public partial class SelectionController : Node
         return _enemies;
     }
 
+    /// <summary>
+    /// The enemy under screen point <paramref name="screen"/> (M4-V2): what the camera ray meets first among unit bodies
+    /// (<see cref="UnitPicker.PickRay"/>), building boxes (<see cref="BuildingPicker.PickRay(BuildingStore, System.Collections.Immutable.ImmutableArray{BuildingDef}, Rts.Sim.Map.NavGrid, Rts.Sim.Map.Heightmap, int, System.Numerics.Vector3, System.Numerics.Vector3, float, float, out float)"/>)
+    /// and resource props, when it is an enemy's live unit or building (M6-V16: <see cref="Enemies"/>, so not an ally's): its
+    /// handle in <paramref name="target"/>, <paramref name="isBuilding"/> for a building. False when the first thing hit is own,
+    /// an ally's, a prop, or nothing (the click then means what it meant before: a Move). Allocation-free.
+    /// </summary>
     public bool EnemyAt(Vector2 screen, out EntityHandle target, out bool isBuilding)
     {
         target = default;
