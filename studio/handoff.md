@@ -1,22 +1,28 @@
 # Handoff: brief for the next session
 
 Written by the Producer at the ACCEPT of session **2026-11-05-0805** (session 1 / 8 on 2026-11-05; the third resume of
-2026-10-27-0658, whose branches carried the work). **Sim M6-S5 ACCEPT, view M6-V16 ACCEPT, data STOP (cheap).** Counters after:
-**sim 2 / 4, view 1 / 4, data 1 / 4.** **No open S1 / S2.** `main` after the two merges (sim first, then view): the sim branch's
-full non-Perf suite and the view branch's smoke / ViewApi suites are in `sessions/2026-11-05-0805.md` ("Producer runs"). Golden
-`data-hash` **4F8CCF2688F9F22F** (moved once this session: `ai.gatherReach`; `k` lines identical). **M5 4 / 9, M6 4 / 10**
-(criterion 1 ticked: the setup's Team column + shared vision). Bug ids next: **sim from 1050, view from 1064, data from 1081**.
+2026-10-27-0658, whose branches carried the work). **Sim M6-S5 ACCEPT (on `main` as 1a90a08); view M6-V16 ACCEPT on its branch, then
+ESCALATE at integration: BUG-1064 (S2, test-only), held on `origin/studio/2026-10-27-0658-view` (2d4dbe4, `main` already merged in);
+data STOP (cheap).** Counters after: **sim 2 / 4, view 0 / 4 (1 / 4 once M6-V16 lands), data 1 / 4.** **Open S2: BUG-1064 only.**
+`main` = 1a90a08: the sim branch's full non-Perf suite 7,674 / 0 / 14 (Producer); the merged view branch: build 0 warnings, non-Perf
+7,692 / 0 / 14, loop 75 / 76 (conductor). Golden `data-hash` **4F8CCF2688F9F22F** (moved once this session: `ai.gatherReach`; `k`
+lines identical). **M5 4 / 9, M6 3 / 10** (criterion 1 ticks when M6-V16 lands). Bug ids next: **sim from 1050, view from 1065, data
+from 1081**.
 
 ## Where we are
 
-- **A 2v2 is playable from the menu now:** Skirmish → four slots → Team 1 / 1 / 2 / 2 → Start. Allies share vision, never attack
-  each other, the banner speaks for the side, the stats group by team, Load Game marks "(T1)". The AI ally scouts away from its
-  partner's base and gathers near home (`ai.gatherReach` 64 m).
+- **A 2v2 will be playable from the menu once the view branch lands (next session):** Skirmish → four slots → Team 1 / 1 / 2 / 2 →
+  Start. On `main` today: allies share vision, never attack each other, the AI ally scouts away from its partner's base and gathers
+  near home (`ai.gatherReach` 64 m); on the held branch: the Team column, the banner per side, the stats by team, Load Game's "(T1)".
+- **BUG-1064 (S2, test-only):** `FogViewTest.AllyGhost` (view, BUG-1062 item 3's row) asserts the ally's hall is a known ghost before
+  its shared-vision skip; an ally's building is never a ghost since M6-S5, so the row fails on the merged tree. One-line fix (move the
+  skip above the check) or drop the row.
 - **Save format 3, replay format 7** (a free-for-all still writes 6). Rule 36 (frozen save / replay API) held on both tracks.
 - **Open S3 (new):** BUG-1047 / 1048 (sim: the gather reach's two blind spots, one decided rule: the reach lifts when the head ring
-  is seen, a kind with no node in reach takes the nearest known one; the fix goes before the map-file format), BUG-1063 (view: four
-  label rows push the stats screen's Back half off 1152 × 648). **S4:** BUG-1049 (sim nits), BUG-1062 item 2 (view: a one-team
-  setup never ends; **decided: refuse it at Start** with a `ui.json` reason).
+  is seen, a kind with no node in reach takes the nearest known one; the fix goes before the map-file format), BUG-1063 (view branch:
+  four label rows push the stats screen's Back half off 1152 × 648). **S4:** BUG-1049 (sim nits), BUG-1062 item 2 (view branch: a
+  one-team setup never ends; **decided: refuse it at Start** with a `ui.json` reason). BUG-1061 / 1062 / 1063's files and index rows
+  are on the view branch, not on `main`, until it lands.
 - **Waiting on the owner** (none blocking): the art call, the sounds, the D21 review table, the Shock pass, `goldShare`, BUG-0780,
   "densest cluster", the 3-hour lock window; the downloads (fonts, music, export templates).
 
@@ -92,13 +98,30 @@ no per-tick allocation; the golden regen in the same commit as the field.
 
 ### Current session plan (next session)
 
-**Producer's call at the PLAN: pull the view hardening forward (M6-VH5, counter 1 / 4 → 0 / 4) or STOP.** Every view feature item waits
-on something (Request 43's setup list on M6-S6, the maps on a map format, the art / music / sounds / export on the owner). The debt is
-real and touches the owner's 2v2: **BUG-1063 (S3)** the stats screen with four label rows (shrink the graph's minimum height when the
-table grows, or put the label in the first row's player column), **BUG-1062 item 2 (decided: refuse a one-team setup at Start,
-`ui.json` reason; TeamsTest row)**, BUG-1062 item 3's `FogViewTest.AllyGhost` now always skips (stage the ghost through a dead ally, or
-drop the row and say so), the `QaM6V16Test` KNOWN row flipped once BUG-1063 is fixed, BUG-0550 item 2 (the art pass, if the owner's
-call lands). QA standard. Bug ids from 1064. If the Producer prefers to keep the counter rule strictly: STOP (cheap).
+**M6-V16 (resumed, third time): fix BUG-1064, rerun the loop, land · feature (counter 0 / 4 → 1 / 4 when it lands) · QA standard
+(re-check) · bug ids from 1065.** Work on `origin/studio/2026-10-27-0658-view` at 2d4dbe4 (it already contains `main` 1a90a08; do not
+rebase). The task is accepted on its merits (session log); only the merged tree's scene loop is red.
+
+**Scope:**
+1. **BUG-1064:** `game/tests/FogViewTest.cs` `AllyGhost`: the check `CanSeeBuilding(0, hall) && Ghosts(0)[hall].Known` (~line 736)
+   runs before the shared-vision skip (~line 744). Either move the skip above it (`CanSeeBuilding` true and `Known` false = an ally's
+   building, allied-as-own since M6-S5: print the skip line, end the match) or drop the row and record in docs/03 "Implementation
+   (M6-V16)" + BUG-1062 item 3 that the ally-ghost branch of `SelectionController.EnemyAt` is unreachable (an ally's building is never
+   a ghost while it stands and collapses when the ally is out). Prefer dropping it: a row that always skips proves nothing.
+2. `powershell -File tools/qa/scene-loop.ps1` whole (76 scenes) and `tools/qa/smoke.ps1` on the merged branch: both green.
+3. **Riders only if a few lines each:** BUG-1063 (S3: shrink the graph's minimum height when the stats table has four label rows, or
+   put the label in the group's first row's player column; flip `QaM6V16Test.StatsLayouts`' `Known("BUG-1063", ...)` row to a check);
+   BUG-1062 item 2 (decided: Start disabled while every shown slot is on one team, a `ui.json` `setup.*` reason line, a `TeamsTest`
+   row; restage `TeamsTest.TeamFlagStart` on a two-team match). Else leave them for M6-VH5.
+4. **OUT:** anything in `sim/**` (the ViewApi files are done), team colours, the starting-resources list (M6-S6 first).
+
+**Acceptance criteria:** (1) build 0 warnings; the whole scene loop green on the merged branch (a wall-clock flake counts only if it
+fails alone); smoke PASS; (2) `FogViewTest` PASS with the ally-ghost row skipping with a printed line or removed, and docs/03 + BUG-1062
+item 3 say which; (3) the M6-V16 criteria of this session's brief still hold (`TeamsTest`, `TeamFilesTest`, `QaM6V16Test` PASS; the
+ViewApi suites green); (4) riders, if taken, each with a scene row; (5) nothing in `sim/**`.
+
+**Design references:** docs/02 "Vision and fog of war" (an ally's building is always seen), docs/03 "Implementation (M6-V16)" tests
+paragraph. **Tests required:** `FogViewTest` green; the loop. **Constraints:** none new; the merged branch must not be rebased.
 
 ### Next task candidates
 
@@ -109,8 +132,11 @@ call lands). QA standard. Bug ids from 1064. If the Producer prefers to keep the
 
 ### Watch-outs (view)
 
-- After the sim's M6-S5 merge, `FogViewTest.AllyGhost` always skips (an ally's hall is never a ghost while the ally stands): correct,
-  but the `EnemyAt` ghost branch has no live test then.
+- **Run the scene loop on the merged tree before claiming green:** this session's QA and Producer both ran the scenes on the view
+  branch alone (no shared vision there) and `AllyGhost` passed; it fails on the merge (BUG-1064). When a view task's scenes depend on sim
+  behaviour landing in the same session, loop a scratch merge with the sim branch (the 0158 / 1236 sessions did).
+- `FogViewTest.AllyGhost`'s premise is gone: an ally's hall is never a ghost since M6-S5 (`UpdateGhosts` skips allies); the ally-ghost
+  branch of `EnemyAt` is unreachable.
 - `ViewApi/SaveSummary` hard-codes the header's shape: the team bytes are after the tick (format 3); M6-S6 adds a field after them.
 - `Match.ResultFor` in a 2v2: no banner while the local player is out and an ally fights on (by design, docs/02 "Game flow" 4).
 - `scene-loop.ps1 -Filter` is a file glob; the loop is 76 scenes now, ~23 min.
@@ -142,10 +168,11 @@ re-print is owed:** M6-S5 moved no pairing cell (27 runs identical on 424a5e8 an
 
 ## Watch-outs (all tracks)
 
-- The two merges (sim, then view) conflict on docs/02 "Game flow" 2, docs/03's team table (keep all rows: the sim's two new
-  `ScoutManager` / `World.cs` rows and the view's rewritten `UnitPicker` / `MinimapRaster` / `ViewApi/*` rows), docs/01's change log (keep
-  every row: the view's M6-V16 row and the Producer's two 2026-11-05 rows), `studio/bugs/README.md` and `studio/qa/coverage.md` (both
-  tracks added rows: union).
+- The view branch is already merged with `main` 1a90a08 (2d4dbe4; the docs/02 / docs/03 / docs/01 / index / coverage conflicts resolved
+  with both sides kept). When it lands, `studio/bugs/README.md` needs BUG-1064's row (added on `main` at this integration) kept beside
+  the view's 1061-1063 rows; the conductor merges `main` into the branch first if `main` moved.
+- The next view session's ACCEPT re-reads nothing of M6-V16's merits (accepted here); it checks the loop on the merged tree, BUG-1064's
+  row, the riders if taken, and then ticks M6 criterion 1 and sets the view counter to 1 / 4.
 - Two tracks a session: two test hosts; wall-clock Perf and scene rows flake under load; rerun alone before filing.
 - **The owner's recordings made since 2026-10-19 refuse to play** (the data hash moved with `ai.gatherReach`); saves from before M6-S4
   refuse too (format 3).
