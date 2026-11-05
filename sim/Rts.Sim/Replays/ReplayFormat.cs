@@ -15,7 +15,8 @@ namespace Rts.Sim.Replays;
 /// <remarks>
 /// One <c>key value</c> line per header field in a fixed order (format 4 adds <c>combat 0 / 1</c> after <c>ticks</c>; format 5
 /// one <c>seat p faction human|ai easy|normal|hard</c> line per player right after <c>players</c>; format 6 five
-/// <c>map.start-*</c> lines after <c>map.mine-spacing</c>; format 7, M6-S4, the seat's team as a fifth seat token),
+/// <c>map.start-*</c> lines after <c>map.mine-spacing</c>; format 7, M6-S4, the seat's team as a fifth seat token; format 8,
+/// M6-S6, <c>starting-resources id</c> after <c>combat</c>),
 /// then <c>commands N</c> and N <c>c</c> lines (format 4: 13 fields, the attack target's index, generation and
 /// building flag before the flags; format 3: 10), <c>checkpoints N</c> and N <c>k</c> lines, <c>end</c>, and last a
 /// <c>checksum</c> line: the FNV-1a 64 hash of every byte before it, so any changed byte is caught.
@@ -64,6 +65,7 @@ public static class ReplayFormat
         Line(sb, "ticks", Int(replay.TickCount));
         bool v4 = replay.FormatVersion >= 4;
         if (v4) Line(sb, "combat", replay.Combat ? "1" : "0");
+        if (replay.FormatVersion >= 8) Line(sb, "starting-resources", replay.StartingResources); // M6-S6
         MapGenParams m = replay.Map;
         Line(sb, "map.width", Int(m.Width));
         Line(sb, "map.height", Int(m.Height));
@@ -233,6 +235,13 @@ public static class ReplayFormat
             if (!r.Fields("combat", 1, out f) || f[0] is not ("0" or "1")) return ReplayError.Malformed;
             combat = f[0] == "1";
         }
+        // M6-S6 (format 8): the starting-resources preset (Validate checks the id); formats 3-7 were recorded at standard.
+        string startingResources = Data.StartingResourcesDef.StandardId;
+        if (version >= 8)
+        {
+            if (!r.Fields("starting-resources", 1, out f)) return ReplayError.Malformed;
+            startingResources = f[0];
+        }
 
         if (!r.Int("map.width", out int width) || !r.Int("map.height", out int height)
             || !r.Int("map.edge-margin", out int edgeMargin)
@@ -336,6 +345,7 @@ public static class ReplayFormat
         {
             FormatVersion = version,
             Combat = combat,
+            StartingResources = startingResources,
             Seats = seats,
             SimVersion = simVersion,
             DataHash = dataHash,

@@ -507,9 +507,11 @@ public class TeamQaTests
         for (int t = 0; t < 3; t++) sim.Tick();
         byte[] bytes = SaveTestRun.Save(sim);
         int hmap = bytes.AsSpan().IndexOf("HMAP"u8);
-        Assert.True(hmap > 4);
-        Assert.Equal(new byte[] { 1, 2, 1, 2 }, bytes[(hmap - 4)..hmap]);
-        return (bytes, hmap - 4);
+        // M6-S6 (save format 4): the starting-resources preset's string field sits between the team bytes and HMAP.
+        int teams = hmap - 4 - (4 + "standard".Length);
+        Assert.True(teams > 0);
+        Assert.Equal(new byte[] { 1, 2, 1, 2 }, bytes[teams..(teams + 4)]);
+        return (bytes, teams);
     }
 
     /// <summary>Every byte value at every seat's team byte: 0-8 load with that team (and only that seat's changes), 9-255 are InvalidHeader.</summary>

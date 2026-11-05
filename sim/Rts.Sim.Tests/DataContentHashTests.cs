@@ -77,6 +77,8 @@ public class DataContentHashTests
         if (t == typeof(ImmutableArray<AiDifficultyDef>)) return ((ImmutableArray<AiDifficultyDef>)value!).SetItem(0, ((ImmutableArray<AiDifficultyDef>)value!)[0] with { ThinkTicks = 99 });
         if (t == typeof(ImmutableArray<AiStep>)) return ((ImmutableArray<AiStep>)value!).Add(((ImmutableArray<AiStep>)value!)[0]);
         if (t == typeof(ImmutableArray<AiComposition>)) return ((ImmutableArray<AiComposition>)value!).RemoveAt(0);
+        // M6-S6: one more starting-resources preset (a copy of the first; each field: EveryStartingResourcesField_AndTheirOrder_ChangeTheHash).
+        if (t == typeof(ImmutableArray<StartingResourcesDef>)) return ((ImmutableArray<StartingResourcesDef>)value!).Add(((ImmutableArray<StartingResourcesDef>)value!)[0]);
         // M5-8a: one more opening (a copy of the first; each opening field: EveryAiStructField_ChangesTheHash).
         if (t == typeof(ImmutableArray<AiOpening>)) return ((ImmutableArray<AiOpening>)value!).Add(((ImmutableArray<AiOpening>)value!)[0]);
         if (t == typeof(ImmutableArray<UnitPassive>)) // M4-4b-3a (each field: EveryPassiveField_AndTheirCount_ChangeTheHash)
@@ -397,6 +399,7 @@ public class DataContentHashTests
             Assert.Contains($"UnitDef.{f}", checkedFields);
         Assert.Contains("AttackDef.Projectile", checkedFields); // nullable: null and "x" must differ
         Assert.Contains("RulesDef.BuildingSight", checkedFields); // M4-3a
+        Assert.Contains("RulesDef.StartingResources", checkedFields); // M6-S6
         foreach (string f in new[] { "Id", "Key", "DisplayName", "Description", "Resource", "FootprintWidth", "FootprintHeight" })
             Assert.Contains($"ResourceDef.{f}", checkedFields);
         // M4-2b: every ProjectileDef field, on each shipped projectile type, and the attack's resolved id.
@@ -451,6 +454,51 @@ public class DataContentHashTests
     }
 
     /// <summary>M5-3: every field of an <see cref="AiDifficultyDef"/>, an <see cref="AiStep"/> and an <see cref="AiComposition"/> moves the hash, on each faction.</summary>
+    /// <summary>M6-S6: every field of a starting-resources preset, the presets' count and their order move the hash.</summary>
+    [Fact]
+    public void EveryStartingResourcesField_AndTheirOrder_ChangeTheHash()
+    {
+        GameData d = TestSim.Data;
+        ulong baseline = d.ContentHash();
+        ImmutableArray<StartingResourcesDef> presets = d.Rules.StartingResources;
+        Assert.True(presets.Length >= 2);
+        GameData WithPresets(ImmutableArray<StartingResourcesDef> list)
+        {
+            RulesDef r = Clone(d.Rules);
+            typeof(RulesDef).GetProperty(nameof(RulesDef.StartingResources))!.SetValue(r, list);
+            return With(d, rules: r);
+        }
+        var fields = new List<string>();
+        foreach (PropertyInfo p in Settable(typeof(StartingResourcesDef)))
+        {
+            for (int i = 0; i < presets.Length; i++)
+            {
+                StartingResourcesDef copy = Clone(presets[i]);
+                p.SetValue(copy, Changed(p.GetValue(copy), p.PropertyType));
+                Assert.True(WithPresets(presets.SetItem(i, copy)).ContentHash() != baseline, $"StartingResourcesDef.{p.Name} (preset {i}) is not in GameData.ContentHash");
+            }
+            fields.Add(p.Name);
+        }
+        Assert.Equal(new[] { "Key", "DisplayName", "Description", "Gold", "Wood" }, fields);
+        Assert.NotEqual(baseline, WithPresets(presets.Reverse().ToImmutableArray()).ContentHash());
+        Assert.NotEqual(baseline, WithPresets(presets.RemoveAt(presets.Length - 1)).ContentHash());
+    }
+
+    /// <summary>M6-S6: an edit to a <c>rules.json</c> <c>startingResources</c> preset in the file moves the hash.</summary>
+    [Theory]
+    [InlineData("gold", "201")]
+    [InlineData("wood", "199")]
+    [InlineData("displayName", "\"Usual\"")]
+    [InlineData("description", "\"Other text.\"")]
+    public void AStartingResourcesEditInTheFile_ChangesTheHash(string field, string json)
+    {
+        using TestDataDir dir = TestDataDir.CopyOfShipped();
+        dir.EditJson("common/rules.json", r => r["startingResources"]![0]![field] = JsonNode.Parse(json));
+        DataLoadResult load = DataLoader.LoadAll(dir.Path);
+        Assert.True(load.Ok, string.Join("; ", load.Errors));
+        Assert.NotEqual(TestSim.Data.ContentHash(), load.Data!.ContentHash());
+    }
+
     [Fact]
     public void EveryAiStructField_ChangesTheHash()
     {

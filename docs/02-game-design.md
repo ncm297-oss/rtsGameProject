@@ -65,7 +65,7 @@ resources for flavor in their display text (e.g. Teblor "Bloodwood" for wood).
 
 | Rule | Value |
 | --- | --- |
-| Starting state | Town Hall, 5 workers, 200 Gold, 200 Wood, pop 5/10 |
+| Starting state | Town Hall, 5 workers, 200 Gold, 200 Wood, pop 5/10 (the Standard starting resources; High: 1,000 Gold, 1,000 Wood, M6-S6, "Game flow" 2) |
 | Worker carry capacity | 10 (some factions differ) |
 | Gather rate | Gold 0.85/s, Wood 0.75/s while working at the node (raised from 0.7 / 0.6 on 2026-10-16, the owner's playtest note: gathering felt slow) |
 | Gold mine | 2 mines of 2,500 at each start location; 2 mines of 2,000 at each expansion |
@@ -455,8 +455,15 @@ own cues (select, order, refused, building placed or finished, unit or tech read
    **Forests** and **Gold mines** counts (defaults 12 / 8; at least one forest and two gold mines per player, so every
    base keeps its start forest and start mines; at most 64 each) (M6-V15). The smallest map (128) fits only about 60 gold
    mines at the generator's spacing: asking for more places what fits, every base still with its start mines, and the
-   match log says how many were placed (M6-VH4). **Starting resources are not built yet:** the
-   sim has one starting purse for every match (`rules.json`), and a per-match choice needs a sim option first.
+   match log says how many were placed (M6-VH4). **Starting resources** are a per-match preset, the same for every seat
+   (`rules.json` `startingResources`, M6-S6): **Standard** 200 gold / 200 wood (the start every match had before presets,
+   and the default) and **High** 1,000 gold / 1,000 wood; every seat starts with 5 workers either way (Producer default
+   2026-11-05, owner may revisit; a "low" preset or per-slot presets are not planned). The sim's half is built (the save
+   and the replay carry the preset; the older save and replay layouts read as Standard, though saves and recordings made
+   before this change refuse to load anyway, since the game data changed with it); the setup screen's list is the view's
+   next task. At High the AI plays its usual openings with more money in hand: two of them (the Malazan Fast
+   Age II and the Whirlwind Holy war) keep much of the extra money for the first minutes rather than spending it at once
+   (BUG-1050).
 3. **Match.** Pause any time (single-player). Game speeds: Slow 0.75×, Normal 1×, Fast 1.5×.
 4. **Victory/defeat:** a player is out once they have **no unit left and no finished unit-producing building** (a
    hall that trains units: the Town Hall or one of the five unit halls; the Whirlwind's Holy Camp, Raider Camp and Archer

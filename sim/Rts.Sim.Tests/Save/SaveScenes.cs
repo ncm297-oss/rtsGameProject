@@ -28,8 +28,9 @@ internal static class SaveScenes
 
     private static readonly Lazy<GameData> s_rich = new(() => AiScenes.DataWith(dir => dir.EditJson("common/rules.json", root =>
     {
-        root["startingGold"] = 50_000;
-        root["startingWood"] = 50_000;
+        // M6-S6: the standard preset (index 0, the one a match plays by default).
+        root["startingResources"]![0]!["gold"] = 50_000;
+        root["startingResources"]![0]!["wood"] = 50_000;
         root["treeWood"] = 20;
     })));
 

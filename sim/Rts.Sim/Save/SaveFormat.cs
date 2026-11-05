@@ -8,8 +8,11 @@ namespace Rts.Sim.Save;
 /// </summary>
 public static class SaveFormat
 {
-    /// <summary>The format version this build writes and the only one it reads (3 since M6-S4: a team byte per seat; 2 since M6-S3: the AI seats' section).</summary>
-    public const int CurrentVersion = 3;
+    /// <summary>The format version this build writes (4 since M6-S6: the starting-resources preset after the team bytes; 3 since M6-S4: a team byte per seat; 2 since M6-S3: the AI seats' section). It reads this one and <see cref="OldestReadVersion"/>.</summary>
+    public const int CurrentVersion = 4;
+
+    /// <summary>M6-S6: the oldest format version this build reads: 3 (M6-S4), which has no preset and loads as <c>standard</c>.</summary>
+    internal const int OldestReadVersion = 3;
 
     /// <summary>Bytes of the magic at offset 0.</summary>
     public const int MagicLength = 8;

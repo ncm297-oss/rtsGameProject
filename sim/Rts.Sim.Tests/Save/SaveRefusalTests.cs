@@ -70,7 +70,7 @@ public class SaveRefusalTests
     [InlineData(0)]
     [InlineData(1)] // M6-S3: slice 1's format (no AI section) has no reader
     [InlineData(2)] // M6-S4: M6-S3's format (no team byte) has no reader
-    [InlineData(4)]
+    [InlineData(5)] // M6-S6: format 4 is current, format 3 still reads (SaveFormatTests.AFormat3Save_LoadsAsStandard)
     [InlineData(-1)]
     public void AnotherFormatVersion_IsFormatVersionMismatch(int version)
     {
@@ -244,6 +244,42 @@ public class SaveRefusalTests
         Assert.Equal("malazan", SaveBytes.StringAt(bad, at.Seat0Faction));
         bad[at.Seat0Faction + 4] = (byte)'x'; // "xalazan"
         Assert.Equal(SaveError.InvalidHeader, SaveTestRun.TryLoad(Data, SaveBytes.Rechecksum(bad)));
+    }
+
+    /// <summary>
+    /// M6-S6: a starting-resources preset the data lacks is InvalidHeader (rule 36: an existing code), human and AI saves,
+    /// an empty id too; a control byte in it or a length past the bytes is Malformed; a format-4 file relabelled format 3 (the
+    /// preset where format 3 has the heightmap's tag) is Malformed.
+    /// </summary>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void AForgedPreset_IsRefused(bool ai)
+    {
+        byte[] good = SaveBytes.Small(ai);
+        SaveBytes.Offsets at = SaveBytes.HeaderOffsets(good);
+        Assert.Equal("standard", SaveBytes.StringAt(good, at.Preset));
+        foreach (string forged in new[] { "standarx", "Standard", "--------", "low_____" })
+        {
+            byte[] bad = (byte[])good.Clone();
+            System.Text.Encoding.ASCII.GetBytes(forged).CopyTo(bad, at.Preset + 4);
+            Assert.True(SaveTestRun.TryLoad(Data, SaveBytes.Rechecksum(bad)) == SaveError.InvalidHeader, forged);
+        }
+        byte[] control = (byte[])good.Clone();
+        control[at.Preset + 4] = 0x07;
+        Assert.Equal(SaveError.Malformed, SaveTestRun.TryLoad(Data, SaveBytes.Rechecksum(control)));
+        byte[] longer = (byte[])good.Clone();
+        BinaryPrimitives.WriteInt32LittleEndian(longer.AsSpan(at.Preset), int.MaxValue);
+        Assert.Equal(SaveError.Malformed, SaveTestRun.TryLoad(Data, SaveBytes.Rechecksum(longer)));
+        byte[] relabelled = (byte[])good.Clone();
+        BinaryPrimitives.WriteInt32LittleEndian(relabelled.AsSpan(SaveFormat.MagicLength), 3);
+        Assert.Equal(SaveError.Malformed, SaveTestRun.TryLoad(Data, SaveBytes.Rechecksum(relabelled)));
+        // An empty id (length 0) names no preset either.
+        byte[] empty = new byte[good.Length - "standard".Length];
+        good.AsSpan(0, at.Preset).CopyTo(empty);
+        good.AsSpan(at.Preset + 4 + "standard".Length).CopyTo(empty.AsSpan(at.Preset + 4));
+        BinaryPrimitives.WriteInt64LittleEndian(empty.AsSpan(SaveFormat.LengthOffset), empty.Length);
+        Assert.Equal(SaveError.InvalidHeader, SaveTestRun.TryLoad(Data, SaveBytes.Rechecksum(empty)));
     }
 
     /// <summary>M6-S4: seat 0's team byte forged past 8 (9, or 255: a -1 written as a byte) is InvalidHeader, human and AI saves; 0-8 load, and the loaded seat has the forged team.</summary>

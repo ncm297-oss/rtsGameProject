@@ -13,8 +13,8 @@ namespace Rts.Sim.Replays;
 /// </remarks>
 public sealed class Replay
 {
-    /// <summary>The format version this build writes (7 since M6-S4: each seat's team, <see cref="ReplaySeat.Team"/>; 6 since M5-4a: the map's start-location fields; 5 since M5-2: one <see cref="Seats"/> line per player; 4 since M4-2a: the <see cref="Combat"/> switch in the header and an attack target on every command line; 3 since M3-1: the resource capacity and the resource placer's map fields; 2 since M1-7: command lines carry <see cref="Command.Flags"/>).</summary>
-    public const int CurrentFormatVersion = 7;
+    /// <summary>The format version this build writes (8 since M6-S6: the <see cref="StartingResources"/> line; 7 since M6-S4: each seat's team, <see cref="ReplaySeat.Team"/>; 6 since M5-4a: the map's start-location fields; 5 since M5-2: one <see cref="Seats"/> line per player; 4 since M4-2a: the <see cref="Combat"/> switch in the header and an attack target on every command line; 3 since M3-1: the resource capacity and the resource placer's map fields; 2 since M1-7: command lines carry <see cref="Command.Flags"/>).</summary>
+    public const int CurrentFormatVersion = 8;
 
     /// <summary>
     /// M6-S4: the format a recording of a free-for-all (every seat team 0) is written in: 6, the newest without team tokens,
@@ -22,6 +22,14 @@ public sealed class Replay
     /// <see cref="CurrentFormatVersion"/>.
     /// </summary>
     public const int TeamlessFormatVersion = 6;
+
+    /// <summary>
+    /// M6-S6: the format a recording at the <c>standard</c> starting resources with a team is written in: 7, the newest without
+    /// the <c>starting-resources</c> line, so such a file is byte for byte what the build before presets wrote. A match at
+    /// another preset is written in <see cref="CurrentFormatVersion"/> (a free-for-all at <c>standard</c> stays
+    /// <see cref="TeamlessFormatVersion"/>).
+    /// </summary>
+    public const int PresetlessFormatVersion = 7;
 
     /// <summary>The oldest format version this build still reads and plays: 3 (M3-1), which has no combat line (combat on) and no attack targets.</summary>
     public const int OldestFormatVersion = 3;
@@ -40,6 +48,12 @@ public sealed class Replay
 
     /// <summary><see cref="SimConfig.Combat"/> when recorded (format 4; a format 3 replay was recorded with combat on).</summary>
     public bool Combat { get; init; } = true;
+
+    /// <summary>
+    /// M6-S6 (format 8): the id of the starting-resources preset it was recorded at (<see cref="SimConfig.StartingResources"/>);
+    /// <c>standard</c> for a format 3-7 replay, recorded before presets. Playback refuses an id the data lacks.
+    /// </summary>
+    public string StartingResources { get; init; } = Data.StartingResourcesDef.StandardId;
 
     /// <summary><see cref="SimInfo.Version"/> of the build that recorded it (informational; playback does not check it).</summary>
     public required string SimVersion { get; init; }
@@ -94,6 +108,9 @@ public sealed class Replay
         if (Map == null || !MapIsValid(Map)) return ReplayError.InvalidHeader;
         // Formats 3-5 have no start-location lines: they can only say "none" (M5-4a).
         if (FormatVersion < 6 && Map.StartLocations != 0) return ReplayError.InvalidHeader;
+        // M6-S6: a snake_case preset id; formats 3-7 have no starting-resources line: they can only say standard.
+        if (!IsFactionToken(StartingResources) || StartingResources == "-"
+            || (FormatVersion < 8 && StartingResources != Data.StartingResourcesDef.StandardId)) return ReplayError.InvalidHeader;
         if (PlayerCount < 1 || PlayerCount > MaxPlayers) return ReplayError.InvalidHeader;
         if (UnitCapacity < 1 || UnitCapacity > MaxCapacity) return ReplayError.InvalidHeader;
         // BUG-1040: the config's own bound, so a replay that reads also builds its sim (no recorder can write one over it).

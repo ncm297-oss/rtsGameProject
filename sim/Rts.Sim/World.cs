@@ -38,7 +38,8 @@ public sealed partial class World
     {
         config.Validate();
         Config = config;
-        _ledger = new PlayerLedger(config.PlayerCount, config.Data, config.StatsSampleCapacity); // M6-S1: the stats buffers too
+        // M6-S1: the stats buffers too; M6-S6: every seat's gold and wood from the match's starting-resources preset.
+        _ledger = new PlayerLedger(config.PlayerCount, config.Data, config.StatsSampleCapacity, config.StartingPreset);
         Techs = new TechState(config.PlayerCount, config.Data);
         Units = new UnitStore(config.UnitCapacity, _ledger, Techs);
         _rngs = new SimRng[RngStream.Count(config.PlayerCount)];
@@ -579,10 +580,10 @@ public sealed partial class World
     /// <summary>All buildings and construction sites (M3-3: placed by workers' <c>Build</c> commands, or the dev command <c>SpawnBuilding</c>). Read-only outside the sim.</summary>
     public BuildingStore Buildings { get; }
 
-    /// <summary>Each player's gold, indexed by player (starts at <c>rules.json</c> <c>startingGold</c>; workers deposit into it).</summary>
+    /// <summary>Each player's gold, indexed by player (starts at the match's <c>rules.json</c> <c>startingResources</c> preset, <see cref="SimConfig.StartingResources"/>; workers deposit into it).</summary>
     public ReadOnlySpan<int> Gold => _ledger.Gold;
 
-    /// <summary>Each player's wood, indexed by player (starts at <c>rules.json</c> <c>startingWood</c>).</summary>
+    /// <summary>Each player's wood, indexed by player (starts at the match's starting-resources preset).</summary>
     public ReadOnlySpan<int> Wood => _ledger.Wood;
 
     /// <summary>

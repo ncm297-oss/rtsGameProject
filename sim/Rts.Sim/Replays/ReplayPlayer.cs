@@ -16,7 +16,7 @@ public static class ReplayPlayer
     /// stamp is checked against the log. Checkpoints are hashed by a recorder on the playback sim,
     /// so recording and playback hash at the same point of the tick.
     /// </remarks>
-    /// <remarks>The sim plays with the replay's own <see cref="Replay.Combat"/> switch (format 4; on for format 3) and (format 5) the header's factions with every seat human (no AI runs: its commands are in the log); a seat naming a faction the data lacks is <see cref="ReplayError.InvalidHeader"/>.</remarks>
+    /// <remarks>The sim plays with the replay's own <see cref="Replay.Combat"/> switch (format 4; on for format 3) and (format 5) the header's factions with every seat human (no AI runs: its commands are in the log), (format 8) the header's starting-resources preset; a seat naming a faction the data lacks, or a preset it lacks, is <see cref="ReplayError.InvalidHeader"/>.</remarks>
     public static ReplayResult Run(Replay replay, GameData data)
     {
         ArgumentNullException.ThrowIfNull(replay);
@@ -50,6 +50,8 @@ public static class ReplayPlayer
             }
             seats = builder.MoveToImmutable();
         }
+        // M6-S6 (format 8): the recorded starting-resources preset (standard before format 8); one the data lacks can't play.
+        if (data.Rules.FindStartingResources(replay.StartingResources) < 0) return Refused(ReplayError.InvalidHeader);
         var config = new SimConfig(replay.Seed, replay.PlayerCount, replay.UnitCapacity, replay.CommandCapacity)
         {
             Data = data,
@@ -57,6 +59,7 @@ public static class ReplayPlayer
             ResourceCapacity = replay.ResourceCapacity,
             Combat = combat,
             Seats = seats,
+            StartingResources = replay.StartingResources,
         };
         var sim = new Simulation(config);
         var recorder = new ReplayRecorder(sim, replay.CheckpointInterval, replay.TickCount, replay.Commands.Length);

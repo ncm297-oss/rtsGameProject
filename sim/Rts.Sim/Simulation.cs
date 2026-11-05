@@ -152,8 +152,9 @@ public sealed partial class Simulation : ICommandSink
         int prefix = Math.Min(bytes.Length, magic.Length);
         if (!bytes.AsSpan(0, prefix).SequenceEqual(magic[..prefix])) return SaveError.BadMagic;
         if (bytes.Length < SaveFormat.FixedPrefix) return SaveError.Truncated;
-        if (System.Buffers.Binary.BinaryPrimitives.ReadInt32LittleEndian(bytes.AsSpan(SaveFormat.MagicLength)) != SaveFormat.CurrentVersion)
-            return SaveError.FormatVersionMismatch;
+        // M6-S6: format 3 (no starting-resources preset, read as standard) and the current one.
+        int version = System.Buffers.Binary.BinaryPrimitives.ReadInt32LittleEndian(bytes.AsSpan(SaveFormat.MagicLength));
+        if (version < SaveFormat.OldestReadVersion || version > SaveFormat.CurrentVersion) return SaveError.FormatVersionMismatch;
         long declared = System.Buffers.Binary.BinaryPrimitives.ReadInt64LittleEndian(bytes.AsSpan(SaveFormat.LengthOffset));
         if (declared < SaveFormat.FixedPrefix + SaveFormat.ChecksumLength || declared > SaveFormat.MaxBytes) return SaveError.Malformed;
         if (bytes.Length < declared) return SaveError.Truncated;
@@ -163,7 +164,7 @@ public sealed partial class Simulation : ICommandSink
         if (SaveFormat.Checksum(bytes.AsSpan(0, body)) != stored) return SaveError.ChecksumMismatch;
 
         var r = new SaveReader(bytes, SaveFormat.FixedPrefix, body);
-        SaveError header = SaveHeader.TryRead(r, data, out SimConfig? config, out int tick);
+        SaveError header = SaveHeader.TryRead(r, data, version, out SimConfig? config, out int tick);
         if (header != SaveError.None) return header;
         Heightmap? map = World.ReadHeightmap(r);
         if (map == null || r.Failed) return SaveError.Malformed;

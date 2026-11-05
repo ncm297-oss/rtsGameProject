@@ -15,11 +15,12 @@ namespace Rts.Sim.Tests.Save;
 public class SaveFormatTests
 {
     [Fact]
-    public void CurrentVersion_Is3()
+    public void CurrentVersion_Is4_AndFormat3StillReads()
     {
-        // M6-S3: the AI seats' section bumped the format to 2 (rule 36); M6-S4: a team byte per seat to 3. Older files are
-        // refused, not read.
-        Assert.Equal(3, SaveFormat.CurrentVersion);
+        // M6-S3: the AI seats' section bumped the format to 2 (rule 36); M6-S4: a team byte per seat to 3; M6-S6: the
+        // starting-resources preset to 4. Format 3 still loads (as standard); older files are refused, not read.
+        Assert.Equal(4, SaveFormat.CurrentVersion);
+        Assert.Equal(3, SaveFormat.OldestReadVersion);
     }
 
     /// <summary>M6-S4: each seat's team is one byte, in player order, after the tick (0 for no team); every format-2 field keeps its offset.</summary>
@@ -32,7 +33,7 @@ public class SaveFormatTests
         byte[] bytes = SaveTestRun.Save(sim);
         using var r = new BinaryReader(new MemoryStream(bytes), Encoding.ASCII);
         r.ReadBytes(8);
-        Assert.Equal(3, r.ReadInt32());
+        Assert.Equal(SaveFormat.CurrentVersion, r.ReadInt32());
         r.ReadInt64();
         ReadString(r);
         r.ReadUInt64();
@@ -48,7 +49,85 @@ public class SaveFormatTests
         r.ReadBytes(4 * 5 + 4 * 26 + 1 + 4 * 4); // the other capacities, the map, combat, the cast floats, the stats ints
         Assert.Equal(0, r.ReadInt32()); // the tick
         Assert.Equal(new byte[] { 3, 8, 0 }, r.ReadBytes(3));
+        Assert.Equal("standard", ReadString(r)); // M6-S6: the preset, after the team bytes
         Assert.Equal("HMAP"u8.ToArray(), r.ReadBytes(4));
+    }
+
+    /// <summary>
+    /// M6-S6: the preset is a string field right after the team bytes, so the header-only reader the view owns
+    /// (<see cref="Rts.Sim.ViewApi.SaveSummary"/>, which stops after the tick and the team bytes) reads a format-4 header's
+    /// seats, seed, map and tick unchanged.
+    /// </summary>
+    [Theory]
+    [InlineData("standard")]
+    [InlineData("high")]
+    public void ThePreset_FollowsTheTeamBytes_AndSaveSummaryStillReadsTheHeader(string preset)
+    {
+        var seats = System.Collections.Immutable.ImmutableArray.Create(new PlayerSeat(0, SeatController.Human, AiDifficulty.Normal, 2),
+            new PlayerSeat(1, SeatController.Ai, AiDifficulty.Hard, 2));
+        var sim = new Simulation(TestSim.Config(7, 2, 64, 64) with { Seats = seats, StartingResources = preset });
+        sim.Tick();
+        byte[] bytes = SaveTestRun.Save(sim);
+        SaveBytes.Offsets at = SaveBytes.HeaderOffsets(bytes);
+        // Two seats: the second seat's id and its two bytes sit between seat 0's and the capacities.
+        int teams = at.Seat0Team + 4 + "whirlwind".Length + 2;
+        Assert.Equal(new byte[] { 2, 2 }, bytes.AsSpan(teams, 2).ToArray());
+        Assert.Equal(preset, SaveBytes.StringAt(bytes, teams + 2));
+        Assert.Equal("HMAP"u8.ToArray(), bytes.AsSpan(teams + 2 + 4 + preset.Length, 4).ToArray());
+
+        Assert.True(Rts.Sim.ViewApi.SaveSummary.TryParse(bytes, out Rts.Sim.ViewApi.SaveSummary? summary));
+        Assert.Equal(4, summary!.FormatVersion);
+        Assert.Equal(7UL, summary.Seed);
+        Assert.Equal(1, summary.Tick);
+        Assert.Equal(new[] { ("malazan", SeatController.Human, AiDifficulty.Normal), ("whirlwind", SeatController.Ai, AiDifficulty.Hard) },
+            summary.Seats.Select(x => (x.Faction, x.Controller, x.Difficulty)));
+        Assert.Equal(sim.World.Config.Map.Width, summary.MapWidth);
+    }
+
+    /// <summary>M6-S6: a format-4 save round-trips the preset: the loaded config names it, the loaded ledger holds the saved banks, and save -> load -> save is byte-identical.</summary>
+    [Fact]
+    public void AHighMatch_SavedAndLoaded_KeepsItsPreset_AndFollowsTheUnsavedRun()
+    {
+        var config = TestSim.Config(2, 3, 64, 64) with { StartingResources = "high" };
+        var sim = new Simulation(config);
+        for (int t = 0; t < 10; t++) sim.Tick();
+        byte[] bytes = SaveTestRun.Save(sim);
+        Simulation loaded = SaveTestRun.Load(TestSim.Data, bytes);
+        Assert.Equal("high", loaded.World.Config.StartingResources);
+        Assert.Same(TestSim.Data.Rules.StartingResources[1], loaded.World.Config.StartingPreset);
+        Assert.Equal(sim.World.Gold.ToArray(), loaded.World.Gold.ToArray());
+        Assert.Equal(sim.World.Wood.ToArray(), loaded.World.Wood.ToArray());
+        Assert.Equal(bytes, SaveTestRun.Save(loaded));
+        for (int t = 0; t < 50; t++)
+        {
+            sim.Tick();
+            loaded.Tick();
+            Assert.Equal(sim.StateHash(), loaded.StateHash());
+        }
+    }
+
+    /// <summary>M6-S6: a format-3 save (no preset field) loads as <c>standard</c> and plays on exactly as its format-4 twin.</summary>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void AFormat3Save_LoadsAsStandard(bool ai)
+    {
+        byte[] current = SaveBytes.Small(ai);
+        SaveBytes.Offsets at = SaveBytes.HeaderOffsets(current);
+        Assert.Equal("standard", SaveBytes.StringAt(current, at.Preset));
+        byte[] old = SaveBytes.AsFormat3(current, at.Preset);
+        Assert.Equal(current.Length - 4 - "standard".Length, old.Length);
+        Assert.Equal("HMAP"u8.ToArray(), old.AsSpan(at.Preset, 4).ToArray());
+        Simulation fromOld = SaveTestRun.Load(TestSim.Data, old);
+        Simulation fromCurrent = SaveTestRun.Load(TestSim.Data, current);
+        Assert.Equal(StartingResourcesDef.StandardId, fromOld.World.Config.StartingResources);
+        Assert.Equal(current, SaveTestRun.Save(fromOld)); // saved again, it is format 4
+        for (int t = 0; t < 40; t++)
+        {
+            fromOld.Tick();
+            fromCurrent.Tick();
+            Assert.Equal(fromCurrent.StateHash(), fromOld.StateHash());
+        }
     }
 
     [Fact]
@@ -83,7 +162,7 @@ public class SaveFormatTests
         {
             Data = TestSim.Data, ResourceCapacity = 3000, BuildingCapacity = 200, ProjectileCapacity = 40, ZoneCapacity = 30,
             Map = MapGenParams.Default with { Forests = 3, GoldMines = 2 }, Combat = false, CastWalkInBlockerRange = 2.25f,
-            CastWalkInPatienceSeconds = 4.5f, StatsSampleTicks = 150, StatsSampleCapacity = 77,
+            CastWalkInPatienceSeconds = 4.5f, StatsSampleTicks = 150, StatsSampleCapacity = 77, StartingResources = "high",
         };
         var sim = new Simulation(config);
         sim.Tick();
@@ -125,6 +204,7 @@ public class SaveFormatTests
         Assert.Equal(77, r.ReadInt32());
         Assert.Equal(2, r.ReadInt32()); // the tick
         Assert.Equal(new byte[] { 0, 0 }, r.ReadBytes(2)); // M6-S4: each seat's team, none
+        Assert.Equal("high", ReadString(r)); // M6-S6: the starting-resources preset, after the team bytes
         Assert.Equal("HMAP"u8.ToArray(), r.ReadBytes(4)); // the first section: the stored heightmap
         Assert.Equal(config.Map.Width, r.ReadInt32());
         Assert.Equal(config.Map.Height, r.ReadInt32());

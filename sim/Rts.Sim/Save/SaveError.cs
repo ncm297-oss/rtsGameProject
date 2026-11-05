@@ -13,13 +13,13 @@ public enum SaveError
     /// <summary>The bytes don't start with the save magic: not a save file.</summary>
     BadMagic = 1,
 
-    /// <summary>A save of another format version (<see cref="SaveFormat.CurrentVersion"/> is the only one read).</summary>
+    /// <summary>A save of another format version (<see cref="SaveFormat.CurrentVersion"/> and, since M6-S6, format 3 are read).</summary>
     FormatVersionMismatch = 2,
 
     /// <summary>Made with other game data (<c>GameData.ContentHash</c> differs): a balance edit or a rename refuses it.</summary>
     DataMismatch = 3,
 
-    /// <summary>A header value is out of range: player count, a capacity, a map parameter, a seat (an unknown faction id), the tick.</summary>
+    /// <summary>A header value is out of range: player count, a capacity, a map parameter, a seat (an unknown faction id), the tick, (M6-S6) a starting-resources preset the data lacks.</summary>
     InvalidHeader = 4,
 
     /// <summary>

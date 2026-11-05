@@ -89,6 +89,7 @@ public static class ReplayTestRun
     {
         Assert.Equal(expected.FormatVersion, actual.FormatVersion);
         Assert.Equal(expected.Combat, actual.Combat);
+        Assert.Equal(expected.StartingResources, actual.StartingResources); // M6-S6
         Assert.Equal(expected.Seats.IsDefault ? Array.Empty<ReplaySeat>() : expected.Seats.ToArray(), actual.Seats.IsDefault ? Array.Empty<ReplaySeat>() : actual.Seats.ToArray());
         Assert.Equal(expected.SimVersion, actual.SimVersion);
         Assert.Equal(expected.DataHash, actual.DataHash);
@@ -129,10 +130,12 @@ public static class ReplayTestRun
     /// <summary>A copy of <paramref name="r"/> with some fields replaced.</summary>
     public static Replay With(Replay r, int? formatVersion = null, ulong? dataHash = null,
         int? players = null, IEnumerable<Command>? commands = null, IEnumerable<ReplayCheckpoint>? checkpoints = null, string? simVersion = null,
-        bool? combat = null, IEnumerable<ReplaySeat>? seats = null) => new()
+        bool? combat = null, IEnumerable<ReplaySeat>? seats = null, string? startingResources = null) => new()
     {
         FormatVersion = formatVersion ?? r.FormatVersion,
         Combat = combat ?? r.Combat,
+        // M6-S6: the preset is format 8's; an older format was recorded at standard.
+        StartingResources = startingResources ?? ((formatVersion ?? r.FormatVersion) >= 8 ? r.StartingResources : Data.StartingResourcesDef.StandardId),
         // M5-2: seats are format 5's; an older format holds none. A player count changed without new seats keeps the
         // replay's (so the seat rule, not a missing seat, decides).
         Seats = seats != null ? seats.ToImmutableArray() : (formatVersion ?? r.FormatVersion) >= 5 ? r.Seats : ImmutableArray<ReplaySeat>.Empty,

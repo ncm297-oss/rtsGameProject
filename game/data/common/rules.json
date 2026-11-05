@@ -1,6 +1,8 @@
 {
-  "startingGold": 200,
-  "startingWood": 200,
+  "startingResources": [
+    { "id": "standard", "displayName": "Standard", "description": "Every player starts with the usual gold and wood.", "gold": 200, "wood": 200 },
+    { "id": "high", "displayName": "High", "description": "Every player starts with five times the usual gold and wood.", "gold": 1000, "wood": 1000 }
+  ],
   "startingWorkers": 5,
   "popCap": 100,
   "workerCarry": 10,
