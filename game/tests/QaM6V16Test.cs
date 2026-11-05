@@ -33,6 +33,10 @@ namespace Rts.Game.Tests;
 /// <item>BUG-1061 re-check: the stats grid read row by row (team labels, "No team", player rows, label rows otherwise empty) for
 /// the two banner screens above and, from the pause menu, teams 0, 1, 2, 3 (opened twice), 4, 3, 2, 1, 0, 0, 0, 2 and a
 /// free-for-all (opened twice). The four-label screens fit (BUG-1063, fixed: the graph shrinks past two label rows).</item>
+/// <item>QA 2026-11-05-1206: the stats screens of four-seat matches started from the setup's Start (three AI seats, three
+/// "opened with" lines; teams 1230, 1234, 0123, 1122, 1200, 0000) fit 1152 x 648: a KNOWN BUG-1065 row for the teamed ones
+/// (fails only with <c>-- --strict</c>); a 3,000-step seeded setup fuzz (Add / Remove / team picks on any slot) holds Start, <c>OneTeam</c> and the
+/// <c>setup.one_team</c> line to an oracle of BUG-1062 item 2's rule, and a Pressed while one-team starts nothing.</item>
 /// </list>
 /// Headless: <c>&amp; $env:GODOT --headless --path game res://tests/QaM6V16Test.tscn</c>; prints "QA M6-V16 TEST PASS" or
 /// "QA M6-V16 TEST FAIL: ..." lines. Windowed with <c>-- --shots &lt;dir&gt;</c> it saves the two stats screens.
@@ -78,6 +82,8 @@ public partial class QaM6V16Test : Node
             await AllyPicks();
             await OldFiles();
             await StatsLayouts();
+            await MenuFourLabelStats();
+            await OneTeamFuzz();
             try { Directory.Delete(_root, true); } catch (IOException) { } catch (UnauthorizedAccessException) { }
         }
         catch (Exception ex)
@@ -397,6 +403,87 @@ public partial class QaM6V16Test : Node
         await PausedStats(4, new[] { "--team", "1", "4", "--team", "2", "3", "--team", "3", "2", "--team", "4", "1" }, "T1 P3 T2 P2 T3 P1 T4 P0", "teams 4, 3, 2, 1", "stats-4-teams", twice: false);
         await PausedStats(4, new[] { "--team", "4", "2" }, "T2 P3 N P0 P1 P2", "teams 0, 0, 0, 2", null, twice: false);
         await PausedStats(4, Array.Empty<string>(), "P0 P1 P2 P3", "free-for-all", null, twice: true);
+    }
+
+    // QA 2026-11-05-1206 (BUG-1063 re-check): the four-label screens as the menu starts them. StatsLayouts' seats are human,
+    // so its screens carry no "opened with" lines; a menu match has three AI seats and three such lines under the table.
+    private async Task MenuFourLabelStats()
+    {
+        foreach (int[] teams in new[] { new[] { 1, 2, 3, 0 }, new[] { 1, 2, 3, 4 }, new[] { 0, 1, 2, 3 }, new[] { 1, 1, 2, 2 }, new[] { 1, 2, 0, 0 }, new[] { 0, 0, 0, 0 } })
+        {
+            string how = $"menu teams {string.Join(", ", teams)}";
+            _main.ShowSetup();
+            await Frames(2);
+            SkirmishSetup setup = _main.Setup!;
+            while (setup.SlotCount < SkirmishSetup.MaxSlots) setup.AddSlot();
+            for (int s = 0; s < SkirmishSetup.MaxSlots; s++) PickTeam(setup, s, teams[s]);
+            await Frames(1);
+            if (!Check(!setup.StartButton.Disabled && !setup.OneTeam, $"{how}: Start disabled")) continue;
+            setup.StartButton.EmitSignal(BaseButton.SignalName.Pressed);
+            await Frames(3);
+            if (!Check(_main.CurrentMatch?.Simulation != null, $"{how}: Start started no match")) continue;
+            _main.CurrentMatch!.GetNode<RtsCamera>("RtsCamera").EdgePanEnabled = false;
+            _main.PauseMatch();
+            await Frames(1);
+            _main.ShowStats();
+            await Frames(2);
+            MatchStats stats = _main.Stats!;
+            Check(stats.OpeningLines.Count == 3, $"{how}: {stats.OpeningLines.Count} opened-with lines (want 3, one per AI seat)");
+            // BUG-1065: with three opened-with lines, any teamed four-seat menu match pushes Back past the bottom edge.
+            List<string> overflow = StatsScreenCheck.Fits(stats, GetViewport().GetVisibleRect(), how);
+            Known("BUG-1065", overflow.Count == 0, overflow.Count == 0 ? $"{how}: the screen fits" : string.Join("; ", overflow));
+            GD.Print($"  {how}: Back {stats.BackButton.GetGlobalRect()}, graph {stats.Graph.GetGlobalRect()}, title {stats.Title.GetGlobalRect()}");
+            foreach (Label line in stats.OpeningLines)
+                Check(GetViewport().GetVisibleRect().Grow(0.5f).Encloses(line.GetGlobalRect()), $"{how}: opened-with line {line.GetGlobalRect()} off screen");
+            if (teams[3] == 0) await Shot($"stats-menu-{string.Join("", teams)}");
+            _main.CloseStats();
+            await Frames(2);
+            await QuitMatch();
+        }
+        SkirmishSetup reset = _main.Setup!;
+        for (int s = 0; s < SkirmishSetup.MaxSlots; s++) PickTeam(reset, s, 0);
+    }
+
+    // QA 2026-11-05-1206 (BUG-1062 item 2 re-check): 3,000 seeded steps of Add / Remove / a team pick on any slot (hidden ones
+    // too); after each, OneTeam, Start's state and the line agree with an oracle of the rule (every shown slot on one team, not
+    // None); a Pressed while one-team starts nothing.
+    private async Task OneTeamFuzz()
+    {
+        _main.ShowSetup();
+        await Frames(2);
+        SkirmishSetup setup = _main.Setup!;
+        var rng = new Random(1206);
+        int oneTeamSteps = 0;
+        for (int step = 0; step < 3000; step++)
+        {
+            int op = rng.Next(6);
+            if (op == 0 && setup.SlotCount < SkirmishSetup.MaxSlots) setup.AddSlot();
+            else if (op == 1 && setup.SlotCount > 2) setup.RemoveSlot();
+            else PickTeam(setup, rng.Next(SkirmishSetup.MaxSlots), rng.Next(LaunchOptions.MaxTeam + 1));
+            int first = setup.TeamPick(0);
+            bool one = first != 0;
+            for (int s = 1; s < setup.SlotCount; s++) one &= setup.TeamPick(s) == first;
+            if (one) oneTeamSteps++;
+            bool ok = setup.OneTeam == one && setup.StartButton.Disabled == (one || setup.Seed == null) && setup.OneTeamLabel.Visible == one;
+            if (!Check(ok, $"one-team fuzz step {step}: {setup.SlotCount} slots, teams {string.Join(",", Enumerable.Range(0, SkirmishSetup.MaxSlots).Select(setup.TeamPick))}: "
+                + $"OneTeam {setup.OneTeam}, Start disabled {setup.StartButton.Disabled}, line {setup.OneTeamLabel.Visible} (want one-team {one})")) break;
+            if (one && step % 50 == 0)
+            {
+                setup.StartButton.EmitSignal(BaseButton.SignalName.Pressed);
+                await Frames(1);
+                if (!Check(_main.CurrentMatch == null, $"one-team fuzz step {step}: Pressed started a match")) { await QuitMatch(); break; }
+            }
+        }
+        Check(oneTeamSteps > 100, $"one-team fuzz: only {oneTeamSteps} one-team states visited");
+        for (int s = 0; s < SkirmishSetup.MaxSlots; s++) PickTeam(setup, s, 0);
+        _main.ShowMenu();
+        await Frames(1);
+    }
+
+    private static void PickTeam(SkirmishSetup setup, int slot, int team)
+    {
+        setup.TeamOptions[slot].Select(team);
+        setup.TeamOptions[slot].EmitSignal(OptionButton.SignalName.ItemSelected, (long)team); // as a click on the item
     }
 
     private async Task PausedStats(int players, string[] teams, string want, string how, string? shot, bool twice)
