@@ -291,6 +291,8 @@ public partial class LoadGameScreen : CanvasLayer
                 item.SetText(4, _ui.LoadGame(kind == RowKind.UnreadableSave ? LoadText.SaveTag : LoadText.ReplayTag));
                 break;
         }
+        // BUG-1062: a four-seat players cell is wider than its column; it wraps to a second line so every seat's team mark shows.
+        item.SetAutowrapMode(2, TextServer.AutowrapMode.WordSmart);
         item.SetMetadata(0, row);
     }
 

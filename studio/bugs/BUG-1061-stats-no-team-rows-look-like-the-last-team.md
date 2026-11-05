@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S2 |
-| Status | open |
+| Status | fixed |
 | Found | 2026-11-05-0805, task M6-V16 |
 | System | Post-match stats screen (`game/scripts/MatchStats.cs`) |
-| Fixed by | |
+| Fixed by | M6-V16 fix round 1 |
 
 ## Repro
 1. `powershell -File tools/qa/scene-loop.ps1 -Filter QaM6V16Test` passes (it checks `DisplayOrder` and `TeamLabels`, which are right).
@@ -36,3 +36,13 @@ of a 1v1v2) is checked without the screen.
 Smallest fix that stays data-driven: a label row before the first no-team seat when the match has a team (a new `ui.json`
 string, e.g. `match_over.no_team` "No team"), or put the no-team seats first, before any label. Either needs the
 `TeamsTest` layout check extended to a mixed match; `QaM6V16Test` already stages both shapes and saves the screenshots.
+
+## Fix (M6-V16 round 1)
+`MatchStats.ShowFor` adds a label row, `match_over.no_team` ("No team", new `ui.json` key), before the first seat with no
+team when a team row came before it (`MatchStats.NoTeamLabel`); a free-for-all and an all-teamed match have none. docs/02
+"Game flow" 4 and docs/03 "Implementation (M6-V16)" say so. Regression: `TeamsTest.MixedStats` opens the stats from the
+pause menu on a 1v1v2 (teams 1, 1, 0, 0), teams 0, 1, 0, a free-for-all and a 2v2; `CheckGrouped`'s grid walk now fails a
+player row that sits under another group's label (or none when the match has a team). With the label row disabled it
+failed with "1v1v2: player 2 (team 0) shows under the team 1 label" (and the 0, 1, 0 rows likewise). Windowed screenshots
+`qa-m6-v16-stats-1v1v2.png`, `teams-stats-1v1v2.png`, `teams-stats-3-slots.png` show "Team 1", its rows, then "No team"
+over the others.

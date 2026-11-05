@@ -179,6 +179,9 @@ public partial class TeamFilesTest : Node
             CheckRow(load, savePath!, factions, kinds, Teams);
             Check(!load.SeatsText(load.Entries.First(e => e.Path.EndsWith(Format6, StringComparison.Ordinal)).Seats).Contains("(T", StringComparison.Ordinal),
                 "the format-6 row shows a team mark");
+            // BUG-1062: a four-seat players cell wraps, so seats 3 and 4's "(T2)" show instead of running past the column.
+            TreeItem? fourSeats = load.List.GetRoot()?.GetChild(load.RowOf(replayPath!));
+            Check(fourSeats != null && fourSeats.GetAutowrapMode(2) != TextServer.AutowrapMode.Off, "the 2v2 row's players cell does not wrap");
             await Shot("load-game");
 
             // Watch the 2v2 through the screen: every checkpoint equal, with the teams.

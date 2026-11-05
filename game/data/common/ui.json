@@ -177,7 +177,8 @@
     "human": "Human",
     "back": "Back",
     "opening": "{0} opened with {1}",
-    "team": "Team {0}"
+    "team": "Team {0}",
+    "no_team": "No team"
   },
   "keys": {
     "tab_general": "General",

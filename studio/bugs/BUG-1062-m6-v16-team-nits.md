@@ -3,7 +3,7 @@
 | Field | Value |
 | --- | --- |
 | Severity | S4 |
-| Status | open |
+| Status | open (part fixed) |
 | Found | 2026-11-05-0805, task M6-V16 |
 | System | Load Game list, skirmish setup, enemy picker tests |
 | Fixed by | |
@@ -34,3 +34,13 @@ As in the repro.
 ## Notes
 None block the 2v2 the owner wants to play. Item 2 interacts with BUG-1042 (the AI never attacks when its scout only finds its
 ally's base): the 2v2 depends on M6-S5's shared vision landing first, which the merge order (sim, then view) assumes.
+
+## Fix (M6-V16 round 1): items 1 and 3 fixed, item 2 left open
+1. Fixed: the Load Game players cell wraps (`TreeItem.SetAutowrapMode(2, WordSmart)` in `LoadGameScreen.AddRow`), so a
+   four-seat row takes two lines and seats 3-4's "(T2)" show at 1152 x 648 (`team-files-load-game.png`). `TeamFilesTest`
+   checks the 2v2 row's cell wraps.
+2. Not changed: the owner's / Producer's call (refuse a one-side match, or call it a sandbox in docs/02).
+3. Fixed: `FogViewTest.AllyGhost` (players 0 and 1 on one team; a player-0 scout sees the ally's hall and walks home; the
+   hall's ghost under the cursor is no `EnemyAt` target). With the `IsEnemyOwner` ghost line removed it failed ("EnemyAt on
+   the ally's remembered hall gave EntityHandle { Index = 1, Generation = 1 } building True"). Once M6-S5's shared vision
+   keeps the ally's hall in sight there is no ally ghost to stage: the test then prints a "skipped" line instead of failing.

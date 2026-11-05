@@ -61,4 +61,6 @@ public enum MatchOverText
     Opening,
     /// <summary>M6-V16: a team's label row in the stats table, a format naming <c>{0}</c> (the team number).</summary>
     Team,
+    /// <summary>BUG-1061: the label row over the seats with no team in a stats table that has teams.</summary>
+    NoTeam,
 }

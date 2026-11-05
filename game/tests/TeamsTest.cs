@@ -28,6 +28,10 @@ namespace Rts.Game.Tests;
 /// <item>Banner, the local side wiped (teams 1, 1, 2, 2): player 3 razes player 0's hall (no banner: player 1 stands), then
 /// player 1's: "Defeat" with the match over (player 2 stands). Stats "Team 1" (0, 1), "Team 2" (2, 3).</item>
 /// <item>The row order of a 1v1v2 (teams 0, 0, 1, 1): the team first, the no-team seats after, ungrouped.</item>
+/// <item>BUG-1061, the stats screen of mixed matches (opened from the pause menu): a 1v1v2 (teams 1, 1, 0, 0) shows "Team 1"
+/// over players 0, 1 and "No team" (<c>match_over.no_team</c>) over 2, 3; teams 0, 1, 0 show "Team 1" over player 1 and
+/// "No team" over 0, 2; a free-for-all shows neither. The grid walk fails on a player row under a label of another
+/// team (or under none when the match has a team).</item>
 /// </list>
 /// </summary>
 /// <remarks>
@@ -71,6 +75,7 @@ public partial class TeamsTest : Node
             await LocalOutAllyWins();
             await LocalSideWiped();
             RowOrderOfA1v1v2();
+            await MixedStats();
         }
         catch (Exception ex)
         {
@@ -210,7 +215,7 @@ public partial class TeamsTest : Node
         Check(banner.Title.Text == _ui.MatchOver(MatchOverText.Victory) && match.Outcome == MatchOutcome.Victory && sim.MatchOver && w.IsDefeated(0) && !w.IsDefeated(2),
             $"ally wins: title '{banner.Title.Text}', outcome {match.Outcome}, MatchOver {sim.MatchOver}, defeated 0 {w.IsDefeated(0)} / 2 {w.IsDefeated(2)}");
         await Click(banner.StatsButton);
-        CheckGrouped(match, new[] { 0, 2, 1, 3 }, new[] { 1, 2 }, "ally wins");
+        CheckGrouped(match, new[] { 0, 2, 1, 3 }, new[] { 1, 2 }, noTeam: false, "ally wins");
         await Shot("stats-ally-wins");
         await Type(Key.Escape);
         await QuitMatch();
@@ -238,13 +243,14 @@ public partial class TeamsTest : Node
             && banner.ContinueButton.Visible,
             $"side wiped: title '{banner.Title.Text}', outcome {match.Outcome}, MatchOver {sim.MatchOver}");
         await Click(banner.StatsButton);
-        CheckGrouped(match, new[] { 0, 1, 2, 3 }, new[] { 1, 2 }, "side wiped");
+        CheckGrouped(match, new[] { 0, 1, 2, 3 }, new[] { 1, 2 }, noTeam: false, "side wiped");
         await Type(Key.Escape);
         await QuitMatch();
     }
 
-    // The open stats screen: the rows in `order` under one label per team of `teams`, every counter right, the screen fits.
-    private void CheckGrouped(Match match, int[] order, int[] teams, string how)
+    // The open stats screen: the rows in `order` under one label per team of `teams` (and, with `noTeam`, the no-team seats
+    // under "No team"), every counter right, the screen fits.
+    private void CheckGrouped(Match match, int[] order, int[] teams, bool noTeam, string how)
     {
         MatchStats stats = _main.Stats!;
         World w = match.Simulation!.World;
@@ -252,28 +258,44 @@ public partial class TeamsTest : Node
             $"{how}: stats rows [{string.Join(", ", stats.DisplayOrder)}] (want [{string.Join(", ", order)}])");
         string[] labels = teams.Select(_ui.TeamLabel).ToArray();
         Check(stats.TeamLabels.Select(l => l.Text).SequenceEqual(labels), $"{how}: team labels [{string.Join(", ", stats.TeamLabels.Select(l => l.Text))}]");
-        // Each label sits above its team's first row and below the previous team's last.
+        Check(noTeam == (stats.NoTeamLabel != null) && (stats.NoTeamLabel == null || stats.NoTeamLabel.Text == _ui.MatchOver(MatchOverText.NoTeam)),
+            $"{how}: no-team label '{stats.NoTeamLabel?.Text}' (want one: {noTeam})");
+        // Each label sits above its group's first row and below the previous group's last; BUG-1061: every player row sits
+        // under the label of its own group (a no-team seat under "No team"), or under none when nobody has a team.
         var grid = (GridContainer)stats.Table;
         var cells = grid.GetChildren().OfType<Control>().ToList();
         int columns = grid.Columns, row = 1; // row 0 holds the headings
-        int k = 0, label = 0;
+        int k = 0, label = 0, group = -1; // group: the team of the label above (0 = "No team"), -1 = no label yet
+        bool walkedNoTeam = false;
         while (k < order.Length && (row + 1) * columns <= cells.Count)
         {
             Control first = cells[row * columns];
             if (label < stats.TeamLabels.Count && first == stats.TeamLabels[label])
             {
                 Check(w.TeamOf(order[k]) == teams[label], $"{how}: label '{stats.TeamLabels[label].Text}' heads player {order[k]} of team {w.TeamOf(order[k])}");
+                group = teams[label];
                 label++;
+            }
+            else if (stats.NoTeamLabel != null && first == stats.NoTeamLabel)
+            {
+                Check(!walkedNoTeam && label == labels.Length && w.TeamOf(order[k]) == 0, $"{how}: the no-team label heads player {order[k]} of team {w.TeamOf(order[k])}");
+                walkedNoTeam = true;
+                group = 0;
             }
             else
             {
                 Check(first is HBoxContainer && ((Label)first.GetChild(1)).Text == stats.FactionName(order[k]),
                     $"{how}: grid row {row} is not player {order[k]}'s");
+                int team = w.TeamOf(order[k]);
+                Check(group == -1 ? teams.Length == 0 : team == group,
+                    $"{how}: player {order[k]} (team {team}) shows under the {(group < 0 ? "no" : group == 0 ? "'No team'" : $"team {group}")} label");
                 k++;
             }
             row++;
         }
-        Check(k == order.Length && label == labels.Length, $"{how}: walked {k} rows and {label} labels in the grid");
+        Check(k == order.Length && label == labels.Length && walkedNoTeam == noTeam, $"{how}: walked {k} rows, {label} labels, no-team label {walkedNoTeam} in the grid");
+        if (stats.NoTeamLabel != null)
+            Check(GetViewport().GetVisibleRect().Grow(0.5f).Encloses(stats.NoTeamLabel.GetGlobalRect()), $"{how}: the no-team label {stats.NoTeamLabel.GetGlobalRect()} off screen");
         foreach (string f in StatsScreenCheck.Columns(stats, w, _ui, how)) Check(false, f);
         foreach (string f in StatsScreenCheck.Graph(stats, match, drawn: false, how)) Check(false, f);
         foreach (string f in StatsScreenCheck.Fits(stats, GetViewport().GetVisibleRect(), how)) Check(false, f);
@@ -295,6 +317,29 @@ public partial class TeamsTest : Node
             new PlayerSeat(0, SeatController.Human, AiDifficulty.Normal, 1), new PlayerSeat(0, SeatController.Human, AiDifficulty.Normal, 2));
         var odd = new Simulation(new SimConfig(1, 4, 64, 64) { Data = _data, Map = MapGenParams.Default with { Forests = 0, GoldMines = 0, StartLocations = 4 }, Seats = three });
         Check(MatchStats.RowOrder(odd.World).SequenceEqual(new[] { 2, 0, 3, 1 }), $"teams 2, 0, 1, 2 row order [{string.Join(", ", MatchStats.RowOrder(odd.World))}]");
+    }
+
+    // BUG-1061: mixed matches' stats screens, opened from the pause menu (no halls, so nobody is out and the counters stay put).
+    private async Task MixedStats()
+    {
+        await StatsOf(4, new[] { "--team", "1", "1", "--team", "2", "1" }, new[] { 0, 1, 2, 3 }, new[] { 1 }, noTeam: true, "1v1v2", "stats-1v1v2");
+        await StatsOf(3, new[] { "--team", "2", "1" }, new[] { 1, 0, 2 }, new[] { 1 }, noTeam: true, "teams 0, 1, 0", "stats-3-slots");
+        await StatsOf(3, Array.Empty<string>(), new[] { 0, 1, 2 }, Array.Empty<int>(), noTeam: false, "free-for-all", null);
+        await StatsOf(4, new[] { "--team", "1", "1", "--team", "2", "1", "--team", "3", "2", "--team", "4", "2" }, new[] { 0, 1, 2, 3 }, new[] { 1, 2 }, noTeam: false, "2v2 (paused)", null);
+    }
+
+    private async Task StatsOf(int players, string[] teams, int[] order, int[] labels, bool noTeam, string how, string? shot)
+    {
+        Match match = Start(players, teams);
+        await Frames(2);
+        _main.PauseMatch();
+        await Frames(1);
+        _main.ShowStats();
+        await Frames(2);
+        CheckGrouped(match, order, labels, noTeam, how);
+        if (shot != null) await Shot(shot);
+        _main.CloseStats();
+        await QuitMatch();
     }
 
     // ---- set-up (commands only), as FreeForAllTest ----

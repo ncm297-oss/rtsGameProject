@@ -6632,14 +6632,14 @@ game/scripts/SkirmishSetup.cs      TeamOptions / TeamPick (None, Team 1-4), a fi
 game/scripts/LaunchOptions.cs      --team <slot> <n> (0-4, MaxTeam = SlotCount), TeamOf(slot); in MatchFlags
 game/scripts/SimRunner.cs          SlotTeams; SeatsFor(..., slotTeams); StartPlayback builds both seat lists with seat.Team
 game/scripts/Match.cs              PickSeats copies the teams; ResultFor: the banner per side (AllyStands)
-game/scripts/MatchStats.cs         RowOrder, DisplayOrder, TeamLabels: rows grouped by team under a label row
+game/scripts/MatchStats.cs         RowOrder, DisplayOrder, TeamLabels, NoTeamLabel: rows grouped by team under a label row
 game/scripts/ReplayStore.cs        TryReadHeader: five-token seat lines in format 7 (team 0-8), four before it
 game/scripts/LoadGameScreen.cs     SeatsText: load.seat_team around a seat on a team, "(T1)"
 game/scripts/SelectionController.cs, Minimap.cs   Enemies(world): the alliance table for the enemy pickers
 sim/Rts.Sim/ViewApi/EnemyTable.cs  IsEnemyOwner(owner, viewer, table): the pickers' read of the view's alliance table
 sim/Rts.Sim/ViewApi/UnitPicker.cs, MinimapRaster.cs   ResolveEnemy / EnemyDotAt / DrawnEnemyDotAt overloads taking the table
 sim/Rts.Sim/ViewApi/SaveSummary.cs Teams (and each seat's Team): format 3's team bytes after the tick
-ui.json                            setup.team, team_none, team_item; match_over.team; load.seat_team
+ui.json                            setup.team, team_none, team_item; match_over.team, no_team; load.seat_team
 ```
 
 - **Setup.** Each slot row gets a fifth cell, a Team list 160 px wide (the other lists are 240, so five columns fit the
@@ -6660,15 +6660,18 @@ ui.json                            setup.team, team_none, team_item; match_over.
   watching (a 1v1v2 whose side is out while the others fight).
 - **Stats grouped by team.** `MatchStats.RowOrder(world)`: the players of team 1, then team 2 ... (player order inside a
   team), then the players with no team. Before each team's first row a label row (`match_over.team`, "Team 1", in the
-  heading colour, the other cells empty). With no team in the match the order is the player order and there is no label: the
+  heading colour, the other cells empty). In a match with a team, the players with no team get a label row of their own
+  (`match_over.no_team`, "No team") before the first of them (BUG-1061: without it a 1v1v2's free-for-all seats read as the
+  last team's). With no team in the match the order is the player order and there is no label: the
   free-for-all screen is unchanged. The row accessors (`Cell`, `SeatName`, `FactionName`, `Swatch`, `OpeningText`) stay
-  indexed by player; `DisplayOrder` and `TeamLabels` say what the grid shows. The opening lines stay in seat order.
+  indexed by player; `DisplayOrder`, `TeamLabels` and `NoTeamLabel` say what the grid shows. The opening lines stay in seat order.
 - **Load Game.** `ReplayStore.TryReadHeader` takes five tokens on a format-7 seat line (the team a canonical integer 0-8, as
   `Replay.Validate` holds) and four before format 7 (team 0); any other count is an unreadable header. `SaveSummary` reads
   the team bytes after the tick when the header's version is 3 or more (a byte over 8 is no header; before 3, every team 0)
   into `Teams` and each seat's `ReplaySeat.Team`, so `SaveEntry` and `ReplayEntry` carry the teams the same way. The players
   cell shows a seat on a team as `load.seat_team` ("{0} (T{1})": the seat text and the team, "Malazan Empire (You) (T1)");
-  a seat with no team (every seat of a free-for-all and of a format-6 replay) has no mark.
+  a seat with no team (every seat of a free-for-all and of a format-6 replay) has no mark. The players cell wraps
+  (`TreeItem` autowrap, BUG-1062), so a four-seat row takes two lines and every seat's mark shows.
 - **Playback.** `SimRunner.StartPlayback` builds the playback seats (all human) and the played seats with the header's team,
   so a watched 2v2 has its alliances and plays to every checkpoint; a format-6 replay plays with every team 0, as before.
 - **The enemy pickers** (BUG-1044 item 2's view follow-up). `SelectionController.Enemies(world)` builds a `bool[players]` of
@@ -6686,7 +6689,10 @@ ui.json                            setup.team, team_none, team_item; match_over.
   2 1`; junk `--team` values; `SeatsFor` with teams; the 2v2 banners (teams 1, 2, 1, 2: the local player razed by an
   executioner seat that never builds, no banner while its ally stands, then Victory when the ally razes the enemy; teams 1, 1,
   2, 2: Defeat once both team-1 halls fall), each with the grouped stats (labels, rows, counters, graph, fits 1152 x 648);
-  `RowOrder` of a 1v1v2. `game/tests/TeamFilesTest.tscn`: the two fixtures (`game/tests/fixtures/teams`, format 6 and 7,
+  `RowOrder` of a 1v1v2; the stats of mixed matches opened from the pause menu (BUG-1061: a 1v1v2 and teams 0, 1, 0 with
+  "No team" over the no-team rows, a free-for-all and a 2v2 without it; the grid walk fails a player row under another
+  group's label). `FogViewTest`: an ally's hall remembered as a ghost is no `EnemyAt` target (BUG-1062; skipped with a line
+  once shared vision keeps the ally's hall in sight). `game/tests/TeamFilesTest.tscn`: the two fixtures (`game/tests/fixtures/teams`, format 6 and 7,
   header-valid and sealed) read by `TryReadHeader` and the sim's reader alike, hostile seat lines refused, teams 0 and 8 read;
   a 2v2 saved at tick 300 and recorded to 600 (format 7), its Load Game rows with "(T1)" / "(T2)" beside the fixtures, Watch
   to all 6 checkpoints with the teams, Load resuming with `TeamOf` 1, 1, 2, 2. Both scenes run windowed with `-- --shots <dir>`
