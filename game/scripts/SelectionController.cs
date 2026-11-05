@@ -945,7 +945,8 @@ public partial class SelectionController : Node
         ResourceStore r = world.Resources;
         ResourcePicker.PickRay(world.NavGrid, world.Data.Resources, r.Alive, r.TypeId, r.Cell, world.Heightmap, so, sd, PropsView.Shape, out float nodeT);
         // A ghost (M4-V5) met before anything drawn is an Attack on the remembered building; the sim accepts the handle. M6-V16:
-        // an ally's remembered building in front is no target (the sim would drop the Attack), as an ally's drawn one.
+        // an ally's remembered building in front is no target (the sim would drop the Attack), as an ally's drawn one. Unreachable
+        // since M6-S5 (an ally's building is never a ghost: always seen while it stands, collapsed when the ally is out); kept as a guard.
         ReadOnlySpan<bool> enemies = Enemies(world);
         int ghost = PickGhost(world, fog, so, sd, out float ghostT);
         if (ghost >= 0 && ghostT < unitT && ghostT < buildingT && ghostT <= nodeT)

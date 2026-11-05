@@ -19,8 +19,10 @@ namespace Rts.Game.Tests;
 /// <item>Setup: each of the four slots shows a Team list (None, Team 1 .. Team 4; default None, which passes no <c>--team</c>);
 /// slots 1 + 2 on Team 1 and 3 + 4 on Team 2 give <c>--team</c> pairs that <see cref="LaunchOptions.Parse"/> reads back, and
 /// Start launches a match whose <c>World.TeamOf</c> is 1, 1, 2, 2 (the played seats carry the teams).</item>
-/// <item><c>--team 1 1 --team 2 1</c> starts the same way (both seats on team 1); junk values are warned about and ignored, a
+/// <item><c>--team 1 1 --team 2 2</c> starts the same way (two sides); junk values are warned about and ignored, a
 /// slot past the players is unused.</item>
+/// <item>BUG-1062 item 2: Start is disabled, with <c>setup.one_team</c> beside it, while every shown slot is on one team (a
+/// hidden slot's team doesn't count); None or a second team on a shown slot enables it.</item>
 /// <item>Banner, the local player out first (teams 1, 2, 1, 2): player 3 (an executioner seat that never builds, so it is
 /// outside the match-over count, as in <see cref="DefeatStaging"/>) razes player 0's only hall: no banner and no result while
 /// the ally (player 2) stands; player 2 then razes player 1's hall: "Victory" for the local player, out but on the winning
@@ -72,6 +74,7 @@ public partial class TeamsTest : Node
             FlagRows();
             await SetupColumn();
             await TeamFlagStart();
+            await OneTeamStart();
             await LocalOutAllyWins();
             await LocalSideWiped();
             RowOrderOfA1v1v2();
@@ -181,14 +184,60 @@ public partial class TeamsTest : Node
 
     private async Task TeamFlagStart()
     {
-        _main.StartSkirmish(new[] { "--team", "1", "1", "--team", "2", "1", "--team", "4", "2", "--mute", "--seed", "3", "--units", "0" });
+        // Two teams (BUG-1062 item 2: a one-team match never ends, so the setup no longer offers one); slot 4 is past --players.
+        _main.StartSkirmish(new[] { "--team", "1", "1", "--team", "2", "2", "--team", "4", "2", "--mute", "--seed", "3", "--units", "0" });
         await Frames(2);
         Match? match = _main.CurrentMatch;
         if (!Check(match?.Simulation != null, "--team started no match")) return;
         World w = match!.Simulation!.World;
-        Check(w.Config.PlayerCount == 2 && w.TeamOf(0) == 1 && w.TeamOf(1) == 1 && w.AreAllied(0, 1) && match.Seats.All(s => s.Team == 1),
-            $"--team 1 1 --team 2 1: {w.Config.PlayerCount} players, TeamOf {w.TeamOf(0)}, {w.TeamOf(1)}");
+        Check(w.Config.PlayerCount == 2 && w.TeamOf(0) == 1 && w.TeamOf(1) == 2 && !w.AreAllied(0, 1) && w.IsEnemy(0, 1)
+            && match.Seats.Select(s => s.Team).SequenceEqual(new[] { 1, 2 }),
+            $"--team 1 1 --team 2 2: {w.Config.PlayerCount} players, TeamOf {w.TeamOf(0)}, {w.TeamOf(1)}");
         await QuitMatch();
+    }
+
+    // BUG-1062 item 2: Start is off, with the ui.json line beside it, while every shown slot is on one team; a hidden slot's
+    // team doesn't count, and None on any shown slot (a side of its own) or a second team turns Start back on.
+    private async Task OneTeamStart()
+    {
+        _main.ShowSetup();
+        await Frames(2);
+        SkirmishSetup setup = _main.Setup!;
+        while (setup.SlotCount < SkirmishSetup.MaxSlots) setup.AddSlot();
+        void Pick(int slot, int team)
+        {
+            setup.TeamOptions[slot].Select(team);
+            setup.TeamOptions[slot].EmitSignal(OptionButton.SignalName.ItemSelected, (long)team); // as a click on the item
+        }
+        for (int s = 0; s < SkirmishSetup.MaxSlots; s++) Pick(s, 0);
+        await Frames(1);
+        Check(!setup.StartButton.Disabled && !setup.OneTeamLabel.Visible && !setup.OneTeam, "a free-for-all: Start off or the one-team line shown");
+        for (int s = 0; s < 3; s++) Pick(s, 1);
+        Pick(3, 2);
+        await Frames(1);
+        Check(!setup.StartButton.Disabled && !setup.OneTeamLabel.Visible, "teams 1, 1, 1, 2: Start off or the one-team line shown");
+        setup.RemoveSlot(); // slot 4 (team 2) hidden: the shown slots are all team 1
+        await Frames(2);
+        Rect2 view = GetViewport().GetVisibleRect();
+        Check(setup.OneTeam && setup.StartButton.Disabled && setup.OneTeamLabel.IsVisibleInTree()
+            && setup.OneTeamLabel.Text == _ui.Setup(SetupText.OneTeam) && _ui.Setup(SetupText.OneTeam).Length > 0
+            && view.Grow(0.5f).Encloses(setup.OneTeamLabel.GetGlobalRect()) && view.Grow(0.5f).Encloses(setup.StartButton.GetGlobalRect()),
+            $"teams 1, 1, 1 (slot 4 hidden on team 2): OneTeam {setup.OneTeam}, Start disabled {setup.StartButton.Disabled}, line visible "
+            + $"{setup.OneTeamLabel.IsVisibleInTree()} '{setup.OneTeamLabel.Text}' at {setup.OneTeamLabel.GetGlobalRect()}");
+        await Shot("setup-one-team");
+        setup.StartButton.EmitSignal(BaseButton.SignalName.Pressed); // Pressed reaching it anyway starts nothing
+        await Frames(2);
+        Check(_main.CurrentMatch == null, "Start with every shown slot on one team started a match");
+        Pick(2, 0);
+        await Frames(1);
+        Check(!setup.StartButton.Disabled && !setup.OneTeamLabel.Visible, "teams 1, 1, None: Start off or the one-team line shown");
+        Pick(2, 1);
+        setup.AddSlot(); // slot 4 shown again, still team 2
+        await Frames(1);
+        Check(!setup.StartButton.Disabled && !setup.OneTeamLabel.Visible, "slot 4 (team 2) shown again: Start off or the one-team line shown");
+        for (int s = 0; s < SkirmishSetup.MaxSlots; s++) Pick(s, 0);
+        _main.ShowMenu();
+        await Frames(1);
     }
 
     // ---- the banner per side ----

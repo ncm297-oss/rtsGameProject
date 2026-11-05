@@ -115,7 +115,8 @@
     "mines": "Gold mines",
     "team": "Team",
     "team_none": "None",
-    "team_item": "Team {0}"
+    "team_item": "Team {0}",
+    "one_team": "Everyone is on one team: put a player on another team or None"
   },
   "pause": {
     "title": "Paused",

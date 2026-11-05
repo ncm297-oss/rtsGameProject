@@ -118,6 +118,22 @@ public partial class SkirmishSetup : CanvasLayer
     /// <summary>The Start button.</summary>
     public Button StartButton { get; private set; } = null!;
 
+    /// <summary>The line beside Start, shown while <see cref="OneTeam"/> holds (BUG-1062 item 2).</summary>
+    public Label OneTeamLabel { get; private set; } = null!;
+
+    /// <summary>True while every shown slot is on the same team (not None): a match with one side never ends, so Start is off.</summary>
+    public bool OneTeam
+    {
+        get
+        {
+            int team = TeamPick(0);
+            if (team == 0) return false;
+            for (int s = 1; s < SlotCount; s++)
+                if (TeamPick(s) != team) return false;
+            return true;
+        }
+    }
+
     /// <summary>The Back button.</summary>
     public Button BackButton { get; private set; } = null!;
 
@@ -180,6 +196,7 @@ public partial class SkirmishSetup : CanvasLayer
         foreach (Control cell in _rows[slot]) cell.Visible = true;
         PickColour(slot, ColourPick(slot));
         UpdateSlotButtons();
+        Validate();
     }
 
     /// <summary>Hides the last slot, down to two; its picks are kept for when it is shown again.</summary>
@@ -190,6 +207,7 @@ public partial class SkirmishSetup : CanvasLayer
         foreach (Control cell in _rows[slot]) cell.Visible = false;
         GreyTakenColours();
         UpdateSlotButtons();
+        Validate();
     }
 
     // Marks the colours the shown slots other than `slot` hold.
@@ -368,6 +386,7 @@ public partial class SkirmishSetup : CanvasLayer
             team.AddItem(ui.Setup(SetupText.TeamNone));
             for (int t = 1; t <= LaunchOptions.MaxTeam; t++) team.AddItem(ui.TeamItem(t));
             team.Select(0);
+            team.ItemSelected += _ => Validate();
             TeamOptions[slot] = team;
             _rows[slot] = new Control[] { SlotLabels[slot], FactionOptions[slot], ColourOptions[slot], difficulty, team };
             foreach (Control cell in _rows[slot])
@@ -396,9 +415,14 @@ public partial class SkirmishSetup : CanvasLayer
         StartButton = ShellUi.Button("Start", ui.Setup(SetupText.Start), 180f);
         StartButton.Pressed += () =>
         {
-            if (MatchArgs() is string[] args) StartPressed?.Invoke(args);
+            if (!OneTeam && MatchArgs() is string[] args) StartPressed?.Invoke(args);
         };
         buttons.AddChild(StartButton);
+        // Beside the buttons, not under them: the line adds no height to a screen that must fit 1152 x 648.
+        OneTeamLabel = ShellUi.Text(ui.Setup(SetupText.OneTeam), 16);
+        OneTeamLabel.Name = "OneTeam";
+        OneTeamLabel.SizeFlagsVertical = Control.SizeFlags.ShrinkCenter;
+        buttons.AddChild(OneTeamLabel);
         GreyTakenColours();
         UpdateSlotButtons();
         Validate();
@@ -411,7 +435,12 @@ public partial class SkirmishSetup : CanvasLayer
         Validate();
     }
 
-    private void Validate() => StartButton.Disabled = Seed == null;
+    private void Validate()
+    {
+        bool oneTeam = OneTeam;
+        StartButton.Disabled = Seed == null || oneTeam;
+        OneTeamLabel.Visible = oneTeam;
+    }
 
     // A small square of the colour for its list item.
     private static ImageTexture Swatch(uint rgb)

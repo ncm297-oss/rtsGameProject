@@ -32,7 +32,7 @@ namespace Rts.Game.Tests;
 /// or 255 lists as unreadable (Delete only) and nothing crashes.</item>
 /// <item>BUG-1061 re-check: the stats grid read row by row (team labels, "No team", player rows, label rows otherwise empty) for
 /// the two banner screens above and, from the pause menu, teams 0, 1, 2, 3 (opened twice), 4, 3, 2, 1, 0, 0, 0, 2 and a
-/// free-for-all (opened twice). The four-label screens' fit is a KNOWN BUG-1063 row (fails only with <c>-- --strict</c>).</item>
+/// free-for-all (opened twice). The four-label screens fit (BUG-1063, fixed: the graph shrinks past two label rows).</item>
 /// </list>
 /// Headless: <c>&amp; $env:GODOT --headless --path game res://tests/QaM6V16Test.tscn</c>; prints "QA M6-V16 TEST PASS" or
 /// "QA M6-V16 TEST FAIL: ..." lines. Windowed with <c>-- --shots &lt;dir&gt;</c> it saves the two stats screens.
@@ -411,11 +411,13 @@ public partial class QaM6V16Test : Node
             await Frames(2);
             MatchStats stats = _main.Stats!;
             CheckLayout(stats, want, $"{how} (pass {pass + 1})");
-            // BUG-1063: four label rows (three teams and a no-team seat, or four teams) push Back off a 1152 x 648 screen.
-            List<string> overflow = StatsScreenCheck.Fits(stats, GetViewport().GetVisibleRect(), how);
-            if (stats.TeamLabels.Count + (stats.NoTeamLabel != null ? 1 : 0) >= 4)
-                Known("BUG-1063", overflow.Count == 0, overflow.Count == 0 ? $"{how}: the screen fits" : string.Join("; ", overflow));
-            else foreach (string f in overflow) Check(false, f);
+            // BUG-1063 (fixed): four label rows (three teams and a no-team seat, or four teams) pushed Back off a 1152 x 648
+            // screen; the graph now gives up a label row's height for each label row past two.
+            foreach (string f in StatsScreenCheck.Fits(stats, GetViewport().GetVisibleRect(), how)) Check(false, f);
+            int labelRows = stats.TeamLabels.Count + (stats.NoTeamLabel != null ? 1 : 0);
+            float wantGraph = MatchStats.GraphHeight - MatchStats.LabelRowHeight * Math.Max(0, labelRows - MatchStats.LabelRowsRoom);
+            Check(Mathf.IsEqualApprox(stats.Graph.CustomMinimumSize.Y, wantGraph),
+                $"{how}: {labelRows} label rows, graph minimum height {stats.Graph.CustomMinimumSize.Y} (want {wantGraph})");
             if (stats.NoTeamLabel != null)
                 Check(GetViewport().GetVisibleRect().Grow(0.5f).Encloses(stats.NoTeamLabel.GetGlobalRect()) && stats.NoTeamLabel.IsVisibleInTree(),
                     $"{how}: the no-team label {stats.NoTeamLabel.GetGlobalRect()} is off screen or hidden");

@@ -6641,14 +6641,16 @@ game/scripts/SelectionController.cs, Minimap.cs   Enemies(world): the alliance t
 sim/Rts.Sim/ViewApi/EnemyTable.cs  IsEnemyOwner(owner, viewer, table): the pickers' read of the view's alliance table
 sim/Rts.Sim/ViewApi/UnitPicker.cs, MinimapRaster.cs   ResolveEnemy / EnemyDotAt / DrawnEnemyDotAt overloads taking the table
 sim/Rts.Sim/ViewApi/SaveSummary.cs Teams (and each seat's Team): format 3's team bytes after the tick
-ui.json                            setup.team, team_none, team_item; match_over.team, no_team; load.seat_team
+ui.json                            setup.team, team_none, team_item, one_team; match_over.team, no_team; load.seat_team
 ```
 
 - **Setup.** Each slot row gets a fifth cell, a Team list 160 px wide (the other lists are 240, so five columns fit the
   1152 px window): item 0 `setup.team_none` ("None", team 0), items 1-4 `setup.team_item` ("Team {0}"). Default None, so a
   match set up as before is a free-for-all. `MatchArgs` adds `--team <slot> <n>` after the slot's `--colour` only for a slot
-  on a team. The setup offers teams 1-4 (`LaunchOptions.MaxTeam`, one per slot at most); the sim takes 0-8. Nothing stops
-  every slot picking one team: that match never ends (the sim's rule needs two sides that built), as in the sim.
+  on a team. The setup offers teams 1-4 (`LaunchOptions.MaxTeam`, one per slot at most); the sim takes 0-8. While every
+  shown slot is on one team (`SkirmishSetup.OneTeam`; a hidden slot doesn't count, None is a side of its own) Start is
+  disabled and `setup.one_team` shows beside it (BUG-1062 item 2: that match would never end, the sim's rule needs two
+  sides that built). The line sits in the buttons' row, so it adds no height. `--team` itself still takes one team (as the sim).
 - **`--team <slot> <n>`.** Two values like `--colour`: slot 1-4, team one digit 0-4 ("01", "+1", "5" are junk, warned and
   ignored; a flag is never taken as a value, BUG-0041); the last good value for a slot wins; a slot past `--players` is
   warned about with the other per-slot flags and unused. `Match.PickSeats` copies `LaunchOptions.TeamOf` into
@@ -6665,7 +6667,9 @@ ui.json                            setup.team, team_none, team_item; match_over.
   heading colour, the other cells empty). In a match with a team, the players with no team get a label row of their own
   (`match_over.no_team`, "No team") before the first of them (BUG-1061: without it a 1v1v2's free-for-all seats read as the
   last team's). With no team in the match the order is the player order and there is no label: the
-  free-for-all screen is unchanged. The row accessors (`Cell`, `SeatName`, `FactionName`, `Swatch`, `OpeningText`) stay
+  free-for-all screen is unchanged. Past two label rows the graph's minimum height gives up 30 px per row
+  (`MatchStats.LabelRowsRoom`, `LabelRowHeight`; BUG-1063), so four label rows (three teams and a no-team seat, or four
+  teams) still fit 1152 x 648. The row accessors (`Cell`, `SeatName`, `FactionName`, `Swatch`, `OpeningText`) stay
   indexed by player; `DisplayOrder`, `TeamLabels` and `NoTeamLabel` say what the grid shows. The opening lines stay in seat order.
 - **Load Game.** `ReplayStore.TryReadHeader` takes five tokens on a format-7 seat line (the team a canonical integer 0-8, as
   `Replay.Validate` holds) and four before format 7 (team 0); any other count is an unreadable header. `SaveSummary` reads
@@ -6682,19 +6686,23 @@ ui.json                            setup.team, team_none, team_item; match_over.
   `MinimapRaster.EnemyDotAt` and `DrawnEnemyDotAt` have overloads taking it: an ally's unit, building or dot is no target,
   as an own one, so the right-click falls through to a Move (and A + click to an Attack-move on the ground); an owner past
   the table is no target; an empty table is the old rule (every other player). A remembered building (ghost) of an ally in
-  front of the cursor is no target either. An ability aimed at an ally's unit aims at the ground behind it, as at an own unit.
+  front of the cursor is no target either; since M6-S5's shared vision that branch is unreachable (an ally's building is never
+  a ghost: always seen while it stands, collapsed when the ally is out), kept as a guard (BUG-1064). An ability aimed at an ally's unit aims at the ground behind it, as at an own unit.
   The old overloads are kept (free-for-all callers, QA suites).
 - **Not in this slice:** team colours (colours stay per slot), starting resources, the fog's shared vision (M6-S5), any
   format change.
 - **Tests.** `game/tests/TeamsTest.tscn`: the setup's four Team lists (items, default None, no `--team` by default, layout),
   slots 1 + 2 / 3 + 4 round-tripping through `MatchArgs` and `Parse` and Start giving `TeamOf` 1, 1, 2, 2; `--team 1 1 --team
-  2 1`; junk `--team` values; `SeatsFor` with teams; the 2v2 banners (teams 1, 2, 1, 2: the local player razed by an
+  2 2` (two sides); junk `--team` values; `SeatsFor` with teams; the 2v2 banners (teams 1, 2, 1, 2: the local player razed by an
   executioner seat that never builds, no banner while its ally stands, then Victory when the ally razes the enemy; teams 1, 1,
   2, 2: Defeat once both team-1 halls fall), each with the grouped stats (labels, rows, counters, graph, fits 1152 x 648);
   `RowOrder` of a 1v1v2; the stats of mixed matches opened from the pause menu (BUG-1061: a 1v1v2 and teams 0, 1, 0 with
   "No team" over the no-team rows, a free-for-all and a 2v2 without it; the grid walk fails a player row under another
-  group's label). `FogViewTest`: an ally's hall remembered as a ghost is no `EnemyAt` target (BUG-1062; skipped with a line
-  once shared vision keeps the ally's hall in sight). `game/tests/TeamFilesTest.tscn`: the two fixtures (`game/tests/fixtures/teams`, format 6 and 7,
+  group's label); Start off with `setup.one_team` beside it while every shown slot is on one team, on again with None or a
+  second team (BUG-1062 item 2). `QaM6V16Test.StatsLayouts`: the four-label screens fit with the graph shrunk (BUG-1063).
+  `FogViewTest` has no ally-ghost row: BUG-1062 item 3's row (an ally's hall remembered as a ghost is no
+  `EnemyAt` target) was dropped in BUG-1064, since after M6-S5 no ally ghost can be staged and a row that always skips proves
+  nothing. `game/tests/TeamFilesTest.tscn`: the two fixtures (`game/tests/fixtures/teams`, format 6 and 7,
   header-valid and sealed) read by `TryReadHeader` and the sim's reader alike, hostile seat lines refused, teams 0 and 8 read;
   a 2v2 saved at tick 300 and recorded to 600 (format 7), its Load Game rows with "(T1)" / "(T2)" beside the fixtures, Watch
   to all 6 checkpoints with the teams, Load resuming with `TeamOf` 1, 1, 2, 2. Both scenes run windowed with `-- --shots <dir>`

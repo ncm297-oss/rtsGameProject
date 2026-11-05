@@ -154,6 +154,17 @@ public partial class MatchStats : CanvasLayer
     /// <summary>The army value graph under the table (M6-V11).</summary>
     public ArmyValueGraph Graph { get; private set; } = null!;
 
+    private const float GraphWidth = 820f;
+
+    /// <summary>The graph's minimum height with up to <see cref="LabelRowsRoom"/> label rows in the table.</summary>
+    public const float GraphHeight = 220f;
+
+    /// <summary>Label rows the screen fits at 1152 x 648 with the full-height graph (BUG-1063).</summary>
+    public const int LabelRowsRoom = 2;
+
+    /// <summary>What the graph's minimum height gives up per label row past <see cref="LabelRowsRoom"/> (a row is about 29 px).</summary>
+    public const float LabelRowHeight = 30f;
+
     /// <summary>Width of every data column, in pixels: ten of them and two seat columns fit 1280 px (headings wrap).</summary>
     public const float ColumnWidth = 74f;
 
@@ -183,7 +194,7 @@ public partial class MatchStats : CanvasLayer
         var openings = new CenterContainer { Name = "OpeningsCentre" };
         openings.AddChild(_openings);
         column.AddChild(openings);
-        Graph = new ArmyValueGraph { Name = "ArmyValueGraph", CustomMinimumSize = new Vector2(820f, 220f) };
+        Graph = new ArmyValueGraph { Name = "ArmyValueGraph", CustomMinimumSize = new Vector2(GraphWidth, GraphHeight) };
         Graph.Build(ui);
         column.AddChild(Graph);
         BackButton = ShellUi.Button("Back", ui.MatchOver(MatchOverText.Back));
@@ -281,6 +292,10 @@ public partial class MatchStats : CanvasLayer
             foreach (Control cell in cells[p]) _grid.AddChild(cell);
             _order.Add(p);
         }
+        // BUG-1063: past two label rows the graph gives up a label row's height for each, so four (three teams and a no-team
+        // seat, or four teams) still leave Back on a 1152 x 648 screen.
+        int labelRows = _teamLabels.Count + (NoTeamLabel != null ? 1 : 0);
+        Graph.CustomMinimumSize = new Vector2(GraphWidth, GraphHeight - LabelRowHeight * Math.Max(0, labelRows - LabelRowsRoom));
         Graph.SetData(samples, colours, w.StatsSampleTicks, sim.TickNumber);
         Visible = true;
         BackButton.GrabFocus();

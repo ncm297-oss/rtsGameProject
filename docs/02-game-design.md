@@ -451,7 +451,8 @@ own cues (select, order, refused, building placed or finished, unit or tech read
    own, the free-for-all default) or 1-8; slots on one team are allies: they never attack each other, their friendly fire
    treats each other's units as their own, and the AI never targets an ally (the sim's half, M6-S4), and allies share vision (M6-S5, "Vision and fog of war").
    The setup's **Team** list per slot offers None (the default) and Team 1-4, so a 2v2, a 1v1v2 or a 2v1 is set up from the
-   menu; colours stay per slot, not per team (built in M6-V16; the Load Game list marks each seat's team, "(T1)"). Built so far:
+   menu; colours stay per slot, not per team. A match needs two sides: while every shown slot is on one team, Start is
+   disabled with a line saying why (BUG-1062; such a match could never end) (built in M6-V16; the Load Game list marks each seat's team, "(T1)"). Built so far:
    the map seed and size, the slots, a **Game speed** list (Slow / Normal / Fast, default Normal) and the map generator's
    **Forests** and **Gold mines** counts (defaults 12 / 8; at least one forest and two gold mines per player, so every
    base keeps its start forest and start mines; at most 64 each) (M6-V15). The smallest map (128) fits only about 60 gold

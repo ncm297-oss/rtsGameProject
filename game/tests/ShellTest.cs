@@ -336,8 +336,8 @@ public partial class ShellTest : Node
         // settings: 22 since M6-V7 (confine_cursor); keys 15 + hud 2 since M6-V8; setup 17 since M6-V5 (add_slot, remove_slot); menu 5 + load 16 since M6-V9 (18 since M6-VH3: playing, unreadable);
         // match_over 27 since M6-V11 (kills, losses and the two in-hand keys out; nine column labels, not_reached and the graph's three in); alert 2 since M6-V12; match_over 28 since M6-V13 (opening)
         // M6-V14: pause 5 (save), load 22 (kind, load, save_tag, replay_tag), save 12; M6-V15: setup 23 (speed, speed_slow / normal / fast, forests, mines)
-        // M6-V16: setup 26 (team, team_none, team_item), match_over 29 (team), load 23 (seat_team); BUG-1061: match_over 30 (no_team)
-        Check(keys.Count == 5 + 26 + 5 + 22 + 30 + 15 + 2 + 23 + 2 + 12, $"{keys.Count} shell keys");
+        // M6-V16: setup 26 (team, team_none, team_item), match_over 29 (team), load 23 (seat_team); BUG-1061: match_over 30 (no_team); BUG-1062: setup 27 (one_team)
+        Check(keys.Count == 5 + 27 + 5 + 22 + 30 + 15 + 2 + 23 + 2 + 12, $"{keys.Count} shell keys");
         string json = File.ReadAllText(UiText.DefaultPath).Replace("\r\n", "\n");
         foreach ((string section, string key, string text) in keys)
         {

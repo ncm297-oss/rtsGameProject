@@ -55,4 +55,6 @@ public enum SetupText
     TeamNone,
     /// <summary>One named team's list item: a format whose <c>{0}</c> is the team number (M6-V16).</summary>
     TeamItem,
+    /// <summary>Beside a disabled Start while every shown slot is on one team (BUG-1062 item 2: such a match could never end).</summary>
+    OneTeam,
 }

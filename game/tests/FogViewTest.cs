@@ -26,9 +26,7 @@ namespace Rts.Game.Tests;
 /// fly into a visible cell, the archer never shown. M4-V5: every frame also checks a ghost box exactly for each of the sim's
 /// unseen last-known entries; per seed a ghost row (the enemy hall and a House site scouted, remembered as ghosts, the site
 /// cancelled unseen and its ghost kept until its ground is seen, a right-click on the hall's ghost an Attack per selected
-/// unit with the remembered handle); BUG-1062 (M6-V16): an ally's hall scouted and remembered as a ghost is no
-/// <see cref="SelectionController.EnemyAt"/> target (skipped, with a line, when the sim shares the ally's vision and the hall
-/// never goes out of sight); a hover row (the build ghost red with "Unexplored" over unexplored ground).
+/// unit with the remembered handle); a hover row (the build ghost red with "Unexplored" over unexplored ground).
 /// Then 300 steady frames at <c>--units 500</c> with a ghost drawn (0 bytes in the view syncs), the hash twins, and a
 /// <c>--no-fog</c> match (everything shown, the texture all visible, uploaded once). M4-VH2 (BUG-0281): a tree felled in
 /// explored fog stays drawn and on the minimap (no relist) until its cell is seen again; the minimap click picks among the
@@ -82,7 +80,6 @@ public partial class FogViewTest : Node
             CheckOptionsAndText();
             foreach (ulong seed in seeds) await Fog(seed);
             foreach (ulong seed in seeds) await Ghosts(seed);
-            await AllyGhost(seeds[0]);
             await UnexploredHover(seeds[0]);
             await LastSeenTree(seeds[0]);
             await HiddenShooter(seeds[0]);
@@ -708,52 +705,6 @@ public partial class FogViewTest : Node
         }
         ghost.ScreenOverride = null;
         ghost.End();
-        await EndMatch();
-    }
-
-    // BUG-1062: players 0 and 1 on one team. A player-0 scout sees the ally's hall, walks home, and the hall's ghost in front
-    // of the cursor is no enemy (SelectionController.EnemyAt's ghost branch: EnemyTable.IsEnemyOwner on the ghost's owner).
-    private async Task AllyGhost(ulong seed)
-    {
-        StartMatch(seed, "--units", "1", "--zoom", "45", "--team", "1", "1", "--team", "2", "1");
-        _sim.Tick();
-        _sim.Tick();
-        int hall = FirstBuildingOf(1), home = FirstBuildingOf(0);
-        if (!Check(hall >= 0 && home >= 0 && W.AreAllied(0, 1), $"ally ghost seed {seed}: no Town Halls, or not allied")) { await EndMatch(); return; }
-        System.Numerics.Vector2 hc = SelectionController.SiteCenter(W, hall), oc = SelectionController.SiteCenter(W, home);
-        System.Numerics.Vector2 toHome = System.Numerics.Vector2.Normalize(oc - hc);
-        System.Numerics.Vector2 side = new(-toHome.Y, toHome.X);
-        System.Numerics.Vector2 scoutAt = hc - toHome * 2f + side * 12f;
-        int scoutType = WorkerType(W.FactionOf(0));
-        _sim.Enqueue(Command.SpawnUnit(0, scoutType, scoutAt));
-        _sim.Tick();
-        _sim.Tick();
-        EntityHandle scout = default;
-        for (int i = 0; i < U.Capacity; i++)
-            if (U.Alive[i] && U.Owner[i] == 0 && U.TypeId[i] == scoutType && System.Numerics.Vector2.Distance(U.Position[i], scoutAt) < 4f) scout = new EntityHandle(i, U.Generation[i]);
-        if (!Check(scout.Generation != 0, $"ally ghost seed {seed}: no scout")) { await EndMatch(); return; }
-        for (int t = 0; t < 60 && !W.Fog.CanSeeBuilding(0, hall); t++) _sim.Tick();
-        if (!Check(W.Fog.CanSeeBuilding(0, hall) && W.Fog.Ghosts(0)[hall].Known, $"ally ghost seed {seed}: the scout never saw the ally's hall")) { await EndMatch(); return; }
-        _sim.Enqueue(Command.Move(0, scout, oc + toHome * 30f));
-        _camera.SetFocus(hc.X, hc.Y);
-        for (int t = 0; t < 900 && !_buildings.IsGhostShown(hall); t++)
-        {
-            _sim.Tick();
-            await Frame();
-        }
-        if (!_buildings.IsGhostShown(hall) && W.Fog.CanSeeBuilding(0, hall))
-        {
-            // Shared allied vision (M6-S5): the ally's own sight keeps its hall in view, so it is never a ghost; nothing to pick.
-            GD.Print($"ally ghost seed {seed}: skipped, the ally's hall stays in sight (shared vision)");
-            await EndMatch();
-            return;
-        }
-        if (!Check(_buildings.IsGhostShown(hall) && W.Fog.Ghosts(0)[hall].Owner == 1, $"ally ghost seed {seed}: no ghost of the ally's hall once the scout left")) { await EndMatch(); return; }
-        await Frame();
-        Vector3 mid = new(hc.X, Rts.Sim.ViewApi.TerrainHeight.At(W.Heightmap, hc.X, hc.Y) + BuildingViews.BoxHeight / 2f, hc.Y);
-        Vector2 px = _camera.UnprojectPosition(mid);
-        bool picked = _sel.EnemyAt(px, out EntityHandle target, out bool isB);
-        Check(!picked && target == default, $"ally ghost seed {seed}: EnemyAt on the ally's remembered hall gave {target} building {isB} (want no target)");
         await EndMatch();
     }
 
