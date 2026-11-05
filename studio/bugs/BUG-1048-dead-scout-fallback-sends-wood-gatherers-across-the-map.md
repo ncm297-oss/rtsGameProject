@@ -34,3 +34,10 @@ passes and pins the documented behaviour.
   and send a gatherer (or the next free worker) to look at the head ring when none is; or replace a scout that dies
   before the head ring is done.
 - Related: BUG-1045, BUG-1047.
+
+## Producer triage (2026-11-05-0805 ACCEPT)
+S3 stands; the fallback is as documented, but in a 2v2 an early-lost scout is ordinary. **Decision:** the same rule as BUG-1047's: a
+dead scout does not lift the reach by itself; the reach lifts when the head ring is visited (by any own unit's sight), and until then a
+kind with no node within reach takes the nearest known node of that kind. A seat whose scout died before the head ring was seen keeps
+gathering near home from what its hall sees and its gatherers' walks reveal. Fix with BUG-1047 (M6-SH1 or the map-format task,
+whichever comes first); un-skip `TheScoutDiesBeforeTheSweepEnds_TheSeatStillGathersWood_By4000` with it.

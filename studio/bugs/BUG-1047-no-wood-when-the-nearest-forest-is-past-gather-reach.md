@@ -44,3 +44,10 @@ tick ~6,000.
   (the per-kind "no node" path), or release the reach once the scout has visited the head ring (the scout already
   covers home by then), rather than waiting for the whole-map sweep.
 - Related: BUG-1045 (the cause of the rule), BUG-1048 (its other fallback).
+
+## Producer triage (2026-11-05-0805 ACCEPT)
+S3 stands (no shipped generated start hits it: the reach table). **Decision:** fix it together with BUG-1048 as one rule, before the
+map-file format lands (a hand-made map can put the nearest forest past 64 m, which makes this an S2): lift the reach once the scout has
+visited the head ring (home is looked at by then), instead of after the whole-map sweep; and while the reach holds, a kind with no node
+within it falls back on the nearest known node of that kind (the "no node" path never idles the seat). First item of the next sim
+hardening (M6-SH1, counter 4 / 4), or folded into the map-format task if it comes first. Un-skip `NearestForestJustPastTheReach_AtTheShippedReach_*` with it.

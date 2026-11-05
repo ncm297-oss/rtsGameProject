@@ -8631,8 +8631,12 @@ that costs 0.01 ms per update, and still needs (a)'s byte-map union for the view
   `QA/GatherWedgeQaTests.SameGameDataHashes`. Recordings made before this commit refuse to play (data hash).
 - **Free-for-all after the reach rule:** `Vision/SharedVisionFfaPinTests`' five scenes (two of them with AI seats: the
   menu's human v AI on seeds 1 and 3, four AI seats on seed 4) give the same 3,000-tick digests on 424a5e8 (the pin file
-  copied there) and on this commit, the e5c4265 pins: no free-for-all scene moved, the AI ones included (their starts
-  see their own forest and mines within reach before the scout leaves). `QA/AiGatherMarkQaTests`' gone-node scene runs
+  copied there) and on this commit, the e5c4265 pins: none of the five pinned scenes moved, the AI ones included (their starts
+  see their own forest and mines within reach before the scout leaves). A free-for-all AI seat whose raiders see an enemy's
+  nodes does play differently from tick ~420 (QA, BUG-1049 item 1: of six AI free-for-all scenes × 12,000 ticks, `AiMatch(5, 4, Hard)`
+  seat 3 and `AiMatch(7, 2, Normal)` seat 1 move; before the rule they released the scout at tick 300 and sent gatherers 166 / 235 m
+  into the enemy's base; head at `gatherReach` 512 equals the base on all six, so the reach rule is the only cause and the intended one).
+  `QA/AiGatherMarkQaTests`' gone-node scene runs
   at `gatherReach` 512 (its subject is the mark; with 64 m the far half's remembered nodes are never sent to while the
   scout is out, so never marked).
 - **The 1v1 pairings after the reach rule:** the 27 pairing runs (`Content/AiOpeningPairsReportTests` 9 and

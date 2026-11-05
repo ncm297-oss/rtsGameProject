@@ -50,3 +50,8 @@ As above.
 ## Notes
 QA's evidence: per-tick hash and AI command logs of both scenes on 424a5e8 and head, and head at reach 512 (session
 scratch, not committed); the five pins re-run on 424a5e8 with `SharedVisionFfaPinTests.cs` copied there.
+
+## Producer triage (2026-11-05-0805 ACCEPT)
+S4, next sim hardening (M6-SH1): item 1 a docs/03 sentence naming the two raider scenes (the Producer will reword it if the hardening
+doesn't reach it); item 2 one anchor (the hall's centre for both, or the sentence); item 3 a comment by `RaidedTicksIfStarved` with the
+band 1,957 / 2,570; item 4 a row with a drop-off site placed while the scout is out.

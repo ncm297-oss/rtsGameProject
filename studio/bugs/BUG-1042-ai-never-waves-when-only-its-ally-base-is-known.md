@@ -3,7 +3,7 @@
 | Field | Value |
 | --- | --- |
 | Severity | S3 |
-| Status | fixed (M6-S5, pending QA) |
+| Status | fixed (M6-S5; QA verified 2026-11-05-0805: the soak's strict wave check green on every row, `MirrorAllies_TheScout_*` fails pre-fix) |
 | Found | 2026-10-27-0158, task M6-S4 |
 | System | AI (ScoutManager, MilitaryManager) with teams |
 | Fixed by | M6-S5: shared vision (an enemy building the ally sees is known) + `ScoutManager` drops a head waypoint at an ally's base and sweeps the grid farthest from the ally first; `AiTeamTests.MirrorAllies_TheScout_SkipsTheAllysBase_AndSweepsFarthestFromItFirst`; the soak's wave check strict on every row |
