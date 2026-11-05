@@ -1,6 +1,7 @@
 using System.Collections.Immutable;
 using System.Diagnostics;
 using System.Numerics;
+using Rts.Sim.Data;
 using Rts.Sim.Commands;
 using Rts.Sim.Entities;
 using Rts.Sim.Map;

@@ -296,7 +296,7 @@ internal sealed partial class AiPlayer
     /// <summary>
     /// M5-4g: whether the player knows a node of <paramref name="kind"/> the economy could send a worker to: one its
     /// gatherers' search would take (not marked dropped, not within <c>ai.workerFleeRadius</c> of the defense point while
-    /// the base is defended).
+    /// the base is defended, and M6-S5 within <c>ai.gatherReach</c> of a drop-off until the scout is done: <see cref="InGatherReach"/>).
     /// Walked once a think per kind.
     /// </summary>
     internal bool KnowsNode(ResourceKind kind)
@@ -313,8 +313,29 @@ internal sealed partial class AiPlayer
         while (View.NextResource(ref s, out SeenResource node))
         {
             if (Data.Resources[node.TypeId].Resource != kind || Board.NodeDropped[s] == node.Handle.Generation) continue;
-            if (Vector2.DistanceSquared(NodeCentre(node.TypeId, node.Cell), Board.DefensePoint) <= flee) continue;
+            Vector2 centre = NodeCentre(node.TypeId, node.Cell);
+            if (Vector2.DistanceSquared(centre, Board.DefensePoint) <= flee || !InGatherReach(centre)) continue;
             return true;
+        }
+        return false;
+    }
+
+    /// <summary>
+    /// M6-S5 (BUG-1045): whether a node centred at <paramref name="centre"/> (m) is one the economy may send a gatherer to, as
+    /// far as distance goes. Once the scout is done (<see cref="Blackboard.ScoutPhase"/> 2: released, or dead) every known
+    /// node is; before, only one within <c>ai.gatherReach</c> of an own finished drop-off (every node while the player has
+    /// none: no anchor to measure from). A node farther counts as unknown, so a seat that knows a forest only through an
+    /// ally's eyes (or a raider's) doesn't walk its wood gatherers across the map before its own scout has looked near home.
+    /// One distance compare per own building; allocates nothing.
+    /// </summary>
+    internal bool InGatherReach(Vector2 centre)
+    {
+        if (Board.ScoutPhase == 2 || !HasDropOff) return true;
+        float reach = Rules.GatherReach * Rules.GatherReach;
+        for (int k = 0; k < OwnBuildingCount; k++)
+        {
+            if (OwnBuildingSites[k] || !Data.Buildings[OwnBuildingTypes[k]].DropOff) continue;
+            if (Vector2.DistanceSquared(BuildingCentre(OwnBuildingTypes[k], OwnBuildingCells[k]), centre) <= reach) return true;
         }
         return false;
     }

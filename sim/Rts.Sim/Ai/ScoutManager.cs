@@ -18,8 +18,9 @@ namespace Rts.Sim.Ai;
 /// A point is visited when the scout comes within <c>ai.scoutReach</c> of it, or the scout is Idle after the Move to it
 /// applied (it got as close as it could); a grid point also once the player has explored its cell (nothing new to see there),
 /// unless it is the one the scout walks to.
-/// The sweep ends when every point is visited, or once a forest, a gold mine and an enemy building (seen or ghost) are all
-/// known: the scout is released (stopped if still walking) and the economy sends it to gather. None is sent if all three are
+/// The sweep ends when every point is visited, or once a forest and a gold mine within <c>ai.gatherReach</c> of the hall
+/// (M6-S5, BUG-1045: one farther, known through an ally or a raider, doesn't count) and an enemy building (seen or ghost)
+/// are all known: the scout is released (stopped if still walking) and the economy sends it to gather. None is sent if all three are
 /// known already. A dead scout is not replaced.
 /// <para>
 /// M6-S5 (BUG-1042), a player with an ally: a head waypoint within <c>ai.scoutRadius</c> of an ally's building is dropped
@@ -196,14 +197,20 @@ internal static class ScoutManager
         board.ScoutSlot = -1;
     }
 
-    /// <summary>Whether the AI knows a forest, a gold mine and an enemy building.</summary>
-    private static bool FoundEnough(AiPlayer ai)
+    /// <summary>
+    /// Whether the AI knows an enemy building and, M6-S5 (BUG-1045), a forest and a gold mine within <c>ai.gatherReach</c> of
+    /// its hall's centre (a node farther, seen through an ally's eyes or a raider's, doesn't count: the scout still looks near
+    /// home). False with no hall.
+    /// </summary>
+    internal static bool FoundEnough(AiPlayer ai)
     {
-        if (ai.Board.KnownEnemyBuildings == 0) return false;
+        if (ai.Board.KnownEnemyBuildings == 0 || !ai.TryHallPoint(out Vector2 hall)) return false;
+        float reach = ai.Rules.GatherReach * ai.Rules.GatherReach;
         bool wood = false, gold = false;
         int s = -1;
         while (!(wood && gold) && ai.View.NextResource(ref s, out SeenResource node))
         {
+            if (Vector2.DistanceSquared(ai.NodeCentre(node.TypeId, node.Cell), hall) > reach) continue;
             if (ai.Data.Resources[node.TypeId].Resource == ResourceKind.Wood) wood = true;
             else gold = true;
         }
