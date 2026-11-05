@@ -46,3 +46,10 @@ player row that sits under another group's label (or none when the match has a t
 failed with "1v1v2: player 2 (team 0) shows under the team 1 label" (and the 0, 1, 0 rows likewise). Windowed screenshots
 `qa-m6-v16-stats-1v1v2.png`, `teams-stats-1v1v2.png`, `teams-stats-3-slots.png` show "Team 1", its rows, then "No team"
 over the others.
+
+## QA re-check (2026-11-05-0805, round 1): verified
+`QaM6V16Test` now reads the grid row by row (`CheckLayout`): "T1 P0 P1 N P2 P3" (1v1v2, from the banner), "T1 P0 N P1 P2"
+(teams 1, 0, 0), "T1 P1 T2 P2 T3 P3 N P0" (teams 0, 1, 2, 3, opened twice: no stale label rows), "T2 P3 N P0 P1 P2"
+(teams 0, 0, 0, 2), "T1 P3 T2 P2 T3 P1 T4 P0" (teams 4, 3, 2, 1) and "P0 P1 P2 P3" (free-for-all, opened twice), with every
+label row's other cells empty. Screenshots `qa-m6-v16-stats-1v1v2.png` / `-3-slots.png` show "No team" over the free-for-all
+seats. Follow-up: the extra label row makes teams 1, 2, 3 + a no-team seat overflow 1152 x 648 (BUG-1063, S3).

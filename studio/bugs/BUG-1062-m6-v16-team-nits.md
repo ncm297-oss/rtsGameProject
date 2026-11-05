@@ -44,3 +44,9 @@ ally's base): the 2v2 depends on M6-S5's shared vision landing first, which the 
    hall's ghost under the cursor is no `EnemyAt` target). With the `IsEnemyOwner` ghost line removed it failed ("EnemyAt on
    the ally's remembered hall gave EntityHandle { Index = 1, Generation = 1 } building True"). Once M6-S5's shared vision
    keeps the ally's hall in sight there is no ally ghost to stage: the test then prints a "skipped" line instead of failing.
+
+## QA re-check (2026-11-05-0805, round 1)
+Item 1 verified: `team-files-load-game.png` shows both 2v2 rows and the format-7 fixture on two lines with all four
+seats' "(T1)" / "(T2)" marks; the format-6 row stays one line. Item 3 verified in this worktree: the scene loop's
+`FogViewTest` log has no "skipped" line, so the `EnemyAt` ghost check ran and passed. After the sim's M6-S5 merge it will
+only skip, which is right (an ally's hall is then never a ghost while the ally stands). Item 2 still open for the owner.

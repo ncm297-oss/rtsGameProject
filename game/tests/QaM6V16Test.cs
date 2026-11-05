@@ -30,6 +30,9 @@ namespace Rts.Game.Tests;
 /// <item>Old files: a format-6 rewrite of a fresh 1v1 recording lists without a team mark and plays to every checkpoint;
 /// a format-2 rewrite of a save lists and is refused on Load with the version reason; a format-3 save with a team byte of 9
 /// or 255 lists as unreadable (Delete only) and nothing crashes.</item>
+/// <item>BUG-1061 re-check: the stats grid read row by row (team labels, "No team", player rows, label rows otherwise empty) for
+/// the two banner screens above and, from the pause menu, teams 0, 1, 2, 3 (opened twice), 4, 3, 2, 1, 0, 0, 0, 2 and a
+/// free-for-all (opened twice). The four-label screens' fit is a KNOWN BUG-1063 row (fails only with <c>-- --strict</c>).</item>
 /// </list>
 /// Headless: <c>&amp; $env:GODOT --headless --path game res://tests/QaM6V16Test.tscn</c>; prints "QA M6-V16 TEST PASS" or
 /// "QA M6-V16 TEST FAIL: ..." lines. Windowed with <c>-- --shots &lt;dir&gt;</c> it saves the two stats screens.
@@ -74,6 +77,7 @@ public partial class QaM6V16Test : Node
             await ThreeSlotsOneTeamed();
             await AllyPicks();
             await OldFiles();
+            await StatsLayouts();
             try { Directory.Delete(_root, true); } catch (IOException) { } catch (UnauthorizedAccessException) { }
         }
         catch (Exception ex)
@@ -115,6 +119,7 @@ public partial class QaM6V16Test : Node
         Check(stats.Visible && stats.DisplayOrder.SequenceEqual(new[] { 0, 1, 2, 3 }) && stats.TeamLabels.Select(l => l.Text).SequenceEqual(new[] { _ui.TeamLabel(1) }),
             $"1v1v2 stats: rows [{string.Join(", ", stats.DisplayOrder)}], labels [{string.Join(", ", stats.TeamLabels.Select(l => l.Text))}]");
         foreach (string f in StatsScreenCheck.Fits(stats, GetViewport().GetVisibleRect(), "1v1v2")) Check(false, f);
+        CheckLayout(stats, "T1 P0 P1 N P2 P3", "1v1v2 (banner)"); // BUG-1061
         await Shot("stats-1v1v2");
         await Type(Key.Escape);
         await QuitMatch();
@@ -138,6 +143,7 @@ public partial class QaM6V16Test : Node
         MatchStats stats = _main.Stats!;
         Check(stats.DisplayOrder.SequenceEqual(new[] { 0, 1, 2 }) && stats.TeamLabels.Count == 1 && stats.TeamLabels[0].Text == _ui.TeamLabel(1),
             $"3 slots stats: rows [{string.Join(", ", stats.DisplayOrder)}], labels [{string.Join(", ", stats.TeamLabels.Select(l => l.Text))}]");
+        CheckLayout(stats, "T1 P0 N P1 P2", "3 slots (banner)"); // BUG-1061
         await Shot("stats-3-slots");
         await Type(Key.Escape);
         await QuitMatch();
@@ -381,6 +387,77 @@ public partial class QaM6V16Test : Node
         return h;
     }
 
+    // ---- BUG-1061 re-check: the stats grid's label rows, read off the grid itself ----
+
+    // The most label rows a 4-seat match can have (three teams and a no-team seat, four teams), the no-team seat first in
+    // player order, a teamless 4-seat FFA, and the screen opened twice (a rebuild must not keep the old label rows).
+    private async Task StatsLayouts()
+    {
+        await PausedStats(4, new[] { "--team", "2", "1", "--team", "3", "2", "--team", "4", "3" }, "T1 P1 T2 P2 T3 P3 N P0", "teams 0, 1, 2, 3", "stats-3-teams-and-one", twice: true);
+        await PausedStats(4, new[] { "--team", "1", "4", "--team", "2", "3", "--team", "3", "2", "--team", "4", "1" }, "T1 P3 T2 P2 T3 P1 T4 P0", "teams 4, 3, 2, 1", "stats-4-teams", twice: false);
+        await PausedStats(4, new[] { "--team", "4", "2" }, "T2 P3 N P0 P1 P2", "teams 0, 0, 0, 2", null, twice: false);
+        await PausedStats(4, Array.Empty<string>(), "P0 P1 P2 P3", "free-for-all", null, twice: true);
+    }
+
+    private async Task PausedStats(int players, string[] teams, string want, string how, string? shot, bool twice)
+    {
+        Match match = Start(players, teams);
+        await Frames(2);
+        _main.PauseMatch();
+        await Frames(1);
+        for (int pass = 0; pass < (twice ? 2 : 1); pass++)
+        {
+            _main.ShowStats();
+            await Frames(2);
+            MatchStats stats = _main.Stats!;
+            CheckLayout(stats, want, $"{how} (pass {pass + 1})");
+            // BUG-1063: four label rows (three teams and a no-team seat, or four teams) push Back off a 1152 x 648 screen.
+            List<string> overflow = StatsScreenCheck.Fits(stats, GetViewport().GetVisibleRect(), how);
+            if (stats.TeamLabels.Count + (stats.NoTeamLabel != null ? 1 : 0) >= 4)
+                Known("BUG-1063", overflow.Count == 0, overflow.Count == 0 ? $"{how}: the screen fits" : string.Join("; ", overflow));
+            else foreach (string f in overflow) Check(false, f);
+            if (stats.NoTeamLabel != null)
+                Check(GetViewport().GetVisibleRect().Grow(0.5f).Encloses(stats.NoTeamLabel.GetGlobalRect()) && stats.NoTeamLabel.IsVisibleInTree(),
+                    $"{how}: the no-team label {stats.NoTeamLabel.GetGlobalRect()} is off screen or hidden");
+            if (pass == 0 && shot != null) await Shot(shot);
+            _main.CloseStats();
+            await Frames(2);
+        }
+        await QuitMatch();
+    }
+
+    // The grid's rows below the headings as tokens: "T<n>" a team label, "N" the no-team label, "P<p>" player p's row.
+    // Every label row's other cells must be empty, and the no-team label must read match_over.no_team.
+    private void CheckLayout(MatchStats stats, string want, string how)
+    {
+        var grid = (GridContainer)stats.Table;
+        var cells = grid.GetChildren().OfType<Control>().Where(c => !c.IsQueuedForDeletion()).ToList();
+        int columns = grid.Columns;
+        var got = new List<string>();
+        for (int row = 1; (row + 1) * columns <= cells.Count; row++)
+        {
+            Control first = cells[row * columns];
+            if (first is Label l && stats.NoTeamLabel == l)
+            {
+                got.Add("N");
+                Check(l.Text == _ui.MatchOver(MatchOverText.NoTeam) && l.Text.Length > 0, $"{how}: the no-team label reads '{l.Text}'");
+            }
+            else if (first is Label t && stats.TeamLabels.Contains(t)) got.Add("T" + t.Text.Split(' ').Last());
+            else if (first is HBoxContainer)
+            {
+                int k = got.Count(g => g.StartsWith('P'));
+                got.Add(k < stats.DisplayOrder.Count ? "P" + stats.DisplayOrder[k] : "P?");
+                continue;
+            }
+            else got.Add("?");
+            for (int c = 1; c < columns; c++)
+                Check(cells[row * columns + c] is not Label { Text.Length: > 0 }, $"{how}: label row {row} has text in column {c}");
+        }
+        Check(cells.Count % columns == 0, $"{how}: {cells.Count} grid cells is not a whole number of {columns}-cell rows");
+        Check(string.Join(" ", got) == want, $"{how}: grid rows [{string.Join(" ", got)}] (want [{want}])");
+        Check(stats.TeamLabels.Count + (stats.NoTeamLabel != null ? 1 : 0) == got.Count(g => !g.StartsWith('P')), $"{how}: label rows in the grid differ from TeamLabels / NoTeamLabel");
+    }
+
     // ---- staging, as TeamsTest ----
 
     private Match Start(int players, params string[] extra)
@@ -504,6 +581,19 @@ public partial class QaM6V16Test : Node
         string path = $"{_shots}/qa-m6-v16-{name}.png";
         GetViewport().GetTexture().GetImage().SavePng(path);
         GD.Print($"  screenshot {path}");
+    }
+
+    // A row for an open bug: reported, failing only with -- --strict (the QaV2Test convention); once it prints "now passes",
+    // make it a plain check.
+    private void Known(string bug, bool ok, string message)
+    {
+        if (ok)
+        {
+            GD.Print($"QA M6-V16 KNOWN {bug} row now passes: {message}");
+            return;
+        }
+        GD.Print($"QA M6-V16 KNOWN {bug} (open): {message}");
+        if (Array.IndexOf(OS.GetCmdlineUserArgs(), "--strict") >= 0) _failures.Add($"{bug}: {message}");
     }
 
     private bool Check(bool ok, string message)
