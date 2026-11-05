@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S2 |
-| Status | open |
+| Status | fixed |
 | Found | 2026-10-27-0658, task M6-S5 |
 | System | AI (ScoutManager `FoundEnough`, EconomyManager `NearestNode`) with shared vision |
-| Fixed by | |
+| Fixed by | M6-S5: `rules.json` `ai.gatherReach` (64 m): `ScoutManager.FoundEnough` counts a forest / mine only within it of the hall; `AiPlayer.InGatherReach` (used by `EconomyManager.NearestNode` and `KnowsNode`) ignores nodes beyond it of every own drop-off until the scout is done |
 
 ## Repro
 1. BUG-1042's repro: four AI seats, teams **1, 1, 2, 2**, seed 1, 256 map, 4 starts, 24 forests, 16 mines, one raider each
@@ -54,3 +54,17 @@ Seat 3, M6-S5 head (d6f597d) vs e5c4265, same scene:
   drop-off and sends a worker on a long walk only when none is known near home.
 - Measured with the QA scratch diagnostics `Diag1042Tests` / `Diag1042cTests` (not committed): per seat waves, army
   half-pop peak, ticks defending, workers, gathered gold / wood, scout phase and nearest known forest at tick 2,000.
+
+## Fix (M6-S5, dev, 2026-11-05)
+- `common/rules.json` `ai.gatherReach` **64 m** (required, 1-512 m, hashed; `DataValidationTests` / `DataContentHashTests` rows).
+- `ScoutManager.FoundEnough`: a forest and a gold mine count only within the reach of the hall's centre, so a seat that knows
+  far nodes through its ally (or a raider) still scouts home.
+- `AiPlayer.InGatherReach`: until the scout is done (`ScoutPhase` 2), a node farther than the reach from every own finished
+  drop-off counts as unknown for `EconomyManager.NearestNode` and `KnowsNode` (the existing "no node" path); with no drop-off,
+  or after the scout, every known node counts. One distance compare per own building, nothing allocated.
+- The value: every start's nearest forest and two mines on the menu map (seeds 1-10) and the 4-start 256 map (seeds 1-10) lie
+  within 21.2 m of the hall (table in docs/03 "Implementation (M6-S5)"); 64 kept.
+- After the fix, same scene: seat 3 knows a forest 17.5 m from its hall by tick 1,000 and gathers 350 wood by tick 4,000;
+  wood by 4,000 for seats 0-3: 90, 440, 330, 350; nearest known forest at tick 2,000: 16, 17, 17, 17 m.
+- Regression: `AiTeamTests.MirrorAllies_Seat3_KnowsAForestWithinGatherReach_By1000_AndGathersWood_By4000`;
+  `QA/SharedVisionQaTests.MirrorAllies_EverySeat_GathersWoodNearHome` un-skipped and green.

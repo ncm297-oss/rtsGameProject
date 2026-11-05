@@ -504,8 +504,9 @@ public class SharedVisionQaTests
     /// gold mine and an enemy building through its ally from the first think, so its scout is never sent, its own forest
     /// 17 m away stays unknown, and its wood gatherers walk to its ally's forests 300-450 m north: 0 wood gathered by tick
     /// 4,000 (370 at e5c4265), no army, no wave (it waved at e5c4265). Prints each seat's gathered wood too.
+    /// Un-skipped with the fix (M6-S5, <c>ai.gatherReach</c>).
     /// </summary>
-    [Fact(Skip = "BUG-1045 (open, S2): a seat that knows a forest only through its ally never scouts and gathers wood 300-450 m away; remove the Skip with the fix")]
+    [Fact]
     public void MirrorAllies_EverySeat_GathersWoodNearHome()
     {
         Simulation sim = AiTeamTests.MirrorAllies(1);

@@ -166,6 +166,45 @@ public class AiTeamTests
         _out.WriteLine($"seed {seed}: first grid targets {string.Join(", ", firstGrid)} at tick {sim.TickNumber}");
     }
 
+    /// <summary>
+    /// BUG-1045 regression (M6-S5): on BUG-1042's repro (seed 1, one raider each) seat 3 knows a forest, a mine and an enemy
+    /// building through its ally (north) from the first think. Before the fix its scout was released at once, its own forest
+    /// 17 m off stayed unknown and its wood gatherers walked 300-450 m north: 0 wood by tick 4,000. Now a node beyond
+    /// <c>ai.gatherReach</c> of its hall doesn't count as found, so it scouts home, knows a forest within the reach by tick
+    /// 1,000 and gathers wood by tick 4,000. <c>InGatherReach</c> also refuses the far forest while the scout is out.
+    /// </summary>
+    [Fact]
+    public void MirrorAllies_Seat3_KnowsAForestWithinGatherReach_By1000_AndGathersWood_By4000()
+    {
+        Simulation sim = MirrorAllies(1);
+        World w = sim.World;
+        AiPlayer ai = sim.AiOf(3)!;
+        float reach = ai.Rules.GatherReach;
+        bool farRefused = false;
+        while (sim.TickNumber < 1000)
+        {
+            sim.Tick();
+            if (ai.Board.ScoutPhase == 2 || !ai.HasDropOff) continue;
+            int r = -1;
+            while (ai.View.NextResource(ref r, out SeenResource n))
+            {
+                Vector2 c = ai.NodeCentre(n.TypeId, n.Cell);
+                if (w.Data.Resources[n.TypeId].Resource == ResourceKind.Wood && Vector2.Distance(c, ai.HallPoint) > reach + 30f)
+                    farRefused |= !ai.InGatherReach(c);
+            }
+        }
+        float nearest = float.MaxValue;
+        int s = -1;
+        while (ai.View.NextResource(ref s, out SeenResource node))
+            if (w.Data.Resources[node.TypeId].Resource == ResourceKind.Wood)
+                nearest = Math.Min(nearest, Vector2.Distance(ai.NodeCentre(node.TypeId, node.Cell), ai.HallPoint));
+        Assert.True(nearest <= reach, $"seat 3's nearest known forest at tick 1,000 is {nearest:F0} m from its hall (reach {reach} m)");
+        Assert.True(farRefused, "setup: seat 3 never knew a forest beyond the reach while its scout was out (the BUG-1045 shape)");
+        while (sim.TickNumber < 4000) sim.Tick();
+        _out.WriteLine($"seat 3: nearest known forest {nearest:F1} m at tick 1,000; gathered wood by 4,000: {w.GatheredWood[3]}");
+        Assert.True(w.GatheredWood[3] > 0, "seat 3 gathered no wood by tick 4,000");
+    }
+
     /// <summary>Squared distance from <paramref name="at"/> to the nearest building of an ally (not itself) of <paramref name="p"/>; float.MaxValue with none.</summary>
     private static float AlliedDistance(World w, int p, Vector2 at)
     {

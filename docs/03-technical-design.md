@@ -6913,7 +6913,8 @@ acting only through commands. Code: `sim/Rts.Sim/Ai/AiPlayer.cs`, `Blackboard.cs
   `houseWhenPopWithin` 2 (pop, a multiple of 0.5, at most `popCap`), `placementSearchRadius` 32 m, `buildingSpacing` 2 m,
   `expandHallReach` 40 m (meters above 0, at most 64; spacing 0-8; to whole cells rounded up: 16, 1, 20). In `ContentHash`
   since M5-3, with `ai.json`. Later knobs: M5-3, M5-4b, M5-4c, M5-4f (`defendRatio` / `defendMinValue` / `recallHallHp`)
-  and M5-4g (`reserveShift`, `reserveArmyShare`), each in its own section.
+  and M5-4g (`reserveShift`, `reserveArmyShare`), M6-S5 (`gatherReach` 64 m, 1-512, "Implementation (M6-S5)"), each in
+  its own section.
 - **Tests.** `Ai/AiPlayerTests` (criterion 3: the shipped steps of both factions run on every difficulty; a 10-step order
   with time / workers / pop triggers, counts, slack and concurrent steps fires in the documented order on Easy and Hard; a
   Build without wood waits and is sent at the first think after the wood, once; a Build the sim refuses (an enemy unit holding
@@ -8580,6 +8581,71 @@ that costs 0.01 ms per update, and still needs (a)'s byte-map union for the view
   the friendly-fire pins moved (`SplashTests.FriendlyFireKills_AreALoss_AndNobodysKill_*`,
   `AbilitySystemTests.Cusser_HurtsTheSapperItself_AnOwnKillIsALossAndNoKill_*`, `QA/CusserQaTests`), and the combat fuzzes'
   books (`Stress/CombatFuzzTests`, `RangedCombatFuzzTests`, `RangedSplashFuzzQaTests`) count only enemy kills.
+- **BUG-1045, the gather reach** (S2, found by QA on this slice). With shared vision a seat could know a forest, a mine and
+  an enemy building through its ally from its first think: `ScoutManager.FoundEnough` released its scout before it walked
+  a waypoint, and `EconomyManager.NearestNode` sent its wood gatherers to the nearest *known* forest, its ally's, 300-450 m
+  away (seat 3 of `AiTeamTests.MirrorAllies(1)`: 0 wood by tick 4,000, no wave). The rule, one knob
+  (`common/rules.json` `ai.gatherReach`, **64 m**, required, 1-512 m (`DataLimits.MaxAiGatherReach`), in `ContentHash`,
+  `DataValidationTests` / `DataContentHashTests` rows): `FoundEnough` counts a forest and a gold mine only within the reach
+  of the hall's centre (the enemy building anywhere); and until the scout is done (`Board.ScoutPhase` 2: released, or
+  dead) `AiPlayer.InGatherReach` treats a node farther than the reach from every own finished drop-off as unknown, for
+  `NearestNode` and `KnowsNode` alike (so the per-kind "no node" path of M5-4g, not a new idle state). With no finished
+  drop-off every node counts (no anchor); after the scout, every known node, wherever it is (a seat whose scout dies
+  early falls back on any node it knows: intended). One squared-distance compare per own building, no list: nothing
+  allocated (`QA/SharedVisionQaTests.ATick_OfTheMirrorStart2v2WhileScouting_*` and `AiTeamTests.ATick_OfA2v2WithAiSeats_*`
+  tick through both with the probe at 0 B). The repro after the fix: seat 3 knows a forest 17.5 m from its hall by tick
+  1,000 and has gathered 350 wood by tick 4,000; every seat's nearest known forest at tick 2,000 is 16-17 m, wood by
+  4,000: 90, 440, 330, 350 (`AiTeamTests.MirrorAllies_Seat3_KnowsAForestWithinGatherReach_By1000_AndGathersWood_By4000`,
+  `QA/SharedVisionQaTests.MirrorAllies_EverySeat_GathersWoodNearHome` un-skipped).
+- **Why 64 m.** Measured once (a scratch test, not committed) at tick 200 on the menu's map (seeds 1-10, 2 seats) and on
+  the 4-start 256 map (`MirrorAllies`, seeds 1-10, 4 seats): each start's nearest forest and nearest two gold mines, in
+  meters from the hall's centre. Every one is within 21.2 m (forests 14.8-21.2, second mines 16.5-19.0), so the shipped 64 m
+  covers every start's forest and two mines with three times the margin and is kept (the Producer's rule: keep 64 if it
+  covers them; 48 would too, but nothing measured asks for less):
+
+  | Map, seed | Seat: forest / mine 1 / mine 2 (m) |
+  | --- | --- |
+  | menu 1 | p0 14.8 / 16.1 / 18.1; p1 15.8 / 17.1 / 19.0 |
+  | menu 2 | p0 19.2 / 18.4 / 19.0; p1 15.0 / 16.1 / 18.1 |
+  | menu 3 | p0 15.0 / 16.1 / 18.4; p1 17.0 / 17.1 / 17.2 |
+  | menu 4 | p0 17.0 / 17.9 / 18.1; p1 15.8 / 16.5 / 18.4 |
+  | menu 5 | p0 14.8 / 16.1 / 19.0; p1 15.0 / 16.5 / 17.9 |
+  | menu 6 | p0 15.6 / 16.5 / 18.4; p1 17.0 / 16.1 / 17.2 |
+  | menu 7 | p0 14.8 / 17.1 / 19.0; p1 21.2 / 17.2 / 17.9 |
+  | menu 8 | p0 15.8 / 16.1 / 18.9; p1 20.2 / 16.5 / 16.5 |
+  | menu 9 | p0 19.2 / 17.9 / 18.4; p1 17.0 / 16.5 / 18.4 |
+  | menu 10 | p0 14.8 / 16.1 / 17.2; p1 19.0 / 17.9 / 18.4 |
+  | 256x4 1 | p0 15.8 / 16.1 / 18.4; p1 17.3 / 17.1 / 18.9; p2 17.5 / 16.1 / 18.9; p3 17.5 / 16.1 / 17.9 |
+  | 256x4 2 | p0 17.0 / 16.5 / 17.1; p1 17.3 / 16.1 / 19.0; p2 14.8 / 16.5 / 18.4; p3 17.0 / 16.1 / 16.5 |
+  | 256x4 3 | p0 14.8 / 16.1 / 18.4; p1 17.5 / 16.1 / 18.9; p2 16.6 / 16.5 / 17.1; p3 18.6 / 18.4 / 18.4 |
+  | 256x4 4 | p0 15.0 / 16.5 / 17.9; p1 16.6 / 17.9 / 18.9; p2 15.0 / 18.1 / 18.1; p3 17.5 / 16.5 / 18.4 |
+  | 256x4 5 | p0 14.8 / 16.1 / 17.9; p1 15.8 / 17.2 / 18.4; p2 15.3 / 16.5 / 19.0; p3 17.5 / 17.1 / 18.4 |
+  | 256x4 6 | p0 16.6 / 17.1 / 19.0; p1 15.8 / 16.1 / 19.0; p2 16.6 / 16.1 / 18.9; p3 15.6 / 18.1 / 18.4 |
+  | 256x4 7 | p0 17.0 / 16.1 / 18.9; p1 15.8 / 16.1 / 18.1; p2 15.8 / 16.1 / 16.5; p3 15.8 / 17.9 / 18.4 |
+  | 256x4 8 | p0 18.6 / 16.1 / 17.2; p1 17.5 / 16.5 / 18.4; p2 19.0 / 16.1 / 18.1; p3 18.4 / 16.5 / 18.9 |
+  | 256x4 9 | p0 19.0 / 17.9 / 18.1; p1 17.0 / 17.1 / 19.0; p2 15.3 / 16.1 / 17.9; p3 15.0 / 16.1 / 17.9 |
+  | 256x4 10 | p0 19.2 / 17.2 / 17.9; p1 18.4 / 16.5 / 18.4; p2 15.3 / 16.1 / 17.2; p3 19.2 / 17.2 / 17.9 |
+
+- **The golden** (`cross_map_seed1.replay`) regenerated once for the data hash: `ai.gatherReach` joined it,
+  `E108AB2A7C66C58D` → `4F8CCF2688F9F22F`; every `k` line identical (no AI seat in it). The pins moved with it:
+  `QA/GatherWedgeQaTests.SameGameDataHashes`. Recordings made before this commit refuse to play (data hash).
+- **Free-for-all after the reach rule:** `Vision/SharedVisionFfaPinTests`' five scenes (two of them with AI seats: the
+  menu's human v AI on seeds 1 and 3, four AI seats on seed 4) give the same 3,000-tick digests on 424a5e8 (the pin file
+  copied there) and on this commit, the e5c4265 pins: no free-for-all scene moved, the AI ones included (their starts
+  see their own forest and mines within reach before the scout leaves). `QA/AiGatherMarkQaTests`' gone-node scene runs
+  at `gatherReach` 512 (its subject is the mark; with 64 m the far half's remembered nodes are never sent to while the
+  scout is out, so never marked).
+- **The 1v1 pairings after the reach rule:** the 27 pairing runs (`Content/AiOpeningPairsReportTests` 9 and
+  `QA/Content/D21OpeningsQaTests`' second and third seeds 18, menu map, Normal v Normal, 24,000 ticks) print the same on
+  424a5e8 and on this commit, line for line (every 2-minute timeline row, waves, Age II, defeats, every step's state): no
+  faction page cell moves, nothing for the data track to re-print.
+- **The soak's "starved" exemption, per seat** (`Stress/TeamAiSoakStressTests`, 12,000 ticks): the seats that never reached
+  wave size are adjacent seed 1 seat 0 (Normal), adjacent seed 2 seats 0 (Hard) and 2 (Normal), adjacent seed 3 seats 0
+  (Easy, defeated) and 2 (Hard), and seed 5 seat 0 (Hard); each had an enemy army within `ai.defendRadius` of its hall from
+  tick 11-41 (the scene's raider) on 2,570-7,168 ticks, 10-46 losses. Every other seat waved. The exemption is now tight: a
+  seat that never reaches wave size must have been raided on at least 2,000 ticks, so a seat starved by its own gather
+  choice fails (with the reach rule switched off, two of the three mirror rows fail on it: seats raided on 1,687 and 1,957
+  ticks that never reached wave size). Each seat's waves, peak army, raided ticks and gathered gold / wood are printed.
 - **Not in this slice:** starting resources (Request 43), allied pushing / formations, resource or tech sharing, AI
   cooperation (the AI doesn't coordinate waves or defend its ally), the view's team column (M6-V16, view track).
 

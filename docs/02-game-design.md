@@ -281,7 +281,8 @@ whether the zone's statuses take it and whether the zone hides it (the ground is
   detects is detected for the whole team. A high-ground reveal shows the attacker to the victim's whole team. Zones keep
   their M6-S4 rules (an ally's Darkness or Sandstorm neither hides nor blinds); a unit inside an enemy's zone is seen by
   the team where a unit of any ally standing inside that zone sees it. A player without an ally (team 0) sees only through
-  its own eyes, as before.
+  its own eyes, as before. An ally that is out lends its last sight until the next fog update (within 4 ticks), as a dead
+  unit's circle lasts until then (Producer decision 2026-11-05, BUG-1046).
 
 ### High ground
 
@@ -422,6 +423,12 @@ own cues (select, order, refused, building placed or finished, unit or tech read
   A resource the AI knows no node of is not held back, and a step short of one is not reserved at all (built in M5-4g,
   BUG-0981, BUG-1021, BUG-1023, BUG-1025; the "at home or out on a wave" wording is BUG-1026, Producer 2026-10-19;
   [03 Implementation (M5-4g)](03-technical-design.md#implementation-m5-4g)).
+- The AI looks near home before it trusts what it sees far away: its scout sweeps until every waypoint is visited or the AI
+  knows an enemy building and a forest and a gold mine within `rules.json` `ai.gatherReach` (64 m) of its Town Hall, and until the scout
+  is done (released, or dead) its gatherers go only to a node within that reach of one of its own finished drop-offs. A
+  forest or mine it knows only through an ally's eyes or a raider's far sighting counts as unknown until then; after, the
+  nearest known node is taken wherever it is (so a seat whose scout dies early falls back on any node it knows, and a seat
+  with no finished drop-off may take any). Built in M6-S5 (BUG-1045; [03 Implementation (M6-S5)](03-technical-design.md#implementation-m6-s5)).
 - Build orders, army compositions, and attack thresholds are per-faction data (`ai.json`), not code.
 - Each faction's `ai.json` holds one to eight named openings (a build order, an army mix and attack thresholds each);
   at match start an Easy AI always plays the first, and a Normal or Hard AI picks one at random from the match seed, so

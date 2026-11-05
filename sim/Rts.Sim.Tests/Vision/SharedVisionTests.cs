@@ -240,4 +240,33 @@ public class SharedVisionTests
         Assert.False(shared.World.Fog.IsVisible(2, shared.World.Fog.CellOf(At(shared, Home.X, Home.Y))));
         Assert.True(shared.World.Fog.IsVisible(0, far) && !alone.World.Fog.IsVisible(0, far));
     }
+
+    /// <summary>
+    /// BUG-1046 item 1: the explore seam (<c>FogStore.ExploreAllForTests</c>) ends with the team merge, so a team scene that
+    /// calls it reads every cell explored (the team's bits, the byte map, placement's rule) at once, not after the next fog
+    /// update. With the merge removed the team arrays stay as the last update left them and this fails; the free-for-all
+    /// twin reads its own bits and passes either way.
+    /// </summary>
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void TheExploreSeam_ExploresEveryCellForTheTeam_BeforeTheNextFogUpdate(bool allies)
+    {
+        Simulation sim = Scene(allies);
+        World w = sim.World;
+        ThreeUnits(sim, HeavyInfantry);
+        int corner = w.Fog.CellOf(At(sim, 60, 4));
+        Assert.False(w.Fog.IsExplored(0, corner), "setup: nobody has seen the corner");
+        w.Fog.ExploreAllForTests(); // no tick after it: no fog update runs before the reads
+        int cells = w.Fog.Width * w.Fog.Height;
+        for (int p = 0; p < 3; p++)
+        {
+            byte[] map = w.Fog.Visibility(p).ToArray();
+            for (int c = 0; c < cells; c++)
+            {
+                Assert.True(w.Fog.IsExplored(p, c), $"player {p} cell {c} not explored after the seam");
+                Assert.True(map[c] != VisionConstants.Unexplored, $"player {p}'s byte map: cell {c} unexplored after the seam");
+            }
+        }
+    }
 }

@@ -76,7 +76,7 @@ becomes strict with the fix.
 - The repro after the fix (`Stress/TeamAiSoakStressTests`, `adjacent: true`, 12,000 ticks): every seat knows an enemy building
   (from tick 1,000 on); waves seed 1: 0, 1, 1, 0; seed 2: 0, 1, 0, 1; seed 3: 0, 1, 0, 0. Every seat that did not wave is
   starved: its army never reached its opening's wave size (`attackMinHalfPop` / `attackMinCost` x `waveSizeMultiplier`) on a
-  tick it was not defending, e.g. seed 2 seat 2 (Hard) holds 2-4 workers and 0-40 gold the whole run, seed 1 seat 0 (Hard)
+  tick it was not defending, e.g. seed 2 seat 2 (Normal) holds 2-4 workers and 0-40 gold the whole run, seed 1 seat 0 (Normal)
   peaks at 24 / 40 half-pop. These are the seats whose own raider stands in the ally's base while an enemy raider works in
   theirs (the economy collapse the Actual section describes); the soak's strict check now asserts "knew an enemy building" for
   every seat and "waved" for every seat whose army reached wave size, on every row. The starvation itself (no army at home

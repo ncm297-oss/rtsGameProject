@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S4 |
-| Status | open |
+| Status | fixed |
 | Found | 2026-10-27-0658, task M6-S5 |
 | System | Vision (FogStore.Teams), BUG-1042 paperwork |
-| Fixed by | |
+| Fixed by | M6-S5 (2026-11-05): item 1 `Vision/SharedVisionTests.TheExploreSeam_ExploresEveryCellForTheTeam_BeforeTheNextFogUpdate`; item 2 docs/02 sentence (Producer decision); item 3 labels corrected |
 
 ## Repro
 1. **The explore seam's merge is untested.** In a scratch clone delete `if (Sharing) MergeTeams();` at the end of
@@ -36,3 +36,12 @@ As above.
   QA added `SharedVisionQaTests.ATowersHighGroundReveal_OnTheAlly_IsSharedWithThePlayer`, which fails on it (not part of
   this bug). `CanSeeBuilding`'s ally clause, the zone union and the ghost-after-merge order are caught only by fuzz rows
   (QA's union fuzz, `PlayerViewOracleFuzzTests.WithTeams_*`).
+
+## Fix (M6-S5, dev, 2026-11-05)
+1. `Vision/SharedVisionTests.TheExploreSeam_ExploresEveryCellForTheTeam_BeforeTheNextFogUpdate` (teams and free-for-all
+   twin): after `ExploreAllForTests`, with no tick, every cell is explored for every player (`IsExplored` and the byte
+   map). Checked: with only the seam's `if (Sharing) MergeTeams();` removed, the team row fails ("player 0 cell 0 not
+   explored after the seam"); restored, both pass.
+2. Producer decision, no code: docs/02 "Vision and fog of war" now says an ally that is out lends its last sight until the
+   next fog update (within 4 ticks), as a dead unit's circle lasts until then.
+3. BUG-1042's fix note: seed 2 seat 2 and seed 1 seat 0 are **Normal** (difficulty `(p + seed) mod 3`), corrected.
