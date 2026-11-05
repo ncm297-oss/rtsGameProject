@@ -13,7 +13,7 @@ Status legend: **Next** = start here, **Planned** = not started, **Done** = acce
 | M3 | Economy & buildings | **Done** (2026-10-08, Producer sign-off in session 2026-10-08-0313 after every track's end-of-M3 hardening (M3-H1 / H2, M3-V3b, D4) and the BUG-0146 fix; retro below) | Build a Malazan base |
 | M4 | Combat, fog, abilities | **Done** (2026-10-11, Producer sign-off in session 2026-10-10-2334 after every track's end-of-M4 hardening (M4-H3, M4-VH3, D-H3); the data track's D12 is accepted and held on its branch, landing at the next session's data merge; 10 / 10 criteria, in progress since 2026-10-07-2315; retro below) | Malazan vs. Whirlwind armies fight with abilities and fog |
 | M5 | AI opponent | **In progress** (since 2026-10-11; 4 / 9 criteria (1, 2, 7, 8), three owner-requested criteria added 2026-10-14) | Lose to a Whirlwind AI |
-| M6 | Game shell & real art | **Started ahead** (view track since 2026-10-11; 4 / 10 criteria (1, 2, 3, 4); criterion 1 ticked 2026-11-05 with M6-S5 + M6-V16) | A friend can play it |
+| M6 | Game shell & real art | **Started ahead** (view track since 2026-10-11; 3 / 10 criteria (2, 3, 4); criterion 1 ticks when M6-V16 lands: accepted 2026-11-05 on its branch, held on BUG-1064) | A friend can play it |
 | M7 | Teblor | Planned | Third faction: scale and population systems proven |
 | M8 | Shadow | Planned | Fourth faction: stealth polish, summons |
 | M9 | Tiste Andii | Planned | Fifth faction: darkness, flying, elite balance |
@@ -703,7 +703,7 @@ open S1 / S2. Retro below; open S3 / S4 listed there.)_
 
 **Done when:**
 
-- [x] Main menu, skirmish setup (map, 2-4 slots, faction, difficulty, color, team), pause menu. (M6-V1, 2026-10-11: menu,
+- [ ] Main menu, skirmish setup (map, 2-4 slots, faction, difficulty, color, team), pause menu. (M6-V1, 2026-10-11: menu,
       seed / map size, pause. M6-V2, 2026-10-12: faction and difficulty per slot. M6-V3, 2026-10-13: a colour per slot from
       `ui.json`'s 8-colour table, and the menu's match opens as docs/02 says (a Town Hall and 5 workers a side). M6-V5,
       2026-10-16: 2-4 slots (Add player / Remove player; slot 1 the local human, slots 2-4 AI seats each with its own faction,
@@ -724,8 +724,9 @@ open S1 / S2. Retro below; open S3 / S4 listed there.)_
       M6-V16, 2026-11-05-0805: **the setup's Team column** (None / Team 1-4 per slot, `--team <slot> <n>`), the banner per side
       (Victory while your side stands, Defeat only when the whole side is out), the stats grouped under "Team n" / "No team", Load
       Game's "(T1)" marks, format-7 replays and format-3 saves read with their teams, a right-click on an ally a Move; verified by
-      `TeamsTest`, `TeamFilesTest`, QA's `QaM6V16Test` / `TeamReadersQaTests`; docs/03 "Implementation (M6-V16)". **Ticked at the
-      2026-11-05-0805 ACCEPT.** Polish left: BUG-1063 (S3: four label rows overflow the stats screen), BUG-1047 / 1048 (S3: the gather
+      `TeamsTest`, `TeamFilesTest`, QA's `QaM6V16Test` / `TeamReadersQaTests`; docs/03 "Implementation (M6-V16)". **Not ticked yet:
+      M6-V16 was accepted on its branch at the 2026-11-05-0805 ACCEPT but held at integration (BUG-1064: `FogViewTest.AllyGhost` red
+      once shared vision was merged in; test-only); it ticks when `origin/studio/2026-10-27-0658-view` lands.** Polish left: BUG-1063 (S3: four label rows overflow the stats screen), BUG-1047 / 1048 (S3: the gather
       reach's two blind spots), BUG-1062 item 2 (a one-team setup never ends: Producer decision, refuse it at Start, next view session);
       docs/02's "starting resources (standard / high)" is Request 43, the sim's next task, not part of this criterion's text.)
 - [x] Victory/defeat detection and post-match stats screen. (M5-4b, 2026-10-13: the sim's detection, `World.IsDefeated` /
