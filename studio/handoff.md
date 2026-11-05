@@ -1,5 +1,14 @@
 # Handoff: brief for the next session
 
+**PLAN 2026-11-05-1206 (session 2 / 8 today, base `5368cfe` = `origin/main`):** the three plans below stand as this session's plans.
+Checks: inbox New empty; `main` 5368cfe build 0 warnings, non-Perf suite **7,674 / 0 / 14 skipped of 7,688 in 22 m 47 s** (the same
+as the 0805 ACCEPT's run; the skips = 12 standing + BUG-1047 / 1048's two); BUG-1064's premise re-verified on
+`FogViewTest.cs` lines 736 / 744; `ViewApi/SaveSummary.TryRead` confirmed to read the header by shape and stop after the team bytes
+(any version), so M6-S6's new field after them is harmless to the view. **Sim GO M6-S6** (Producer default for `high`: **1000 gold /
+1000 wood**, `standard` = today's 200 / 200; `startingWorkers` unchanged for both; owner may revisit), **view GO M6-V16 resume** (fix
+BUG-1064, loop + smoke on the merged tree, land; riders BUG-1063 / BUG-1062 item 2 only if a few lines; the conductor merges `main`
+5368cfe into the branch first), **data STOP (cheap)**. No new owner items.
+
 Written by the Producer at the ACCEPT of session **2026-11-05-0805** (session 1 / 8 on 2026-11-05; the third resume of
 2026-10-27-0658, whose branches carried the work). **Sim M6-S5 ACCEPT (on `main` as 1a90a08); view M6-V16 ACCEPT on its branch, then
 ESCALATE at integration: BUG-1064 (S2, test-only), held on `origin/studio/2026-10-27-0658-view` (2d4dbe4, `main` already merged in);
@@ -34,10 +43,12 @@ Unchanged. Rule 31 was satisfied this session without a re-print: the 27 pairing
 
 ## Sim track
 
-### Current session plan (next session)
+### Current session plan (session 2026-11-05-1206)
 
 **Feature (counter 2 / 4 → 3 / 4): M6-S6, Request 43: starting resources.** QA full (the save / replay format moves; AI openings at
-"high"). Bug ids from 1050. Base `origin/main` after both merges.
+"high"). Bug ids from 1050. Base `origin/main` 5368cfe. **Preset numbers (Producer default, owner may revisit): `standard` 200 gold /
+200 wood (today's `startingGold` / `startingWood`, bit for bit), `high` 1000 / 1000; `startingWorkers` 5 for both.** Files under
+`game/data/` this task may touch: `game/data/common/rules.json` only (the view's rider touches `ui.json`).
 
 **Goal.** docs/02 "Game flow" 2's "starting resources (standard / high)": a preset per match, chosen in the setup (the view's half comes
 next view session), carried by the save and the replay, and the AI's openings behaving at "high" (no idle bank).
@@ -96,11 +107,13 @@ no per-tick allocation; the golden regen in the same commit as the field.
 
 ## View track
 
-### Current session plan (next session)
+### Current session plan (session 2026-11-05-1206; confirmed at the PLAN: resume, no new view work)
 
 **M6-V16 (resumed, third time): fix BUG-1064, rerun the loop, land · feature (counter 0 / 4 → 1 / 4 when it lands) · QA standard
 (re-check) · bug ids from 1065.** Work on `origin/studio/2026-10-27-0658-view` at 2d4dbe4 (it already contains `main` 1a90a08; do not
-rebase). The task is accepted on its merits (session log); only the merged tree's scene loop is red.
+rebase; the conductor merges `main` 5368cfe, a state-only commit, into it first: keep BUG-1064's index row beside 1061-1063's). The
+task is accepted on its merits (session log 2026-11-05-0805); only the merged tree's scene loop is red. Files under `game/data/` this
+task may touch: `game/data/common/ui.json` only (the sim's M6-S6 touches `rules.json`).
 
 **Scope:**
 1. **BUG-1064:** `game/tests/FogViewTest.cs` `AllyGhost`: the check `CanSeeBuilding(0, hall) && Ghosts(0)[hall].Known` (~line 736)
@@ -145,7 +158,7 @@ paragraph. **Tests required:** `FogViewTest` green; the loop. **Constraints:** n
 
 ## Data track
 
-### Current session plan (next session)
+### Current session plan (session 2026-11-05-1206: **STOP, cheap**; inbox New empty, M6-S6's presets not on `main` yet)
 
 **STOP (cheap, counter stays 1 / 4)** unless the inbox's **New** carries an answer (D21 names / descriptions / the Malazan standard wave,
 D19's table, the Shock pass, `goldShare`, BUG-0780) — each a small page + `ai.json` / data task with a review table (golden regen once)
