@@ -2,7 +2,7 @@
 
 | Field | Value |
 | --- | --- |
-| Severity | S3 |
+| Severity | S2 (QA 2026-11-05-1206: was S3 as filed by the dev; M6-S6 acceptance criterion 5 is not met) |
 | Status | open |
 | Found | 2026-11-05-1206, task M6-S6 (game-dev) |
 | System | AI (production throughput, build-order timing), `Stress/StartingResourcesAiStressTests` |
@@ -60,3 +60,27 @@ preset. The 27 `standard` runs print identical to 5368cfe on this commit.
   than one 10:00 sample; or (b) a spending rule for large banks, gated so `standard` cannot reach it (a rules.json knob, a
   bank threshold above every `standard` run's peak, measured), with the data track re-printing nothing.
 - Related: BUG-0981 (long gold / wood waits at `standard`), M5-4g's reserve (docs/03 "Implementation (M5-4g)").
+
+## QA (2026-11-05-1206, M6-S6 inspection)
+
+Re-graded **S2**: criterion 5 ("AI at high: no opening banks over 2x standard's 10-minute bank") is not met, and the
+behaviour behind it is real (an AI that sits on most of a 2,000 start through 5:00 is not "spending its start", the brief's
+goal). The dev's analysis holds; QA's independent numbers, per opening rather than per pairing
+(`QA/StartingResourcesAiQaTests`, each opening on the 3 smallest seeds its seat picks it on, Normal v Normal, menu map,
+10 min, standard / high; identical in two separate processes):
+
+| Opening (seeds) | bank at 5:00 standard / high | bank at 10:00 over 2x standard |
+| --- | --- | --- |
+| Malazan `cadre_rush` (13, 7, 8) | 703 / 1,539; 687 / 1,769; 443 / 1,679 | seed 13 (41 / 143) |
+| Malazan `crossbow_push` (11, 5, 9) | 308 / 149; 264 / 316; 118 / 74 | seed 11 (68 / 397, x5.8, a side the dev's test doesn't run), seed 5 |
+| Malazan `standard` (1, 2, 3) | 120 / 740; 42 / 210; 76 / 570 | seed 2 |
+| Whirlwind `holy_war` (3, 4, 6) | 449 / 1,125; 237 / 1,225; 479 / 1,025 | none |
+| Whirlwind `raider_rush` (2, 5, 7) | 301 / 358; 320 / 384; 603 / 224 | seed 2 |
+| Whirlwind `standard` (13, 1, 9) | 419 / 92; 343 / 212; 349 / 92 | seed 1 |
+
+6 of 18 sides over the brief's measure; the two openings that really hold the start (`cadre_rush`, `holy_war`: 1,025-1,769
+at 5:00) are not among the ones the measure flags, except `cadre_rush` seed 13 by accident. No opening is idle in the other
+sense: at high every side has done at least as many build steps by 5:00 as at standard, no side is defeated at high that
+stands at standard, and waves at high are at most one fewer (Whirlwind `standard` seed 1: 3 -> 2). The 27 standard pairing
+runs are identical to 5368cfe (QA re-ran both commits). Either way the Producer picks, criterion 5 needs the restated
+measure or the gated rule before M6-S6 can be accepted as written.
