@@ -479,7 +479,7 @@ public class DataContentHashTests
             }
             fields.Add(p.Name);
         }
-        Assert.Equal(new[] { "Key", "DisplayName", "Description", "Gold", "Wood" }, fields);
+        Assert.Equal(new[] { "Key", "DisplayName", "Description", "Gold", "Wood", "AiSpendAbove" }, fields); // BUG-1050: AiSpendAbove
         Assert.NotEqual(baseline, WithPresets(presets.Reverse().ToImmutableArray()).ContentHash());
         Assert.NotEqual(baseline, WithPresets(presets.RemoveAt(presets.Length - 1)).ContentHash());
     }
@@ -490,6 +490,7 @@ public class DataContentHashTests
     [InlineData("wood", "199")]
     [InlineData("displayName", "\"Usual\"")]
     [InlineData("description", "\"Other text.\"")]
+    [InlineData("aiSpendAbove", "1")] // BUG-1050: standard leaves it out (0); setting it moves the hash
     public void AStartingResourcesEditInTheFile_ChangesTheHash(string field, string json)
     {
         using TestDataDir dir = TestDataDir.CopyOfShipped();

@@ -71,7 +71,8 @@ public sealed partial class Simulation : ICommandSink
             if (seat.Controller != SeatController.Ai) continue;
             // Its own stream: the world's RngStream.Ai(p) seeded alike but never drawn, so the AI's draws move no hashed state.
             var rng = new SimRng(config.Seed, (ulong)RngStream.Ai(p));
-            ai[p] = new AiPlayer(new PlayerView(World, p), config.Data, config.Data.Ai[seat.Faction], seat.Difficulty, rng, this);
+            ai[p] = new AiPlayer(new PlayerView(World, p), config.Data, config.Data.Ai[seat.Faction], seat.Difficulty, rng, this)
+                { SpendAbove = config.StartingPreset.AiSpendAbove };
             seats++;
         }
         return ai;

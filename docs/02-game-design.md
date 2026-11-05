@@ -461,9 +461,10 @@ own cues (select, order, refused, building placed or finished, unit or tech read
    2026-11-05, owner may revisit; a "low" preset or per-slot presets are not planned). The sim's half is built (the save
    and the replay carry the preset; the older save and replay layouts read as Standard, though saves and recordings made
    before this change refuse to load anyway, since the game data changed with it); the setup screen's list is the view's
-   next task. At High the AI plays its usual openings with more money in hand: two of them (the Malazan Fast
-   Age II and the Whirlwind Holy war) keep much of the extra money for the first minutes rather than spending it at once
-   (BUG-1050).
+   next task. At High the AI plays its usual openings and spends the extra money as it goes: while it holds more than 200
+   gold + wood it starts its opening's timed steps (Age II, the later buildings) early, trains at every producer and leans
+   its gatherers toward the kind it is short of, so it doesn't sit on the start (BUG-1050; at Standard it plays exactly as
+   before).
 3. **Match.** Pause any time (single-player). Game speeds: Slow 0.75×, Normal 1×, Fast 1.5×.
 4. **Victory/defeat:** a player is out once they have **no unit left and no finished unit-producing building** (a
    hall that trains units: the Town Hall or one of the five unit halls; the Whirlwind's Holy Camp, Raider Camp and Archer

@@ -95,6 +95,8 @@ public class DataValidationTests
         Assert.Equal(new[] { "standard", "high" }, r.StartingResources.Select(x => x.Key));
         Assert.Equal((200, 200), (r.StartingResources[0].Gold, r.StartingResources[0].Wood));
         Assert.Equal((1000, 1000), (r.StartingResources[1].Gold, r.StartingResources[1].Wood));
+        // BUG-1050: the AI's spend-down rule is off at standard (the field left out) and on above 200 at high.
+        Assert.Equal((0, 200), (r.StartingResources[0].AiSpendAbove, r.StartingResources[1].AiSpendAbove));
         Assert.Equal(0, r.FindStartingResources("standard"));
         Assert.Equal(1, r.FindStartingResources("high"));
         Assert.Equal(-1, r.FindStartingResources("low"));
@@ -414,6 +416,8 @@ public class DataValidationTests
     [InlineData("[{\"id\":\"standard\",\"displayName\":\"S\",\"gold\":200,\"wood\":200},{\"id\":\"High\",\"displayName\":\"H\",\"gold\":1,\"wood\":1}]", "startingResources[1].id", "not snake_case")]
     [InlineData("[{\"id\":\"standard\",\"displayName\":\"S\",\"gold\":200,\"wood\":200},{\"id\":\"a234567890123456789012345678901234567890123456789012345678901234x\",\"displayName\":\"H\",\"gold\":1,\"wood\":1}]", "startingResources[1].id", "longer than 64 characters")]
     [InlineData("[{\"id\":\"standard\",\"displayName\":\"S\",\"gold\":200,\"wood\":200},null]", "startingResources[1]", "missing required field")]
+    [InlineData("[{\"id\":\"standard\",\"displayName\":\"S\",\"gold\":200,\"wood\":200,\"aiSpendAbove\":-1}]", "startingResources[0].aiSpendAbove", "below the minimum 0")] // BUG-1050
+    [InlineData("[{\"id\":\"standard\",\"displayName\":\"S\",\"gold\":200,\"wood\":200,\"aiSpendAbove\":1000001}]", "startingResources[0].aiSpendAbove", "above the maximum 1000000")]
     public void StartingResources_BadOrMissing_IsOneError(string? json, string path, string message)
     {
         using TestDataDir dir = TestDataDir.CopyOfShipped();
@@ -434,9 +438,9 @@ public class DataValidationTests
     {
         static JsonArray Presets(int count)
         {
-            var list = new JsonArray { new JsonObject { ["id"] = "standard", ["displayName"] = "S", ["gold"] = 0, ["wood"] = DataLimits.MaxInteger } };
+            var list = new JsonArray { new JsonObject { ["id"] = "standard", ["displayName"] = "S", ["gold"] = 0, ["wood"] = DataLimits.MaxInteger, ["aiSpendAbove"] = DataLimits.MaxInteger } };
             for (int i = 1; i < count; i++)
-                list.Add(new JsonObject { ["id"] = i == 1 ? "a" + new string('b', 63) : $"p{i}", ["displayName"] = $"P{i}", ["gold"] = i, ["wood"] = i });
+                list.Add(new JsonObject { ["id"] = i == 1 ? "a" + new string('b', 63) : $"p{i}", ["displayName"] = $"P{i}", ["gold"] = i, ["wood"] = i, ["aiSpendAbove"] = i == 1 ? 0 : i });
             return list;
         }
         using (TestDataDir dir = TestDataDir.CopyOfShipped())
@@ -446,6 +450,8 @@ public class DataValidationTests
             Assert.True(load.Ok, string.Join("; ", load.Errors));
             StartingResourcesDef s = load.Data!.Rules.StartingResources[0];
             Assert.Equal(("standard", "S", "", 0, DataLimits.MaxInteger), (s.Key, s.DisplayName, s.Description, s.Gold, s.Wood));
+            Assert.Equal(DataLimits.MaxInteger, s.AiSpendAbove); // BUG-1050: 0 and the maximum load
+            Assert.Equal(0, load.Data.Rules.StartingResources[1].AiSpendAbove);
             Assert.Equal(DataLimits.MaxStartingResourcesPresets, load.Data.Rules.StartingResources.Length);
             Assert.Equal(64, load.Data.Rules.StartingResources[1].Key.Length);
         }

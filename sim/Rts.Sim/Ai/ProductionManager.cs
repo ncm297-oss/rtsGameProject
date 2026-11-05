@@ -7,17 +7,34 @@ namespace Rts.Sim.Ai;
 /// the current age's most under-weighted composition unit (fewest own live + queued half-pop per unit of weight, M5-3:
 /// weights are population shares; composition order on ties) among those a finished own building with an empty queue may train now, if what is left this think pays for it;
 /// else it waits (it doesn't spend on a cheaper unit instead). M5-4g: it spends only above the reserve of the build order's
-/// reserved step (<see cref="AiPlayer.CanAffordAboveReserve"/>).
+/// reserved step (<see cref="AiPlayer.CanAffordAboveReserve"/>). BUG-1050: while the AI spends down
+/// (<see cref="AiPlayer.SpendingDown"/>, a starting-resources preset's <c>aiSpendAbove</c>) it trains even on a think the build
+/// order sent, one Train per producer, at producers whose queue holds fewer than <see cref="SpendDownQueue"/>, until the bank
+/// is down to the threshold or nothing more can be trained.
 /// </summary>
 internal static class ProductionManager
 {
-    /// <summary>One Train at most a think (see the type's summary).</summary>
+    /// <summary>One Train at most a think; while spending down, one per producer (see the type's summary).</summary>
     internal static void Run(AiPlayer ai)
     {
-        if (ai.ExecutorSent) return;
+        if (ai.ExecutorSent && !ai.SpendingDown) return;
+        // Ends: each Train sent marks its building busy for the rest of the think (BuildingBusyUntil), so at most one per producer.
+        while (TrainOne(ai) && ai.SpendingDown) { }
+    }
+
+    /// <summary>
+    /// BUG-1050: while spending down, a producer takes a Train while its queue holds fewer than this: the unit in work and one
+    /// waiting, so a producer that finishes between thinks starts the next at once. With only empty queues (as at
+    /// <c>standard</c>) a <c>high</c> Malazan side still floated 380-1,300 at 10:00 on three of the measured seeds.
+    /// </summary>
+    internal const int SpendDownQueue = 2;
+
+    /// <summary>Sends the current composition's most under-weighted unit at a producer that may take it; true when one was sent.</summary>
+    private static bool TrainOne(AiPlayer ai)
+    {
         int age = ai.View.Age;
         var compositions = ai.Opening.Compositions; // M5-8a: the picked opening's
-        if (compositions.Length == 0) return;
+        if (compositions.Length == 0) return false;
         AiComposition mix = compositions[System.Math.Clamp(age, 1, compositions.Length) - 1];
         int pick = -1;
         float pickShare = float.MaxValue;
@@ -30,19 +47,20 @@ internal static class ProductionManager
             pick = type;
             pickShare = share;
         }
-        if (pick < 0) return;
+        if (pick < 0) return false;
         // Not judged: the next think simply looks at the queues again. M5-4g: only above the build order's reserve.
-        ai.TryTrain(pick, emptyQueueOnly: true, ref ai.Board.ProductionPending, aboveReserve: true);
+        return ai.TryTrain(pick, emptyQueueOnly: !ai.SpendingDown, ref ai.Board.ProductionPending, aboveReserve: true);
     }
 
-    /// <summary>Whether a finished own building with an empty queue and no AI command waiting on it may train <paramref name="type"/> now (its cost aside).</summary>
+    /// <summary>Whether a finished own building with an empty queue (spending down: fewer than <see cref="SpendDownQueue"/>) and no AI command waiting on it may train <paramref name="type"/> now (its cost aside).</summary>
     private static bool CanTrainSomewhere(AiPlayer ai, int type)
     {
         int at = ai.Data.Units[type].TrainedAtTypeId;
         for (int k = 0; k < ai.OwnBuildingCount; k++)
         {
             int slot = ai.OwnBuildingSlots[k];
-            if (ai.OwnBuildingSites[k] || ai.OwnBuildingTypes[k] != at || ai.Board.BuildingBusyUntil[slot] >= ai.Now || ai.View.QueueCount(slot) > 0) continue;
+            if (ai.OwnBuildingSites[k] || ai.OwnBuildingTypes[k] != at || ai.Board.BuildingBusyUntil[slot] >= ai.Now
+                || ai.View.QueueCount(slot) >= (ai.SpendingDown ? SpendDownQueue : 1)) continue;
             if (ai.View.CanTrain(slot, type, out Economy.TrainError why) || why == Economy.TrainError.CannotAfford) return true;
         }
         return false;

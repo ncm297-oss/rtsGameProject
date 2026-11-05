@@ -35,10 +35,11 @@ internal static class AiScenes
 
     /// <summary>The flat scene (see the type's summary) with <paramref name="data"/> (shipped by default).</summary>
     internal static Simulation Flat(PlayerSeat[] seats, GameData? data = null, int units = 256, int commands = 512, ulong seed = 3,
-        int workers = 5, bool combat = false, bool expansionMine = false)
+        int workers = 5, bool combat = false, bool expansionMine = false, string startingResources = StartingResourcesDef.StandardId)
     {
         data ??= TestSim.Data;
-        var config = new SimConfig(seed, seats.Length, units, commands) { Data = data, Seats = seats.ToImmutableArray(), Combat = combat };
+        var config = new SimConfig(seed, seats.Length, units, commands)
+            { Data = data, Seats = seats.ToImmutableArray(), Combat = combat, StartingResources = startingResources }; // M6-S6 / BUG-1050
         var sim = new Simulation(config, LocalMovementTests.Flat(FlatSize));
         World w = sim.World;
         int mine = data.FindResource("gold_mine"), tree = data.FindResource("tree");

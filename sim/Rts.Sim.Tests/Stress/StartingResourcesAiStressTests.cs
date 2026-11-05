@@ -15,12 +15,13 @@ namespace Rts.Sim.Tests.Stress;
 /// M6-S6 criterion 5: does the AI spend a <c>high</c> start instead of banking it? Every Malazan x Whirlwind opening
 /// pairing (9, so each of the six openings plays three times) on its smallest seed (the pairs report's,
 /// <see cref="AiOpeningSeeds.SmallestPair"/>), Normal v Normal on the menu's map (12 forests, 8 mines) for 10 minutes, once
-/// at <c>standard</c> and once at <c>high</c>. The brief's measure, per side: the bank (gold + wood) at 10:00 at <c>high</c>
-/// is no more than twice the <c>standard</c> run's. Asserted for every side but the ones listed in
-/// <see cref="KnownOverTwice"/> (BUG-1050: a listed side that comes under prints "take it out"; a new one over fails).
-/// Printed for the report: both runs' 2-minute timeline (banks, army and worker pop, waves, producers busy, pop and cap, build
-/// order steps done and due), and per side the 10:00 banks, the mean bank from 2:00 to 10:00 (every 5 s) and the bank at 4:00:
-/// the two measures that show which openings hold the start (BUG-1050). Lines starting "ROW" are machine-read by the QA report.
+/// at <c>standard</c> and once at <c>high</c>. Asserted per side: the brief's measure, the bank (gold + wood) at 10:00 at
+/// <c>high</c> no more than twice the <c>standard</c> run's; and (BUG-1050, the measure that reads the start rather than one
+/// sample of a fight's ebb) the mean bank from 2:00 to 10:00 (every 5 s) at <c>high</c> no more than
+/// <see cref="MeanBankRatio"/> times <c>standard</c>'s. Before the spend-down rule (fix round 1) five sides failed the first
+/// and eleven the second (Malazan <c>cadre_rush</c> held 1,325-1,515 at 4:00). Printed for the report: both runs' 2-minute
+/// timeline (banks, army and worker pop, waves, producers busy, pop and cap, build order steps done and due), and per side the
+/// 10:00 banks, the mean bank and the bank at 4:00. Lines starting "ROW" are machine-read by the QA report.
 /// </summary>
 public class StartingResourcesAiStressTests
 {
@@ -59,30 +60,18 @@ public class StartingResourcesAiStressTests
             _out.WriteLine($"ROW {side} {standard.Names[p]} seed {seed}: bank at 10:00 standard {s} high {h} (x{(s == 0 ? 0 : (double)h / s):0.00}); "
                 + $"waves {standard.Waves[p]} / {high.Waves[p]}; Age II {Sec(standard.AgeTwo[p])} / {Sec(high.AgeTwo[p])}; "
                 + $"army pop at 10:00 {standard.Army[p] / 2.0} / {high.Army[p] / 2.0}; mean bank 2:00-10:00 {standard.Mean[p]} / {high.Mean[p]}; bank at 4:00 {standard.At4[p]} / {high.At4[p]}");
-            bool known = Array.IndexOf(KnownOverTwice, (opening, other, p)) >= 0;
-            if (h > 2 * s && !known) over.Add($"{side} {standard.Names[p]} seed {seed}: high banks {h} at 10:00, over twice standard's {s}");
-            if (h <= 2 * s && known) _out.WriteLine($"  {side} {standard.Names[p]}: listed in KnownOverTwice but under twice now: take it out");
+            if (h > 2 * s) over.Add($"{side} {standard.Names[p]} seed {seed}: high banks {h} at 10:00, over twice standard's {s}");
+            if (high.Mean[p] > MeanBankRatio * standard.Mean[p])
+                over.Add($"{side} {standard.Names[p]} seed {seed}: high's mean bank 2:00-10:00 {high.Mean[p]}, over {MeanBankRatio} x standard's {standard.Mean[p]}");
         }
         Assert.True(over.Count == 0, string.Join("\n", over));
     }
 
     /// <summary>
-    /// BUG-1050: the sides whose 10:00 bank at <c>high</c> is over twice the <c>standard</c> run's, by (Malazan opening,
-    /// Whirlwind opening, player; Malazan 0 standard, 1 crossbow_push, 2 cadre_rush; Whirlwind 0 standard, 1 raider_rush,
-    /// 2 holy_war), measured on this commit. Four of them had spent the start by 4:00 (bank at 4:00 at most 350 of the
-    /// 2,000): their 10:00 bank is one sample of a fight's ebb (an army just lost, wood piling while gold is short). The
-    /// fifth, <c>cadre_rush</c> seed 13, is over because its <c>standard</c> bank at 10:00 is near empty (41). The sides that
-    /// hold much of the start, Malazan <c>cadre_rush</c> and Whirlwind <c>holy_war</c> (mean bank 2:00-10:00 of 570-1,090 at
-    /// <c>high</c> against about 270-630), otherwise pass the 10:00 measure: it misses them (the bug).
+    /// BUG-1050: the most the mean bank 2:00-10:00 at <c>high</c> may be, as a multiple of <c>standard</c>'s. With the
+    /// spend-down rule the 18 sides are at 0.44-1.26 (before it 0.42-3.17, eleven over 1.5: the start held for minutes).
     /// </summary>
-    internal static readonly (int Malazan, int Whirlwind, int Player)[] KnownOverTwice =
-    {
-        (0, 0, 1), // standard v standard (Swarm) seed 1, Whirlwind: 170 -> 432 (x2.54), 13 gold / 419 wood, army 4 (lost); bank at 4:00 82
-        (0, 1, 0), // standard (Combined arms) v raider_rush seed 2, Malazan: 221 -> 481 (x2.18); bank at 4:00 249
-        (0, 1, 1), // standard v raider_rush seed 2, Whirlwind: 372 -> 794 (x2.13); bank at 4:00 350
-        (1, 1, 0), // crossbow_push v raider_rush seed 5, Malazan: 72 -> 306 (x4.25); bank at 4:00 217
-        (2, 0, 0), // cadre_rush v standard seed 13, Malazan: 41 -> 143 (x3.49), the standard run's bank near empty; bank at 4:00 1,515 (it does hold the start)
-    };
+    internal const double MeanBankRatio = 1.5;
 
     private sealed record Run(string Preset, string[] Names, int[] Bank, int[] Army, int[] Waves, int[] AgeTwo, List<string> Timeline, int[] Mean, int[] At4);
 

@@ -99,6 +99,7 @@ public sealed class GameData
             h.Add(s.Description);
             h.Add(s.Gold);
             h.Add(s.Wood);
+            h.Add(s.AiSpendAbove); // BUG-1050
         }
         h.Add(r.StartingWorkers);
         h.Add(r.HalfPopCap);

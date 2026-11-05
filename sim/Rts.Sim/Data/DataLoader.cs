@@ -362,7 +362,7 @@ public static partial class DataLoader
     /// <summary>
     /// M6-S6: the <c>startingResources</c> presets in file order: each a unique snake_case id of at most
     /// <see cref="DataLimits.MaxStartingResourcesIdLength"/> characters, a display name, an optional description, gold and wood
-    /// from 0 to <see cref="DataLimits.MaxInteger"/>; at most <see cref="DataLimits.MaxStartingResourcesPresets"/> of them, one
+    /// from 0 to <see cref="DataLimits.MaxInteger"/>, an optional <c>aiSpendAbove</c> in the same range (BUG-1050; left out: 0); at most <see cref="DataLimits.MaxStartingResourcesPresets"/> of them, one
     /// of them <see cref="StartingResourcesDef.StandardId"/>.
     /// </summary>
     private static ImmutableArray<StartingResourcesDef> BuildStartingResources(Checker c, List<StartingResourcesJson?>? list)
@@ -396,6 +396,7 @@ public static partial class DataLoader
                 Description = r.Description ?? "",
                 Gold = c.Int(r.Gold, p + ".gold", 0),
                 Wood = c.Int(r.Wood, p + ".wood", 0),
+                AiSpendAbove = r.AiSpendAbove == null ? 0 : c.Int(r.AiSpendAbove, p + ".aiSpendAbove", 0),
             });
         }
         if (!seen.Contains(StartingResourcesDef.StandardId))

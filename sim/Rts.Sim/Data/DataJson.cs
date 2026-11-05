@@ -52,6 +52,7 @@ internal sealed class StartingResourcesJson
     public string? Description { get; set; }
     public int? Gold { get; set; }
     public int? Wood { get; set; }
+    public int? AiSpendAbove { get; set; } // BUG-1050, optional
 }
 
 // M5-2: rules.json "ai", the AI's generic tunables.

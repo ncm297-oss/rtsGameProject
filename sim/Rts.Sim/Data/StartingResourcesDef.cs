@@ -27,4 +27,10 @@ public sealed class StartingResourcesDef
 
     /// <summary>Wood each seat starts with.</summary>
     public int Wood { get; init; }
+
+    /// <summary>
+    /// BUG-1050: an AI seat spends down while its gold + wood is above this (<c>aiSpendAbove</c>, optional, 0 to
+    /// <see cref="DataLimits.MaxInteger"/>; docs/03 "Implementation (M6-S6)"); 0, or the field left out, turns the rule off.
+    /// </summary>
+    public int AiSpendAbove { get; init; }
 }
