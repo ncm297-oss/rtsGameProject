@@ -1,11 +1,11 @@
 # Handoff: brief for the next session
 
-Written by the Producer at the PLAN of session **2026-11-05-0749** (session 1 / 8 on 2026-11-05; base `424a5e8` = `origin/main`; the
-second resume of the paused session 2026-10-27-0658, whose branches carry the recovered work; 0658 and its first resume 2050 both died
+Written by the Producer at the PLAN of session **2026-11-05-0805** (session 1 / 8 on 2026-11-05; base `424a5e8` = `origin/main`; the
+third resume of the paused session 2026-10-27-0658, whose branches carry the recovered work; 0658, its first resume 2050 and the scheduled resume 0749 (died at its PLAN, ~07:55; its plan is adopted here unchanged) all died
 without an ACCEPT: `studio/sessions/2026-10-27-0658-incident.md`). Sim **GO (finish M6-S5 on `studio/2026-10-27-0658-sim`)**, view
 **GO (finish M6-V16 on `studio/2026-10-27-0658-view`)**, data **STOP (cheap)**. Counters at the start: sim 1 / 4, view 0 / 4, data
 1 / 4. **Open S1 / S2: BUG-1045 (S2, against M6-S5, on the sim branch; its fix is mostly in 5dff5d8, finished by this session's sim
-brief).** `main` green at the 0158 ACCEPT (7,608 / 0 / 12); 424a5e8 is docs-only on top of it.
+brief).** `main` green at the 0158 ACCEPT (7,608 / 0 / 12); 424a5e8 is docs-only on top of it. **Verified at the 0805 PLAN:** both branches build 0 warnings; the sim branch's targeted run (golden, data validation / hash, `AiTeamTests`, `SharedVisionQaTests`, `TeamArchitectureTests`, `GatherWedgeQaTests`) 294 / 2 / 1: the two reds are the expected golden + the `data-hash` pin, the skip BUG-1045's test.
 
 ## Where we are
 
@@ -34,7 +34,7 @@ moves): the BUG-1045 fix may move 1v1 pairing cells; the sim reports, the data t
 
 ## Sim track
 
-### Current session plan (2026-11-05-0749)
+### Current session plan (2026-11-05-0805, the 0749 plan adopted)
 
 **M6-S5 (resumed, second time): finish BUG-1045 (S2), regen the golden, A/B, BUG-1046, docs, report · feature (counter 1 / 4 → 2 / 4)
 · QA full · bug ids from 1047.** Work on `studio/2026-10-27-0658-sim` at 5dff5d8 (do not rebase; `main` is its base). Keep QA's two
@@ -119,7 +119,7 @@ the field with its reason; no `DateTime` / `System.Random`.
 
 ## View track
 
-### Current session plan (2026-11-05-0749)
+### Current session plan (2026-11-05-0805, the 0749 plan adopted)
 
 **M6-V16 (resumed, second time): verify, fix, report · feature (counter 0 / 4 → 1 / 4) · QA standard · bug ids from 1061.** Work on
 `studio/2026-10-27-0658-view` at 7450aef ("recovered work": every item of the 0658 brief is in code; builds 0 warnings, smoke PASS,
@@ -186,7 +186,7 @@ M6-V16: the starting-resources list when 43 lands, then (e) export, (f) criterio
 
 ## Data track
 
-### Current session plan (2026-11-05-0749)
+### Current session plan (2026-11-05-0805, the 0749 plan adopted)
 
 **STOP (cheap, counter stays 1 / 4).** The inbox's **New** is empty (no D21 / D19 / Shock / `goldShare` / BUG-0780 answer); no schema
 the data track needs is new on `main` (`ai.gatherReach` is a sim-owned `rules.json` knob, on the sim branch only). **Next session,
@@ -213,5 +213,6 @@ folded in.
 - Two tracks this session: two test hosts; wall-clock Perf and scene rows flake under load; rerun alone before filing.
 - Bug ids next: **sim from 1047, view from 1061, data from 1081**.
 - The owner's old recordings refuse to play since E108AB2A7C66C58D (two `rules.json` fields); a third field lands this session.
+- **The diff base for both resumed devs is `424a5e8`** (`git diff 424a5e8...HEAD`); the sim dev goes first (unfinished work), the view dev goes first too (verification + report), then each track's QA.
 - Sessions longer than 3 h: the conductor refreshes `studio/.session.lock` at each phase; commit each dev's work at every phase boundary
   (the 2050 fix sat uncommitted for nine days).
