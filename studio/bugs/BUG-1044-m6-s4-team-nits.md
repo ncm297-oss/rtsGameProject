@@ -84,3 +84,18 @@ a Move, not an Attack the sim drops. Tests: `ViewApi/UnitPickerTests.ResolveEnem
 `ViewApi/MinimapRasterTests.AnAllysDot_IsNoEnemyDot_WithTheAlliances`, `ViewApiAllocationTests.EnemyPickers_WithTheAllianceTable_*`.
 The old overloads (no table: every other player is an enemy) are kept for the free-for-all callers and QA's suites. Items 1 and 3
 are the sim's, unchanged.
+## Item 1 fixed (M6-S5, dev)
+- `World.RecordDeath` passes the killer to `PlayerLedger.CountDeath` only when `IsEnemy(killerOwner, victimOwner)`; otherwise
+  -1 (no player). A friendly-fire death, by an own unit or an ally's, is the victim owner's loss (and unit / building loss)
+  and nobody's kill; the `DeathEvent` still names the attacker's owner (the view's event is unchanged). docs/02 "Game flow" 4
+  has the sentence.
+- Tests: `TeamTests.AFriendlyFireKill_OwnOrAnAllys_IsALoss_AndNobodysKill` (own, ally, and the enemy control row: Kills,
+  Losses, `UnitKills`); the pin `QA/CusserQaTests.Cusser_OnItsOwnPosition_KillsTheSapper_CreditsNoKill_StillHitsTheKeep_TwinsEqual`
+  (renamed from `..._CreditsItsOwner_...`) moved to Kills[0] = 0, Losses[0] = 1.
+- The five free-for-all A/B scenes stay hash-equal to e5c4265 (`Vision/SharedVisionFfaPinTests`): none has an own
+  friendly-fire kill in its first 3,000 ticks. A match that has one hashes differently from before (the kill counter is hashed).
+- Item 3 / the regex nits: not touched, except that M6-S5 moved the two lower-case aliased compares QA pinned in
+  `QA/TeamArchitectureQaTests` (`NextSeenUnit`'s `owner[s] == player`, `UpdateGhosts`' `owner[j] != p`) onto lines that ask
+  `AreAllied`, so its known-missed list is now empty (edited by the dev, the test's rule unchanged). Status stays open for the
+  rest (M6-SH1).
+

@@ -79,5 +79,6 @@ public sealed partial class FogStore
             int x0 = _visibleBox[4 * p], y0 = _visibleBox[4 * p + 1], x1 = _visibleBox[4 * p + 2], y1 = _visibleBox[4 * p + 3];
             if (x0 != int.MaxValue && !r.Check(x0 >= 0 && x0 <= x1 && x1 < _width && y0 >= 0 && y0 <= y1 && y1 < _height)) return;
         }
+        RebuildTeamsAfterLoad(); // M6-S5: the teams' shared fog is derived from the own bits just read
     }
 }

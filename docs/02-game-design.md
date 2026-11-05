@@ -274,9 +274,15 @@ whether the zone's statuses take it and whether the zone hides it (the ground is
 - Vision modifiers: Darkness and Sandstorm zones hide their contents from enemies outside them
   and blind enemies inside them; an ally's zone neither hides nor blinds (M6-S4). High ground limits vision from below
   (next section).
-- **Allies do not share vision yet** (M6-S4; shared vision is M6-S5): a player sees an ally's units and buildings only
-  inside its own sight, as any other player's, and remembers an ally's buildings as last-known ghosts the same way. A
-  stealthed unit hides only from enemies: its owner's allies see it wherever their own sight reaches.
+- **Allies share vision** (M6-S5): a player sees every cell, unit and building any ally sees, and always sees its allies'
+  own units and buildings (a stealthed one too: stealth hides a unit only from enemies). Explored ground is shared: what
+  any ally has explored is explored for the whole team (so a player may build there). An enemy building either ally sees
+  becomes a last-known ghost for both; an ally's building is never a ghost (it is always seen). A stealthed enemy one ally
+  detects is detected for the whole team. A high-ground reveal shows the attacker to the victim's whole team. Zones keep
+  their M6-S4 rules (an ally's Darkness or Sandstorm neither hides nor blinds); a unit inside an enemy's zone is seen by
+  the team where a unit of any ally standing inside that zone sees it. A player without an ally (team 0) sees only through
+  its own eyes, as before. An ally that is out lends its last sight until the next fog update (within 4 ticks), as a dead
+  unit's circle lasts until then (Producer decision 2026-11-05, BUG-1046).
 
 ### High ground
 
@@ -417,6 +423,12 @@ own cues (select, order, refused, building placed or finished, unit or tech read
   A resource the AI knows no node of is not held back, and a step short of one is not reserved at all (built in M5-4g,
   BUG-0981, BUG-1021, BUG-1023, BUG-1025; the "at home or out on a wave" wording is BUG-1026, Producer 2026-10-19;
   [03 Implementation (M5-4g)](03-technical-design.md#implementation-m5-4g)).
+- The AI looks near home before it trusts what it sees far away: its scout sweeps until every waypoint is visited or the AI
+  knows an enemy building and a forest and a gold mine within `rules.json` `ai.gatherReach` (64 m) of its Town Hall, and until the scout
+  is done (released, or dead) its gatherers go only to a node within that reach of one of its own finished drop-offs. A
+  forest or mine it knows only through an ally's eyes or a raider's far sighting counts as unknown until then; after, the
+  nearest known node is taken wherever it is (so a seat whose scout dies early falls back on any node it knows, and a seat
+  with no finished drop-off may take any). Built in M6-S5 (BUG-1045; [03 Implementation (M6-S5)](03-technical-design.md#implementation-m6-s5)).
 - Build orders, army compositions, and attack thresholds are per-faction data (`ai.json`), not code.
 - Each faction's `ai.json` holds one to eight named openings (a build order, an army mix and attack thresholds each);
   at match start an Easy AI always plays the first, and a Normal or Hard AI picks one at random from the match seed, so
@@ -437,7 +449,7 @@ own cues (select, order, refused, building placed or finished, unit or tech read
    pick a colour another slot holds. Single-player: slot 1 is always the local human, slots 2-4 are AI seats, each with
    its own difficulty (built in M6-V5: Add player / Remove player, 2-4 slots). A slot's team is 0 (no team: a side of its
    own, the free-for-all default) or 1-8; slots on one team are allies: they never attack each other, their friendly fire
-   treats each other's units as their own, and the AI never targets an ally (the sim's half, M6-S4; shared vision is M6-S5).
+   treats each other's units as their own, and the AI never targets an ally (the sim's half, M6-S4), and allies share vision (M6-S5, "Vision and fog of war").
    The setup's **Team** list per slot offers None (the default) and Team 1-4, so a 2v2, a 1v1v2 or a 2v1 is set up from the
    menu; colours stay per slot, not per team (built in M6-V16; the Load Game list marks each seat's team, "(T1)"). Built so far:
    the map seed and size, the slots, a **Game speed** list (Slow / Normal / Fast, default Normal) and the map generator's
@@ -459,7 +471,9 @@ own cues (select, order, refused, building placed or finished, unit or tech read
    team, the players with no team last under their own "No team" label (Producer default 2026-10-27, M6-V16). A
    player that is out loses its remaining buildings on that tick: they collapse like razed ones (rubble, the ground opens,
    queued research and training go with them), and a collapse is **neither a kill nor a loss** in the stats, which count
-   only what an enemy destroyed (Producer decisions 2026-10-14 and 2026-10-16, BUG-0703; built in M5-H2).
+   only what an enemy destroyed (Producer decisions 2026-10-14 and 2026-10-16, BUG-0703; built in M5-H2). Likewise a
+   friendly-fire death (a unit killed by its own player's or an ally's splash, Cusser or other area effect) is a loss for
+   its owner and **nobody's kill** (Producer decision 2026-10-27, BUG-1044; built in M6-S5).
 5. **Post-match stats:** resources gathered, units trained/lost/killed, buildings built/lost,
    army value over time (graph), time to Age II, and for each AI seat the opening it played ("Malazan Empire opened with
    Combined arms", the opening's description on hover; a human seat shows none; a watched replay shows the same line; built in

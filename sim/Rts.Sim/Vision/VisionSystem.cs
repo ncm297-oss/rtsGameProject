@@ -143,7 +143,8 @@ public static class VisionSystem
     /// melee hit, or at firing for a projectile) on something of <paramref name="victimOwner"/> standing on
     /// <paramref name="victimLevel"/>: from a higher level it reveals the attacker to the victim's owner for
     /// <see cref="VisionConstants.HighGroundRevealTicks"/> (docs/02 "High ground"; refreshed by every such hit). A tower's
-    /// hit (<paramref name="attackerIsBuilding"/>, a building handle; BUG-0270) reveals the tower the same way.
+    /// hit (<paramref name="attackerIsBuilding"/>, a building handle; BUG-0270) reveals the tower the same way. M6-S5: to the
+    /// victim owner's allies too (shared vision; <see cref="FogStore.Reveal"/>).
     /// </summary>
     internal static void OnHit(World world, EntityHandle attacker, bool attackerIsBuilding, int attackerLevel, int victimOwner, int victimLevel)
     {

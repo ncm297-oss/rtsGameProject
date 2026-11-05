@@ -15,12 +15,13 @@ public class TeamArchitectureQaTests
     private static readonly Regex s_aliasedOwnerCompare =
         new(@"\b[A-Za-z_]*[Oo]wner[A-Za-z]*\s*\[[^\]]*\]\s*[!=]=|[!=]=\s*[A-Za-z_.]*[Oo]wner[A-Za-z]*\s*\[", RegexOptions.Compiled);
 
-    /// <summary>Aliased compares the developer's scan misses today, each reviewed by QA: both are the player's own or allied-as-other by docs/03.</summary>
-    private static readonly (string File, string Code)[] s_knownMissed =
-    {
-        ("FogStore.cs", "if (owner[s] == player) return s;"),            // NextSeenUnit: the player's own unit (own eyes)
-        ("FogStore.cs", "bool enemy = alive[j] && owner[j] != p;"),     // UpdateGhosts: allied-as-other (an ally's building is remembered)
-    };
+    /// <summary>
+    /// Aliased compares the developer's scan misses today, each reviewed by QA. M6-S5 (dev): the two QA listed at M6-S4
+    /// (<c>NextSeenUnit</c>'s <c>owner[s] == player</c>, <c>UpdateGhosts</c>' <c>owner[j] != p</c>) now ask
+    /// <c>AreAllied</c> on the same line (shared vision: an ally's unit is seen as an own one, an ally's building is never a
+    /// ghost), so both scans skip them and none is left.
+    /// </summary>
+    private static readonly (string File, string Code)[] s_knownMissed = Array.Empty<(string, string)>();
 
     private static readonly string[] s_dirs = { "Combat", "Abilities", "Vision", "Ai" };
 

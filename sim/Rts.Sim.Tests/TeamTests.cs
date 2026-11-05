@@ -185,6 +185,47 @@ public class TeamTests
         Assert.Equal(enemy, StoneDamage(2, fraction)); // the enemy, in full
     }
 
+    /// <summary>
+    /// M6-S5 (BUG-1044 item 1, docs/02 "Game flow" 4): a friendly-fire death is its owner's loss and nobody's kill. The stone of
+    /// player 0's Catapult kills a Laborer at 1 hp beside its enemy target: player 0's own (<paramref name="victim"/> 0) or its
+    /// ally's (1) is a loss for its owner and no kill for player 0; an enemy's (2) is player 0's kill, as before. The death
+    /// event still names the attacker's owner (what the view shows).
+    /// </summary>
+    [Theory]
+    [InlineData(0)]
+    [InlineData(1)]
+    [InlineData(2)]
+    public void AFriendlyFireKill_OwnOrAnAllys_IsALoss_AndNobodysKill(int victim)
+    {
+        Simulation sim = Flat(48, true, 1, 1, 0);
+        World w = sim.World;
+        UnitStore u = w.Units;
+        Vector2 center = At(sim, 24, 24);
+        EntityHandle c = Place(sim, 0, ProjectileTests.Catapult, center - new Vector2(20f, 0f));
+        EntityHandle target = Place(sim, 2, Laborer, center);
+        EntityHandle v = Place(sim, victim, Laborer, center + new Vector2(1f, 0f));
+        Place(sim, 1, Laborer, At(sim, 4, 44)); // keeps player 1 in when its Laborer dies
+        u.Hp[v.Index] = 1;
+        sim.Enqueue(Command.HoldPosition(2, target));
+        sim.Enqueue(Command.HoldPosition(victim, v));
+        Spot(sim, 0, target);
+        sim.Enqueue(Command.Attack(0, c, target, isBuilding: false));
+        RunUntil(sim, () => w.Projectiles.Count == 1, 300);
+        var deaths = new List<DeathEvent>();
+        while (w.Projectiles.Count > 0)
+        {
+            sim.Tick();
+            deaths.AddRange(w.Deaths.ToArray());
+        }
+        DeathEvent d = Assert.Single(deaths);
+        Assert.Equal((v, 0, victim), (d.Victim, d.KillerOwner, d.VictimOwner));
+        Assert.True(u.IsAlive(target), "setup: the target outlived the stone");
+        int[] kills = w.Kills.ToArray(), losses = w.Losses.ToArray();
+        Assert.Equal(victim == 2 ? new[] { 1, 0, 0 } : new[] { 0, 0, 0 }, kills);
+        Assert.Equal(Enumerable.Range(0, 3).Select(p => p == victim ? 1 : 0).ToArray(), losses);
+        Assert.Equal(victim == 2 ? 1 : 0, w.UnitKills[0]);
+    }
+
     [Fact]
     public void ACatapultStone_NeverDamagesAnAllysBuilding()
     {
@@ -306,7 +347,7 @@ public class TeamTests
         Assert.True(new PlayerView(w, 1).TryGetUnit(hidden.Index, out SeenUnit seen) && seen.Owner == 0);
         Assert.False(w.Fog.CanSeeUnit(2, hidden.Index), "the enemy sees the stealthed unit");
         Assert.False(new PlayerView(w, 2).TryGetUnit(hidden.Index, out _));
-        Assert.False(w.Fog.CanSeeUnit(3, hidden.Index), "an ally far away sees it: shared vision is M6-S5");
+        Assert.True(w.Fog.CanSeeUnit(3, hidden.Index), "an ally far away doesn't see it: M6-S5 shares vision, and an ally's unit is seen as an own one");
         Assert.False(w.IsDetectedBy(1, hidden.Index), "an ally needs no detection");
     }
 

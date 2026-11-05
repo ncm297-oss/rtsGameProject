@@ -221,7 +221,8 @@ public sealed partial class World
     internal int DeathCount { get; private set; }
 
     /// <summary>
-    /// Appends a death to this tick's <see cref="Deaths"/> and counts it in the killer's kills and the victim owner's losses
+    /// Appends a death to this tick's <see cref="Deaths"/> and counts it in the killer's kills (M6-S5: only an enemy's; a
+    /// friendly-fire death, own or allied, is nobody's kill) and the victim owner's losses
     /// (M6-S1: and in the unit or building half of each, by <see cref="DeathEvent.IsBuilding"/>)
     /// (M4-4b-3b: an expiry, <see cref="DeathEvent.Expired"/>, counts neither; M5-H2: nor a defeated player's collapse,
     /// <see cref="DeathEvent.Collapsed"/>). Past the list's capacity the event is not
@@ -231,7 +232,8 @@ public sealed partial class World
     {
         System.Diagnostics.Debug.Assert(DeathCount < _deaths.Length, "death list full: an event is dropped (BUG-0452)");
         if (DeathCount < _deaths.Length) _deaths[DeathCount++] = e;
-        if (!e.Expired && !e.Collapsed) _ledger.CountDeath(e.KillerOwner, e.VictimOwner, e.IsBuilding);
+        // M6-S5 (BUG-1044 item 1): a friendly-fire death (an own or an ally's attacker) is the victim's loss and nobody's kill.
+        if (!e.Expired && !e.Collapsed) _ledger.CountDeath(IsEnemy(e.KillerOwner, e.VictimOwner) ? e.KillerOwner : -1, e.VictimOwner, e.IsBuilding);
     }
 
     /// <summary>Empties <see cref="Deaths"/> (start of a tick).</summary>

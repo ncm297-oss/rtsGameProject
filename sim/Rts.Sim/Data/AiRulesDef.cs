@@ -81,4 +81,11 @@ public sealed class AiRulesDef
     /// whatever the army, the defense aside).
     /// </summary>
     public float ReserveArmyShare { get; init; }
+
+    /// <summary>
+    /// M6-S5 (BUG-1045): until the scout is done, the AI counts only nodes within this distance of an own finished drop-off
+    /// as ones to gather from, and its scout's "found enough" only a forest and a mine within it of the hall, in meters
+    /// (<c>gatherReach</c>, 1-<see cref="DataLimits.MaxAiGatherReach"/>).
+    /// </summary>
+    public float GatherReach { get; init; }
 }

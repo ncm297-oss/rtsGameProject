@@ -310,8 +310,9 @@ public class MilitaryManagerTests
 
     /// <summary>
     /// M6-S4: player 0 (AI, team 1) sees its ally's hall (player 2, team 1, north, the nearer) and the enemy's (player 1, team
-    /// 2, east) through two billets of its own, or (<paramref name="ghost"/>) remembers both: the rally points toward the
-    /// enemy's hall and the wave attack-moves to it; the ally's building is never a target and never counted as an enemy's.
+    /// 2, east) through two billets of its own, or (<paramref name="ghost"/>) remembers the enemy's (M6-S5: and still sees its
+    /// ally's, live, through shared vision: an ally's building is never a ghost): the rally points toward the enemy's hall and
+    /// the wave attack-moves to it; the ally's building is never a target and never counted as an enemy's.
     /// </summary>
     [Theory]
     [InlineData(false)]
@@ -344,7 +345,8 @@ public class MilitaryManagerTests
         {
             Assert.True(w.Buildings.Free(eastBillet) && w.Buildings.Free(northBillet));
             do sim.Tick(); while (sim.TickNumber % 4 != 2);
-            Assert.True(ai.View.TryGetGhost(enemyHall.Index, out _) && ai.View.TryGetGhost(allyHall.Index, out _), "setup: both halls are ghosts");
+            Assert.True(ai.View.TryGetGhost(enemyHall.Index, out _), "setup: the enemy's hall is not a ghost");
+            Assert.True(ai.View.TryGetBuilding(allyHall.Index, out _) && !ai.View.TryGetGhost(allyHall.Index, out _), "the ally's hall is not seen live (shared vision)");
             NextThink(sim);
             Assert.Equal(1, ai.Board.KnownEnemyBuildings);
         }

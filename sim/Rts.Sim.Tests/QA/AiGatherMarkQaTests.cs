@@ -23,6 +23,18 @@ public class AiGatherMarkQaTests
     private static readonly Lazy<GameData> s_quietOrder = new(() => AiScenes.DataWithAi("malazan", root =>
         AiScenes.Opening(root)["buildOrder"] = AiScenes.BuildOrder(("time", 3600, "train", "malazan_laborer", 1))));
 
+    /// <summary>
+    /// The quiet order with <c>ai.gatherReach</c> at its 512 m maximum (M6-S5, BUG-1045): most of the remembered nodes lie
+    /// beyond the shipped 64 m of the hall (the far half of the map), and with it the economy never sends a worker to them
+    /// while the scout is out (so never marks them). This scene's subject is the mark of a gone node, so every node is in reach.
+    /// </summary>
+    private static readonly Lazy<GameData> s_quietOrderAnyReach = new(() => AiScenes.DataWith(dir =>
+    {
+        dir.EditJson("factions/malazan/ai.json", root =>
+            AiScenes.Opening(root)["buildOrder"] = AiScenes.BuildOrder(("time", 3600, "train", "malazan_laborer", 1)));
+        dir.EditJson("common/rules.json", r => r["ai"]!["gatherReach"] = 512);
+    }));
+
     private static bool FarHalf(int cell) => cell % AiScenes.FlatSize >= AiScenes.FlatSize / 2;
 
     /// <summary>Takes every node of <paramref name="typeKey"/> the filter picks (alive ones), returns their slots.</summary>
@@ -86,7 +98,7 @@ public class AiGatherMarkQaTests
     private Simulation BothKindsGoneScene(out int remembered)
     {
         PlayerSeat[] seats = AiScenes.Seats(AiDifficulty.Hard, SeatController.Ai, SeatController.Human);
-        Simulation sim = AiScenes.Flat(seats, s_quietOrder.Value);
+        Simulation sim = AiScenes.Flat(seats, s_quietOrderAnyReach.Value);
         World w = sim.World;
         List<int> farMines = TakeAll(w, "gold_mine", FarHalf), farTrees = TakeAll(w, "tree", FarHalf);
         TakeAll(w, "gold_mine", c => true);

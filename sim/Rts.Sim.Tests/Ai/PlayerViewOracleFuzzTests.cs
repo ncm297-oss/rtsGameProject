@@ -21,12 +21,17 @@ public class PlayerViewOracleFuzzTests
     [InlineData(1UL)]
     [InlineData(4UL)]
     [InlineData(7UL)]
-    public void EveryAnswer_EveryTick_EqualsTheBruteForceOracle(ulong seed) => Run(seed, null);
+    public void EveryAnswer_EveryTick_EqualsTheBruteForceOracle(ulong seed)
+    {
+        PlayerViewOracle.Tally tally = Run(seed, null);
+        Assert.Equal(0, tally.SeenThroughAlly); // M6-S5: a free-for-all player sees nothing beyond its own eyes
+    }
 
     /// <summary>
     /// M6-S4 criterion 6: the same scene as 2v2 (teams 1, 1, 2, 2: the two northern bases allies): stealth hides a unit only
     /// from its owner's enemies, an ally's Sandstorm hides nothing from its allies, and allies are seen only inside the
-    /// player's own vision; every answer still equals the oracle's, which learns the teams from the seats.
+    /// player's own vision; every answer still equals the oracle's, which learns the teams from the seats. M6-S5: with shared
+    /// vision, the oracle's union rule: an ally's units always seen, an enemy seen when any ally sees it by its own eyes.
     /// </summary>
     [Theory]
     [InlineData(1UL)]
@@ -36,6 +41,8 @@ public class PlayerViewOracleFuzzTests
     {
         PlayerViewOracle.Tally tally = Run(seed, new[] { 1, 1, 2, 2 });
         Assert.True(tally.AlliedUnitsSeen > 0, "no ally's unit was seen");
+        // M6-S5: shared vision was exercised: an enemy seen only by an ally's eyes.
+        Assert.True(tally.SeenThroughAlly > 0, "no enemy unit was seen only through an ally");
     }
 
     private PlayerViewOracle.Tally Run(ulong seed, int[]? teams)

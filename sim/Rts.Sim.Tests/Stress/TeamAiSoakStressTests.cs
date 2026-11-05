@@ -13,11 +13,22 @@ namespace Rts.Sim.Tests.Stress;
 /// it is sent: no Attack on an ally's unit or building, no AttackMove or cast onto an ally's building. Every tick: no wave
 /// targets an ally's building, and a seat that starts defending has an enemy (not an ally) army unit near its hall or a
 /// damaged own building. At the end (allies not at mirror starts) both sides have waved, and at least three of the four seats.
+/// M6-S5 (BUG-1042): the wave check is strict on every row, the mirror-start rows (<c>adjacent: true</c>, teams 1, 1, 2, 2)
+/// included: every seat knows an enemy building by the end (with shared vision, what its ally sees counts), and every seat
+/// that is not starved starts a wave at an enemy. Starved: its army (every unit the census counts as army) never reached its
+/// opening's wave size (<c>attackMinHalfPop</c> and <c>attackMinCost</c> x the difficulty's <c>waveSizeMultiplier</c>, what
+/// <c>MilitaryManager.TryStart</c> asks) on a tick it was not defending, up to tick 11,000 (a wave needs that army; a seat
+/// whose raiders wrecked its economy, or an Easy seat that fell behind, never gets one, with or without teams). M6-S5 (BUG-1045):
+/// a starved seat must have been raided (an enemy army within <c>ai.defendRadius</c> of its hall on at least 2,000 ticks), so a
+/// seat starved by its own gather choice fails; each seat's waves, peak army, raided ticks, gathered gold / wood are printed.
 /// </summary>
 [Collection(SerialCollection.Name)]
 [Trait("Category", "Soak")]
 public class TeamAiSoakStressTests
 {
+    /// <summary>M6-S5 (BUG-1045): the least ticks with an enemy army near its hall a seat that never reached wave size must have had (100 s).</summary>
+    private const int RaidedTicksIfStarved = 2000;
+
     private readonly ITestOutputHelper _out;
 
     public TeamAiSoakStressTests(ITestOutputHelper output) => _out = output;
@@ -101,12 +112,26 @@ public class TeamAiSoakStressTests
             };
         }
         var defending = new bool[4];
+        var waveSized = new bool[4];
+        var knew = new bool[4];
+        var firstRaid = new int[4];
+        var raidedTicks = new int[4];
+        var peakArmy = new int[4];
+        Array.Fill(firstRaid, -1);
         for (int t = 0; t < 12_000; t++)
         {
             sim.Tick();
             for (int p = 0; p < 4; p++)
             {
                 AiPlayer ai = sim.AiOf(p)!;
+                knew[p] |= ai.Board.KnownEnemyBuildings > 0;
+                if (!w.IsDefeated(p) && EnemyArmyNear(w, p, ai.HallPoint, ai.Rules.DefendRadius))
+                {
+                    raidedTicks[p]++;
+                    if (firstRaid[p] < 0) firstRaid[p] = sim.TickNumber;
+                }
+                if (sim.TickNumber % 20 == 0) peakArmy[p] = Math.Max(peakArmy[p], ArmyHalfPop(w, ai));
+                if (!waveSized[p] && !ai.Board.Defending && sim.TickNumber <= 11_000) waveSized[p] = WaveSized(w, ai);
                 EntityHandle target = ai.Board.WaveTarget;
                 if (target.Generation != 0 && w.Buildings.IsAlive(target) && w.AreAllied(p, w.Buildings.Owner[target.Index]))
                     bad.Add($"tick {sim.TickNumber}: seat {p}'s wave targets player {w.Buildings.Owner[target.Index]}'s building");
@@ -129,11 +154,50 @@ public class TeamAiSoakStressTests
         // Both sides wave at the enemy. Not every seat: on seed 3 the Easy seat 3 falls behind and never waves, the same with every
         // team 0 (QA checked the free-for-all twin: equal counts), so that is the economy, not the teams.
         Assert.True(w.Losses.ToArray().Sum() > 0, "nobody lost anything");
-        // BUG-1042: with allies at mirror start locations (adjacent), the seat whose raider stands in its ally's base knows no enemy
-        // building for the whole run (its scout's mirror waypoint is the ally) and never starts a wave: only the safety half is
-        // held there until that is fixed.
+        _out.WriteLine($"knew an enemy building {string.Join(", ", knew)}; army reached wave size {string.Join(", ", waveSized)}");
+        for (int p = 0; p < 4; p++)
+            _out.WriteLine($"  seat {p} ({(AiDifficulty)((p + (int)seed) % 3)}): waves {waves[p]}, wave-sized {waveSized[p]}, peak army half-pop {peakArmy[p]}, " +
+                $"enemy army within defendRadius of its hall from tick {firstRaid[p]} on {raidedTicks[p]} ticks, " +
+                $"gathered gold {w.GatheredGold[p]} wood {w.GatheredWood[p]}, losses {w.Losses[p]}");
+        // M6-S5 (BUG-1042, strict on every row): every seat learns of an enemy building (its own eyes or its ally's), and every
+        // seat whose army reached wave size waves at the enemy.
+        Assert.True(knew.All(k => k), $"a seat never knew an enemy building: {string.Join(", ", knew)}");
+        for (int p = 0; p < 4; p++)
+            Assert.True(!waveSized[p] || waves[p] > 0, $"seat {p}'s army reached wave size but it never waved (waves {string.Join(", ", waves)})");
+        // M6-S5 (BUG-1045): "starved" is a raid's doing only. A seat whose army never reached wave size must have had an enemy
+        // army within ai.defendRadius of its hall on at least RaidedTicksIfStarved ticks (BUG-1045's seat 3 starved unraided:
+        // 0 ticks defending). Measured 2026-11-05: the six starved seats (adjacent seeds 1-3, seed 5) were raided from tick
+        // 11-41 on 2,570-7,168 ticks.
+        for (int p = 0; p < 4; p++)
+            Assert.True(waveSized[p] || raidedTicks[p] >= RaidedTicksIfStarved,
+                $"seat {p} never reached wave size but was raided on only {raidedTicks[p]} ticks (from tick {firstRaid[p]}): starved by its economy, not a raid");
         if (adjacent) return;
         Assert.True(waves[0] + waves[2] > 0 && waves[1] + waves[3] > 0, "a side never waved");
         Assert.True(waves.Count(n => n > 0) >= 3, "two seats never waved");
+    }
+
+    /// <summary>The live half-pop of <paramref name="ai"/>'s army (its census's army units).</summary>
+    private static int ArmyHalfPop(World w, AiPlayer ai)
+    {
+        int half = 0;
+        for (int k = 0; k < ai.ArmyCount; k++)
+            if (w.Units.Alive[ai.ArmySlots[k]]) half += w.Data.Units[w.Units.TypeId[ai.ArmySlots[k]]].HalfPop;
+        return half;
+    }
+
+    /// <summary>Whether <paramref name="ai"/>'s army (its census's army units) is wave-sized by its opening and difficulty, as <c>MilitaryManager.TryStart</c> sizes a wave.</summary>
+    private static bool WaveSized(World w, AiPlayer ai)
+    {
+        int half = 0, cost = 0;
+        for (int k = 0; k < ai.ArmyCount; k++)
+        {
+            int s = ai.ArmySlots[k];
+            if (!w.Units.Alive[s]) continue;
+            UnitDef d = w.Data.Units[w.Units.TypeId[s]];
+            half += d.HalfPop;
+            cost += d.CostGold + d.CostWood;
+        }
+        float scale = ai.Knobs.WaveSizeMultiplier;
+        return half > 0 && half >= ai.Opening.AttackMinHalfPop * scale && cost >= ai.Opening.AttackMinCost * scale;
     }
 }

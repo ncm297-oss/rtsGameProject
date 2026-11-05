@@ -348,6 +348,7 @@ public sealed class GameData
         h.Add(r.RecallHallHp);
         h.Add(r.ReserveShift); // M5-4g
         h.Add(r.ReserveArmyShare); // M5-4g, BUG-1021
+        h.Add(r.GatherReach); // M6-S5, BUG-1045
         h.Add(Ai.Length);
         foreach (AiDef a in Ai)
         {

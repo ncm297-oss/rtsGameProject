@@ -373,6 +373,10 @@ public class DataValidationTests
     [InlineData("reserveArmyShare", null, "ai.reserveArmyShare", "missing required field")] // M5-4g, BUG-1021
     [InlineData("reserveArmyShare", "-0.01", "ai.reserveArmyShare", "outside 0-1")]
     [InlineData("reserveArmyShare", "1.01", "ai.reserveArmyShare", "outside 0-1")]
+    [InlineData("gatherReach", null, "ai.gatherReach", "missing required field")] // M6-S5, BUG-1045
+    [InlineData("gatherReach", "0", "ai.gatherReach", "outside 1-512 m")]
+    [InlineData("gatherReach", "-64", "ai.gatherReach", "outside 1-512 m")]
+    [InlineData("gatherReach", "512.5", "ai.gatherReach", "outside 1-512 m")]
     public void AiRulesBlock_MissingOrOutOfRange_IsOneError(string? field, string? value, string path, string message)
     {
         using TestDataDir dir = TestDataDir.CopyOfShipped();
@@ -425,6 +429,7 @@ public class DataValidationTests
         Assert.Equal(2, a.CastMinTargets); // M5-4c
         Assert.Equal((1.5f, 150f, 0.5f), (a.DefendRatio, a.DefendMinValue, a.RecallHallHp)); // M5-4f
         Assert.Equal((0.25f, 1f), (a.ReserveShift, a.ReserveArmyShare)); // M5-4g, BUG-1021
+        Assert.Equal(64f, a.GatherReach); // M6-S5 (BUG-1045): meters
     }
 
     /// <summary>M5-4b: the defense knobs load at their edges (<c>defendFor</c> 0 and 600 s, <c>defendRadius</c> 8 and 256 m, <c>workerFleeRadius</c> 1 and 64 m).</summary>
@@ -447,6 +452,8 @@ public class DataValidationTests
     [InlineData("reserveShift", 1, 1)]
     [InlineData("reserveArmyShare", 0, 0)] // BUG-1021
     [InlineData("reserveArmyShare", 1, 1)]
+    [InlineData("gatherReach", 1, 1)] // M6-S5, BUG-1045
+    [InlineData("gatherReach", 512, 512)]
     public void AiDefenseKnobs_AtTheirEdges_Load(string knob, double value, double loaded)
     {
         using TestDataDir dir = TestDataDir.CopyOfShipped();
@@ -457,7 +464,7 @@ public class DataValidationTests
         Assert.Equal(loaded, knob switch
         {
             "defendFor" => a.DefendForTicks, "defendRadius" => a.DefendRadius, "castMinTargets" => a.CastMinTargets,
-            "defendRatio" => a.DefendRatio, "defendMinValue" => a.DefendMinValue, "recallHallHp" => a.RecallHallHp, "reserveShift" => a.ReserveShift, "reserveArmyShare" => a.ReserveArmyShare, _ => a.WorkerFleeRadius,
+            "defendRatio" => a.DefendRatio, "defendMinValue" => a.DefendMinValue, "recallHallHp" => a.RecallHallHp, "reserveShift" => a.ReserveShift, "reserveArmyShare" => a.ReserveArmyShare, "gatherReach" => a.GatherReach, _ => a.WorkerFleeRadius,
         }, 5);
     }
 

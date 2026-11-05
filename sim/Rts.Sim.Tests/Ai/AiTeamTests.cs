@@ -111,6 +111,144 @@ public class AiTeamTests
         return n + w.Fog.GhostCount(p);
     }
 
+    /// <summary>
+    /// BUG-1042's scene (M6-S5): four AI seats, teams 1, 1, 2, 2 on the 4-start 256 map (seats west, east, north, south), so
+    /// every seat's ally starts at its hall's mirror, <paramref name="raiders"/> raiders of each seat in the next seat's base.
+    /// </summary>
+    internal static Simulation MirrorAllies(ulong seed, int raiders = 1)
+    {
+        PlayerSeat[] seats = Enumerable.Range(0, 4)
+            .Select(p => new PlayerSeat(p % 2, SeatController.Ai, (AiDifficulty)((p + (int)seed) % 3), 1 + p / 2)).ToArray();
+        return AiScenes.Generated(seats, seed, record: false, out _, units: 800, commands: 2048, raiders: raiders,
+            configure: c => c with { Map = c.Map with { Width = 256, Height = 256, Forests = 24, GoldMines = 16, StartLocations = 4 } });
+    }
+
+    /// <summary>
+    /// BUG-1042 regression (M6-S5): with the ally at the hall's mirror, the scout drops the mirror waypoint (the ally's base)
+    /// without walking there, and its first grid point is the one farthest from the ally's buildings. Before the fix every
+    /// seat's scout walked to its ally's base (target 8, the mirror) and then swept the ally's half nearest-first. No raiders
+    /// (with them, a seat's raider in an enemy's base shows that base to its ally too, and no scout is needed).
+    /// </summary>
+    [Theory]
+    [InlineData(1UL)]
+    [InlineData(2UL)]
+    public void MirrorAllies_TheScout_SkipsTheAllysBase_AndSweepsFarthestFromItFirst(ulong seed)
+    {
+        Simulation sim = MirrorAllies(seed, raiders: 0);
+        World w = sim.World;
+        var firstGrid = new int[4];
+        Array.Fill(firstGrid, -1);
+        var sent = new bool[4];
+        while (sim.TickNumber < 3000 && firstGrid.Any(g => g < 0))
+        {
+            sim.Tick();
+            for (int p = 0; p < 4; p++)
+            {
+                Blackboard b = sim.AiOf(p)!.Board;
+                sent[p] |= b.ScoutPhase == 1;
+                Assert.True(b.ScoutTarget != Blackboard.ScoutHead - 1, $"seed {seed} tick {sim.TickNumber}: seat {p}'s scout walks to its ally's base (the mirror waypoint)");
+                if (firstGrid[p] < 0 && b.ScoutTarget >= Blackboard.ScoutHead)
+                {
+                    firstGrid[p] = b.ScoutTarget;
+                    Assert.True(b.ScoutVisited[Blackboard.ScoutHead - 1], $"seat {p}: the mirror waypoint was not dropped");
+                    // The farthest grid point from the ally's buildings, among those not visited when the target was picked.
+                    Vector2 chosen = b.ScoutPoints[b.ScoutTarget];
+                    float best = AlliedDistance(w, p, chosen);
+                    for (int k = Blackboard.ScoutHead; k < b.ScoutPoints.Length; k++)
+                        if (!b.ScoutVisited[k] && k != b.ScoutTarget)
+                            Assert.True(AlliedDistance(w, p, b.ScoutPoints[k]) <= best + 1e-3f, $"seat {p}: grid point {k} lies farther from the ally than the target {b.ScoutTarget}");
+                }
+                if (b.ScoutPhase == 2 && firstGrid[p] < 0) firstGrid[p] = int.MaxValue; // released (or dead) before the grid
+            }
+        }
+        Assert.True(sent.All(s => s), "a seat never sent its scout");
+        Assert.True(firstGrid.All(g => g >= 0), $"a scout never reached the grid within 3,000 ticks: {string.Join(", ", firstGrid)}");
+        _out.WriteLine($"seed {seed}: first grid targets {string.Join(", ", firstGrid)} at tick {sim.TickNumber}");
+    }
+
+    /// <summary>
+    /// BUG-1045 regression (M6-S5): on BUG-1042's repro (seed 1, one raider each) seat 3 knows a forest, a mine and an enemy
+    /// building through its ally (north) from the first think. Before the fix its scout was released at once, its own forest
+    /// 17 m off stayed unknown and its wood gatherers walked 300-450 m north: 0 wood by tick 4,000. Now a node beyond
+    /// <c>ai.gatherReach</c> of its hall doesn't count as found, so it scouts home, knows a forest within the reach by tick
+    /// 1,000 and gathers wood by tick 4,000. <c>InGatherReach</c> also refuses the far forest while the scout is out.
+    /// </summary>
+    [Fact]
+    public void MirrorAllies_Seat3_KnowsAForestWithinGatherReach_By1000_AndGathersWood_By4000()
+    {
+        Simulation sim = MirrorAllies(1);
+        World w = sim.World;
+        AiPlayer ai = sim.AiOf(3)!;
+        float reach = ai.Rules.GatherReach;
+        bool farRefused = false;
+        while (sim.TickNumber < 1000)
+        {
+            sim.Tick();
+            if (ai.Board.ScoutPhase == 2 || !ai.HasDropOff) continue;
+            int r = -1;
+            while (ai.View.NextResource(ref r, out SeenResource n))
+            {
+                Vector2 c = ai.NodeCentre(n.TypeId, n.Cell);
+                if (w.Data.Resources[n.TypeId].Resource == ResourceKind.Wood && Vector2.Distance(c, ai.HallPoint) > reach + 30f)
+                    farRefused |= !ai.InGatherReach(c);
+            }
+        }
+        float nearest = float.MaxValue;
+        int s = -1;
+        while (ai.View.NextResource(ref s, out SeenResource node))
+            if (w.Data.Resources[node.TypeId].Resource == ResourceKind.Wood)
+                nearest = Math.Min(nearest, Vector2.Distance(ai.NodeCentre(node.TypeId, node.Cell), ai.HallPoint));
+        Assert.True(nearest <= reach, $"seat 3's nearest known forest at tick 1,000 is {nearest:F0} m from its hall (reach {reach} m)");
+        Assert.True(farRefused, "setup: seat 3 never knew a forest beyond the reach while its scout was out (the BUG-1045 shape)");
+        while (sim.TickNumber < 4000) sim.Tick();
+        _out.WriteLine($"seat 3: nearest known forest {nearest:F1} m at tick 1,000; gathered wood by 4,000: {w.GatheredWood[3]}");
+        Assert.True(w.GatheredWood[3] > 0, "seat 3 gathered no wood by tick 4,000");
+    }
+
+    /// <summary>Squared distance from <paramref name="at"/> to the nearest building of an ally (not itself) of <paramref name="p"/>; float.MaxValue with none.</summary>
+    private static float AlliedDistance(World w, int p, Vector2 at)
+    {
+        float best = float.MaxValue;
+        for (int k = 0; k < w.Buildings.Capacity; k++)
+        {
+            if (!w.Buildings.Alive[k] || w.Buildings.Owner[k] == p || w.IsEnemy(p, w.Buildings.Owner[k])) continue;
+            best = Math.Min(best, Vector2.DistanceSquared(at, Centre(w, k)));
+        }
+        return best;
+    }
+
+    /// <summary>
+    /// M6-S5 criterion 3, the AI's half: on the flat AI scene, an AI seat (player 0, team 1) whose own eyes see only its base,
+    /// its ally (player 1) with a unit beside the enemy's (player 2, no team) hall. The AI's census counts that hall as a known
+    /// enemy building and its nearest enemy building is that hall (its view answers through the ally's eyes); in the
+    /// free-for-all twin (every team 0) the AI knows no enemy building of player 2.
+    /// </summary>
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void AnEnemyHall_OnlyTheAllySees_IsAKnownEnemyBuilding_ForTheAi(bool allies)
+    {
+        PlayerSeat[] seats = AiScenes.Seats(AiDifficulty.Normal, SeatController.Ai, SeatController.Human, SeatController.Human)
+            .Select((s, p) => s with { Team = allies && p < 2 ? 1 : 0 }).ToArray();
+        Simulation sim = AiScenes.Flat(seats);
+        World w = sim.World;
+        CombatScenes.Place(sim, 1, CombatScenes.HeavyInfantry, w.NavGrid.CellCenter(36, 14));
+        int enemyHall = -1;
+        for (int k = 0; k < w.Buildings.Capacity; k++)
+            if (w.Buildings.Alive[k] && w.Buildings.Owner[k] == 2) enemyHall = k;
+        AiPlayer ai = sim.AiOf(0)!;
+        for (int t = 0; t < 60; t++) sim.Tick();
+        Assert.True(ai.Thinks > 1, "setup: the AI never thought");
+        Assert.True(w.Fog.CanSeeBuilding(1, enemyHall), "setup: the ally sees the enemy's hall");
+        BuildingDef d = w.Data.Buildings[w.Buildings.TypeId[enemyHall]];
+        for (int dy = 0; dy < d.FootprintHeight; dy++)
+            for (int dx = 0; dx < d.FootprintWidth; dx++)
+                Assert.True(w.Fog.OwnVisibility(0)[w.Buildings.Cell[enemyHall] + dy * w.Fog.Width + dx] != Vision.VisionConstants.Visible, "setup: player 0's own eyes see the hall");
+        Assert.Equal(allies, ai.View.TryGetBuilding(enemyHall, out _));
+        Assert.Equal(allies, ai.Board.KnownEnemyBuildings > 0);
+        Assert.Equal(allies, ai.NearestEnemyBuilding(ai.HallPoint, out EntityHandle nearest, out _, out _) && nearest.Index == enemyHall);
+    }
+
     [Fact]
     public void ATick_OfA2v2WithAiSeats_AllocatesNothing()
     {

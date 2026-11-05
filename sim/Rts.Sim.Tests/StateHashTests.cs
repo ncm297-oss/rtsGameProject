@@ -1507,7 +1507,9 @@ public class StateHashTests
             "_levels", "_halfWidths", "_unitMask", "_buildingMask", "_lipMask", "_scratch", "_levelUsed", "_box",
             "_limits", "_statusMask", // M4-4b-2: derived from the data
             "_nodes", // M5-2: the node memory, unhashed by decision (docs/03 "Implementation (M5-1)", Lifetime)
-            "_nearBlocker" }; // M5-H2 (BUG-0701): derived from the live zones, rebuilt when a blocker is made or freed
+            "_nearBlocker", // M5-H2 (BUG-0701): derived from the live zones, rebuilt when a blocker is made or freed
+            // M6-S5: the teams' shared fog, derived from the own bits (SharedVisionTests.TheTeamMaps_AreDerived_*)
+            "_mates", "_teamVisible", "_teamExplored", "_teamBox", "_teamVisibility", "_teamVisibilityVersion" };
         foreach (FieldInfo f in typeof(Vision.FogStore).GetFields(BindingFlags.NonPublic | BindingFlags.Instance))
             if (f.FieldType.IsArray) Assert.True(classified.Contains(f.Name), $"FogStore.{f.Name} is not classified as hashed or derived");
     }

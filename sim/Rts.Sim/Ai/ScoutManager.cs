@@ -18,9 +18,17 @@ namespace Rts.Sim.Ai;
 /// A point is visited when the scout comes within <c>ai.scoutReach</c> of it, or the scout is Idle after the Move to it
 /// applied (it got as close as it could); a grid point also once the player has explored its cell (nothing new to see there),
 /// unless it is the one the scout walks to.
-/// The sweep ends when every point is visited, or once a forest, a gold mine and an enemy building (seen or ghost) are all
-/// known: the scout is released (stopped if still walking) and the economy sends it to gather. None is sent if all three are
+/// The sweep ends when every point is visited, or once a forest and a gold mine within <c>ai.gatherReach</c> of the hall
+/// (M6-S5, BUG-1045: one farther, known through an ally or a raider, doesn't count) and an enemy building (seen or ghost)
+/// are all known: the scout is released (stopped if still walking) and the economy sends it to gather. None is sent if all three are
 /// known already. A dead scout is not replaced.
+/// <para>
+/// M6-S5 (BUG-1042), a player with an ally: a head waypoint within <c>ai.scoutRadius</c> of an ally's building is dropped
+/// (the base there is the ally's: with teams the hall's mirror may be the ally's start), and past the head the next grid
+/// point is the unvisited one farthest from the ally's buildings (the largest distance to the nearest of them; list order on
+/// ties), so the sweep heads for the enemy's half first. With shared vision the ally's buildings are always known, and the
+/// ground the ally explored is skipped like the player's own. A free-for-all sweeps as before.
+/// </para>
 /// </summary>
 internal static class ScoutManager
 {
@@ -74,6 +82,8 @@ internal static class ScoutManager
         if (ai.OrderedNotApplied(slot, u.Handle.Generation)) return;
         Vector2[] points = board.ScoutPoints;
         bool[] visited = board.ScoutVisited;
+        bool hasAlly = ai.View.HasAlly;
+        if (hasAlly) DropAlliedHeadPoints(ai, points, visited);
         float reach = ai.Rules.ScoutReach * ai.Rules.ScoutReach;
         for (int k = 0; k < points.Length; k++)
         {
@@ -85,7 +95,7 @@ internal static class ScoutManager
         }
         // Idle after the Move applied: there, or as close as it could get (a waypoint on a cliff or in the water).
         if (board.ScoutTarget >= 0 && u.State == UnitState.Idle) visited[board.ScoutTarget] = true;
-        int next = Next(board, u.Position);
+        int next = Next(ai, board, u.Position, hasAlly);
         if (next < 0 || FoundEnough(ai))
         {
             Release(ai, u);
@@ -100,25 +110,74 @@ internal static class ScoutManager
     /// <summary>
     /// The point to walk to: the first unvisited one of the head; past the head, the one it walks to while unvisited (so it
     /// isn't turned each think), else the unvisited grid point nearest <paramref name="at"/> (list order on ties); -1 when all
-    /// are visited.
+    /// are visited. M6-S5 (BUG-1042): with <paramref name="hasAlly"/>, the unvisited grid point farthest from the ally's
+    /// buildings instead (<see cref="AlliedDistance"/>; list order on ties).
     /// </summary>
-    private static int Next(Blackboard board, Vector2 at)
+    private static int Next(AiPlayer ai, Blackboard board, Vector2 at, bool hasAlly)
     {
         bool[] visited = board.ScoutVisited;
         for (int k = 0; k < Blackboard.ScoutHead; k++)
             if (!visited[k]) return k;
         if (board.ScoutTarget >= Blackboard.ScoutHead && !visited[board.ScoutTarget]) return board.ScoutTarget;
         int best = -1;
-        float bestDistance = float.MaxValue;
+        float bestDistance = hasAlly ? -1f : float.MaxValue;
         for (int k = Blackboard.ScoutHead; k < visited.Length; k++)
         {
             if (visited[k]) continue;
+            if (hasAlly)
+            {
+                float far = AlliedDistance(ai, board.ScoutPoints[k]);
+                if (far <= bestDistance) continue;
+                bestDistance = far;
+                best = k;
+                continue;
+            }
             float d = Vector2.DistanceSquared(at, board.ScoutPoints[k]);
             if (d >= bestDistance) continue;
             bestDistance = d;
             best = k;
         }
         return best;
+    }
+
+    /// <summary>Whether <paramref name="owner"/> is an ally of the AI's player (not the player itself).</summary>
+    private static bool IsAlly(AiPlayer ai, int owner) => owner != ai.Player && !ai.View.IsEnemy(owner);
+
+    /// <summary>
+    /// M6-S5 (BUG-1042): marks visited every unvisited head waypoint within <c>ai.scoutRadius</c> of a building of an ally
+    /// the player sees (one pass over the buildings it sees): the base there is the ally's, nothing to find.
+    /// </summary>
+    private static void DropAlliedHeadPoints(AiPlayer ai, Vector2[] points, bool[] visited)
+    {
+        bool any = false;
+        for (int k = 0; k < Blackboard.ScoutHead; k++) any |= !visited[k];
+        if (!any) return;
+        float r2 = ai.Rules.ScoutRadius * ai.Rules.ScoutRadius;
+        int s = -1;
+        while (ai.View.NextBuilding(ref s, out SeenBuilding b))
+        {
+            if (!IsAlly(ai, b.Owner)) continue;
+            Vector2 centre = ai.BuildingCentre(b.TypeId, b.Cell);
+            for (int k = 0; k < Blackboard.ScoutHead; k++)
+                if (!visited[k] && Vector2.DistanceSquared(points[k], centre) <= r2) visited[k] = true;
+        }
+    }
+
+    /// <summary>
+    /// M6-S5: the squared distance (m^2) from <paramref name="p"/> to the nearest building of an ally the player sees;
+    /// <see cref="float.MaxValue"/> when it sees none (every point ties, so list order decides).
+    /// </summary>
+    private static float AlliedDistance(AiPlayer ai, Vector2 p)
+    {
+        float nearest = float.MaxValue;
+        int s = -1;
+        while (ai.View.NextBuilding(ref s, out SeenBuilding b))
+        {
+            if (!IsAlly(ai, b.Owner)) continue;
+            float d = Vector2.DistanceSquared(p, ai.BuildingCentre(b.TypeId, b.Cell));
+            if (d < nearest) nearest = d;
+        }
+        return nearest;
     }
 
     /// <summary>Whether the player has explored the cell under <paramref name="p"/> (a point inside the map).</summary>
@@ -138,14 +197,20 @@ internal static class ScoutManager
         board.ScoutSlot = -1;
     }
 
-    /// <summary>Whether the AI knows a forest, a gold mine and an enemy building.</summary>
-    private static bool FoundEnough(AiPlayer ai)
+    /// <summary>
+    /// Whether the AI knows an enemy building and, M6-S5 (BUG-1045), a forest and a gold mine within <c>ai.gatherReach</c> of
+    /// its hall's centre (a node farther, seen through an ally's eyes or a raider's, doesn't count: the scout still looks near
+    /// home). False with no hall.
+    /// </summary>
+    internal static bool FoundEnough(AiPlayer ai)
     {
-        if (ai.Board.KnownEnemyBuildings == 0) return false;
+        if (ai.Board.KnownEnemyBuildings == 0 || !ai.TryHallPoint(out Vector2 hall)) return false;
+        float reach = ai.Rules.GatherReach * ai.Rules.GatherReach;
         bool wood = false, gold = false;
         int s = -1;
         while (!(wood && gold) && ai.View.NextResource(ref s, out SeenResource node))
         {
+            if (Vector2.DistanceSquared(ai.NodeCentre(node.TypeId, node.Cell), hall) > reach) continue;
             if (ai.Data.Resources[node.TypeId].Resource == ResourceKind.Wood) wood = true;
             else gold = true;
         }

@@ -122,12 +122,18 @@ public static class StealthSystem
         }
     }
 
-    /// <summary>A detector of <paramref name="player"/> covers unit slot <paramref name="j"/>: the player detects it when it sees the unit's cell.</summary>
+    /// <summary>
+    /// A detector of <paramref name="player"/> covers unit slot <paramref name="j"/>: the player detects it when it sees the
+    /// unit's cell. M6-S5: so does every ally of the player (shared vision: the team sees the same cells, and what one
+    /// detects all detect), settled with it.
+    /// </summary>
     private static void Mark(World world, FogStore fog, int j, int player, ref ulong done)
     {
         ulong bit = player < 64 ? 1UL << player : 0UL;
         if ((done & bit) != 0) return;
-        done |= bit;
-        if (fog.SeesUnitCell(player, j)) world.SetDetected(player, j);
+        ReadOnlySpan<int> team = fog.TeamOf(player);
+        foreach (int q in team) done |= q < 64 ? 1UL << q : 0UL;
+        if (!fog.SeesUnitCell(player, j)) return;
+        foreach (int q in team) world.SetDetected(q, j);
     }
 }

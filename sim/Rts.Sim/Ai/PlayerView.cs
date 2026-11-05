@@ -14,7 +14,8 @@ namespace Rts.Sim.Ai;
 /// hit, never an enemy's stealthed unit the player doesn't detect); an enemy building only while the player sees it
 /// (<see cref="FogStore.CanSeeBuilding"/>) or as a ghost from its last-known list; a resource node as the player last saw
 /// it (M5-2, BUG-0540: a node gone out of sight stays answered until its ground is seen); and the explored / visible state
-/// of every cell.
+/// of every cell. M6-S5 (shared vision): "the player sees" is its team's: every answer above reads the fog's union of the
+/// allies' eyes, so an ally's units and buildings are answered as own ones are, and an enemy any ally sees is seen.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -68,7 +69,7 @@ public sealed class PlayerView
     /// <summary>
     /// Whether <paramref name="player"/> is the player's enemy (<see cref="World.IsEnemy"/>): any other player, unless both
     /// are on one named team. The teams are the match's setup, known to every seat, so this reveals nothing the fog hides.
-    /// An ally's units are still seen only inside the player's own vision (no shared vision yet, M6-S5).
+    /// M6-S5: allies share vision, so the view answers through the allies' eyes too (see the type's remarks).
     /// </summary>
     public bool IsEnemy(int player) => _world.IsEnemy(_player, player);
 

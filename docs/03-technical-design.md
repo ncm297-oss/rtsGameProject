@@ -2892,6 +2892,8 @@ and the Blinded sight since M4-4b-2 (see "Implementation (M4-4b-2)"); stealth an
   Flying units would see every level; none exists yet (no code).
 - **Visible to explored.** A cell visible at the last update that no circle covers now becomes explored; explored stays
   for the match. A dead unit's circle is gone at the next update.
+- **Shared vision (M6-S5).** Each player's fog above is its own eyes; after every update the allies' own bits are OR-ed
+  into one team map, and every answer of what a player sees reads the team's (see "Implementation (M6-S5)").
 - **State and hashing.** Hashed: the explored bits (a `ulong` per 64 cells per player, set when a cell is first seen),
   the visible bits (packed the same way, rewritten by every update) and the high-ground reveals in force. The visible
   bits are state, not derived (M4-H1, BUG-0215): between updates they follow from where the units stood at the last
@@ -6994,7 +6996,8 @@ acting only through commands. Code: `sim/Rts.Sim/Ai/AiPlayer.cs`, `Blackboard.cs
   `houseWhenPopWithin` 2 (pop, a multiple of 0.5, at most `popCap`), `placementSearchRadius` 32 m, `buildingSpacing` 2 m,
   `expandHallReach` 40 m (meters above 0, at most 64; spacing 0-8; to whole cells rounded up: 16, 1, 20). In `ContentHash`
   since M5-3, with `ai.json`. Later knobs: M5-3, M5-4b, M5-4c, M5-4f (`defendRatio` / `defendMinValue` / `recallHallHp`)
-  and M5-4g (`reserveShift`, `reserveArmyShare`), each in its own section.
+  and M5-4g (`reserveShift`, `reserveArmyShare`), M6-S5 (`gatherReach` 64 m, 1-512, "Implementation (M6-S5)"), each in
+  its own section.
 - **Tests.** `Ai/AiPlayerTests` (criterion 3: the shipped steps of both factions run on every difficulty; a 10-step order
   with time / workers / pop triggers, counts, slack and concurrent steps fires in the documented order on Easy and Hard; a
   Build without wood waits and is sent at the first think after the wood, once; a Build the sim refuses (an enemy unit holding
@@ -7053,7 +7056,9 @@ six `rules.json` `ai` knobs in `Data/AiRulesDef.cs`; the hash in `GameData.Conte
   the mirror that searches the far half first). The sweep **ends** when every point is visited, or as soon as a forest, a
   gold mine and an enemy building (seen or ghost) are all known: a scout walking to a waypoint is sent `Stop` (one command),
   and the economy manager sends it to gather at the next think it is Idle. A dead scout is not replaced (periodic
-  re-scouting: M5-4).
+  re-scouting: M5-4). M6-S5 (BUG-1042), a player with an ally: a head waypoint within `ai.scoutRadius` of an ally's
+  building is visited without walking there (the base is the ally's), and the next grid point is the unvisited one farthest
+  from the ally's buildings instead of the nearest (see "Implementation (M6-S5)").
 - **Military** (`MilitaryManager`). **Rally point**: `ai.rallyDistance` from the hall's centre toward the footprint centre of
   the known enemy building nearest the hall (toward the map centre when none is known), clamped inside the map; it is
   recomputed each think and its version bumps when it moves. An army unit not in a wave that is Idle, farther than
@@ -8528,8 +8533,9 @@ site means the very same player: ownership, queues, groupmates).
 | `World.Stealth.cs` | `HiddenFrom` | stealth hides from | allied-as-own: only enemies |
 | `Vision/FogStore.cs` | `HidesFrom` (and `BlocksFor`, `InsideBlocker`) | a Darkness / Sandstorm blocks | allied-as-own: only enemy viewers |
 | `Vision/VisionSystem.cs` | `ZoneHides`, `BlockerNear`, `OnHit` | zone hiding, high-ground reveal | allied-as-own |
-| `Vision/FogStore.cs` | `CanSeeUnit`, `NextSeenUnit`, `CanSeeBuilding`, `Update` stamps | the player's own eyes | untouched (no shared vision) |
-| `Vision/FogStore.cs` | `UpdateGhosts` | remembered buildings | allied-as-other (an ally's building is remembered; slice 2 shares vision) |
+| `Vision/FogStore.cs` | `CanSeeUnit`, `NextSeenUnit`, `CanSeeBuilding` | what the player sees | allied-as-own since M6-S5 (shared vision: an ally's units and buildings are seen as own ones) |
+| `Vision/FogStore.cs` | `Update` stamps | the player's own fog | untouched (each player stamps its own eyes; M6-S5 ORs the team's after) |
+| `Vision/FogStore.cs` | `UpdateGhosts` | remembered buildings | allied-as-own since M6-S5 (an ally's building is always seen, never a ghost; allied-as-other in M6-S4) |
 | `World.Defeat.cs` | `HasResult` | the winning side | allied-as-own |
 | `World.Defeat.cs` | `Collapse` | the player's own buildings | untouched |
 | `Orders/OrderSystem.cs` | the command's unit is the player's | ownership | untouched |
@@ -8541,6 +8547,8 @@ site means the very same player: ownership, queues, groupmates).
 | `Ai/AbilityManager.cs` | `SeeEnemies`, `NearestEnemyBuilding`, friendly-fire avoidance | enemies / friends | allied-as-own |
 | `Ai/BuildOrderExecutor.cs` | `HallNear` (an expansion keeps clear of every other hall) | occupied ground | allied-as-other |
 | `Ai/ScoutManager.cs`, `Ai/PlayerView.cs` (`IsOwnUnit`, `IsOwnBuilding`, cargo, casts) | the scout, own-only answers | ownership | untouched |
+| `Ai/ScoutManager.cs` | `IsAlly` (M6-S5: head waypoints at an ally's base, the grid farthest from the ally) | an ally | ally (`!View.IsEnemy` and not the player) |
+| `World.cs` | `RecordDeath` (M6-S5: the kill's credit) | friendly fire | allied-as-own: an own or an ally's friendly-fire death is nobody's kill |
 | `ViewApi/UnitPicker.cs` | `ResolveEnemy` (`unitOwner[unit] == localPlayer`, `buildings.Owner[building] == localPlayer`: the right-click attack pick) | enemy | allied-as-own since M6-V16 (the overload taking `ViewApi/EnemyTable`, `World.IsEnemy`): a right-click on an ally is a Move; see "Implementation (M6-V16)" |
 | `ViewApi/MinimapRaster.cs` | `DrawnEnemyDotAt` (`_centreOwner[k] == localPlayer`) | enemy | allied-as-own since M6-V16 (the overload taking `ViewApi/EnemyTable`); dot colours stay per slot |
 | `ViewApi/*` (the rest) | the view's own-player answers | ownership | untouched (no owner compare changed; M6-V16 added `EnemyTable` and `SaveSummary`'s team bytes, read-only) |
@@ -8564,6 +8572,169 @@ phase 1's, and a slot freed and refilled since, by a summon, may hold an own or 
   wave at an ally; a tick allocation-free), `AiDeterminismTests` 2v2 twins, `MilitaryManagerTests` / `DefenseManagerTests` /
   `ScoutManagerTests` allied rows; `PlayerViewOracleFuzzTests` with teams (the oracle learns the alliance rule from the
   seats).
+
+### Implementation (M6-S5)
+
+Teams, slice 2: shared vision between allies (docs/02 "Vision and fog of war", docs/01 change log 2026-10-27), the mirror-start
+scout (BUG-1042) and friendly fire as nobody's kill (BUG-1044 item 1).
+
+- **The rule.** A player sees whatever any ally sees: every cell, unit and building; an ally's own units and buildings always
+  (a stealthed one too); ground any ally explored is explored for the team; an enemy building either ally sees is a ghost for
+  both (and an ally's building is never a ghost: it is always seen); a stealthed enemy one ally detects is detected by the
+  team; a high-ground reveal shows the attacker to the victim's team. Zones keep M6-S4's rules; a unit inside an enemy's
+  blocking zone is seen where an ally's unit inside that zone sees it (each ally's own zone record, OR-ed). A team-0 player
+  reads only its own eyes.
+- **The design: (a), a team map OR-ed after the own passes** (`Vision/FogStore.Teams.cs`). Each player's fog is stamped,
+  combined, hashed and saved exactly as before (its own eyes). Per team, built once at construction: the members
+  (`_mates[p]`, ascending, itself included; one array a team) and one visible / explored bit set a team (`_teamVisible`,
+  `_teamExplored`). After every update's own passes, `MergeTeams` copies the lowest member's own bits into the team arrays and
+  ORs the others' in, word by word (cells / 64 words x members, once a team), and joins their stamped boxes (`_teamBox`);
+  then each player's ghosts and node memory update from its team's bits (the ghost / node loop moved after every player's
+  own pass, which for a free-for-all is the same result: a player's memories read only its own bits). A player without an
+  ally has no team arrays: `_teamVisible[p]` *is* `_visible[p]` (the same reference), and `MergeTeams` runs only while some
+  player has an ally (`FogStore.Sharing`), so a free-for-all runs no new pass and reads what it read before.
+- **Readers** switched to the team: `IsVisible`, `IsExplored`, `SeesFootprint` (ghosts, a ghost Attack's end,
+  `PlayerView.TryGetGhost`), `SeesNodeFootprint` (with the team box), `SeesUnitCell` (no blocker: the team bit; with a blocker,
+  each member's own zone rule OR-ed), `NextSeenUnit`, `CanSeeUnit` and `CanSeeBuilding` (an ally's unit or building: seen, the
+  `u.Owner[j] == owner || (HasAlliances && AreAllied(...))` shape on one line), `Visibility(p)` (below). Combat's vision gate
+  (`VisionSystem.UnitSeesUnit` / `UnitSeesBuilding` / `BuildingSeesUnit`, falling back on `SeesUnit` / `SeesBuildingCells`)
+  and placement's explored rule follow, so a unit may take an enemy its ally sees, and a player may build on ground its ally
+  explored.
+- **Written for the team:** `FogStore.Reveal` / `RevealBuilding` set the reveal for every member of the victim's team (the
+  reveal entries are hashed, so a team match's hash counts them per member); `StealthSystem.Mark` sets the detection bit
+  (derived) for every member of the detector's team and settles them together.
+- **The byte map** (`Visibility(p)`, the view's fog texture): for a player with an ally, the team's, built on request from the
+  team bits when its fog version moved since the last build (`_teamVisibility`, `_teamVisibilityVersion`; visible over
+  explored over unexplored); no rule reads it, so the sim never pays for it. A player alone gets its own map as before.
+  `OwnVisibility(p)` and `SeesUnitCellOwn` keep the own eyes readable for the oracle tests.
+- **State.** The team arrays, box and byte map are derived from the own bits: not hashed (`StateHashTests`' audit lists them;
+  `SharedVisionTests.TheTeamMaps_AreDerived_*` scribbles them and the hash holds), not saved: `ReadFrom` ends with
+  `RebuildTeamsAfterLoad` (merge, byte maps stale). **No save or replay format change**, no new signature (rule 36); a
+  free-for-all's `StateHash` is unchanged (below). A team match's hash differs from M6-S4's (ghosts, reveals and the play).
+- **The AI** reads only `PlayerView`, which answers through the fog: the census's `KnownEnemyBuildings`,
+  `NearestEnemyBuilding`, `EnemyBuildingKnown`, the enemy army and intruders all count what the ally sees, with no AI change
+  (`PlayerViewArchitectureTests` unchanged). An ally's units now pass `NextUnit` (the census already skips them by
+  `View.IsEnemy`).
+- **BUG-1042, the scout** (`ScoutManager`, a player with an ally): every unvisited head waypoint within `ai.scoutRadius` of an
+  ally's building it sees is visited without walking there (one pass over its seen buildings a think while the head is
+  unfinished; on the 4-start map with allies at mirror starts the hall's mirror is the ally's hall); past the head the next
+  grid point is the unvisited one farthest from the ally's buildings (the largest squared distance to the nearest; list
+  order on ties; computed only when a new grid target is picked). Ground the ally explored is skipped (the team's explored
+  bits). A free-for-all keeps the nearest-first sweep.
+- **BUG-1044 item 1:** `World.RecordDeath` credits the kill only when `IsEnemy(killerOwner, victimOwner)`; a friendly-fire
+  death (own or allied) is the victim's loss and nobody's kill (`PlayerLedger.CountDeath` with killer -1). The death event
+  still names the attacker's owner.
+
+**The A/B (criterion 7).** Three candidates for the union: (a) the team OR after the own passes (built); (b) read-side: every
+`IsVisible` / `IsExplored` / `CanSeeUnit` / `CanSeeBuilding` / footprint read loops the allies' maps (no extra pass, every read
+loops; the AI's cursor walks 2,500 slots x 8 players a tick, and the view's byte map would still need a union); (c) stamping
+every ally's units and buildings into each player's own map (no derived state, but every member re-stamps the team and runs
+`Combine` over the team's box: the whole span between two allies' bases). (a) and (c) prototyped (c: the `Update` loops' owner
+filter widened to the team, nothing else), measured on the 4-start 256 map with each seat's start base and 125 fighters a seat
+brawling round the centre (500 units; `Vision/SharedVisionPerfTests`, Debug like every tick budget here):
+
+| Measure | base e5c4265 | (c) stamp allies | (a) team OR (built) |
+| --- | --- | --- | --- |
+| Fog update alone, 2v2 (ms per update, every 4th tick; in-process, best of 3 x 400) | 0.168-0.216 | 0.267 / 0.271 (+57 % over the base's 0.170 that hour) | 0.182-0.249 (in the base's noise band; +0.01 ms over the base the same hour) |
+| Whole tick, 2v2 1122, fresh process, 300 ticks (best of three) | 2.19 / 2.25 / 2.36 | 2.21 | 2.38 / 2.42 |
+| Whole tick, same layout free-for-all, fresh process | 2.00 / 2.03 / 2.04 | 1.96 | 2.02 / 2.04 |
+| Whole tick, 250 v 250 free-for-all (`VisionGatePerfTests`' scene), fresh process | 3.59 / 3.76 / 3.84 | 3.57 | 3.78 / 3.81 |
+
+(a) costs a word-wise OR per team (1,024 words x 2 bit sets on the 256 map) where (c) re-stamps and re-combines every ally's
+sight per member; (a)'s 2v2 whole tick sits 0.05-0.15 ms over the base's best, which includes the play shared vision changes
+(units now take enemies their ally sees). The free-for-all rows are the base's within noise (within ±2 % at the best of
+three, either side; the machine ran warmer for the last pair than the first: 3.57-3.59 vs 3.76-3.84 on both trees). The 2v2 is far under
+docs/03's 4 ms. (b) was not prototyped: it adds a loop to every read on the AI's hottest path (the unit cursor) to save a pass
+that costs 0.01 ms per update, and still needs (a)'s byte-map union for the view.
+
+- **Free-for-all unchanged:** `Vision/SharedVisionFfaPinTests` pins the digest of 3,000 per-tick state hashes of QA's five A/B
+  scenes (the menu's human v AI seeds 1 and 3, four scripted seats on a 256 map, four AI seats on seed 4, the surround brawl)
+  to what e5c4265 gave; `ReplayGoldenTests` 2 / 2 untouched (none of these scenes has an own friendly-fire kill, so the kill
+  rule moves none of them).
+- **Tests:** `Vision/SharedVisionTests` (an enemy unit inside only the ally's sight: `CanSeeUnit`, `IsVisible`, the byte map,
+  `PlayerView`; explored ground left behind; an enemy building seen then a ghost for both; an ally's building never a ghost; a
+  stealthed enemy detected by the ally's detector for both, and hidden from both with no detector near; a high-ground reveal
+  shared; each with its free-for-all twin seeing nothing extra; the own bits unchanged; the team maps derived);
+  `PlayerViewOracleFuzzTests` (the oracle's union rule from each ally's own byte map, own zone rule, reveals and detection;
+  the teams rows must see an enemy only through an ally, the free-for-all rows never); `AiTeamTests`
+  (`MirrorAllies_TheScout_SkipsTheAllysBase_AndSweepsFarthestFromItFirst`, failing on the pre-fix scout;
+  `AnEnemyHall_OnlyTheAllySees_IsAKnownEnemyBuilding_ForTheAi`); `Stress/TeamAiSoakStressTests` strict on every row (every
+  seat knows an enemy building; every seat whose army reached wave size waves); `SaveRoundTripTests.A2v2_SavedAt500_TheSharedFogIsRebuiltAtLoad_*`;
+  `SharedVisionPerfTests` (2v2 under 4 ms fresh, the reports above); `TeamTests.AFriendlyFireKill_OwnOrAnAllys_IsALoss_AndNobodysKill`;
+  the friendly-fire pins moved (`SplashTests.FriendlyFireKills_AreALoss_AndNobodysKill_*`,
+  `AbilitySystemTests.Cusser_HurtsTheSapperItself_AnOwnKillIsALossAndNoKill_*`, `QA/CusserQaTests`), and the combat fuzzes'
+  books (`Stress/CombatFuzzTests`, `RangedCombatFuzzTests`, `RangedSplashFuzzQaTests`) count only enemy kills.
+- **BUG-1045, the gather reach** (S2, found by QA on this slice). With shared vision a seat could know a forest, a mine and
+  an enemy building through its ally from its first think: `ScoutManager.FoundEnough` released its scout before it walked
+  a waypoint, and `EconomyManager.NearestNode` sent its wood gatherers to the nearest *known* forest, its ally's, 300-450 m
+  away (seat 3 of `AiTeamTests.MirrorAllies(1)`: 0 wood by tick 4,000, no wave). The rule, one knob
+  (`common/rules.json` `ai.gatherReach`, **64 m**, required, 1-512 m (`DataLimits.MaxAiGatherReach`), in `ContentHash`,
+  `DataValidationTests` / `DataContentHashTests` rows): `FoundEnough` counts a forest and a gold mine only within the reach
+  of the hall's centre (the enemy building anywhere); and until the scout is done (`Board.ScoutPhase` 2: released, or
+  dead) `AiPlayer.InGatherReach` treats a node farther than the reach from every own finished drop-off as unknown, for
+  `NearestNode` and `KnowsNode` alike (so the per-kind "no node" path of M5-4g, not a new idle state). With no finished
+  drop-off every node counts (no anchor); after the scout, every known node, wherever it is (a seat whose scout dies
+  early falls back on any node it knows: intended). One squared-distance compare per own building, no list: nothing
+  allocated (`QA/SharedVisionQaTests.ATick_OfTheMirrorStart2v2WhileScouting_*` and `AiTeamTests.ATick_OfA2v2WithAiSeats_*`
+  tick through both with the probe at 0 B). The repro after the fix: seat 3 knows a forest 17.5 m from its hall by tick
+  1,000 and has gathered 350 wood by tick 4,000; every seat's nearest known forest at tick 2,000 is 16-17 m, wood by
+  4,000: 90, 440, 330, 350 (`AiTeamTests.MirrorAllies_Seat3_KnowsAForestWithinGatherReach_By1000_AndGathersWood_By4000`,
+  `QA/SharedVisionQaTests.MirrorAllies_EverySeat_GathersWoodNearHome` un-skipped).
+- **Why 64 m.** Measured once (a scratch test, not committed) at tick 200 on the menu's map (seeds 1-10, 2 seats) and on
+  the 4-start 256 map (`MirrorAllies`, seeds 1-10, 4 seats): each start's nearest forest and nearest two gold mines, in
+  meters from the hall's centre. Every one is within 21.2 m (forests 14.8-21.2, second mines 16.5-19.0), so the shipped 64 m
+  covers every start's forest and two mines with three times the margin and is kept (the Producer's rule: keep 64 if it
+  covers them; 48 would too, but nothing measured asks for less):
+
+  | Map, seed | Seat: forest / mine 1 / mine 2 (m) |
+  | --- | --- |
+  | menu 1 | p0 14.8 / 16.1 / 18.1; p1 15.8 / 17.1 / 19.0 |
+  | menu 2 | p0 19.2 / 18.4 / 19.0; p1 15.0 / 16.1 / 18.1 |
+  | menu 3 | p0 15.0 / 16.1 / 18.4; p1 17.0 / 17.1 / 17.2 |
+  | menu 4 | p0 17.0 / 17.9 / 18.1; p1 15.8 / 16.5 / 18.4 |
+  | menu 5 | p0 14.8 / 16.1 / 19.0; p1 15.0 / 16.5 / 17.9 |
+  | menu 6 | p0 15.6 / 16.5 / 18.4; p1 17.0 / 16.1 / 17.2 |
+  | menu 7 | p0 14.8 / 17.1 / 19.0; p1 21.2 / 17.2 / 17.9 |
+  | menu 8 | p0 15.8 / 16.1 / 18.9; p1 20.2 / 16.5 / 16.5 |
+  | menu 9 | p0 19.2 / 17.9 / 18.4; p1 17.0 / 16.5 / 18.4 |
+  | menu 10 | p0 14.8 / 16.1 / 17.2; p1 19.0 / 17.9 / 18.4 |
+  | 256x4 1 | p0 15.8 / 16.1 / 18.4; p1 17.3 / 17.1 / 18.9; p2 17.5 / 16.1 / 18.9; p3 17.5 / 16.1 / 17.9 |
+  | 256x4 2 | p0 17.0 / 16.5 / 17.1; p1 17.3 / 16.1 / 19.0; p2 14.8 / 16.5 / 18.4; p3 17.0 / 16.1 / 16.5 |
+  | 256x4 3 | p0 14.8 / 16.1 / 18.4; p1 17.5 / 16.1 / 18.9; p2 16.6 / 16.5 / 17.1; p3 18.6 / 18.4 / 18.4 |
+  | 256x4 4 | p0 15.0 / 16.5 / 17.9; p1 16.6 / 17.9 / 18.9; p2 15.0 / 18.1 / 18.1; p3 17.5 / 16.5 / 18.4 |
+  | 256x4 5 | p0 14.8 / 16.1 / 17.9; p1 15.8 / 17.2 / 18.4; p2 15.3 / 16.5 / 19.0; p3 17.5 / 17.1 / 18.4 |
+  | 256x4 6 | p0 16.6 / 17.1 / 19.0; p1 15.8 / 16.1 / 19.0; p2 16.6 / 16.1 / 18.9; p3 15.6 / 18.1 / 18.4 |
+  | 256x4 7 | p0 17.0 / 16.1 / 18.9; p1 15.8 / 16.1 / 18.1; p2 15.8 / 16.1 / 16.5; p3 15.8 / 17.9 / 18.4 |
+  | 256x4 8 | p0 18.6 / 16.1 / 17.2; p1 17.5 / 16.5 / 18.4; p2 19.0 / 16.1 / 18.1; p3 18.4 / 16.5 / 18.9 |
+  | 256x4 9 | p0 19.0 / 17.9 / 18.1; p1 17.0 / 17.1 / 19.0; p2 15.3 / 16.1 / 17.9; p3 15.0 / 16.1 / 17.9 |
+  | 256x4 10 | p0 19.2 / 17.2 / 17.9; p1 18.4 / 16.5 / 18.4; p2 15.3 / 16.1 / 17.2; p3 19.2 / 17.2 / 17.9 |
+
+- **The golden** (`cross_map_seed1.replay`) regenerated once for the data hash: `ai.gatherReach` joined it,
+  `E108AB2A7C66C58D` → `4F8CCF2688F9F22F`; every `k` line identical (no AI seat in it). The pins moved with it:
+  `QA/GatherWedgeQaTests.SameGameDataHashes`. Recordings made before this commit refuse to play (data hash).
+- **Free-for-all after the reach rule:** `Vision/SharedVisionFfaPinTests`' five scenes (two of them with AI seats: the
+  menu's human v AI on seeds 1 and 3, four AI seats on seed 4) give the same 3,000-tick digests on 424a5e8 (the pin file
+  copied there) and on this commit, the e5c4265 pins: none of the five pinned scenes moved, the AI ones included (their starts
+  see their own forest and mines within reach before the scout leaves). A free-for-all AI seat whose raiders see an enemy's
+  nodes does play differently from tick ~420 (QA, BUG-1049 item 1: of six AI free-for-all scenes × 12,000 ticks, `AiMatch(5, 4, Hard)`
+  seat 3 and `AiMatch(7, 2, Normal)` seat 1 move; before the rule they released the scout at tick 300 and sent gatherers 166 / 235 m
+  into the enemy's base; head at `gatherReach` 512 equals the base on all six, so the reach rule is the only cause and the intended one).
+  `QA/AiGatherMarkQaTests`' gone-node scene runs
+  at `gatherReach` 512 (its subject is the mark; with 64 m the far half's remembered nodes are never sent to while the
+  scout is out, so never marked).
+- **The 1v1 pairings after the reach rule:** the 27 pairing runs (`Content/AiOpeningPairsReportTests` 9 and
+  `QA/Content/D21OpeningsQaTests`' second and third seeds 18, menu map, Normal v Normal, 24,000 ticks) print the same on
+  424a5e8 and on this commit, line for line (every 2-minute timeline row, waves, Age II, defeats, every step's state): no
+  faction page cell moves, nothing for the data track to re-print.
+- **The soak's "starved" exemption, per seat** (`Stress/TeamAiSoakStressTests`, 12,000 ticks): the seats that never reached
+  wave size are adjacent seed 1 seat 0 (Normal), adjacent seed 2 seats 0 (Hard) and 2 (Normal), adjacent seed 3 seats 0
+  (Easy, defeated) and 2 (Hard), and seed 5 seat 0 (Hard); each had an enemy army within `ai.defendRadius` of its hall from
+  tick 11-41 (the scene's raider) on 2,570-7,168 ticks, 10-46 losses. Every other seat waved. The exemption is now tight: a
+  seat that never reaches wave size must have been raided on at least 2,000 ticks, so a seat starved by its own gather
+  choice fails (with the reach rule switched off, two of the three mirror rows fail on it: seats raided on 1,687 and 1,957
+  ticks that never reached wave size). Each seat's waves, peak army, raided ticks and gathered gold / wood are printed.
+- **Not in this slice:** starting resources (Request 43), allied pushing / formations, resource or tech sharing, AI
+  cooperation (the AI doesn't coordinate waves or defend its ally), the view's team column (M6-V16, view track).
 
 ## Testing strategy
 
