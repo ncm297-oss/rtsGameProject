@@ -6,7 +6,8 @@ namespace Rts.Sim.Tests.QA.Content;
 
 /// <summary>
 /// QA (D23, 2026-11-05-2148): attacks on the map-text checker and Raraku's shipped text beyond the dev's pins. The rule
-/// is "no digit", not "no number word" (the brief: describe, don't count; "two mesas" is fine in words), faction words
+/// is "no digit", not "no number word" (the brief: describe, don't count; "two mesas" is fine in words), but a ratio word
+/// ("twice", "half") is out (D24, BUG-1102: a comparison goes stale when either side changes), faction words
 /// match whole words in any case, and the text reads as one tooltip (printable ASCII, sentences, no double space).
 /// </summary>
 public class D23MapTextQaTests
@@ -15,13 +16,13 @@ public class D23MapTextQaTests
 
     private static List<string> Check(string text)
     {
-        MapDef m = Data.Maps[0];
+        MapDef m = MapTextContentTests.Raraku(Data);
         return MapTextContentTests.Problems(Data, m.Key, m.DisplayName, text);
     }
 
     [Theory]
-    [InlineData("Open desert where two mesas flank a wide centre.")]
-    [InlineData("A dozen dunes, a few forests and twice the sightlines.")]
+    [InlineData("Open desert where two mesas flank a wide center.")]
+    [InlineData("A dozen dunes, a few forests and long sightlines.")]
     [InlineData("Malazans beware nothing here: open sand.")] // "Malazans" is not the whole word "Malazan"
     [InlineData("A drill-flat plain of sand and scrub.")] // hyphen splits words: "drill" IS caught, see below
     public void NumberWords_AreAllowed_ButFactionWholeWordsStillCount(string text)
@@ -30,6 +31,19 @@ public class D23MapTextQaTests
         bool hasDrill = Regex.IsMatch(text, @"\bdrill\b", RegexOptions.IgnoreCase);
         if (hasDrill) Assert.Contains(problems, p => p.Contains("names 'Drill'", StringComparison.Ordinal));
         else Assert.True(problems.Count == 0, string.Join("; ", problems));
+    }
+
+    /// <summary>Re-cut in D24 (BUG-1102): number words stay allowed, ratio words do not, in any case.</summary>
+    [Theory]
+    [InlineData("A dozen dunes, a few forests and twice the sightlines.", "twice")]
+    [InlineData("Twice the forests of Pale Hills.", "twice")]
+    [InlineData("Two mesas and DOUBLE the open sand.", "double")]
+    [InlineData("Half the timber of a forest map.", "half")]
+    public void RatioWords_AreRejected_EvenBesideANumberWord(string text, string word)
+    {
+        List<string> problems = Check(text);
+        Assert.Contains(problems, p => p.Contains($"ratio word '{word}'", StringComparison.Ordinal));
+        Assert.Single(problems);
     }
 
     [Theory]
@@ -47,7 +61,7 @@ public class D23MapTextQaTests
     [Fact]
     public void TheChecker_RejectsAnEmptyOrDigitDisplayName()
     {
-        MapDef m = Data.Maps[0];
+        MapDef m = MapTextContentTests.Raraku(Data);
         Assert.Contains(MapTextContentTests.Problems(Data, m.Key, "", m.Description), p => p.Contains("no display name"));
         Assert.Contains(MapTextContentTests.Problems(Data, m.Key, "Raraku 2", m.Description), p => p.Contains("a digit"));
         Assert.Empty(MapTextContentTests.Problems(Data, m.Key, m.DisplayName, m.Description));
@@ -75,7 +89,7 @@ public class D23MapTextQaTests
         }
     }
 
-    /// <summary>Raraku's description names what docs/02's Shipped maps row says: desert, open centre, few forests, long sightlines.</summary>
+    /// <summary>Raraku's description names what docs/02's Shipped maps row says: desert, open center, few forests, long sightlines.</summary>
     [Fact]
     public void Raraku_NamesTheDocsTraits()
     {

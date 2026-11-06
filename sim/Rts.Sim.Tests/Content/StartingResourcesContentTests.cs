@@ -24,12 +24,25 @@ public class StartingResourcesContentTests
     /// <summary>The longest description the setup shows (the brief's limit).</summary>
     public const int MaxDescriptionLength = 200;
 
-    /// <summary>Words that state an amount without digits ("five times the usual").</summary>
+    /// <summary>
+    /// Words that state a ratio against something else ("twice the usual"). Shared with the maps' checker
+    /// (<see cref="MapTextContentTests"/>, BUG-1102): a map may count in words ("two mesas") but not compare.
+    /// </summary>
+    public static readonly string[] RatioWords = { "twice", "double", "triple", "half" };
+
+    /// <summary>Words that state an amount without digits ("five times the usual"): the count words plus <see cref="RatioWords"/>.</summary>
+    // Declared after RatioWords: static initializers run in text order.
     private static readonly string[] NumberWords =
-    {
+    [
         "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten", "eleven", "twelve", "twenty",
-        "fifty", "hundred", "hundreds", "thousand", "thousands", "twice", "double", "triple", "half",
-    };
+        "fifty", "hundred", "hundreds", "thousand", "thousands", .. RatioWords,
+    ];
+
+    [Fact]
+    public void NumberWords_HoldEveryRatioWord()
+    {
+        foreach (string w in RatioWords) Assert.Contains(w, NumberWords);
+    }
 
     private static readonly Regex Digits = new(@"\d[\d,]*(?:\.\d+)?", RegexOptions.CultureInvariant);
 
