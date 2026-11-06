@@ -318,7 +318,7 @@ whether the zone's statuses take it and whether the zone hides it (the ground is
 | High ground | Low ground can't see up (see [High ground](#high-ground)) |
 | Trees | Block movement, choppable for wood, grouped into forests |
 | Water | Optional lakes: impassable cells, decorative |
-| Gold | 2 mines per start location, 2 per expansion, 2-3 expansions per player |
+| Gold | 2 mines per start location, 2 per expansion, 1-3 expansions per player (Pale Hills gives one per camp: gold is scarce there by design, M6-S8) |
 | Layout | Symmetric for 2-4 players (mirror or rotational) |
 | Maps | Seeded procedural generator + 3 hand-tuned maps shipped |
 

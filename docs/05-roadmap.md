@@ -13,7 +13,7 @@ Status legend: **Next** = start here, **Planned** = not started, **Done** = acce
 | M3 | Economy & buildings | **Done** (2026-10-08, Producer sign-off in session 2026-10-08-0313 after every track's end-of-M3 hardening (M3-H1 / H2, M3-V3b, D4) and the BUG-0146 fix; retro below) | Build a Malazan base |
 | M4 | Combat, fog, abilities | **Done** (2026-10-11, Producer sign-off in session 2026-10-10-2334 after every track's end-of-M4 hardening (M4-H3, M4-VH3, D-H3); the data track's D12 is accepted and held on its branch, landing at the next session's data merge; 10 / 10 criteria, in progress since 2026-10-07-2315; retro below) | Malazan vs. Whirlwind armies fight with abilities and fog |
 | M5 | AI opponent | **In progress** (since 2026-10-11; 4 / 9 criteria (1, 2, 7, 8), three owner-requested criteria added 2026-10-14) | Lose to a Whirlwind AI |
-| M6 | Game shell & real art | **Started ahead** (view track since 2026-10-11; 4 / 10 criteria (1, 2, 3, 4); criterion 1 ticked 2026-11-05-1206 when M6-V16 landed) | A friend can play it |
+| M6 | Game shell & real art | **Started ahead** (view track since 2026-10-11; 5 / 10 criteria (1, 2, 3, 4, 7); criterion 7 ticked 2026-11-06-0326 when M6-S8's two maps landed) | A friend can play it |
 | M7 | Teblor | Planned | Third faction: scale and population systems proven |
 | M8 | Shadow | Planned | Fourth faction: stealth polish, summons |
 | M9 | Tiste Andii | Planned | Fifth faction: darkness, flying, elite balance |
@@ -793,7 +793,7 @@ open S1 / S2. Retro below; open S3 / S4 listed there.)_
       hook (`MusicPlayer` plays `assets/audio/music/*.ogg`; none ships); verified by `SfxTest`, `AlertTest`, `CombatViewTest`, `ShellTest`,
       QA's `QaM6V12Test` and `AttackAlertsQaTests`; docs/03 "Implementation (M6-V12)". Left: a placeholder music track (the owner's
       download, docs/04) and the owner's ear on the clips.)
-- [ ] 3 maps (Raraku, Pale Hills, Vathar Crossing) plus the procedural generator in skirmish setup. (M5-4a, 2026-10-13, pulled
+- [x] 3 maps (Raraku, Pale Hills, Vathar Crossing) plus the procedural generator in skirmish setup. (M5-4a, 2026-10-13, pulled
       forward: the generator's mirrored start locations, each with 2 mines and a forest in reach, replay format 6. M5-H1, 2026-10-13:
       both bases on one level and at least half a map apart. M6-V15, 2026-10-18-1814: **the generator's options are in the skirmish
       setup**: Forests and Gold mines counts (defaults 12 / 8, floors one forest and two mines per player, cap 64) beside a Game speed
@@ -804,8 +804,13 @@ open S1 / S2. Retro below; open S3 / S4 listed there.)_
       2026-11-05-2148: **the setup's Map list** (Generated, then every map file by name with its description as the tooltip; a picked map
       greys the generator's rows and caps the slots at its start locations; `--map <id>`; the map carried by save format 5 / replay format 9
       through load, Watch and Load Game) and **Raraku's final description** (D23 accepted; its branch did not merge on 2026-11-06 and lands at
-      the next data session, so `main` still shows the placeholder sentence until then). Left: Pale Hills and Vathar Crossing (sim slice 2 +
-      their text), mirrored-terrain tooling.)
+      the next data session; landed 2026-11-06-0326 with D24). M6-S8, 2026-11-06-0326: **Pale Hills** (4 players, 256, hedgerow woods
+      with a hill a quarter, 16 mines, 3,796 trees) and **Vathar Crossing** (4 starts for 2-4, 256, a sunken river band crossed only at four
+      ford ramps, 24 mines), each one quarter mirrored across both axes by the new `tools/Rts.Cli` **`mirror-map`** verb (the mirrored-terrain
+      tooling; `DataLoader.CheckMapFile`), each proven by a Normal v Normal match to a result (Whirlwind at 34,175 / 23,219 ticks, seed 1),
+      saved / recorded / replayed hash-equal; M6-V19 the same session: the greyed Forests / Gold mines show the picked map's own counts.
+      **Ticked 2026-11-06-0326 (Producer).** Polish left, not blocking: the two new maps' final text (D25; provisional sentences ship),
+      BUG-1068 S3 (Pale Hills AI v AI stalls on most seeds: M5-4d's hunt), BUG-1067 S3, Raraku's placeholder layout.)
 - [ ] `tools/export.ps1` produces a Windows zip that runs on a machine without Godot or .NET installed.
 - [ ] Revisit the .NET version (see [03 Platform](03-technical-design.md#platform-and-versions)).
 - [ ] Playable: a friend can unzip it and play a match without help.

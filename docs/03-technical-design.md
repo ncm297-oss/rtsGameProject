@@ -9264,7 +9264,8 @@ quarter points: two neighbouring starts must stand half the side apart).
   now three; Pale Hills' diagonal starts and open ground; Vathar Crossing's 2-player starts on opposite banks, the banks joined
   only through the band, and a unit walking from start 0 to start 1 through a ford (57 band cells on its path, 10 of them ramp
   cells, the band entered once, onto a ramp); same seed twice; saved at 1,000 (format 5) and followed 1,000 ticks; recorded
-  3,000 ticks (format 9) and played to all 30 checkpoints; the two matches, about 20 s each, so no `Stress` trait);
+  3,000 ticks (format 9) and played to all 30 checkpoints; the two matches, about 20 s each, carry the `Stress` trait so a
+  quick loop can skip them (BUG-1069 item 1 corrected this sentence));
   `Cli/MirrorMapCliTests` (point symmetry item by item, the quad order, the refusals);
   `AiDeterminismTests.FourAiSeats_OnPaleHills_TwoProcesses_SamePerTickHashes` (four Normal seats on every start, a child
   `dotnet test` folding the same 3,000 per-tick hashes); `DataContentHashTests` (every map field on each shipped map, read by id

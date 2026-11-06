@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S4 |
-| Status | open |
+| Status | fixed (Producer, at the 2026-11-06-0326 ACCEPT) |
 | Found | 2026-11-06-0326, task M6-S8 (QA) |
 | System | docs/03 "Implementation (M6-S8)", docs/02 "Map and terrain", the brief's size budget |
-| Fixed by | |
+| Fixed by | Producer at the ACCEPT: item 1 docs/03's sentence now says the two matches carry the `Stress` trait; item 2 docs/02's Gold row reads "1-3 expansions per player (Pale Hills gives one per camp ...)"; item 3 ruled: the budget counts the developer's hand-written lines (production, tests, docs), not generated map content (terrain and forest rows, the tool's source quarters) nor QA's suites, so M6-S8 is ~1,300 lines and inside 1,500; future briefs say "excluding generated map content" |
 
 ## Repro / items
 1. **The Stress trait.** docs/03 line ~9267 ("the two matches, about 20 s each, so no `Stress` trait") and the developer's
