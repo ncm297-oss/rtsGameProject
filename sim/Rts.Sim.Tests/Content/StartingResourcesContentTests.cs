@@ -65,11 +65,25 @@ public class StartingResourcesContentTests
     [InlineData("high", "Every player starts with 200 gold and wood.", "names the number '200'")]
     [InlineData("high", "Every player starts with a large stockpile, like a Malazan Empire treasury.", "names 'Malazan Empire'")]
     [InlineData("standard", "Every player starts with enough for a Garrison Keep.", "names 'Garrison Keep'")]
+    [InlineData("high", "Every player starts like a Malazan quartermaster.", "names 'Malazan'")] // BUG-1081: a bare faction word
+    [InlineData("standard", "Every player starts with a Whirlwind war chest.", "names 'Whirlwind'")]
     public void AMutantDescription_IsCaught(string id, string text, string says)
     {
         StartingResourcesDef p = Data.Rules.StartingResources[Data.Rules.FindStartingResources(id)];
         List<string> problems = Problems(Data, id, text, p.Gold, p.Wood);
         Assert.True(problems.Any(x => x.Contains(says, StringComparison.Ordinal)), $"'{text}': " + string.Join("; ", problems));
+    }
+
+    /// <summary>BUG-1081 item 1: the proper-name list holds each faction's id and its bare name words, not only whole names.</summary>
+    [Fact]
+    public void ProperNames_HoldTheBareFactionWords()
+    {
+        List<string> names = ProperNames(Data);
+        foreach (string w in new[] { "Malazan", "Empire", "Imperial", "Whirlwind", "Apocalypse", "Malazan Empire", "The Whirlwind" })
+            Assert.Contains(w, names);
+        foreach (FactionDef f in Data.Factions)
+            Assert.Contains(names, n => string.Equals(n, f.Key, StringComparison.OrdinalIgnoreCase));
+        Assert.DoesNotContain("Army", names); // a generic word ("Army of the Apocalypse" is still whole)
     }
 
     /// <summary>A preset's own amounts may be named ("1,000 gold" on High): the rule is "no number but its own".</summary>
@@ -104,16 +118,19 @@ public class StartingResourcesContentTests
         return problems;
     }
 
-    /// <summary>The data's faction, unit, building, tech, ability and status display names, longest first, no duplicates.</summary>
-    private static List<string> ProperNames(GameData d)
+    /// <summary>
+    /// The data's faction, unit, building, tech, ability and status display names, plus each faction's id and bare name
+    /// words (<see cref="FactionWords"/>, BUG-1081), longest first, no duplicates.
+    /// </summary>
+    public static List<string> ProperNames(GameData d)
     {
-        var names = new List<string>();
+        var names = new List<string>(FactionWords.All(d));
         foreach (FactionDef f in d.Factions) { names.Add(f.DisplayName); names.Add(f.BonusDisplayName); }
         foreach (UnitDef u in d.Units) names.Add(u.DisplayName);
         foreach (BuildingDef b in d.Buildings) names.Add(b.DisplayName);
         foreach (TechDef t in d.Techs) names.Add(t.DisplayName);
         foreach (AbilityDef a in d.Abilities) names.Add(a.DisplayName);
         foreach (StatusDef s in d.Statuses) names.Add(s.DisplayName);
-        return names.Where(n => n.Length > 0).Distinct(StringComparer.Ordinal).OrderByDescending(n => n.Length).ThenBy(n => n, StringComparer.Ordinal).ToList();
+        return names.Where(n => n.Length > 0).Distinct(StringComparer.OrdinalIgnoreCase).OrderByDescending(n => n.Length).ThenBy(n => n, StringComparer.Ordinal).ToList();
     }
 }
