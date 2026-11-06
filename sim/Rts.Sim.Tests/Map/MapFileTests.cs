@@ -205,8 +205,11 @@ public class MapFileTests
     /// <summary>Runs row <paramref name="row"/> of this class as a fresh child <c>dotnet test</c> with <paramref name="variable"/> set; the text after <paramref name="marker"/> on its line.</summary>
     private static string RunChild(string row, string variable, string marker) => RunChild(typeof(MapFileTests), row, variable, marker);
 
-    /// <summary>As <see cref="RunChild(string, string, string)"/>, for row <paramref name="row"/> of <paramref name="testClass"/> (M6-S8: <c>AiDeterminismTests</c> uses it too).</summary>
-    internal static string RunChild(Type testClass, string row, string variable, string marker)
+    /// <summary>
+    /// As <see cref="RunChild(string, string, string)"/>, for row <paramref name="row"/> of <paramref name="testClass"/> (M6-S8:
+    /// <c>AiDeterminismTests</c> uses it too); the child is killed after <paramref name="seconds"/> (M5-4d: a whole match needs longer).
+    /// </summary>
+    internal static string RunChild(Type testClass, string row, string variable, string marker, int seconds = 180)
     {
         string dll = typeof(MapFileTests).Assembly.Location;
         var info = new ProcessStartInfo("dotnet") { RedirectStandardOutput = true, RedirectStandardError = true, UseShellExecute = false };
@@ -216,10 +219,10 @@ public class MapFileTests
         using Process p = Process.Start(info)!;
         System.Threading.Tasks.Task<string> err = p.StandardError.ReadToEndAsync();
         System.Threading.Tasks.Task<string> output = p.StandardOutput.ReadToEndAsync();
-        if (!p.WaitForExit(180_000))
+        if (!p.WaitForExit(seconds * 1000))
         {
             try { p.Kill(entireProcessTree: true); } catch (InvalidOperationException) { } // it exited meanwhile
-            Assert.Fail("the child dotnet test did not exit within 180 s and was killed");
+            Assert.Fail($"the child dotnet test did not exit within {seconds} s and was killed");
         }
         p.WaitForExit();
         string text = output.Result;
@@ -232,7 +235,7 @@ public class MapFileTests
     // ---------- save (format 5) and replay (format 9) ----------
 
     /// <summary>
-    /// Criterion 4: a Raraku AI match saved at ticks 137 and 1,000 is format 5 (the map id after the preset), loads (the
+    /// Criterion 4: a Raraku AI match saved at ticks 137 and 1,000 is format 5 (the map id after the preset; M5-4d: format 7, 5 plus the HUNT section), loads (the
     /// config names the map), follows the unsaved run hash for hash for 1,000 ticks, the state outside the hash compared, and
     /// save -> load -> save is byte-identical.
     /// </summary>
@@ -245,7 +248,7 @@ public class MapFileTests
         Simulation sim = RarakuMatch(3, false, out _);
         for (int t = 0; t < 20; t++) sim.Tick();
         byte[] bytes = SaveTestRun.Save(sim);
-        Assert.Equal(5, BitConverter.ToInt32(bytes, Rts.Sim.Save.SaveFormat.MagicLength));
+        Assert.Equal(Rts.Sim.Save.SaveFormat.CurrentVersion, BitConverter.ToInt32(bytes, Rts.Sim.Save.SaveFormat.MagicLength)); // M5-4d: 5 plus HUNT
         Simulation loaded = SaveTestRun.Load(TestSim.Data, bytes);
         Assert.Equal(Raraku, loaded.World.Config.MapId);
         Assert.Same(RarakuDef, loaded.World.Config.MapFile);
@@ -544,7 +547,7 @@ public class MapFileTests
         }
     }
 
-    /// <summary>M6-S8 criterion 3: an AI match on each new map saved at tick 1,000 is format 5 naming the map, loads, and follows the unsaved run hash for hash for 1,000 ticks.</summary>
+    /// <summary>M6-S8 criterion 3: an AI match on each new map saved at tick 1,000 is format 5 naming the map (M5-4d: format 7, 5 plus the HUNT section), loads, and follows the unsaved run hash for hash for 1,000 ticks.</summary>
     [Theory]
     [InlineData(PaleHills)]
     [InlineData(VatharCrossing)]
@@ -556,7 +559,7 @@ public class MapFileTests
         Simulation sim = MapMatch(id, 3, false, out _);
         for (int t = 0; t < 20; t++) sim.Tick();
         byte[] bytes = SaveTestRun.Save(sim);
-        Assert.Equal(5, BitConverter.ToInt32(bytes, Rts.Sim.Save.SaveFormat.MagicLength));
+        Assert.Equal(Rts.Sim.Save.SaveFormat.CurrentVersion, BitConverter.ToInt32(bytes, Rts.Sim.Save.SaveFormat.MagicLength)); // M5-4d: 5 plus HUNT
         Assert.Equal(id, SaveTestRun.Load(TestSim.Data, bytes).World.Config.MapId);
     }
 

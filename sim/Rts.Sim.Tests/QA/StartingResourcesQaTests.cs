@@ -184,7 +184,9 @@ public class StartingResourcesQaTests
 
     /// <summary>
     /// A format-3 save of a four-seat AI match at tick 1,000 (forged from its format-4 save) loads as standard with every AI
-    /// seat and plays to tick 3,000 hash-equal to the format-4 load every tick and to the unsaved run.
+    /// seat and plays to tick 3,000 hash-equal to the format-4 load every tick and to the unsaved run. M5-4d: an AI save before
+    /// format 6 has no hunt memory and is refused (FormatVersionMismatch, the summary still lists it); the current save (format
+    /// 6) loads and plays on hash-equal to the unsaved run.
     /// </summary>
     [Fact]
     [Trait("Category", "Stress")]
@@ -193,18 +195,15 @@ public class StartingResourcesQaTests
         Simulation sim = AiSaveScenes.AiMatch(4, 4, AiDifficulty.Normal).Build();
         for (int t = 0; t < 1000; t++) sim.Tick();
         byte[] current = SaveTestRun.Save(sim);
-        byte[] old = SaveBytes.AsFormat3(current, PresetAt(current, "standard"));
+        byte[] old = SaveBytes.AsFormat3(PreMapFixtures.WithoutHunt(current), PresetAt(current, "standard"));
         Assert.Equal(3, BinaryPrimitives.ReadInt32LittleEndian(old.AsSpan(SaveFormat.MagicLength)));
-        Simulation fromOld = SaveTestRun.Load(Data, old);
+        Assert.Equal(SaveError.FormatVersionMismatch, SaveTestRun.TryLoad(Data, old));
         Simulation fromCurrent = SaveTestRun.Load(Data, current);
-        Assert.Equal("standard", fromOld.World.Config.StartingResources);
-        for (int p = 0; p < 4; p++) Assert.NotNull(fromOld.AiOf(p));
+        for (int p = 0; p < 4; p++) Assert.NotNull(fromCurrent.AiOf(p));
         for (int t = 0; t < 2000; t++)
         {
             sim.Tick();
-            fromOld.Tick();
             fromCurrent.Tick();
-            Assert.Equal(sim.StateHash(), fromOld.StateHash());
             Assert.Equal(sim.StateHash(), fromCurrent.StateHash());
         }
         Assert.True(Rts.Sim.ViewApi.SaveSummary.TryParse(old, out var summary));
@@ -215,7 +214,8 @@ public class StartingResourcesQaTests
     [Fact]
     public void AFormat3Save_TruncatedAnywhereAroundTheMissingField_IsRefused()
     {
-        byte[] current = SaveBytes.Small(ai: true);
+        // M5-4d: an AI save in format 3 is refused whole (no hunt memory), so the sweep runs on the human save, which loads.
+        byte[] current = SaveBytes.Small(ai: false);
         int at = PresetAt(current, "standard");
         byte[] old = SaveBytes.AsFormat3(current, at);
         Assert.Equal(SaveError.None, SaveTestRun.TryLoad(Data, old));

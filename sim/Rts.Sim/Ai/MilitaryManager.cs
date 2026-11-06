@@ -30,6 +30,19 @@ namespace Rts.Sim.Ai;
 /// One command per unit per think at most; a full queue ends the think and the rest go next think (the per-slot flags keep
 /// what is owed). M5-4b: while the base is defended (<see cref="DefenseManager"/>) no wave starts and nobody is rallied;
 /// M5-4f: a wave in progress goes on (the defense may pull members out of it, or end it), and its start threshold is kept.
+/// <para>
+/// M5-4d, the <b>hunt</b> (docs/03 "Implementation (M5-4d)"): with no enemy building known, the match not over, the base not
+/// defended and a wave sent before, the free army goes whatever its size (a wave with no threshold, <see cref="Blackboard.Hunting"/>),
+/// and a wave whose last known target is gone turns into one. Its target is a point: the last enemy unit seen
+/// (<see cref="Blackboard.EnemyUnitPoint"/>) while that sighting is at most <c>ai.huntMemory</c> old, else a sweep of the
+/// scout's map grid (<see cref="HuntPoint"/>: its cell centres and its interior corners, the hunt's own marks), the point
+/// nearest the army first, then the unvisited one with the least distance from the last plus distance from where the sweep
+/// began (<see cref="NextSweep"/>). A point is reached when a member comes within <c>ai.rallyReach</c> of it, or every
+/// member stands Idle having had <see cref="MaxTries"/> orders toward it without getting nearer (as close as they get):
+/// a sweep point is then visited, a sighting not seen again since is forgotten. A fresher sighting (more than
+/// <c>ai.rallyReach</c> from the target) re-targets at once. Members are sent <c>AttackMove</c> only. It ends as a wave does
+/// (the retreat, the idle cooldown, the defense); an enemy building coming into view makes it a wave on that building.
+/// </para>
 /// </summary>
 internal static class MilitaryManager
 {
@@ -51,7 +64,7 @@ internal static class MilitaryManager
     {
         if (ai.TryHallPoint(out Vector2 hall)) RallyPoint(ai, hall);
         if (ai.Board.WaveActive) Wave(ai);
-        else if (!ai.Board.Defending) TryStart(ai); // M5-4b: no wave while the base is defended
+        else if (!ai.Board.Defending && !TryStart(ai)) TryHunt(ai); // M5-4b: no wave while the base is defended
         Orders(ai);
     }
 
@@ -67,10 +80,11 @@ internal static class MilitaryManager
         board.RallyVersion++; // units already rallied go again to the new point
     }
 
-    private static void TryStart(AiPlayer ai)
+    /// <summary>Starts a wave if it may (see the type's summary); true when it did.</summary>
+    private static bool TryStart(AiPlayer ai)
     {
         Blackboard board = ai.Board;
-        if (ai.Now < board.WaveCooldownUntil) return;
+        if (ai.Now < board.WaveCooldownUntil) return false;
         int half = 0, cost = 0, count = 0;
         for (int k = 0; k < ai.ArmyCount; k++)
         {
@@ -81,8 +95,8 @@ internal static class MilitaryManager
             count++;
         }
         float scale = ai.Knobs.WaveSizeMultiplier;
-        if (count == 0 || half < ai.Opening.AttackMinHalfPop * scale || cost < ai.Opening.AttackMinCost * scale) return;
-        if (!ai.NearestEnemyBuilding(board.Rally, out EntityHandle target, out int type, out int cell)) return;
+        if (count == 0 || half < ai.Opening.AttackMinHalfPop * scale || cost < ai.Opening.AttackMinCost * scale) return false;
+        if (!ai.NearestEnemyBuilding(board.Rally, out EntityHandle target, out int type, out int cell)) return false;
         Array.Clear(board.WaveGeneration);
         Array.Clear(board.WaveFlag);
         for (int k = 0; k < ai.ArmyCount; k++)
@@ -101,6 +115,204 @@ internal static class MilitaryManager
         board.WaveBusyTick = ai.Now;
         board.WaveCooldownUntil = ai.Now + ai.Rules.WaveCooldownTicks;
         board.WavesStarted++;
+        return true;
+    }
+
+    /// <summary>
+    /// M5-4d: starts a hunt (see the type's summary) when no enemy building is known, a wave was sent before, the match is not
+    /// over and the cooldown is over (the caller checked the defense): every free army unit becomes a member, whatever their
+    /// number. The cooldown starts, as a wave's.
+    /// </summary>
+    private static void TryHunt(AiPlayer ai)
+    {
+        Blackboard board = ai.Board;
+        if (board.KnownEnemyBuildings > 0 || board.WavesStarted == 0 || ai.View.MatchOver || ai.Now < board.WaveCooldownUntil) return;
+        int half = 0, count = 0;
+        Vector2 sum = Vector2.Zero;
+        for (int k = 0; k < ai.ArmyCount; k++)
+        {
+            if (!Free(ai, ai.ArmySlots[k], out SeenUnit u)) continue;
+            half += ai.Data.Units[u.TypeId].HalfPop;
+            sum += u.Position;
+            count++;
+        }
+        if (count == 0) return;
+        Array.Clear(board.WaveGeneration);
+        Array.Clear(board.WaveFlag);
+        for (int k = 0; k < ai.ArmyCount; k++)
+        {
+            int slot = ai.ArmySlots[k];
+            if (!Free(ai, slot, out SeenUnit u)) continue;
+            board.WaveGeneration[slot] = u.Handle.Generation;
+            board.WaveFlag[slot] = ToAttack;
+        }
+        board.WaveActive = true;
+        board.WaveStartHalfPop = half;
+        board.WaveStartTick = ai.Now;
+        board.WaveBusyTick = ai.Now;
+        board.WaveCooldownUntil = ai.Now + ai.Rules.WaveCooldownTicks;
+        BeginHunt(ai, sum / count);
+    }
+
+    /// <summary>
+    /// M5-4d: makes the wave in progress a hunt from the army at <paramref name="army"/>: no building target, no start
+    /// threshold (the defense may pull any member), a fresh sweep, and the first target (every member owed an AttackMove).
+    /// </summary>
+    private static void BeginHunt(AiPlayer ai, Vector2 army)
+    {
+        Blackboard board = ai.Board;
+        board.Hunting = true;
+        board.WaveTarget = default;
+        board.WaveTargetType = board.WaveTargetCell = -1;
+        board.WaveMinHalfPop = board.WaveMinCost = 0f;
+        Array.Clear(board.HuntVisited);
+        board.HuntsStarted++;
+        if (Fresh(ai)) HuntTarget(ai, board.EnemyUnitPoint, -1);
+        else StartSweep(ai, army);
+    }
+
+    /// <summary>M5-4d: the sweep (re)starts from the army at <paramref name="army"/>: its origin, and the point nearest it.</summary>
+    private static void StartSweep(AiPlayer ai, Vector2 army)
+    {
+        ai.Board.HuntOrigin = army;
+        HuntTarget(ai, army, NextSweep(ai, army, -1));
+    }
+
+    /// <summary>M5-4d: whether the last enemy unit seen is a sighting the hunt follows: at most <c>ai.huntMemory</c> old.</summary>
+    private static bool Fresh(AiPlayer ai) =>
+        ai.Board.EnemyUnitTick >= 0 && ai.Now - ai.Board.EnemyUnitTick <= ai.Rules.HuntMemoryTicks;
+
+    /// <summary>
+    /// M5-4d: the hunt's target becomes <paramref name="sweep"/>'s grid point, or with -1 <paramref name="point"/> (a
+    /// sighting), clamped inside the map; every member is owed an AttackMove to it.
+    /// </summary>
+    private static void HuntTarget(AiPlayer ai, Vector2 point, int sweep)
+    {
+        Blackboard board = ai.Board;
+        board.HuntSweep = sweep;
+        board.WaveTargetPoint = sweep >= 0 ? HuntPoint(ai, Cols(ai), Rows(ai), sweep) : ai.ClampToMap(point);
+        for (int k = 0; k < ai.ArmyCount; k++)
+            if (Member(ai, ai.ArmySlots[k], out _)) board.WaveFlag[ai.ArmySlots[k]] = ToAttack;
+    }
+
+    /// <summary>
+    /// M5-4d: the next sweep point: the unvisited one with the least distance from <paramref name="from"/> (the last point,
+    /// or the army) plus distance from <see cref="Blackboard.HuntOrigin"/>, never <paramref name="skip"/> (list order on ties);
+    /// once all are visited the marks clear and the sweep starts over. Why the origin term: nearest-first alone walked
+    /// straight away from where the enemy was last (Pale Hills seed 1: a last building 50 m from the razed hall, the sweep
+    /// heading for the far edge on a tie); with it the sweep spreads outward from there, still walking point to point.
+    /// One pass over the grid points (two at a restart).
+    /// </summary>
+    private static int NextSweep(AiPlayer ai, Vector2 from, int skip)
+    {
+        bool[] visited = ai.Board.HuntVisited;
+        int best = NearestUnvisited(ai, visited, from, skip);
+        if (best >= 0) return best;
+        Array.Clear(visited);
+        best = NearestUnvisited(ai, visited, from, skip);
+        return best >= 0 ? best : 0; // a one-point grid: that point again
+    }
+
+    private static int NearestUnvisited(AiPlayer ai, bool[] visited, Vector2 from, int skip)
+    {
+        int best = -1, cols = Cols(ai), rows = Rows(ai);
+        float bestDistance = float.MaxValue;
+        Vector2 origin = ai.Board.HuntOrigin;
+        for (int i = 0; i < visited.Length; i++)
+        {
+            if (visited[i] || i == skip) continue;
+            Vector2 p = HuntPoint(ai, cols, rows, i);
+            float d = Vector2.Distance(from, p) + Vector2.Distance(origin, p);
+            if (d >= bestDistance) continue;
+            bestDistance = d;
+            best = i;
+        }
+        return best;
+    }
+
+    /// <summary>
+    /// M5-4d: how many sweep points a <paramref name="cols"/> x <paramref name="rows"/> scout grid gives the hunt: its cell
+    /// centres, then its interior corners. Why the corners too: the centres alone are a cell apart (51 m on Pale Hills at the
+    /// shipped <c>ai.scoutGrid</c>), past a unit's sight (14 m), and a side's last units standing 29-35 m from the nearest
+    /// centre were missed for 40,000 ticks (seed 5). Centres alone leave ground half a cell's diagonal from any point (36 m
+    /// there); with the corners, at most half a cell (25.6 m).
+    /// </summary>
+    internal static int HuntPoints(int cols, int rows) => cols * rows + (cols - 1) * (rows - 1);
+
+    private static int Cols(AiPlayer ai) => ScoutManager.GridLines(ai.View.MapWidth, ai.Rules.ScoutGrid);
+
+    private static int Rows(AiPlayer ai) => ScoutManager.GridLines(ai.View.MapHeight, ai.Rules.ScoutGrid);
+
+    /// <summary>
+    /// M5-4d: sweep point <paramref name="k"/> of a <paramref name="cols"/> x <paramref name="rows"/> grid, clamped inside the
+    /// map: below <c>cols x rows</c> the scout's grid point (<see cref="ScoutManager.GridPoint"/>'s cell centre, row order),
+    /// past it the grid's interior corners in row order.
+    /// </summary>
+    internal static Vector2 HuntPoint(AiPlayer ai, int cols, int rows, int k)
+    {
+        int centres = cols * rows;
+        if (k < centres) return ScoutManager.GridPoint(ai, Blackboard.ScoutHead + k);
+        Vector2 size = ai.MapSize;
+        int j = k - centres, x = j % (cols - 1), y = j / (cols - 1);
+        return ai.ClampToMap(new Vector2((x + 1) * size.X / cols, (y + 1) * size.Y / rows));
+    }
+
+    /// <summary>
+    /// M5-4d: a think of the hunt (the retreat and idle rules ran): an enemy building known makes it a wave on the one nearest
+    /// <paramref name="army"/>; else the target is judged reached (see the type's summary) and moved: to a fresher sighting,
+    /// or along the sweep.
+    /// </summary>
+    private static void Hunt(AiPlayer ai, Vector2 army)
+    {
+        Blackboard board = ai.Board;
+        if (ai.View.MatchOver)
+        {
+            End(ai);
+            return;
+        }
+        if (board.KnownEnemyBuildings > 0 && ai.NearestEnemyBuilding(army, out EntityHandle target, out int type, out int cell))
+        {
+            // Back to the wave rule: the hunt's members attack the building (no start threshold to keep: the defense may still pull any).
+            board.Hunting = false;
+            board.HuntSweep = -1;
+            SetTarget(ai, target, type, cell);
+            for (int k = 0; k < ai.ArmyCount; k++)
+                if (Member(ai, ai.ArmySlots[k], out _)) board.WaveFlag[ai.ArmySlots[k]] = ToAttack;
+            return;
+        }
+        float reach = ai.Rules.RallyReach * ai.Rules.RallyReach;
+        bool reached = false, stuck = true;
+        for (int k = 0; k < ai.ArmyCount; k++)
+        {
+            int slot = ai.ArmySlots[k];
+            if (!Member(ai, slot, out SeenUnit u)) continue;
+            if (Vector2.DistanceSquared(u.Position, board.WaveTargetPoint) <= reach) reached = true;
+            // Not stuck: walking or fighting, an order pending or owed, or orders toward the point left to give.
+            if (u.State != UnitState.Idle || ai.OrderedNotApplied(slot, u.Handle.Generation) || board.WaveFlag[slot] == ToAttack
+                || board.WaveTries[slot] < MaxTries) stuck = false;
+        }
+        bool next = false;
+        if (reached || stuck)
+        {
+            if (board.HuntSweep >= 0)
+            {
+                board.HuntVisited[board.HuntSweep] = true;
+                next = true;
+            }
+            else if (board.EnemyUnitTick < ai.Now)
+            {
+                board.EnemyUnitTick = -1; // went there and nobody is seen: forgotten
+                next = true;
+            }
+        }
+        if (Fresh(ai))
+        {
+            if (board.HuntSweep >= 0 || Vector2.DistanceSquared(board.EnemyUnitPoint, board.WaveTargetPoint) > reach)
+                HuntTarget(ai, board.EnemyUnitPoint, -1);
+            return;
+        }
+        if (board.HuntSweep < 0) StartSweep(ai, army); // a sighting forgotten (or none): sweep from here
+        else if (next) HuntTarget(ai, board.WaveTargetPoint, NextSweep(ai, board.WaveTargetPoint, board.HuntSweep));
     }
 
     private static void Wave(AiPlayer ai)
@@ -131,11 +343,18 @@ internal static class MilitaryManager
             board.WaveCooldownUntil = ai.Now + ai.Rules.WaveCooldownTicks;
             return;
         }
+        if (board.Hunting)
+        {
+            Hunt(ai, sum / live); // M5-4d
+            return;
+        }
         if (ai.EnemyBuildingKnown(board.WaveTarget, out _)) return;
-        // The target is gone (razed, or seen gone): the nearest known enemy building to the members, or home.
+        // The target is gone (razed, or seen gone): the nearest known enemy building to the members; with none, M5-4d, a hunt
+        // (the base not defended, the match not over), else home.
         if (!ai.NearestEnemyBuilding(sum / live, out EntityHandle target, out int type, out int cell))
         {
-            End(ai);
+            if (!board.Defending && !ai.View.MatchOver) BeginHunt(ai, sum / live);
+            else End(ai);
             return;
         }
         SetTarget(ai, target, type, cell);
@@ -143,13 +362,15 @@ internal static class MilitaryManager
             if (Member(ai, ai.ArmySlots[k], out _)) board.WaveFlag[ai.ArmySlots[k]] = ToAttack;
     }
 
-    /// <summary>Ends the wave: every live member owes a Move to the rally point (also the defense's, M5-4b).</summary>
+    /// <summary>Ends the wave (M5-4d: or the hunt): every live member owes a Move to the rally point (also the defense's, M5-4b).</summary>
     internal static void End(AiPlayer ai)
     {
         Blackboard board = ai.Board;
         for (int k = 0; k < ai.ArmyCount; k++)
             if (Member(ai, ai.ArmySlots[k], out _)) board.WaveFlag[ai.ArmySlots[k]] = ToRally;
         board.WaveActive = false;
+        board.Hunting = false;
+        board.HuntSweep = -1;
     }
 
     private static void SetTarget(AiPlayer ai, EntityHandle target, int type, int cell)
@@ -166,13 +387,14 @@ internal static class MilitaryManager
     {
         Blackboard board = ai.Board;
         float near = 0f;
-        if (board.WaveActive)
+        bool hunting = board.WaveActive && board.Hunting; // M5-4d: a point, no building
+        if (board.WaveActive && !hunting)
         {
             // Near the target: within rallyReach of its footprint's edge, roughly (a unit can't stand at the centre).
             BuildingDef target = ai.Data.Buildings[board.WaveTargetType];
             near = ai.Rules.RallyReach + Math.Max(target.FootprintWidth, target.FootprintHeight) * Map.MapConstants.CellSize * 0.5f;
         }
-        bool targetSeen = board.WaveActive && ai.EnemyBuildingKnown(board.WaveTarget, out bool seen) && seen;
+        bool targetSeen = board.WaveActive && !hunting && ai.EnemyBuildingKnown(board.WaveTarget, out bool seen) && seen;
         float rallyReach = ai.Rules.RallyReach * ai.Rules.RallyReach;
         for (int k = 0; k < ai.ArmyCount; k++)
         {
@@ -201,9 +423,13 @@ internal static class MilitaryManager
                         board.WaveBest[slot] = d; // a cell nearer since the last order: it is getting somewhere
                         board.WaveTries[slot] = 0;
                     }
+                    // M5-4d: a hunt's member is only ever sent on toward the point; out of orders it waits there, a member,
+                    // until the hunt moves the point (every member as close as it gets counts as reached).
+                    if (hunting && board.WaveTries[slot] >= MaxTries) continue;
                     bool atTarget = targetSeen && d <= near;
                     UnitDef def = ai.Data.Units[u.TypeId];
-                    if (atTarget && def.Attack.Targets == AttackTargets.Units) c = Leave(ai, slot, u.Handle, def); // can't harm a building
+                    if (hunting) c = Command.AttackMove(ai.Player, u.Handle, board.WaveTargetPoint);
+                    else if (atTarget && def.Attack.Targets == AttackTargets.Units) c = Leave(ai, slot, u.Handle, def); // can't harm a building
                     else if (board.WaveTries[slot] >= MaxTries)
                     {
                         if (atTarget) continue; // crowded off the target: it stays by it, a member, unordered

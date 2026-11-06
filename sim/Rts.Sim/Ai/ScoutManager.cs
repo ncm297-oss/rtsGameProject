@@ -332,9 +332,10 @@ internal static class ScoutManager
 
     /// <summary>
     /// Waypoint <paramref name="k"/> (at least <see cref="Blackboard.ScoutHead"/>) of the grid as <see cref="Waypoints"/> lays
-    /// it: the centre of grid cell <c>k - ScoutHead</c> in row order, clamped inside the map.
+    /// it: the centre of grid cell <c>k - ScoutHead</c> in row order, clamped inside the map. M5-4d: the hunt's sweep walks
+    /// the same points (<see cref="MilitaryManager"/>).
     /// </summary>
-    private static Vector2 GridPoint(AiPlayer ai, int k)
+    internal static Vector2 GridPoint(AiPlayer ai, int k)
     {
         Vector2 size = ai.MapSize;
         int cols = GridLines(ai.View.MapWidth, ai.Rules.ScoutGrid), rows = GridLines(ai.View.MapHeight, ai.Rules.ScoutGrid);

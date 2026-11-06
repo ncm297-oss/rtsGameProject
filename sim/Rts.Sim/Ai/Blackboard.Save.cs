@@ -219,6 +219,35 @@ internal sealed partial class Blackboard
         RecentCastCount = r.ReadInt32In(0, AbilityManager.MaxRecentCasts);
     }
 
+    /// <summary>
+    /// M5-4d: writes the hunt's fields (the last enemy unit seen, the hunt flag, the sweep, its origin and marks, the count) for the
+    /// save's <c>HUNT</c> section (formats 6 and 7). Kept out of <see cref="WriteTo"/> so the <c>AIST</c> layout is format 5's
+    /// byte for byte, and a format-6 save is a format-4 one plus this section.
+    /// </summary>
+    internal void WriteHuntTo(SaveWriter w)
+    {
+        w.Write(EnemyUnitPoint);
+        w.Write(EnemyUnitTick);
+        w.Write(Hunting);
+        w.Write(HuntSweep);
+        w.Write(HuntOrigin);
+        w.WriteArray(HuntVisited);
+        w.Write(HuntsStarted);
+    }
+
+    /// <summary>Reads what <see cref="WriteHuntTo"/> wrote over this board (the sweep index range-checked, a hunt only while a wave is in progress).</summary>
+    internal void ReadHuntFrom(SaveReader r)
+    {
+        EnemyUnitPoint = r.ReadVector2();
+        EnemyUnitTick = r.ReadInt32();
+        Hunting = r.ReadBool();
+        HuntSweep = r.ReadInt32In(-1, HuntVisited.Length - 1);
+        HuntOrigin = r.ReadVector2();
+        r.ReadBools(HuntVisited);
+        HuntsStarted = r.ReadInt32();
+        r.Check(!Hunting || WaveActive);
+    }
+
     /// <summary>A pending order field by field (its byte kind leaves padding, so it isn't written as raw bytes).</summary>
     private static void Write(SaveWriter w, in PendingOrder p)
     {

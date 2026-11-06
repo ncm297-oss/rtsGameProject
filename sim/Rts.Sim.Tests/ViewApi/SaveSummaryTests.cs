@@ -20,7 +20,7 @@ public class SaveSummaryTests
         for (int t = 0; t < 40; t++) sim.Tick();
         byte[] bytes = SaveTestRun.Save(sim);
         Assert.True(SaveSummary.TryParse(bytes, out SaveSummary? s));
-        Assert.Equal(SaveFormat.MaplessVersion, s!.FormatVersion); // M6-S7: a generated map's save is format 4
+        Assert.Equal(SaveFormat.HuntMaplessVersion, s!.FormatVersion); // M6-S7: a generated map's save is format 4; M5-4d: 6 with AI seats
         Assert.True(s.FormatVersion >= SaveSummary.FirstTeamVersion);
         Assert.Equal(new[] { 1, 2, 1, 2 }, s.Teams.ToArray());
         Assert.Equal(new[] { 1, 2, 1, 2 }, s.Seats.Select(seat => seat.Team).ToArray());
@@ -82,7 +82,7 @@ public class SaveSummaryTests
     {
         byte[] bytes = SaveTestRun.Save(RarakuSim());
         Assert.True(SaveSummary.TryParse(bytes, out SaveSummary? s));
-        Assert.Equal(SaveFormat.CurrentVersion, s!.FormatVersion);
+        Assert.Equal(SaveFormat.MapVersion, s!.FormatVersion); // M5-4d: no AI seat, so still format 5
         Assert.Equal("raraku", s.MapId);
         Assert.Equal(StartingResourcesDef.StandardId, s.StartingResources);
         Assert.Equal(128, s.MapWidth);

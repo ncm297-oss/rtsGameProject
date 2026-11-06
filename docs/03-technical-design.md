@@ -7183,8 +7183,9 @@ acting only through commands. Code: `sim/Rts.Sim/Ai/AiPlayer.cs`, `Blackboard.cs
   `houseWhenPopWithin` 2 (pop, a multiple of 0.5, at most `popCap`), `placementSearchRadius` 32 m, `buildingSpacing` 2 m,
   `expandHallReach` 40 m (meters above 0, at most 64; spacing 0-8; to whole cells rounded up: 16, 1, 20). In `ContentHash`
   since M5-3, with `ai.json`. Later knobs: M5-3, M5-4b, M5-4c, M5-4f (`defendRatio` / `defendMinValue` / `recallHallHp`)
-  and M5-4g (`reserveShift`, `reserveArmyShare`), M6-S5 (`gatherReach` 64 m, 1-512, "Implementation (M6-S5)"), each in
-  its own section.
+  and M5-4g (`reserveShift`, `reserveArmyShare`), M6-S5 (`gatherReach` 64 m, 1-512, "Implementation (M6-S5)"), M6-SH1
+  (`scoutReplacements`, `spendDownQueue`), M5-4d (`huntMemory` 120 s, 0-3,600, "Implementation (M5-4d)"), each in its own
+  section.
 - **Tests.** `Ai/AiPlayerTests` (criterion 3: the shipped steps of both factions run on every difficulty; a 10-step order
   with time / workers / pop triggers, counts, slack and concurrent steps fires in the documented order on Easy and Hard; a
   Build without wood waits and is sent at the first think after the wood, once; a Build the sim refuses (an enemy unit holding
@@ -7225,7 +7226,8 @@ six `rules.json` `ai` knobs in `Data/AiRulesDef.cs`; the hash in `GameData.Conte
 - **Enemy memory** (`Blackboard`, from the view only, rebuilt each think): the known enemy buildings are the ones the view shows
   now plus its ghosts (the fog's memory; no second copy is kept; `AiPlayer.NearestEnemyBuilding`, `EnemyBuildingKnown`); the
   last enemy army seen is the centroid, count and tick of the enemy non-worker units the view showed at the last think that
-  showed any (kept until replaced; read by nothing yet, M5-4's defense).
+  showed any (kept until replaced; read by nothing yet, M5-4's defense). M5-4d adds the last enemy unit seen, workers
+  too, the hunt's target ("Implementation (M5-4d)").
 - **Scout** (`ScoutManager`). At the first think at or after `ai.scoutAfter` the own worker nearest the hall's centre with no
   AI command pending (an idle one first, else a gathering or returning one: `PickBuilder`'s rule) becomes the scout; its slot
   and generation are kept, and the economy manager, the rebalance and `PickBuilder` skip it. If a forest, a gold mine and an
@@ -7260,7 +7262,8 @@ six `rules.json` `ai` knobs in `Data/AiRulesDef.cs`; the hash in `GameData.Conte
   half-pop below `(1 - retreat.lossFraction) x start` (or none left) is a **retreat**: every live member is owed a `Move` to the
   rally point, the wave ends, and `waveCooldownUntil = Now + ai.waveCooldown` again; a target no longer known (not seen alive,
   no ghost of that slot and generation) is replaced by the known enemy building nearest the members' centroid (every member
-  owed an `AttackMove` again), or with none known the wave ends and the members are owed a `Move` home. **Orders**: each free
+  owed an `AttackMove` again), or with none known the wave ends and the members are owed a `Move` home (since M5-4d it turns
+  into a hunt instead, "Implementation (M5-4d)"). **Orders**: each free
   army unit in slot order gets at most one command a think: what it is owed, else a member standing Idle within `rallyReach`
   of the target's footprint edge (`rallyReach` + half its larger side) while the target is seen gets `Attack` on it, unless its
   attack hits units only (BUG-0591): that member can't fight a building, so it is sent `Move` home and leaves the wave; one Idle
@@ -7584,6 +7587,105 @@ and docs).
   `DataValidationTests` / `DataContentHashTests` (the knob).
 - **Not yet:** slice 2 (`gatherBonus`, `focusFire`, `pullBackWounded`); `targetUnit` and `autocast`; own-unit abilities aimed at
   own units (a heal); expansion, rebuilding, re-scouting (M5-4d).
+
+### Implementation (M5-4d)
+
+The AI finishes the match, slice 1 (roadmap M5 criterion 3; docs/02 "AI opponent"; BUG-1068). Before it a wave targeted
+buildings only: once a beaten side had no building left that the winner knew of, the wave ended and the winner's army went
+home, so the loser's last unit out in the woods kept the match alive under M5-4e's win rule. Code: `Ai/MilitaryManager.cs`
+(the hunt), the memory in `AiPlayer.Census`, the fields in `Blackboard.cs`, their save in `Blackboard.Save.cs` /
+`AiPlayer.Save.cs` / `Simulation.TrySave` (the `HUNT` section), `PlayerView.MatchOver`, `ScoutManager.GridPoint` (now
+internal, shared), one knob. No `Command` kind: the hunt sends `AttackMove` (and the wave's `Move` home), which every player has.
+
+- **The memory** (`Blackboard.EnemyUnitPoint`, `EnemyUnitTick`): one point overall, not one per enemy (builder's call: the
+  hunt follows one trail). Each think's census walks `PlayerView.NextUnit` as before; of the enemy units it shows (workers
+  too, never an ally's) the one nearest the hunt's target while a hunt is on (the chase stays on what it follows), else
+  nearest the hall's centre (the map centre with no building), slot order on ties, becomes the point, stamped with the
+  think's tick. A think that sees none keeps the last. So the point is always a position the fog granted that think
+  (criterion 4). The hunt forgets it (`EnemyUnitTick` -1) once it went there and saw nobody (below). The M5-3 enemy-army
+  centroid is unchanged (non-workers only, still read by nothing).
+- **When a hunt starts.** No wave in progress, the base not defended, no wave started this think, and: no enemy building
+  known (`KnownEnemyBuildings` 0: none seen, no ghost), at least one wave sent before (`WavesStarted` > 0), the match not
+  over (`PlayerView.MatchOver`, the result every seat is shown), the cooldown over. Every free army unit (not casting, no
+  command pending) becomes a member, whatever their number: no `attack` threshold, and the hunt's kept threshold
+  (`WaveMinHalfPop` / `WaveMinCost`) is 0, so the defense may pull any member. The cooldown (`ai.waveCooldown`) starts, as
+  a wave's. A wave whose target is gone with no other building known **turns into a hunt** on the spot (the same members,
+  no trip home), unless the base is defended or the match is over (then it ends, as before). `HuntsStarted` counts both.
+- **The target**, a point (`WaveTargetPoint`; `WaveTarget` none, `WaveTargetType` -1): the remembered point while it is
+  fresh (`Now - EnemyUnitTick <= ai.huntMemory`, 120 s), else a **sweep** of the scout's map-grid geometry
+  (`MilitaryManager.HuntPoint`: the grid's cell centres, `ScoutManager.GridPoint`, then its interior corners, both of
+  `ai.scoutGrid`'s `GridLines`; the hunt's own marks, `HuntVisited`, never the scout's `ScoutVisited`): first the point
+  nearest the members' centroid, which becomes the sweep's origin (`HuntOrigin`), then the unvisited point with the least
+  distance from the last point plus distance from the origin (list order on ties); with every point visited the marks
+  clear and the sweep starts over. A sighting forgotten restarts the sweep from the members (a new origin). `HuntSweep` is
+  the point's index, -1 while the target is a sighting. **Builder's calls, measured:** (1) *the corners.* The brief named
+  the scout's grid points; the centres alone are a cell apart (51.2 m on Pale Hills' 10 x 10 grid), far past a unit's
+  sight (14 m): centres alone leave ground half a cell's diagonal (36 m there) from every point, with the interior corners
+  (81 more there) at most half a cell (25.6 m). Pale Hills seed 5 with centres alone ran to 72,000 ticks with the loser's
+  last six workers idle by a forest 29-35 m from the nearest centre, every centre visited, that ground never explored;
+  with the corners it ends. (2) *the origin term.* Nearest-to-the-last alone walked away from where the enemy was: on
+  Pale Hills seed 1 the loser's last building stood 50 m from its razed hall and the sweep, on a four-way tie, set off for
+  the far edge (no result by 36,000); weighted by the distance from the origin the sweep spreads outward from the razed
+  base, still walking point to point, and seed 1 ends at 34,856.
+- **Each think of a hunt** (after the wave's retreat and BUG-0598 idle rules, which end it as they end a wave): an enemy
+  building known hands back to the wave rule (the known enemy building nearest the members becomes the target, every member
+  owed an `AttackMove`, `Hunting` cleared). Else the target is **reached** when a member is within `ai.rallyReach` of it, or
+  every member stands Idle with no order pending or owed after `MaxTries` orders toward it without getting a cell nearer (as
+  close as they get: a point in a forest or on a cliff). A reached sweep point is visited; a reached sighting not seen again
+  this think is forgotten. Then a fresh sighting more than `ai.rallyReach` from the target (or any fresh sighting while
+  sweeping) **re-targets** at once; with none fresh, a reached point (or a forgotten sighting) moves the sweep on, from the
+  last point (or from the members' centroid). Every re-target owes each member one `AttackMove`.
+- **Orders.** As a wave's: one command per unit per think, in slot order; a member owed an order gets `AttackMove` to the
+  point; an Idle member is sent `AttackMove` again until `MaxTries` orders without progress, then left standing, a member,
+  unordered (no `Attack` on a building, no going home: the "every member stuck" rule moves the point instead). The
+  `MaxTries` bound and its progress rule are the wave's.
+- **The match end.** A hunt in progress at the match's end ends (members home); none starts after it.
+- **Knob.** `common/rules.json` `ai.huntMemory`: seconds, 0-3,600 (`DataLimits.MaxSeconds`), to ticks, required, shipped
+  **120** (the brief's proposal); 0 is valid (only a sighting from the think itself is fresh). In `ContentHash`
+  (`DataContentHashTests` row), `DataValidationTests` rows (missing, negative, over the maximum; 0 and 3,600 load).
+- **Save format 6 / 7.** The hunt's fields (`EnemyUnitPoint`, `EnemyUnitTick`, `Hunting`, `HuntSweep`, `HuntOrigin`,
+  `HuntVisited`, `HuntsStarted`) are written in their own section, `HUNT`, after `AIST`, only for a match with an AI seat: 6 is format 4
+  plus `HUNT` (a generated map), 7 is format 5 plus `HUNT` (a hand-made map); a human-only match is saved 4 / 5 byte for
+  byte as before ("Save format (M6-S2)"; `SaveHeader.VersionFor`). `AIST` keeps format 5's layout, so the M6-S7 fixtures
+  still prove the old bytes: a format-6 save with `HUNT` cut out and the version and length put back is the pre-map
+  fixture byte for byte (`PreMapFixtures.WithoutHunt`). A save of format 3-5 with an AI seat is refused
+  `FormatVersionMismatch` once the header is read (any real one is refused `DataMismatch` first: the knob moved the hash);
+  format 6 without its `HUNT` section, or with a forged seat count, is `Malformed`. The replay format is unchanged (playback
+  runs no AI; the AI's commands are in the log).
+- **Determinism and hashes.** The AI's state stays out of `StateHash`. The golden (no AI seat) is unchanged: no checkpoint
+  moved, and since M6-SH1 its `data-hash` header is not a pin. Pinned AI matches change only from the first hunt (or the first
+  wave that now turns into one) on. Of the 27 pairings' Age II pins two reach a hunt and were re-printed on the Malazan page
+  (`crossbow_push` v `raider_rush` seed 19: "never" to "never (defeated 10:24)"; `crossbow_push` v `standard` seed 32: "never"
+  to "never (defeated 14:48)": beaten sides that used to stand at 20:00 are finished off); every other pin, pairing and the
+  golden's `k` lines are unchanged.
+- **Measured** (Normal v Normal, Malazan v Whirlwind, starts 0 and 1, to 72,000 ticks, `Stress/MapSlice2StressTests`; at
+  e3fd8fb none of these ended): Pale Hills seeds 3, 4 and 6 (one match: a map file draws nothing from the seed but the
+  openings) end at tick 29,421 (24:31), Whirlwind winning after one hunt; seed 5 at 41,337 (34:27), Malazan winning after
+  two hunts (with the centres alone it ran out the hour); the generated map's seed 6 at 26,875 (22:24), Whirlwind after one
+  hunt. Seed 2 (both sides keep two halls) is untouched: no hunt starts while an enemy building is known. The rows that
+  ended before still end, none of them through a hunt but Pale Hills seed 1, now 34,856 (was 34,175: its last wave, its
+  target razed with one building of the loser's left unseen 50 m off, turns into a hunt, "Implementation (M6-S8)"); Vathar
+  Crossing seed 1 and Raraku seed 1 are unchanged (23,219 and 29,001), and so are the M6-S8 sweep rows (Vathar 2-6, Raraku
+  2-6, generated 2-5).
+- **Cost.** The census adds one distance compare per enemy unit seen; a hunt's think one pass over its members; a re-target
+  one pass over the sweep points (two at a restart; 41 on the 256 m map at the shipped 56 m, 181 on Pale Hills' 512 m). No
+  allocation (`AiPerfTests`, the 1 ms think gate and 0 B a think, unchanged). **Memory:** per AI seat one bool per sweep
+  point (41 B on the 256 m map, 32 KB at the 16 m minimum on a 1,024-cell map) and a few scalars.
+- **Tests.** `Ai/HuntTests` (criterion 3 on the flat scene, combat off, by the command log: a sighting seen then hidden,
+  every army unit `AttackMove` to it, none before the first wave; the sweep's order, one `AttackMove` per member per point,
+  each point reached within `rallyReach`, a sighting re-targeting it; an enemy building seen ending the hunt and the wave
+  targeting it; the retreat ending a hunt with the cooldown; criterion 4's fog oracle on two generated AI v AI seeds, every
+  think of both seats; criterion 5's save mid-hunt followed 1,000 ticks hash for hash, the seats field for field),
+  `Save/SaveRefusalTests` (formats 3-5 with an AI seat refused, with or without `HUNT`; format 6 without it or with a forged
+  count `Malformed`; a human seat forged into an AI one is now `FormatVersionMismatch` at format 4, `Malformed` at 6),
+  `Save/SaveFormatTests` (the versions, the fixtures through `WithoutHunt`), `AiDeterminismTests.PaleHillsSeed3_ToTheEnd_TwoProcesses_SamePerTickHashes`
+  (criterion 6, Stress), `Stress/MapSlice2StressTests.NormalVersusNormal_KnownStalls_EndWithin72000` (un-skipped, the fog
+  oracle at every think), `DataValidationTests` / `DataContentHashTests` (the knob).
+- **Not yet** (slice 2 and later): high ground and ramps before attacking up, periodic re-scouting, rebuilding; Pale Hills
+  seed 2's stalemate (both sides keep two halls; BUG-1068, narrowed to it) is not a hunt case. BUG-1067 (a seat whose scouts
+  all die at the door finds no wood for minutes) is not taken here: neither rider is a few lines (gatherers searching near home
+  is a new behaviour; the hall's sight reaching its woodlot is a faction-data change or a global `buildingSight` change that
+  moves every pinned match).
 
 ### Implementation (M5-4e)
 
@@ -8554,7 +8656,11 @@ version 2) stores the AI seats too, so every match saves. Code in `sim/Rts.Sim/S
   patterns. Strings are an int32 byte count and printable ASCII (the sim version, snake_case faction ids). An array is its
   int32 length, then its elements; the reader requires the length the header's capacities give. Structs holding a bool
   (commands, ghosts, events) go field by field.
-- **Header**, in order: magic `RTSSAVE\0` (8 bytes); format version (int32, `SaveFormat.CurrentVersion` = 5 since M6-S7,
+- **Header**, in order: magic `RTSSAVE\0` (8 bytes); format version (int32, `SaveFormat.CurrentVersion` = 7 since M5-4d,
+  which added the `HUNT` section after `AIST` for a match with an AI seat: 6 (`SaveFormat.HuntMaplessVersion`) is format 4
+  plus `HUNT` (a generated map), 7 is format 5 plus `HUNT` (a hand-made map), and a match with no AI seat is still saved 4 /
+  5 (`SaveFormat.MapVersion`) byte for byte; a save of format 3-5 with an AI seat is refused `FormatVersionMismatch`, after
+  the header is read, since its seats were saved without the hunt memory ("Implementation (M5-4d)"); 5 since M6-S7,
   which added the map id after the starting-resources preset, written only for a match on a hand-made map: a generated-map
   match is saved as `SaveFormat.MaplessVersion` = 4, byte for byte as before; 4 since M6-S6,
   which added the starting-resources preset after the team bytes; version 3 (M6-S4, which added the team byte) still loads,
@@ -8602,6 +8708,7 @@ version 2) stores the AI seats too, so every match saves. Code in `sim/Rts.Sim/S
   | `EVNT` | the last tick's `Deaths`, `Impacts`, `AbilityEvents`, `DefeatEvents` (`Tick()` clears them first, but a view reads them between ticks) |
   | `CMDS` | each player's next sequence number, then the pending queue: count, every command, every field, in queue order |
   | `AIST` | (format 2) the AI seat count, then per AI seat in player order its player index and its state (below) |
+  | `HUNT` | (formats 6 and 7, M5-4d, only with an AI seat) the AI seat count, then per AI seat in player order its player index and its hunt memory: `EnemyUnitPoint`, `EnemyUnitTick`, `Hunting`, `HuntSweep` (-1 to the last sweep point's index), `HuntOrigin`, `HuntVisited`, `HuntsStarted` |
   | `END!` | nothing: the body's end |
 
   Last, the checksum: FNV-1a 64 over every byte before it (the replay file's). A flow field's slot holds its keys
@@ -9273,7 +9380,7 @@ with five more stands of trees: 8 ramps, 24 mines, 1,540 trees in 28 forests.
 
 | Map | Result | Waves (Malazan / Whirlwind) | Gathered gold / wood (Malazan v Whirlwind) |
 | --- | --- | --- | --- |
-| Pale Hills | Whirlwind won at 28:28 (34,175 ticks) | 7 / 9 | 8,880 / 7,720 v 8,840 / 8,520 |
+| Pale Hills | Whirlwind won at 28:28 (34,175 ticks); since M5-4d at 29:02 (34,856: its last wave turns into a hunt) | 7 / 9 (M5-4d: 7 / 8) | 8,880 / 7,720 v 8,840 / 8,520 (M5-4d: 8,840 / 8,740) |
 | Vathar Crossing | Whirlwind won at 19:20 (23,219 ticks) | 2 / 4 | 2,910 / 1,810 v 6,680 / 4,500 |
 
 What moved on the way (as Raraku's first draft did): Pale Hills' first draft (starts (60, 60), its expansion pair 57 cells out

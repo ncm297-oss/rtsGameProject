@@ -43,8 +43,9 @@ internal sealed partial class AiPlayer
         ThinkTicks = Math.Max(1, Knobs.ThinkTicks);
         OpeningIndex = PickOpening(def.Openings.Length, difficulty, ref _rng);
         Opening = def.Openings[OpeningIndex];
-        Board = new Blackboard(Opening.BuildOrder.Length, view.UnitSlots, view.BuildingSlots, view.ResourceSlots,
-            ScoutManager.GridLines(view.MapWidth, Rules.ScoutGrid) * ScoutManager.GridLines(view.MapHeight, Rules.ScoutGrid));
+        int cols = ScoutManager.GridLines(view.MapWidth, Rules.ScoutGrid), rows = ScoutManager.GridLines(view.MapHeight, Rules.ScoutGrid);
+        Board = new Blackboard(Opening.BuildOrder.Length, view.UnitSlots, view.BuildingSlots, view.ResourceSlots, cols * rows,
+            MilitaryManager.HuntPoints(cols, rows));
         Live = new int[data.Units.Length];
         Queued = new int[data.Units.Length];
         WorkerSlots = new int[view.UnitSlots];
@@ -453,13 +454,24 @@ internal sealed partial class AiPlayer
         float defend = Rules.DefendRadius * Rules.DefendRadius;
         int s = -1, enemies = 0;
         Vector2 sum = Vector2.Zero, intruders = Vector2.Zero;
+        // M5-4d: the last enemy unit seen, workers too: the one nearest the hunt's target while hunting (the chase stays on
+        // what it follows), else nearest the hall (slot order on ties).
+        Vector2 from = Board.WaveActive && Board.Hunting ? Board.WaveTargetPoint : HasHall ? hall : MapSize * 0.5f, sighted = default;
+        float nearest = float.MaxValue;
         while (View.NextUnit(ref s, out SeenUnit u))
         {
             if (u.Owner != Player)
             {
                 // The enemy memory: the enemy army seen this think (workers aside). M6-S4: an ally's units are neither the
                 // enemy army nor intruders (no defense against them).
-                if (!View.IsEnemy(u.Owner) || IsWorkerType[u.TypeId]) continue;
+                if (!View.IsEnemy(u.Owner)) continue;
+                float d = Vector2.DistanceSquared(u.Position, from);
+                if (d < nearest)
+                {
+                    nearest = d;
+                    sighted = u.Position;
+                }
+                if (IsWorkerType[u.TypeId]) continue;
                 enemies++;
                 sum += u.Position;
                 if (HasHall && Vector2.DistanceSquared(u.Position, hall) <= defend)
@@ -474,6 +486,11 @@ internal sealed partial class AiPlayer
             Live[u.TypeId]++;
             if (IsWorkerType[u.TypeId]) WorkerSlots[WorkerCount++] = s;
             else ArmySlots[ArmyCount++] = s;
+        }
+        if (nearest < float.MaxValue)
+        {
+            Board.EnemyUnitPoint = sighted;
+            Board.EnemyUnitTick = Now;
         }
         if (enemies > 0)
         {

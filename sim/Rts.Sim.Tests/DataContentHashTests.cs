@@ -432,7 +432,7 @@ public class DataContentHashTests
         foreach (string f in new[] { "GoldShare", "HouseHalfPopMargin", "PlacementSearchCells", "SpacingCells", "ExpandReachCells", "ScoutAfterTicks",
             "ScoutRadius", "ScoutReach", "ScoutGrid", "RallyDistance", "RallyReach", "WaveCooldownTicks", "DefendRadius", "DefendForTicks", "WorkerFleeRadius", "CastMinTargets",
             "DefendRatio", "DefendMinValue", "RecallHallHp", "ReserveShift", "ReserveArmyShare", "GatherReach",
-            "ScoutReplacements", "SpendDownQueue" })
+            "ScoutReplacements", "SpendDownQueue", "HuntMemoryTicks" })
             Assert.Contains($"AiRulesDef.{f}", checkedFields);
         for (int slot = 0; slot < d.Ai.Length; slot++)
             Check(d.Ai[slot], x => With(d, ai: x, aiSlot: slot));
@@ -796,6 +796,7 @@ public class DataContentHashTests
     [InlineData("gatherReach", 48)] // M6-S5, BUG-1045
     [InlineData("scoutReplacements", 3)] // M6-SH1, BUG-1052
     [InlineData("spendDownQueue", 3)] // M6-SH1, BUG-1051
+    [InlineData("huntMemory", 90)] // M5-4d
     public void AnAiRulesFieldEdit_ChangesTheHash(string field, double value)
     {
         using TestDataDir dir = TestDataDir.CopyOfShipped();

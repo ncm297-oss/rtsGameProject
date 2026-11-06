@@ -79,6 +79,9 @@ public sealed class PlayerView
     /// <summary>Whether the player has an ally (another player on its named team); false in a free-for-all.</summary>
     public bool HasAlly => _world.HasAlly(_player);
 
+    /// <summary>M5-4d: whether the match has a result (<see cref="World.MatchOver"/>): the result screen every seat is shown, so nothing hidden.</summary>
+    public bool MatchOver => _world.MatchOver;
+
     // ---------- the fog grid ----------
 
     /// <summary>Map width in cells (cells are row-major, <c>y * MapWidth + x</c>).</summary>

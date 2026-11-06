@@ -59,6 +59,12 @@ internal sealed partial class AiPlayer
         Board.WriteTo(w);
     }
 
+    /// <summary>M5-4d: writes the seat's hunt memory for the save's <c>HUNT</c> section (<see cref="Blackboard.WriteHuntTo"/>).</summary>
+    internal void WriteHuntTo(SaveWriter w) => Board.WriteHuntTo(w);
+
+    /// <summary>M5-4d: reads what <see cref="WriteHuntTo"/> wrote, after <see cref="ReadFrom"/>.</summary>
+    internal void ReadHuntFrom(SaveReader r) => Board.ReadHuntFrom(r);
+
     /// <summary>Reads what <see cref="WriteTo"/> wrote over this seat, freshly built for the same match (its pick already drawn).</summary>
     internal void ReadFrom(SaveReader r)
     {

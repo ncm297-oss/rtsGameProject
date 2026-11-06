@@ -558,15 +558,17 @@ every Malazan opening against every Whirlwind opening on the pairing's three sma
 `QA/Content/D21OpeningsQaTests`'; each run pins its cell here and on the Whirlwind page's twin table. Since M5-4g's
 reserve the Malazans reach Age II on 23 of the 27 sides: of the four that don't, `standard` seed 2 and `cadre_rush` seed
 14 are defeated first, `crossbow_push` seed 19 is BUG-1010's beaten side, and `crossbow_push` seed 32 is not defeated at
-20:00 (3 pop, no pop building left; 794 gold and 5 wood in hand) (docs/03 "Implementation (M5-4g)").
+20:00 (3 pop, no pop building left; 794 gold and 5 wood in hand) (docs/03 "Implementation (M5-4g)"). Since M5-4d (the AI
+hunts the last units once it knows no enemy building) those two are finished off: seed 19 is defeated at 10:24 and seed
+32 at 14:48 (docs/03 "Implementation (M5-4d)").
 
 | Malazan opening | Whirlwind opening | 1st seed | 2nd seed | 3rd seed |
 | --- | --- | --- | --- | --- |
 | `standard` | `standard` | seed 1: 12:22 | seed 22: 13:08 | seed 26: 11:48 |
 | `standard` | `raider_rush` | seed 2: never (defeated 16:45) | seed 10: 12:00 | seed 21: 8:19 |
 | `standard` | `holy_war` | seed 3: 13:51 | seed 4: 15:19 (defeated 19:53) | seed 6: 8:29 (defeated 15:39) |
-| `crossbow_push` | `standard` | seed 9: 12:01 | seed 32: never | seed 37: 14:20 |
-| `crossbow_push` | `raider_rush` | seed 5: 9:53 | seed 11: 8:47 | seed 19: never |
+| `crossbow_push` | `standard` | seed 9: 12:01 | seed 32: never (defeated 14:48) | seed 37: 14:20 |
+| `crossbow_push` | `raider_rush` | seed 5: 9:53 | seed 11: 8:47 | seed 19: never (defeated 10:24) |
 | `crossbow_push` | `holy_war` | seed 12: 12:13 | seed 45: 9:28 | seed 71: 9:43 |
 | `cadre_rush` | `standard` | seed 13: 6:05 | seed 16: 8:24 | seed 17: 8:44 |
 | `cadre_rush` | `raider_rush` | seed 7: 8:26 | seed 8: 8:41 (defeated 13:25) | seed 14: never (defeated 12:33) |

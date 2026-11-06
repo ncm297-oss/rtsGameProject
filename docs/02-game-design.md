@@ -423,6 +423,14 @@ own cues (select, order, refused, building placed or finished, unit or tech read
   above it gives its surplus), and calls the whole wave home only when the raid is worth more than that or its Town Hall
   is hit and below half hp (`rules.json` `ai.defendRatio` / `defendMinValue` / `recallHallHp`; built in M5-4f; wording
   aligned with [03 Implementation (M5-4f)](03-technical-design.md#implementation-m5-4f) on 2026-10-17, BUG-0871).
+- The AI finishes the match: once it knows no enemy building (every one razed, or out of sight with nothing left of it in
+  its memory of the map) and has sent at least one wave, it **hunts** with its whole army, whatever its size. The army goes to
+  where the AI last saw an enemy unit (a worker counts) if that was at most `rules.json` `ai.huntMemory` (120 s) ago, else
+  it sweeps the map (the centres and the corners of the scout's grid, from the point nearest the army outward, point to
+  point), and turns at once toward any enemy unit it sees. A hunt ends like a wave (heavy losses, nobody busy for a while,
+  a raid at home), and becomes a wave again on the first enemy building it finds. So a beaten side's last unit hiding in
+  the woods is found, and AI-against-AI matches end (built in M5-4d, BUG-1068;
+  [03 Implementation (M5-4d)](03-technical-design.md#implementation-m5-4d)).
 - The build order comes before the army once the army is wave-sized: when a due building, research or
   expansion step can't be paid yet, the AI keeps its cost in reserve (army production and the build order's later unit
   steps spend only what is above it; earlier steps, houses and the defense are unaffected) and moves its gatherers toward
