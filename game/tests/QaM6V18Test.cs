@@ -193,10 +193,27 @@ public partial class QaM6V18Test : Node
         main.ShowSetup();
         await Frames(2);
         SkirmishSetup setup = main.Setup!;
+        int forestsBefore = setup.ForestsPick, minesBefore = setup.MinesPick;
         Check(setup.PickMap(mapId), $"the list has no '{mapId}'");
+        int shownForests = setup.ForestsPick, shownMines = setup.MinesPick;
+        if (mapId.Length > 0)
+        {
+            // M6-V19: the greyed counts are the map's own (Raraku: 6 forests, 12 gold mines), and Generated gives back the
+            // values from before; the match's start line (the sim's placement) then says the same counts the setup showed.
+            MapDef map = _data.Maps[_data.FindMap(mapId)];
+            Check(shownForests == map.ForestCount && (mapId != "raraku" || (shownForests == 6 && shownMines == 12)),
+                $"'{mapId}' picked: Forests {shownForests}, Gold mines {shownMines} (the file lists {map.ForestCount} forests)");
+            setup.PickMap("");
+            Check(setup.ForestsPick == forestsBefore && setup.MinesPick == minesBefore,
+                $"Generated after '{mapId}': Forests {setup.ForestsPick}, Gold mines {setup.MinesPick} (want {forestsBefore} / {minesBefore} back)");
+            setup.PickMap(mapId);
+        }
         setup.StartButton.EmitSignal(BaseButton.SignalName.Pressed);
         Match? match = main.CurrentMatch;
         if (!Check(match?.Simulation != null, $"'{mapId}': Start started no match")) return new Menu(null, null, null, 0, 0);
+        if (mapId.Length > 0)
+            Check(match!.StartLine.Contains($"forests {shownForests} ", StringComparison.Ordinal) && match.StartLine.Contains($"mines {shownMines},", StringComparison.Ordinal),
+                $"'{mapId}': the setup showed {shownForests} forests / {shownMines} mines, the start line says '{match.StartLine}'");
         Simulation sim = match!.Simulation!;
         string? replayPath = main.ReplayPath;
         var clock = System.Diagnostics.Stopwatch.StartNew();

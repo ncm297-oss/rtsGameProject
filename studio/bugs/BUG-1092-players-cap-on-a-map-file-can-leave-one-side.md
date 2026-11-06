@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S3 |
-| Status | open |
+| Status | fixed |
 | Found | 2026-11-05-2148, task M6-V18 |
 | System | launch options / match start (view: `LaunchOptions.Parse`, `Match` map cap) |
-| Fixed by | |
+| Fixed by | M6-V19 (06d6abc, session 2026-11-06-0326, view): `Match` re-runs `LaunchOptions.IsOneTeam` over the capped players, logs `Match.OneTeamWarning` and seats every slot on team 0. Proof (QA 2026-11-06-0326): `QaM6V18bTest` row (was KNOWN) a plain check, `IsEnemy(0, 1)` true; `MapListTest.FlagMatches` one-side / two-side rows; `QaM6V19Test.OneTeamMatrix` (`--players 2 / 3 / 4 --map raraku` x every team 0-2 set over four slots, 243 matches: 28 warned after the cap, 26 dropped by LaunchOptions, 189 kept; every one two sides) |
 
 ## Repro
 1. `& $env:GODOT --path game -- --players 4 --map raraku --team 1 1 --team 2 1 --team 3 2 --skirmish`

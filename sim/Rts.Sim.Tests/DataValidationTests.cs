@@ -1082,9 +1082,10 @@ public class DataValidationTests
             File.Copy(dir.FullPath(RarakuFile), dir.FullPath("maps/a_first.json"));
             dir.EditJson("maps/a_first.json", r => r["id"] = "zz_sorted_by_file");
             GameData d = Load(dir.Path);
-            Assert.Equal(new[] { "zz_sorted_by_file", "raraku" }, d.Maps.Select(m => m.Key));
-            Assert.Equal(new[] { 0, 1 }, d.Maps.Select(m => m.Id));
-            Assert.Equal(1, d.FindMap("raraku"));
+            // M6-S8: the three shipped maps follow in their files' order (pale_hills, raraku, vathar_crossing).
+            Assert.Equal(new[] { "zz_sorted_by_file", "pale_hills", "raraku", "vathar_crossing" }, d.Maps.Select(m => m.Key));
+            Assert.Equal(new[] { 0, 1, 2, 3 }, d.Maps.Select(m => m.Id));
+            Assert.Equal(2, d.FindMap("raraku"));
         }
     }
 

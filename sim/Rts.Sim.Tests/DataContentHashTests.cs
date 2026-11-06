@@ -491,12 +491,16 @@ public class DataContentHashTests
     }
 
     /// <summary>
-    /// M6-S7: every public field of a map (on the shipped Raraku: its id, names, players, size, every level, ramp field, start,
-    /// node field and the forest count), the maps' count and their order move the hash; data without maps hashes without a
-    /// maps term at all (so a data set with no <c>maps/</c> folder keeps its old hash).
+    /// M6-S7: every public field of a map (on each shipped map, read by id (M6-S8: <c>Maps[0]</c> is Pale Hills in file order):
+    /// its id, names, players, size, every level, ramp field, start, node field and the forest count), the maps' count and their
+    /// order move the hash; data without maps hashes without a maps term at all (so a data set with no <c>maps/</c> folder keeps
+    /// its old hash).
     /// </summary>
-    [Fact]
-    public void EveryMapField_TheCount_AndTheOrder_ChangeTheHash()
+    [Theory]
+    [InlineData("raraku")]
+    [InlineData("pale_hills")]
+    [InlineData("vathar_crossing")]
+    public void EveryMapField_TheCount_AndTheOrder_ChangeTheHash(string id)
     {
         GameData d = TestSim.Data;
         ulong baseline = d.ContentHash();
@@ -508,7 +512,9 @@ public class DataContentHashTests
             Maps = maps,
         };
         Assert.Equal(baseline, WithMaps(d.Maps).ContentHash());
-        MapDef m = d.Maps[0];
+        int index = d.FindMap(id);
+        Assert.True(index >= 0, $"no {id} in GameData.Maps");
+        MapDef m = d.Maps[index];
         var fields = new List<string>();
         foreach (PropertyInfo p in Settable(typeof(MapDef)))
         {
@@ -523,12 +529,12 @@ public class DataContentHashTests
             if (changed == null) continue; // the struct lists: field by field below
             MapDef copy = Clone(m);
             p.SetValue(copy, changed);
-            Assert.True(WithMaps(d.Maps.SetItem(0, copy)).ContentHash() != baseline, $"MapDef.{p.Name} is not in GameData.ContentHash");
+            Assert.True(WithMaps(d.Maps.SetItem(index, copy)).ContentHash() != baseline, $"MapDef.{p.Name} is not in GameData.ContentHash");
             fields.Add(p.Name);
         }
         void Expect(string what, Func<MapDef, MapDef> edit)
         {
-            Assert.True(WithMaps(d.Maps.SetItem(0, edit(Clone(m)))).ContentHash() != baseline, $"{what} is not in GameData.ContentHash");
+            Assert.True(WithMaps(d.Maps.SetItem(index, edit(Clone(m)))).ContentHash() != baseline, $"{what} is not in GameData.ContentHash");
             fields.Add(what);
         }
         MapDef With(MapDef x, string property, object list)
@@ -585,6 +591,49 @@ public class DataContentHashTests
             int at = last.IndexOf('[');
             if (at < 0) parent[last] = JsonNode.Parse(json);
             else parent[last[..at]]![int.Parse(last[(at + 1)..^1])] = JsonNode.Parse(json);
+        });
+        DataLoadResult load = DataLoader.LoadAll(dir.Path);
+        Assert.True(load.Ok, string.Join("; ", load.Errors));
+        Assert.NotEqual(TestSim.Data.ContentHash(), load.Data!.ContentHash());
+    }
+
+    /// <summary>M6-S8: an edit to each new shipped map file moves the hash: its text, its name, a mine's gold, a tree taken from a forest row.</summary>
+    [Theory]
+    [InlineData("pale_hills", "description", "\"Other text.\"")]
+    [InlineData("pale_hills", "displayName", "\"Pale Woods\"")]
+    [InlineData("pale_hills", "mines[5].gold", "2499")]
+    [InlineData("vathar_crossing", "description", "\"Other text.\"")]
+    [InlineData("vathar_crossing", "displayName", "\"Vathar Fords\"")]
+    [InlineData("vathar_crossing", "mines[9].gold", "1999")]
+    public void ANewMapFileEdit_ChangesTheHash(string id, string field, string json)
+    {
+        using TestDataDir dir = TestDataDir.CopyOfShipped();
+        dir.EditJson($"maps/{id}.json", root =>
+        {
+            int at = field.IndexOf('[');
+            if (at < 0) root[field] = JsonNode.Parse(json);
+            else root[field[..at]]![int.Parse(field[(at + 1)..field.IndexOf(']')])]![field[(field.IndexOf('.') + 1)..]] = JsonNode.Parse(json);
+        });
+        DataLoadResult load = DataLoader.LoadAll(dir.Path);
+        Assert.True(load.Ok, string.Join("; ", load.Errors));
+        Assert.NotEqual(TestSim.Data.ContentHash(), load.Data!.ContentHash());
+    }
+
+    /// <summary>M6-S8: a tree taken out of a new map's forest (the first tree of its first forest's first row with one) moves the hash.</summary>
+    [Theory]
+    [InlineData("pale_hills")]
+    [InlineData("vathar_crossing")]
+    public void ANewMapForestEdit_ChangesTheHash(string id)
+    {
+        using TestDataDir dir = TestDataDir.CopyOfShipped();
+        dir.EditJson($"maps/{id}.json", root =>
+        {
+            JsonArray rows = root["forests"]![0]!["rows"]!.AsArray();
+            int r = 0;
+            while (!rows[r]!.GetValue<string>().Contains('T')) r++;
+            string row = rows[r]!.GetValue<string>();
+            int k = row.IndexOf('T');
+            rows[r] = row[..k] + "." + row[(k + 1)..];
         });
         DataLoadResult load = DataLoader.LoadAll(dir.Path);
         Assert.True(load.Ok, string.Join("; ", load.Errors));

@@ -76,7 +76,7 @@ public class ScoutSentAgainQaTests
     public void EveryScoutKilledAtTheDoor_TheCapHolds_WhenTheHallStandsOffTheGrid() => KillEveryScout(29, 30);
 
     /// <summary>See <see cref="EveryScoutKilledAtTheDoor_TheCapHolds_WhenTheHallStandsOffTheGrid"/>: the hall's centre (64, 64) is the scout grid's middle centre.</summary>
-    [Fact(Skip = "BUG-1057 (open, S3): SentAgain can't see its mark when the hall's centre is a grid centre, so the cap never applies (9 scouts killed by 6,000)")]
+    [Fact]
     public void EveryScoutKilledAtTheDoor_TheCapHolds_WhenTheHallStandsOnAGridCentre() => KillEveryScout(30, 30);
 
     private void KillEveryScout(int hx, int hy)

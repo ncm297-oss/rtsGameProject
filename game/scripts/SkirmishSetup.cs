@@ -21,7 +21,7 @@ namespace Rts.Game;
 /// <c>rules.json</c> <c>startingResources</c> presets in file order, by <c>displayName</c>, the <c>description</c> as the
 /// tooltip; default <c>standard</c>), passed as <c>--resources</c>. M6-V18: a map list (Generated, then <c>GameData.Maps</c> in data
 /// order by <c>displayName</c>, the <c>description</c> as the tooltip), passed as <c>--map</c>: a map file greys Map size,
-/// Forests and Gold mines (they don't apply) and caps the slots at its start locations, with a line saying so. Text from <c>ui.json</c> <c>setup</c> (the colours' names
+/// Forests and Gold mines (they don't apply; M6-V19: they show the map's own counts) and caps the slots at its start locations, with a line saying so. Text from <c>ui.json</c> <c>setup</c> (the colours' names
 /// and swatches from its colour table), faction and preset names from the data's <c>displayName</c>.
 /// </summary>
 /// <remarks>
@@ -84,6 +84,8 @@ public partial class SkirmishSetup : CanvasLayer
     private GameData? _data;
     private UiText? _ui;
     private int _sizeBeforeMap = -1, _slotsBeforeMap = -1;
+    // M6-V19: the Forests / Gold mines values a map file's own counts replaced while it is picked (-1: none taken).
+    private double _forestsBeforeMap = -1, _minesBeforeMap = -1;
 
     private readonly RandomNumberGenerator _rng = new();
     private int _startMines;
@@ -251,6 +253,11 @@ public partial class SkirmishSetup : CanvasLayer
                 while (SlotCount > SlotCap) HideLastSlot();
             }
             MapPlayersLabel.Text = _ui?.MapPlayersLine(map.DisplayName, map.Players) ?? "";
+            // M6-V19: the greyed counts show the map's own (its forests and gold mines), not the generator's unused picks.
+            if (_forestsBeforeMap < 0) _forestsBeforeMap = ForestsSpin.Value;
+            if (_minesBeforeMap < 0) _minesBeforeMap = MinesSpin.Value;
+            ShowCount(ForestsSpin, map.ForestCount);
+            ShowCount(MinesSpin, MinesOn(map));
         }
         else
         {
@@ -258,6 +265,11 @@ public partial class SkirmishSetup : CanvasLayer
             _sizeBeforeMap = -1;
             while (SlotCount < _slotsBeforeMap && SlotCount < MaxSlots) ShowNextSlot();
             _slotsBeforeMap = -1;
+            // The generator's range and the values from before the map (their floors follow in UpdateSlotButtons).
+            ForestsSpin.MaxValue = MinesSpin.MaxValue = MapGenParams.MaxResourceGroups;
+            if (_forestsBeforeMap >= 0) ForestsSpin.Value = _forestsBeforeMap;
+            if (_minesBeforeMap >= 0) MinesSpin.Value = _minesBeforeMap;
+            _forestsBeforeMap = _minesBeforeMap = -1;
         }
         MapSizeOption.Disabled = file;
         SetEditable(ForestsSpin, !file);
@@ -266,6 +278,23 @@ public partial class SkirmishSetup : CanvasLayer
         GreyTakenColours();
         UpdateSlotButtons();
         Validate();
+    }
+
+    // The gold mines a map file places (M6-V19): its nodes of a gold resource type, as the sim counts them at the start.
+    private int MinesOn(MapDef map)
+    {
+        int mines = 0;
+        foreach (MapNodeDef n in map.Nodes)
+            if (_data != null && (uint)n.TypeId < (uint)_data.Resources.Length && _data.Resources[n.TypeId].Resource == ResourceKind.Gold) mines++;
+        return mines;
+    }
+
+    // A greyed count shows a map file's own number, whatever the generator's range (the range comes back on Generated).
+    private static void ShowCount(SpinBox spin, int count)
+    {
+        spin.MinValue = Math.Min(spin.MinValue, count);
+        spin.MaxValue = Math.Max(spin.MaxValue, count);
+        spin.Value = count;
     }
 
     // A greyed count takes no typing, no arrows and no focus (M6-V18: the keyboard can't change it either).
@@ -377,6 +406,7 @@ public partial class SkirmishSetup : CanvasLayer
         RemoveSlotButton.Disabled = SlotCount <= LaunchOptions.MinPlayers;
         // M6-V15: the resource counts' floors follow the shown slots (one start forest and the start mines a base); a count
         // under a raised floor is raised to it, a count kept over a lowered one stays.
+        if (MapPick != null) return; // M6-V19: a map file's own counts show, under any floor
         SetFloor(ForestsSpin, MinForestsFor(SlotCount));
         SetFloor(MinesSpin, MinMinesFor(SlotCount, _startMines));
     }
@@ -404,7 +434,7 @@ public partial class SkirmishSetup : CanvasLayer
     /// colour and faction, only for a slot on a team (None passes nothing: team 0 is the default). M6-V17: <c>--resources &lt;id&gt;</c>
     /// after the counts, only for a preset other than <c>standard</c> (the default). M6-V18: <c>--map &lt;id&gt;</c> after that, only
     /// for a map file (Generated passes nothing, so a generated match's args are as before); <c>--map-size</c> is then the map's
-    /// side and the two counts, passed as shown, are unused.
+    /// side and the two counts, passed as shown (M6-V19: the map's own), are unused.
     /// </summary>
     public string[]? MatchArgs()
     {
@@ -418,7 +448,7 @@ public partial class SkirmishSetup : CanvasLayer
             "--seed", seed.ToString(CultureInfo.InvariantCulture), "--map-size", MapSize.ToString(CultureInfo.InvariantCulture), "--units", "0",
             "--players", SlotCount.ToString(CultureInfo.InvariantCulture),
             "--speed", SpeedPick.ToString("0.##", CultureInfo.InvariantCulture),
-            "--forests", ForestsPick.ToString(CultureInfo.InvariantCulture), "--mines", MinesPick.ToString(CultureInfo.InvariantCulture),
+            "--forests", Groups(ForestsPick), "--mines", Groups(MinesPick),
         };
         if (ResourcesPick != StartingResourcesDef.StandardId)
         {
@@ -456,6 +486,9 @@ public partial class SkirmishSetup : CanvasLayer
         }
         return args.ToArray();
     }
+
+    // A count as --forests / --mines takes it: a map file's own count (shown, unused) past the generator's cap is passed at the cap.
+    private static string Groups(int count) => Math.Clamp(count, 0, MapGenParams.MaxResourceGroups).ToString(CultureInfo.InvariantCulture);
 
     /// <summary>Builds the screen's controls with <paramref name="ui"/>'s text and <paramref name="data"/>'s faction names.</summary>
     public void Build(UiText ui, GameData data)

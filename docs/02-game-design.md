@@ -318,7 +318,7 @@ whether the zone's statuses take it and whether the zone hides it (the ground is
 | High ground | Low ground can't see up (see [High ground](#high-ground)) |
 | Trees | Block movement, choppable for wood, grouped into forests |
 | Water | Optional lakes: impassable cells, decorative |
-| Gold | 2 mines per start location, 2 per expansion, 2-3 expansions per player |
+| Gold | 2 mines per start location, 2 per expansion, 1-3 expansions per player (Pale Hills gives one per camp: gold is scarce there by design, M6-S8) |
 | Layout | Symmetric for 2-4 players (mirror or rotational) |
 | Maps | Seeded procedural generator + 3 hand-tuned maps shipped |
 
@@ -340,7 +340,8 @@ of a seed and hashed with the rest of the data, so a save or a recording of a ma
 rebuilds the map from its id; a save names it by id only, its terrain loading from the save's own stored heightmap (as for
 a generated map), so the id is a label there, kept true by the data hash in the save's header (M6-SH1, BUG-1054). Each
 must keep the generator's start rules (every start on one level, at least half the map apart, two mines and a forest
-beside it); Raraku is the first (M6-S7, a placeholder layout), Pale Hills and Vathar Crossing follow. The skirmish setup's Map list offers every shipped map file ("Game flow" 2,
+beside it). All three ship: Raraku (M6-S7), Pale Hills and Vathar Crossing (M6-S8, each laid out as one quarter mirrored
+across both axes); Raraku's layout is a placeholder. The skirmish setup's Map list offers every shipped map file ("Game flow" 2,
 M6-V18).
 
 ## Controls and camera
@@ -485,7 +486,7 @@ own cues (select, order, refused, building placed or finished, unit or tech read
    Standard picked by default, each one's description as its tooltip; Load Game names a save's or a replay's preset when it
    isn't Standard (built in M6-V17). The setup's **Map** list offers Generated (the default: the map generator on the
    seed, size and counts above) and then every hand-made map by name ("Map and terrain"), each one's description as its
-   tooltip; picking one greys Map size, Forests and Gold mines (the map has its own) and allows at most as many slots as the
+   tooltip; picking one greys Map size, Forests and Gold mines, which show the map's own side and counts, and allows at most as many slots as the
    map has start locations, with a line saying so; Generated gives them back. The save and the replay carry the map, and
    Load Game names it (built in M6-V18). At High the AI plays its usual openings and spends the extra money as it goes: while it holds more than 200
    gold + wood it starts its opening's timed steps (Age II, the later buildings) early, trains at every producer and leans

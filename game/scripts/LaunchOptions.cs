@@ -132,6 +132,22 @@ public sealed class LaunchOptions
     /// <summary>The player colour <c>--colour &lt;slot&gt; &lt;n&gt;</c> picked for slot <paramref name="slot"/> (0-based), as a 0-based index into <c>ui.json</c>'s colour table (<see cref="UiText.ColourRgb"/>), or null for the default (slot s: colour s).</summary>
     public int? ColourIndex(int slot) => (uint)slot < (uint)SlotCount ? _colours[slot] : null;
 
+    /// <summary>
+    /// BUG-1066's rule over the first <paramref name="players"/> slots: true when every one of them is on the same team (one side,
+    /// a match that never ends). M6-V19 (BUG-1092): <see cref="Match"/> asks it again over the players a map file kept.
+    /// </summary>
+    public bool IsOneTeam(int players)
+    {
+        if (_teams[0] == 0) return false;
+        for (int s = 1; s < Math.Min(players, SlotCount); s++)
+            if (_teams[s] != _teams[0]) return false;
+        return true;
+    }
+
+    /// <summary>The dev-log warning for <see cref="IsOneTeam"/> (BUG-1066): <paramref name="players"/> players all on <paramref name="team"/>, so the teams are dropped.</summary>
+    public static string OneTeamText(int players, int team) =>
+        $"Ignoring --team: all {players} players are on team {team}, and a match with one side never ends; playing free-for-all.";
+
     /// <summary>The team <c>--team &lt;slot&gt; &lt;n&gt;</c> put slot <paramref name="slot"/> (0-based) on (M6-V16): 0 (no team, the default) to <see cref="MaxTeam"/>; 0 out of range.</summary>
     public int TeamOf(int slot) => (uint)slot < (uint)SlotCount ? _teams[slot] : 0;
 
@@ -382,16 +398,11 @@ public sealed class LaunchOptions
                 GD.PushWarning($"Ignoring slot {s + 1}'s --faction / --colour / --ai / --team: the match has {players} players (--players).");
         // BUG-1066: every one of the match's slots on one team is one side, and a match with one side never ends (the setup's
         // Start refuses it, setup.one_team); the teams are dropped, so the match is a free-for-all, and the log says why.
-        if (o._teams[0] != 0)
+        if (o.IsOneTeam(players))
         {
-            bool one = true;
-            for (int s = 1; s < players; s++) one &= o._teams[s] == o._teams[0];
-            if (one)
-            {
-                o.OneTeamWarning = $"Ignoring --team: all {players} players are on team {o._teams[0]}, and a match with one side never ends; playing free-for-all.";
-                GD.PushWarning(o.OneTeamWarning);
-                Array.Clear(o._teams);
-            }
+            o.OneTeamWarning = OneTeamText(players, o._teams[0]);
+            GD.PushWarning(o.OneTeamWarning);
+            Array.Clear(o._teams);
         }
         // Colours are unique per match (docs/02 "Game flow" 2, BUG-0631 item 3), slot by slot: one on a colour an earlier slot
         // holds is warned about and keeps its default (slot s: colour s), or takes the first free colour when an earlier slot

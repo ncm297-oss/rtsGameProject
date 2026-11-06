@@ -311,8 +311,23 @@ internal static class ScoutManager
         // byte. The grid point nearest the hall becomes the hall's centre, visited: nothing to see at home, so the walk is
         // the same.
         int home = HomeGridPoint(points, hall);
-        points[home] = ai.ClampToMap(hall);
+        points[home] = Mark(ai, hall, home);
         board.ScoutVisited[home] = true;
+    }
+
+    /// <summary>
+    /// The mark <see cref="Waypoints"/> lays at grid point <paramref name="k"/> for a scout sent again: the hall's centre
+    /// clamped inside the map, or (BUG-1057) a quarter cell east of it (west at the map's east edge) when that is the grid
+    /// point's own centre, so the mark always differs from what a first scout lays there. <see cref="SentAgain"/> reads it
+    /// the same way. Allocates nothing.
+    /// </summary>
+    private static Vector2 Mark(AiPlayer ai, Vector2 hall, int k)
+    {
+        Vector2 mark = ai.ClampToMap(hall), grid = GridPoint(ai, k);
+        if (mark != grid) return mark;
+        const float quarter = MapConstants.CellSize * 0.25f;
+        Vector2 east = ai.ClampToMap(mark + new Vector2(quarter, 0f));
+        return east != grid ? east : ai.ClampToMap(mark - new Vector2(quarter, 0f));
     }
 
     /// <summary>
@@ -344,18 +359,24 @@ internal static class ScoutManager
 
     /// <summary>
     /// M6-SH1 round 1: whether the scout out now (or the one just lost) was sent again, as a replacement (M6-S7) or a
-    /// re-scout (BUG-1053): <see cref="Waypoints"/> laid one of its grid points at the hall's centre (a first scout's grid is
-    /// the map's cell centres only; a hall standing exactly on its cell's centre can't be told apart and reads false). False
-    /// with no hall, or once the hall has moved (the sweep then plays as a first one). At most one pass over the grid
-    /// points; allocates nothing.
+    /// re-scout (BUG-1053): <see cref="Waypoints"/> laid one of its grid points at the hall's <see cref="Mark"/> (a first
+    /// scout's grid is the map's cell centres only, and the mark is never its point's centre: a hall standing exactly on a
+    /// grid centre is marked a quarter cell off, BUG-1057). False with no hall, or once the hall has moved (the sweep then
+    /// plays as a first one). At most one pass over the grid points; allocates nothing.
     /// </summary>
     internal static bool SentAgain(AiPlayer ai)
     {
         if (!ai.TryHallPoint(out Vector2 hall)) return false;
-        Vector2 home = ai.ClampToMap(hall);
         Vector2[] points = ai.Board.ScoutPoints;
+        Vector2 home = ai.ClampToMap(hall);
+        // Only a point within a quarter cell of the hall's centre can be the mark: the full check (two grid points' worth of
+        // work) runs for those alone, so the pass over a large grid stays one compare a point (QA's scout-grid cost row).
+        const float near = MapConstants.CellSize * 0.25f * 1.01f;
         for (int k = Blackboard.ScoutHead; k < points.Length; k++)
-            if (points[k] == home && home != GridPoint(ai, k)) return true;
+        {
+            if (Vector2.DistanceSquared(points[k], home) > near * near) continue;
+            if (points[k] == Mark(ai, hall, k) && points[k] != GridPoint(ai, k)) return true;
+        }
         return false;
     }
 

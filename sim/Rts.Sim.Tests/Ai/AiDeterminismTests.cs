@@ -1,5 +1,6 @@
 using Rts.Sim.Ai;
 using Rts.Sim.Data;
+using Xunit.Abstractions;
 
 namespace Rts.Sim.Tests;
 
@@ -13,6 +14,10 @@ namespace Rts.Sim.Tests;
 /// </summary>
 public class AiDeterminismTests
 {
+    private readonly ITestOutputHelper _out;
+
+    public AiDeterminismTests(ITestOutputHelper output) => _out = output;
+
     /// <summary>
     /// The two runs, <paramref name="ticks"/> long: equal hashes after every tick, the same commands and thinks; each seat
     /// waved (<paramref name="waves"/>) or defended its base (<paramref name="defends"/>), the same in both runs.
@@ -106,6 +111,36 @@ public class AiDeterminismTests
         // The hash covers the pending commands: equal unless the think sent something.
         Assert.Equal(sim.AiOf(0)!.CommandsSent - sent, sim.PendingCommandCount - pending);
         if (sim.PendingCommandCount == pending) Assert.Equal(before, sim.StateHash());
+    }
+
+    private const string PaleHillsChildVariable = "RTS_AI_PALE_HILLS_TWIN_CHILD";
+    private const string PaleHillsLine = "PALE-HILLS-TWIN ";
+
+    /// <summary>
+    /// M6-S8: a free-for-all of four Normal AI seats on Pale Hills (Malazan and Whirlwind by turns, every start used, seed 2) is deterministic across processes:
+    /// this process and a fresh child <c>dotnet test</c> of this row fold the same per-tick hashes over 3,000 ticks.
+    /// </summary>
+    [Fact]
+    public void FourAiSeats_OnPaleHills_TwoProcesses_SamePerTickHashes()
+    {
+        PlayerSeat[] seats = new PlayerSeat[4];
+        for (int p = 0; p < 4; p++) seats[p] = new PlayerSeat(p % 2, SeatController.Ai, AiDifficulty.Normal);
+        Simulation sim = AiScenes.Generated(seats, 2, record: false, out _,
+            configure: c => c with { MapId = MapFileTests.PaleHills, Map = c.Map with { Width = 256, Height = 256 } });
+        var h = new Determinism.StateHasher();
+        for (int t = 0; t < 3000; t++)
+        {
+            sim.Tick();
+            h.Add(sim.StateHash());
+        }
+        for (int p = 0; p < 4; p++) Assert.True(sim.AiOf(p)!.CommandsSent > 0, $"AI {p} sent nothing");
+        string mine = $"{h.Value:X16} {sim.StateHash():X16}";
+        if (Environment.GetEnvironmentVariable(PaleHillsChildVariable) == "1")
+        {
+            _out.WriteLine(PaleHillsLine + mine);
+            return;
+        }
+        Assert.Equal(mine, MapFileTests.RunChild(typeof(AiDeterminismTests), nameof(FourAiSeats_OnPaleHills_TwoProcesses_SamePerTickHashes), PaleHillsChildVariable, PaleHillsLine));
     }
 
     /// <summary>M6-S4 criterion 5: two runs of the 2v2 AI match (teams 1, 2, 1, 2; <see cref="AiTeamTests.Match"/>) hash equal after every tick, with the same commands and thinks per seat.</summary>
