@@ -148,6 +148,12 @@ against the raider rush" at the end of this page). The long waits the pairings r
   openings; Hard pulls it back).
 - **Later waves** (every opening): one wave at a time; a new one starts when none is out, at least `ai.waveCooldown`
   after the last began, at the opening's threshold, and never while the base is defended.
+- **High starting resources** (docs/02 "Game flow" 2, docs/03 "Implementation (M6-S6)"): the AI plays the same openings
+  as at Standard, but while it holds more gold + wood than the preset's spend-down threshold (`rules.json`
+  `startingResources` `high` `aiSpendAbove`) it brings its next timed step forward, trains at every producer and leans
+  its gatherers toward the kind it holds less of; Standard has no threshold, so it plays exactly as before. Measured (QA,
+  M6-S6, 2026-11-05; not pinned): `cadre_rush` held 1,539-1,769 gold + wood at 5:00 at High before the rule (3 seeds) and
+  70-466 with it (6 seeds nobody tuned on).
 - **Defense** (docs/02 "AI opponent", docs/03 "Implementation (M5-4b)" and "(M5-4f)"; re-worded in D20, 2026-10-17, for
   M5-4f's sized answer): a threat starts when an own building (a site too) within the defend radius of the Garrison Keep
   is hit, or an enemy soldier (not a worker) is seen within it (`rules.json` `ai.defendRadius` 48 m; the threat holds
@@ -551,8 +557,8 @@ every Malazan opening against every Whirlwind opening on the pairing's three sma
 20 minutes, and the defeat if the side fell. The 1st seed is `Content/AiOpeningPairsReportTests`' run, the 2nd and 3rd
 `QA/Content/D21OpeningsQaTests`'; each run pins its cell here and on the Whirlwind page's twin table. Since M5-4g's
 reserve the Malazans reach Age II on 23 of the 27 sides: of the four that don't, `standard` seed 2 and `cadre_rush` seed
-14 are defeated first, `crossbow_push` seed 19 is BUG-1010's beaten side, and `crossbow_push` seed 32 is still standing
-with 794 gold and 5 wood (docs/03 "Implementation (M5-4g)").
+14 are defeated first, `crossbow_push` seed 19 is BUG-1010's beaten side, and `crossbow_push` seed 32 is not defeated at
+20:00 (3 pop, no pop building left; 794 gold and 5 wood in hand) (docs/03 "Implementation (M5-4g)").
 
 | Malazan opening | Whirlwind opening | 1st seed | 2nd seed | 3rd seed |
 | --- | --- | --- | --- | --- |

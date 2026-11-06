@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S4 |
-| Status | open |
+| Status | open (item 1 fixed by D23, 2026-11-05-2148; item 2 stays open, the view's) |
 | Found | 2026-11-05-1716, task D22 (QA, light) |
 | System | sim/Rts.Sim.Tests/Content/StartingResourcesContentTests.cs; game/data/common/rules.json `startingResources[*].description` |
-| Fixed by | |
+| Fixed by | item 1: D23 (`Content/FactionWords`, shared with `Content/MapTextContentTests`; `StartingResourcesContentTests.ProperNames_HoldTheBareFactionWords` and the `AMutantDescription_IsCaught` rows "a Malazan quartermaster" / "a Whirlwind war chest") |
 
 ## Repro
 1. Read `StartingResourcesContentTests.ProperNames`: it lists whole display names ("Malazan Empire", "The Whirlwind",
@@ -35,3 +35,6 @@ line.
   mutant row "a Malazan quartermaster".
 - 2 is a deferred check, not a data defect: if M6-V17 shows the description unwrapped, either it wraps or the text is cut
   to about 60 characters.
+- D23 (2026-11-05-2148): item 1 fixed. `ProperNames` now starts from `FactionWords.All` (each faction id and the
+  capitalised words of four letters or more of its display and bonus names, "Army" excepted as a generic word); the
+  ratio words "fivefold" / "quintuple" / "a dozen" were not part of the fix's note and are not added.
