@@ -337,7 +337,8 @@ public partial class ShellTest : Node
         // match_over 27 since M6-V11 (kills, losses and the two in-hand keys out; nine column labels, not_reached and the graph's three in); alert 2 since M6-V12; match_over 28 since M6-V13 (opening)
         // M6-V14: pause 5 (save), load 22 (kind, load, save_tag, replay_tag), save 12; M6-V15: setup 23 (speed, speed_slow / normal / fast, forests, mines)
         // M6-V16: setup 26 (team, team_none, team_item), match_over 29 (team), load 23 (seat_team); BUG-1061: match_over 30 (no_team); BUG-1062: setup 27 (one_team)
-        Check(keys.Count == 5 + 27 + 5 + 22 + 30 + 15 + 2 + 23 + 2 + 12, $"{keys.Count} shell keys");
+        // M6-V17: setup 28 (starting_resources), load 24 (preset)
+        Check(keys.Count == 5 + 28 + 5 + 22 + 30 + 15 + 2 + 24 + 2 + 12, $"{keys.Count} shell keys");
         string json = File.ReadAllText(UiText.DefaultPath).Replace("\r\n", "\n");
         foreach ((string section, string key, string text) in keys)
         {
@@ -391,7 +392,9 @@ public partial class ShellTest : Node
             "save.read_failed", "save.bad_magic", "save.version_mismatch", "save.data_mismatch", "save.invalid_header", "save.ai_seats_unsupported",
             "save.truncated", "save.checksum_mismatch", "save.malformed",
             // M6-V15: the setup's game speed list and the generator's two counts.
-            "setup.speed", "setup.speed_slow", "setup.speed_normal", "setup.speed_fast", "setup.forests", "setup.mines" };
+            "setup.speed", "setup.speed_slow", "setup.speed_normal", "setup.speed_fast", "setup.forests", "setup.mines",
+            // M6-V17: the setup's starting-resources list and a Load Game row's preset.
+            "setup.starting_resources", "load.preset" };
         foreach (string n in named) Check(keys.Any(k => $"{k.Section}.{k.Key}" == n), $"no key {n}");
         // M6-V12: the brief's wording (docs/02 "HUD layout").
         Check(_ui.Alert(AlertText.BaseUnderAttack) == "Your base is under attack" && _ui.Alert(AlertText.UnitsUnderAttack) == "Your units are under attack",
@@ -484,6 +487,7 @@ public partial class ShellTest : Node
             ("setup", "team_item", new[] { "Team", "{1}", "{0", "{{0}}", "{0} {1}" }),
             ("match_over", "team", new[] { "Team", "{1}", "{0", "{{0}}" }),
             ("load", "seat_team", new[] { "{0}", "{1}", "{0} {2}", "{0", "{{0}} {{1}}" }),
+            ("load", "preset", new[] { "{0}", "{1}", "{0} {2}", "{0", "{{0}} {{1}}" }), // M6-V17: the seats and the preset's name
         })
             foreach (string bad in bads)
             {

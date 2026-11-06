@@ -460,10 +460,11 @@ own cues (select, order, refused, building placed or finished, unit or tech read
    match log says how many were placed (M6-VH4). **Starting resources** are a per-match preset, the same for every seat
    (`rules.json` `startingResources`, M6-S6): **Standard** 200 gold / 200 wood (the start every match had before presets,
    and the default) and **High** 1,000 gold / 1,000 wood; every seat starts with 5 workers either way (Producer default
-   2026-11-05, owner may revisit; a "low" preset or per-slot presets are not planned). The sim's half is built (the save
-   and the replay carry the preset; the older save and replay layouts read as Standard, though saves and recordings made
-   before this change refuse to load anyway, since the game data changed with it); the setup screen's list is the view's
-   next task. At High the AI plays its usual openings and spends the extra money as it goes: while it holds more than 200
+   2026-11-05, owner may revisit; a "low" preset or per-slot presets are not planned). The save and the replay carry
+   the preset (the older save and replay layouts read as Standard, though saves and recordings made before this change refuse
+   to load anyway, since the game data changed with it). The setup's **Starting resources** list offers the presets by name,
+   Standard picked by default, each one's description as its tooltip; Load Game names a save's or a replay's preset when it
+   isn't Standard (built in M6-V17). At High the AI plays its usual openings and spends the extra money as it goes: while it holds more than 200
    gold + wood it starts its opening's timed steps (Age II, the later buildings) early, trains at every producer and leans
    its gatherers toward the kind it is short of, so it doesn't sit on the start (BUG-1050; at Standard it plays exactly as
    before).

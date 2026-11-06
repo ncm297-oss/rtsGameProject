@@ -10,4 +10,8 @@ namespace Rts.Game;
 /// <param name="Seed">The header's seed.</param>
 /// <param name="Seats">The header's seats as played (faction id, human / AI, difficulty, team: format 7's, 0 before it), one per player.</param>
 /// <param name="TickCount">Ticks recorded (50 ms each).</param>
-public sealed record ReplayEntry(string Path, DateTime When, ulong Seed, ImmutableArray<ReplaySeat> Seats, int TickCount);
+public sealed record ReplayEntry(string Path, DateTime When, ulong Seed, ImmutableArray<ReplaySeat> Seats, int TickCount)
+{
+    /// <summary>M6-V17: the header's starting-resources preset id (format 8's <c>starting-resources</c> line; <c>standard</c> before format 8).</summary>
+    public string StartingResources { get; init; } = Rts.Sim.Data.StartingResourcesDef.StandardId;
+}

@@ -156,14 +156,29 @@ public partial class MatchStats : CanvasLayer
 
     private const float GraphWidth = 820f;
 
-    /// <summary>The graph's minimum height with up to <see cref="LabelRowsRoom"/> label rows in the table.</summary>
+    /// <summary>The graph's minimum height with up to <see cref="LabelRowsRoom"/> label rows (and no "opened with" line) under the headings.</summary>
     public const float GraphHeight = 220f;
 
-    /// <summary>Label rows the screen fits at 1152 x 648 with the full-height graph (BUG-1063).</summary>
+    /// <summary>Label rows the screen fits at 1152 x 648 with the full-height graph and no "opened with" line (BUG-1063).</summary>
     public const int LabelRowsRoom = 2;
 
-    /// <summary>What the graph's minimum height gives up per label row past <see cref="LabelRowsRoom"/> (a row is about 29 px).</summary>
+    /// <summary>What the graph's minimum height gives up per label row past the room (a row is about 29 px).</summary>
     public const float LabelRowHeight = 30f;
+
+    /// <summary>BUG-1065: what the graph's minimum height gives up per "opened with" line past the room (a line and its spacing are about 23 px).</summary>
+    public const float OpeningLineHeight = 24f;
+
+    /// <summary>
+    /// The graph's minimum height for <paramref name="labelRows"/> label rows and <paramref name="openingLines"/> "opened with"
+    /// lines (BUG-1063, BUG-1065): <see cref="GraphHeight"/> less whatever the two take past the room of
+    /// <see cref="LabelRowsRoom"/> label rows, so the screen is never taller than with two label rows and no line, which fits
+    /// 1152 x 648. With no line it is BUG-1063's rule (30 px per label row past two).
+    /// </summary>
+    public static float GraphHeightFor(int labelRows, int openingLines)
+    {
+        float extra = LabelRowHeight * Math.Max(0, labelRows) + OpeningLineHeight * Math.Max(0, openingLines);
+        return GraphHeight - Math.Max(0f, extra - LabelRowHeight * LabelRowsRoom);
+    }
 
     /// <summary>Width of every data column, in pixels: ten of them and two seat columns fit 1280 px (headings wrap).</summary>
     public const float ColumnWidth = 74f;
@@ -293,9 +308,10 @@ public partial class MatchStats : CanvasLayer
             _order.Add(p);
         }
         // BUG-1063: past two label rows the graph gives up a label row's height for each, so four (three teams and a no-team
-        // seat, or four teams) still leave Back on a 1152 x 648 screen.
+        // seat, or four teams) still leave Back on a 1152 x 648 screen. BUG-1065: the "opened with" lines count too (a menu
+        // match has one per AI seat, three in a four-seat match), so every teamed four-seat menu match fits as well.
         int labelRows = _teamLabels.Count + (NoTeamLabel != null ? 1 : 0);
-        Graph.CustomMinimumSize = new Vector2(GraphWidth, GraphHeight - LabelRowHeight * Math.Max(0, labelRows - LabelRowsRoom));
+        Graph.CustomMinimumSize = new Vector2(GraphWidth, GraphHeightFor(labelRows, _openingLines.Count));
         Graph.SetData(samples, colours, w.StatsSampleTicks, sim.TickNumber);
         Visible = true;
         BackButton.GrabFocus();

@@ -53,7 +53,7 @@ public partial class Match : Node3D
     /// <summary>Each player's colour (0xRRGGBB) every view draws it in (<see cref="PlayerColours"/>); empty before <see cref="Start"/>.</summary>
     public uint[] PlayerRgb { get; private set; } = Array.Empty<uint>();
 
-    /// <summary>The dev-log line the match printed when it was wired (M6-V15, for tests): "Save loaded: ..." for a loaded match, else "".</summary>
+    /// <summary>The dev-log line the match printed when it was wired (M6-V15, for tests): "Save loaded: ..." for a loaded match, "Match started: ..." for a new one (M6-V17), else "".</summary>
     public string StartLine { get; private set; } = "";
 
     /// <summary>
@@ -87,6 +87,7 @@ public partial class Match : Node3D
             _runner.StartLocations = players;
         }
         PickSeats(data, options);
+        _runner.StartingResources = PresetFor(data, options.StartingResources);
         UnitsPerPlayer = options.UnitsPerPlayer;
         WorkersPerPlayer = options.NoBases ? 0 : options.Workers ?? data.Rules.StartingWorkers;
         // The start workers come on top of the armies (the bench keeps its 100 / 1,000 a side), so the store grows past 2,000 when needed.
@@ -290,21 +291,24 @@ public partial class Match : Node3D
         if (!live)
         {
             GD.Print($"Replay started: {ReplayPath}, seed {replay!.Seed}, map {map.Width} x {map.Height}, {replay.TickCount} ticks, " +
-                $"{replay.Commands.Length} commands, {replay.Checkpoints.Length} checkpoints, seats {SeatsText(data, _runner.PlayedSeats)}");
+                $"{replay.Commands.Length} commands, {replay.Checkpoints.Length} checkpoints, starting resources {replay.StartingResources}, seats {SeatsText(data, _runner.PlayedSeats)}");
             return;
         }
         if (loaded)
         {
             StartLine = $"Save loaded: {SavePath}, seed {unchecked((ulong)_runner.Seed)}, map {map.Width} x {map.Height}, tick {sim.TickNumber}, " +
-                $"speed {_runner.GameSpeed.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)}x, seats {SeatsText(data, _runner.Seats)}, not recorded";
+                $"speed {_runner.GameSpeed.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)}x, starting resources {sim.World.Config.StartingResources}, seats {SeatsText(data, _runner.Seats)}, not recorded";
             GD.Print(StartLine);
             return;
         }
-        GD.Print($"Match started: seed {unchecked((ulong)_runner.Seed)}, map {map.Width} x {map.Height}, " +
-            $"speed {_runner.GameSpeed:0.##}x, {options.UnitsPerPlayer} units per player, " +
+        // M6-V17: the preset by its data id (the dev log is not player-facing text), read from the sim's config.
+        StartLine = $"Match started: seed {unchecked((ulong)_runner.Seed)}, map {map.Width} x {map.Height}, " +
+            $"speed {_runner.GameSpeed.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)}x, {options.UnitsPerPlayer} units per player, " +
             $"forests {placed.Forests} trees {placed.Trees} mines {placed.Mines}, " +
-            $"town halls {Halls(Bases)}, {WorkersPerPlayer} workers per player" + (options.NoCombat ? ", combat off" : "") + (options.NoFog ? ", fog not drawn" : "") +
-            $", seats {SeatsText(data, _runner.Seats)}");
+            $"town halls {Halls(Bases)}, {WorkersPerPlayer} workers per player, starting resources {sim.World.Config.StartingResources}" +
+            (options.NoCombat ? ", combat off" : "") + (options.NoFog ? ", fog not drawn" : "") +
+            $", seats {SeatsText(data, _runner.Seats)}";
+        GD.Print(StartLine);
         MapGenParams asked = sim.World.Config.Map;
         if (placed.Forests < asked.Forests || placed.Mines < asked.GoldMines)
         {
@@ -436,6 +440,19 @@ public partial class Match : Node3D
         for (int p = 0; p < w.Config.PlayerCount; p++)
             if (w.EverBuilt(p) && !w.IsDefeated(p)) n++;
         return n;
+    }
+
+    /// <summary>
+    /// M6-V17: the preset a new match plays for <c>--resources</c>' <paramref name="id"/>: it when the data has it (<c>rules.json</c>
+    /// <c>startingResources</c>), else <c>standard</c>; an id the data lacks is warned about like any bad flag value and the
+    /// match still starts. Null (no flag) is <c>standard</c>.
+    /// </summary>
+    public static string PresetFor(GameData data, string? id)
+    {
+        if (id == null || id == StartingResourcesDef.StandardId) return StartingResourcesDef.StandardId;
+        if (data.Rules.FindStartingResources(id) >= 0) return id;
+        GD.PushWarning($"Ignoring --resources with bad or missing value '{id}': the data has no such starting-resources preset; playing {StartingResourcesDef.StandardId}.");
+        return StartingResourcesDef.StandardId;
     }
 
     // M6-V2: the setup's (or --faction / --ai's) picks into the runner's seats. An id the data lacks, or an AI seat whose faction

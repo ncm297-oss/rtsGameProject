@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Collections.Immutable;
 using System.Globalization;
 using Godot;
 using Rts.Sim.Data;
@@ -16,8 +17,10 @@ namespace Rts.Game;
 /// <see cref="LaunchOptions.DefaultForests"/> / <see cref="LaunchOptions.DefaultMines"/>; floors <see cref="MinForestsFor"/> /
 /// <see cref="MinMinesFor"/> the shown slots, so every base keeps its start forest and mines; cap
 /// <see cref="MapGenParams.MaxResourceGroups"/>). M6-V16: a team list per slot (None, Team 1 to <see cref="LaunchOptions.MaxTeam"/>;
-/// default None, the free-for-all; slots on one team are allies), passed as <c>--team</c>. Text from <c>ui.json</c>
-/// <c>setup</c> (the colours' names and swatches from its colour table), faction names from the data's <c>displayName</c>.
+/// default None, the free-for-all; slots on one team are allies), passed as <c>--team</c>. M6-V17: a starting-resources list (the
+/// <c>rules.json</c> <c>startingResources</c> presets in file order, by <c>displayName</c>, the <c>description</c> as the
+/// tooltip; default <c>standard</c>), passed as <c>--resources</c>. Text from <c>ui.json</c> <c>setup</c> (the colours' names
+/// and swatches from its colour table), faction and preset names from the data's <c>displayName</c>.
 /// </summary>
 /// <remarks>
 /// The faction lists hold every loaded faction in id order (defaults: slot s plays faction <c>s mod factions</c>, the match's
@@ -64,6 +67,14 @@ public partial class SkirmishSetup : CanvasLayer
 
     // The team lists are narrower than the others, so five columns fit the 1152 px window (M6-V16).
     private const float TeamListWidth = 160f;
+
+    /// <summary>
+    /// BUG-1066: the width kept on each side of Back and Start: the one-team line (wrapped to it) on the right, an empty
+    /// spacer as wide on the left, so the two buttons stay centred and don't move when the line shows or hides.
+    /// </summary>
+    public const float OneTeamRoom = 300f;
+
+    private string[] _presetKeys = Array.Empty<string>();
 
     private readonly RandomNumberGenerator _rng = new();
     private int _startMines;
@@ -149,6 +160,27 @@ public partial class SkirmishSetup : CanvasLayer
 
     /// <summary>The picked game speed (a <see cref="GameSpeeds"/> entry).</summary>
     public double SpeedPick => GameSpeeds[Math.Clamp(SpeedOption.Selected, 0, GameSpeeds.Length - 1)];
+
+    /// <summary>
+    /// The starting-resources list (M6-V17): one item per <c>rules.json</c> <c>startingResources</c> preset in file order, its
+    /// <c>displayName</c> shown and its <c>description</c> as the item's and (for the picked one) the list's tooltip; default
+    /// <c>standard</c>.
+    /// </summary>
+    public OptionButton ResourcesOption { get; private set; } = null!;
+
+    /// <summary>The picked starting-resources preset's data id (<c>standard</c> when the list is empty).</summary>
+    public string ResourcesPick =>
+        _presetKeys.Length == 0 ? StartingResourcesDef.StandardId : _presetKeys[Math.Clamp(ResourcesOption.Selected, 0, _presetKeys.Length - 1)];
+
+    /// <summary>Picks the preset with data id <paramref name="id"/> in the list (as a click on its item); false (nothing changed) for an id the list lacks.</summary>
+    public bool PickResources(string id)
+    {
+        int i = Array.IndexOf(_presetKeys, id);
+        if (i < 0) return false;
+        ResourcesOption.Select(i);
+        ShowPresetTooltip();
+        return true;
+    }
 
     /// <summary>The forests count (M6-V15): <see cref="MinForestsFor"/> the shown slots to <see cref="MapGenParams.MaxResourceGroups"/>.</summary>
     public SpinBox ForestsSpin { get; private set; } = null!;
@@ -260,7 +292,8 @@ public partial class SkirmishSetup : CanvasLayer
     /// opens with a Town Hall and the starting workers a side, no dev army (M6-V3, BUG-0604). A slot with no faction (no
     /// factions loaded) passes no <c>--faction</c>. M6-V15: <c>--speed &lt;x&gt; --forests &lt;n&gt; --mines &lt;n&gt;</c> after
     /// <c>--players</c> (the speed list's and the two counts' picks). M6-V16: <c>--team &lt;slot&gt; &lt;n&gt;</c> after the slot's
-    /// colour and faction, only for a slot on a team (None passes nothing: team 0 is the default).
+    /// colour and faction, only for a slot on a team (None passes nothing: team 0 is the default). M6-V17: <c>--resources &lt;id&gt;</c>
+    /// after the counts, only for a preset other than <c>standard</c> (the default).
     /// </summary>
     public string[]? MatchArgs()
     {
@@ -276,6 +309,11 @@ public partial class SkirmishSetup : CanvasLayer
             "--speed", SpeedPick.ToString("0.##", CultureInfo.InvariantCulture),
             "--forests", ForestsPick.ToString(CultureInfo.InvariantCulture), "--mines", MinesPick.ToString(CultureInfo.InvariantCulture),
         };
+        if (ResourcesPick != StartingResourcesDef.StandardId)
+        {
+            args.Add("--resources");
+            args.Add(ResourcesPick);
+        }
         for (int slot = 0; slot < SlotCount; slot++)
         {
             string slotArg = (slot + 1).ToString(CultureInfo.InvariantCulture);
@@ -308,12 +346,13 @@ public partial class SkirmishSetup : CanvasLayer
     {
         _rng.Randomize();
         AddChild(ShellUi.Backdrop(new Color(0.09f, 0.08f, 0.07f)));
-        VBoxContainer column = ShellUi.CentredColumn(this, 20);
+        // M6-V17: 16 / 10 px spacing (was 20 / 12): the starting-resources row is one more, and four slots must still fit 648 px.
+        VBoxContainer column = ShellUi.CentredColumn(this, 16);
         column.AddChild(ShellUi.Heading(ui.Setup(SetupText.Title)));
 
         var grid = new GridContainer { Name = "Grid", Columns = 5 }; // M6-V16: the slots' team column is the fifth
         grid.AddThemeConstantOverride("h_separation", 16);
-        grid.AddThemeConstantOverride("v_separation", 12);
+        grid.AddThemeConstantOverride("v_separation", 10);
         column.AddChild(grid);
 
         grid.AddChild(ShellUi.Text(ui.Setup(SetupText.Seed)));
@@ -338,6 +377,26 @@ public partial class SkirmishSetup : CanvasLayer
         foreach (SetupText key in SpeedKeys) SpeedOption.AddItem(ui.Setup(key));
         SpeedOption.Select(DefaultSpeedIndex);
         grid.AddChild(SpeedOption);
+        grid.AddChild(new Control());
+
+        // M6-V17: the starting-resources presets on a row of their own under the map size and the game speed.
+        grid.AddChild(ShellUi.Text(ui.Setup(SetupText.StartingResources)));
+        ResourcesOption = List("Resources");
+        ImmutableArray<StartingResourcesDef> presets = data.Rules.StartingResources;
+        _presetKeys = new string[presets.Length];
+        for (int i = 0; i < presets.Length; i++)
+        {
+            _presetKeys[i] = presets[i].Key;
+            ResourcesOption.AddItem(presets[i].DisplayName);
+            ResourcesOption.SetItemTooltip(i, presets[i].Description);
+        }
+        int standard = Array.IndexOf(_presetKeys, StartingResourcesDef.StandardId);
+        if (presets.Length > 0) ResourcesOption.Select(Math.Max(standard, 0));
+        ResourcesOption.ItemSelected += _ => ShowPresetTooltip();
+        ShowPresetTooltip();
+        grid.AddChild(ResourcesOption);
+        grid.AddChild(new Control());
+        grid.AddChild(new Control());
         grid.AddChild(new Control());
 
         _startMines = data.Rules.StartMineCount;
@@ -409,6 +468,8 @@ public partial class SkirmishSetup : CanvasLayer
         var buttons = new HBoxContainer { Name = "Buttons", Alignment = BoxContainer.AlignmentMode.Center };
         buttons.AddThemeConstantOverride("separation", 24);
         column.AddChild(buttons);
+        // BUG-1066: as wide as the one-team line's room on the right, so Back and Start stay centred.
+        buttons.AddChild(new Control { Name = "OneTeamSpacer", CustomMinimumSize = new Vector2(OneTeamRoom, 0f), MouseFilter = Control.MouseFilterEnum.Ignore });
         BackButton = ShellUi.Button("Back", ui.Setup(SetupText.Back), 180f);
         BackButton.Pressed += () => BackPressed?.Invoke();
         buttons.AddChild(BackButton);
@@ -418,14 +479,26 @@ public partial class SkirmishSetup : CanvasLayer
             if (!OneTeam && MatchArgs() is string[] args) StartPressed?.Invoke(args);
         };
         buttons.AddChild(StartButton);
-        // Beside the buttons, not under them: the line adds no height to a screen that must fit 1152 x 648.
+        // Beside the buttons, not under them: the line adds no height to a screen that must fit 1152 x 648. BUG-1066: it sits
+        // in a holder of fixed width (a plain Control: its size doesn't follow the line's visibility), wrapped to it, so
+        // showing or hiding the line moves nothing.
+        var oneTeamRoom = new Control { Name = "OneTeamRoom", CustomMinimumSize = new Vector2(OneTeamRoom, 0f), MouseFilter = Control.MouseFilterEnum.Ignore };
+        buttons.AddChild(oneTeamRoom);
         OneTeamLabel = ShellUi.Text(ui.Setup(SetupText.OneTeam), 16);
         OneTeamLabel.Name = "OneTeam";
-        OneTeamLabel.SizeFlagsVertical = Control.SizeFlags.ShrinkCenter;
-        buttons.AddChild(OneTeamLabel);
+        OneTeamLabel.AutowrapMode = TextServer.AutowrapMode.WordSmart;
+        OneTeamLabel.SetAnchorsPreset(Control.LayoutPreset.FullRect);
+        oneTeamRoom.AddChild(OneTeamLabel);
         GreyTakenColours();
         UpdateSlotButtons();
         Validate();
+    }
+
+    // The list's tooltip is the picked preset's description (each item carries its own in the popup).
+    private void ShowPresetTooltip()
+    {
+        int i = ResourcesOption.Selected;
+        ResourcesOption.TooltipText = i >= 0 && i < ResourcesOption.ItemCount ? ResourcesOption.GetItemTooltip(i) : "";
     }
 
     /// <summary>What Random does: a fresh seed in the field (view-side randomness: the seed is the sim's input, not its state).</summary>

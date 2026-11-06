@@ -106,7 +106,7 @@ public static class SaveStore
         {
             using var stream = new FileStream(path, FileMode.Open, System.IO.FileAccess.Read, FileShare.Read);
             if (!SaveSummary.TryRead(stream, out SaveSummary? s)) return false;
-            entry = new SaveEntry(path, ReplayStore.DateOf(path), s!.Seed, s.Seats, s.Tick);
+            entry = new SaveEntry(path, ReplayStore.DateOf(path), s!.Seed, s.Seats, s.Tick) { StartingResources = s.StartingResources };
             return true;
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)

@@ -49,4 +49,6 @@ public enum LoadText
     ReplayTag,
     /// <summary>M6-V16: a seat on a team in the players cell, a format naming <c>{0}</c> (the seat's <see cref="Seat"/> text) and <c>{1}</c> (the team number).</summary>
     SeatTeam,
+    /// <summary>M6-V17: the players cell of a save or replay at a starting-resources preset other than Standard, a format naming <c>{0}</c> (the seats) and <c>{1}</c> (the preset's <c>displayName</c>).</summary>
+    Preset,
 }

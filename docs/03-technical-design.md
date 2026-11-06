@@ -6650,7 +6650,9 @@ ui.json                            setup.team, team_none, team_item, one_team; m
   on a team. The setup offers teams 1-4 (`LaunchOptions.MaxTeam`, one per slot at most); the sim takes 0-8. While every
   shown slot is on one team (`SkirmishSetup.OneTeam`; a hidden slot doesn't count, None is a side of its own) Start is
   disabled and `setup.one_team` shows beside it (BUG-1062 item 2: that match would never end, the sim's rule needs two
-  sides that built). The line sits in the buttons' row, so it adds no height. `--team` itself still takes one team (as the sim).
+  sides that built). The line sits in the buttons' row, so it adds no height. `--team` itself still took one team (as the sim);
+  since M6-V17 (BUG-1066) a `--team` set that puts every player on one team is warned about and dropped (a free-for-all), and the
+  line's room is kept whether it shows or not, so Back and Start don't move.
 - **`--team <slot> <n>`.** Two values like `--colour`: slot 1-4, team one digit 0-4 ("01", "+1", "5" are junk, warned and
   ignored; a flag is never taken as a value, BUG-0041); the last good value for a slot wins; a slot past `--players` is
   warned about with the other per-slot flags and unused. `Match.PickSeats` copies `LaunchOptions.TeamOf` into
@@ -6669,7 +6671,10 @@ ui.json                            setup.team, team_none, team_item, one_team; m
   last team's). With no team in the match the order is the player order and there is no label: the
   free-for-all screen is unchanged. Past two label rows the graph's minimum height gives up 30 px per row
   (`MatchStats.LabelRowsRoom`, `LabelRowHeight`; BUG-1063), so four label rows (three teams and a no-team seat, or four
-  teams) still fit 1152 x 648. The row accessors (`Cell`, `SeatName`, `FactionName`, `Swatch`, `OpeningText`) stay
+  teams) fit 1152 x 648 **when no seat has an "opened with" line** (human seats). That did not hold for a match started
+  from the menu, whose three AI seats add three "opened with" lines (BUG-1065: every teamed four-seat menu match was 20-24 px
+  too tall); since M6-V17 the shrink counts those lines too (`MatchStats.GraphHeightFor`, "Implementation (M6-V17)"), and
+  every four-seat menu layout fits. The row accessors (`Cell`, `SeatName`, `FactionName`, `Swatch`, `OpeningText`) stay
   indexed by player; `DisplayOrder`, `TeamLabels` and `NoTeamLabel` say what the grid shows. The opening lines stay in seat order.
 - **Load Game.** `ReplayStore.TryReadHeader` takes five tokens on a format-7 seat line (the team a canonical integer 0-8, as
   `Replay.Validate` holds) and four before format 7 (team 0); any other count is an unreadable header. `SaveSummary` reads
@@ -6712,6 +6717,72 @@ ui.json                            setup.team, team_none, team_item, one_team; m
   `ViewApiAllocationTests.EnemyPickers_WithTheAllianceTable_2000Units_AllocateZeroBytes`, `ViewApi/SaveSummaryTests` (a
   format-3 2v2, a free-for-all, a pre-3 header, team bytes 0 / 8 / 9 / 255), `QA/SaveSummaryQaTests` with a 2v2 row (its
   header end now includes the team bytes).
+
+### Implementation (M6-V17)
+
+Starting resources, the view's half (docs/02 "Game flow" 2; the sim's half is "Implementation (M6-S6)", whose "Requests
+for the view" this answers), and the riders BUG-1065 / BUG-1066. The one sim file is the view's own `ViewApi/SaveSummary.cs`.
+
+```
+game/scripts/SkirmishSetup.cs      ResourcesOption / ResourcesPick / PickResources; MatchArgs: --resources <id>; OneTeamRoom
+game/scripts/LaunchOptions.cs      --resources <id> (StartingResources), OneTeamWarning (BUG-1066)
+game/scripts/Match.cs              PresetFor(data, id); the start / load / replay log lines name the preset; StartLine for a new match
+game/scripts/SimRunner.cs          StartingResources: Start's SimConfig; StartLoaded and StartPlayback take the header's
+game/scripts/ReplayStore.cs        TryReadHeader: format 8's combat + starting-resources lines after ticks
+game/scripts/SaveStore.cs, SaveEntry.cs, ReplayEntry.cs   StartingResources on each entry
+game/scripts/LoadGameScreen.cs     PlayersText: load.preset around the seats for a non-standard preset
+game/scripts/MatchStats.cs         GraphHeightFor(labelRows, openingLines), OpeningLineHeight (BUG-1065)
+sim/Rts.Sim/ViewApi/SaveSummary.cs StartingResources (format 4's preset string after the team bytes); the FormatVersion doc (BUG-1051 item 1)
+ui.json                            setup.starting_resources, load.preset (setup: 28 keys, load: 24)
+```
+
+- **The list.** A row of its own under Map size / Game speed: the label `setup.starting_resources` ("Starting resources") and
+  a list of every `rules.json` `startingResources` preset in file order, each item its `displayName` and, as the item's
+  tooltip, its `description` (the list's own tooltip is the picked preset's); default `standard`. The setup holds only the
+  pick (an index into the data's list): the amounts are read by the sim from `World.Data.Rules` and never copied. To keep
+  four slots inside 648 px with the extra row, the column's spacing went from 20 to 16 px and the grid's row spacing from 12
+  to 10 (Start's bottom edge at 633 with four slots). `MatchArgs` adds `--resources <id>` after `--mines`, only for a preset
+  other than `standard`, so a Standard match's args are as before.
+- **`--resources <id>`.** One value, a snake_case id of at most 64 characters (`DataLimits.MaxStartingResourcesIdLength`);
+  junk ("High", "hi-gh", a missing value; a flag is never taken as the value) is warned and ignored; the last good one wins.
+  `LaunchOptions` knows no data, so the data's check is `Match.PresetFor`, as for `--faction`: an id the data lacks is warned
+  about ("... playing standard") and the match plays `standard`. A match flag (skips the main menu).
+- **The match start, a load and playback.** `SimRunner.StartingResources` (an id, default `standard`) goes into `Start`'s
+  `SimConfig.StartingResources`; `StartLoaded` takes the save's (`SimConfig.StartingResources`), `StartPlayback` the
+  recording's (`Replay.StartingResources`; without it a High recording stopped at its first checkpoint), and refuses an id
+  the data lacks with `InvalidHeader` (a guard: the data hash already rules it out). The "Match started", "Save loaded" and
+  "Replay started" log lines say `starting resources <id>` (the id: the log is not player-facing text). `Match.StartLine`
+  now holds the "Match started" line too.
+- **Load Game.** `ReplayStore.TryReadHeader` reads, for format 8 and later, the `combat` and `starting-resources <id>` lines
+  right after `ticks` (one token, 1-64 characters, no space; anything else makes the header unreadable); whatever follows them
+  (M6-S7's `map` line) is not read. Before format 8 the entry is `standard`. `SaveSummary.StartingResources` reads format 4's
+  string after the team bytes (`standard` before format 4) and nothing after it (M6-S7 puts a map id there); a header cut
+  before the string still lists, with `""` (as before, the summary accepts a header that reaches the team bytes, and Load
+  refuses the file). The players cell of a file at another preset is `load.preset` ("{0}; starting resources: {1}") of the
+  seats and the preset's `displayName` (an id the data lacks shows as the id); a Standard file's cell is exactly as before.
+- **BUG-1065 (the stats screen of a teamed four-seat menu match).** `MatchStats.GraphHeightFor(labelRows, openingLines)`:
+  the graph's minimum height is 220 px less whatever the label rows (30 px each) and the "opened with" lines (24 px each) take
+  past 60 px (two label rows' room). With no opened-with line it is BUG-1063's rule. So no screen is taller than one with two
+  label rows and no line. Measured at 1152 x 648, Back's top edge: 579-581 px for the six four-seat menu layouts (teams 1230,
+  1234, 0123, 1122, 1200, 0000); the graph is 88 px at four label rows and three lines, 148 at a 2v2, 208 in a menu
+  free-for-all (12 px less than before, since three lines are 72 px).
+- **BUG-1066.** `--team` that puts every one of the match's players on one team (`--team 1 1 --team 2 1` in a two-player match;
+  slots past `--players` don't count) logs `LaunchOptions.OneTeamWarning` and drops the teams: the match is a free-for-all.
+  In the setup the one-team line sits in a fixed 300 px holder right of Start (`SkirmishSetup.OneTeamRoom`, wrapped to two
+  lines) with an empty spacer as wide left of Back, so Back and Start stay centred and don't move when it shows or hides.
+- **Tests.** `game/tests/StartingResourcesTest.tscn`: the list's items and tooltips against the data, the default, every
+  item round-tripping through `MatchArgs` / `Parse`, the four-slot setup inside 1152 x 648 with 8 px to spare; `--resources`
+  junk and an unknown id (Standard, warned); `--resources high` on four seats: every seat at the preset's 1,000 gold / 1,000
+  wood at tick 0 and the start line naming it; a Standard and a High match from the setup's Start, each saved and recorded:
+  the High recording is format 8 (the Standard one 6), the High save's summary reads `high`; Load Game shows both High files
+  with the preset and both Standard files exactly as `SeatsText`; Watch plays the High recording to all 6 checkpoints; Load
+  resumes the High save with its bank and state hash; hostile `starting-resources` lines (missing, empty, two tokens, too
+  long) unreadable, an unknown id listed as itself, a save header cut before its preset listed without one; BUG-1066's
+  command line (warned, free-for-all; two sides left alone) and Back / Start equal with the line shown and hidden.
+  `QaM6V16Test.MenuFourLabelStats`: the BUG-1065 row is a plain check, with the graph height against `GraphHeightFor`.
+  `ShellTest`: the two new keys required, `load.preset`'s bad formats refused, the key count. Run windowed with
+  `-- --shots <dir>`, `StartingResourcesTest` writes the setup with High picked, the one-team line, and the Load Game list.
+- **Not in this slice:** per-slot presets, new presets (data), the map list (M6-V18 once M6-S7 lands).
 
 ## AI architecture
 
@@ -8759,7 +8830,8 @@ that costs 0.01 ms per update, and still needs (a)'s byte-map union for the view
 
 ### Implementation (M6-S6)
 
-Starting resources, the sim's half (docs/02 "Game flow" 2, Request 43). The setup screen's list is the view's next task.
+Starting resources, the sim's half (docs/02 "Game flow" 2, Request 43). The setup screen's list is the view's half
+("Implementation (M6-V17)").
 
 - **Data.** `rules.json` `startingResources` replaces the top-level `startingGold` / `startingWood` (now unknown fields): a list
   of presets in the setup's order, each `{id, displayName, description (optional), gold, wood}`, loaded into

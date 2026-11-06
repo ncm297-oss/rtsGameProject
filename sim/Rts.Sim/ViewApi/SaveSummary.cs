@@ -17,8 +17,10 @@ namespace Rts.Sim.ViewApi;
 /// the player is told. So a save damaged past its header is listed, then refused on Load. M6-V16: from format 3 (M6-S4) the
 /// header ends with one team byte per seat after the tick; they are read into <see cref="Teams"/> and each seat's
 /// <see cref="ReplaySeat.Team"/> (a byte over <see cref="PlayerSeat.MaxTeam"/> is no save header); before format 3 every team is 0.
+/// M6-V17: from format 4 (M6-S6) the starting-resources preset's id follows the team bytes (<see cref="StartingResources"/>).
+/// Whatever follows the preset (M6-S7 adds a map id there) is not read.
 /// </summary>
-/// <param name="FormatVersion">The header's format version (any; only <see cref="SaveFormat.CurrentVersion"/> loads).</param>
+/// <param name="FormatVersion">The header's format version (any; <see cref="SaveFormat.OldestReadVersion"/> to <see cref="SaveFormat.CurrentVersion"/> load, BUG-1051 item 1).</param>
 /// <param name="Seed">The match's seed.</param>
 /// <param name="Seats">One per player: the faction id (<c>-</c> for none), human or AI, the difficulty, the team (M6-V16).</param>
 /// <param name="MapWidth">The map's side in cells (its width).</param>
@@ -33,6 +35,18 @@ public sealed record SaveSummary(int FormatVersion, ulong Seed, ImmutableArray<R
 
     /// <summary>M6-V16: each player's team, in player order (0 = no team; 1 to <see cref="PlayerSeat.MaxTeam"/> a named team); all 0 before format <see cref="FirstTeamVersion"/>.</summary>
     public ImmutableArray<int> Teams { get; init; } = ImmutableArray<int>.Empty;
+
+    /// <summary>
+    /// M6-V17: the starting-resources preset's id (<c>rules.json</c> <c>startingResources</c>): the header's from format 4
+    /// (M6-S6: a string after the team bytes) on, <see cref="StartingResourcesDef.StandardId"/> before it (an older save plays
+    /// Standard). "" when a format-4 header's bytes end before the id, or the id is not a string of 1 to 256 UTF-8 bytes: the
+    /// summary still lists such a file (as before M6-V17, it reads only up to the team bytes to accept a header) and
+    /// <see cref="Simulation.TryLoad"/> refuses it.
+    /// </summary>
+    public string StartingResources { get; init; } = StartingResourcesDef.StandardId;
+
+    // The first format whose header holds the preset's id (M6-S6).
+    private const int FirstPresetVersion = 4;
 
     // MapGenParams fields the header writes (SaveHeader.WriteMap), each four bytes; the width is the first.
     private const int MapFields = 26;
@@ -104,7 +118,10 @@ public sealed record SaveSummary(int FormatVersion, ulong Seed, ImmutableArray<R
             }
         }
         else for (int p = 0; p < players; p++) teams.Add(0);
-        summary = new SaveSummary(version, seed, seats.MoveToImmutable(), width, tick) { Teams = teams.MoveToImmutable() };
+        // M6-V17: format 4's preset id after the team bytes; a header cut before it still lists (the load refuses it).
+        string preset = StartingResourcesDef.StandardId;
+        if (version >= FirstPresetVersion) preset = ReadString(bytes, ref at, out string id) && id.Length > 0 ? id : "";
+        summary = new SaveSummary(version, seed, seats.MoveToImmutable(), width, tick) { Teams = teams.MoveToImmutable(), StartingResources = preset };
         return true;
     }
 

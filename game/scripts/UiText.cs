@@ -153,6 +153,9 @@ public sealed class UiText
     /// <summary>A seat on a team in a Load Game players cell (M6-V16): <c>load.seat_team</c> with <paramref name="seat"/> (the <see cref="ReplaySeat"/> text) for <c>{0}</c> and <paramref name="team"/> for <c>{1}</c>.</summary>
     public string SeatOnTeam(string seat, int team) => string.Format(CultureInfo.InvariantCulture, LoadGame(LoadText.SeatTeam), seat, team);
 
+    /// <summary>M6-V17: a Load Game players cell with its non-standard starting-resources preset (<c>load.preset</c>): <paramref name="seats"/> and the preset's <paramref name="preset"/> name.</summary>
+    public string SeatsWithPreset(string seats, string preset) => string.Format(CultureInfo.InvariantCulture, LoadGame(LoadText.Preset), seats, preset);
+
     /// <summary>The <c>setup</c> key of player colour <paramref name="index"/> (0-based): <c>colour_1</c> .. <c>colour_8</c>.</summary>
     public static string ColourKey(int index) => $"colour_{index + 1}";
 
@@ -360,6 +363,7 @@ public sealed class UiText
                 errors.Add($"ui.json: load.{Key(LoadText.DateItem)} must be a format with {{0}} (the date) and no other placeholder: '{dateItem}'");
             TwoArgs(ui._load[(int)LoadText.Seat], $"load.{Key(LoadText.Seat)}", "the faction", "the seat", errors);
             TwoArgs(ui._load[(int)LoadText.SeatTeam], $"load.{Key(LoadText.SeatTeam)}", "the seat", "the team", errors); // M6-V16
+            TwoArgs(ui._load[(int)LoadText.Preset], $"load.{Key(LoadText.Preset)}", "the seats", "the preset", errors); // M6-V17
             string skipped = ui._load[(int)LoadText.Skipped];
             if (skipped.Length > 0 && !IsSizeFormat(skipped))
                 errors.Add($"ui.json: load.{Key(LoadText.Skipped)} must be a format with {{0}} (the count) and no other placeholder: '{skipped}'");

@@ -34,8 +34,9 @@ namespace Rts.Game.Tests;
 /// the two banner screens above and, from the pause menu, teams 0, 1, 2, 3 (opened twice), 4, 3, 2, 1, 0, 0, 0, 2 and a
 /// free-for-all (opened twice). The four-label screens fit (BUG-1063, fixed: the graph shrinks past two label rows).</item>
 /// <item>QA 2026-11-05-1206: the stats screens of four-seat matches started from the setup's Start (three AI seats, three
-/// "opened with" lines; teams 1230, 1234, 0123, 1122, 1200, 0000) fit 1152 x 648: a KNOWN BUG-1065 row for the teamed ones
-/// (fails only with <c>-- --strict</c>); a 3,000-step seeded setup fuzz (Add / Remove / team picks on any slot) holds Start, <c>OneTeam</c> and the
+/// "opened with" lines; teams 1230, 1234, 0123, 1122, 1200, 0000) fit 1152 x 648 (BUG-1065, fixed in M6-V17: the graph's
+/// shrink counts the opened-with lines; a plain check since, with the graph's height against
+/// <see cref="MatchStats.GraphHeightFor"/>); a 3,000-step seeded setup fuzz (Add / Remove / team picks on any slot) holds Start, <c>OneTeam</c> and the
 /// <c>setup.one_team</c> line to an oracle of BUG-1062 item 2's rule, and a Pressed while one-team starts nothing.</item>
 /// </list>
 /// Headless: <c>&amp; $env:GODOT --headless --path game res://tests/QaM6V16Test.tscn</c>; prints "QA M6-V16 TEST PASS" or
@@ -429,9 +430,13 @@ public partial class QaM6V16Test : Node
             await Frames(2);
             MatchStats stats = _main.Stats!;
             Check(stats.OpeningLines.Count == 3, $"{how}: {stats.OpeningLines.Count} opened-with lines (want 3, one per AI seat)");
-            // BUG-1065: with three opened-with lines, any teamed four-seat menu match pushes Back past the bottom edge.
+            // BUG-1065 (fixed, M6-V17): with three opened-with lines any teamed four-seat menu match pushed Back past the bottom
+            // edge; the graph's shrink now counts the lines too.
             List<string> overflow = StatsScreenCheck.Fits(stats, GetViewport().GetVisibleRect(), how);
-            Known("BUG-1065", overflow.Count == 0, overflow.Count == 0 ? $"{how}: the screen fits" : string.Join("; ", overflow));
+            Check(overflow.Count == 0, $"BUG-1065: {string.Join("; ", overflow)}");
+            int labelRows = stats.TeamLabels.Count + (stats.NoTeamLabel != null ? 1 : 0);
+            Check(Mathf.IsEqualApprox(stats.Graph.CustomMinimumSize.Y, MatchStats.GraphHeightFor(labelRows, 3)),
+                $"{how}: {labelRows} label rows and 3 opened-with lines, graph minimum height {stats.Graph.CustomMinimumSize.Y} (want {MatchStats.GraphHeightFor(labelRows, 3)})");
             GD.Print($"  {how}: Back {stats.BackButton.GetGlobalRect()}, graph {stats.Graph.GetGlobalRect()}, title {stats.Title.GetGlobalRect()}");
             foreach (Label line in stats.OpeningLines)
                 Check(GetViewport().GetVisibleRect().Grow(0.5f).Encloses(line.GetGlobalRect()), $"{how}: opened-with line {line.GetGlobalRect()} off screen");

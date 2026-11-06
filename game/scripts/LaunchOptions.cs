@@ -34,7 +34,11 @@ namespace Rts.Game;
 /// <see cref="SlotCount"/> is drawn in player colour n, 1 to <see cref="UiText.ColourCount"/>, of <c>ui.json</c>'s table; without it
 /// slot s takes colour s; M6-V3; a slot on a colour an earlier slot holds keeps its default, or the first free colour, M6-VH1, M6-V5) and
 /// <c>--team &lt;slot&gt; &lt;n&gt;</c> (slot 1 to <see cref="SlotCount"/> plays on team n, 0 (no team, the default: a side of its own) to
-/// <see cref="MaxTeam"/>; slots on one team are allies; M6-V16). A slot past
+/// <see cref="MaxTeam"/>; slots on one team are allies; M6-V16; BUG-1066: a <c>--team</c> set that puts every one of the match's
+/// slots on one team is warned about and dropped, so the match is a free-for-all, <see cref="OneTeamWarning"/>) and
+/// <c>--resources &lt;id&gt;</c> (the starting-resources preset with data id <c>id</c>, <c>rules.json</c> <c>startingResources</c>;
+/// default <c>standard</c>; an id the data lacks is warned about by <see cref="Match"/> and the match plays <c>standard</c>;
+/// M6-V17). A slot past
 /// the match's players is warned about and unused. Any of these flags
 /// on the command line skips the main menu (<see cref="HasMatchFlag"/>), so every dev and test run starts its match as
 /// before M6-V1. Bad values are warned about and ignored; a token starting with <c>--</c> is never taken as a value (BUG-0041).
@@ -70,7 +74,7 @@ public sealed class LaunchOptions
     {
         "--seed", "--speed", "--screenshot", "--screenshot-after", "--units", "--workers", "--forests", "--mines", "--zoom", "--bench",
         "--vsync", "--no-hud", "--debug-overlay", "--mute", "--no-bases", "--no-combat", "--no-fog", "--map-size", "--skirmish",
-        "--faction", "--ai", "--colour", "--players", "--team",
+        "--faction", "--ai", "--colour", "--players", "--team", "--resources",
     };
 
     /// <summary>Whether <paramref name="args"/> holds any of <see cref="MatchFlags"/>: the boot then starts the match at once instead of showing the main menu (M6-V1).</summary>
@@ -96,6 +100,19 @@ public sealed class LaunchOptions
     private readonly bool[] _human = new bool[SlotCount];
     private readonly int[] _teams = new int[SlotCount];
     private readonly System.Collections.Generic.List<string> _colourWarnings = new();
+
+    /// <summary>
+    /// BUG-1066: the dev-log warning <see cref="Parse"/> gave when <c>--team</c> put every one of the match's slots on one team
+    /// (such a match never ends: the sim's rule needs two sides; the setup refuses it with <c>setup.one_team</c>), and dropped
+    /// the teams so the match plays as a free-for-all; "" otherwise.
+    /// </summary>
+    public string OneTeamWarning { get; private set; } = "";
+
+    /// <summary>
+    /// M6-V17: the starting-resources preset's data id <c>--resources &lt;id&gt;</c> named (snake_case; whether the data has it is
+    /// <see cref="Match"/>'s check), or null for the default (<c>standard</c>).
+    /// </summary>
+    public string? StartingResources { get; private set; }
 
     /// <summary>The dev-log warnings <see cref="Parse"/> gave for colour collisions (one per moved slot of the match), for tests.</summary>
     public System.Collections.Generic.IReadOnlyList<string> ColourWarnings => _colourWarnings;
@@ -308,6 +325,11 @@ public sealed class LaunchOptions
                     if (n != null) i++;
                     break;
                 }
+                case "--resources":
+                    // M6-V17: one value, a preset id (snake_case, at most the data's id length); Match checks the data has it.
+                    if (value != null && IsId(value) && value.Length <= DataLimits.MaxStartingResourcesIdLength) o.StartingResources = value;
+                    else Warn(flag, value);
+                    break;
                 case "--skirmish":
                     o.Skirmish = true;
                     continue; // takes no value
@@ -344,6 +366,19 @@ public sealed class LaunchOptions
         for (int s = players; s < SlotCount; s++)
             if (o._factionIds[s] != null || o._colours[s] != null || o._ai[s] != null || o._teams[s] != 0)
                 GD.PushWarning($"Ignoring slot {s + 1}'s --faction / --colour / --ai / --team: the match has {players} players (--players).");
+        // BUG-1066: every one of the match's slots on one team is one side, and a match with one side never ends (the setup's
+        // Start refuses it, setup.one_team); the teams are dropped, so the match is a free-for-all, and the log says why.
+        if (o._teams[0] != 0)
+        {
+            bool one = true;
+            for (int s = 1; s < players; s++) one &= o._teams[s] == o._teams[0];
+            if (one)
+            {
+                o.OneTeamWarning = $"Ignoring --team: all {players} players are on team {o._teams[0]}, and a match with one side never ends; playing free-for-all.";
+                GD.PushWarning(o.OneTeamWarning);
+                Array.Clear(o._teams);
+            }
+        }
         // Colours are unique per match (docs/02 "Game flow" 2, BUG-0631 item 3), slot by slot: one on a colour an earlier slot
         // holds is warned about and keeps its default (slot s: colour s), or takes the first free colour when an earlier slot
         // holds that too. Slots past the match are moved the same way, unwarned (they are unused).

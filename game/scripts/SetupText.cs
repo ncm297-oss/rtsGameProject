@@ -57,4 +57,6 @@ public enum SetupText
     TeamItem,
     /// <summary>Beside a disabled Start while every shown slot is on one team (BUG-1062 item 2: such a match could never end).</summary>
     OneTeam,
+    /// <summary>The starting-resources list's label (M6-V17; the items are the presets' <c>displayName</c> from <c>rules.json</c>).</summary>
+    StartingResources,
 }
