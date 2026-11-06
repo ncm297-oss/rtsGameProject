@@ -3,7 +3,7 @@
 | Field | Value |
 | --- | --- |
 | Severity | S4 |
-| Status | open |
+| Status | open (item 2 fixed in 0ad9d0c; item 1 rides with the view's M6-S6 follow-up; item 3 the Producer's; item 4 fixed by QA's test) |
 | Found | 2026-11-05-1206, task M6-S6 (QA) |
 | System | save format docs (`ViewApi/SaveSummary`), `Stress/StartingResourcesAiStressTests`, docs/01 |
 | Fixed by | |
@@ -31,3 +31,14 @@
 ## Notes
 - Item 2 is moot once BUG-1050's measure is restated; item 1 belongs to the view's M6-S6 follow-up (`SimRunner` start and
   `StartPlayback` must also pass the preset, the dev's request).
+
+## QA re-check round 1 (2026-11-05-1206, fix 0ad9d0c)
+
+1. `SaveSummary`'s FormatVersion doc: unchanged (view-owned `ViewApi/`, correctly left to the view). Open.
+2. `KnownOverTwice`: removed; `Stress/StartingResourcesAiStressTests` now asserts the 10:00 measure and the mean bank on
+   every side with no exemptions. **Fixed.**
+3. docs/01 decisions row: still none (the dev left it to the Producer). Open.
+4. (new, round 1) `SpendDownTests.AtHigh_AtTheThreshold_TheRuleIsOff` did not test the threshold: its 150 / 50 bank drops
+   to 150 after the think's 50-gold Laborer, so the `>`-to-`>=` mutant on `AiPlayer.SpendingDown` survived the dev's
+   tests. QA added `QA/SpendDownQaTests.TheThreshold_IsStrict_AfterWhatTheThinkAlreadySpent` (249 / 250 / 251 gold:
+   199 / 200 / 201 left), which kills it. **Fixed (test only).**

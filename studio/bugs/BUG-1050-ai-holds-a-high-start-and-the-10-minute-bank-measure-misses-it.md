@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S2 (QA 2026-11-05-1206: was S3 as filed by the dev; M6-S6 acceptance criterion 5 is not met) |
-| Status | open |
+| Status | open (behaviour fixed and verified in round 1; criterion 5's 10:00 measure still fails 4 of 36 unseen sides: Producer to restate the measure) |
 | Found | 2026-11-05-1206, task M6-S6 (game-dev) |
 | System | AI (production throughput, build-order timing), `Stress/StartingResourcesAiStressTests` |
-| Fixed by | |
+| Fixed by | 0ad9d0c (spend-down rule, `aiSpendAbove` 200 on `high`; `Ai/SpendDownTests`, `QA/SpendDownQaTests`) for the behaviour; the measure is the Producer's call |
 
 ## Repro
 1. `dotnet test sim/Rts.Sim.Tests --filter "FullyQualifiedName~StartingResourcesAiStressTests" --logger "console;verbosity=detailed"`:
@@ -84,3 +84,33 @@ sense: at high every side has done at least as many build steps by 5:00 as at st
 stands at standard, and waves at high are at most one fewer (Whirlwind `standard` seed 1: 3 -> 2). The 27 standard pairing
 runs are identical to 5368cfe (QA re-ran both commits). Either way the Producer picks, criterion 5 needs the restated
 measure or the gated rule before M6-S6 can be accepted as written.
+
+## QA re-check round 1 (2026-11-05-1206, fix 0ad9d0c)
+
+**The behaviour is fixed, robustly.** With `aiSpendAbove` 200 at `high` every opening spends the start: on 36 sides no
+tuning saw (`QA/SpendDownQaTests.SixUnseenSeedsPerOpening_AtHigh_SpendTheStart`: each opening on the first six seeds from
+101 its seat picks it on, Normal v Normal, menu map, 10 minutes) the mean bank 2:00-10:00 at `high` is 0.32-1.44 x
+`standard`'s (30 of 36 at or below 1.0) and the bank at 5:00 at `high` is 28-654 (`standard` 68-587). `cadre_rush` at
+5:00 holds 70-466 (was 1,539-1,769 on QA's round-0 seeds), `holy_war` 85-545. Rows identical in two processes.
+
+**The brief's measure is met only on the tuned seeds.** The same 36 sides, bank at 10:00 `high` over twice `standard`'s:
+
+| Side, seed | bank at 10:00 standard / high | mean bank 2:00-10:00 standard / high |
+| --- | --- | --- |
+| Malazan `standard`, 114 | 61 / 230 (x3.77) | 145 / 199 |
+| Malazan `crossbow_push`, 105 | 87 / 209 (x2.40) | 229 / 213 |
+| Malazan `crossbow_push`, 118 | 235 / 484 (x2.06) | 269 / 207 |
+| Whirlwind `holy_war`, 115 | 75 / 157 (x2.09) | 254 / 209 |
+
+4 of 36 (11 %), against 0 of the 36 the threshold was chosen on (QA's 18 + the dev's 18). Each is one 10:00 sample over a
+small `standard` bank (61-235) with the mean bank at or below 1.37 x. More evidence it is the sample, not the rule: the
+`>`-to-`>=` mutant on the threshold (a difference only when a bank sits exactly on 200) flips `crossbow_push` v
+`raider_rush` seed 5 in `Stress/StartingResourcesAiStressTests` to 359 v 72 (x4.99). Picking another threshold to pass these
+36 would be the same over-fit. QA's recommendation: restate criterion 5 as "the mean bank 2:00-10:00 at `high` at most 1.5 x
+`standard`'s on every side" (met on all 72 measured sides, 0.32-1.44; the dev's stress test already asserts it) and close
+this bug; no further code change is asked for.
+
+Also verified: `standard` bit for bit (StandardPresetPinQaTests 20 / 20, SharedVisionFfaPinTests 5 / 5, the 27 pairing
+runs identical to 5368cfe), a `high` AI match saved at 0:10 / 1:00 / 3:00 while spending down plays to 8:00 hash-equal to
+the unsaved run every tick, a `high` recording plays to every checkpoint (and diverges played as `standard`), 0 B per tick
+on the spend-down path, extreme thresholds (1, 1,000,000) x starts (0, 1,000,000) twin-equal with no negative bank.

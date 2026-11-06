@@ -70,9 +70,9 @@ public class StartingResourcesAiQaTests
         Assert.True(problems.Count == 0, string.Join("\n", problems));
     }
 
-    private sealed record Run(int[] Opening, string[] Names, int[] Bank5, int[] Bank10, int[] Mean, int[] Steps5, int[] AgeTwo, int[] Waves, bool[] Defeated, ulong Hash);
+    internal sealed record Run(int[] Opening, string[] Names, int[] Bank5, int[] Bank10, int[] Mean, int[] Steps5, int[] AgeTwo, int[] Waves, bool[] Defeated, ulong Hash);
 
-    private static Run Play(ulong seed, string preset)
+    internal static Run Play(ulong seed, string preset)
     {
         Simulation sim = MenuMap(AiScenes.Seats(AiDifficulty.Normal, SeatController.Ai, SeatController.Ai), seed, preset);
         World w = sim.World;
@@ -116,7 +116,7 @@ public class StartingResourcesAiQaTests
     }
 
     /// <summary>The pairs report's menu map at a preset (as <c>Stress/StartingResourcesAiStressTests</c> builds it).</summary>
-    private static Simulation MenuMap(PlayerSeat[] seats, ulong seed, string preset)
+    internal static Simulation MenuMap(PlayerSeat[] seats, ulong seed, string preset)
     {
         MapGenParams map = AiSpendingReportTests.MenuMap(seats, seed).World.Config.Map;
         var sim = new Simulation(new SimConfig(seed, seats.Length, 400, 1024)
@@ -139,5 +139,5 @@ public class StartingResourcesAiQaTests
         return sim;
     }
 
-    private static string Sec(int tick) => tick < 0 ? "never" : $"{tick / Tps / 60}:{tick / Tps % 60:00}";
+    internal static string Sec(int tick) => tick < 0 ? "never" : $"{tick / Tps / 60}:{tick / Tps % 60:00}";
 }
