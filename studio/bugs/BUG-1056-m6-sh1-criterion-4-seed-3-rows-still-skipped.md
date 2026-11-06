@@ -3,7 +3,7 @@
 | Field | Value |
 | --- | --- |
 | Severity | S2 |
-| Status | fixed (M6-SH1 round 1, dev; QA to confirm): `ReachRuleQaTests.ScoutKilledAfterTheRing_Seed3_TheSeatStillGetsWood` un-skipped and green (5,541 / 5,619), `Ai/ScoutReplacementTests.AScoutSentAgain_KnowingAFarForestClearOfTheEnemy_IsReleasedToGather` / `..._KnowingOnlyAForestAtAnEnemysDoor_KeepsSweeping`. Seed 1 at 2,000 keeps its 32-tick margin (its forest is at an enemy's door, so no release) |
+| Status | fixed (M6-SH1 round 1, dev; QA confirmed 2026-11-05-2148 re-verify: both rows green at 5,541 / 5,619; the release has two follow-ups, BUG-1057 / BUG-1058): `ReachRuleQaTests.ScoutKilledAfterTheRing_Seed3_TheSeatStillGetsWood` un-skipped and green (5,541 / 5,619), `Ai/ScoutReplacementTests.AScoutSentAgain_KnowingAFarForestClearOfTheEnemy_IsReleasedToGather` / `..._KnowingOnlyAForestAtAnEnemysDoor_KeepsSweeping`. Seed 1 at 2,000 keeps its 32-tick margin (its forest is at an enemy's door, so no release) |
 | Found | 2026-11-05-2148, task M6-SH1 (QA) |
 | System | AI scout / economy (BUG-1053's re-scout), `QA/ReachRuleQaTests` |
 | Fixed by | M6-SH1 round 1: a scout sent again is released to gather once the reach has lifted and it knows an enemy building and a node of every kind, its nearest forest not within `ai.workerFleeRadius` of an enemy building |
