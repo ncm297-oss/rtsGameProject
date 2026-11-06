@@ -485,7 +485,7 @@ own cues (select, order, refused, building placed or finished, unit or tech read
    Standard picked by default, each one's description as its tooltip; Load Game names a save's or a replay's preset when it
    isn't Standard (built in M6-V17). The setup's **Map** list offers Generated (the default: the map generator on the
    seed, size and counts above) and then every hand-made map by name ("Map and terrain"), each one's description as its
-   tooltip; picking one greys Map size, Forests and Gold mines (the map has its own) and allows at most as many slots as the
+   tooltip; picking one greys Map size, Forests and Gold mines, which show the map's own side and counts, and allows at most as many slots as the
    map has start locations, with a line saying so; Generated gives them back. The save and the replay carry the map, and
    Load Game names it (built in M6-V18). At High the AI plays its usual openings and spends the extra money as it goes: while it holds more than 200
    gold + wood it starts its opening's timed steps (Age II, the later buildings) early, trains at every producer and leans

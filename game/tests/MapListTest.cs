@@ -143,6 +143,10 @@ public partial class MapListTest : Node
         // Four slots and a 192 map on Generated, then each map file picked as a click on its item.
         for (int k = 0; k < SkirmishSetup.MaxSlots; k++) setup.AddSlot(); // bounded: a no-op on a capped map
         setup.MapSizeOption.Select(Array.IndexOf(LaunchOptions.MapSizes, 192));
+        // M6-V19: counts of the player's own, which each map file's counts replace and Generated gives back.
+        const int ownForests = 20, ownMines = 17;
+        setup.ForestsSpin.Value = ownForests;
+        setup.MinesSpin.Value = ownMines;
         await Frames(2);
         Rect2 add = setup.AddSlotButton.GetGlobalRect(), remove = setup.RemoveSlotButton.GetGlobalRect();
         Rect2 start4 = setup.StartButton.GetGlobalRect();
@@ -167,6 +171,18 @@ public partial class MapListTest : Node
                 $"{map.Key}: {setup.SlotCount} slots shown (cap {setup.SlotCap}, want {cap}), --players {parsed.Players}, Add disabled {setup.AddSlotButton.Disabled}");
             Check(setup.MapPlayersLabel.Visible && setup.MapPlayersLabel.Text == _ui.MapPlayersLine(map.DisplayName, map.Players) && setup.MapPlayersLabel.Text.Contains(map.DisplayName, StringComparison.Ordinal),
                 $"{map.Key}: the players line '{setup.MapPlayersLabel.Text}' (shown {setup.MapPlayersLabel.Visible})");
+            // M6-V19: the greyed counts are the map's own (its forests, its gold nodes), shown in the boxes.
+            int mines = map.Nodes.Count(n => _data.Resources[n.TypeId].Resource == ResourceKind.Gold);
+            Check(setup.ForestsPick == map.ForestCount && setup.MinesPick == mines
+                && setup.ForestsSpin.GetLineEdit().Text == map.ForestCount.ToString() && setup.MinesSpin.GetLineEdit().Text == mines.ToString(),
+                $"{map.Key}: Forests {setup.ForestsPick} ('{setup.ForestsSpin.GetLineEdit().Text}'), Gold mines {setup.MinesPick} ('{setup.MinesSpin.GetLineEdit().Text}'); want the map's {map.ForestCount} / {mines}");
+        }
+        // The shipped Raraku by id (never by list index): 6 forests, 12 gold mines.
+        if (_data.FindMap("raraku") >= 0)
+        {
+            setup.PickMap("raraku");
+            Check(setup.ForestsPick == 6 && setup.MinesPick == 12 && !setup.ForestsSpin.Editable && !setup.MinesSpin.Editable,
+                $"Raraku picked: Forests {setup.ForestsPick}, Gold mines {setup.MinesPick} (want 6 / 12, greyed)");
         }
 
         // The map with fewer starts: Add player does nothing; the line sits inside the window and moves no button.
@@ -189,8 +205,13 @@ public partial class MapListTest : Node
             && setup.ForestsSpin.Editable && setup.MinesSpin.Editable && setup.ForestsSpin.GetLineEdit().Editable && setup.ForestsSpin.GetLineEdit().FocusMode == Control.FocusModeEnum.All
             && !setup.MapPlayersLabel.Visible && setup.AddSlotButton.Disabled && list.TooltipText == "",
             $"Generated again: {setup.SlotCount} slots, size {setup.MapSize}, size list disabled {setup.MapSizeOption.Disabled}, line {setup.MapPlayersLabel.Visible}");
+        Check(setup.ForestsPick == ownForests && setup.MinesPick == ownMines && setup.ForestsSpin.MaxValue == MapGenParams.MaxResourceGroups
+            && setup.MinesSpin.MaxValue == MapGenParams.MaxResourceGroups && setup.ForestsSpin.MinValue == SkirmishSetup.MinForestsFor(setup.SlotCount)
+            && setup.ForestsSpin.GetLineEdit().Text == ownForests.ToString() && setup.MinesSpin.GetLineEdit().Text == ownMines.ToString(),
+            $"Generated again: Forests {setup.ForestsPick} ('{setup.ForestsSpin.GetLineEdit().Text}', {setup.ForestsSpin.MinValue}-{setup.ForestsSpin.MaxValue}), Gold mines {setup.MinesPick} ('{setup.MinesSpin.GetLineEdit().Text}'); want {ownForests} / {ownMines} back");
         string[] back = setup.MatchArgs()!;
-        Check(!back.Contains("--map") && LaunchOptions.Parse(back).Players == SkirmishSetup.MaxSlots && LaunchOptions.Parse(back).MapSize == 192,
+        LaunchOptions backParsed = LaunchOptions.Parse(back);
+        Check(!back.Contains("--map") && backParsed.Players == SkirmishSetup.MaxSlots && backParsed.MapSize == 192 && backParsed.Forests == ownForests && backParsed.Mines == ownMines,
             $"Generated again passes [{string.Join(' ', back)}]");
         // A slot removed while the map is picked: Generated keeps the player's count.
         Click(list, _map.Id + 1);
@@ -259,6 +280,53 @@ public partial class MapListTest : Node
             World w = match!.Simulation!.World;
             Check(w.Config.MapId == _map.Key && w.Config.PlayerCount == _map.Players && w.NavGrid.Width == _map.Size && match.MapPlayersWarning.Contains("--players", StringComparison.Ordinal),
                 $"--players 4 --map {_map.Key}: map '{w.Config.MapId}', {w.Config.PlayerCount} players, {w.NavGrid.Width} wide, warning '{match.MapPlayersWarning}'");
+            // M6-V19: --map-size other than the file's side is warned and ignored.
+            Check(_map.Size == 256 || match.MapSizeWarning.Contains("--map-size 256", StringComparison.Ordinal),
+                $"--map-size 256 --map {_map.Key}: warning '{match.MapSizeWarning}'");
+            await QuitMatch(main);
+        }
+        // M6-V19: --map-size as the file's side (what the setup passes), or with an id the data lacks: no warning.
+        foreach ((string[] args, int side) in new[]
+        {
+            (new[] { "--seed", "3", "--units", "0", "--mute", "--map-size", _map.Size.ToString(), "--map", _map.Key }, _map.Size),
+            (new[] { "--seed", "3", "--units", "0", "--mute", "--map-size", "256", "--map", "no_such_map" }, 256),
+        })
+        {
+            main.StartSkirmish(args);
+            match = main.CurrentMatch;
+            if (!Check(match?.Simulation != null, $"[{string.Join(' ', args)}] started no match")) continue;
+            Check(match!.Simulation!.World.NavGrid.Width == side && match.MapSizeWarning == "",
+                $"[{string.Join(' ', args)}]: {match.Simulation.World.NavGrid.Width} wide, warning '{match.MapSizeWarning}'");
+            await QuitMatch(main);
+        }
+        // M6-V19 (BUG-1092): four players asked, the map's kept players all on team 1 and the rest on team 2: two sides asked,
+        // one side after the cap. BUG-1066's rule runs again over the kept players: warned, a free-for-all. With the kept
+        // players on two teams the teams stay.
+        foreach (bool oneSide in new[] { true, false })
+        {
+            var flags = new List<string> { "--skirmish", "--players", "4", "--seed", "3", "--mute", "--map", _map.Key };
+            for (int s = 0; s < SkirmishSetup.MaxSlots; s++)
+            {
+                int team = s < _map.Players && (oneSide || s == 0) ? 1 : 2;
+                flags.AddRange(new[] { "--team", (s + 1).ToString(), team.ToString() });
+            }
+            string how = string.Join(' ', flags);
+            Check(LaunchOptions.Parse(flags.ToArray()).OneTeamWarning == "", $"[{how}]: LaunchOptions warned before the cap");
+            main.StartSkirmish(flags.ToArray());
+            match = main.CurrentMatch;
+            if (!Check(match?.Simulation != null, $"[{how}] started no match")) continue;
+            World w = match!.Simulation!.World;
+            if (oneSide)
+                Check(w.Config.PlayerCount == _map.Players && w.IsEnemy(0, 1) && w.TeamOf(0) == 0 && w.TeamOf(1) == 0
+                    && match.OneTeamWarning.Contains("--team", StringComparison.Ordinal) && match.OneTeamWarning.Contains($"all {_map.Players} players", StringComparison.Ordinal),
+                    $"[{how}]: {w.Config.PlayerCount} players, teams {w.TeamOf(0)} / {w.TeamOf(1)}, enemies {w.IsEnemy(0, 1)}, warning '{match.OneTeamWarning}'");
+            else
+                Check(w.Config.PlayerCount == _map.Players && w.IsEnemy(0, 1) && w.TeamOf(0) == 1 && w.TeamOf(1) == 2 && match.OneTeamWarning == "",
+                    $"[{how}]: {w.Config.PlayerCount} players, teams {w.TeamOf(0)} / {w.TeamOf(1)}, warning '{match.OneTeamWarning}'");
+            var clock = System.Diagnostics.Stopwatch.StartNew();
+            int until = match.Simulation!.TickNumber + 20;
+            while (match.Simulation.TickNumber < until && clock.Elapsed.TotalSeconds < 30) await Frames(1);
+            Check(!main.BannerUp, $"[{how}]: ended at once");
             await QuitMatch(main);
         }
         // An id the data lacks, and junk: warned, a generated map, the start line as before (no map file named).

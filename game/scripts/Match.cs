@@ -66,6 +66,19 @@ public partial class Match : Node3D
     /// <summary>M6-V18: the dev-log warning a new match gave when <c>--players</c> asked for more players than the map file's start locations (the players were capped), else "".</summary>
     public string MapPlayersWarning { get; private set; } = "";
 
+    /// <summary>M6-V19: the dev-log warning a new match gave when <c>--map-size</c> asked for another side than the map file's (the file's side plays), else "".</summary>
+    public string MapSizeWarning { get; private set; } = "";
+
+    /// <summary>
+    /// M6-V19 (BUG-1092): the dev-log warning a new match gave when the map file's cap left every kept player on one team
+    /// (BUG-1066's rule, <see cref="LaunchOptions.IsOneTeam"/>, asked again over the capped players; the teams are dropped, a
+    /// free-for-all), else "". <see cref="LaunchOptions.OneTeamWarning"/> is the same rule over the players asked.
+    /// </summary>
+    public string OneTeamWarning { get; private set; } = "";
+
+    // M6-V19: the teams are dropped after the map cap (OneTeamWarning).
+    private bool _dropTeams;
+
     /// <summary>Starting workers per player this match asked for (<c>--workers</c>, else <c>rules.json</c> <c>startingWorkers</c>).</summary>
     public int WorkersPerPlayer { get; private set; }
 
@@ -95,12 +108,25 @@ public partial class Match : Node3D
         {
             _runner.MapId = mapFile.Key;
             _runner.MapSize = mapFile.Size;
+            if (options.MapSize is int asked && asked != mapFile.Size)
+            {
+                MapSizeWarning = $"Ignoring --map-size {asked}: map '{mapFile.Key}' is {mapFile.Size} x {mapFile.Size}; playing {mapFile.Size}.";
+                GD.PushWarning(MapSizeWarning);
+            }
             if (_runner.PlayerCount > mapFile.Players)
             {
                 MapPlayersWarning = $"Ignoring --players {_runner.PlayerCount}: map '{mapFile.Key}' has {mapFile.Players} start locations; playing {mapFile.Players} players.";
                 GD.PushWarning(MapPlayersWarning);
                 _runner.PlayerCount = mapFile.Players;
                 _runner.StartLocations = mapFile.Players;
+                // BUG-1092: LaunchOptions checked BUG-1066's one-team rule over the players asked; the cap can leave the kept ones
+                // all on one team (a match that never ends), so the rule runs again over them.
+                if (options.IsOneTeam(_runner.PlayerCount))
+                {
+                    OneTeamWarning = LaunchOptions.OneTeamText(_runner.PlayerCount, options.TeamOf(0));
+                    GD.PushWarning(OneTeamWarning);
+                    _dropTeams = true;
+                }
             }
         }
         PickSeats(data, options);
@@ -503,7 +529,7 @@ public partial class Match : Node3D
             if (faction >= 0) _runner.SlotFactions[slot] = faction;
             else GD.PushWarning($"Ignoring --faction with bad or missing value '{slot + 1} {id}'.");
         }
-        for (int slot = 0; slot < LaunchOptions.SlotCount; slot++) _runner.SlotTeams[slot] = options.TeamOf(slot); // M6-V16
+        for (int slot = 0; slot < LaunchOptions.SlotCount; slot++) _runner.SlotTeams[slot] = _dropTeams ? 0 : options.TeamOf(slot); // M6-V16; M6-V19: none after BUG-1092's check
         for (int slot = 0; slot < LaunchOptions.SlotCount; slot++)
         {
             AiDifficulty? ai = _runner.SlotAi[slot] = options.AiOf(slot);

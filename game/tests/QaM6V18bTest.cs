@@ -21,7 +21,7 @@ namespace Rts.Game.Tests;
 /// next flag; id-shaped unknowns parsed and played generated; the last good value wins; real starts for each kind.</item>
 /// <item>The command line on a map file: <c>--players 4 / 3 --map</c> capped and warned, 2 not warned, an unknown map not
 /// capped; <c>--map-size 256</c>, <c>--forests 0 --mines 0</c> give the file's side and counts with no shortfall line;
-/// the halls on the file's starts on level 0; <c>--players 4 --map</c> with the first two slots on one team (BUG-1066's rule).</item>
+/// the halls on the file's starts on level 0 (M6-V19: <c>--map-size 256</c> warned); <c>--players 4 --map</c> with the first two slots on one team (BUG-1066's rule; BUG-1092 fixed in M6-V19).</item>
 /// <item>The setup's cap: four slots then the map (two shown, Add disabled and a no-op, the line, the args), the map size
 /// restored from 256, a hidden slot's picks kept, a cap that leaves the shown slots on one team refused.</item>
 /// <item>The keyboard: with the map picked the focus chain skips Forests and Gold mines (and their boxes); the greyed
@@ -195,8 +195,9 @@ public partial class QaM6V18bTest : Node
         {
             World w = f!.Simulation!.World;
             Check(w.NavGrid.Width == _map.Size && w.Config.Map == MapGenParams.Default with { Width = _map.Size, Height = _map.Size } && f.ShortfallLine == ""
-                && f.StartLine.Contains($"forests {_map.ForestCount} ", StringComparison.Ordinal),
-                $"--map-size 256 --forests 0 --mines 0 --map raraku: side {w.NavGrid.Width}, params {w.Config.Map}, line '{f.StartLine}', shortfall '{f.ShortfallLine}'");
+                && f.StartLine.Contains($"forests {_map.ForestCount} ", StringComparison.Ordinal)
+                && f.MapSizeWarning.Contains("--map-size 256", StringComparison.Ordinal) && f.MapSizeWarning.Contains($"playing {_map.Size}", StringComparison.Ordinal),
+                $"--map-size 256 --forests 0 --mines 0 --map raraku: side {w.NavGrid.Width}, params {w.Config.Map}, line '{f.StartLine}', shortfall '{f.ShortfallLine}', map-size warning '{f.MapSizeWarning}' (M6-V19)");
             await Ticks(f.Simulation!, 5);
             foreach ((int p, int x, int y) in new[] { (0, 22, 64), (1, 105, 63) })
             {
@@ -215,8 +216,9 @@ public partial class QaM6V18bTest : Node
         {
             World w = o!.Simulation!.World;
             GD.Print($"  capped one side: {w.Config.PlayerCount} players, teams {w.TeamOf(0)},{w.TeamOf(1)}, enemies {w.IsEnemy(0, 1)}");
-            Known("BUG-1092", w.Config.PlayerCount == 2 && w.IsEnemy(0, 1),
-                $"[--players 4 --map raraku --team 1 1 --team 2 1 --team 3 2]: {w.Config.PlayerCount} players on teams {w.TeamOf(0)} / {w.TeamOf(1)}, enemies {w.IsEnemy(0, 1)}: one side, the match can never end (BUG-1066's rule is checked before the cap)");
+            // BUG-1092, fixed in M6-V19: Match runs the rule again over the capped players (warned, the teams dropped).
+            Check(w.Config.PlayerCount == 2 && w.IsEnemy(0, 1) && o.OneTeamWarning.Contains("--team", StringComparison.Ordinal),
+                $"[--players 4 --map raraku --team 1 1 --team 2 1 --team 3 2]: {w.Config.PlayerCount} players on teams {w.TeamOf(0)} / {w.TeamOf(1)}, enemies {w.IsEnemy(0, 1)}, warning '{o.OneTeamWarning}': one side, the match can never end (BUG-1092)");
             await QuitMatch();
         }
     }

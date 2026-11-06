@@ -6810,7 +6810,8 @@ ui.json                            setup.map, setup.map_generated, setup.map_pla
   648 px no row was added: the map size moved beside the map list, and the game speed beside the starting resources (it
   was beside the map size, M6-V15); Start's bottom edge is where it was.
 - **A map file picked.** Map size shows the map's side and is greyed; Forests and Gold mines are greyed (not editable, no
-  focus, so the keyboard can't change them either) and keep their values, unused. The shown slots are capped at the map's
+  focus, so the keyboard can't change them either) and show the map's own counts (M6-V19; before, they kept the generator's
+  values, unused). The shown slots are capped at the map's
   start locations (`MapDef.Players`, `SlotCap`): extra slots are hidden (their picks kept, as Remove player keeps them) and
   Add player is disabled; the line `setup.map_players` ("{0} has room for {1} players": the map's name and its starts) shows
   right of Remove player, in a 300 px holder with an empty spacer as wide left of Add player (BUG-1066's pattern), so the
@@ -6821,7 +6822,7 @@ ui.json                            setup.map, setup.map_generated, setup.map_pla
   `ra-raku`, a path, unicode, 65 characters, a missing value; a flag is never taken as the value) is warned and ignored; the
   last good one wins. `Match.MapFor` is the data's check: an id the data lacks is warned about ("... playing a generated
   map") and the match plays a generated map. A match flag (skips the main menu). On a map file the match takes the map's
-  side (`--map-size` is ignored) and `--forests` / `--mines` are unused; `--players` over the map's starts is warned
+  side (`--map-size` is ignored; since M6-V19 warned when it differs, `Match.MapSizeWarning`) and `--forests` / `--mines` are unused; `--players` over the map's starts is warned
   (`Match.MapPlayersWarning`) and capped (`--players 4 --map raraku` plays 2).
 - **The match start, a load and playback.** `SimRunner.MapId` (an id, "" for generated) goes into `Start`'s `SimConfig.MapId`
   with `Map = MapGenParams.Default with { Width = side, Height = side }` (the docs/03 M6-S7 request: no other generator field);
@@ -6855,6 +6856,41 @@ ui.json                            setup.map, setup.map_generated, setup.map_pla
   bad formats refused, the key count.
 - **Not in this slice:** map content or text, per-biome art, per-map AI openings, Pale Hills / Vathar Crossing (they appear
   in the list by themselves once their files ship), a map preview in the setup.
+
+### Implementation (M6-V19)
+
+The two rough edges M6-V18 left (BUG-1092 and the greyed counts), plus a warning. No sim or `ui.json` change: the new lines
+are dev-log warnings, like `MapPlayersWarning`.
+
+```
+game/scripts/LaunchOptions.cs   IsOneTeam(players), OneTeamText (BUG-1066's rule, now shared with Match)
+game/scripts/Match.cs           OneTeamWarning (BUG-1092), MapSizeWarning; PickSeats drops the teams after the cap
+game/scripts/SkirmishSetup.cs   a map file's own forests / gold mines in the greyed counts; Generated gives back the values
+```
+
+- **BUG-1092.** `LaunchOptions.Parse` checks BUG-1066's one-team rule over the players asked. On a map file `Match` then caps
+  them at its starts, and the kept ones can all be on one team (`--players 4 --map raraku --team 1 1 --team 2 1 --team 3 2`
+  kept players 1 and 2, both team 1: a match that never ends). After the cap `Match` asks `LaunchOptions.IsOneTeam` again
+  over the kept players. If they are on one team it logs `Match.OneTeamWarning` (the same text as
+  `LaunchOptions.OneTeamWarning`) and seats every slot on team 0, so the match is a free-for-all. The setup already refused
+  this case (Start disabled, `setup.one_team`); that is unchanged.
+- **The greyed counts.** With a map file picked, Forests shows `MapDef.ForestCount` and Gold mines the file's gold nodes (its
+  `Nodes` whose resource is gold, the count the sim's `MapFile.Place` reports). Raraku shows 6 / 12. The boxes' range widens
+  to take a count outside the generator's floor or cap, and the slot floors are not applied while a map is picked. Generated
+  puts back the values from before the first map pick and the generator's range and floors. `MatchArgs` passes the shown
+  counts (unused on a map file), capped at `MapGenParams.MaxResourceGroups`, so `--forests` / `--mines` stay valid flags.
+- **`--map-size` with `--map`.** A side other than the map file's is warned (`Match.MapSizeWarning`, "Ignoring --map-size
+  256: map 'raraku' is 128 x 128; playing 128.") and ignored, following `MapPlayersWarning`. The map's own side (what the setup
+  passes) is not warned. Nor is an id the data lacks, which plays a generated map at the asked side.
+- **Tests.** `MapListTest`: every map's greyed counts against the data, Raraku looked up by id at 6 / 12, Generated giving
+  back 20 / 17 with the range and floor and passing them; `--map-size 256 --map <id>` warned, the map's own side and an
+  unknown id not warned; `--players 4 --map <id>` with the kept players on one team (warned, free-for-all, not over at
+  once) and on two teams (kept, no warning). `QaM6V18Test.MenuMatch`: the map's counts shown, Generated giving back the values,
+  and the start line naming the counts the setup showed. `QaM6V18bTest`: the BUG-1092 row is a plain check
+  (`IsEnemy(0, 1)`, the warning), and the `--map-size 256 --map raraku` row reads `MapSizeWarning`.
+- **Not in this slice:** wrapping the long tooltips (BUG-1081 item 2). Godot draws an `OptionButton` item's tooltip in its
+  popup with no wrap setting, so a fix would mean pre-wrapping the data text and changing every test that compares a tooltip
+  to a `description`, which is more than a few lines.
 
 ## AI architecture
 
