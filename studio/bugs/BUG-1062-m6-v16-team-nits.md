@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S4 |
-| Status | open (part fixed) |
+| Status | fixed (all three items) |
 | Found | 2026-11-05-0805, task M6-V16 |
 | System | Load Game list, skirmish setup, enemy picker tests |
-| Fixed by | |
+| Fixed by | items 1 / 3: M6-V16 round 1 (2026-11-05-0805); item 2: 8c0ad73 (M6-V16 rider, 2026-11-05-1206): `SkirmishSetup.OneTeam` + `ui.json` `setup.one_team`, Start disabled while every shown slot is on one team, `TeamsTest.OneTeamStart` / QA's `OneTeamFuzz`; docs/02 "Game flow" 2 says so. Status field corrected by the Producer at the 2026-11-05-1716 PLAN (the 1206 log already listed it fixed); the `--team` one-team start and the Back / Start slide are BUG-1066 |
 
 ## Repro
 1. **Load Game: seats 3-4 cut off.** `& $env:GODOT --path game res://tests/TeamFilesTest.tscn -- --shots <dir>`, then open

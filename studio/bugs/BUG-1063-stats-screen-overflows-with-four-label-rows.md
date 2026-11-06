@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S3 |
-| Status | open |
+| Status | fixed (as filed; the teamed menu-match overflow it did not cover is BUG-1065) |
 | Found | 2026-11-05-0805, task M6-V16 (re-check, round 1) |
 | System | Post-match stats screen (`game/scripts/MatchStats.cs`) |
-| Fixed by | |
+| Fixed by | 8c0ad73 (M6-V16 rider, 2026-11-05-1206): `MatchStats.GraphHeight` 220 − `LabelRowHeight` 30 × label rows past `LabelRowsRoom` 2; `QaM6V16Test.StatsLayouts`' two rows plain checks (the 2026-11-05-1206 scene loop 76 / 76). Status field corrected by the Producer at the 2026-11-05-1716 PLAN (the 1206 log already listed it fixed) |
 
 ## Repro
 1. Headless: `& $env:GODOT --headless --path game res://tests/QaM6V16Test.tscn -- --strict` fails with
