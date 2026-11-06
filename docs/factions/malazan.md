@@ -115,7 +115,8 @@ the list gets the gold first). **At** is the trigger: `time` in seconds of match
 manager's split, not a step). On Easy each step waits `buildOrderSlack` (30 s) after it is due, on Hard none.
 `Content/AiContentTests` pins the openings table, every opening's step table, composition table and wave line, and the
 retreat line below to the file, both ways; `Content/AiOpeningPairsReportTests` plays every Malazan opening against every
-Whirlwind opening (9 Normal AI-v-AI matches, 20 minutes each, the menu's map) and fails unless both sides send a wave and
+Whirlwind opening (9 Normal AI-v-AI matches, 20 minutes each, the menu's map: on this page the skirmish setup's default
+Generated map, 12 forests and 8 mines; no hand-made map was measured) and fails unless both sides send a wave and
 no step is a dead end, and with `QA/Content/D21OpeningsQaTests` (each pairing's 2nd and 3rd seeds) pins every side's
 Age II to "Age II against the Whirlwind" at the end of this page. A step still short of gold or wood at 20:00 prints
 how long it has been due and the banks; a wait over 5 minutes is marked as BUG-0981's pattern (see "The reserve" below
@@ -129,7 +130,7 @@ the openings table), printed but not failed.
 
 Not in the file, because the schema has no field for it (requests to the sim track): the sketch's expansion condition
 (army ≥ 12 pop and no enemy army near the base for 60 s; the step fires at its time), the Barracks rally to the base
-choke and the Watchtower's spot at the choke (the executor places every building near the Keep), and the 3 : 2 gold /
+choke and the Watchtower's spot at the choke (the executor places every building but the Depot near the Keep), and the 3 : 2 gold /
 wood split (the economy manager's `goldShare`, a common rule).
 
 **The reserve (BUG-0981, fixed by the sim's M5-4g; re-printed 2026-10-26).** Until M5-4g the AI saved nothing for a
@@ -178,7 +179,7 @@ Whirlwind's raider rush (seed 2: the base was defended at 779 of its 1,200 think
 | --- | --- | --- | --- | --- | --- |
 | 1 | time 0 | train | `malazan_laborer` | 15 | Workers to 20 in Age I (5 at the start + 15) |
 | 2 | pop 6 | build | `malazan_billet` | 1 | First Billet |
-| 3 | pop 8 | build | `malazan_depot` | 1 | Quartermaster's Depot at the nearest forest |
+| 3 | pop 8 | build | `malazan_depot` | 1 | Quartermaster's Depot by the nearest known forest |
 | 4 | pop 10 | build | `malazan_barracks` | 1 | Legion Barracks |
 | 5 | pop 12 | build | `malazan_billet` | 1 | Second Billet |
 | 6 | pop 14 | build | `malazan_crossbow_range` | 1 | Crossbow Range |
@@ -255,7 +256,7 @@ standard (23 in Age I): two Ranges and a crossbow army eat the wood.
 | --- | --- | --- | --- | --- | --- |
 | 1 | time 0 | train | `malazan_laborer` | 18 | Workers to 23 in Age I (5 at the start + 18): the Ranges and the crossbows need the wood |
 | 2 | pop 6 | build | `malazan_billet` | 1 | First Billet |
-| 3 | pop 8 | build | `malazan_depot` | 1 | Quartermaster's Depot at the nearest forest |
+| 3 | pop 8 | build | `malazan_depot` | 1 | Quartermaster's Depot by the nearest known forest |
 | 4 | pop 9 | build | `malazan_crossbow_range` | 1 | The first Crossbow Range, before the Barracks |
 | 5 | pop 11 | build | `malazan_billet` | 1 | Second Billet |
 | 6 | pop 13 | build | `malazan_barracks` | 1 | Legion Barracks: the shield line |
@@ -318,7 +319,7 @@ Range waits for Age II, so Age I trains Heavy Infantry only.
 | --- | --- | --- | --- | --- | --- |
 | 1 | time 0 | train | `malazan_laborer` | 15 | Workers to 20 in Age I (5 at the start + 15) |
 | 2 | pop 6 | build | `malazan_billet` | 1 | First Billet |
-| 3 | pop 8 | build | `malazan_depot` | 1 | Quartermaster's Depot at the nearest forest |
+| 3 | pop 8 | build | `malazan_depot` | 1 | Quartermaster's Depot by the nearest known forest |
 | 4 | pop 10 | build | `malazan_barracks` | 1 | Legion Barracks: the one hall of Age I |
 | 5 | pop 12 | build | `malazan_billet` | 1 | Second Billet |
 | 6 | pop 14 | build | `malazan_armory` | 1 | The Forge: Age II's second kind of building, and no queue to spend the gold |
@@ -545,7 +546,8 @@ QA's 4th and 5th, `QA/Content/DH6ThresholdQaTests`). Against `raider_rush` it se
 smallest seeds (5, 11, 19, 25, 38), and both are still standing at 20:00, beaten down: on seed 19 its army peaks at 7
 pop, under its 14-pop wave, while it holds the base, and at 20:00 it has 15 pop with a cap of 24, 910 gold and 15 wood
 and no Age II; on seed 25 it peaks at 12 pop and is down to 1 pop at 20:00. Both rows name the seed as a known case
-(`KnownBeatenAlive`) instead of loosening their rule. Before M5-4g seed 19 read a peak of 8 pop and 6 pop / cap 16 with
+(`KnownBeatenAlive`) instead of loosening their rule; re-measured on 2026-11-06 (D-H7, after M6-S5 / S7 / SH1 / S8),
+both still fail it with the same numbers, so both entries stay. Before M5-4g seed 19 read a peak of 8 pop and 6 pop / cap 16 with
 670 gold and 60 wood at 20:00, and seed 25 was destroyed at 11:26. Over the two openings, `raider_rush` beats the
 Malazans without a fight on 6 of 10 seeds (`cadre_rush` 4 of 5, `crossbow_push` 2 of 5). `standard` sent a wave on
 each of its 9 measured pairing seeds (3 Whirlwind openings x 3 seeds).

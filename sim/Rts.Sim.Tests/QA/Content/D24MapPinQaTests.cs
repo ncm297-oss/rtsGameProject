@@ -64,7 +64,7 @@ public class D24MapPinQaTests
     {
         GameData d = LoadWithExtraMaps(description);
         List<string> pin = MapTextContentTests.PinProblems(MapTextContentTests.Shipped(d), MapTextContentTests.Pinned);
-        Assert.Empty(pin); // the pin only covers raraku; the checker is what catches the new map
+        Assert.Empty(pin); // the pin covers the shipped maps only (D-H7: all three); the checker is what catches the new map
         List<string> problems = CheckAll(d);
         Assert.Contains(problems, p => p.StartsWith("aa_first:", StringComparison.Ordinal) && p.Contains(says, StringComparison.Ordinal));
     }

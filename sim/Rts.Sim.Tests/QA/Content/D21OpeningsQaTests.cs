@@ -298,8 +298,10 @@ public class D21OpeningsQaTests
     /// wood, no Age II, still standing (D-H6 read peak 8, 222 thinks, 6 pop / cap 16, 670 / 60). A lower wave would not
     /// reach it either: the reserve waits for a wave-sized army, so it never engages here. It is BUG-0982's pattern (a
     /// Malazan opening falls to the raider rush without attacking) on another opening, tracked as BUG-1010 (the sim-side
-    /// lever: send what you have when the base is being lost). Take the entry out when the row passes the rule (the run
-    /// prints so). <c>DH6ThresholdQaTests</c> carries the pairing's 5th seed (25) the same way.
+    /// lever: send what you have when the base is being lost). Re-measured on main for D-H7 (2026-11-06, after M6-S5 / S7 /
+    /// SH1 / S8): still failing the rule, every number above unchanged (no wave, peak 7 pop, 282 thinks defending, 15 pop /
+    /// cap 24, 910 gold, 15 wood, no Age II, not defeated), so the entry stays. Take the entry out when the row passes the
+    /// rule (the run prints so). <c>DH6ThresholdQaTests</c> carries the pairing's 5th seed (25) the same way.
     /// </summary>
     private static readonly (int Malazan, int Whirlwind, ulong Seed, int Player)[] KnownBeatenAlive = { (1, 1, 19, 0) };
 

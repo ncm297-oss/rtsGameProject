@@ -158,6 +158,8 @@ public class DH6ThresholdQaTests
     /// instead of loosening the rule (D-R32, 2026-10-26, BUG-1010; the 3rd seed, 19, is <c>D21OpeningsQaTests.KnownBeatenAlive</c>).
     /// Seed 25: after M5-4g's reserve the Malazan side sends no wave, its army peaks at 12 pop (under its 14-pop wave, so the
     /// reserve never engages), and at 20:00 it is down to 1 pop but not defeated (D-H6 read it defeated at 11:26).
+    /// Re-measured on main for D-H7 (2026-11-06, after M6-S5 / S7 / SH1 / S8): still failing the rule, unchanged (no wave,
+    /// peak 12 pop, 1 pop at 20:00, not defeated; <c>raider_rush</c> 2 waves), so the entry stays.
     /// Take the entry out when the row passes the rule (the run prints so).
     /// </summary>
     private static readonly ulong[] KnownBeatenAlive = { 25 };

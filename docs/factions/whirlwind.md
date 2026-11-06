@@ -115,7 +115,8 @@ AI always plays opening 1, `standard`**; a Normal or Hard AI picks one of the th
 (18 in Age I, 26 in Age II) than the Malazan, spending on the army first. The AI starts with 5 Camp Followers, 3 on gold
 and 2 on wood. `Content/AiContentTests` pins the openings table, every opening's step table, composition table and wave
 line, and the retreat line below to the file, both ways; `Content/AiOpeningPairsReportTests` plays the 9 pairings
-against the Malazan openings (malazan.md), and with `QA/Content/D21OpeningsQaTests` (each pairing's 2nd and 3rd seeds)
+against the Malazan openings (malazan.md; "the menu's map" on this page is, as there, the setup's default Generated
+map), and with `QA/Content/D21OpeningsQaTests` (each pairing's 2nd and 3rd seeds)
 pins every side's Age II to "Age II against the Malazans" at the end of this page.
 
 | # | Id | Name (shown to the player) | Description (shown to the player) |
@@ -176,7 +177,7 @@ its name and description.
 | 1 | time 0 | train | `whirlwind_camp_follower` | 13 | Workers to 18 in Age I (5 at the start + 13) |
 | 2 | pop 6 | build | `whirlwind_tent` | 1 | First Tent |
 | 3 | pop 8 | build | `whirlwind_raider_camp` | 1 | Raider Camp |
-| 4 | pop 9 | build | `whirlwind_supply_cache` | 1 | Supply Cache at the nearest forest |
+| 4 | pop 9 | build | `whirlwind_supply_cache` | 1 | Supply Cache by the nearest known forest |
 | 5 | pop 11 | build | `whirlwind_tent` | 1 | Second Tent |
 | 6 | pop 12 | build | `whirlwind_archer_camp` | 1 | Archer Camp |
 | 7 | pop 14 | build | `whirlwind_horse_lines` | 1 | Horse Lines |
@@ -247,7 +248,7 @@ Smithy waits for pop 24 and Age II for 8:00.
 | 1 | time 0 | train | `whirlwind_camp_follower` | 13 | Workers to 18 in Age I (5 at the start + 13) |
 | 2 | pop 6 | build | `whirlwind_tent` | 1 | First Tent |
 | 3 | pop 7 | build | `whirlwind_raider_camp` | 1 | The first Raider Camp |
-| 4 | pop 9 | build | `whirlwind_supply_cache` | 1 | Supply Cache at the nearest forest |
+| 4 | pop 9 | build | `whirlwind_supply_cache` | 1 | Supply Cache by the nearest known forest |
 | 5 | pop 10 | build | `whirlwind_raider_camp` | 1 | The second Raider Camp |
 | 6 | pop 11 | build | `whirlwind_tent` | 1 | Second Tent |
 | 7 | pop 13 | build | `whirlwind_horse_lines` | 1 | Horse Lines (needs the Raider Camp) |
@@ -309,7 +310,7 @@ wave waits for 20 army pop, the latest Whirlwind wave.
 | 1 | time 0 | train | `whirlwind_camp_follower` | 13 | Workers to 18 in Age I (5 at the start + 13) |
 | 2 | pop 6 | build | `whirlwind_tent` | 1 | First Tent |
 | 3 | pop 8 | build | `whirlwind_raider_camp` | 1 | Raider Camp |
-| 4 | pop 9 | build | `whirlwind_supply_cache` | 1 | Supply Cache at the nearest forest |
+| 4 | pop 9 | build | `whirlwind_supply_cache` | 1 | Supply Cache by the nearest known forest |
 | 5 | pop 11 | build | `whirlwind_tent` | 1 | Second Tent |
 | 6 | pop 12 | build | `whirlwind_archer_camp` | 1 | Archer Camp |
 | 7 | pop 16 | build | `whirlwind_tent` | 1 | From pop 16 a Tent every 7 pop |

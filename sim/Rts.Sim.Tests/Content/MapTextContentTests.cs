@@ -13,11 +13,21 @@ namespace Rts.Sim.Tests.Content;
 /// </summary>
 public class MapTextContentTests
 {
-    /// <summary>The setup list's text by map id: id, display name, description (D23, 2026-11-05; Raraku's "center" D24).</summary>
+    /// <summary>
+    /// The setup list's text by map id: id, display name, description (D23, 2026-11-05; Raraku's "center" D24). Raraku stays
+    /// first (the pin's own rule test reads it as <c>Pinned[0]</c>). Pale Hills and Vathar Crossing joined in D-H7
+    /// (2026-11-06) with the text M6-S8 shipped: a new sentence there also needs the sim track's map source
+    /// (tools/Rts.Cli/maps/&lt;id&gt;.quad.json, which <c>mirror-map</c> rebuilds the file from byte for byte) and
+    /// <c>Map/MapFileTests.TheNewMaps_Load_WithTheirFields</c>, so it lands with them.
+    /// </summary>
     public static readonly (string Id, string DisplayName, string Description)[] Pinned =
     {
         ("raraku", "Raraku",
             "Rival camps face each other across open desert of sand, scrub and sparse palms. Forests are few, twin mesas flank a wide open center, and long sightlines leave little room to hide."),
+        ("pale_hills", "Pale Hills",
+            "Four camps in dense hill woods, joined by narrow paths between the trees. Timber is everywhere, gold is scarce beyond the camps, and every path is a place for an ambush."),
+        ("vathar_crossing", "Vathar Crossing",
+            "A sunken river of slopes cuts the steppe in two, crossed only at its fords. Hold a ford and the far bank is yours; lose it and the enemy pours through."),
     };
 
     /// <summary>The longest description the setup shows (the presets' limit, <see cref="StartingResourcesContentTests.MaxDescriptionLength"/>).</summary>
@@ -38,20 +48,31 @@ public class MapTextContentTests
     [Fact]
     public void ThePin_AllowsAnUnpinnedShippedMap_ButNotAMissingOrChangedPinnedOne()
     {
+        var rarakuOnly = new[] { Pinned[0] };
         var shipped = new List<(string, string, string)>
         {
-            ("pale_hills", "Pale Hills", "Provisional text."), // sorts first, not pinned
+            ("frost_pass", "Frost Pass", "Provisional text."), // sorts first, not pinned
             ("raraku", "Raraku", Pinned[0].Description),
         };
-        Assert.Empty(PinProblems(shipped, Pinned));
+        Assert.Empty(PinProblems(shipped, rarakuOnly));
 
         var missing = new[] { Pinned[0], ("vathar_crossing", "Vathar Crossing", "A river ford.") };
         Assert.Contains(PinProblems(shipped, missing), p => p.Contains("vathar_crossing: pinned but not shipped", StringComparison.Ordinal));
 
         var renamed = new List<(string, string, string)> { ("raraku", "Raraku Waste", Pinned[0].Description) };
-        Assert.Contains(PinProblems(renamed, Pinned), p => p.Contains("raraku: display name", StringComparison.Ordinal));
+        Assert.Contains(PinProblems(renamed, rarakuOnly), p => p.Contains("raraku: display name", StringComparison.Ordinal));
         var reworded = new List<(string, string, string)> { ("raraku", "Raraku", Pinned[0].Description + " More.") };
-        Assert.Contains(PinProblems(reworded, Pinned), p => p.Contains("raraku: description", StringComparison.Ordinal));
+        Assert.Contains(PinProblems(reworded, rarakuOnly), p => p.Contains("raraku: description", StringComparison.Ordinal));
+    }
+
+    /// <summary>D-H7: the pin names every shipped map, once each, and Raraku first (the rule test above reads it there).</summary>
+    [Fact]
+    public void ThePin_NamesEveryShippedMap_RarakuFirst()
+    {
+        Assert.Equal("raraku", Pinned[0].Id);
+        string[] pinned = Pinned.Select(p => p.Id).OrderBy(id => id, StringComparer.Ordinal).ToArray();
+        string[] shipped = Data.Maps.Select(m => m.Key).OrderBy(id => id, StringComparer.Ordinal).ToArray();
+        Assert.Equal(shipped, pinned);
     }
 
     [Fact]
