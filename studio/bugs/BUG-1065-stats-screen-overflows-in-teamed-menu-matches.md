@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S3 |
-| Status | open |
+| Status | fixed |
 | Found | 2026-11-05-1206, task M6-V16 (re-check of the BUG-1063 rider) |
 | System | Post-match stats screen (`game/scripts/MatchStats.cs`) |
-| Fixed by | |
+| Fixed by | M6-V17 (session 2026-11-05-1716, view): `MatchStats.GraphHeightFor(labelRows, openingLines)`: the graph gives up 24 px per "opened with" line and 30 px per label row past two label rows' room, so no stats screen is taller than one with two label rows and no line; `QaM6V16Test.MenuFourLabelStats` is a plain check (Back's top edge 579-581 px at 1152 x 648 on teams 1230 / 1234 / 0123 / 1122 / 1200 / 0000; QA also 1280 x 720); docs/03 "Implementation (M6-V16)"'s "still fit" sentence corrected. docs/03 "Implementation (M6-V17)" |
 
 ## Repro
 1. Headless: `& $env:GODOT --headless --path game res://tests/QaM6V16Test.tscn -- --strict` fails with (the new

@@ -3,7 +3,7 @@
 | Field | Value |
 | --- | --- |
 | Severity | S4 |
-| Status | open (items 2 and 4 fixed 2026-11-05-1206; item 3 fixed by the Producer at the ACCEPT (docs/01 row); item 1 rides with the view's M6-V17; items 5-6 new, for M6-SH1) |
+| Status | open (items 1-4 fixed: 2 and 4 2026-11-05-1206, 3 by the Producer's docs/01 row, 1 by M6-V17 2026-11-05-1716: `ViewApi/SaveSummary.cs`'s FormatVersion doc names `OldestReadVersion` to `CurrentVersion`; left: items 5-6, M6-SH1) |
 | Found | 2026-11-05-1206, task M6-S6 (QA) |
 | System | save format docs (`ViewApi/SaveSummary`), `Stress/StartingResourcesAiStressTests`, docs/01 |
 | Fixed by | |

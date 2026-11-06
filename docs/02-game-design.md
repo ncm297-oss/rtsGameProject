@@ -435,10 +435,10 @@ own cues (select, order, refused, building placed or finished, unit or tech read
   scout's head ring (the eight points round the hall) seen, or the sweep ended with the scout alive. A forest or mine it
   knows only through an ally's eyes or a raider's far sighting counts as unknown until then; after, the nearest known node
   is taken wherever it is. So a start whose nearest forest lies past the reach gets its wood once the scout has circled home
-  (its first minute out), not after the whole map. A scout that dies before the ring is seen is replaced by another worker
+  (its first minute or two out: measured 60-103 s after it leaves), not after the whole map. A scout that dies before the ring is seen is replaced by another worker
   and does not lift the reach; a seat with no finished drop-off may take any node. Built in M6-S5 (BUG-1045), the head ring
   and the replacement in M6-S7 (BUG-1047, BUG-1048; [03 Implementation (M6-S7)](03-technical-design.md#implementation-m6-s7);
-  the decided fallback for a kind with no node in reach was measured and left out there, for the Producer).
+  the fallback for a kind with no node in reach was built, measured and dropped: Producer decision, [01 change log](01-vision.md) 2026-11-05).
 - Build orders, army compositions, and attack thresholds are per-faction data (`ai.json`), not code.
 - Each faction's `ai.json` holds one to eight named openings (a build order, an army mix and attack thresholds each);
   at match start an Easy AI always plays the first, and a Normal or Hard AI picks one at random from the match seed, so
