@@ -9092,9 +9092,30 @@ ticks), 4 waves to 3, gathered 8,810 gold / 4,240 wood v 5,300 / 3,540.
   the player knows no node of some resource kind at all (`ScoutManager.KnowsEveryKind`, dropped nodes aside), within the same
   bound; the replacement's `Waypoints` skips the ring points seen. A seat that knows a node of every kind never re-scouts, so
   a match whose scout lives on, or dies with home known, plays as before. Seed 1 killed 2,000 ticks out now gets wood at
-  tick 5,968; seed 3's two rows still don't by 6,000 (the sweep first sees a forest 179 m off at ~4,250 ticks; at 200 the
-  scout is replaced before the ring and nobody dies after it), skipped with BUG-1053 open. A re-scout skipping the mirror
+  tick 5,968; seed 3's two rows still didn't by 6,000 (the sweep first sees a forest 179 m off at ~4,250 ticks; at 200 the
+  scout is replaced before the ring and nobody dies after it): round 1 below. A re-scout skipping the mirror
   (to sweep round home) was tried and made seed 1 worse; not kept.
+- **Round 1 (QA findings BUG-1055 / 1056), still no saved byte:**
+  - *The mark of a scout sent again.* A replacement's or re-scout's `Waypoints` lays the grid point nearest the hall at the
+    hall's centre, visited (nothing to see at home, so the walk is unchanged); `ScoutManager.SentAgain` looks for that
+    point. A first scout's grid holds cell centres only. If the hall moves the mark is lost and the sweep plays as a first one.
+  - *BUG-1055:* the cap ends the sweep only for a scout sent again (or with `ai.scoutReplacements` 0), so the first scout's
+    death is always followed whatever the earlier losses. A seat that lost 3 workers before its scout: wood at ticks
+    4,979 / 3,144 / 4,688 on seeds 1-3 (was 0). Every scout killed at the door still costs 3 scouts.
+  - *BUG-1056:* a scout sent again also ends its sweep (released alive, so the economy sets it gathering) once the reach
+    has lifted and the player knows an enemy building and a node of every kind at any distance, unless the known forest
+    nearest the hall stands within `ai.workerFleeRadius` of an enemy building (seen or ghost). The scout is standing at the
+    far forest it found, so it brings wood home a walk sooner than a gatherer sent from the hall. On the 90 m-cleared
+    start, one scout killed at 0 / 200 / 2,000 ticks, seeds 1-10: wood by 6,000 on 9 / 8 / 5 seeds (was 9 / 6 / 4); seed 3
+    at 200 and 2,000 now at ticks 5,541 / 5,619. Without the door rule it was 10 / 9 / 9, but rows whose forest stood 9-11 m
+    from an enemy building lost 2-5 more workers (seeds 1 and 5 fell to 12-13); seed 3's forest stands 41 m from one.
+    Seed 1 at 2,000 is unchanged (5,968, its forest at an enemy's door). A wider second ring for the re-scout was also
+    tried (`2 x ai.scoutRadius`): better on the rows it was aimed at, worse over seeds 1-10; not kept.
+  - Rows: `Ai/ScoutReplacementTests` (`ASeatPastTheCapBeforeItsFirstScout_StillFollowsThatScoutsDeath`,
+    `AScoutSentAgain_IsMarkedByItsHomeGridPoint_*`, `AScoutSentAgain_KnowingAFarForestClearOfTheEnemy_IsReleasedToGather`,
+    `AScoutSentAgain_KnowingOnlyAForestAtAnEnemysDoor_KeepsSweeping`; `TheCap_CountsTheOwnSeatsLossesOnly` now kills the
+    replacement), QA's un-skipped `ReachRuleQaTests.ScoutKilledAfterTheRing_Seed3_*` and
+    `ScoutCapQaTests.ASeatPastTheCapBeforeItsFirstScout_OnAFarForestStart_StillGetsWood`.
 - **`ai.spendDownQueue`** (1-5, default 2, hashed) replaces `ProductionManager.SpendDownQueue` (BUG-1051 item 6); the
   starting-resources stress row prints its 10:00 measure and asserts the mean bank only (item 5).
 - **Two reach anchors (BUG-1049 item 2), documented, not merged:** `ScoutManager.FoundEnough` measures `ai.gatherReach` from

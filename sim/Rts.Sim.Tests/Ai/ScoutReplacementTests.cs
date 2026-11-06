@@ -13,7 +13,9 @@ namespace Rts.Sim.Tests;
 /// M6-SH1 (BUG-1052 / 1053, docs/03 "Implementation (M6-S7)", the M6-SH1 note): a lost scout is sent again (replaced
 /// before the head ring is seen; after it, only while the seat knows no node of some resource kind) only while the own
 /// unit losses are at most <c>ai.scoutReplacements</c>; past that the sweep ends and the reach lifts. The count is the
-/// saved match stats' own unit losses, so the blackboard keeps no new state.
+/// saved match stats' own unit losses, so the blackboard keeps no new state. Round 1 (BUG-1055 / 1056): the first scout's
+/// death is always followed (unless the knob is 0), and a scout sent again, marked in its saved waypoints, is released to
+/// gather once it knows a forest clear of the enemy's buildings.
 /// </summary>
 [Collection(SerialCollection.Name)]
 public class ScoutReplacementTests
@@ -108,10 +110,11 @@ public class ScoutReplacementTests
     }
 
     /// <summary>
-    /// Mutation guard (the losses read from the wrong seat): the enemy losing units before the scout dies doesn't engage the
-    /// cap, the own seat losing them does. Same start (seed 2, far forest), the scout killed 30 ticks out, before the ring
-    /// is seen: with 3 enemy units killed first it is replaced (phase 0); with 2 own workers killed first (losses 3 with the
-    /// scout, past the cap of 2) it is not (phase 2).
+    /// Mutation guard (the losses read from the wrong seat): the enemy losing units before a scout sent again dies doesn't
+    /// engage the cap, the own seat losing them does. Same start (seed 2, far forest): the first scout killed 30 ticks out,
+    /// before the ring is seen, is replaced (M6-SH1 round 1, BUG-1055: the first death always is); then with 3 enemy units
+    /// killed the replacement's death is followed again (phase 0); with 2 own workers killed (own losses 4 with both scouts,
+    /// past the cap of 2) it is not (phase 2).
     /// </summary>
     [Theory]
     [InlineData(1, (byte)0)]
@@ -121,11 +124,122 @@ public class ScoutReplacementTests
         Simulation sim = Far(2);
         UntilScoutOut(sim, 3000);
         for (int t = 0; t < 30; t++) sim.Tick();
-        Assert.False(sim.AiOf(0)!.ReachLifted(), "setup: the ring was seen within 30 ticks");
+        Assert.True(KillScout(sim));
+        Assert.Equal(0, AfterTheDeath(sim));
+        UntilScoutOut(sim, 4000);
+        for (int t = 0; t < 30; t++) sim.Tick();
+        Assert.True(ScoutManager.SentAgain(sim.AiOf(0)!), "setup: the replacement isn't marked sent again");
         for (int k = 0; k < (lossesOf == 0 ? 2 : 3); k++) Assert.True(KillOther(sim, lossesOf));
         Assert.True(KillScout(sim));
         Assert.Equal(phase, AfterTheDeath(sim));
         _out.WriteLine($"losses of player {lossesOf}: own {sim.World.UnitLosses[0]}, enemy {sim.World.UnitLosses[1]}; phase {phase}");
+    }
+
+    /// <summary>
+    /// BUG-1055 (M6-SH1 round 1): a seat that lost 3 workers before its first scout went out (own losses past the cap of 2)
+    /// still follows that scout's death with another (phase 0, then a new unit out), on seeds 1-3 of the far-forest start;
+    /// with ai.scoutReplacements 0 it doesn't (phase 2). Before the fix the cap read the 3 earlier losses and ended the sweep.
+    /// </summary>
+    [Theory]
+    [InlineData(1UL, 2, (byte)0)]
+    [InlineData(2UL, 2, (byte)0)]
+    [InlineData(3UL, 2, (byte)0)]
+    [InlineData(1UL, 0, (byte)2)]
+    public void ASeatPastTheCapBeforeItsFirstScout_StillFollowsThatScoutsDeath(ulong seed, int replacements, byte phase)
+    {
+        Simulation sim = Far(seed, Replacements(replacements));
+        for (int k = 0; k < 3; k++) Assert.True(KillOther(sim, 0));
+        UntilScoutOut(sim, 3000);
+        Assert.False(ScoutManager.SentAgain(sim.AiOf(0)!), "the first scout is marked sent again");
+        for (int t = 0; t < 30; t++) sim.Tick();
+        Assert.True(KillScout(sim));
+        Assert.Equal(phase, AfterTheDeath(sim));
+        _out.WriteLine($"seed {seed}, scoutReplacements {replacements}: own losses {sim.World.UnitLosses[0]}; phase {phase}");
+        if (phase == 2) return;
+        UntilScoutOut(sim, 4000);
+        Assert.True(ScoutManager.SentAgain(sim.AiOf(0)!), "the second scout isn't marked sent again");
+    }
+
+    /// <summary>
+    /// The mark of a scout sent again (<see cref="ScoutManager.SentAgain"/>): the grid point nearest the hall is laid at the
+    /// hall's centre and visited; every other point is laid as for the first scout, so its walk is the same. Seed 2's far
+    /// start, the first scout killed 30 ticks out.
+    /// </summary>
+    [Fact]
+    public void AScoutSentAgain_IsMarkedByItsHomeGridPoint_AndItsOtherPointsAreTheFirstScouts()
+    {
+        Simulation sim = Far(2);
+        AiPlayer ai = sim.AiOf(0)!;
+        UntilScoutOut(sim, 3000);
+        Vector2[] firstPoints = (Vector2[])ai.Board.ScoutPoints.Clone();
+        Assert.False(ScoutManager.SentAgain(ai));
+        for (int t = 0; t < 30; t++) sim.Tick();
+        Assert.True(KillScout(sim));
+        AfterTheDeath(sim);
+        UntilScoutOut(sim, 4000);
+        Assert.True(ScoutManager.SentAgain(ai));
+        Vector2 hall = ReachRuleQaTests.HallCentre(sim.World, 0);
+        int moved = 0;
+        for (int k = 0; k < firstPoints.Length; k++)
+        {
+            if (ai.Board.ScoutPoints[k] == firstPoints[k]) continue;
+            moved++;
+            Assert.True(k >= Blackboard.ScoutHead, $"head point {k} moved");
+            Assert.Equal(hall, ai.Board.ScoutPoints[k]);
+            Assert.True(ai.Board.ScoutVisited[k]);
+        }
+        Assert.Equal(1, moved);
+    }
+
+    /// <summary>
+    /// BUG-1056 (M6-SH1 round 1): a scout sent again ends its sweep once the reach has lifted and the seat knows a node of
+    /// every kind and an enemy building, when its nearest known forest is clear of the enemy's buildings: seed 3, its trees
+    /// within 90 m taken, the scout killed 200 ticks out; the replacement is released alive (phase 2) on the think it learns
+    /// of the 186 m forest, and the seat's first wood comes in by tick 6,000 (before: the sweep went on, no wood by 6,000).
+    /// </summary>
+    [Fact]
+    public void AScoutSentAgain_KnowingAFarForestClearOfTheEnemy_IsReleasedToGather()
+    {
+        Simulation sim = Far(3);
+        AiPlayer ai = sim.AiOf(0)!;
+        UntilScoutOut(sim, 3000);
+        for (int t = 0; t < 200; t++) sim.Tick();
+        Assert.True(KillScout(sim));
+        AfterTheDeath(sim);
+        UntilScoutOut(sim, 4000);
+        (int Slot, int Gen) scout = (ai.Board.ScoutSlot, ai.Board.ScoutGeneration);
+        while (ai.Board.ScoutPhase == 1 && sim.TickNumber < 6000) sim.Tick();
+        int releasedAt = sim.TickNumber;
+        Assert.Equal(2, ai.Board.ScoutPhase);
+        Assert.True(sim.World.Units.IsAlive(new EntityHandle(scout.Slot, scout.Gen)), "the scout died");
+        Assert.True(ScoutManager.KnowsEveryKind(ai) && ai.Board.KnownEnemyBuildings > 0);
+        Assert.False(ScoutManager.FoundEnough(ai), "setup: a forest near home was found");
+        while (sim.World.GatheredWood[0] == 0 && sim.TickNumber < 6000) sim.Tick();
+        _out.WriteLine($"released at {releasedAt}; first wood at {sim.TickNumber}");
+        Assert.True(sim.World.GatheredWood[0] > 0, "no wood by tick 6,000");
+    }
+
+    /// <summary>
+    /// The other side of the release (BUG-1056): a scout sent again whose nearest known forest stands at an enemy's door
+    /// (within ai.workerFleeRadius of an enemy building: seed 5's far start, the forest 10.8 m from one) keeps sweeping
+    /// although the seat knows a node of every kind and an enemy building. Released, it and the gatherers sent after it
+    /// worked inside the enemy base (measured: 2 more workers lost by tick 6,000).
+    /// </summary>
+    [Fact]
+    public void AScoutSentAgain_KnowingOnlyAForestAtAnEnemysDoor_KeepsSweeping()
+    {
+        Simulation sim = Far(5);
+        AiPlayer ai = sim.AiOf(0)!;
+        UntilScoutOut(sim, 3000);
+        Assert.True(KillScout(sim));
+        AfterTheDeath(sim);
+        UntilScoutOut(sim, 4000);
+        while (!(ai.ReachLifted() && ScoutManager.KnowsEveryKind(ai) && ai.Board.KnownEnemyBuildings > 0) && ai.Board.ScoutPhase == 1 && sim.TickNumber < 6000) sim.Tick();
+        Assert.True(ScoutManager.KnowsEveryKind(ai) && ai.Board.KnownEnemyBuildings > 0, "setup: the seat never knew every kind and an enemy building");
+        int knewAt = sim.TickNumber;
+        for (int t = 0; t < 100; t++) sim.Tick();
+        _out.WriteLine($"knew every kind and an enemy building at {knewAt}; phase at {sim.TickNumber}: {ai.Board.ScoutPhase}");
+        Assert.Equal(1, ai.Board.ScoutPhase);
     }
 
     /// <summary>
@@ -225,7 +339,7 @@ public class ScoutReplacementTests
         Assert.Equal(cappedA, cappedL);
     }
 
-    /// <summary>The death branch's new reads (the own losses, <see cref="ScoutManager.KnowsEveryKind"/>) allocate nothing, on both seats of a running match.</summary>
+    /// <summary>The death branch's new reads (the own losses, <see cref="ScoutManager.KnowsEveryKind"/>, round 1's <see cref="ScoutManager.SentAgain"/> and <see cref="ScoutManager.FoundEnoughToGather"/>) allocate nothing, on both seats of a running match.</summary>
     [Fact]
     public void KnowsEveryKind_AndTheOwnLosses_AllocateNothing()
     {
@@ -239,6 +353,8 @@ public class ScoutReplacementTests
             {
                 sink += ai.View.OwnUnitLosses;
                 if (ScoutManager.KnowsEveryKind(ai)) sink++;
+                if (ScoutManager.SentAgain(ai)) sink++;
+                if (ScoutManager.FoundEnoughToGather(ai)) sink++;
             }
         };
         probe();

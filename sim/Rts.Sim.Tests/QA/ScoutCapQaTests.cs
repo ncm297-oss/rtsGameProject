@@ -237,15 +237,18 @@ public class ScoutCapQaTests
     }
 
     /// <summary>
-    /// The cap reads every own loss, not just scouts: a seat that has lost 3 workers before its scout is sent, then loses
-    /// that scout before the ring is seen, does not replace it and lifts the reach at once (the developer's stated
-    /// semantics). Seeds 1-3, trees within 90 m taken: the gatherers stay within 150 m.
+    /// A seat that has lost 3 workers before its scout is sent, then loses that scout before the ring is seen. QA's first
+    /// version pinned the M6-SH1 semantics (the cap read the 3 earlier losses: 1 scout sent, the sweep ended on the death,
+    /// gatherers within 150 m, and no wood: BUG-1055). M6-SH1 round 1 (the developer, for BUG-1055): the first scout's death
+    /// is always followed, so 2 scouts are sent (the cap still bounds the second), the sweep doesn't end on the first death,
+    /// and the gatherers go no farther than the same far-forest start unharmed sends them (seeds 1-3: 210.6 / 174.2 /
+    /// 151.2 m; no 150 m bound: that was the capped rows' rule).
     /// </summary>
     [Theory]
     [InlineData(1UL)]
     [InlineData(2UL)]
     [InlineData(3UL)]
-    public void ASeatPastTheCapBeforeItsFirstScout_LosesOneScout_AndGathersWithin150m(ulong seed)
+    public void ASeatPastTheCapBeforeItsFirstScout_ItsFirstScoutIsReplaced_AndGathersNoFartherThanUnharmed(ulong seed)
     {
         Row r = Play(seed, 6000, cleared: 90f, killAt: 30, before: (sim, hall) =>
         {
@@ -258,19 +261,21 @@ public class ScoutCapQaTests
                 killed++;
             }
         });
-        _out.WriteLine($"ROW pre-losses seed {seed}: sent {r.Sent}; losses {r.Losses}; capped at {r.CappedAt}; workers {r.Workers}; farthest {r.Farthest:F1} m; wood {r.Wood} (first {r.FirstWood}); forest known {r.KnowsWood}");
-        Assert.Equal(1, r.Sent);
-        Assert.True(r.CappedAt > 0, "the sweep never ended on the death");
-        Assert.True(r.Farthest <= FarthestAllowed, $"a gatherer sent {r.Farthest:F1} m from the hall");
+        Row calm = Play(seed, 6000, cleared: 90f);
+        _out.WriteLine($"ROW pre-losses seed {seed}: sent {r.Sent}; losses {r.Losses}; capped at {r.CappedAt}; workers {r.Workers}; farthest {r.Farthest:F1} m (unharmed {calm.Farthest:F1}); wood {r.Wood} (first {r.FirstWood}); forest known {r.KnowsWood}");
+        Assert.Equal(2, r.Sent);
+        Assert.True(r.CappedAt < 0, "the sweep ended on the first scout's death");
+        Assert.True(r.Farthest <= Math.Max(FarthestAllowed, calm.Farthest), $"a gatherer sent {r.Farthest:F1} m from the hall (unharmed {calm.Farthest:F1})");
     }
 
     /// <summary>
     /// BUG-1055: the same seat (3 workers lost before its scout goes out, its trees within 90 m taken, the scout killed 30
     /// ticks out) knows no forest when the cap ends its sweep, and the cap also bars BUG-1053's re-scout, so it gathers no
     /// wood by tick 6,000 on seeds 1-3 (measured M6-SH1: wood 0, "forest known False"). With the cap off the scout is
-    /// replaced and the seat gets wood.
+    /// replaced and the seat gets wood. Un-skipped in M6-SH1 round 1 (the first scout's death is always followed): first
+    /// wood at ticks 4,979 / 3,144 / 4,688.
     /// </summary>
-    [Theory(Skip = "BUG-1055 (open, S3): a seat whose earlier losses already pass ai.scoutReplacements gets neither a replacement nor a re-scout, and with no forest known gathers no wood")]
+    [Theory]
     [InlineData(1UL)]
     [InlineData(2UL)]
     [InlineData(3UL)]

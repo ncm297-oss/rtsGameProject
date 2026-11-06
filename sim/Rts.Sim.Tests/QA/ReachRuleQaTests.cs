@@ -178,7 +178,8 @@ public class ReachRuleQaTests
     /// past 54 m is seen: no scout was sent again, the seat knew no forest (or one 185 m off, seed 3 at 200) and gathered 0
     /// wood by tick 6,000. On ab54ddb these rows gathered 0 too (not a regression of M6-S7; the reach rule doesn't reach it).
     /// M6-SH1: a scout lost while the seat knows no node of some kind is sent again (within ai.scoutReplacements). Seed 1 at
-    /// 2,000: the second scout, sent at tick 2,341, finds a forest; first wood at tick 5,968 (a 32-tick margin).
+    /// 2,000: the second scout, sent at tick 2,341, finds a forest; first wood at tick 5,968 (a 32-tick margin; round 1
+    /// leaves it: that forest stands 8.9 m from an enemy building, so the scout is not released to it).
     /// </summary>
     [Theory]
     [InlineData(1UL, 2000)]
@@ -190,9 +191,11 @@ public class ReachRuleQaTests
     /// ring. At 2,000 the re-scout is sent (tick 2,341). Either way the sweep (head, mirror, then the grid nearest the scout)
     /// first sees a forest at about tick 4,250, 179 m off; seven gatherers walk to it and none is back by tick 6,000 (the
     /// nearest, 90.8 m, is seen only near the end). A sweep that looks round home first was tried (the re-scout skipping
-    /// the mirror): seed 3 gathered no sooner and seed 1 at 2,000 lost its wood. Left for the Producer (M6-SH1 report).
+    /// the mirror): seed 3 gathered no sooner and seed 1 at 2,000 lost its wood. Un-skipped in M6-SH1 round 1 (BUG-1056): a
+    /// scout sent again is released to gather once it knows a forest clear of the enemy's buildings, so the scout standing
+    /// at the 186 m forest brings the first wood home: ticks 5,541 (at 200) and 5,619 (at 2,000).
     /// </summary>
-    [Theory(Skip = "BUG-1053 (open, S3): seed 3's sweep first sees a forest at ~4,250 ticks, 179 m off; no wood by 6,000 with or without the re-scout")]
+    [Theory]
     [InlineData(3UL, 200)]
     [InlineData(3UL, 2000)]
     public void ScoutKilledAfterTheRing_Seed3_TheSeatStillGetsWood(ulong seed, int killAt) => AssertWoodAfterAScoutKill(seed, killAt);

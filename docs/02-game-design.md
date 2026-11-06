@@ -441,7 +441,10 @@ own cues (select, order, refused, building placed or finished, unit or tech read
   and does not lift the reach; one that dies after it is replaced only if the AI still knows no node of some resource. Either
   way a scout is sent again only while the AI has lost at most `rules.json` `ai.scoutReplacements` (2) units in all, so a
   base whose scouts die at the door stops feeding workers to the role, and the reach then lifts as if home had been looked
-  at (M6-SH1, BUG-1052 / 1053); a seat with no finished drop-off may take any node. Built in M6-S5 (BUG-1045), the head ring
+  at (M6-SH1, BUG-1052 / 1053). The first scout's loss is always followed by one more (earlier losses in a fight are not the
+  scout role's, BUG-1055), and a scout sent again stops looking, and gathers, as soon as the AI knows an enemy building, a
+  gold mine and a forest anywhere that is not at an enemy's door: it stands at the far forest it found, so the first wood
+  comes home a walk sooner (BUG-1056). A seat with no finished drop-off may take any node. Built in M6-S5 (BUG-1045), the head ring
   and the replacement in M6-S7 (BUG-1047, BUG-1048; [03 Implementation (M6-S7)](03-technical-design.md#implementation-m6-s7);
   the fallback for a kind with no node in reach was built, measured and dropped: Producer decision, [01 change log](01-vision.md) 2026-11-05).
 - Build orders, army compositions, and attack thresholds are per-faction data (`ai.json`), not code.

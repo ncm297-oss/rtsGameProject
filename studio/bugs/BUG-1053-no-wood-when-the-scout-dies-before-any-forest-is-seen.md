@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S3 |
-| Status | partly fixed (M6-SH1, dev): the re-scout is built and seed 1 at 2,000 passes; seed 3 at 200 / 2,000 still gather no wood by 6,000 (skipped), open |
+| Status | fixed (M6-SH1 round 1, dev; QA to confirm): with BUG-1056's release all three `ReachRuleQaTests.ScoutKilledAfterTheRing_*` rows are un-skipped and green (seed 1 at 2,000: 5,968; seed 3 at 200 / 2,000: 5,541 / 5,619) |
 | Found | 2026-11-05-1716, task M6-S7 (QA) |
 | System | AI scout / economy (`ScoutManager.Sweep` death branch at phase 2, no re-scout), BUG-1047 / 1048 follow-up |
-| Fixed by | M6-SH1 (partly): re-scout while a kind has no known node, within `ai.scoutReplacements` |
+| Fixed by | M6-SH1: re-scout while a kind has no known node, within `ai.scoutReplacements`; round 1: a scout sent again is released to gather once it knows a forest clear of the enemy (BUG-1056) |
 
 ## Repro
 1. `dotnet test sim/Rts.Sim.Tests --filter "FullyQualifiedName~ReachRuleQaTests.ScoutKilledAfterTheRing"` (remove the

@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S3 |
-| Status | open |
+| Status | fixed (M6-SH1 round 1, dev; QA to confirm): the first scout's death is always followed (unless `ai.scoutReplacements` is 0); `QA/ScoutCapQaTests.ASeatPastTheCapBeforeItsFirstScout_OnAFarForestStart_StillGetsWood` un-skipped and green (wood at 4,979 / 3,144 / 4,688), `Ai/ScoutReplacementTests.ASeatPastTheCapBeforeItsFirstScout_StillFollowsThatScoutsDeath`. QA's sibling row asserting the old semantics (1 scout sent) was updated to the new rule and renamed `..._ItsFirstScoutIsReplaced_AndGathersNoFartherThanUnharmed`. Seed 1 with every scout killed at the door still gathers 0 wood (no forest ever seen): left for the Producer |
 | Found | 2026-11-05-2148, task M6-SH1 (QA) |
 | System | AI scout (`ScoutManager.Sweep` death branch, `ai.scoutReplacements` against `PlayerView.OwnUnitLosses`) |
-| Fixed by | |
+| Fixed by | M6-SH1 round 1: the cap applies to a scout sent again only, marked in its saved waypoints (`ScoutManager.SentAgain`, no new saved byte) |
 
 ## Repro
 1. `dotnet test sim/Rts.Sim.Tests --filter "FullyQualifiedName~ScoutCapQaTests.ASeatPastTheCapBeforeItsFirstScout"`

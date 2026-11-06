@@ -26,7 +26,10 @@ namespace Rts.Sim.Ai;
 /// by the next think's free worker, whose sweep starts with the ring points not yet seen; one that dies after is not, unless
 /// (M6-SH1, BUG-1053) the player knows no node of some resource kind at all (<see cref="KnowsEveryKind"/>). M6-SH1
 /// (BUG-1052): a scout is sent again either way only while the player's own unit losses are at most <c>ai.scoutReplacements</c> (derived from the saved match stats,
-/// so the blackboard keeps no count); past that the sweep ends and the reach lifts.
+/// so the blackboard keeps no count); past that the sweep ends and the reach lifts. M6-SH1 round 1: the first scout's death is
+/// always followed (BUG-1055: losses before it aren't the scout role's), unless the knob is 0; a scout sent again is marked in
+/// its saved waypoints (<see cref="SentAgain"/>) and released to gather once the reach has lifted and the player knows an
+/// enemy building and a node of every kind, its nearest forest clear of the enemy's buildings (BUG-1056).
 /// <para>
 /// M6-S5 (BUG-1042), a player with an ally: a head waypoint within <c>ai.scoutRadius</c> of an ally's building is dropped
 /// (the base there is the ally's: with teams the hall's mirror may be the ally's start), and past the head the next grid
@@ -85,7 +88,10 @@ internal static class ScoutManager
             // seen. M6-SH1 (BUG-1053): one lost after is replaced only while a resource kind has no known node at all (else
             // the reach has lifted and the economy has one to go to). M6-SH1 (BUG-1052): either only while the own unit losses
             // are at most ai.scoutReplacements; past that the sweep ends (phase 2), so the reach lifts as a death did in M6-S5.
-            bool again = ai.View.OwnUnitLosses <= ai.Rules.ScoutReplacements && (!ai.ReachLifted() || !KnowsEveryKind(ai));
+            // M6-SH1 round 1 (BUG-1055): the first scout's death is followed whatever the losses, unless the knob is 0 (the
+            // cap reads every own loss, so a seat that lost workers before its scout went out never looked for a forest again).
+            bool capped = ai.View.OwnUnitLosses > ai.Rules.ScoutReplacements && (ai.Rules.ScoutReplacements == 0 || SentAgain(ai));
+            bool again = !capped && (!ai.ReachLifted() || !KnowsEveryKind(ai));
             board.ScoutPhase = again ? (byte)0 : (byte)2;
             board.ScoutSlot = -1;
             return;
@@ -107,7 +113,7 @@ internal static class ScoutManager
         // Idle after the Move applied: there, or as close as it could get (a waypoint on a cliff or in the water).
         if (board.ScoutTarget >= 0 && u.State == UnitState.Idle) visited[board.ScoutTarget] = true;
         int next = Next(ai, board, u.Position, hasAlly);
-        if (next < 0 || FoundEnough(ai))
+        if (next < 0 || FoundEnough(ai) || SentAgain(ai) && FoundEnoughToGather(ai))
         {
             Release(ai, u);
             return;
@@ -295,14 +301,103 @@ internal static class ScoutManager
         for (int k = 0; k < 8; k++)
             points[k] = ai.ClampToMap(hall + s_compass[(first + k) % 8] * ai.Rules.ScoutRadius);
         points[8] = ai.ClampToMap(size - hall);
-        int cols = GridLines(ai.View.MapWidth, ai.Rules.ScoutGrid), rows = GridLines(ai.View.MapHeight, ai.Rules.ScoutGrid);
-        int n = Blackboard.ScoutHead;
-        for (int y = 0; y < rows; y++)
-            for (int x = 0; x < cols; x++)
-                points[n++] = ai.ClampToMap(new Vector2((x + 0.5f) * size.X / cols, (y + 0.5f) * size.Y / rows));
+        for (int k = Blackboard.ScoutHead; k < points.Length; k++)
+            points[k] = GridPoint(ai, k);
         Array.Clear(board.ScoutVisited);
         if (!replacement) return;
         for (int k = 0; k < 8; k++)
             if (Explored(ai, points[k])) board.ScoutVisited[k] = true;
+        // M6-SH1 round 1: the mark of a scout sent again (SentAgain), kept in the saved points so the blackboard gains no
+        // byte. The grid point nearest the hall becomes the hall's centre, visited: nothing to see at home, so the walk is
+        // the same.
+        int home = HomeGridPoint(points, hall);
+        points[home] = ai.ClampToMap(hall);
+        board.ScoutVisited[home] = true;
+    }
+
+    /// <summary>
+    /// Waypoint <paramref name="k"/> (at least <see cref="Blackboard.ScoutHead"/>) of the grid as <see cref="Waypoints"/> lays
+    /// it: the centre of grid cell <c>k - ScoutHead</c> in row order, clamped inside the map.
+    /// </summary>
+    private static Vector2 GridPoint(AiPlayer ai, int k)
+    {
+        Vector2 size = ai.MapSize;
+        int cols = GridLines(ai.View.MapWidth, ai.Rules.ScoutGrid), rows = GridLines(ai.View.MapHeight, ai.Rules.ScoutGrid);
+        int n = k - Blackboard.ScoutHead, x = n % cols, y = n / cols;
+        return ai.ClampToMap(new Vector2((x + 0.5f) * size.X / cols, (y + 0.5f) * size.Y / rows));
+    }
+
+    /// <summary>The grid point (index past the head) nearest <paramref name="hall"/>; the first in list order on ties.</summary>
+    private static int HomeGridPoint(Vector2[] points, Vector2 hall)
+    {
+        int best = Blackboard.ScoutHead;
+        float bestDistance = float.MaxValue;
+        for (int k = Blackboard.ScoutHead; k < points.Length; k++)
+        {
+            float d = Vector2.DistanceSquared(points[k], hall);
+            if (d >= bestDistance) continue;
+            bestDistance = d;
+            best = k;
+        }
+        return best;
+    }
+
+    /// <summary>
+    /// M6-SH1 round 1: whether the scout out now (or the one just lost) was sent again, as a replacement (M6-S7) or a
+    /// re-scout (BUG-1053): <see cref="Waypoints"/> laid one of its grid points at the hall's centre (a first scout's grid is
+    /// the map's cell centres only; a hall standing exactly on its cell's centre can't be told apart and reads false). False
+    /// with no hall, or once the hall has moved (the sweep then plays as a first one). At most one pass over the grid
+    /// points; allocates nothing.
+    /// </summary>
+    internal static bool SentAgain(AiPlayer ai)
+    {
+        if (!ai.TryHallPoint(out Vector2 hall)) return false;
+        Vector2 home = ai.ClampToMap(hall);
+        Vector2[] points = ai.Board.ScoutPoints;
+        for (int k = Blackboard.ScoutHead; k < points.Length; k++)
+            if (points[k] == home && home != GridPoint(ai, k)) return true;
+        return false;
+    }
+
+    /// <summary>
+    /// M6-SH1 round 1 (BUG-1056): a scout sent again ends its sweep, and so gathers, once the reach has lifted and the player
+    /// knows an enemy building and a node of every kind (<see cref="KnowsEveryKind"/>, at any distance), unless its nearest
+    /// known forest is at an enemy's door. A first scout keeps <see cref="FoundEnough"/>'s near-home rule. Why: the forest a
+    /// scout sent again finds is often 150-200 m out; the scout is standing at it, so it brings the first wood home a walk
+    /// sooner than a gatherer sent from the hall, while the sweep it gives up was already past the near ground.
+    /// </summary>
+    internal static bool FoundEnoughToGather(AiPlayer ai) =>
+        ai.Board.KnownEnemyBuildings > 0 && ai.ReachLifted() && KnowsEveryKind(ai) && !NearestForestAtAnEnemyDoor(ai);
+
+    /// <summary>
+    /// M6-SH1 round 1: whether the known forest node nearest the hall (one the economy dropped doesn't count) stands within
+    /// <c>ai.workerFleeRadius</c> of an enemy building the player sees or remembers: a scout gathering there, and the gatherers
+    /// the economy sends after it, would work inside the enemy base (measured: such rows lost 2-5 more workers). True with no
+    /// hall or no forest known. One pass over the known nodes, buildings and ghosts; allocates nothing.
+    /// </summary>
+    private static bool NearestForestAtAnEnemyDoor(AiPlayer ai)
+    {
+        if (!ai.TryHallPoint(out Vector2 hall)) return true;
+        float nearest = float.MaxValue;
+        Vector2 forest = default;
+        int s = -1;
+        while (ai.View.NextResource(ref s, out SeenResource node))
+        {
+            if (ai.Board.NodeDropped[s] == node.Handle.Generation || ai.Data.Resources[node.TypeId].Resource != ResourceKind.Wood) continue;
+            Vector2 c = ai.NodeCentre(node.TypeId, node.Cell);
+            float d = Vector2.DistanceSquared(c, hall);
+            if (d >= nearest) continue;
+            nearest = d;
+            forest = c;
+        }
+        if (nearest == float.MaxValue) return true;
+        float door = ai.Rules.WorkerFleeRadius * ai.Rules.WorkerFleeRadius;
+        s = -1;
+        while (ai.View.NextBuilding(ref s, out SeenBuilding b))
+            if (ai.View.IsEnemy(b.Owner) && Vector2.DistanceSquared(ai.BuildingCentre(b.TypeId, b.Cell), forest) <= door) return true;
+        s = -1;
+        while (ai.View.NextGhost(ref s, out Vision.BuildingGhost g))
+            if (ai.View.IsEnemy(g.Owner) && Vector2.DistanceSquared(ai.BuildingCentre(g.TypeId, g.Cell), forest) <= door) return true;
+        return false;
     }
 }
