@@ -3,7 +3,7 @@
 | Field | Value |
 | --- | --- |
 | Severity | S3 |
-| Status | fixed (M6-S8; awaiting QA) |
+| Status | fixed (M6-S8; QA confirmed 2026-11-06-0326) |
 | Found | 2026-11-05-2148, task M6-SH1 round 1 (QA re-verify) |
 | System | AI scout (`ScoutManager.SentAgain`, the death branch of `Sweep`) |
 | Fixed by | M6-S8: `ScoutManager.Mark` lays the mark a quarter cell (0.5 m) off the hall's centre when that is the grid point's own centre, and `SentAgain` reads the same mark (no saved byte). Tests: `QA/ScoutSentAgainQaTests.EveryScoutKilledAtTheDoor_TheCapHolds_WhenTheHallStandsOnAGridCentre` (un-skipped: 3 scouts, was 9), `Ai/ScoutReplacementTests.AScoutSentAgain_FromAHallOnAGridCentre_IsMarkedAQuarterCellOff`, `EveryScoutOfAHallOnAGridCentre_Killed_TheSeatLosesThree` (30 and the control 29), `ASaveWhileAHallOnAGridCentreHasAScoutSentAgainOut_LoadsMarked_AndPlaysOnHashEqual`, `SentAgain_OnAHallOnAGridCentre_AllocatesNothing` |
@@ -41,3 +41,12 @@ cell centre reads false") but not what it costs.
   - The same can happen through a rebuilt hall, or through the first-building fallback in `TryHallPoint`.
 - Possible fixes (the developer's call): make the mark a point that can never be a grid centre, e.g. offset it by a
   quarter cell when the hall's centre is a grid centre. Or count a scout as "sent again" from another saved fact.
+
+## QA (2026-11-06-0326, M6-S8)
+- Confirmed: `QA/ScoutSentAgainQaTests.EveryScoutKilledAtTheDoor_TheCapHolds_WhenTheHallStandsOnAGridCentre` is un-skipped
+  and green (3 scouts); the save rows and the `ai.scoutReplacements` rows are green in the full suite.
+- On a 256 map (`QA/MapSlice2QaTests`): halls centred on all four quarter points (128 / 384 m), every scout killed at the
+  door to 8,000: 3 killed each, sweep ended, reach lifted (the control one cell off: 3). The quarter-point hall destroyed
+  and rebuilt on the same cell: 3. No hall, only a Billet on the grid centre (`TryHallPoint`'s first-building fallback): 3.
+  `SentAgain` on the 256 quarter-point hall allocates nothing.
+- On the shipped maps, seeds 1-10, both seats (`Stress/MapSlice2StressTests`): 3 scouts lost a seat on all 40 seat-runs.
