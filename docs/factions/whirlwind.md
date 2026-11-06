@@ -144,6 +144,12 @@ against the raider rush").
 - **Later waves** (every opening): one wave at a time; a new one starts when none is out, at least `ai.waveCooldown`
   after the last began, at the opening's threshold, and never while the base is defended. Priests cast Sandstorm on
   the enemy army's center as the melee engages.
+- **High starting resources** (docs/02 "Game flow" 2, docs/03 "Implementation (M6-S6)"): the AI plays the same openings
+  as at Standard, but while it holds more gold + wood than the preset's spend-down threshold (`rules.json`
+  `startingResources` `high` `aiSpendAbove`) it brings its next timed step forward, trains at every producer and leans
+  its gatherers toward the kind it holds less of; Standard has no threshold, so it plays exactly as before. Measured (QA,
+  M6-S6, 2026-11-05; not pinned): `holy_war` held 1,025-1,225 gold + wood at 5:00 at High before the rule (3 seeds) and
+  85-545 with it (6 seeds nobody tuned on).
 - **Defense** (docs/02 "AI opponent", docs/03 "Implementation (M5-4b)" and "(M5-4f)"; re-worded in D20, 2026-10-17, for
   M5-4f's sized answer): a threat starts when an own building (a site too) within the defend radius of the Holy Camp is
   hit, or an enemy soldier (not a worker) is seen within it (`rules.json` `ai.defendRadius` 48 m; the threat holds
@@ -200,8 +206,7 @@ command sent and no Tent placed. On the menu's map (20 minutes, the other seat i
 below 100 (92 at 20:00); the last Tent step (step 19) is done at a cap of 84; skipped at the hard cap: none; 12 Tents
 stand at 20:00, 0 past the cap. The 12th Tent can leave 6 of its 8 pop unused, so D21 measured taking it out: without
 the 12th Tent step (step 19) on the same seed, the cap stays below 100, and 11 Tents stand at 20:00, 0 past the cap.
-Re-printed 2026-10-26 for M5-4g (the reserve): wood runs short on this seed (0-50 in hand from 13:00 while the gold
-piles up), so three Tents are still sites at 20:00 and the cap is 92 with the 12th Tent step and 84 without it, where
+Re-printed 2026-10-26 for M5-4g (the reserve): three Tents are still sites at 20:00, so the cap is 92 with the 12th Tent step and 84 without it, where
 the population sits from 17:00. Before M5-4g the cap reached 100 at 683 s with the step and 827 s without it (12 Tents
 both times, the house rule placing the 12th anyway). The step stays in every opening.
 
