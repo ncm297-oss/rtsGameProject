@@ -3,7 +3,7 @@
 | Field | Value |
 | --- | --- |
 | Severity | S3 |
-| Status | fixed (M6-SH1, dev; QA to confirm) |
+| Status | fixed (M6-SH1; QA confirmed 2026-11-05-2148: seeds 1-10 with every scout killed at the door send 3 scouts and keep 17-19 workers, `QA/ScoutCapQaTests`; the cap's side effect is BUG-1055) |
 | Found | 2026-11-05-1716, task M6-S7 (QA) |
 | System | AI scout (`ScoutManager.Sweep` death branch, `AiPlayer.ReachLifted`), M6-S7 BUG-1048 fix |
 | Fixed by | M6-SH1: `rules.json` `ai.scoutReplacements` (default 2) against the own unit losses |
@@ -49,3 +49,12 @@ it; the Producer decides whether the reach should then lift (BUG-1048's original
   (`ASaveBetweenTwoScoutDeaths_LoadsEqual_AndTheCapEngagesOnTheSameTick`); the reads allocate nothing.
   `DataValidationTests` / `DataContentHashTests` rows for the knob. The 20 `StandardPresetPinQaTests` and 5
   `SharedVisionFfaPinTests` pins unchanged.
+
+## QA (2026-11-05-2148, M6-SH1)
+- `QA/ScoutCapQaTests.EveryScoutKilledAtTheDoor_*` seeds 1-10: 3 scouts sent on every seed, sweep ended at tick 401-441,
+  17-19 workers at 6,000 (unharmed 19-23), farthest gather target after the cap 16-32 m (no row near 150 m), wood on 9 of
+  10 (seed 1 knows no forest: BUG-1055).
+- A camp of 4 on the ring (still or walking, seeds 1-10): 1 scout sent on every row. On 3 still-camp rows (seeds 2, 6, 9)
+  the scout dies after the ring with every kind known, so the sweep ends; gatherers go at most 57 m out afterwards.
+- Mutants: cap off, cap 0, `<` for `<=`, wrong seat: each fails 5-28 rows. Save between the 2nd and 3rd death on seeds
+  2-5 loads equal, plays hash-equal to 6,000, caps on the same tick.

@@ -51,3 +51,13 @@ kind has no known node (bounded, see BUG-1052) is the natural fix.
   Tried and dropped: a re-scout skipping the mirror (to sweep round home first): seed 3 no sooner, seed 1 at 2,000 lost its
   wood. A fix needs a sweep that looks round home before the far half when no forest is known near it: a sweep-order
   change that touches every first scout (and so the pins), the Producer's call.
+
+## QA (2026-11-05-2148, M6-SH1)
+- Confirmed: seed 1 at 2,000 green (first wood 5,968); seed 3 at 200 / 2,000 fail with the `Skip` removed. Filed as
+  BUG-1056 (S2: criterion 4).
+- Seeds 1-10, 90 m start, one kill (`QA/ScoutCapQaTests.OneScoutKilled_At0_200_2000_*`, printed): wood by 6,000 at 0 on 9
+  of 10, at 200 on 6 of 10, at 2,000 on 4 of 10; the unharmed start on 9 of 10 (first wood 3,649-5,782).
+- The re-scout is barred by the cap once a seat has lost 3 units to anything: BUG-1055.
+- Mutation: re-scout removed / inverted fail 4 / 8 rows; `KnowsEveryKind` ignoring dropped nodes survived the
+  developer's rows and is killed by QA's `EveryKnownForestDropped_TheScoutLostAfterTheRing_IsSentAgain`. A save while the
+  re-scout is pending (seeds 1, 3) loads equal and plays hash-equal to 6,000.
