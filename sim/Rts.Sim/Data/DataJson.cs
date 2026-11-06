@@ -80,6 +80,8 @@ internal sealed class AiRulesJson
     public double? ReserveShift { get; set; } // M5-4g
     public double? ReserveArmyShare { get; set; } // M5-4g (BUG-1021)
     public double? GatherReach { get; set; } // M6-S5 (BUG-1045)
+    public double? ScoutReplacements { get; set; } // M6-SH1 (BUG-1052)
+    public double? SpendDownQueue { get; set; } // M6-SH1 (BUG-1051)
 }
 
 internal sealed class StealthJson

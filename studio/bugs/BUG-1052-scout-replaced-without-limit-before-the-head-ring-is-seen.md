@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S3 |
-| Status | open |
+| Status | fixed (M6-SH1, dev; QA to confirm) |
 | Found | 2026-11-05-1716, task M6-S7 (QA) |
 | System | AI scout (`ScoutManager.Sweep` death branch, `AiPlayer.ReachLifted`), M6-S7 BUG-1048 fix |
-| Fixed by | |
+| Fixed by | M6-SH1: `rules.json` `ai.scoutReplacements` (default 2) against the own unit losses |
 
 ## Repro
 1. `dotnet test sim/Rts.Sim.Tests --filter "FullyQualifiedName~ReachRuleQaTests.EveryScoutKilledAtOnce"` (remove the
@@ -35,3 +35,17 @@ see anything (an enemy at the hall's door, a tower rush covering the hall's exit
 ## Notes
 A cap on replacements (e.g. a `rules.json` `ai.scoutReplacements`, or "replace once, then lift the reach") would bound
 it; the Producer decides whether the reach should then lift (BUG-1048's original symptom) or hold.
+
+## M6-SH1 (dev)
+- A lost scout is sent again only while the player's own unit losses (`PlayerView.OwnUnitLosses`, the saved
+  `MatchStats.UnitLosses`) are at most `ai.scoutReplacements` (0-8, default 2, validated, hashed); past it the sweep ends
+  (`ScoutPhase` 2) and the reach lifts, as in M6-S5. No new saved state, save format still 5.
+- `QA/ReachRuleQaTests.EveryScoutKilledAtOnce_TheSeatDoesNotFeedItsWorkersToTheScoutRole` un-skipped: seeds 1-3 lose 3 scouts
+  by tick 6,000 (was 9), 17 workers each (unharmed 20), farthest gather target 16.1 / 31.8 / 21.0 m (seeds 1 / 2 / 3; no
+  150 m hold needed), wood 0 / 550 / 650. Seed 1's 0 wood: it knows no forest (its start sees none and every scout dies
+  on its first tick), so the row asserts wood only where a forest is known.
+- `Ai/ScoutReplacementTests`: n + 1 scouts lost for n = 0 / 1 / 2 / 4; the cap reads the own seat only (enemy losses don't
+  engage it, own ones do); a save after the first or the second death loads equal and the cap engages on the same tick
+  (`ASaveBetweenTwoScoutDeaths_LoadsEqual_AndTheCapEngagesOnTheSameTick`); the reads allocate nothing.
+  `DataValidationTests` / `DataContentHashTests` rows for the knob. The 20 `StandardPresetPinQaTests` and 5
+  `SharedVisionFfaPinTests` pins unchanged.

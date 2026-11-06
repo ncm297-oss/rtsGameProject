@@ -23,7 +23,10 @@ namespace Rts.Sim.Ai;
 /// are all known: the scout is released (stopped if still walking) and the economy sends it to gather. None is sent if all three are
 /// known already. M6-S7 (BUG-1047 / 1048): the sweep's end no longer decides the gather reach; the head ring being seen does
 /// (<see cref="HeadRingSeen"/>, <see cref="AiPlayer.ReachLifted"/>). So a scout that dies before the ring is seen is replaced
-/// by the next think's free worker, whose sweep starts with the ring points not yet seen; one that dies after is not.
+/// by the next think's free worker, whose sweep starts with the ring points not yet seen; one that dies after is not, unless
+/// (M6-SH1, BUG-1053) the player knows no node of some resource kind at all (<see cref="KnowsEveryKind"/>). M6-SH1
+/// (BUG-1052): a scout is sent again either way only while the player's own unit losses are at most <c>ai.scoutReplacements</c> (derived from the saved match stats,
+/// so the blackboard keeps no count); past that the sweep ends and the reach lifts.
 /// <para>
 /// M6-S5 (BUG-1042), a player with an ally: a head waypoint within <c>ai.scoutRadius</c> of an ally's building is dropped
 /// (the base there is the ally's: with teams the hall's mirror may be the ally's start), and past the head the next grid
@@ -79,8 +82,11 @@ internal static class ScoutManager
         {
             // Dead. M6-S7 (BUG-1048): a scout lost before its head ring was seen is replaced (phase 0: the next think sends
             // another worker, which skips the ring points already seen), since the gather reach lifts only once the ring is
-            // seen; one lost after is not (periodic re-scouting is M5-4).
-            board.ScoutPhase = ai.ReachLifted() ? (byte)2 : (byte)0;
+            // seen. M6-SH1 (BUG-1053): one lost after is replaced only while a resource kind has no known node at all (else
+            // the reach has lifted and the economy has one to go to). M6-SH1 (BUG-1052): either only while the own unit losses
+            // are at most ai.scoutReplacements; past that the sweep ends (phase 2), so the reach lifts as a death did in M6-S5.
+            bool again = ai.View.OwnUnitLosses <= ai.Rules.ScoutReplacements && (!ai.ReachLifted() || !KnowsEveryKind(ai));
+            board.ScoutPhase = again ? (byte)0 : (byte)2;
             board.ScoutSlot = -1;
             return;
         }
@@ -216,6 +222,24 @@ internal static class ScoutManager
         while (!(wood && gold) && ai.View.NextResource(ref s, out SeenResource node))
         {
             if (Vector2.DistanceSquared(ai.NodeCentre(node.TypeId, node.Cell), hall) > reach) continue;
+            if (ai.Data.Resources[node.TypeId].Resource == ResourceKind.Wood) wood = true;
+            else gold = true;
+        }
+        return wood && gold;
+    }
+
+    /// <summary>
+    /// M6-SH1 (BUG-1053): whether the player knows a node of every resource kind, at any distance (one the economy dropped as
+    /// unreachable doesn't count): with the reach lifted the economy will walk to any of them. One pass over the nodes it
+    /// knows, ending at the first of each kind; allocates nothing.
+    /// </summary>
+    internal static bool KnowsEveryKind(AiPlayer ai)
+    {
+        bool wood = false, gold = false;
+        int s = -1;
+        while (!(wood && gold) && ai.View.NextResource(ref s, out SeenResource node))
+        {
+            if (ai.Board.NodeDropped[s] == node.Handle.Generation) continue;
             if (ai.Data.Resources[node.TypeId].Resource == ResourceKind.Wood) wood = true;
             else gold = true;
         }

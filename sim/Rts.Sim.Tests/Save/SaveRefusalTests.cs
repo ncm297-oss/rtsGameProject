@@ -2,6 +2,7 @@ using System.Buffers.Binary;
 using System.Collections.Immutable;
 using System.Text.Json.Nodes;
 using Rts.Sim.Data;
+using Rts.Sim.Entities;
 using Rts.Sim.Save;
 using Xunit.Abstractions;
 
@@ -211,12 +212,14 @@ public class SaveRefusalTests
     /// BUG-0960 item 2: two forged values QA's int32 sweep loaded and then threw on within three ticks. A live unit's goal
     /// cell off the map (the flow field cache threw) and a player's last visible box past the map (the fog update indexed
     /// past the grid) are refused Malformed at load. The forged state is written by the sim's own save (the small save's
-    /// walking unit; its fog box), so the bytes are otherwise real.
+    /// walking unit; its fog box), so the bytes are otherwise real. M6-SH1: the last one QA's sweep still saw throw, a Moving
+    /// unit with no goal (-1, legal for a unit at rest), refused the same way.
     /// </summary>
     [Theory]
     [InlineData("goal", int.MaxValue)]
     [InlineData("goal", -2)]
     [InlineData("goal", 16 * 16)]
+    [InlineData("goal", -1)] // M6-SH1 (BUG-0960's last throw, QA's offset 2525): no goal on a Moving unit
     [InlineData("box", 16)]
     [InlineData("box", -1)]
     public void AForgedGoalCellOrVisibleBox_IsMalformed(string what, int value)
@@ -225,6 +228,7 @@ public class SaveRefusalTests
         if (what == "goal")
         {
             Assert.True(sim.World.Units.Alive[0]);
+            Assert.Equal(UnitState.Moving, sim.World.Units.State[0]); // a Moving unit's goal is read every tick
             sim.World.Units.GoalCell[0] = value;
         }
         else

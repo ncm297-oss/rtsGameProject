@@ -3,7 +3,7 @@
 | Field | Value |
 | --- | --- |
 | Severity | S4 |
-| Status | open: item 1 fixed (M6-S3); item 2's two named paths fixed (M5-H4), one more forged value still throws; item 3 a record only |
+| Status | fixed (item 1 M6-S3; item 2 M5-H4 and its last throw M6-SH1; item 3 a record only) |
 | Found | 2026-10-18-0516, task M6-S2 |
 | System | sim: `Save/SaveHeader`, `Simulation.TryLoad`, `Save/SavePerfTests` |
 | Fixed by | Item 1: M6-S3 (acb71e5, session 2026-10-18-1236): `SaveHeader.MinBodyBytes` + the heightmap length check in `World.Save.cs`; the forged max-capacity header is `Malformed` in 0.2 ms with ~101 KB allocated (`SaveRefusalTests`, QA's `AiSaveQaTests.Serial.AForgedHeader_EveryCapacityAtMax_*`). The bound leaves out the command / projectile / zone capacities: BUG-0990 (S4) |
@@ -40,3 +40,9 @@ None blocks: items 1 and 2 need a file whose checksum was recomputed by hand, it
 - QA's `SaveForgeryQaTests.TheSmallSave_AnInterestingInt32AtEveryOffset_NeverThrowsOnLoad`: loaded 47,566, **1** threw within
   3 ticks (81 before): offset 2525 value -1, `ArgumentOutOfRangeException` in `FlowFieldCache.Get`, a path not looked at here.
 - Item 3 (the save Perf row under a second suite) stays a record.
+
+## M6-SH1 (dev): item 2's last throw
+QA's offset 2525 value -1 was a Moving unit's goal cell set to -1 ("no goal", legal at rest): movement fetches a Moving
+unit's field every tick, so `FlowFieldCache.Get(-1)` threw. `World.ReadFrom` now requires a goal cell of at least 0 on a
+Moving unit (`Malformed`). Row `Save/SaveRefusalTests.AForgedGoalCellOrVisibleBox_IsMalformed("goal", -1)`: it loaded
+before the fix (the row failed), `Malformed` after.

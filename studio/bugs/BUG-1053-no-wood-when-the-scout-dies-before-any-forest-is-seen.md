@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S3 |
-| Status | open |
+| Status | partly fixed (M6-SH1, dev): the re-scout is built and seed 1 at 2,000 passes; seed 3 at 200 / 2,000 still gather no wood by 6,000 (skipped), open |
 | Found | 2026-11-05-1716, task M6-S7 (QA) |
 | System | AI scout / economy (`ScoutManager.Sweep` death branch at phase 2, no re-scout), BUG-1047 / 1048 follow-up |
-| Fixed by | |
+| Fixed by | M6-SH1 (partly): re-scout while a kind has no known node, within `ai.scoutReplacements` |
 
 ## Repro
 1. `dotnet test sim/Rts.Sim.Tests --filter "FullyQualifiedName~ReachRuleQaTests.ScoutKilledAfterTheRing"` (remove the
@@ -35,3 +35,19 @@ known one) would not help either: there is no known node.
 Unreachable on a valid map file at tick 0 (the loader's start contract puts a tree within 24 m of every start, and the
 generator does too), so it bites once the home forest is cut out or on a start trimmed by a test. A re-scout while a
 kind has no known node (bounded, see BUG-1052) is the natural fix.
+
+## M6-SH1 (dev)
+- The death branch of `ScoutManager.Sweep` now also sends another scout after the ring is seen while the player knows no
+  node of some resource kind at all (`ScoutManager.KnowsEveryKind`, dropped nodes aside), within BUG-1052's bound; the
+  new scout's waypoints skip the ring points seen. A seat knowing a node of every kind never re-scouts
+  (`Ai/ScoutReplacementTests.ASeatKnowingANodeOfEveryKind_NeverReScouts`, seeds 1-3;
+  `TheScoutLostAfterTheRing_WithNoForestKnown_IsSentAgain_WithinTheCap`).
+- `QA/ReachRuleQaTests.ScoutKilledAfterTheRing_BeforeAnyForestIsSeen_TheSeatStillGetsWood` un-skipped for seed 1 at 2,000:
+  re-scout sent at tick 2,341, first wood at 5,968 (a 32-tick margin under the bound).
+- **Still failing, skipped (`ScoutKilledAfterTheRing_Seed3_TheSeatStillGetsWood`):** seed 3 at 200 (the scout dies before
+  the ring, is replaced by M6-S7's rule and the replacement lives: nobody dies after the ring, so no re-scout applies) and
+  at 2,000 (re-scout sent at 2,341). In both the sweep (head, mirror, grid nearest the scout) first sees a forest at about
+  tick 4,250, 179 m off; seven gatherers walk there and none is back by 6,000; the 90.8 m forest is seen only near the end.
+  Tried and dropped: a re-scout skipping the mirror (to sweep round home first): seed 3 no sooner, seed 1 at 2,000 lost its
+  wood. A fix needs a sweep that looks round home before the far half when no forest is known near it: a sweep-order
+  change that touches every first scout (and so the pins), the Producer's call.

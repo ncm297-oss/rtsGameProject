@@ -3,7 +3,7 @@
 | Field | Value |
 | --- | --- |
 | Severity | S4 |
-| Status | open |
+| Status | fixed (M6-SH1, dev: items 1-4; item 1 was already reworded in docs/03 before) |
 | Found | 2026-11-05-0805, task M6-S5 (QA) |
 | System | docs/03 "Implementation (M6-S5)", AI (`InGatherReach` / `FoundEnough`), `Stress/TeamAiSoakStressTests` |
 | Fixed by | |
@@ -55,3 +55,12 @@ scratch, not committed); the five pins re-run on 424a5e8 with `SharedVisionFfaPi
 S4, next sim hardening (M6-SH1): item 1 a docs/03 sentence naming the two raider scenes (the Producer will reword it if the hardening
 doesn't reach it); item 2 one anchor (the hall's centre for both, or the sentence); item 3 a comment by `RaidedTicksIfStarved` with the
 band 1,957 / 2,570; item 4 a row with a drop-off site placed while the scout is out.
+
+## M6-SH1 (dev)
+- Item 1: docs/03 "Free-for-all after the reach rule" already names the five unchanged pins and the two raider scenes
+  (`AiMatch(5, 4, Hard)` seat 3, `AiMatch(7, 2, Normal)` seat 1); nothing more to change.
+- Item 2: documented, not merged (docs/03 "Implementation (M6-S7)", the M6-SH1 note): `FoundEnough` measures from the hall,
+  `InGatherReach` from every own finished drop-off; they agree while the hall is the only drop-off.
+- Item 3: a comment by `Stress/TeamAiSoakStressTests.RaidedTicksIfStarved` with the measured band (1,687 / 1,957 v 2,570-7,168).
+- Item 4: `QA/GatherReachQaTests.ASecondDropOff_AnchorsTheReach_OnlyOnceFinished` (a second drop-off as a site 95-110 m from
+  the hall: a node at it is out of reach; finished: in reach). Kills the "a site counts as an anchor" mutant.

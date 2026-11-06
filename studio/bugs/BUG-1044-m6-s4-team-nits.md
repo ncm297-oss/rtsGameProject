@@ -3,7 +3,7 @@
 | Field | Value |
 | --- | --- |
 | Severity | S4 |
-| Status | open |
+| Status | open (item 1 fixed M6-S5; item 2 built M6-V16; item 3: scan width done in round 1, summary wording M6-SH1; the untested sites and the regex blind spots are left) |
 | Found | 2026-10-27-0158, task M6-S4 |
 | System | Teams (stats, docs/03 table, tests) |
 | Fixed by | |
@@ -99,3 +99,9 @@ are the sim's, unchanged.
   `AreAllied`, so its known-missed list is now empty (edited by the dev, the test's rule unchanged). Status stays open for the
   rest (M6-SH1).
 
+## M6-SH1 (dev): item 3
+- `TeamArchitectureTests` already scanned `Combat/`, `Abilities/`, `Vision/`, `Ai/` and `World*.cs` (round 1). M6-SH1 fixed the
+  class summary ("the four listed below") and the allow-list's summary (it holds `BuildOrderExecutor.HallNear`, an
+  allied-as-other site, with its comment).
+- Not done (budget): the regression rows for the stale-slot allied re-check, `ZoneHides`, the stealth building-detector ally
+  skip, `CollectBuildings`, `OnHit`, and the regex blind spots (lower-case aliases, a mixed line). Still open.

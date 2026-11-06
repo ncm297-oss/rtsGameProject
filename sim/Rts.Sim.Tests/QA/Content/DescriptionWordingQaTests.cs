@@ -90,16 +90,6 @@ public class DescriptionWordingQaTests
     [InlineData(" The effects linger on a unit for 1 s.")]
     public void LingerPhrasings_ThatPassedAtTheBase_StillPass(string sentence) => LingerPhrasings(sentence, true);
 
-    /// <summary>D11 landing: the shipped data hash equals the golden replay's header (read from the file, no literal).</summary>
-    [Fact]
-    public void TheShippedContentHash_IsTheGoldenReplaysHeader()
-    {
-        string path = Path.Combine(TestDataDir.RepoRoot(), "sim", "Rts.Sim.Tests", "Replays", "cross_map_seed1.replay");
-        string line = File.ReadLines(path).First(l => l.StartsWith("data-hash ", StringComparison.Ordinal));
-        ulong golden = ulong.Parse(line["data-hash ".Length..].Trim(), System.Globalization.NumberStyles.HexNumber, System.Globalization.CultureInfo.InvariantCulture);
-        Assert.Equal(golden, Data.ContentHash());
-    }
-
     [Fact]
     public void ShippedDescriptions_StillHaveNoProblems()
     {

@@ -2,6 +2,7 @@ using System;
 using Rts.Sim.Abilities;
 using Rts.Sim.Combat;
 using Rts.Sim.Determinism;
+using Rts.Sim.Entities;
 using Rts.Sim.Map;
 using Rts.Sim.Save;
 
@@ -170,8 +171,10 @@ public sealed partial class World
         Buildings.ReadFrom(r, Config.PlayerCount, cells);
         Units.ReadFrom(r, Config.PlayerCount, Data.Units.Length, Data.Statuses.Length);
         // BUG-0960 item 2: a live unit's goal cell is -1 (none) or on the map; a forged one made the flow field cache throw.
+        // M6-SH1 (its last throw): a Moving unit has a goal (movement fetches its field every tick; the sim never moves one
+        // without), so -1 there is forged too.
         for (int i = 0; i < Units.Capacity && !r.Failed; i++)
-            if (Units.Alive[i] && !r.Check(Units.GoalCell[i] >= -1 && Units.GoalCell[i] < cells)) return;
+            if (Units.Alive[i] && !r.Check(Units.GoalCell[i] >= (Units.State[i] == UnitState.Moving ? 0 : -1) && Units.GoalCell[i] < cells)) return;
         _ledger.ReadFrom(r);
         Techs.ReadFrom(r);
         Projectiles.ReadFrom(r, Data.Projectiles.Length, Data.Units.Length, Data.Buildings.Length);

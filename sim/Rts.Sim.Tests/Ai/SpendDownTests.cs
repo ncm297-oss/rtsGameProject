@@ -10,7 +10,7 @@ namespace Rts.Sim.Tests;
 /// BUG-1050 (M6-S6 fix round 1, docs/03 "Implementation (M6-S6)"): the AI's spend-down rule. A starting-resources preset's
 /// <c>aiSpendAbove</c> (shipped: <c>high</c> 200, <c>standard</c> none) turns it on; while an AI seat's gold + wood left this
 /// think is above it, the build order pulls its next time step due early (one a think), production trains on a think the
-/// build order sent, at every producer, up to <see cref="ProductionManager.SpendDownQueue"/> in a queue, and the gatherers
+/// build order sent, at every producer, up to <c>ai.spendDownQueue</c> in a queue, and the gatherers
 /// lean toward the kind the bank holds less of. At <c>standard</c> none of it can happen, whatever the bank. Scene: the flat AI
 /// scene, a Hard Malazan seat (0.5 s thinks, no slack) against a human seat, two finished Barracks, the bank set just before a think.
 /// </summary>
@@ -115,7 +115,7 @@ public class SpendDownTests
         var b = sim.World.Buildings;
         int barracks = s_data.Value.FindBuilding("malazan_barracks");
         for (int s = 0; s < b.Capacity; s++)
-            if (b.Alive[s] && b.Owner[s] == 0 && b.TypeId[s] == barracks) Assert.Equal(ProductionManager.SpendDownQueue, b.QueueCount[s]);
+            if (b.Alive[s] && b.Owner[s] == 0 && b.TypeId[s] == barracks) Assert.Equal(TestSim.Data.AiRules.SpendDownQueue, b.QueueCount[s]);
     }
 
     /// <summary>

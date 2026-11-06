@@ -88,4 +88,19 @@ public sealed class AiRulesDef
     /// (<c>gatherReach</c>, 1-<see cref="DataLimits.MaxAiGatherReach"/>).
     /// </summary>
     public float GatherReach { get; init; }
+
+    /// <summary>
+    /// M6-SH1 (BUG-1052 / 1053): a lost scout is replaced, or a scout sent again for a resource kind it knows no node of, only
+    /// while the player's own unit losses are at most this (<c>scoutReplacements</c>, a whole number 0-<see cref="DataLimits.MaxAiScoutReplacements"/>):
+    /// a seat whose scouts die at its door stops feeding workers to the role.
+    /// </summary>
+    public int ScoutReplacements { get; init; }
+
+    /// <summary>
+    /// M6-SH1 (BUG-1051, was <c>ProductionManager.SpendDownQueue</c>): while the AI spends down (BUG-1050) a producer takes a
+    /// Train while its queue holds fewer than this (<c>spendDownQueue</c>, a whole number 1-<see cref="DataLimits.MaxAiSpendDownQueue"/>).
+    /// The default 2 is the unit in work and one waiting, so a producer that finishes between thinks starts the next at once:
+    /// with only empty queues (as at <c>standard</c>) a <c>high</c> Malazan side still floated 380-1,300 at 10:00 on three seeds.
+    /// </summary>
+    public int SpendDownQueue { get; init; }
 }

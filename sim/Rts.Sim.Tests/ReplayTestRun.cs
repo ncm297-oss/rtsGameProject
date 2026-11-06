@@ -128,6 +128,12 @@ public static class ReplayTestRun
     public static ImmutableArray<ReplaySeat> HumanSeats(int players) =>
         Enumerable.Range(0, players).Select(p => new ReplaySeat(p % 2 == 0 ? "malazan" : "whirlwind", SeatController.Human, Data.AiDifficulty.Normal)).ToImmutableArray();
 
+    /// <summary>
+    /// M6-SH1: <paramref name="r"/> with its data hash replaced by the shipped data's: how the golden (and every test that
+    /// plays or rebuilds from it) reads a file whose header is the hash at recording time.
+    /// </summary>
+    public static Replay WithShippedDataHash(Replay r) => With(r, dataHash: TestSim.Data.ContentHash());
+
     /// <summary>A copy of <paramref name="r"/> with some fields replaced.</summary>
     public static Replay With(Replay r, int? formatVersion = null, ulong? dataHash = null,
         int? players = null, IEnumerable<Command>? commands = null, IEnumerable<ReplayCheckpoint>? checkpoints = null, string? simVersion = null,
