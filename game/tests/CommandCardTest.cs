@@ -346,7 +346,7 @@ public partial class CommandCardTest : Node
                 Check(_card.NameAt(i).Text == def.DisplayName, $"{key} menu cell {i}: label '{_card.NameAt(i).Text}', want '{def.DisplayName}'");
                 Check(_card.HintAt(i).Text == keys[i] && _card.GridKey(i) == keys[i], $"{key} menu cell {i}: hint '{_card.HintAt(i).Text}', want {keys[i]}");
                 string cost = $"{f.GoldName} {def.CostGold}  {f.WoodName} {def.CostWood}";
-                Check(b.TooltipText.Contains(def.Description) && b.TooltipText.Contains(cost), $"{key} menu cell {i}: tooltip '{b.TooltipText}' lacks description or '{cost}'");
+                Check(b.TooltipText.Contains(TooltipWrap.Wrap(def.Description)) && b.TooltipText.Contains(cost), $"{key} menu cell {i}: tooltip '{b.TooltipText}' lacks description or '{cost}'");
                 // M3-V4 (BUG-0126 item 1): a locked entry (CanPlace at BuildMenu.NoAnchor answers Requires) reads
                 // placement.requires ("Locked") dimmed instead of its cost, and stays pressable (not Disabled).
                 W.CanPlace(0, type, BuildMenu.NoAnchor, out PlacementError lockedWhy);

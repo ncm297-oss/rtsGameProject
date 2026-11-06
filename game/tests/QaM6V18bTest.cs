@@ -263,7 +263,7 @@ public partial class QaM6V18bTest : Node
         Check(args != null && joined.Contains("--map raraku", StringComparison.Ordinal) && joined.Contains("--players 2", StringComparison.Ordinal)
             && joined.Contains($"--map-size {_map.Size}", StringComparison.Ordinal) && !joined.Contains("--team 3", StringComparison.Ordinal) && !joined.Contains("--faction 3", StringComparison.Ordinal),
             $"the map's args: {joined}");
-        Check(setup.MapOption.TooltipText == _map.Description, $"the list's tooltip '{setup.MapOption.TooltipText}'");
+        Check(setup.MapOption.TooltipText == TooltipWrap.Wrap(_map.Description), $"the list's tooltip '{setup.MapOption.TooltipText}'");
         // Add player: the button and the method are both no-ops.
         setup.AddSlotButton.EmitSignal(BaseButton.SignalName.Pressed);
         setup.AddSlot();

@@ -149,10 +149,10 @@ public partial class StartingResourcesTest : Node
         var presets = _data.Rules.StartingResources;
         string[] items = Enumerable.Range(0, list.ItemCount).Select(list.GetItemText).ToArray();
         string[] tips = Enumerable.Range(0, list.ItemCount).Select(list.GetItemTooltip).ToArray();
-        Check(items.SequenceEqual(presets.Select(p => p.DisplayName)) && tips.SequenceEqual(presets.Select(p => p.Description)) && items.All(t => t.Length > 0),
+        Check(items.SequenceEqual(presets.Select(p => p.DisplayName)) && tips.SequenceEqual(presets.Select(p => TooltipWrap.Wrap(p.Description))) && items.All(t => t.Length > 0),
             $"list items [{string.Join("|", items)}] (want the data's [{string.Join("|", presets.Select(p => p.DisplayName))}]), tooltips [{string.Join("|", tips)}]");
         int standard = presets.Select(p => p.Key).ToList().IndexOf(StartingResourcesDef.StandardId);
-        Check(list.Selected == standard && setup.ResourcesPick == StartingResourcesDef.StandardId && list.TooltipText == presets[standard].Description,
+        Check(list.Selected == standard && setup.ResourcesPick == StartingResourcesDef.StandardId && list.TooltipText == TooltipWrap.Wrap(presets[standard].Description),
             $"default pick {list.Selected} ('{setup.ResourcesPick}'), tooltip '{list.TooltipText}'");
         Check(_ui.Setup(SetupText.StartingResources).Length > 0 && Labels(setup).Contains(_ui.Setup(SetupText.StartingResources)), "the list's label is not ui.json's setup.starting_resources");
         string[] plain = setup.MatchArgs()!;
@@ -166,7 +166,7 @@ public partial class StartingResourcesTest : Node
             string? parsed = LaunchOptions.Parse(args).StartingResources;
             bool isStandard = presets[i].Key == StartingResourcesDef.StandardId;
             Check(setup.ResourcesPick == presets[i].Key && (isStandard ? parsed == null && !args.Contains("--resources") : parsed == presets[i].Key)
-                && list.TooltipText == presets[i].Description,
+                && list.TooltipText == TooltipWrap.Wrap(presets[i].Description),
                 $"item {i} ({presets[i].Key}): pick '{setup.ResourcesPick}', args [{string.Join(' ', args)}], parsed '{parsed}', tooltip '{list.TooltipText}'");
         }
         Check(setup.PickResources(StartingResourcesDef.StandardId) && !setup.PickResources("no_such_preset") && setup.ResourcesPick == StartingResourcesDef.StandardId, "PickResources");

@@ -464,34 +464,36 @@ own cues (select, order, refused, building placed or finished, unit or tech read
    Load resumes a save, Watch plays a replay back, Delete removes a file (a save with the recording beside it); a file that
    can't be read is listed for Delete, and a save that won't load says why (another version, other game data, damaged)
    (built in M6-V9; saves in M6-V14).
-2. **Skirmish setup:** map, 2-4 player slots (each: human/AI, faction, difficulty, color, team),
-   starting resources (standard / high), game speed. Default: free-for-all. Colours are unique per match: a slot can't
-   pick a colour another slot holds. Single-player: slot 1 is always the local human, slots 2-4 are AI seats, each with
-   its own difficulty (built in M6-V5: Add player / Remove player, 2-4 slots). A slot's team is 0 (no team: a side of its
-   own, the free-for-all default) or 1-8; slots on one team are allies: they never attack each other, their friendly fire
-   treats each other's units as their own, and the AI never targets an ally (the sim's half, M6-S4), and allies share vision (M6-S5, "Vision and fog of war").
-   The setup's **Team** list per slot offers None (the default) and Team 1-4, so a 2v2, a 1v1v2 or a 2v1 is set up from the
-   menu; colours stay per slot, not per team. A match needs two sides: while every shown slot is on one team, Start is
-   disabled with a line saying why (BUG-1062; such a match could never end) (built in M6-V16; the Load Game list marks each seat's team, "(T1)"). Built so far:
-   the map seed and size, the slots, a **Game speed** list (Slow / Normal / Fast, default Normal) and the map generator's
-   **Forests** and **Gold mines** counts (defaults 12 / 8; at least one forest and two gold mines per player, so every
-   base keeps its start forest and start mines; at most 64 each) (M6-V15). The smallest map (128) fits only about 60 gold
-   mines at the generator's spacing: asking for more places what fits, every base still with its start mines, and the
-   match log says how many were placed (M6-VH4). **Starting resources** are a per-match preset, the same for every seat
-   (`rules.json` `startingResources`, M6-S6): **Standard** 200 gold / 200 wood (the start every match had before presets,
-   and the default) and **High** 1,000 gold / 1,000 wood; every seat starts with 5 workers either way (Producer default
-   2026-11-05, owner may revisit; a "low" preset or per-slot presets are not planned). The save and the replay carry
-   the preset (the older save and replay layouts read as Standard, though saves and recordings made before this change refuse
-   to load anyway, since the game data changed with it). The setup's **Starting resources** list offers the presets by name,
-   Standard picked by default, each one's description as its tooltip; Load Game names a save's or a replay's preset when it
-   isn't Standard (built in M6-V17). The setup's **Map** list offers Generated (the default: the map generator on the
-   seed, size and counts above) and then every hand-made map by name ("Map and terrain"), each one's description as its
-   tooltip; picking one greys Map size, Forests and Gold mines, which show the map's own side and counts, and allows at most as many slots as the
-   map has start locations, with a line saying so; Generated gives them back. The save and the replay carry the map, and
-   Load Game names it (built in M6-V18). At High the AI plays its usual openings and spends the extra money as it goes: while it holds more than 200
-   gold + wood it starts its opening's timed steps (Age II, the later buildings) early, trains at every producer and leans
-   its gatherers toward the kind it is short of, so it doesn't sit on the start (BUG-1050; at Standard it plays exactly as
-   before).
+2. **Skirmish setup:** map, 2-4 player slots (each: human/AI, faction, difficulty, color, team), starting resources
+   (standard / high), game speed. Default: free-for-all. Colours are unique per match: a slot can't pick a colour
+   another slot holds. Single-player: slot 1 is always the local human, slots 2-4 are AI seats, each with its own
+   difficulty (built in M6-V5: Add player / Remove player, 2-4 slots). A slot's team is 0 (no team: a side of its own,
+   the free-for-all default) or 1-8; slots on one team are allies: they never attack each other, their friendly fire
+   treats each other's units as their own, and the AI never targets an ally (the sim's half, M6-S4), and allies share
+   vision (M6-S5, "Vision and fog of war"). The setup's **Team** list per slot offers None (the default) and Team 1-4,
+   so a 2v2, a 1v1v2 or a 2v1 is set up from the menu; colours stay per slot, not per team. A match needs two sides:
+   while every shown slot is on one team, Start is disabled with a line saying why (BUG-1062; such a match could never
+   end) (built in M6-V16; the Load Game list marks each seat's team, "(T1)"). Built so far: the map seed and size, the
+   slots, a **Game speed** list (Slow / Normal / Fast, default Normal) and the map generator's **Forests** and **Gold
+   mines** counts (defaults 12 / 8; at least one forest and two gold mines per player, so every base keeps its start
+   forest and start mines; at most 64 each) (M6-V15). The smallest map (128) fits only about 60 gold mines at the
+   generator's spacing: asking for more places what fits, every base still with its start mines, and the match log says
+   how many were placed (M6-VH4). **Starting resources** are a per-match preset, the same for every seat (`rules.json`
+   `startingResources`, M6-S6): **Standard** 200 gold / 200 wood (the start every match had before presets, and the
+   default) and **High** 1,000 gold / 1,000 wood; every seat starts with 5 workers either way (Producer default
+   2026-11-05, owner may revisit; a "low" preset or per-slot presets are not planned). The save and the replay carry the
+   preset (the older save and replay layouts read as Standard, though saves and recordings made before this change
+   refuse to load anyway, since the game data changed with it). The setup's **Starting resources** list offers the
+   presets by name, Standard picked by default, each one's description as its tooltip; Load Game names a save's or a
+   replay's preset when it isn't Standard (built in M6-V17). The setup's **Map** list offers Generated (the default: the
+   map generator on the seed, size and counts above) and then every hand-made map by name ("Map and terrain"), each
+   one's description as its tooltip; picking one greys Map size, Forests and Gold mines, which show the map's own side
+   and counts, and allows at most as many slots as the map has start locations, with a line saying so; Generated gives
+   them back, and so does a map with more start locations (M6-VH5). The save and the replay carry the map, and Load Game
+   names it (built in M6-V18). At High the AI plays its usual openings and spends the extra money as it goes: while it
+   holds more than 200 gold + wood it starts its opening's timed steps (Age II, the later buildings) early, trains at
+   every producer and leans its gatherers toward the kind it is short of, so it doesn't sit on the start (BUG-1050; at
+   Standard it plays exactly as before).
 3. **Match.** Pause any time (single-player). Game speeds: Slow 0.75×, Normal 1×, Fast 1.5×.
 4. **Victory/defeat:** a player is out once they have **no unit left and no finished unit-producing building** (a
    hall that trains units: the Town Hall or one of the five unit halls; the Whirlwind's Holy Camp, Raider Camp and Archer

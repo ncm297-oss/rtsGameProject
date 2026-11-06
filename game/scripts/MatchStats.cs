@@ -349,7 +349,7 @@ public partial class MatchStats : CanvasLayer
         line.AddThemeConstantOverride("separation", 6);
         line.AddChild(new ColorRect { Color = colour, CustomMinimumSize = new Vector2(12f, 12f), SizeFlagsVertical = Control.SizeFlags.ShrinkCenter });
         Label label = ShellUi.Text(text, 15);
-        label.TooltipText = opening.Description;
+        label.TooltipText = TooltipWrap.Wrap(opening.Description); // BUG-1081: one unwrapped line otherwise
         label.MouseFilter = Control.MouseFilterEnum.Stop; // a Label ignores the mouse by default: no tooltip without this
         line.AddChild(label);
         _openings.AddChild(line);

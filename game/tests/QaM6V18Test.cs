@@ -278,7 +278,8 @@ public partial class QaM6V18Test : Node
         foreach ((string name, Replay forged) in new[]
         {
             ("unknown map", Copy(replay!, mapId: "no_such_map")),
-            ("other size", Copy(replay!, map: replay!.Map with { Width = 256, Height = 256 })),
+            // M6-VH5: a side other than the map's (the first map was Raraku, 128; on three maps it is Pale Hills, 256).
+            ("other size", Copy(replay!, map: replay!.Map with { Width = OtherSide(_map.Size), Height = OtherSide(_map.Size) })),
             ("small capacity", Copy(replay!, resources: _map.Nodes.Length - 1)),
         })
         {
@@ -289,6 +290,8 @@ public partial class QaM6V18Test : Node
         runner.QueueFree();
         await Frames(1);
     }
+
+    private static int OtherSide(int side) => side == 256 ? 128 : 256;
 
     private static Replay Copy(Replay r, string? mapId = null, MapGenParams? map = null, int? resources = null) => new()
     {

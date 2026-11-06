@@ -6816,14 +6816,16 @@ ui.json                            setup.map, setup.map_generated, setup.map_pla
   Add player is disabled; the line `setup.map_players` ("{0} has room for {1} players": the map's name and its starts) shows
   right of Remove player, in a 300 px holder with an empty spacer as wide left of Add player (BUG-1066's pattern), so the
   buttons don't move. Generated again gives back the map size picked before and the slot count the cap took away (unless the
-  player removed a slot meanwhile), and the rows. `MatchArgs` adds `--map <id>` after `--resources`, only for a map file,
+  player removed a slot meanwhile), and the rows; since M6-VH5 a map with more starts gives those slots back too, up to its
+  own cap (four slots, Raraku: two, Vathar Crossing: four again). `MatchArgs` adds `--map <id>` after `--resources`, only for a map file,
   with `--map-size` the map's side; a Generated match's args are exactly as before.
 - **`--map <id>`.** One value, a snake_case id of at most 64 characters (`DataLimits.MaxMapIdLength`); junk (`""`, `Raraku`,
   `ra-raku`, a path, unicode, 65 characters, a missing value; a flag is never taken as the value) is warned and ignored; the
   last good one wins. `Match.MapFor` is the data's check: an id the data lacks is warned about ("... playing a generated
   map") and the match plays a generated map. A match flag (skips the main menu). On a map file the match takes the map's
-  side (`--map-size` is ignored; since M6-V19 warned when it differs, `Match.MapSizeWarning`) and `--forests` / `--mines` are unused; `--players` over the map's starts is warned
-  (`Match.MapPlayersWarning`) and capped (`--players 4 --map raraku` plays 2).
+  side (`--map-size` is ignored; since M6-V19 warned when it differs, `Match.MapSizeWarning`) and `--forests` / `--mines`
+  are unused; `--players` over the map's starts is warned (`Match.MapPlayersWarning`) and capped (`--players 4 --map raraku`
+  plays 2).
 - **The match start, a load and playback.** `SimRunner.MapId` (an id, "" for generated) goes into `Start`'s `SimConfig.MapId`
   with `Map = MapGenParams.Default with { Width = side, Height = side }` (the docs/03 M6-S7 request: no other generator field);
   a generated match's config is exactly as before. `StartLoaded` takes the save's (`SimConfig.MapId`; the terrain is the
@@ -6890,7 +6892,74 @@ game/scripts/SkirmishSetup.cs   a map file's own forests / gold mines in the gre
   (`IsEnemy(0, 1)`, the warning), and the `--map-size 256 --map raraku` row reads `MapSizeWarning`.
 - **Not in this slice:** wrapping the long tooltips (BUG-1081 item 2). Godot draws an `OptionButton` item's tooltip in its
   popup with no wrap setting, so a fix would mean pre-wrapping the data text and changing every test that compares a tooltip
-  to a `description`, which is more than a few lines.
+  to a `description`, which is more than a few lines. Done in M6-VH5 (`TooltipWrap`, below).
+
+### Implementation (M6-VH5)
+
+View hardening now that three maps are on `main` (Raraku, Pale Hills, Vathar Crossing): the scene loop on the merged tree,
+the four-start maps from the menu, BUG-1093 and BUG-1081 item 2. No sim, data or `ui.json` change.
+
+```
+game/scripts/TooltipWrap.cs     Wrap(text): a line break at the last space before 60 characters (BUG-1081 item 2)
+game/scripts/SkirmishSetup.cs   the Map and Starting resources item tooltips through TooltipWrap; a bigger map gives slots back
+game/scripts/MatchStats.cs      the opening line's tooltip through TooltipWrap
+game/scripts/CommandCard.cs     the description line of every build / train / research / ability tooltip through TooltipWrap
+game/scripts/Main.cs            MatchScene: the match PackedScene loaded once and held (BUG-1093)
+game/tests/TooltipWrapTest.*    the helper, every shipped description, the setup's lists; windowed, the hovered tooltip
+game/tests/MapListTest.cs       MenuMaps: each four-start map from the menu with 4 and 2 slots, the frame cost line
+game/tests/QaM6V18Test.cs       the "other size" forgery: a side the first map file doesn't have
+```
+
+- **Tooltips (BUG-1081 item 2).** Godot draws a control's tooltip, and an `OptionButton` item's tooltip in its popup, as
+  one unwrapped line: Raraku's 180-character description was a panel about as wide as the 1152 px window.
+  `TooltipWrap.Wrap` (width `TooltipWrap.Width` = 60 characters, about 480 px at the 16 px font) turns the space before
+  each word that would take a line past 60 into a line break and changes nothing else: words stay whole (a word longer
+  than 60 gets a line of its own, unbroken), a line break already in the text is kept and each line wraps on its own, and
+  turning the added breaks back into spaces gives the data text. So the text stays the data's (rule 8) and needs no data
+  change. Wrapped: the setup's Map and Starting resources item tooltips, the stats screen's AI opening tooltips, and the
+  description line of the command card's tooltips; the card's cost and "Needs" lines are not, so a requirement's name never
+  splits. 57 shipped descriptions wrap to at most 4 lines (Raraku: 4). The tests that compared a tooltip to a
+  `description` compare to `TooltipWrap.Wrap(description)`.
+- **BUG-1093 (made robust; the cause not reproduced).** The error was GodotSharp's "Handle is not initialized" inside
+  `GD.Load<PackedScene>("res://scenes/Match.tscn")` at a match start right after a match was freed. That load is the only
+  managed reference to a cached `RefCounted`; its throwaway wrapper is left to the GC, and the next load swaps the native
+  object's weak handle to a strong one (`ScriptManagerBridge.SwapGCHandleForType`), which can meet a wrapper the finalizer
+  thread is disposing. No C# reference to a freed `Match` was found (its `Ended` / `Ticked` handlers live on the match and
+  the test, and go with them). A probe of 200,000 loads against a thread collecting without pause did not reproduce it, so
+  the fix removes the race's ingredients instead: `Main.MatchScene` loads the scene once and holds it for the process, so
+  its wrapper is never finalized and no match start (new, loaded or replay) calls `GD.Load`. `MapListTest.MenuMaps` runs a
+  full collection after each quit (its finalizers left running into the next start, the race's shape) and checks every
+  start instantiated the one held scene.
+- **The four-start maps from the menu.** `MapListTest.MenuMaps`: for each map with at least four starts, Skirmish with 4
+  and then 2 slots, Map → the map (a click on its item), Start. The `setup.map_players` line sits inside its 300 px
+  holder, in at most two lines, above Start; the match plays the map with the slots asked, the "Match started" line names
+  `map file <id>`, and each seat has a Town Hall on its own start cell (four halls with 4 slots, two with 2: the first
+  starts of the file; Vathar Crossing's starts are on its level-1 steppe, Raraku's on level 0).
+- **The loop on three maps.** 83 scenes with `TooltipWrapTest`. Besides the slots below, one row assumed the first map
+  file is Raraku: `QaM6V18Test`'s "other size" forgery used 256, which is Pale Hills' own side now (data order), so the
+  playback started; it now forges the side the map doesn't have (`OtherSide`).
+- **Slots on a bigger map (found by the loop on three maps).** `MapListTest`'s per-map row failed on the merged tree: four
+  slots, then Raraku (two starts) took two away, and Vathar Crossing (four) kept two. `SkirmishSetup.ApplyMap` now gives
+  back the slots an earlier map's cap took, up to the new map's cap, as Generated does; a slot the player removed is
+  still not given back. `MapListTest.MenuMaps` checks four slots, Raraku 2, Vathar Crossing 4, Generated 4, and a Remove
+  on the bigger map kept by Generated.
+- **Frame cost of a 256 map.** The first match of each map (4 slots, the menu's start: a hall and 5 workers each, real
+  speed) prints `frame cost <map>`: the Start press (the whole match build, synchronous: terrain, props, views, minimap),
+  then the first second's frames (count, FPS, first, average and worst frame), the trees the props view shows and the
+  minimap refreshes. Measured 2026-11-06 on the dev machine (RTX 4070, 1152 x 648 window, other worktrees' test suites
+  running), over the windowed runs logged: Pale Hills (3,796 trees, 60 forests) Start press 94-107 ms, first second
+  122-124 frames (about 123 FPS), first frame about 2 ms, average 8.1 ms, worst 12-66 ms; Vathar Crossing (1,540 trees)
+  Start press 99-114 ms, first second 123-133 frames, average 7.6-8.1 ms, worst 15-105 ms. Headless (no draw) the Start
+  press is 83-100 ms on both maps (two early runs, under heavy load from the other worktrees, measured Vathar Crossing at
+  660 ms). The trees are one `MultiMesh` per resource type (`PropsView`, one upload), not a node each, and the minimap's
+  resource layer is drawn once. The worst frame is one spike in a first second that still runs above 120 FPS, so the first
+  second never drops under 30 FPS: no S3. A 4-seat match on either map with the dev armies (`--players 4 --units 100`)
+  holds 120 FPS (the debug overlay's figure) at tick 60.
+- **The scene loop's screenshots.** `MapListTest.Shot` and `TooltipWrapTest`'s hover shot wait for three draws with a bound
+  (300 frames) and skip the file with a line when the window draws nothing: a minimized window (Windows minimized the test's
+  window in 1 of 25 diagnosed runs) never emits `FramePostDraw`, and the unbounded wait hung the run 4 times while
+  `MapListTest` was looped windowed. Other tests' `Shot` helpers still wait unbounded (windowed `--shots` runs only; the
+  headless loop never takes a shot).
 
 ## AI architecture
 
