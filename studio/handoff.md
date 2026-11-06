@@ -1,14 +1,20 @@
 # Handoff: brief for the next session
 
-Written by the Producer at the ACCEPT of session **2026-11-05-2148** (session 4 / 8 on 2026-11-05; base `60dbd57`). All three tracks
-accepted: sim **M6-SH1** (the hardening, 1 fix round), view **M6-V18** (the Map list), data **D23** (Raraku's text; D22 rode in with it).
-**Open S1 / S2: none.** Golden `data-hash` header stays **30C51BB619A7E650** (informational since M6-SH1; the shipped hash differs and
-that is fine). Bug ids next: **sim from 1060, view from 1094, data from 1103.** Counters: **sim 0 / 4, view 3 / 4, data 3 / 4.**
+Written by the Producer at the ACCEPT of session **2026-11-05-2148** (session 4 / 8 on 2026-11-05; base `60dbd57`), **updated 2026-11-06
+after the conductor's integration.** All three tracks accepted: sim **M6-SH1** (the hardening, 1 fix round) and view **M6-V18** (the Map
+list) are **on `main` (29e900f, 03b45ed)**; data **D23** (Raraku's text; D22 rode in with it) is **accepted but NOT on `main`**: the
+conductor's merge conflicted in a code file (`sim/Rts.Sim.Tests/QA/GatherWedgeQaTests.cs`) and the skill's rule aborted it; the branch is
+intact at `origin/studio/2026-11-05-2148-data` (935ae30). **The data track's next task begins with that merge (step 0, recipe below).**
+**Open S1 / S2: none.** `main` 03b45ed: build 0 warnings, non-Perf 8,069 / 0 / 14, smoke PASS; the scene loop not run on `main`. Golden
+`data-hash` header on `main` is **30C51BB619A7E650** (the sim's, byte-identical since M6-S7; informational since M6-SH1; the branch's
+742D3E95CF629116 must not land). Bug ids next: **sim from 1060, view from 1094, data from 1103.** Counters: **sim 0 / 4, view 3 / 4,
+data 3 / 4.**
 
 ## Where we are
 
 - **Playable from the menu:** a 1v1 to 2v2 against AIs, Standard or High starting resources, teams, game speed, **the Map list (Generated
-  or Raraku)**; save / load / Watch carry the map; Load Game names it. Raraku's description is final; its layout is still the M6-S7 placeholder.
+  or Raraku)**; save / load / Watch carry the map; Load Game names it. Raraku's final description and the presets' final sentences (D23 /
+  D22) are accepted but **off `main` until D24's step 0**: on `main` the tooltips read the placeholders. Raraku's layout is the M6-S7 placeholder.
 - **M6 4 / 10.** Criterion 7 needs Pale Hills and Vathar Crossing (sim slice 2) + their text (data) + mirrored-terrain tooling. The rest of
   M6 waits on the owner (the art call, music / fonts / export templates) or on the export script (e) once the templates exist.
 - **The golden replay is decoupled** (docs/03 "Testing strategy"): a data change regenerates `cross_map_seed1.replay` only when a `k` line
@@ -24,22 +30,33 @@ that is fine). Bug ids next: **sim from 1060, view from 1094, data from 1103.** 
 - **Waiting on the owner** (none blocking): the art call, the sounds, the D21 / D22 / **D23** review tables, the Shock pass, `goldShare`,
   BUG-0780, "densest cluster", the 3-hour lock window; the downloads (fonts, music, export templates).
 
-## Integration of 2026-11-05-2148 (the conductor's recipe; the next PLAN verifies `main` against it)
+## Integration of 2026-11-05-2148: what happened (conductor, 2026-11-06) and what is left
 
-Rehearsed by the Producer on a scratch clone (build 0 warnings, the golden / data / save filter 646 / 646, smoke PASS, `MapListTest` and
-`QaM6V18Test` PASS). Merge order **sim → view → data**:
+1. **Sim** → `main` 29e900f (fast-forward). 2. **View** → `main` 03b45ed (the two foreseen doc / coverage conflicts resolved as the recipe
+said). On the merged tree: build 0 warnings / 0 errors, non-Perf **8,069 / 0 / 14 in 27 m 42 s**, smoke **PASS**; **the 81-scene loop was not
+run on `main`** (the view's criterion 1 wanted it there: the next view QA runs the loop on its branch, which carries `main`; `TeamsTest` /
+`FreeForAllTest` rerun alone before filing).
+3. **Data** → **not merged.** Merging `main` into `studio/2026-11-05-2148-data` conflicted in `sim/Rts.Sim.Tests/QA/GatherWedgeQaTests.cs`
+(code), `studio/bugs/README.md`, `studio/qa/coverage.md`, and auto-took the branch's golden regen; the skill's rule (abort on any code / data /
+config conflict) escalated it. The branch is pushed intact: **`origin/studio/2026-11-05-2148-data`** (D22 d0f76b8 + D23 9552963 + QA 935ae30).
+`BUG-1102`'s file was copied to `main` byte-identical by the Producer (merges clean). **Producer's call: no owner action; a game-dev step.**
 
-1. **Sim** `studio/2026-11-05-2148-sim` (b44ae87 + the Producer's state commit): fast-forward.
-2. **View** `studio/2026-11-05-2148-view` (fe9267e): conflicts in `docs/02-game-design.md` ("Map and terrain": take the sim's paragraph and
-   append the view's last sentence "The skirmish setup's Map list offers every shipped map file ("Game flow" 2, M6-V18).") and
-   `studio/qa/coverage.md` (keep both sides at both hunks).
-3. **Data** `studio/2026-11-05-2148-data` (935ae30): `sim/Rts.Sim.Tests/QA/GatherWedgeQaTests.cs` → **the sim's** (`main`'s);
-   **`sim/Rts.Sim.Tests/Replays/cross_map_seed1.replay` → `main`'s** (`git checkout HEAD -- <file>` after the merge: git auto-takes the
-   data's regen, which would fail `GoldenDecouplingQaTests.TheCheckedInHeader_*`); `studio/qa/coverage.md` keep both;
-   `studio/bugs/README.md` keep both appended blocks but **one BUG-1081 row, the data's** ("open (item 1 fixed by D23 ...)").
-4. After: `tools/qa/smoke.ps1`, the filter `FullyQualifiedName~ReplayGoldenTests|GoldenDecouplingQaTests|GatherWedgeQaTests|DescriptionWordingQaTests|DataValidationTests|MapTextContentTests`
-   and the scene loop on `main` (the view's criterion 1 asked for the loop on the merged tree; `TeamsTest` / `FreeForAllTest` rerun alone
-   before filing).
+### D24 step 0 (the data dev's first commit; the next PLAN's brief must carry it verbatim)
+
+On the session branch (cut from `origin/main` as usual): `git merge origin/studio/2026-11-05-2148-data`, then resolve:
+- `sim/Rts.Sim.Tests/QA/GatherWedgeQaTests.cs` → **`main`'s** (`git checkout origin/main -- <file>`): the branch's one-line
+  `SameGameDataHashes` move v the sim's deletion of that test.
+- `sim/Rts.Sim.Tests/Replays/cross_map_seed1.replay` → **`main`'s** (same command, **after** the merge even if git reports no conflict: it
+  auto-takes the branch's regen `742D3E95CF629116`, which fails `GoldenDecouplingQaTests.TheCheckedInHeader_*`; `main`'s header is
+  `30C51BB619A7E650`).
+- `studio/qa/coverage.md`: both sides. `studio/bugs/README.md`: both appended blocks, **one BUG-1081 row, the branch's** ("open (item 1
+  fixed D23 ...)"); the BUG-1102 row from the branch; the file itself is already on `main`.
+- Check: `git diff --stat origin/main -- sim/` lists only `sim/Rts.Sim.Tests/Content/**` and `sim/Rts.Sim.Tests/QA/Content/**` (the track's
+  folders); `game/data/` diff = `rules.json`'s two `description`s + `raraku.json`'s `description`; `docs/factions/*.md` the High bullet.
+- Run the filter `FullyQualifiedName~ReplayGoldenTests|GoldenDecouplingQaTests|GatherWedgeQaTests|DescriptionWordingQaTests|DataValidationTests|DataContentHashTests|MapTextContentTests|StartingResourcesContentTests|D22PresetTextQaTests|D23MapTextQaTests`
+  (the Producer's rehearsal of the same resolutions on 2026-11-05: 646 / 646 with the save rows). Commit as "D24: merge D22 + D23 onto main".
+- Then D24 proper (BUG-1102) on top. With the golden decoupled (M6-SH1) no data task touches `GatherWedgeQaTests.cs` or the golden again, so
+  the conductor's next data integration is a clean merge: **this is the last merge of its kind.**
 
 ## Standing rules (1-37)
 
@@ -87,7 +104,8 @@ Vathar Crossing appear in the list by themselves once the sim ships them.
 
 ### Watch-outs (view)
 
-- The scene loop is 81 scenes (~20 min); run it on the merged tree. Recordings made before a data-hash move refuse afterwards (re-record
+- The scene loop is 81 scenes (~20 min); run it on the merged tree. **It has not run on `main` since 2148's merges** (the conductor ran
+  build / non-Perf / smoke only): the next view QA's full loop is the first on a tree carrying M6-SH1 + M6-V18 together. Recordings made before a data-hash move refuse afterwards (re-record
   QA fixtures on the merged tree).
 - `SkirmishSetup` layout: four slots must fit 648 px; the Map row shares a grid row with Map size and Game speed with Starting resources.
   Start's bottom at 633 / 669 (1152 × 648 / 1280 × 720) with four slots.
@@ -99,7 +117,8 @@ Vathar Crossing appear in the list by themselves once the sim ships them.
 
 ### Current session plan
 
-None yet. **Candidate: D24 (feature, counter 3 / 4 → 4 / 4), QA light:** BUG-1102 item 1 ("centre" → "center" in `raraku.json` + the pin
+None yet. **Candidate: D24 (feature, counter 3 / 4 → 4 / 4), QA light: step 0 the merge of `origin/studio/2026-11-05-2148-data` (D22 +
+D23 onto `main`; the recipe above, a game-dev step, no owner needed; it is the task's first acceptance criterion), then** BUG-1102 item 1 ("centre" → "center" in `raraku.json` + the pin
 in `MapTextContentTests.Pinned`; **Producer default: American spelling, as the rest of the data**, unless the owner answers "spelling:
 British" in the inbox) and item 2 (the ratio words "twice" / "double" / "triple" / "half" in the map checker, shared with the presets'
 `NumberWords`); no golden regen needed any more (say so in the report: the first data task under the decoupled golden). Then Pale Hills /
@@ -119,5 +138,8 @@ they arrive; D14 c; M7's rosters.
 ## Watch-outs (all tracks)
 
 - Three tracks a session: three test hosts; wall-clock Perf and scene rows flake under load; rerun alone before filing.
-- **The owner's recordings and saves made before 2026-11-05-2148 refuse to play** (the shipped hash moved: two `ai` knobs, D22 + D23's text).
+- **The owner's recordings and saves made before 2026-11-05-2148 refuse to play** (the shipped hash moved: two `ai` knobs); **it moves once
+  more when D22 + D23 land** (D24's step 0), so recordings made on `main` 03b45ed refuse after that too.
+- **`main` 03b45ed lacks D22 / D23:** `rules.json`'s preset descriptions and `raraku.json`'s description are placeholders, the faction pages
+  have no High bullet, BUG-1081 item 1 reads open. Any task reading those files before D24 lands sees the old text.
 - Sessions longer than 3 h: the conductor refreshes `studio/.session.lock` at each phase and commits each dev's work at every phase boundary.

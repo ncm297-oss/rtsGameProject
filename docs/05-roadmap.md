@@ -803,8 +803,9 @@ open S1 / S2. Retro below; open S3 / S4 listed there.)_
       first map, **Raraku** (2 players, 128, a placeholder layout: Normal v Normal plays to the end, Malazan at 24:10). M6-V18 + D23,
       2026-11-05-2148: **the setup's Map list** (Generated, then every map file by name with its description as the tooltip; a picked map
       greys the generator's rows and caps the slots at its start locations; `--map <id>`; the map carried by save format 5 / replay format 9
-      through load, Watch and Load Game) and **Raraku's final description**. Left: Pale Hills and Vathar Crossing (sim slice 2 + their text),
-      mirrored-terrain tooling.)
+      through load, Watch and Load Game) and **Raraku's final description** (D23 accepted; its branch did not merge on 2026-11-06 and lands at
+      the next data session, so `main` still shows the placeholder sentence until then). Left: Pale Hills and Vathar Crossing (sim slice 2 +
+      their text), mirrored-terrain tooling.)
 - [ ] `tools/export.ps1` produces a Windows zip that runs on a machine without Godot or .NET installed.
 - [ ] Revisit the .NET version (see [03 Platform](03-technical-design.md#platform-and-versions)).
 - [ ] Playable: a friend can unzip it and play a match without help.
