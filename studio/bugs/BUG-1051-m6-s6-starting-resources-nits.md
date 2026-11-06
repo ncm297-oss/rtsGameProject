@@ -3,7 +3,7 @@
 | Field | Value |
 | --- | --- |
 | Severity | S4 |
-| Status | open (item 2 fixed in 0ad9d0c; item 1 rides with the view's M6-S6 follow-up; item 3 the Producer's; item 4 fixed by QA's test) |
+| Status | open (items 2 and 4 fixed 2026-11-05-1206; item 3 fixed by the Producer at the ACCEPT (docs/01 row); item 1 rides with the view's M6-V17; items 5-6 new, for M6-SH1) |
 | Found | 2026-11-05-1206, task M6-S6 (QA) |
 | System | save format docs (`ViewApi/SaveSummary`), `Stress/StartingResourcesAiStressTests`, docs/01 |
 | Fixed by | |
@@ -42,3 +42,14 @@
    to 150 after the think's 50-gold Laborer, so the `>`-to-`>=` mutant on `AiPlayer.SpendingDown` survived the dev's
    tests. QA added `QA/SpendDownQaTests.TheThreshold_IsStrict_AfterWhatTheThinkAlreadySpent` (249 / 250 / 251 gold:
    199 / 200 / 201 left), which kills it. **Fixed (test only).**
+
+## Producer (2026-11-05-1206 ACCEPT)
+
+3. **Fixed:** docs/01's change log has the row (2026-11-05, "Starting resources are two presets ...": the preset numbers, the
+   spend-down rule and the restated criterion 5).
+5. (new) `Stress/StartingResourcesAiStressTests` asserts the brief's 10:00 measure on its nine tuned pairings as well as the mean
+   bank; the 10:00 sample is noise (BUG-1050's Producer decision), so a later AI change can fail the row for nothing. Print the
+   10:00 column, assert the mean only (M6-SH1).
+6. (new) `ProductionManager.SpendDownQueue` (2) is a C# constant deciding AI behaviour; every other AI tunable is a `rules.json`
+   `ai.*` knob (CLAUDE.md rule 6). Move it to `ai.spendDownQueue` (validated 1-5, hashed; the golden moves once) in M6-SH1, or
+   write down why it stays a constant.

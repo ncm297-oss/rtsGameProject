@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S2 (QA 2026-11-05-1206: was S3 as filed by the dev; M6-S6 acceptance criterion 5 is not met) |
-| Status | open (behaviour fixed and verified in round 1; criterion 5's 10:00 measure still fails 4 of 36 unseen sides: Producer to restate the measure) |
+| Status | fixed (Producer, 2026-11-05-1206 ACCEPT: the behaviour by 0ad9d0c; criterion 5 restated as the mean-bank measure, docs/01 2026-11-05) |
 | Found | 2026-11-05-1206, task M6-S6 (game-dev) |
 | System | AI (production throughput, build-order timing), `Stress/StartingResourcesAiStressTests` |
-| Fixed by | 0ad9d0c (spend-down rule, `aiSpendAbove` 200 on `high`; `Ai/SpendDownTests`, `QA/SpendDownQaTests`) for the behaviour; the measure is the Producer's call |
+| Fixed by | 0ad9d0c (spend-down rule, `aiSpendAbove` 200 on `high`; `Ai/SpendDownTests`, `QA/SpendDownQaTests`, `Stress/StartingResourcesAiStressTests` mean-bank assertion); the measure restated by the Producer at the 2026-11-05-1206 ACCEPT |
 
 ## Repro
 1. `dotnet test sim/Rts.Sim.Tests --filter "FullyQualifiedName~StartingResourcesAiStressTests" --logger "console;verbosity=detailed"`:
@@ -114,3 +114,13 @@ Also verified: `standard` bit for bit (StandardPresetPinQaTests 20 / 20, SharedV
 runs identical to 5368cfe), a `high` AI match saved at 0:10 / 1:00 / 3:00 while spending down plays to 8:00 hash-equal to
 the unsaved run every tick, a `high` recording plays to every checkpoint (and diverges played as `standard`), 0 B per tick
 on the spend-down path, extreme thresholds (1, 1,000,000) x starts (0, 1,000,000) twin-equal with no negative bank.
+
+## Producer decision (2026-11-05-1206 ACCEPT)
+
+Criterion 5's goal was "no opening sits on a `high` start"; the 10:00 bank was my proxy for it, and QA showed the proxy is one
+noisy sample: the 4 unseen sides over it hold 157-484 at 10:00 over `standard` banks of 61-235 while their mean bank is at or
+below 1.37 x, and the `>`-to-`>=` mutant alone flips a tuned side to x4.99. **Criterion 5 is restated** as "the mean bank
+2:00-10:00 at `high` at most 1.5 x `standard`'s on every side" (met on all 72 measured sides, 0.32-1.44 x; asserted by
+`Stress/StartingResourcesAiStressTests` and QA's `SpendDownQaTests.SixUnseenSeedsPerOpening_AtHigh_SpendTheStart`), recorded in
+docs/01's change log. **Closed as fixed.** Left as S4 (BUG-1051 item 5): the stress row still asserts the 10:00 measure on its
+nine tuned pairings; a later AI change can trip it on noise, so it should print that column and assert the mean only.
