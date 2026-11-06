@@ -1,3 +1,5 @@
+using System.Collections.Immutable;
+
 namespace Rts.Sim.Data;
 
 /// <summary>Global economy rules from <c>common/rules.json</c> (docs/02 "Economy"), converted to sim units.</summary>
@@ -7,10 +9,20 @@ public sealed class RulesDef
     {
     }
 
-    /// <summary>Gold each player starts with.</summary>
-    public int StartingGold { get; init; }
-    /// <summary>Wood each player starts with.</summary>
-    public int StartingWood { get; init; }
+    /// <summary>
+    /// M6-S6: the starting-resources presets in file order (the setup's list order), ids unique, <see cref="StartingResourcesDef.StandardId"/>
+    /// among them. A match picks one by id (<see cref="SimConfig.StartingResources"/>).
+    /// </summary>
+    public ImmutableArray<StartingResourcesDef> StartingResources { get; init; } = ImmutableArray<StartingResourcesDef>.Empty;
+
+    /// <summary>The index in <see cref="StartingResources"/> of the preset with id <paramref name="key"/>, or -1.</summary>
+    public int FindStartingResources(string? key)
+    {
+        for (int i = 0; i < StartingResources.Length; i++)
+            if (StartingResources[i].Key == key) return i;
+        return -1;
+    }
+
     /// <summary>Workers each player starts with.</summary>
     public int StartingWorkers { get; init; }
     /// <summary>Hard population cap, in half-pop units (100 pop = 200).</summary>

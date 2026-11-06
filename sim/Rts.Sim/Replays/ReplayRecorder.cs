@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Immutable;
 using Rts.Sim.Commands;
+using Rts.Sim.Data;
 
 namespace Rts.Sim.Replays;
 
@@ -134,9 +135,13 @@ public sealed class ReplayRecorder
         }
         return new Replay
         {
-            // M6-S4: a match with a team is format 7; a free-for-all stays format 6, byte for byte as before (every reader of
-            // format 6, the game's replay list among them, keeps reading it).
-            FormatVersion = teams ? Replay.CurrentFormatVersion : Replay.TeamlessFormatVersion,
+            // The oldest format that holds the match, so a match a format didn't change is written byte for byte as before:
+            // M6-S6, a preset other than standard is format 8; M6-S4, a match with a team at standard is format 7; a
+            // free-for-all at standard stays format 6 (every reader of format 6, the game's replay list among them, keeps
+            // reading it).
+            FormatVersion = config.StartingResources != StartingResourcesDef.StandardId ? Replay.CurrentFormatVersion
+                : teams ? Replay.PresetlessFormatVersion : Replay.TeamlessFormatVersion,
+            StartingResources = config.StartingResources,
             Seats = seats.MoveToImmutable(),
             SimVersion = SimInfo.Version,
             DataHash = _dataHash,

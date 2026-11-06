@@ -29,8 +29,7 @@ internal sealed class DamageTypeJson
 
 internal sealed class RulesJson
 {
-    public int? StartingGold { get; set; }
-    public int? StartingWood { get; set; }
+    public List<StartingResourcesJson?>? StartingResources { get; set; } // M6-S6
     public int? StartingWorkers { get; set; }
     public int? PopCap { get; set; }
     public int? WorkerCarry { get; set; }
@@ -43,6 +42,17 @@ internal sealed class RulesJson
     public double? BuildingSight { get; set; }
     public StealthJson? Stealth { get; set; }
     public AiRulesJson? Ai { get; set; }
+}
+
+// M6-S6: one rules.json "startingResources" preset.
+internal sealed class StartingResourcesJson
+{
+    public string? Id { get; set; }
+    public string? DisplayName { get; set; }
+    public string? Description { get; set; }
+    public int? Gold { get; set; }
+    public int? Wood { get; set; }
+    public int? AiSpendAbove { get; set; } // BUG-1050, optional
 }
 
 // M5-2: rules.json "ai", the AI's generic tunables.

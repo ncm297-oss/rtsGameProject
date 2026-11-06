@@ -17,6 +17,12 @@ public static class DataLimits
     /// <summary>Largest value an integer field may hold, so derived values such as half-pop (2 x popCap) stay inside int (BUG-0007).</summary>
     public const int MaxInteger = 1_000_000;
 
+    /// <summary>M6-S6: most <c>rules.json</c> <c>startingResources</c> presets (a setup list, not a catalogue).</summary>
+    public const int MaxStartingResourcesPresets = 16;
+
+    /// <summary>M6-S6: longest starting-resources preset id, so it fits one token of a replay header line (<c>Replay.IsToken</c>: 64).</summary>
+    public const int MaxStartingResourcesIdLength = 64;
+
     /// <summary>Longest duration in seconds (one hour), so the conversion to ticks can't overflow int (BUG-0007).</summary>
     public const double MaxSeconds = 3600;
 

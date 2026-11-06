@@ -214,6 +214,21 @@ internal sealed partial class AiPlayer
     /// <summary>See <see cref="Gold"/>.</summary>
     internal int Wood { get; private set; }
 
+    /// <summary>
+    /// BUG-1050: the match's starting-resources preset's <c>aiSpendAbove</c> (gold + wood; set by the sim from
+    /// <see cref="SimConfig.StartingPreset"/>, configuration, not state); 0 (<c>standard</c>) turns the spend-down rule off.
+    /// </summary>
+    internal int SpendAbove { get; init; }
+
+    /// <summary>
+    /// BUG-1050: whether the AI spends down this think: the rule is on and what is left (gold + wood, after the commands sent
+    /// so far) is above <see cref="SpendAbove"/>. Then the build order pulls its next time-triggered step due early
+    /// (<see cref="BuildOrderExecutor"/>), production trains at every producer (<see cref="ProductionManager"/>), and the
+    /// gatherers lean toward the kind the bank holds less of (<see cref="WantedGoldShare()"/>). With the rule off this is
+    /// never true, so a <c>standard</c> match plays exactly as before the rule.
+    /// </summary>
+    internal bool SpendingDown => SpendAbove > 0 && Gold + Wood > SpendAbove;
+
     /// <summary>Whether the build-order executor sent a command this think (the production manager then waits).</summary>
     internal bool ExecutorSent { get; set; }
 
@@ -342,9 +357,20 @@ internal sealed partial class AiPlayer
 
     /// <summary>
     /// M5-4g: the share of gatherers the economy wants on gold: <c>ai.goldShare</c>, plus <c>ai.reserveShift</c> while the
-    /// reserved step is short of gold only, minus it while short of wood only, clamped to 0-1.
+    /// reserved step is short of gold only, minus it while short of wood only, clamped to 0-1. BUG-1050: with no reserved step
+    /// short, while spending down (<see cref="SpendingDown"/>) it shifts the same way toward the kind the bank holds less of
+    /// (a <c>high</c> Malazan side otherwise piled 450-750 wood with its gold at 10-60: its units cost mostly gold).
     /// </summary>
-    internal float WantedGoldShare() => WantedGoldShare(Rules.GoldShare, Rules.ReserveShift, ReserveShortGold, ReserveShortWood);
+    internal float WantedGoldShare()
+    {
+        bool shortGold = ReserveShortGold, shortWood = ReserveShortWood;
+        if (!shortGold && !shortWood && SpendingDown)
+        {
+            shortGold = Gold < Wood;
+            shortWood = Wood < Gold;
+        }
+        return WantedGoldShare(Rules.GoldShare, Rules.ReserveShift, shortGold, shortWood);
+    }
 
     /// <summary>See <see cref="WantedGoldShare()"/>: <paramref name="goldShare"/> moved by <paramref name="shift"/> toward the one kind short, clamped to 0-1.</summary>
     internal static float WantedGoldShare(float goldShare, float shift, bool shortGold, bool shortWood)

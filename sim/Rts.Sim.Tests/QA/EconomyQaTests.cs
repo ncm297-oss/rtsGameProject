@@ -538,7 +538,7 @@ public class EconomyQaTests
             sim.Tick();
         }
         Replay r = rec.ToReplay();
-        Assert.Equal(7, Replay.CurrentFormatVersion); // M4-2a: format 4; M5-2: format 5 (seat lines); M5-4a: format 6 (start lines); M6-S4: format 7 (teams)
+        Assert.Equal(8, Replay.CurrentFormatVersion); // M4-2a: format 4; M5-2: format 5 (seat lines); M5-4a: format 6 (start lines); M6-S4: format 7 (teams); M6-S6: format 8 (starting resources)
         Assert.Equal(Replay.TeamlessFormatVersion, r.FormatVersion); // M6-S4: a match without teams is still written as format 6
         Assert.Equal(ReplayError.None, ReplayFormat.TryRead(ReplayFormat.Write(r), out Replay? back));
         ReplayResult res = ReplayPlayer.Run(back!, TestSim.Data);

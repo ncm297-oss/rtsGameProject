@@ -49,6 +49,9 @@ internal static class SaveHeader
         // field, so every format-2 field before it keeps its offset (a header-only reader, ViewApi.SaveSummary, reads up to the
         // tick).
         for (int p = 0; p < c.PlayerCount; p++) w.Write((byte)c.SeatOf(p).Team);
+        // Format 4 (M6-S6): the starting-resources preset's id (a string), after the team bytes: every format-3 field keeps
+        // its offset, so the view's header-only reader (it stops after the team bytes) reads a format-4 header unchanged.
+        w.WriteString(c.StartingResources);
     }
 
     /// <summary>Every <see cref="MapGenParams"/> field, in declaration order.</summary>
@@ -115,11 +118,12 @@ internal static class SaveHeader
     /// <summary>
     /// Reads the header after the fixed prefix (the caller checked magic, version, length and checksum): the data hash
     /// (<see cref="SaveError.DataMismatch"/> against <paramref name="data"/>), then every field, each in its range
-    /// (<see cref="SaveError.InvalidHeader"/>, an AI seat whose faction has no <c>ai.json</c> too, and since format 3 a team
-    /// outside 0 to <see cref="PlayerSeat.MaxTeam"/>). On success
+    /// (<see cref="SaveError.InvalidHeader"/>, an AI seat whose faction has no <c>ai.json</c> too, since format 3 a team
+    /// outside 0 to <see cref="PlayerSeat.MaxTeam"/>, and since format 4 a starting-resources preset the data lacks; a
+    /// <paramref name="version"/> 3 header has no preset and loads as <c>standard</c>). On success
     /// <paramref name="config"/> is the match's config and <paramref name="tick"/> the tick number the save was made at.
     /// </summary>
-    public static SaveError TryRead(SaveReader r, GameData data, out SimConfig? config, out int tick)
+    public static SaveError TryRead(SaveReader r, GameData data, int version, out SimConfig? config, out int tick)
     {
         config = null;
         tick = 0;
@@ -158,7 +162,9 @@ internal static class SaveHeader
             if (team > PlayerSeat.MaxTeam) return SaveError.InvalidHeader;
             seats[p] = seats[p] with { Team = team };
         }
-        if (r.Failed) return SaveError.Malformed;
+        // Format 4 (M6-S6): the starting-resources preset, after the teams; a format-3 save was made before presets: standard.
+        string? preset = version >= 4 ? r.ReadString() : StartingResourcesDef.StandardId;
+        if (r.Failed || preset == null) return SaveError.Malformed;
         // BUG-1040: the command capacity's range is the config's own (1 to SaveFormat.MaxCommandCapacity), so a header over
         // it is InvalidHeader before anything is built, as every other capacity out of range.
         if (!InCapacity(units, 1) || commands < 1 || commands > SaveFormat.MaxCommandCapacity || !InCapacity(resources, 1) || !InCapacity(buildings, 1)
@@ -178,8 +184,10 @@ internal static class SaveHeader
             StatsSampleTicks = sampleTicks,
             StatsSampleCapacity = sampleCapacity,
             Seats = seats.MoveToImmutable(),
+            StartingResources = preset,
         };
-        // An AI seat's faction needs a loaded ai.json, which the config's check asks (M6-S3: AI seats load).
+        // An AI seat's faction needs a loaded ai.json, which the config's check asks (M6-S3: AI seats load); an unknown
+        // starting-resources id is refused there too (M6-S6).
         if (!Valid(built)) return SaveError.InvalidHeader;
         config = built;
         return SaveError.None;

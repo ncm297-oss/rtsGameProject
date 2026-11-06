@@ -91,8 +91,15 @@ public class DataValidationTests
         Assert.False(t.IgnoresArmor[Type("pierce")]);
 
         RulesDef r = data.Rules;
-        Assert.Equal(200, r.StartingGold);
-        Assert.Equal(200, r.StartingWood);
+        // M6-S6: the presets in file order; standard is today's 200 / 200 (the Producer's numbers; high 1000 / 1000).
+        Assert.Equal(new[] { "standard", "high" }, r.StartingResources.Select(x => x.Key));
+        Assert.Equal((200, 200), (r.StartingResources[0].Gold, r.StartingResources[0].Wood));
+        Assert.Equal((1000, 1000), (r.StartingResources[1].Gold, r.StartingResources[1].Wood));
+        // BUG-1050: the AI's spend-down rule is off at standard (the field left out) and on above 200 at high.
+        Assert.Equal((0, 200), (r.StartingResources[0].AiSpendAbove, r.StartingResources[1].AiSpendAbove));
+        Assert.Equal(0, r.FindStartingResources("standard"));
+        Assert.Equal(1, r.FindStartingResources("high"));
+        Assert.Equal(-1, r.FindStartingResources("low"));
         Assert.Equal(5, r.StartingWorkers);
         Assert.Equal(200, r.HalfPopCap); // hard cap 100
         Assert.Equal(10, r.WorkerCarry);
@@ -390,6 +397,83 @@ public class DataValidationTests
         Assert.Equal("common/rules.json", e.File);
         Assert.Equal(path, e.Path);
         Assert.Contains(message, e.Message);
+    }
+
+    /// <summary>
+    /// M6-S6: <c>startingResources</c>, each refusal one error at its path: the list missing, no <c>standard</c> preset, a
+    /// duplicate id, a negative or too large amount, a missing amount or name, an id not snake_case or too long, too many presets.
+    /// </summary>
+    [Theory]
+    [InlineData(null, "startingResources", "missing required field")]
+    [InlineData("[]", "startingResources", "no 'standard' preset")]
+    [InlineData("[{\"id\":\"high\",\"displayName\":\"High\",\"gold\":1000,\"wood\":1000}]", "startingResources", "no 'standard' preset")]
+    [InlineData("[{\"id\":\"standard\",\"displayName\":\"S\",\"gold\":200,\"wood\":200},{\"id\":\"standard\",\"displayName\":\"T\",\"gold\":1,\"wood\":1}]", "startingResources[1].id", "duplicate starting-resources id 'standard'")]
+    [InlineData("[{\"id\":\"standard\",\"displayName\":\"S\",\"gold\":-1,\"wood\":200}]", "startingResources[0].gold", "below the minimum 0")]
+    [InlineData("[{\"id\":\"standard\",\"displayName\":\"S\",\"gold\":200,\"wood\":-200}]", "startingResources[0].wood", "below the minimum 0")]
+    [InlineData("[{\"id\":\"standard\",\"displayName\":\"S\",\"gold\":1000001,\"wood\":200}]", "startingResources[0].gold", "above the maximum 1000000")]
+    [InlineData("[{\"id\":\"standard\",\"displayName\":\"S\",\"wood\":200}]", "startingResources[0].gold", "missing required field")]
+    [InlineData("[{\"id\":\"standard\",\"gold\":200,\"wood\":200}]", "startingResources[0].displayName", "missing required text")]
+    [InlineData("[{\"id\":\"standard\",\"displayName\":\"S\",\"gold\":200,\"wood\":200},{\"id\":\"High\",\"displayName\":\"H\",\"gold\":1,\"wood\":1}]", "startingResources[1].id", "not snake_case")]
+    [InlineData("[{\"id\":\"standard\",\"displayName\":\"S\",\"gold\":200,\"wood\":200},{\"id\":\"a234567890123456789012345678901234567890123456789012345678901234x\",\"displayName\":\"H\",\"gold\":1,\"wood\":1}]", "startingResources[1].id", "longer than 64 characters")]
+    [InlineData("[{\"id\":\"standard\",\"displayName\":\"S\",\"gold\":200,\"wood\":200},null]", "startingResources[1]", "missing required field")]
+    [InlineData("[{\"id\":\"standard\",\"displayName\":\"S\",\"gold\":200,\"wood\":200,\"aiSpendAbove\":-1}]", "startingResources[0].aiSpendAbove", "below the minimum 0")] // BUG-1050
+    [InlineData("[{\"id\":\"standard\",\"displayName\":\"S\",\"gold\":200,\"wood\":200,\"aiSpendAbove\":1000001}]", "startingResources[0].aiSpendAbove", "above the maximum 1000000")]
+    public void StartingResources_BadOrMissing_IsOneError(string? json, string path, string message)
+    {
+        using TestDataDir dir = TestDataDir.CopyOfShipped();
+        dir.EditJson("common/rules.json", r =>
+        {
+            if (json == null) r.Remove("startingResources");
+            else r["startingResources"] = JsonNode.Parse(json);
+        });
+        DataError e = Assert.Single(DataLoader.LoadAll(dir.Path).Errors);
+        Assert.Equal("common/rules.json", e.File);
+        Assert.Equal(path, e.Path);
+        Assert.Contains(message, e.Message);
+    }
+
+    /// <summary>M6-S6: more than <see cref="DataLimits.MaxStartingResourcesPresets"/> presets is one error; the limit itself, amounts at 0 and the maximum, no description and a 64-character id load.</summary>
+    [Fact]
+    public void StartingResources_AtTheLimits_Load_AndOneMorePreset_IsOneError()
+    {
+        static JsonArray Presets(int count)
+        {
+            var list = new JsonArray { new JsonObject { ["id"] = "standard", ["displayName"] = "S", ["gold"] = 0, ["wood"] = DataLimits.MaxInteger, ["aiSpendAbove"] = DataLimits.MaxInteger } };
+            for (int i = 1; i < count; i++)
+                list.Add(new JsonObject { ["id"] = i == 1 ? "a" + new string('b', 63) : $"p{i}", ["displayName"] = $"P{i}", ["gold"] = i, ["wood"] = i, ["aiSpendAbove"] = i == 1 ? 0 : i });
+            return list;
+        }
+        using (TestDataDir dir = TestDataDir.CopyOfShipped())
+        {
+            dir.EditJson("common/rules.json", r => r["startingResources"] = Presets(DataLimits.MaxStartingResourcesPresets));
+            DataLoadResult load = DataLoader.LoadAll(dir.Path);
+            Assert.True(load.Ok, string.Join("; ", load.Errors));
+            StartingResourcesDef s = load.Data!.Rules.StartingResources[0];
+            Assert.Equal(("standard", "S", "", 0, DataLimits.MaxInteger), (s.Key, s.DisplayName, s.Description, s.Gold, s.Wood));
+            Assert.Equal(DataLimits.MaxInteger, s.AiSpendAbove); // BUG-1050: 0 and the maximum load
+            Assert.Equal(0, load.Data.Rules.StartingResources[1].AiSpendAbove);
+            Assert.Equal(DataLimits.MaxStartingResourcesPresets, load.Data.Rules.StartingResources.Length);
+            Assert.Equal(64, load.Data.Rules.StartingResources[1].Key.Length);
+        }
+        using (TestDataDir dir = TestDataDir.CopyOfShipped())
+        {
+            dir.EditJson("common/rules.json", r => r["startingResources"] = Presets(DataLimits.MaxStartingResourcesPresets + 1));
+            DataError e = Assert.Single(DataLoader.LoadAll(dir.Path).Errors);
+            Assert.Equal("startingResources", e.Path);
+            Assert.Contains("above the maximum 16", e.Message);
+        }
+    }
+
+    /// <summary>M6-S6: the old top-level <c>startingGold</c> / <c>startingWood</c> are unknown fields now (the presets replace them).</summary>
+    [Theory]
+    [InlineData("startingGold")]
+    [InlineData("startingWood")]
+    public void TheOldStartingFields_AreUnknown(string field)
+    {
+        using TestDataDir dir = TestDataDir.CopyOfShipped();
+        dir.EditJson("common/rules.json", r => r[field] = 200);
+        DataError e = Assert.Single(DataLoader.LoadAll(dir.Path).Errors);
+        Assert.Contains(field, e.Path + e.Message);
     }
 
     /// <summary>BUG-0593: <c>ai.scoutGrid</c> loads at both edges, in meters.</summary>

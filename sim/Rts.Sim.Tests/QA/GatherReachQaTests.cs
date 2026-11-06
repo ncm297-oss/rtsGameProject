@@ -338,7 +338,7 @@ public class GatherReachQaTests
         }
         Assert.True(sim.World.GatheredWood[3] > 0, "setup: seat 3 gathered no wood (BUG-1045's scene not reproduced)");
         Replay replay = rec!.ToReplay();
-        Assert.Equal(Replay.CurrentFormatVersion, replay.FormatVersion);
+        Assert.Equal(Replay.PresetlessFormatVersion, replay.FormatVersion); // M6-S6: a team match at standard stays format 7
         Assert.Equal(7, replay.FormatVersion);
         Assert.Equal(new[] { 1, 1, 2, 2 }, replay.Seats.Select(s => s.Team).ToArray());
         byte[] bytes = ReplayFormat.Write(replay);

@@ -108,6 +108,16 @@ public sealed record SimConfig(ulong Seed, int PlayerCount, int UnitCapacity, in
     /// </summary>
     public ImmutableArray<PlayerSeat> Seats { get; init; } = ImmutableArray<PlayerSeat>.Empty;
 
+    /// <summary>
+    /// M6-S6: the id of the <c>rules.json</c> <c>startingResources</c> preset every seat starts with (docs/02 "Game flow" 2);
+    /// default <see cref="StartingResourcesDef.StandardId"/>. <see cref="Validate"/> refuses an id the data lacks. Configuration,
+    /// not hashed state: the ledger it seeds is. In the save header (format 4) and the replay header (format 8).
+    /// </summary>
+    public string StartingResources { get; init; } = StartingResourcesDef.StandardId;
+
+    /// <summary>M6-S6: the preset <see cref="StartingResources"/> names (call after <see cref="Validate"/>, which refuses an unknown id).</summary>
+    public StartingResourcesDef StartingPreset => Data.Rules.StartingResources[Data.Rules.FindStartingResources(StartingResources)];
+
     /// <summary>Player <paramref name="player"/>'s seat: <see cref="Seats"/>' entry, or the default (<c>p mod factions</c>, human, Normal; faction -1 with no factions).</summary>
     public PlayerSeat SeatOf(int player)
     {
@@ -128,7 +138,7 @@ public sealed record SimConfig(ulong Seed, int PlayerCount, int UnitCapacity, in
         }
     }
 
-    /// <summary>Throws if any size is out of range, or (M5-2) a seat is bad: a count other than the players', an unknown faction, controller or difficulty, (M6-S4) a team outside 0 to <see cref="PlayerSeat.MaxTeam"/>, or an AI seat whose faction has no loaded <c>ai.json</c>.</summary>
+    /// <summary>Throws if any size is out of range, (M6-S6) the starting-resources preset is not in the data, or (M5-2) a seat is bad: a count other than the players', an unknown faction, controller or difficulty, (M6-S4) a team outside 0 to <see cref="PlayerSeat.MaxTeam"/>, or an AI seat whose faction has no loaded <c>ai.json</c>.</summary>
     public void Validate()
     {
         if (PlayerCount < 1) throw new ArgumentOutOfRangeException(nameof(PlayerCount));
@@ -145,6 +155,8 @@ public sealed record SimConfig(ulong Seed, int PlayerCount, int UnitCapacity, in
         if (Data == null) throw new ArgumentNullException(nameof(Data));
         if (Map == null) throw new ArgumentNullException(nameof(Map));
         Map.Validate();
+        if (Data.Rules.FindStartingResources(StartingResources) < 0)
+            throw new ArgumentException($"Unknown starting-resources preset '{StartingResources}'.", nameof(StartingResources));
         ValidateSeats();
     }
 

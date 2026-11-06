@@ -91,8 +91,16 @@ public sealed class GameData
         AddAll(ref h, t.Multipliers);
 
         RulesDef r = Rules;
-        h.Add(r.StartingGold);
-        h.Add(r.StartingWood);
+        h.Add(r.StartingResources.Length); // M6-S6: the presets in file order, every field
+        foreach (StartingResourcesDef s in r.StartingResources)
+        {
+            h.Add(s.Key);
+            h.Add(s.DisplayName);
+            h.Add(s.Description);
+            h.Add(s.Gold);
+            h.Add(s.Wood);
+            h.Add(s.AiSpendAbove); // BUG-1050
+        }
         h.Add(r.StartingWorkers);
         h.Add(r.HalfPopCap);
         h.Add(r.WorkerCarry);

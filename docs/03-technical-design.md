@@ -1959,8 +1959,8 @@ closed by rule: only exposed nodes are gathered.
   border, node or building), or a live unit whose center lies in it. The queued flag on it is
   malformed. `Free` exists as a test seam until destruction (M3-3 / M4).
 - **Player totals.** `World.Gold` / `World.Wood` (read-only spans, one int per player) start at
-  `rules.json` `startingGold` / `startingWood`; deposits add to them (saturating at `int.MaxValue`).
-  Hashed.
+  the match's `rules.json` `startingResources` preset (`SimConfig.StartingResources`, M6-S6; before it, `startingGold` /
+  `startingWood`); deposits add to them (saturating at `int.MaxValue`). Hashed.
 - **Gather command.** `Command.Gather(player, unit, position[, queued])` (kind 7, a unit order):
   `position` is any point of a node's footprint; the node is resolved at apply. Dropped (no throw) for
   a dead or foreign handle, a unit whose type isn't in the `worker` slot (queued or not), or a target
@@ -3171,7 +3171,7 @@ the milestone that consumes it.
 | --- | --- |
 | `damage_table.json` | `armorClasses: [{id, displayName}]`, `damageTypes: [{id, displayName, ignoresArmor?, multipliers: {<armorClass>: x}}]`. Every type must list every class. `ignoresArmor` (default false) is how Magic skips armor |
 | `resources.json` | `{ "resources": [ ... ] }`, each `{id, displayName, description, resource, footprint {width, height}}`: `resource` is `gold` or `wood`, footprint sides are cells, 1-4 (`DataLimits.MaxFootprint`). Amounts are not here: a tree holds `rules.json` `treeWood`, a mine `startMines.gold` (M3-1, see "Economy implementation") |
-| `rules.json` | docs/02 Economy table: `startingGold`, `startingWood`, `startingWorkers`, `popCap`, `workerCarry`, `gatherRate {gold, wood}` (per second), `startMines` / `expansionMines {count, gold}`, `treeWood`, `nodeSearchRadius`, `repair {rateFactor, costFactor}` (M3-3), `buildingSight` (M4-3a: meters, above 0 and at most 64, the sight of a building whose entry gives none; shipped 12, a Producer default: docs/02 gives sight only for the Watch Tower), `stealth {proximity, revealSeconds}` (M4-5: meters and seconds, above 0; shipped 3 and 3, docs/02 "Stealth and detection"). Pop provided by buildings comes with `buildings.json` (M3); the Age II cost with `techs.json` (M3-5) |
+| `rules.json` | docs/02 Economy table: `startingResources` (M6-S6, replacing `startingGold` / `startingWood`: a list of presets in the setup's order, each `{id, displayName, description?, gold, wood, aiSpendAbove?}`; ids unique snake_case of at most 64 characters, a `standard` entry required, gold and wood 0 to 1,000,000, at most 16 presets; shipped `standard` 200 / 200 and `high` 1000 / 1000, Producer default; `aiSpendAbove` (M6-S6 fix round 1, BUG-1050) optional, 0 to 1,000,000, 0 or left out = off: the AI's spend-down threshold in gold + wood, shipped `high` 200, `standard` none; every field, the count and the order in `ContentHash`), `startingWorkers`, `popCap`, `workerCarry`, `gatherRate {gold, wood}` (per second), `startMines` / `expansionMines {count, gold}`, `treeWood`, `nodeSearchRadius`, `repair {rateFactor, costFactor}` (M3-3), `buildingSight` (M4-3a: meters, above 0 and at most 64, the sight of a building whose entry gives none; shipped 12, a Producer default: docs/02 gives sight only for the Watch Tower), `stealth {proximity, revealSeconds}` (M4-5: meters and seconds, above 0; shipped 3 and 3, docs/02 "Stealth and detection"). Pop provided by buildings comes with `buildings.json` (M3); the Age II cost with `techs.json` (M3-5) |
 | `faction.json` | `id` (must equal the folder name), `displayName`, `description`, `bonus {displayName, description}`, `resources {gold, wood: {displayName}}`, `palette {primary, secondary, accent}` as `#RRGGBB` |
 | `buildings.json` | `{ "buildings": [ ... ] }`, each `{id, displayName, description, slot, footprint {width, height}, hp, armor, cost {gold, wood}, buildTime, popProvided, dropOff}`: `slot` is one of the ten template slots (`DataLimits.BuildingSlotIds`), footprint sides 1-4 cells, `buildTime` in seconds (to ticks), `popProvided` a multiple of 0.5 (to half-pop), `dropOff` a required bool, `requires` an optional list of tech / building ids (M3-5; resolved and gating placement since M3-6), `sight` optional meters (M4-3a: above 0 and at most 64, default `rules.json` `buildingSight`; shipped 24 on both watch towers, docs/02), `attack` optional (M4-3b: the unit `attack` object; value at least 1, range above 0, an aimed `projectile` required, `targets` not `buildings`; shipped on both watch towers), `detector` optional meters (M4-3b: above 0 and at most 64; shipped 16 on both watch towers; unused until M4-5). Ids unique across factions (M3-2, see "Economy implementation"); exactly one building per slot per faction (M3-6, BUG-0010) |
 | `techs.json` | `{ "techs": [ ... ] }` in `common/` (shared by every faction) and in each faction folder (its own), each `{id, displayName, description, researchedAt, cost {gold, wood}, researchTime, requires?, requiresAnyOf?, effects: [{stat, amount, appliesTo {attackType?, tags?, units?, siege?}}]}`: `researchedAt` is a building slot id (a common tech resolves to each faction's building of it; a faction without one is an error), `researchTime` in seconds (to ticks), `requires` tech / building ids (resolved and gating research since M3-6), `requiresAnyOf` `{count, of: [slot ids, or in a faction file its own building ids]}`: met when `count` of the distinct listed slots hold an own finished building (M3-6; shipped on `age_ii` only), `effects` may be empty. `stat` is one of `attack`, `armor`, `range`, `hp`, `abilityCooldown` (`DataLimits.TechStatIds`); `amount` is non-zero, whole for attack / armor / hp, meters for range, seconds for ability cooldown (to ticks, negative shortens it). `appliesTo` is required (`{}` = every unit); each filter it sets must match: `attackType` a damage type, `tags` any one of the unit's tags (each must be a tag some unit has), `units` unit ids (a faction tech's must be its own), `siege` true / false for the `siege` slot; a `tags` or `units` list set to `[]` is an error (M3-6, BUG-0098). Tech ids are unique across all techs files and may not equal a building id (M3-6); `DataLimits.AgeTechIds` (`age_ii`) must be a common tech (M3-5, see "Implementation (M3-5)") |
@@ -8236,7 +8236,10 @@ M5 criterion 8, the sim half: named AI openings (D14 b). Code: `Data/AiOpening.c
 
 - **Replay file** (M1-6, `Rts.Sim.Replays`): a `Replay` holds a header, the command log, and
   checkpoints.
-  - Header: format version (`Replay.CurrentFormatVersion` = 7 since M6-S4, which added each seat's team as a fifth seat
+  - Header: format version (`Replay.CurrentFormatVersion` = 8 since M6-S6, which added the `starting-resources <id>` line
+    after `combat` (formats 3-7 read as `standard`; the recorder writes the oldest format that holds the match: 8 for a preset
+    other than `standard`, else 7 (`Replay.PresetlessFormatVersion`) for a match with a team, else 6, so a match at
+    `standard` is written byte for byte as before); 7 since M6-S4, which added each seat's team as a fifth seat
     token (formats 5-6 read with every team 0; the recorder writes 7 only for a match with a team and keeps a free-for-all at
     `Replay.TeamlessFormatVersion` = 6, byte for byte as before); 6 since M5-4a, which added the five `map.start-*` lines (formats
     3-5 read with no start locations); 5 since M5-2, which added one seat line per player; 4
@@ -8250,7 +8253,9 @@ M5 criterion 8, the sim half: named AI openings (D14 b). Code: `Data/AiOpening.c
     capacity (they decide outcomes: the unit and
     resource capacities are in the state hash and a full store drops spawns), checkpoint interval,
     tick count, (format 4) `combat 0 / 1` (`SimConfig.Combat` when recorded, `Replay.Combat`; a format 3 file has no
-    such line and was recorded with combat on), and every `MapGenParams` field (M3-1 added `map.forests`,
+    such line and was recorded with combat on), (format 8) `starting-resources <id>` (`Replay.StartingResources`, the
+    preset's snake_case id, `Replay.Validate` holds it to a snake_case token of at most 64 characters and to `standard` in
+    formats 3-7: `InvalidHeader`), and every `MapGenParams` field (M3-1 added `map.forests`,
     `map.forest-min-trees`, `map.forest-max-trees`, `map.gold-mines`, `map.mine-spacing`; format 6, M5-4a, the five
     `map.start-*` lines). There is no map id yet:
     the map, resource nodes included, is rebuilt from seed + params.
@@ -8293,7 +8298,8 @@ M5 criterion 8, the sim half: named AI openings (D14 b). Code: `Data/AiOpening.c
   The interval may exceed the tick count: the recorder writes replays shorter than one interval.
 - **Playback** (`ReplayPlayer.Run(replay, data)`): refuses before any tick with
   `FormatVersionMismatch`, another validation code, or `DataMismatch` when the data hash differs.
-  Otherwise it builds the `SimConfig` (since format 4 with the header's `combat`; `Run(replay, data, combat)` overrides
+  Otherwise it builds the `SimConfig` (since format 8 with the header's starting-resources preset, `InvalidHeader` before
+  any tick for an id the data lacks; since format 4 with the header's `combat`; `Run(replay, data, combat)` overrides
   it, for format 3 test replays recorded with combat off, which can't say so; since format 5 with the header's factions
   and **every seat human**: the AI's commands are in the log, so playback runs no AI; a seat naming a faction the data
   lacks is `InvalidHeader` before any tick), enqueues each command when `TickNumber == command.Tick - 1`
@@ -8361,8 +8367,10 @@ version 2) stores the AI seats too, so every match saves. Code in `sim/Rts.Sim/S
   patterns. Strings are an int32 byte count and printable ASCII (the sim version, snake_case faction ids). An array is its
   int32 length, then its elements; the reader requires the length the header's capacities give. Structs holding a bool
   (commands, ghosts, events) go field by field.
-- **Header**, in order: magic `RTSSAVE\0` (8 bytes); format version (int32, `SaveFormat.CurrentVersion` = 3 since M6-S4,
-  which added the team byte; version 2 was M6-S3's and version 1 slice 1's, both refused `FormatVersionMismatch`, no reader); total length of the file (int64, checksum included); `SimInfo.Version` (string, informational); `GameData.ContentHash()` (uint64); seed
+- **Header**, in order: magic `RTSSAVE\0` (8 bytes); format version (int32, `SaveFormat.CurrentVersion` = 4 since M6-S6,
+  which added the starting-resources preset after the team bytes; version 3 (M6-S4, which added the team byte) still loads,
+  as `standard` (`SaveFormat.OldestReadVersion`); version 2 was M6-S3's and version 1 slice 1's, both refused
+  `FormatVersionMismatch`, no reader); total length of the file (int64, checksum included); `SimInfo.Version` (string, informational); `GameData.ContentHash()` (uint64); seed
   (uint64); player count (int32); per player its seat: faction string id (`-` for data without factions), controller
   (byte: 0 human, 1 AI), difficulty (byte); unit, command, resource, building, projectile (the config value, 0 = from the
   data) and zone capacities (int32 each); every `MapGenParams` field in declaration order (`Width`, `Height`,
@@ -8372,7 +8380,11 @@ version 2) stores the AI seats too, so every match saves. Code in `sim/Rts.Sim/S
   `StartEdgeMargin`, `StartMineDistance`, `StartForestDistance`; int32 or float); `Combat` (byte);
   `CastWalkInBlockerRange`, `CastWalkInPatienceSeconds` (float); `StatsSampleTicks`, `StatsSampleCapacity` (int32); the
   tick number (int32); (format 3, M6-S4) each seat's team (byte, 0-8), in player order: last, so every format-2 field
-  keeps its offset for a header-only reader (`ViewApi.SaveSummary`, the Load Game list). Every seat is written out (the default ones too), so the loaded config has explicit seats.
+  keeps its offset for a header-only reader (`ViewApi.SaveSummary`, the Load Game list); (format 4, M6-S6) the
+  starting-resources preset's id (string: int32 byte count, then the ASCII id), right after the team bytes, so every format-3
+  field keeps its offset. **For the view:** the preset string starts at the team bytes' offset + the player count, i.e. after
+  the tick (whose offset `SaveSummary` already computes) + 4 + players; `SaveSummary.TryParse`, which stops after the tick
+  (or, on the view's branch, after the team bytes), reads a format-4 header unchanged (`SaveFormatTests.ThePreset_FollowsTheTeamBytes_AndSaveSummaryStillReadsTheHeader`). Every seat is written out (the default ones too), so the loaded config has explicit seats.
 - **Sections**, each opening with a four-letter tag, in this order:
 
   | Tag | Holds |
@@ -8452,7 +8464,8 @@ version 2) stores the AI seats too, so every match saves. Code in `sim/Rts.Sim/S
   declared length; an empty stream); `FormatVersionMismatch`; `Malformed` for a declared length out of range or bytes past
   it; `ChecksumMismatch`; `DataMismatch` (another `ContentHash`, so any data edit refuses a save, as a replay);
   `InvalidHeader` (a player count outside 1-16, a capacity outside its range, a faction id the data lacks, an unknown
-  controller or difficulty, a team outside 0-8 (M6-S4), a map parameter or config value `SimConfig.Validate` refuses, an AI seat whose faction has no
+  controller or difficulty, a team outside 0-8 (M6-S4), a starting-resources preset the data lacks, an empty id included (M6-S6),
+  a map parameter or config value `SimConfig.Validate` refuses, an AI seat whose faction has no
   `ai.json`); `Malformed` for a body too short for the header's capacities (the
   pre-check) or that doesn't parse (a tag out
   of place, an AI seat count or player that doesn't match the header's seats, a stored opening pick other than the load's, an array of the wrong length, a count past its capacity, a
@@ -8743,6 +8756,95 @@ that costs 0.01 ms per update, and still needs (a)'s byte-map union for the view
   ticks that never reached wave size). Each seat's waves, peak army, raided ticks and gathered gold / wood are printed.
 - **Not in this slice:** starting resources (Request 43), allied pushing / formations, resource or tech sharing, AI
   cooperation (the AI doesn't coordinate waves or defend its ally), the view's team column (M6-V16, view track).
+
+### Implementation (M6-S6)
+
+Starting resources, the sim's half (docs/02 "Game flow" 2, Request 43). The setup screen's list is the view's next task.
+
+- **Data.** `rules.json` `startingResources` replaces the top-level `startingGold` / `startingWood` (now unknown fields): a list
+  of presets in the setup's order, each `{id, displayName, description (optional), gold, wood}`, loaded into
+  `RulesDef.StartingResources` (`StartingResourcesDef`: `Key`, `DisplayName`, `Description`, `Gold`, `Wood`, `AiSpendAbove`) with
+  `RulesDef.FindStartingResources(id)`. Validation, each one error at its path: the list required; ids snake_case, unique, at
+  most 64 characters (`DataLimits.MaxStartingResourcesIdLength`, one replay header token); a `standard` entry required
+  (`StartingResourcesDef.StandardId`: the default and what an old save or replay plays); gold and wood 0 to 1,000,000; a display
+  name; at most 16 presets (`DataLimits.MaxStartingResourcesPresets`). Every field, the count and the order are in
+  `ContentHash`. Shipped (Producer default 2026-11-05, owner may revisit): `standard` 200 / 200 (the old numbers, bit for bit),
+  `high` 1000 / 1000; `startingWorkers` stays 5 for both. The `description` text is a placeholder for the data track.
+  Fix round 1 (BUG-1050): an optional `aiSpendAbove` per preset (0 to 1,000,000; 0 or left out = off), the AI's spend-down
+  threshold below; shipped `high` 200, `standard` leaves it out.
+- **Config.** `SimConfig.StartingResources` (a preset id, default `standard`); `Validate` throws `ArgumentException` (param
+  `StartingResources`) for an id the data lacks; `SimConfig.StartingPreset` is the resolved def. Configuration, not hashed
+  state: `World` hands the preset to `PlayerLedger`, which fills every seat's gold and wood from it at construction (tick 0)
+  and nothing else; the ledger it seeds is hashed, so a `high` match's hash differs from `standard`'s by the banks. No
+  per-tick work; nothing in C# names an amount.
+- **Save format 4**: the preset's id as a string after the team bytes (the header's last field; offset in "Save format
+  (M6-S2)" above). A format-3 save loads as `standard` (`SaveFormat.OldestReadVersion` = 3: the reader takes the version and
+  skips the field); an unknown or empty id is `InvalidHeader` through `SimConfig.Validate` (rule 36: no new code or
+  signature: `TryLoad` / `TrySave` unchanged, `SaveHeader.TryRead` is internal). A format-4 file relabelled 3 is `Malformed`
+  (its preset sits where format 3 has `HMAP`). A format-3 file *made before this commit* is still refused, `DataMismatch`:
+  the presets moved `ContentHash`; the format-3 reader serves the layout (tests forge one from a format-4 save), as the
+  replay's formats 3-7 do.
+- **Replay format 8**: `starting-resources <id>` after `combat`. The rule that keeps old free-for-all recordings readable: the
+  recorder writes the **oldest format that holds the match**, so a match at `standard` is written exactly as before (a
+  free-for-all format 6, a team match format 7), and only a match at another preset is format 8 (with format 7's five-token
+  seat lines). Formats 3-7 read as `standard`; `Validate` refuses a non-`standard` preset in them. The view's
+  `ReplayStore.TryReadHeader` accepts versions up to `Replay.CurrentFormatVersion` and scans for `ticks` (it never reaches
+  the new line, which follows `combat`); its four-token seat lines read format 6 and, on the view's M6-V16 branch, five-token
+  lines from format 7 on, so it lists format 8 once M6-V16 lands. **Requests for the view** (the setup task): `SimRunner`'s
+  match start sets `StartingResources` from the setup's pick, and `SimRunner.StartPlayback` builds its `SimConfig` with
+  `replay.StartingResources` (without it a `high` recording played in the game stops at its first checkpoint;
+  `ReplayPlayer.Run` already does).
+- **The golden** (`cross_map_seed1.replay`) regenerated for the data hash (the `rules.json` presets):
+  `4F8CCF2688F9F22F` -> `EAA372D73FAE040A`, then in fix round 1 (`high`'s `aiSpendAbove` joined the hash) -> `69E7B3B8E6732BC2`;
+  every `k` line identical both times (it plays `standard`); still format 6. The pin moved with it:
+  `QA/GatherWedgeQaTests.SameGameDataHashes`. Recordings made before this commit refuse to play (data hash).
+- **`standard` bit for bit:** `Vision/SharedVisionFfaPinTests`' five digests unmoved; the 27 pairing runs
+  (`Content/AiOpeningPairsReportTests` 9 and `QA/Content/D21OpeningsQaTests`' second and third seeds 18) print identical on
+  5368cfe and on this commit, line for line: no faction page cell moves.
+- **The AI at `high`: the spend-down rule** (fix round 1, BUG-1050, S2). Without it Malazan `cadre_rush` and Whirlwind
+  `holy_war` held 1,025-1,769 of the 2,000 start at 5:00 (producers idle with the bank full, the build order waiting on its
+  time triggers; M5-4g's reserve held nothing then, so it was not the lever) and 6 of QA's 18 sides failed the brief's
+  10:00 measure. The rule is driven by the preset, so `standard` cannot reach it: `AiPlayer.SpendAbove` is the match's
+  preset's `aiSpendAbove` (set by `Simulation` when it builds each AI seat, from `SimConfig.StartingPreset`; configuration,
+  so a loaded save rebuilds it from its header's preset and nothing new is saved), and `AiPlayer.SpendingDown` is true while
+  the rule is on and the gold + wood left this think (after the commands sent so far) is above it. While it is true:
+  1. **The executor** (`BuildOrderExecutor`) makes the first `time` step not yet due come due at this think (its due tick
+     the think's; one a think, file order; it then waits the slack and acts like any due step). Expand still waits for
+     `expandAfter`.
+  2. **Production** (`ProductionManager`) runs even on a think the build order sent, and trains in a loop at every producer
+     (one Train per building a think: `BuildingBusyUntil` ends the loop) whose queue holds fewer than
+     `ProductionManager.SpendDownQueue` (2: the unit in work and one waiting, so a producer finishing between thinks starts
+     the next at once; with empty queues only, three Malazan sides still floated 380-1,300 at 10:00), until the bank is at or
+     below the threshold.
+  3. **The gatherers** (`AiPlayer.WantedGoldShare`): with no reserved step short, the share moves by `ai.reserveShift`
+     toward the kind the bank holds less of (a `high` Malazan side piled 450-750 wood with 10-60 gold).
+  With the rule off (`standard`: no `aiSpendAbove`) `SpendingDown` is never true and every path is the old one: QA's
+  `StandardPresetPinQaTests` (20 digests pinned to 5368cfe) and `SharedVisionFfaPinTests` unmoved, the 27 pairing runs
+  (`Content/AiOpeningPairsReportTests` 9, `QA/Content/D21OpeningsQaTests` 18) print identical to 5368cfe line for line.
+  **The threshold, 200** (measured): on QA's 18 sides (`QA/StartingResourcesAiQaTests`) and the 9 pairings' 18 sides at
+  `high` every side's bank at 10:00 is at most twice `standard`'s (before: 6 of 18 and 5 of 18 over) and the mean bank
+  2:00-10:00 is 0.44-1.26 x `standard`'s (before 0.42-3.17, eleven of the pairings' 18 sides over 1.5 x); `cadre_rush` holds
+  400-656 at 5:00 (`standard` 443-703), `holy_war` 123-499. On the next three seeds of each opening (18 more sides, not in a
+  test) none is over twice. The 10:00 sample is noisy, and 200 is the one threshold tried that passes every measured side:
+  100, 150, 250, 300 and 400 leave 3, 4, 2, 2 and 4 distinct sides over twice (the two sets are partly the same matches),
+  every one a side whose `standard` bank at 10:00 is 41-221 (`cadre_rush` seed 13 at all five), while the mean bank stays
+  within 1.5 x `standard`'s on all but 0-2 of QA's 18 sides at every one of them.
+  `Stress/StartingResourcesAiStressTests` asserts both measures on every side (`KnownOverTwice` is gone; the mean at most
+  `MeanBankRatio` 1.5 x); with the rule off 8 of its 9 rows fail.
+- **Tests:** `DataValidationTests` (12 refusal rows, the limits, the old fields unknown), `DataContentHashTests` (every preset
+  field on each preset, the order, the count, a file edit), `Economy/StartingResourcesTests` (the default, every seat at the
+  preset at tick 0, unknown ids refused, the human-only `high` scene equal to `standard` with the banks written back, a
+  `high` AI twin, a `high` AI replay to every checkpoint, a `high` AI save at 500), `Save/SaveFormatTests` (format 4, the
+  field's place and `SaveSummary`, a `high` round trip, format 3 as `standard`), `Save/SaveRefusalTests.AForgedPreset_IsRefused`,
+  `ReplayFormatTests` (format 8, the oldest-format rule, format 7 as `standard`, a `high` file relabelled 7 diverging at its
+  first checkpoint, forged ids), the stress row above. Fix round 1: `Ai/SpendDownTests` (each seat's threshold from its
+  preset, a loaded save's too; `standard` with 100,000 / 100,000 changes nothing; at `high` production trains at both
+  Barracks on a think the build order sent, two to a queue and no third; at the threshold the rule is off; the next time
+  step comes due early, one a think; the gather share leans toward the kind short, 4 rows), `DataValidationTests`
+  (`aiSpendAbove` below 0 / above the maximum, 0 and the maximum load, the shipped values), `DataContentHashTests`
+  (`AiSpendAbove` on each preset, a file edit).
+- **Not in this slice:** the setup screen's list and `--resources` (view), per-slot presets, a "low" preset, the presets'
+  final text (data track), BUG-1047 / 1048.
 
 ## Testing strategy
 

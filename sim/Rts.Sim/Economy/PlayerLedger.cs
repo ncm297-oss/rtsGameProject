@@ -22,10 +22,11 @@ internal sealed partial class PlayerLedger
     private readonly bool[] _trainsUnits;
 
     /// <summary>
-    /// A ledger for <paramref name="players"/> players starting at <paramref name="data"/>'s rules totals, no population, no cap
-    /// and no buildings, with room for <paramref name="sampleCapacity"/> army-value samples per player (M6-S1).
+    /// A ledger for <paramref name="players"/> players each starting with <paramref name="start"/>'s gold and wood (M6-S6: the
+    /// match's starting-resources preset), no population, no cap and no buildings, with room
+    /// for <paramref name="sampleCapacity"/> army-value samples per player (M6-S1).
     /// </summary>
-    public PlayerLedger(int players, GameData data, int sampleCapacity = 0)
+    public PlayerLedger(int players, GameData data, int sampleCapacity, StartingResourcesDef start)
     {
         Stats = new MatchStats(players, data.Techs.Length, sampleCapacity);
         RulesDef rules = data.Rules;
@@ -46,8 +47,8 @@ internal sealed partial class PlayerLedger
         ProductionBuildings = new int[players];
         EverBuilt = new bool[players];
         Defeated = new bool[players];
-        Array.Fill(Gold, rules.StartingGold);
-        Array.Fill(Wood, rules.StartingWood);
+        Array.Fill(Gold, start.Gold);
+        Array.Fill(Wood, start.Wood);
         _rulesCap = rules.HalfPopCap;
     }
 

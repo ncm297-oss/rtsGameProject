@@ -88,6 +88,24 @@ internal static class SaveBytes
         /// combat (1 byte), the two cast walk-in floats, the two stats ints and the tick.
         /// </summary>
         public int Seat0Team => Capacities + 4 * 6 + 4 * 26 + 1 + 4 * 4 + 4;
+
+        /// <summary>M6-S6 (format 4): the starting-resources preset's string field in a one-seat save, right after the team byte.</summary>
+        public int Preset => Seat0Team + 1;
+    }
+
+    /// <summary>
+    /// M6-S6: <paramref name="bytes"/> (a format-4 save) as format 3 wrote it: the preset's string field at
+    /// <paramref name="presetAt"/> taken out, the version 3, the total length and the checksum fixed.
+    /// </summary>
+    internal static byte[] AsFormat3(byte[] bytes, int presetAt)
+    {
+        int fieldLength = 4 + BinaryPrimitives.ReadInt32LittleEndian(bytes.AsSpan(presetAt));
+        byte[] old = new byte[bytes.Length - fieldLength];
+        bytes.AsSpan(0, presetAt).CopyTo(old);
+        bytes.AsSpan(presetAt + fieldLength).CopyTo(old.AsSpan(presetAt));
+        BinaryPrimitives.WriteInt32LittleEndian(old.AsSpan(SaveFormat.MagicLength), 3);
+        BinaryPrimitives.WriteInt64LittleEndian(old.AsSpan(SaveFormat.LengthOffset), old.Length);
+        return Rechecksum(old);
     }
 
     internal static Offsets HeaderOffsets(byte[] bytes)

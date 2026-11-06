@@ -210,15 +210,15 @@ public class ReplayFormatTests
         Assert.Throws<ArgumentException>(() => ReplayFormat.Write(bad)); // the writer won't write it either
     }
 
-    /// <summary>M1-7: format 2 added the flags field; M3-1: format 3 the resource lines; M4-2a: format 4 the combat line and attack targets; M5-2: format 5 the seat lines. M5-4a: format 6 the start-location lines. M6-S4: format 7 the seats' teams. Any version but 3 to 7 is refused by version first.</summary>
+    /// <summary>M1-7: format 2 added the flags field; M3-1: format 3 the resource lines; M4-2a: format 4 the combat line and attack targets; M5-2: format 5 the seat lines. M5-4a: format 6 the start-location lines. M6-S4: format 7 the seats' teams. M6-S6: format 8 the starting-resources line. Any version but 3 to 8 is refused by version first.</summary>
     [Theory]
     [InlineData(1)]
     [InlineData(2)]
-    [InlineData(8)]
+    [InlineData(9)]
     [InlineData(0)]
     public void OtherFormatVersion_IsRefusedAsVersionMismatch(int version)
     {
-        Assert.Equal(7, Replay.CurrentFormatVersion);
+        Assert.Equal(8, Replay.CurrentFormatVersion);
         Assert.Equal(3, Replay.OldestFormatVersion);
         string text = Text(Small).Replace($"rts-replay {Small.FormatVersion}\n", $"rts-replay {version}\n");
         Assert.Equal(ReplayError.FormatVersionMismatch, Read(Reseal(text)));
@@ -857,5 +857,103 @@ public class ReplayFormatTests
         Assert.Equal(15, back!.Checkpoints.Length);
         Replay ffa = ReplayTestRun.With(back, seats: back.Seats.Select(s => s with { Team = 0 }));
         Assert.Equal(ReplayError.CheckpointMismatch, ReplayPlayer.Run(ffa, TestSim.Data).Error);
+    }
+
+    // ---------- M6-S6: format 8 (the starting-resources preset); formats 3-7 read as standard ----------
+
+    /// <summary>A short recording of a 2-player human match at <paramref name="preset"/> with these teams (none by default).</summary>
+    private static Replay AtPreset(string preset, params int[] teams)
+    {
+        if (teams.Length == 0) teams = new[] { 0, 0 };
+        SimConfig config = TestSim.Config(Seed: 6, PlayerCount: teams.Length, UnitCapacity: 16, CommandCapacity: 16)
+            with { Seats = TeamTests.Seats(teams), StartingResources = preset };
+        var sim = new Simulation(config);
+        var rec = new ReplayRecorder(sim, checkpointInterval: 10);
+        for (int t = 0; t < 20; t++) sim.Tick();
+        return rec.ToReplay();
+    }
+
+    /// <summary>
+    /// The recorder writes the oldest format that holds the match: a preset other than standard is format 8 (with or without
+    /// teams), a team at standard format 7, a free-for-all at standard format 6 (each byte for byte what the build before
+    /// wrote). Format 8's <c>starting-resources</c> line follows <c>combat</c>; it reads back byte for byte and plays.
+    /// </summary>
+    [Fact]
+    public void Format8_HasTheStartingResourcesLine_AfterCombat_ReadsBackByteForByte_AndPlays()
+    {
+        Assert.Equal(6, AtPreset("standard").FormatVersion);
+        Assert.Equal(7, AtPreset("standard", 1, 2).FormatVersion);
+        Assert.Equal(8, AtPreset("high", 1, 2).FormatVersion);
+        Replay r = AtPreset("high");
+        Assert.Equal(8, r.FormatVersion);
+        Assert.Equal("high", r.StartingResources);
+        string text = Text(r);
+        Assert.StartsWith("rts-replay 8\n", text);
+        Assert.Contains("\nseat 0 malazan human normal 0\nseat 1 whirlwind human normal 0\nunit-capacity ", text); // format 7's seat lines
+        Assert.Contains("\nticks 20\ncombat 1\nstarting-resources high\nmap.width ", text);
+        Assert.Equal(ReplayError.None, ReplayFormat.TryRead(Encoding.ASCII.GetBytes(text), out Replay? back));
+        ReplayTestRun.AssertEqual(r, back!);
+        Assert.Equal(Encoding.ASCII.GetBytes(text), ReplayFormat.Write(back!));
+        ReplayResult played = ReplayPlayer.Run(back!, TestSim.Data);
+        Assert.True(played.Ok, played.ToString());
+        Assert.DoesNotContain("starting-resources", Text(AtPreset("standard", 1, 2)));
+        // A format-8 file may say standard too (the recorder never writes one, a reader takes it).
+        Replay standard8 = ReplayTestRun.With(AtPreset("standard"), formatVersion: 8);
+        Assert.Contains("\ncombat 1\nstarting-resources standard\n", Text(standard8));
+        Assert.True(ReplayPlayer.Run(standard8, TestSim.Data).Ok);
+    }
+
+    /// <summary>
+    /// Formats 3-7 play as standard: a format-7 file (no preset line) reads as standard and plays; the high recording relabelled
+    /// format 7 (its line taken out) reads as standard and diverges at its first checkpoint, so playback does use the preset.
+    /// </summary>
+    [Fact]
+    public void Format7_ReadsAsStandard_AndAHighRecordingPlayedAsStandard_Diverges()
+    {
+        Replay r7 = AtPreset("standard", 1, 2);
+        Assert.Equal(ReplayError.None, ReplayFormat.TryRead(ReplayFormat.Write(r7), out Replay? back7));
+        Assert.Equal(StartingResourcesDef.StandardId, back7!.StartingResources);
+        Assert.True(ReplayPlayer.Run(back7, TestSim.Data).Ok);
+        Assert.Equal(StartingResourcesDef.StandardId, Small.StartingResources); // format 6
+        Assert.Equal(StartingResourcesDef.StandardId, ReplayTestRun.With(Small, formatVersion: 3).StartingResources);
+
+        string high = Text(AtPreset("high", 1, 2));
+        string asSeven = high.Replace("rts-replay 8\n", "rts-replay 7\n").Replace("starting-resources high\n", "");
+        Assert.Equal(ReplayError.None, ReplayFormat.TryRead(Reseal(asSeven), out Replay? relabelled));
+        Assert.Equal(StartingResourcesDef.StandardId, relabelled!.StartingResources);
+        ReplayResult played = ReplayPlayer.Run(relabelled, TestSim.Data);
+        Assert.Equal(ReplayError.CheckpointMismatch, played.Error);
+        Assert.Equal(10, played.Tick);
+    }
+
+    /// <summary>
+    /// A forged preset: an id the data lacks reads (the file holds no data) and is refused by playback as InvalidHeader
+    /// before any tick; an id that isn't snake_case, or a preset other than standard in a format 3-7 replay, is InvalidHeader
+    /// on read; the line missing, doubled, out of place, empty or with a field too many is Malformed.
+    /// </summary>
+    [Fact]
+    public void AForgedPreset_IsRefused()
+    {
+        string text = Text(AtPreset("high"));
+        Assert.Equal(ReplayError.None, ReplayFormat.TryRead(Reseal(text.Replace("starting-resources high\n", "starting-resources low\n")), out Replay? low));
+        Assert.Equal("low", low!.StartingResources);
+        ReplayResult refused = ReplayPlayer.Run(low, TestSim.Data);
+        Assert.Equal(ReplayError.InvalidHeader, refused.Error);
+        Assert.Equal(-1, refused.Tick);
+        foreach (string bad in new[] { "High", "-", "1high", "hi-gh", new string('a', 65) })
+            Assert.True(Read(Reseal(text.Replace("starting-resources high\n", $"starting-resources {bad}\n"))) == ReplayError.InvalidHeader, bad);
+        Assert.Equal(ReplayError.InvalidHeader, ReplayTestRun.With(Small, formatVersion: 7, startingResources: "high").Validate());
+        Assert.Equal(ReplayError.InvalidHeader, ReplayTestRun.With(Small, formatVersion: 6, startingResources: "high").Validate());
+        Assert.Equal(ReplayError.None, ReplayTestRun.With(Small, formatVersion: 8, startingResources: "high").Validate());
+        Assert.Throws<ArgumentException>(() => ReplayFormat.Write(ReplayTestRun.With(Small, formatVersion: 7, startingResources: "high")));
+        foreach ((string find, string replace) in new[]
+        {
+            ("starting-resources high\n", ""),
+            ("starting-resources high\n", "starting-resources high\nstarting-resources high\n"),
+            ("starting-resources high\n", "starting-resources high extra\n"),
+            ("starting-resources high\n", "starting-resources \n"),
+            ("combat 1\nstarting-resources high\n", "starting-resources high\ncombat 1\n"),
+        })
+            Assert.True(Read(Reseal(text.Replace(find, replace))) == ReplayError.Malformed, replace);
     }
 }

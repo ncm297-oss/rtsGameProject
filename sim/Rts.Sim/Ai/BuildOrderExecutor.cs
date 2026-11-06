@@ -12,7 +12,8 @@ namespace Rts.Sim.Ai;
 /// <remarks>
 /// <list type="bullet">
 /// <item>A step is due from the first think its trigger holds (<c>time</c>: the tick number reaches it; <c>workers</c>: the
-/// player's live workers; <c>pop</c>: its population, half-pop) and stays due. Its first command waits
+/// player's live workers; <c>pop</c>: its population, half-pop) and stays due. BUG-1050: while the AI spends down
+/// (<see cref="AiPlayer.SpendingDown"/>), the first <c>time</c> step not yet due comes due at that think, one a think. Its first command waits
 /// <c>buildOrderSlack</c> after that (an <c>expand</c> also waits for <c>expandAfter</c>).</item>
 /// <item><c>train</c>: <c>count</c> Train commands accepted over the step's life, one per think; <c>build</c>,
 /// <c>research</c> and <c>expand</c>: complete on the first accepted command (a research also once the tech is researched or
@@ -38,14 +39,22 @@ internal static class BuildOrderExecutor
         var steps = ai.Opening.BuildOrder; // M5-8a: the picked opening's
         int slack = ai.Knobs.BuildOrderSlackTicks;
         bool mayReserve = ai.MayReserve(); // BUG-1021 / BUG-1025: a wave-sized army, the base not defended
+        bool pulled = false; // BUG-1050: a time step pulled due early this think
         for (int i = 0; i < steps.Length; i++)
         {
             if (board.StepDone[i]) continue;
             AiStep step = steps[i];
             if (board.StepDueTick[i] < 0)
             {
-                if (!Triggered(ai, step)) continue;
-                board.StepDueTick[i] = step.Trigger == AiStepTrigger.Time ? step.At : ai.Now;
+                bool early = false;
+                if (!Triggered(ai, step))
+                {
+                    // BUG-1050: while the AI spends down, the first time step not yet due comes due now (one a think, file
+                    // order): a big start buys the opening's timed steps sooner instead of waiting in the bank for the clock.
+                    if (step.Trigger != AiStepTrigger.Time || pulled || !ai.SpendingDown) continue;
+                    early = pulled = true;
+                }
+                board.StepDueTick[i] = step.Trigger == AiStepTrigger.Time && !early ? step.At : ai.Now;
             }
             if (ai.Now < board.StepDueTick[i] + slack) continue;
             if (step.Action == AiStepAction.Expand && ai.Now < ai.Knobs.ExpandAfterTicks) continue;

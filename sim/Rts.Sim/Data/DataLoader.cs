@@ -338,8 +338,7 @@ public static partial class DataLoader
         StealthJson? stealth = c.Obj(j.Stealth, "stealth");
         return new RulesDef
         {
-            StartingGold = c.Int(j.StartingGold, "startingGold", 0),
-            StartingWood = c.Int(j.StartingWood, "startingWood", 0),
+            StartingResources = BuildStartingResources(c, j.StartingResources),
             StartingWorkers = c.Int(j.StartingWorkers, "startingWorkers", 0),
             HalfPopCap = 2 * c.Int(j.PopCap, "popCap", 1),
             WorkerCarry = c.Int(j.WorkerCarry, "workerCarry", 1),
@@ -358,6 +357,51 @@ public static partial class DataLoader
             StealthProximity = stealth == null ? 0f : (float)c.Sight(stealth.Proximity, "stealth.proximity", "rules", "proximity"),
             RevealTicks = stealth == null ? 0 : c.Ticks(stealth.RevealSeconds, "stealth.revealSeconds", 1),
         };
+    }
+
+    /// <summary>
+    /// M6-S6: the <c>startingResources</c> presets in file order: each a unique snake_case id of at most
+    /// <see cref="DataLimits.MaxStartingResourcesIdLength"/> characters, a display name, an optional description, gold and wood
+    /// from 0 to <see cref="DataLimits.MaxInteger"/>, an optional <c>aiSpendAbove</c> in the same range (BUG-1050; left out: 0); at most <see cref="DataLimits.MaxStartingResourcesPresets"/> of them, one
+    /// of them <see cref="StartingResourcesDef.StandardId"/>.
+    /// </summary>
+    private static ImmutableArray<StartingResourcesDef> BuildStartingResources(Checker c, List<StartingResourcesJson?>? list)
+    {
+        if (c.Obj(list, "startingResources") == null) return ImmutableArray<StartingResourcesDef>.Empty;
+        if (list!.Count > DataLimits.MaxStartingResourcesPresets)
+            c.Error("startingResources", $"{list.Count} presets, above the maximum {DataLimits.MaxStartingResourcesPresets}");
+        var presets = ImmutableArray.CreateBuilder<StartingResourcesDef>(list.Count);
+        var seen = new List<string>();
+        for (int i = 0; i < list.Count; i++)
+        {
+            string p = $"startingResources[{i}]";
+            StartingResourcesJson? r = c.Obj(list[i], p);
+            if (r == null) continue;
+            string id = c.Id(r.Id, p + ".id");
+            if (id.Length > DataLimits.MaxStartingResourcesIdLength)
+            {
+                c.Error(p + ".id", $"id '{id}' is longer than {DataLimits.MaxStartingResourcesIdLength} characters");
+                id = "";
+            }
+            else if (id.Length > 0 && seen.Contains(id))
+            {
+                c.Error(p + ".id", $"duplicate starting-resources id '{id}'");
+                id = "";
+            }
+            if (id.Length > 0) seen.Add(id);
+            presets.Add(new StartingResourcesDef
+            {
+                Key = id,
+                DisplayName = c.Text(r.DisplayName, p + ".displayName"),
+                Description = r.Description ?? "",
+                Gold = c.Int(r.Gold, p + ".gold", 0),
+                Wood = c.Int(r.Wood, p + ".wood", 0),
+                AiSpendAbove = r.AiSpendAbove == null ? 0 : c.Int(r.AiSpendAbove, p + ".aiSpendAbove", 0),
+            });
+        }
+        if (!seen.Contains(StartingResourcesDef.StandardId))
+            c.Error("startingResources", $"no '{StartingResourcesDef.StandardId}' preset (every match without a pick, and every save or replay from before presets, plays it)");
+        return presets.ToImmutable();
     }
 
     /// <summary>
