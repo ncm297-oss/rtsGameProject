@@ -27,7 +27,7 @@ public class ReachRuleQaTests
 
     private static readonly Lazy<GameData> s_reach512 = new(() => AiScenes.DataWith(dir => dir.EditJson("common/rules.json", r => r["ai"]!["gatherReach"] = 512)));
 
-    private static Vector2 HallCentre(World w, int player)
+    internal static Vector2 HallCentre(World w, int player)
     {
         for (int k = 0; k < w.Buildings.Capacity; k++)
         {
@@ -47,7 +47,7 @@ public class ReachRuleQaTests
     }
 
     /// <summary>Takes every tree within <paramref name="cleared"/> m of <paramref name="hall"/>; the nearest one left.</summary>
-    private static float Clear(World w, Vector2 hall, float cleared)
+    internal static float Clear(World w, Vector2 hall, float cleared)
     {
         float nearest = float.MaxValue;
         for (int k = 0; k < w.Resources.Capacity; k++)
@@ -60,21 +60,22 @@ public class ReachRuleQaTests
         return nearest;
     }
 
-    /// <summary>The farthest wood node (from <paramref name="hall"/>) a live unit of <paramref name="player"/> is set to gather now.</summary>
-    private static float FarthestWoodTarget(World w, int player, Vector2 hall)
+    /// <summary>The farthest wood node (from <paramref name="hall"/>) a live unit of <paramref name="player"/> is set to gather now (M6-SH1: <paramref name="anyKind"/>, any node).</summary>
+    private static float FarthestWoodTarget(World w, int player, Vector2 hall, bool anyKind = false)
     {
         float far = 0f;
         for (int i = 0; i < w.Units.Capacity; i++)
         {
             EntityHandle n = w.Units.GatherNode[i];
             if (!w.Units.Alive[i] || w.Units.Owner[i] != player || n.Generation == 0 || !w.Resources.IsAlive(n)
-                || w.Data.Resources[w.Resources.TypeId[n.Index]].Resource != ResourceKind.Wood) continue;
+                || !anyKind && w.Data.Resources[w.Resources.TypeId[n.Index]].Resource != ResourceKind.Wood) continue;
             far = Math.Max(far, Vector2.Distance(NodeCentre(w, n.Index), hall));
         }
         return far;
     }
 
-    private sealed record Run(int FirstWood, int Lifted, float Nearest, float Farthest, int ScoutsLost, int WorkersAt, int Wood);
+    /// <summary>M6-SH1: <paramref name="ScoutsSent"/> every scout sent (a new slot or generation at phase 1); <paramref name="FarthestAny"/> the farthest node of any kind a gatherer is set to, from the hall.</summary>
+    private sealed record Run(int FirstWood, int Lifted, float Nearest, float Farthest, int ScoutsLost, int WorkersAt, int Wood, int ScoutsSent = 0, float FarthestAny = 0f, bool KnowsWood = false);
 
     /// <summary>
     /// Player 0 of a generated 2-seat Normal v Normal match, trees within <paramref name="cleared"/> m of its hall taken, run
@@ -90,8 +91,8 @@ public class ReachRuleQaTests
         while (sim.TickNumber < 5) sim.Tick();
         Vector2 hall = HallCentre(w, 0);
         float nearest = cleared > 0 ? Clear(w, hall, cleared) : 0f;
-        int firstWood = -1, lifted = -1, lost = 0, sentAt = -1, slot = -1, generation = 0;
-        float farthest = 0f;
+        int firstWood = -1, lifted = -1, lost = 0, sentAt = -1, slot = -1, generation = 0, sent = 0;
+        float farthest = 0f, farthestAny = 0f;
         bool killedOnce = false;
         while (sim.TickNumber < until)
         {
@@ -103,6 +104,7 @@ public class ReachRuleQaTests
                 slot = ai.Board.ScoutSlot;
                 generation = ai.Board.ScoutGeneration;
                 sentAt = sim.TickNumber;
+                sent++;
             }
             if (killAt >= 0 && sentAt >= 0 && ai.Board.ScoutPhase == 1 && sim.TickNumber - sentAt == killAt && (killEvery || !killedOnce))
             {
@@ -114,12 +116,19 @@ public class ReachRuleQaTests
                     killedOnce = true;
                 }
             }
-            if (sim.TickNumber % 20 == 0) farthest = Math.Max(farthest, FarthestWoodTarget(w, 0, hall));
+            if (sim.TickNumber % 20 == 0)
+            {
+                farthest = Math.Max(farthest, FarthestWoodTarget(w, 0, hall));
+                farthestAny = Math.Max(farthestAny, FarthestWoodTarget(w, 0, hall, anyKind: true));
+            }
         }
         int workers = 0;
         for (int i = 0; i < w.Units.Capacity; i++)
             if (w.Units.Alive[i] && w.Units.Owner[i] == 0 && w.Data.Units[w.Units.TypeId[i]].Slot == UnitSlot.Worker) workers++;
-        return new Run(firstWood, lifted, nearest, farthest, lost, workers, w.GatheredWood[0]);
+        bool knowsWood = false;
+        for (int s = -1; ai.View.NextResource(ref s, out SeenResource node);)
+            knowsWood |= w.Data.Resources[node.TypeId].Resource == ResourceKind.Wood;
+        return new Run(firstWood, lifted, nearest, farthest, lost, workers, w.GatheredWood[0], sent, farthestAny, knowsWood);
     }
 
     /// <summary>
@@ -152,7 +161,8 @@ public class ReachRuleQaTests
     /// The nearest forest at 90 m and the scout killed at its first tick out, 200 ticks in and 2,000 ticks in: the reach
     /// lifts anyway (a replacement circles home), the seat gets wood by tick 6,000, and it loses that one scout only. On the
     /// diff base (ab54ddb) 8 of these 9 rows gathered 0 wood by 6,000; on M6-S7 6 of 9 do (below), the other 3 are
-    /// <see cref="ScoutKilledAfterTheRing_BeforeAnyForestIsSeen_TheSeatStillGetsWood"/>.
+    /// <see cref="ScoutKilledAfterTheRing_BeforeAnyForestIsSeen_TheSeatStillGetsWood"/> and
+    /// <see cref="ScoutKilledAfterTheRing_Seed3_TheSeatStillGetsWood"/>.
     /// </summary>
     [Theory]
     [InlineData(1UL, 0)]
@@ -165,14 +175,30 @@ public class ReachRuleQaTests
 
     /// <summary>
     /// BUG-1053: the rows where the scout dies after its head ring is seen (or its replacement does) but before any forest
-    /// past 54 m is seen: no scout is sent again, the seat knows no forest (or one 185 m off, seed 3 at 200) and gathers 0
+    /// past 54 m is seen: no scout was sent again, the seat knew no forest (or one 185 m off, seed 3 at 200) and gathered 0
     /// wood by tick 6,000. On ab54ddb these rows gathered 0 too (not a regression of M6-S7; the reach rule doesn't reach it).
+    /// M6-SH1: a scout lost while the seat knows no node of some kind is sent again (within ai.scoutReplacements). Seed 1 at
+    /// 2,000: the second scout, sent at tick 2,341, finds a forest; first wood at tick 5,968 (a 32-tick margin; round 1
+    /// leaves it: that forest stands 8.9 m from an enemy building, so the scout is not released to it).
     /// </summary>
-    [Theory(Skip = "BUG-1053 (open, S3): a scout lost after the head ring is seen is not replaced, and a seat that has seen no forest yet never gets wood")]
+    [Theory]
     [InlineData(1UL, 2000)]
+    public void ScoutKilledAfterTheRing_BeforeAnyForestIsSeen_TheSeatStillGetsWood(ulong seed, int killAt) => AssertWoodAfterAScoutKill(seed, killAt);
+
+    /// <summary>
+    /// BUG-1053's seed-3 rows, still short of the 6,000-tick bound after M6-SH1, for a reason the re-scout can't reach. At
+    /// 200 the scout dies before its ring is seen, so it is replaced (M6-S7) and the replacement lives: nobody dies after the
+    /// ring. At 2,000 the re-scout is sent (tick 2,341). Either way the sweep (head, mirror, then the grid nearest the scout)
+    /// first sees a forest at about tick 4,250, 179 m off; seven gatherers walk to it and none is back by tick 6,000 (the
+    /// nearest, 90.8 m, is seen only near the end). A sweep that looks round home first was tried (the re-scout skipping
+    /// the mirror): seed 3 gathered no sooner and seed 1 at 2,000 lost its wood. Un-skipped in M6-SH1 round 1 (BUG-1056): a
+    /// scout sent again is released to gather once it knows a forest clear of the enemy's buildings, so the scout standing
+    /// at the 186 m forest brings the first wood home: ticks 5,541 (at 200) and 5,619 (at 2,000).
+    /// </summary>
+    [Theory]
     [InlineData(3UL, 200)]
     [InlineData(3UL, 2000)]
-    public void ScoutKilledAfterTheRing_BeforeAnyForestIsSeen_TheSeatStillGetsWood(ulong seed, int killAt) => AssertWoodAfterAScoutKill(seed, killAt);
+    public void ScoutKilledAfterTheRing_Seed3_TheSeatStillGetsWood(ulong seed, int killAt) => AssertWoodAfterAScoutKill(seed, killAt);
 
     private void AssertWoodAfterAScoutKill(ulong seed, int killAt)
     {
@@ -187,9 +213,11 @@ public class ReachRuleQaTests
     /// Every scout killed the moment it is sent (an enemy camped at the hall's door, the worst case for "a lost scout is
     /// replaced"): how many workers the seat feeds to the scout role by tick 6,000. Before M6-S7 a dead scout was never
     /// replaced (1 worker); the rule must not bleed the seat's economy dry. Bound: at most 4 scouts lost. BUG-1052: 9 scouts
-    /// lost on every seed, the seat at 0 workers and 0 wood by tick 6,000 (ab54ddb: 1 scout, 18-19 workers).
+    /// lost on every seed, the seat at 0 workers and 0 wood by tick 6,000 (ab54ddb: 1 scout, 18-19 workers). Un-skipped in
+    /// M6-SH1 (ai.scoutReplacements 2: three scouts at most), with the brief's bounds: workers at least 15, some wood, and no
+    /// gatherer sent more than 150 m from the hall once the capped reach has lifted.
     /// </summary>
-    [Theory(Skip = "BUG-1052 (open, S3): a scout lost before its head ring is seen is replaced without limit; a seat whose scouts die at the door feeds every worker to the role")]
+    [Theory]
     [InlineData(1UL)]
     [InlineData(2UL)]
     [InlineData(3UL)]
@@ -197,8 +225,14 @@ public class ReachRuleQaTests
     {
         Run r = Play(seed, 0f, 6000, killAt: 0, killEvery: true);
         Run calm = Play(seed, 0f, 6000);
-        _out.WriteLine($"seed {seed}: scouts lost {r.ScoutsLost}; lifted {r.Lifted}; workers at 6000 {r.WorkersAt} (unharmed run {calm.WorkersAt}); wood {r.Wood} (unharmed {calm.Wood})");
+        _out.WriteLine($"seed {seed}: scouts lost {r.ScoutsLost} (sent {r.ScoutsSent}); lifted {r.Lifted}; workers at 6000 {r.WorkersAt} (unharmed run {calm.WorkersAt}); wood {r.Wood} (unharmed {calm.Wood}), a forest known {r.KnowsWood}; farthest gather target {r.FarthestAny:F1} m (unharmed {calm.FarthestAny:F1} m)");
         Assert.True(r.ScoutsLost <= 4, $"{r.ScoutsLost} scouts sent to die by tick 6,000");
+        Assert.True(r.WorkersAt >= 15, $"{r.WorkersAt} workers at tick 6,000");
+        // Seed 1's hall and workers see no tree from home (the unharmed run's wood lies up to 71 m off, found by its scout):
+        // with every scout dead on its first tick the seat never learns of one, whatever the cap, so its wood stays 0
+        // (measured M6-SH1: "a forest known False"; reported to the Producer). Where a forest is known, wood comes.
+        Assert.True(r.Wood > 0 || !r.KnowsWood, "a forest known, no wood by tick 6,000");
+        Assert.True(r.FarthestAny <= 150f, $"a gatherer sent {r.FarthestAny:F1} m from the hall");
     }
 
     /// <summary>

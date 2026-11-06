@@ -336,10 +336,12 @@ Shipped maps (working titles):
 
 The hand-made maps are files under `game/data/maps/` (one JSON file a map: a text heightmap of levels 0-2 with its ramps,
 the start locations, the gold mines and the forests, and a player-facing name and description), picked by their id instead
-of a seed and hashed with the rest of the data, so a save or a recording of a match on one names the map and rebuilds it
-exactly. Each must keep the generator's start rules (every start on one level, at least half the map apart, two mines and
-a forest beside it); Raraku is the first (M6-S7, a placeholder layout), Pale Hills and Vathar Crossing follow. The
-skirmish setup's Map list offers every shipped map file ("Game flow" 2, M6-V18).
+of a seed and hashed with the rest of the data, so a save or a recording of a match on one names the map. A recording
+rebuilds the map from its id; a save names it by id only, its terrain loading from the save's own stored heightmap (as for
+a generated map), so the id is a label there, kept true by the data hash in the save's header (M6-SH1, BUG-1054). Each
+must keep the generator's start rules (every start on one level, at least half the map apart, two mines and a forest
+beside it); Raraku is the first (M6-S7, a placeholder layout), Pale Hills and Vathar Crossing follow. The skirmish setup's Map list offers every shipped map file ("Game flow" 2,
+M6-V18).
 
 ## Controls and camera
 
@@ -437,7 +439,13 @@ own cues (select, order, refused, building placed or finished, unit or tech read
   knows only through an ally's eyes or a raider's far sighting counts as unknown until then; after, the nearest known node
   is taken wherever it is. So a start whose nearest forest lies past the reach gets its wood once the scout has circled home
   (its first minute or two out: measured 60-103 s after it leaves), not after the whole map. A scout that dies before the ring is seen is replaced by another worker
-  and does not lift the reach; a seat with no finished drop-off may take any node. Built in M6-S5 (BUG-1045), the head ring
+  and does not lift the reach; one that dies after it is replaced only if the AI still knows no node of some resource. Either
+  way a scout is sent again only while the AI has lost at most `rules.json` `ai.scoutReplacements` (2) units in all, so a
+  base whose scouts die at the door stops feeding workers to the role, and the reach then lifts as if home had been looked
+  at (M6-SH1, BUG-1052 / 1053). The first scout's loss is always followed by one more (earlier losses in a fight are not the
+  scout role's, BUG-1055), and a scout sent again stops looking, and gathers, as soon as the AI knows an enemy building, a
+  gold mine and a forest anywhere that is not at an enemy's door: it stands at the far forest it found, so the first wood
+  comes home a walk sooner (BUG-1056). A seat with no finished drop-off may take any node. Built in M6-S5 (BUG-1045), the head ring
   and the replacement in M6-S7 (BUG-1047, BUG-1048; [03 Implementation (M6-S7)](03-technical-design.md#implementation-m6-s7);
   the fallback for a kind with no node in reach was built, measured and dropped: Producer decision, [01 change log](01-vision.md) 2026-11-05).
 - Build orders, army compositions, and attack thresholds are per-faction data (`ai.json`), not code.

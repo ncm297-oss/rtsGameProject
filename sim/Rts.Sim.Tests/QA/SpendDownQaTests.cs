@@ -216,7 +216,7 @@ public class SpendDownQaTests
     /// <summary>
     /// Four Hard AIs, 6,000 ticks, at <c>aiSpendAbove</c> 1 and 1,000,000 with starts 0 / 0 and 1,000,000 / 1,000,000: no
     /// throw, twin runs hash-equal every 100 ticks, banks never negative, no queue past the engine's capacity, and no
-    /// producer's queue past <see cref="ProductionManager.SpendDownQueue"/> plus what the build order may add (one a think,
+    /// producer's queue past <c>ai.spendDownQueue</c> plus what the build order may add (one a think,
     /// judged), i.e. the queues don't run away.
     /// </summary>
     [Theory]

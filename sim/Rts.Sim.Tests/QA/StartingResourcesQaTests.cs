@@ -237,8 +237,9 @@ public class StartingResourcesQaTests
     [Fact]
     public void TheGolden_InFormats6To8AtStandard_PlaysToEveryCheckpoint_AndAtHighDiverges()
     {
-        Assert.Equal(ReplayError.None, ReplayFormat.TryReadFile(ReplayTestRun.GoldenPath, out Replay? golden));
-        Assert.Equal(6, golden!.FormatVersion);
+        Assert.Equal(ReplayError.None, ReplayFormat.TryReadFile(ReplayTestRun.GoldenPath, out Replay? recorded));
+        Replay golden = ReplayTestRun.With(recorded!, dataHash: Data.ContentHash()); // M6-SH1: the header is the recording-time hash
+        Assert.Equal(6, golden.FormatVersion);
         Assert.Equal("standard", golden.StartingResources);
         foreach (int version in new[] { 6, 7, 8 })
         {

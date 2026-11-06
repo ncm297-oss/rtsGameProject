@@ -110,6 +110,12 @@ public sealed class PlayerView
     /// <summary>The player's age (1 at start, 2 after <c>age_ii</c>).</summary>
     public int Age => _world.Age(_player);
 
+    /// <summary>
+    /// M6-SH1 (BUG-1052): how many of the player's own units have died this match (<see cref="World.UnitLosses"/>, saved with
+    /// the match stats). Own seat only: a player knows what it lost, so this is not hidden information; no other seat's is read.
+    /// </summary>
+    public int OwnUnitLosses => _world.UnitLosses[_player];
+
     /// <summary>Whether the player has researched tech <paramref name="techId"/>; false for an unknown id.</summary>
     public bool HasTech(int techId) => _world.HasTech(_player, techId);
 

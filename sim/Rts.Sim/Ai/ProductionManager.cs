@@ -9,7 +9,7 @@ namespace Rts.Sim.Ai;
 /// else it waits (it doesn't spend on a cheaper unit instead). M5-4g: it spends only above the reserve of the build order's
 /// reserved step (<see cref="AiPlayer.CanAffordAboveReserve"/>). BUG-1050: while the AI spends down
 /// (<see cref="AiPlayer.SpendingDown"/>, a starting-resources preset's <c>aiSpendAbove</c>) it trains even on a think the build
-/// order sent, one Train per producer, at producers whose queue holds fewer than <see cref="SpendDownQueue"/>, until the bank
+/// order sent, one Train per producer, at producers whose queue holds fewer than <see cref="AiRulesDef.SpendDownQueue"/> (<c>ai.spendDownQueue</c>), until the bank
 /// is down to the threshold or nothing more can be trained.
 /// </summary>
 internal static class ProductionManager
@@ -21,13 +21,6 @@ internal static class ProductionManager
         // Ends: each Train sent marks its building busy for the rest of the think (BuildingBusyUntil), so at most one per producer.
         while (TrainOne(ai) && ai.SpendingDown) { }
     }
-
-    /// <summary>
-    /// BUG-1050: while spending down, a producer takes a Train while its queue holds fewer than this: the unit in work and one
-    /// waiting, so a producer that finishes between thinks starts the next at once. With only empty queues (as at
-    /// <c>standard</c>) a <c>high</c> Malazan side still floated 380-1,300 at 10:00 on three of the measured seeds.
-    /// </summary>
-    internal const int SpendDownQueue = 2;
 
     /// <summary>Sends the current composition's most under-weighted unit at a producer that may take it; true when one was sent.</summary>
     private static bool TrainOne(AiPlayer ai)
@@ -52,7 +45,7 @@ internal static class ProductionManager
         return ai.TryTrain(pick, emptyQueueOnly: !ai.SpendingDown, ref ai.Board.ProductionPending, aboveReserve: true);
     }
 
-    /// <summary>Whether a finished own building with an empty queue (spending down: fewer than <see cref="SpendDownQueue"/>) and no AI command waiting on it may train <paramref name="type"/> now (its cost aside).</summary>
+    /// <summary>Whether a finished own building with an empty queue (spending down: fewer than <see cref="AiRulesDef.SpendDownQueue"/> (<c>ai.spendDownQueue</c>)) and no AI command waiting on it may train <paramref name="type"/> now (its cost aside).</summary>
     private static bool CanTrainSomewhere(AiPlayer ai, int type)
     {
         int at = ai.Data.Units[type].TrainedAtTypeId;
@@ -60,7 +53,7 @@ internal static class ProductionManager
         {
             int slot = ai.OwnBuildingSlots[k];
             if (ai.OwnBuildingSites[k] || ai.OwnBuildingTypes[k] != at || ai.Board.BuildingBusyUntil[slot] >= ai.Now
-                || ai.View.QueueCount(slot) >= (ai.SpendingDown ? SpendDownQueue : 1)) continue;
+                || ai.View.QueueCount(slot) >= (ai.SpendingDown ? ai.Rules.SpendDownQueue : 1)) continue;
             if (ai.View.CanTrain(slot, type, out Economy.TrainError why) || why == Economy.TrainError.CannotAfford) return true;
         }
         return false;

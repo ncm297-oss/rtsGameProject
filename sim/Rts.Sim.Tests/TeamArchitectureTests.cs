@@ -7,7 +7,7 @@ namespace Rts.Sim.Tests;
 /// and the <c>World*.cs</c> partials (BUG-1044: the scan began with <c>Combat/</c> only) asks the one alliance predicate
 /// (<see cref="World.AreAllied"/> / <see cref="World.IsEnemy"/>, or the spatial hash's enemy queries, which take the same
 /// table). A raw owner compare is allowed only where it means "the same player" (docs/03 "Implementation (M6-S4)"'s
-/// table): the four listed below, or as the fast first half of a predicate test on the same line
+/// table, and the allied-as-other sites it lists): the ones in <c>s_samePlayer</c> below, or as the fast first half of a predicate test on the same line
 /// (<c>u.Owner[j] == owner || (world.HasAlliances &amp;&amp; world.AreAllied(owner, u.Owner[j]))</c>). A new one fails this test
 /// until it goes through the predicate or is added to the table.
 /// </summary>
@@ -16,7 +16,10 @@ public class TeamArchitectureTests
     // An owner compared with == or != (an Owner[...] read, or a local named *owner / *Owner).
     private static readonly Regex s_rawOwnerCompare = new(@"Owner(\[[^\]]*\])?\s*[!=]=|[!=]=\s*[A-Za-z_.]*[Oo]wner\b|\b[a-z]*[Oo]wner\s*[!=]=", RegexOptions.Compiled);
 
-    /// <summary>The same-player sites (docs/03's table, "untouched"), by file and the code of the line, trimmed.</summary>
+    /// <summary>
+    /// The allowed sites, by file and the code of the line, trimmed: the same-player ones (docs/03's table, "untouched"), and
+    /// (BUG-1044) the allied-as-other ones docs/03 lists, each with a comment saying so (<c>BuildOrderExecutor.HallNear</c>).
+    /// </summary>
     private static readonly (string File, string Code)[] s_samePlayer =
     {
         ("CombatSystem.cs", "if (j == i || !u.Alive[j] || u.Owner[j] != owner || u.State[j] != UnitState.Attacking) continue;"),

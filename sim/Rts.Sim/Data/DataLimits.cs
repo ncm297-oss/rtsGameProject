@@ -169,6 +169,12 @@ public static class DataLimits
     /// <summary>M5-4c: the most <c>rules.json</c> <c>ai.castMinTargets</c> may be (a Producer default).</summary>
     public const int MaxAiCastMinTargets = 50;
 
+    /// <summary>M6-SH1 (BUG-1052): the most <c>rules.json</c> <c>ai.scoutReplacements</c> may be (the brief's range).</summary>
+    public const int MaxAiScoutReplacements = 8;
+
+    /// <summary>M6-SH1 (BUG-1051): the most <c>rules.json</c> <c>ai.spendDownQueue</c> may be (the brief's range; a queue holds more).</summary>
+    public const int MaxAiSpendDownQueue = 5;
+
     /// <summary>M5-4f: the least and the most <c>rules.json</c> <c>ai.defendRatio</c> may be (the brief's range).</summary>
     public const double MinAiDefendRatio = 0.5, MaxAiDefendRatio = 10;
 

@@ -3,7 +3,7 @@
 | Field | Value |
 | --- | --- |
 | Severity | S4 |
-| Status | open (item 1 fixed by the Producer at the 1716 ACCEPT: docs/02 says "its first minute or two out: measured 60-103 s"; item 2 covered by QA's rows; left: item 3, one sentence on what a save's map id does, M6-SH1) |
+| Status | fixed (item 1 by the Producer, item 2 by QA rows, item 3 M6-SH1: docs/02 "Map and terrain") |
 | Found | 2026-11-05-1716, task M6-S7 (QA) |
 | System | docs/02 "AI opponent", `DataLoader.Maps` connectivity, `ScoutManager.Waypoints` replacement skip, save format 5 |
 | Fixed by | |
@@ -33,3 +33,7 @@ As above.
 
 ## Notes
 None blocks M6-S7.
+
+## M6-SH1 (dev): item 3
+docs/02 "Map and terrain" now says a recording rebuilds the map from its id, while a save names it by id only and loads its
+terrain from its own stored heightmap (the id a label there, kept true by the header's data hash).

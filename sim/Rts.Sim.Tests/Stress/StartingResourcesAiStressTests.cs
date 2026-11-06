@@ -15,10 +15,11 @@ namespace Rts.Sim.Tests.Stress;
 /// M6-S6 criterion 5: does the AI spend a <c>high</c> start instead of banking it? Every Malazan x Whirlwind opening
 /// pairing (9, so each of the six openings plays three times) on its smallest seed (the pairs report's,
 /// <see cref="AiOpeningSeeds.SmallestPair"/>), Normal v Normal on the menu's map (12 forests, 8 mines) for 10 minutes, once
-/// at <c>standard</c> and once at <c>high</c>. Asserted per side: the brief's measure, the bank (gold + wood) at 10:00 at
-/// <c>high</c> no more than twice the <c>standard</c> run's; and (BUG-1050, the measure that reads the start rather than one
-/// sample of a fight's ebb) the mean bank from 2:00 to 10:00 (every 5 s) at <c>high</c> no more than
-/// <see cref="MeanBankRatio"/> times <c>standard</c>'s. Before the spend-down rule (fix round 1) five sides failed the first
+/// at <c>standard</c> and once at <c>high</c>. Asserted per side (BUG-1050, the measure that reads the start rather than one
+/// sample of a fight's ebb): the mean bank from 2:00 to 10:00 (every 5 s) at <c>high</c> no more than
+/// <see cref="MeanBankRatio"/> times <c>standard</c>'s. M6-SH1 (BUG-1051 item 5, the Producer's restated criterion): the
+/// brief's first measure, the bank (gold + wood) at 10:00 at <c>high</c> against twice the <c>standard</c> run's, is printed
+/// only (a "10:00 over 2x" line), no longer asserted: one sample lands on a wave's ebb or its peak. Before the spend-down rule (fix round 1) five sides failed the first
 /// and eleven the second (Malazan <c>cadre_rush</c> held 1,325-1,515 at 4:00). Printed for the report: both runs' 2-minute
 /// timeline (banks, army and worker pop, waves, producers busy, pop and cap, build order steps done and due), and per side the
 /// 10:00 banks, the mean bank and the bank at 4:00. Lines starting "ROW" are machine-read by the QA report.
@@ -41,7 +42,7 @@ public class StartingResourcesAiStressTests
     [Theory]
     [Trait("Category", "Stress")]
     [MemberData(nameof(Openings))]
-    public void EachOpening_AtHigh_SpendsItsStart_BankAtTenMinutesAtMostTwiceStandards(int opening, int other)
+    public void EachOpening_AtHigh_SpendsItsStart_MeanBankWithinTheRatioOfStandards(int opening, int other)
     {
         ulong seed = AiOpeningSeeds.SmallestPair(opening, other);
         Run standard = Play(seed, "standard", opening, other);
@@ -60,7 +61,7 @@ public class StartingResourcesAiStressTests
             _out.WriteLine($"ROW {side} {standard.Names[p]} seed {seed}: bank at 10:00 standard {s} high {h} (x{(s == 0 ? 0 : (double)h / s):0.00}); "
                 + $"waves {standard.Waves[p]} / {high.Waves[p]}; Age II {Sec(standard.AgeTwo[p])} / {Sec(high.AgeTwo[p])}; "
                 + $"army pop at 10:00 {standard.Army[p] / 2.0} / {high.Army[p] / 2.0}; mean bank 2:00-10:00 {standard.Mean[p]} / {high.Mean[p]}; bank at 4:00 {standard.At4[p]} / {high.At4[p]}");
-            if (h > 2 * s) over.Add($"{side} {standard.Names[p]} seed {seed}: high banks {h} at 10:00, over twice standard's {s}");
+            if (h > 2 * s) _out.WriteLine($"  10:00 over 2x (printed, not asserted): {side} {standard.Names[p]} seed {seed}: high banks {h}, standard {s}");
             if (high.Mean[p] > MeanBankRatio * standard.Mean[p])
                 over.Add($"{side} {standard.Names[p]} seed {seed}: high's mean bank 2:00-10:00 {high.Mean[p]}, over {MeanBankRatio} x standard's {standard.Mean[p]}");
         }

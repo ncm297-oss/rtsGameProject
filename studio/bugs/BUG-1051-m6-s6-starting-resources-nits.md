@@ -3,7 +3,7 @@
 | Field | Value |
 | --- | --- |
 | Severity | S4 |
-| Status | open (items 1-4 fixed: 2 and 4 2026-11-05-1206, 3 by the Producer's docs/01 row, 1 by M6-V17 2026-11-05-1716: `ViewApi/SaveSummary.cs`'s FormatVersion doc names `OldestReadVersion` to `CurrentVersion`; left: items 5-6, M6-SH1) |
+| Status | fixed (items 1-4 before; items 5-6 M6-SH1, dev) |
 | Found | 2026-11-05-1206, task M6-S6 (QA) |
 | System | save format docs (`ViewApi/SaveSummary`), `Stress/StartingResourcesAiStressTests`, docs/01 |
 | Fixed by | |
@@ -53,3 +53,11 @@
 6. (new) `ProductionManager.SpendDownQueue` (2) is a C# constant deciding AI behaviour; every other AI tunable is a `rules.json`
    `ai.*` knob (CLAUDE.md rule 6). Move it to `ai.spendDownQueue` (validated 1-5, hashed; the golden moves once) in M6-SH1, or
    write down why it stays a constant.
+
+## M6-SH1 (dev): items 5-6
+- Item 5: `Stress/StartingResourcesAiStressTests` (renamed `EachOpening_AtHigh_SpendsItsStart_MeanBankWithinTheRatioOfStandards`)
+  prints the 10:00 bank against twice standard's ("10:00 over 2x (printed, not asserted)") and asserts the mean bank only.
+- Item 6: `ProductionManager.SpendDownQueue` is `rules.json` `ai.spendDownQueue` (`AiRulesDef.SpendDownQueue`, 1-5,
+  default 2, validated and hashed: `DataValidationTests.AiRulesBlock_MissingOrOutOfRange_IsOneError` /
+  `AiDefenseKnobs_AtTheirEdges_Load`, `DataContentHashTests.AnAiRulesFieldEdit_ChangesTheHash`); behaviour at the default
+  pinned by `Ai/SpendDownTests` and `QA/SpendDownQaTests` (green).

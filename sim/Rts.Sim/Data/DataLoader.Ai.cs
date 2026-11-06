@@ -355,7 +355,7 @@ public static partial class DataLoader
     /// to whole cells, rounded up. M5-3: <c>scoutAfter</c> and <c>waveCooldown</c> s (0-3,600, to ticks); <c>scoutRadius</c> and
     /// <c>rallyDistance</c> m (1-64), <c>scoutReach</c> and <c>rallyReach</c> m (1-16), <c>scoutGrid</c> m (16-256, BUG-0593), kept in meters. M5-4b: <c>defendRadius</c> m (8-256), <c>defendFor</c> s (0-600, to
     /// ticks), <c>workerFleeRadius</c> m (1-64). M5-4c: <c>castMinTargets</c> a whole number 1-50. M5-4f: <c>defendRatio</c> 0.5-10,
-    /// <c>defendMinValue</c> gold + wood 0-5,000, <c>recallHallHp</c> a fraction 0-1. M5-4g: <c>reserveShift</c> and <c>reserveArmyShare</c> fractions 0-1. M6-S5: <c>gatherReach</c> m (1-<see cref="DataLimits.MaxAiGatherReach"/>, BUG-1045). A refused <c>popCap</c> is reported once: the cap rule is skipped then.
+    /// <c>defendMinValue</c> gold + wood 0-5,000, <c>recallHallHp</c> a fraction 0-1. M5-4g: <c>reserveShift</c> and <c>reserveArmyShare</c> fractions 0-1. M6-S5: <c>gatherReach</c> m (1-<see cref="DataLimits.MaxAiGatherReach"/>, BUG-1045). M6-SH1: <c>scoutReplacements</c> a whole number 0-8 (BUG-1052), <c>spendDownQueue</c> a whole number 1-5 (BUG-1051). A refused <c>popCap</c> is reported once: the cap rule is skipped then.
     /// </summary>
     private static AiRulesDef BuildAiRules(Checker c, AiRulesJson? j, RulesDef? rules)
     {
@@ -390,6 +390,8 @@ public static partial class DataLoader
             ReserveShift = (float)Fraction(c, j.ReserveShift, "ai.reserveShift"), // M5-4g
             ReserveArmyShare = (float)Fraction(c, j.ReserveArmyShare, "ai.reserveArmyShare"), // M5-4g, BUG-1021
             GatherReach = Meters(c, j.GatherReach, "ai.gatherReach", DataLimits.MaxAiGatherReach), // M6-S5, BUG-1045
+            ScoutReplacements = WholeNumber(c, j.ScoutReplacements, "ai.scoutReplacements", 0, DataLimits.MaxAiScoutReplacements), // M6-SH1, BUG-1052
+            SpendDownQueue = WholeNumber(c, j.SpendDownQueue, "ai.spendDownQueue", 1, DataLimits.MaxAiSpendDownQueue), // M6-SH1, BUG-1051
         };
     }
 

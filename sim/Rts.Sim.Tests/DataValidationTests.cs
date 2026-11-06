@@ -384,6 +384,14 @@ public class DataValidationTests
     [InlineData("gatherReach", "0", "ai.gatherReach", "outside 1-512 m")]
     [InlineData("gatherReach", "-64", "ai.gatherReach", "outside 1-512 m")]
     [InlineData("gatherReach", "512.5", "ai.gatherReach", "outside 1-512 m")]
+    [InlineData("scoutReplacements", null, "ai.scoutReplacements", "missing required field")] // M6-SH1, BUG-1052
+    [InlineData("scoutReplacements", "-1", "ai.scoutReplacements", "not a whole number in 0-8")]
+    [InlineData("scoutReplacements", "9", "ai.scoutReplacements", "not a whole number in 0-8")]
+    [InlineData("scoutReplacements", "1.5", "ai.scoutReplacements", "not a whole number in 0-8")]
+    [InlineData("spendDownQueue", null, "ai.spendDownQueue", "missing required field")] // M6-SH1, BUG-1051
+    [InlineData("spendDownQueue", "0", "ai.spendDownQueue", "not a whole number in 1-5")]
+    [InlineData("spendDownQueue", "6", "ai.spendDownQueue", "not a whole number in 1-5")]
+    [InlineData("spendDownQueue", "2.5", "ai.spendDownQueue", "not a whole number in 1-5")]
     public void AiRulesBlock_MissingOrOutOfRange_IsOneError(string? field, string? value, string path, string message)
     {
         using TestDataDir dir = TestDataDir.CopyOfShipped();
@@ -514,6 +522,7 @@ public class DataValidationTests
         Assert.Equal((1.5f, 150f, 0.5f), (a.DefendRatio, a.DefendMinValue, a.RecallHallHp)); // M5-4f
         Assert.Equal((0.25f, 1f), (a.ReserveShift, a.ReserveArmyShare)); // M5-4g, BUG-1021
         Assert.Equal(64f, a.GatherReach); // M6-S5 (BUG-1045): meters
+        Assert.Equal((2, 2), (a.ScoutReplacements, a.SpendDownQueue)); // M6-SH1 (BUG-1052, BUG-1051)
     }
 
     /// <summary>M5-4b: the defense knobs load at their edges (<c>defendFor</c> 0 and 600 s, <c>defendRadius</c> 8 and 256 m, <c>workerFleeRadius</c> 1 and 64 m).</summary>
@@ -538,6 +547,10 @@ public class DataValidationTests
     [InlineData("reserveArmyShare", 1, 1)]
     [InlineData("gatherReach", 1, 1)] // M6-S5, BUG-1045
     [InlineData("gatherReach", 512, 512)]
+    [InlineData("scoutReplacements", 0, 0)] // M6-SH1, BUG-1052
+    [InlineData("scoutReplacements", 8, 8)]
+    [InlineData("spendDownQueue", 1, 1)] // M6-SH1, BUG-1051
+    [InlineData("spendDownQueue", 5, 5)]
     public void AiDefenseKnobs_AtTheirEdges_Load(string knob, double value, double loaded)
     {
         using TestDataDir dir = TestDataDir.CopyOfShipped();
@@ -548,7 +561,8 @@ public class DataValidationTests
         Assert.Equal(loaded, knob switch
         {
             "defendFor" => a.DefendForTicks, "defendRadius" => a.DefendRadius, "castMinTargets" => a.CastMinTargets,
-            "defendRatio" => a.DefendRatio, "defendMinValue" => a.DefendMinValue, "recallHallHp" => a.RecallHallHp, "reserveShift" => a.ReserveShift, "reserveArmyShare" => a.ReserveArmyShare, "gatherReach" => a.GatherReach, _ => a.WorkerFleeRadius,
+            "defendRatio" => a.DefendRatio, "defendMinValue" => a.DefendMinValue, "recallHallHp" => a.RecallHallHp, "reserveShift" => a.ReserveShift, "reserveArmyShare" => a.ReserveArmyShare, "gatherReach" => a.GatherReach,
+            "scoutReplacements" => a.ScoutReplacements, "spendDownQueue" => a.SpendDownQueue, _ => a.WorkerFleeRadius,
         }, 5);
     }
 

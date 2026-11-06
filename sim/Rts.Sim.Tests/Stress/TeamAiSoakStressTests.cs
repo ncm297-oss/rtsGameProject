@@ -27,6 +27,9 @@ namespace Rts.Sim.Tests.Stress;
 public class TeamAiSoakStressTests
 {
     /// <summary>M6-S5 (BUG-1045): the least ticks with an enemy army near its hall a seat that never reached wave size must have had (100 s).</summary>
+    // BUG-1049 item 3: the line sits in a narrow band. Measured 2026-11-05: the legitimately starved (raided) seats at
+    // 2,570-7,168 raided ticks, the reach-rule-off failures (gather-starved) at 1,687 and 1,957. A change in raid behaviour
+    // can move a row across 2,000 either way; move the line on purpose, with both ends re-measured.
     private const int RaidedTicksIfStarved = 2000;
 
     private readonly ITestOutputHelper _out;

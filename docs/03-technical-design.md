@@ -9144,6 +9144,58 @@ ticks), 4 waves to 3, gathered 8,810 gold / 4,240 wood v 5,300 / 3,540.
 - **Not in this slice:** Pale Hills and Vathar Crossing, a mirrored-terrain helper (Raraku was laid out by a one-off script,
   not shipped), biome art and per-map props, per-map AI openings, water, the setup's list.
 
+**M6-SH1 (the sim's hardening after M6-S7).** No new feature, no save or replay format change (`SaveFormat.CurrentVersion`
+5, the `AIST` layout and `Blackboard.Save.cs` unchanged).
+
+- **The golden is decoupled from the data hash** ("Testing strategy"): its `data-hash` line is the hash at recording time,
+  the tests play it with the shipped hash substituted, the `k` lines are the pin. `QA/GatherWedgeQaTests` dropped its
+  list of shipped hashes (its checkpoints are the proof), and `QA/Content/DescriptionWordingQaTests.TheShippedContentHash_IsTheGoldenReplaysHeader`
+  is gone. This task moved the shipped hash and left the file byte-identical.
+- **Scout replacements are bounded (BUG-1052)** by `rules.json` `ai.scoutReplacements` (a whole number 0-8, default 2,
+  hashed): the death branch of `ScoutManager.Sweep` sends a scout again only while the player's own unit losses
+  (`PlayerView.OwnUnitLosses`, the saved `MatchStats.UnitLosses`, own seat only) are at most the knob; past it the sweep ends
+  (`ScoutPhase` 2) and the reach lifts, as a death did in M6-S5. Every unit lost counts, not only scouts: no count is
+  saved for the rule, and a seat that has lost units in a fight is past the point where a replacement is cheap. Every
+  scout killed on its first tick: 3 lost by tick 6,000 on seeds 1-3 (was 9), 17 workers (unharmed 20), the farthest gather
+  target 16-32 m from the hall once capped (no row past 150 m, so the reach lifts rather than holding). Seed 1 then gathers
+  no wood: its start sees no tree and every scout died before seeing one (`QA/ReachRuleQaTests.EveryScoutKilledAtOnce_*`).
+- **A kind with no known node is scouted again (BUG-1053):** a scout lost after the head ring is seen is replaced too while
+  the player knows no node of some resource kind at all (`ScoutManager.KnowsEveryKind`, dropped nodes aside), within the same
+  bound; the replacement's `Waypoints` skips the ring points seen. A seat that knows a node of every kind never re-scouts, so
+  a match whose scout lives on, or dies with home known, plays as before. Seed 1 killed 2,000 ticks out now gets wood at
+  tick 5,968; seed 3's two rows still didn't by 6,000 (the sweep first sees a forest 179 m off at ~4,250 ticks; at 200 the
+  scout is replaced before the ring and nobody dies after it): round 1 below. A re-scout skipping the mirror
+  (to sweep round home) was tried and made seed 1 worse; not kept.
+- **Round 1 (QA findings BUG-1055 / 1056), still no saved byte:**
+  - *The mark of a scout sent again.* A replacement's or re-scout's `Waypoints` lays the grid point nearest the hall at the
+    hall's centre, visited (nothing to see at home, so the walk is unchanged); `ScoutManager.SentAgain` looks for that
+    point. A first scout's grid holds cell centres only. If the hall moves the mark is lost and the sweep plays as a first one.
+  - *BUG-1055:* the cap ends the sweep only for a scout sent again (or with `ai.scoutReplacements` 0), so the first scout's
+    death is always followed whatever the earlier losses. A seat that lost 3 workers before its scout: wood at ticks
+    4,979 / 3,144 / 4,688 on seeds 1-3 (was 0). Every scout killed at the door still costs 3 scouts.
+  - *BUG-1056:* a scout sent again also ends its sweep (released alive, so the economy sets it gathering) once the reach
+    has lifted and the player knows an enemy building and a node of every kind at any distance, unless the known forest
+    nearest the hall stands within `ai.workerFleeRadius` of an enemy building (seen or ghost). The scout is standing at the
+    far forest it found, so it brings wood home a walk sooner than a gatherer sent from the hall. On the 90 m-cleared
+    start, one scout killed at 0 / 200 / 2,000 ticks, seeds 1-10: wood by 6,000 on 9 / 8 / 5 seeds (was 9 / 6 / 4); seed 3
+    at 200 and 2,000 now at ticks 5,541 / 5,619. Without the door rule it was 10 / 9 / 9, but rows whose forest stood 9-11 m
+    from an enemy building lost 2-5 more workers (seeds 1 and 5 fell to 12-13); seed 3's forest stands 41 m from one.
+    Seed 1 at 2,000 is unchanged (5,968, its forest at an enemy's door). A wider second ring for the re-scout was also
+    tried (`2 x ai.scoutRadius`): better on the rows it was aimed at, worse over seeds 1-10; not kept.
+  - Rows: `Ai/ScoutReplacementTests` (`ASeatPastTheCapBeforeItsFirstScout_StillFollowsThatScoutsDeath`,
+    `AScoutSentAgain_IsMarkedByItsHomeGridPoint_*`, `AScoutSentAgain_KnowingAFarForestClearOfTheEnemy_IsReleasedToGather`,
+    `AScoutSentAgain_KnowingOnlyAForestAtAnEnemysDoor_KeepsSweeping`; `TheCap_CountsTheOwnSeatsLossesOnly` now kills the
+    replacement), QA's un-skipped `ReachRuleQaTests.ScoutKilledAfterTheRing_Seed3_*` and
+    `ScoutCapQaTests.ASeatPastTheCapBeforeItsFirstScout_OnAFarForestStart_StillGetsWood`.
+- **`ai.spendDownQueue`** (1-5, default 2, hashed) replaces `ProductionManager.SpendDownQueue` (BUG-1051 item 6); the
+  starting-resources stress row prints its 10:00 measure and asserts the mean bank only (item 5).
+- **Two reach anchors (BUG-1049 item 2), documented, not merged:** `ScoutManager.FoundEnough` measures `ai.gatherReach` from
+  the hall's centre, `AiPlayer.InGatherReach` from every own finished drop-off. While the scout is out a seat's only drop-off
+  is its hall, so the two agree; a second drop-off finished before the scout is done would let gatherers use a node near it
+  while the scout still looks for one near the hall (the scout then sweeps a little longer, nothing worse).
+  `QA/GatherReachQaTests.ASecondDropOff_AnchorsTheReach_OnlyOnceFinished` pins that a site is no anchor (item 4).
+- **A forged save's last throw (BUG-0960):** a Moving unit with goal cell -1 is refused `Malformed` (`World.ReadFrom`).
+
 ## Testing strategy
 
 | Test kind | What it proves | Runs |
@@ -9164,10 +9216,19 @@ ticks), 4 waves to 3, gathered 8,810 gold / 4,240 wood v 5,300 / 3,540.
   unit trajectories are unchanged); in M4-2a (format 4: the `combat` line and 13-field command lines; the data
   hash for the ram's `attack.targets`; every `k` line identical); last in M4-H1 (the fog's visible bits in the state
   hash, BUG-0215: every `k` line moved, and with the visible bits left out locally the old file reproduced every one). `ReplayGoldenTests` plays it back and fails on
-  the first mismatching checkpoint. When a deliberate change alters outcomes (movement, tick order,
-  RNG use, any `game/data` edit), run the tests once with the environment variable
-  `RTS_REGEN_GOLDEN=1`: the test rewrites the file and then fails with "golden regenerated; rerun
-  without the flag". Rerun without it, and explain why in the commit message.
+  the first mismatching checkpoint. **Since M6-SH1 the `k` lines are the pin, not the header:** the file's `data-hash`
+  line is the shipped data's hash at recording time, and the test plays the file with it replaced by the shipped hash
+  (`ReplayTestRun.WithShippedDataHash`), as does every other test that plays or rebuilds from the golden (`ReplayFormatTests`'
+  format 3 / 4 rewrites, `QA/StartingResourcesQaTests`; `GatherWedgeQaTests`' `seed21_playable.replay` likewise checks its
+  checkpoints only). So a data change that does not move the golden's game (an AI knob, a faction or ability it doesn't
+  spawn, a map) needs no regeneration, and two tracks' data changes no longer collide on the file. **Regenerate only when
+  a `k` line moves** (movement, tick order, RNG use, the hash's composition, data the cross-map run uses): run the tests once
+  with the environment variable `RTS_REGEN_GOLDEN=1`: the test rewrites the file and then fails with "golden regenerated;
+  rerun without the flag". Rerun without it, and explain why in the commit message. The product still refuses a recording
+  made with other data: `ReplayGoldenTests.TheGoldenAsRecorded_IsRefusedForItsDataHash_WhenTheShippedHashHasMoved` (played
+  as recorded, `ReplayError.DataMismatch` before tick 1) and `TheGoldenWithAForeignDataHash_IsRefused`. M6-SH1 moved the
+  shipped hash (two `rules.json` `ai` knobs) and left the file byte-identical at `30C51BB619A7E650`: the proof the decoupling
+  works.
 - `DeterminismTests`: two sims with the same seed and commands keep equal hashes every 100 ticks
   over 2,000 ticks of movement; different seeds differ by tick 100. Since M3-1 also on a map with 12
   forests and 8 mines, with scripted `Take`s between ticks that fell trees mid-run.

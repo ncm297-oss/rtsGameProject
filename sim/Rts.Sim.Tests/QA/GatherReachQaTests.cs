@@ -156,6 +156,47 @@ public class GatherReachQaTests
     }
 
     /// <summary>
+    /// M6-SH1 (BUG-1049 item 4, the mutant "a drop-off site counts as an anchor" survived every test): while the reach holds,
+    /// a second drop-off of the seat's faction placed about 100 m from the hall as a construction site doesn't bring a node
+    /// beside it into reach; the same building finished does. (Item 3, the soak's starved line: see the comment by
+    /// <c>Stress/TeamAiSoakStressTests.RaidedTicksIfStarved</c>.)
+    /// </summary>
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void ASecondDropOff_AnchorsTheReach_OnlyOnceFinished(bool site)
+    {
+        PlayerSeat[] seats = { new(0, SeatController.Ai, AiDifficulty.Normal), new(1, SeatController.Ai, AiDifficulty.Normal) };
+        Simulation sim = AiScenes.Generated(seats, 1, record: false, out _);
+        World w = sim.World;
+        AiPlayer ai = sim.AiOf(0)!;
+        while (!ai.HasDropOff && sim.TickNumber < 50) sim.Tick();
+        Assert.True(ai.HasDropOff && !ai.ReachLifted(), "setup");
+        Vector2 hall = ai.HallPoint;
+        int type = -1;
+        foreach (BuildingDef d in w.Data.Buildings)
+            if (d.Faction == w.FactionOf(0) && d.DropOff && d.Slot != BuildingSlot.TownHall) type = d.Id;
+        Assert.True(type >= 0, "setup: the faction has no second drop-off");
+        BuildingDef def = w.Data.Buildings[type];
+        int cell = -1;
+        Vector2 centre = default;
+        for (int c = 0; c < w.NavGrid.Width * w.NavGrid.Height && cell < 0; c++)
+        {
+            var at = new Vector2((c % w.NavGrid.Width + def.FootprintWidth * 0.5f) * Map.MapConstants.CellSize, (c / w.NavGrid.Width + def.FootprintHeight * 0.5f) * Map.MapConstants.CellSize);
+            float d = Vector2.Distance(at, hall);
+            if (d < 95f || d > 110f || !w.Buildings.Fits(type, c)) continue;
+            cell = c;
+            centre = at;
+        }
+        Assert.True(cell >= 0, "setup: no free cell 95-110 m from the hall");
+        Assert.False(ai.InGatherReach(centre), "setup: the spot is in the hall's reach");
+        Assert.True(w.Buildings.Spawn(0, type, cell, out _, site));
+        for (int t = 0; t < 2 * ai.ThinkTicks; t++) sim.Tick();
+        Assert.False(ai.ReachLifted(), "setup: the reach lifted");
+        Assert.Equal(!site, ai.InGatherReach(centre));
+    }
+
+    /// <summary>
     /// M6-S7: on the flat AI scene (every cell explored) the head ring round the hall is seen from the first think, so the
     /// reach has lifted: a point 100 m off the hall is in reach.
     /// </summary>

@@ -276,7 +276,7 @@ public class ReplayFormatTests
         Assert.True(r.Combat);
         Assert.All(r.Commands, c => Assert.True(c.Target == default && !c.TargetIsBuilding));
         Assert.Equal(bytes, ReplayFormat.Write(r)); // a format 3 replay writes back as format 3, byte for byte
-        ReplayResult played = ReplayPlayer.Run(r, TestSim.Data);
+        ReplayResult played = ReplayPlayer.Run(ReplayTestRun.WithShippedDataHash(r), TestSim.Data); // M6-SH1: the golden's header is its recording-time hash
         Assert.True(played.Ok, played.ToString());
     }
 
@@ -624,7 +624,7 @@ public class ReplayFormatTests
         Assert.Equal(4, r!.FormatVersion);
         Assert.True(r.Seats.IsEmpty);
         Assert.Equal(bytes, ReplayFormat.Write(r)); // a format 4 replay writes back as format 4, byte for byte
-        ReplayResult played = ReplayPlayer.Run(r, TestSim.Data);
+        ReplayResult played = ReplayPlayer.Run(ReplayTestRun.WithShippedDataHash(r), TestSim.Data); // M6-SH1: the golden's header is its recording-time hash
         Assert.True(played.Ok, played.ToString());
     }
 
