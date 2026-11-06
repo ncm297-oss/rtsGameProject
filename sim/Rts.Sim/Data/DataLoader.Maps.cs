@@ -50,6 +50,25 @@ public static partial class DataLoader
     }
 
     /// <summary>
+    /// M6-S8: checks one map file anywhere on disk (the <c>mirror-map</c> tool's output) exactly as <see cref="LoadAll"/>
+    /// checks a <c>maps/*.json</c>, against <c>common/rules.json</c> and <c>common/resources.json</c> under
+    /// <paramref name="dataDir"/> (the other data files and the shipped maps are not read, so a broken shipped copy of the
+    /// same map doesn't block its rebuild). Every error found; empty when the file would load.
+    /// </summary>
+    public static IReadOnlyList<DataError> CheckMapFile(string dataDir, string mapPath)
+    {
+        var c = new Checker(dataDir);
+        RulesJson? rulesJson = c.Read("common/rules.json", DataJsonContext.Default.RulesJson);
+        RulesDef? rules = rulesJson == null ? null : BuildRules(c, rulesJson);
+        ResourceFileJson? resourcesJson = c.Read("common/resources.json", DataJsonContext.Default.ResourceFileJson);
+        ResourceDef[]? resources = resourcesJson == null ? null : BuildResources(c, resourcesJson);
+        if (c.Errors.Count > 0) return c.Errors;
+        MapJson? j = c.Read(Path.GetFullPath(mapPath), DataJsonContext.Default.MapJson); // a rooted path: Path.Combine keeps it
+        if (j != null) BuildMap(c, j, 0, rules, resources);
+        return c.Errors;
+    }
+
+    /// <summary>
     /// One map file, checked in stages so one mistake is one error: its own fields (id, names, players 2-4, size 128 or
     /// 256: nothing else is read without a size); the text rows, ramps, starts, mines and forests as written (each on the
     /// map, the rows of the size, levels 0-2, trees 'T' or '.'); then, all of those clean, the terrain built (each ramp a

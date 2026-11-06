@@ -145,11 +145,13 @@ public class MapFileQaTests
     public void AFileNamedOtherThanItsId_LoadsUnderItsId()
     {
         using TestDataDir dir = TestDataDir.CopyOfShipped();
-        File.Move(dir.FullPath(RarakuFile), dir.FullPath("maps/desert.json"));
+        // M6-S8: a name that keeps the file's place among the three shipped maps (pale_hills, raraku, vathar_crossing), so the
+        // order, and with it the hash, is unchanged.
+        File.Move(dir.FullPath(RarakuFile), dir.FullPath("maps/raraku_desert.json"));
         DataLoadResult load = DataLoader.LoadAll(dir.Path);
         Assert.True(load.Ok, string.Join(" | ", load.Errors));
-        Assert.Equal(0, load.Data!.FindMap("raraku"));
-        Assert.Equal(-1, load.Data.FindMap("desert"));
+        Assert.Equal(TestSim.Data.FindMap("raraku"), load.Data!.FindMap("raraku"));
+        Assert.Equal(-1, load.Data.FindMap("raraku_desert"));
         Assert.Equal(TestSim.Data.ContentHash(), load.Data.ContentHash());
     }
 

@@ -54,7 +54,7 @@ Why the split matters:
 | `sim/Rts.Sim.Tests` | xUnit test project | Rts.Sim | Unit, scenario, determinism, replay, data-validation, perf tests |
 | `game/RtsGame.csproj` | Godot.NET.Sdk 4.7.x | Rts.Sim | Presentation, input, UI, audio |
 | `tools/*` | console apps / scripts | Rts.Sim (map gen) | Asset import, map generator CLI, export script |
-| `tools/Rts.Cli` | `net8.0` console app (M1-8) | Rts.Sim | Headless sim runs: checkpoint hashes, tick timings, replay record/play |
+| `tools/Rts.Cli` | `net8.0` console app (M1-8) | Rts.Sim | Headless sim runs: checkpoint hashes, tick timings, replay record/play; (M6-S8) `mirror-map` for hand-made maps |
 
 `RtsGame.sln` sits at the repo root. Godot's `dotnet/project/solution_directory` setting points
 to `..` so the editor uses it.
@@ -9143,7 +9143,7 @@ the replays as text, the saves as their FNV-1a 64 digest and length) and `SaveFo
 / `ReplayFormatTests.AGeneratedMatch_RecordsFormats6To8_ByteForByte_AsBeforeMapFiles` compare this build's bytes with them,
 the data hash and the checksums aside (they follow the data, which `maps/` and the data track's text change).
 
-**Raraku** (`maps/raraku.json`, placeholder text): 2 players, 128, point-symmetric through the centre (x → 127 − x, y → 127 − y).
+**Raraku** (`maps/raraku.json`, its layout a placeholder): 2 players, 128, point-symmetric through the centre (x → 127 − x, y → 127 − y).
 Open desert, the starts west and east on level 0 (cells (22, 64) and (105, 63), 83 cells apart); a level-1 mesa on the north
 and the south flank (32 x 20 cells) with a level-2 butte (12 x 9), each reached by a ramp from the open centre, one from the
 outer flank and one up onto the butte (6 ramps). Each start: two 2,500-gold mines 17.3 / 17.7 m off, a 21-tree woodlot 20.9
@@ -9231,6 +9231,89 @@ ticks), 4 waves to 3, gathered 8,810 gold / 4,240 wood v 5,300 / 3,540.
   while the scout still looks for one near the hall (the scout then sweeps a little longer, nothing worse).
   `QA/GatherReachQaTests.ASecondDropOff_AnchorsTheReach_OnlyOnceFinished` pins that a site is no anchor (item 4).
 - **A forged save's last throw (BUG-0960):** a Moving unit with goal cell -1 is refused `Malformed` (`World.ReadFrom`).
+
+### Implementation (M6-S8)
+
+Hand-made maps, slice 2 (docs/05 M6 criterion 7; docs/02 "Map and terrain"): the `mirror-map` helper, Pale Hills and
+Vathar Crossing, and BUG-1057. No change to the map schema, `SimConfig`, the save or replay formats, the generator or the
+start contract. All three shipped maps load; only Raraku's layout is a placeholder.
+
+**The helper** (`tools/Rts.Cli` `mirror-map <in.json> <out.json> --symmetry point|quad [--data <dir>]`, `MirrorMap.cs`; a
+dev tool, nothing ships): the source is a map file whose `terrain` holds one part only, `point` the north half (size / 2 rows
+of size cells, mirrored through the centre, x → size − 1 − x, y → size − 1 − y, as Raraku) or `quad` the north-west quarter
+(size / 2 rows of size / 2 cells, mirrored across both axes, `players` 4 and one start), with its ramps, starts, mines and
+forests inside that part. The output lists each source item and then its mirrors (point: the centre mirror; quad: the centre,
+east-west and north-south mirrors), a mirrored ramp's `up` flipped and a mine's or forest's anchor moved by its footprint (the
+gold mine's from `resources.json`). So start 1 is always start 0's centre mirror: a 2-player match is fair, and the AI scout's
+first far point (the mirror of its own hall, `ScoutManager.Waypoints`) is the enemy's start. It writes only the out path, then
+checks it with `DataLoader.CheckMapFile` (new: one file checked as `LoadAll` checks a `maps/*.json`, against `rules.json` and
+`resources.json` only, so a broken shipped copy doesn't block its rebuild) and prints every error, exit 1 on any; a source
+item outside its part, a malformed source or a bad option is one line and nothing is written. The sources live in
+`tools/Rts.Cli/maps/<id>.quad.json` (laid out by a one-off script, as Raraku was; not shipped).
+
+**Pale Hills** (`maps/pale_hills.json`, quad, 4 players, 256): hedgerow woods on level 0, starts (63, 63), (192, 192), (192,
+63) and (63, 192), so starts 0 and 1 are diagonally opposite, 129 cells apart on both axes. Per quarter: a 19-cell open camp,
+12-cell corridors to the two neighbouring camps, tree rows every 11 cells with 3-cell gaps every 18 elsewhere, a level-1 hill
+(27 x 27 cells, x / y 78-104) between camp and centre with a level-2 knoll and four ramps (from the camp's side, down to the
+south and east, onto the knoll), an open path round the hill and a central plaza; each camp has two 2,500-gold mines 17.3 /
+17.7 m west and a 14 x 3 woodlot 22 m north, and one expansion pair (2,000 each) in a clearing on the east corridor 49 / 56 m
+out: 16 ramps, 16 mines, 3,796 trees in 60 forests. Open cells are 94 % of the passable ones: the default resource capacity
+(`ResourceStore.DefaultCapacity`, 4,096 nodes, which the setup uses) caps a map's trees near 4,000, about 6 % of a 256 map,
+so "dense woods" is rows of trees, not solid blocks.
+
+**Vathar Crossing** (`maps/vathar_crossing.json`, quad, 4 players for 2-4, 256): a level-1 steppe cut west to east by a level-0
+river band, rows 108-147 (80 m; its banks wind 3 cells either way away from the fords), crossed only at four fords at x 40-45,
+100-105, 150-155 and 210-215, each a 6-wide ramp down the north bank (rows 108-111) and one up the south bank (rows 144-147)
+with 32 band rows between; the band can't see the banks. Starts (60, 62) and (195, 62) on the north bank, (195, 193) and (60,
+193) on the south, so starts 0 and 1 face each other diagonally across the river. Each camp has two 2,500-gold mines 17.3 /
+17.7 m west and a woodlot 22 m north; two expansion pairs a quarter (2,000 each) stand on the bank by its fords, 74-104 m out,
+with five more stands of trees: 8 ramps, 24 mines, 1,540 trees in 28 forests.
+
+**The matches** (`MapFileTests.NormalVersusNormal_OnANewMap_EndsWithin36000Ticks`, seed 1, Malazan v Whirlwind, starts 0 and 1):
+
+| Map | Result | Waves (Malazan / Whirlwind) | Gathered gold / wood (Malazan v Whirlwind) |
+| --- | --- | --- | --- |
+| Pale Hills | Whirlwind won at 28:28 (34,175 ticks) | 7 / 9 | 8,880 / 7,720 v 8,840 / 8,520 |
+| Vathar Crossing | Whirlwind won at 19:20 (23,219 ticks) | 2 / 4 | 2,910 / 1,810 v 6,680 / 4,500 |
+
+What moved on the way (as Raraku's first draft did): Pale Hills' first draft (starts (60, 60), its expansion pair 57 cells out
+in the west woods) starved both seats (about 4,900 gold each, the start mines) with no result by 30:00. With the pair moved to
+the east corridor they gathered 8,850 each and still had none by 30:00 (at 2,000 or 3,000 gold a mine none by 60:00, at 4,000
+one at 41:00). Moving the starts to (63, 63), 6 cells nearer each other on both axes, gave the result above. Vathar Crossing's
+first draft (band rows 113-142, fords at x 28 and 94, expansions 95 m out, starts 0 and 1 straight across the river,
+north-west v south-west) had no result in 60:00: Malazan never found Whirlwind's base (its scout's far point, its hall's centre
+mirror, was an empty start) and never expanded, and Whirlwind razed its buildings but left six workers alive (an AI wave
+targets buildings only). Making starts 0 and 1 centre mirrors (the helper's only order since), widening the band to rows
+108-147 with the fords at x 40 and 100, and moving the expansions nearer gave the result above.
+
+**BUG-1057** (`ScoutManager.Mark`): the mark a scout sent again carries (M6-SH1 round 1) is the hall's centre, laid on the grid
+point nearest it, where a first scout lays that grid cell's centre. When the hall's centre is a grid centre (a 4 x 4 hall on
+cell (64, 64) of a 256 map, the quarter points) the two were equal and `SentAgain` read false, so the cap never applied (9
+scouts fed to the door by 6,000). The mark is now laid a quarter cell (0.5 m) east of the hall's centre when it would equal
+the point's grid centre (west at the map's east edge), and `SentAgain` computes the same mark, so a first scout's grid never
+matches it. No byte added (the mark is in the saved points; the `AIST` layout and `Blackboard.Save.cs` unchanged), no
+allocation; off a grid centre nothing changed. Neither new map puts a hall on a grid centre (quad starts can't reach the
+quarter points: two neighbouring starts must stand half the side apart).
+
+- **Tests:** `Map/MapFileTests` (the new maps' fields and exact text; each the mirror of its source, cell, ramp, start and node;
+  `mirror-map` on the checked-in source reproducing the shipped file byte for byte; every shipped map keeping the start contract,
+  now three; Pale Hills' diagonal starts and open ground; Vathar Crossing's 2-player starts on opposite banks, the banks joined
+  only through the band, and a unit walking from start 0 to start 1 through a ford (57 band cells on its path, 10 of them ramp
+  cells, the band entered once, onto a ramp); same seed twice; saved at 1,000 (format 5) and followed 1,000 ticks; recorded
+  3,000 ticks (format 9) and played to all 30 checkpoints; the two matches, about 20 s each, carry the `Stress` trait so a
+  quick loop can skip them (BUG-1069 item 1 corrected this sentence));
+  `Cli/MirrorMapCliTests` (point symmetry item by item, the quad order, the refusals);
+  `AiDeterminismTests.FourAiSeats_OnPaleHills_TwoProcesses_SamePerTickHashes` (four Normal seats on every start, a child
+  `dotnet test` folding the same 3,000 per-tick hashes); `DataContentHashTests` (every map field on each shipped map, read by id
+  now that `Maps[0]` is Pale Hills; file edits on each new map); `DataValidationTests` (file order now `pale_hills`, `raraku`,
+  `vathar_crossing`); `Ai/ScoutReplacementTests` (the 64 x 64 grid-centre hall at (30, 30): the mark a quarter cell off, every
+  scout killed costing 3 (the control at (29, 30) too), a save with the replacement out loading marked and playing on
+  hash-equal, no allocation); QA's `ScoutSentAgainQaTests.EveryScoutKilledAtTheDoor_TheCapHolds_WhenTheHallStandsOnAGridCentre`
+  un-skipped (3 scouts, was 9).
+- **The data hash moved** (two map files joined it), as expected. The golden replay is byte-identical (its `k` lines are the
+  pin, M6-SH1), and every generated-map pin row is unmoved.
+- **Not in this slice:** the maps' final text (data track), biome art, water, per-map AI openings, an AI that hunts an enemy's
+  last units (Vathar's first draft), BUG-1058 / 1059.
 
 ## Testing strategy
 
@@ -9441,6 +9524,10 @@ ticks), 4 waves to 3, gathered 8,810 gold / 4,240 wood v 5,300 / 3,540.
     (`ReplayPlayer.Run`); on success it prints the same `tick <n> hash` lines and
     `ok: K checkpoints matched over N ticks`, or `ok: 0 checkpoints (nothing compared) over N ticks`
     for a replay shorter than one checkpoint interval (valid, but it proves nothing; M1-9).
+  - `mirror-map <in.json> <out.json> --symmetry point|quad [--data <dir>]` (M6-S8, "Implementation (M6-S8)") writes a whole
+    hand-made map file from its source half or quarter and checks it as the loader would. It prints `wrote <out> (<symmetry>
+    symmetry): it loads`, or every loader error (`error: <file>: <path>: <message>`, the one exception to the one-line rule
+    below) and a closing `error: '<out>' was written but does not load (N errors)`, exit 1.
   - Data that doesn't load prints `error: data in '<dir>' did not load (N error[s]), first: <error>`,
     where an error reads `file: path: message` with an empty file or path left out (M1-9).
   - Exit codes: **0** success; **1** bad usage (one `error: ... usage: ...` line), data that
