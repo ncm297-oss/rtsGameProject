@@ -46,7 +46,7 @@ public class D24MapPinQaTests
     public void ThreeMaps_WithCleanText_PassThePinAndTheChecker_AndRarakuIsFoundById()
     {
         GameData d = LoadWithExtraMaps(Clean);
-        Assert.Equal(3, d.Maps.Length);
+        Assert.Equal(TestSim.Data.Maps.Length + 2, d.Maps.Length); // tolerant of how many maps ship (the sim adds two)
         Assert.NotEqual("raraku", d.Maps[0].Key); // the index moved: an index-based pin would now read the wrong map
         Assert.Equal("raraku", MapTextContentTests.Raraku(d).Key);
         List<string> pin = MapTextContentTests.PinProblems(MapTextContentTests.Shipped(d), MapTextContentTests.Pinned);
