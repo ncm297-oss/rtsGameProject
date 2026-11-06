@@ -3,7 +3,7 @@
 | Field | Value |
 | --- | --- |
 | Severity | S4 |
-| Status | open (items 1-2 fixed D24 2026-11-06-0326, QA-verified; item 3 is the sim's, M6-S8) |
+| Status | fixed (items 1-2 D24 2026-11-06-0326, QA-verified; item 3 M6-S8 the same session: docs/02 "Map and terrain" and docs/03's M6-S7 paragraph now say Raraku's *layout* is the placeholder, its text final since D23; closed by the Producer at the 2026-11-06-0926 PLAN) |
 | Found | 2026-11-05-2148, task D23 (QA, light) |
 | System | game/data/maps/raraku.json `description`; sim/Rts.Sim.Tests/Content/MapTextContentTests.cs |
 | Fixed by | D24 (429adf9): item 1 `raraku.json` "center", pinned in `MapTextContentTests.Pinned`; item 2 `MapTextContentTests.Problems` rejects `StartingResourcesContentTests.RatioWords` (rows `AMutantDescription_IsCaught` ratio cases, `ACountOrAPartWord_Passes`, `D23MapTextQaTests.RatioWords_AreRejected_EvenBesideANumberWord`, QA `D24MapPinQaTests`). Item 3 (docs/02, docs/03 "placeholder") left to the sim. |

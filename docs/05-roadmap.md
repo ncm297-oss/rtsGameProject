@@ -662,7 +662,10 @@ open S1 / S2. Retro below; open S3 / S4 listed there.)_
 - [ ] Expansion, defense, attack waves, retreat, rebuilding; scouts ramps and high ground before attacking up. (M5-3,
       2026-10-12: attack waves, retreat and the rally are in. M5-4b, 2026-10-13: defense is in (`DefenseManager`: a hit
       building or an intruder near the hall pulls the army home and the workers to a drop-off; knobs in `rules.json` `ai`).
-      Left for M5-4c: expansion, rebuilding, the high-ground scouting.)
+      Expansion is in as the build order's `expand` step (M5-2 / D14: `AiStepAction.Expand`, the difficulty's `expandAfter`,
+      `rules.json` `ai.expandHallReach`; `BuildOrderExecutor.ExpansionMine`), a time- and build-order-driven expansion, not a
+      "mines running low" one (drift fixed by the Producer 2026-11-06-0926). Left: hunting the last units (M5-4d slice 1),
+      rebuilding and the high-ground scouting (M5-4d slice 2).)
 - [ ] Easy / Normal / Hard per [02 AI](02-game-design.md#ai-opponent). (D16, 2026-10-13: the three blocks pinned to docs/02 and
       the faction pages. M5-4c slice 1, 2026-10-13: `useAbilities` applied (Easy never cast then; D19, 2026-10-15, turned it on for Easy too). Left for M5-4c slice 2:
       `gatherBonus`, `focusFire`, `pullBackWounded`.)
