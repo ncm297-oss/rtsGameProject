@@ -38,3 +38,12 @@ ERROR: System.InvalidOperationException: Handle is not initialized.
   crash (handoff watch-outs).
 - Worth watching across loops. If it recurs, check whether a `Match` freed with `QueueFree` is still referenced from C#
   (an event handler or a static) when the scene is loaded again.
+
+## QA verification (2026-11-06-0926, M6-VH5)
+- Made robust, cause not proven (the dev's note): `Main.MatchScene` loads `Match.tscn` once and holds it; all three match
+  starts (new, loaded, replay) instantiate it, so no match start calls `GD.Load`. `MapListTest.MenuMaps` checks the held
+  scene and runs `GC.Collect()` after each quit.
+- No recurrence: two full loops (83 / 83 under the sim suite's load; 84 / 84 bar one QaM25Test overlay-timing flake, 3 / 3
+  alone), `TeamsTest` 13 / 13 alone and beside three parallel `MapListTest` runs with the sim suite running, `MapListTest`
+  9 / 9 in parallel, no "Handle is not initialized" in any log. No process-exit leak warning from the static hold.
+- The Producer decides closure (the race was never reproduced before or after; a fix by removal of the ingredients).

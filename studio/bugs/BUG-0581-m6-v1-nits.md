@@ -36,3 +36,10 @@
 - The CS8602 warning in `game/tests/QaShellTest.cs` (the brief's "item 4"): fixed, verified. `dotnet build RtsGame.sln
   --no-incremental` reports 0 warnings, on the worktree and on a fresh clone.
 - Items 2 and 3 are unchanged, so the bug stays open.
+
+## QA note (2026-11-06-0926, M6-VH5)
+- Item 1 re-checked on the three-map tree: `SkirmishSetup.Build` adds `ui.MapSizeItem(size)` (`setup.map_size_item`); no
+  player-facing string literal in `SkirmishSetup.cs` (every remaining literal is a node name or a command-line flag).
+- Item 2 (a generated 256 is a bigger empty field) was not re-checked; the hand-made 256 maps (Pale Hills / Vathar
+  Crossing) place their own starts, and generated start placement is the sim's. Item 3 was a process note answered long ago. The Producer
+  decides closure.
