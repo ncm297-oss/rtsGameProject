@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S3 |
-| Status | open |
+| Status | fixed (M6-S8; awaiting QA) |
 | Found | 2026-11-05-2148, task M6-SH1 round 1 (QA re-verify) |
 | System | AI scout (`ScoutManager.SentAgain`, the death branch of `Sweep`) |
-| Fixed by | |
+| Fixed by | M6-S8: `ScoutManager.Mark` lays the mark a quarter cell (0.5 m) off the hall's centre when that is the grid point's own centre, and `SentAgain` reads the same mark (no saved byte). Tests: `QA/ScoutSentAgainQaTests.EveryScoutKilledAtTheDoor_TheCapHolds_WhenTheHallStandsOnAGridCentre` (un-skipped: 3 scouts, was 9), `Ai/ScoutReplacementTests.AScoutSentAgain_FromAHallOnAGridCentre_IsMarkedAQuarterCellOff`, `EveryScoutOfAHallOnAGridCentre_Killed_TheSeatLosesThree` (30 and the control 29), `ASaveWhileAHallOnAGridCentreHasAScoutSentAgainOut_LoadsMarked_AndPlaysOnHashEqual`, `SentAgain_OnAHallOnAGridCentre_AllocatesNothing` |
 
 ## Repro
 1. `dotnet test sim/Rts.Sim.Tests --filter "FullyQualifiedName~ScoutSentAgainQaTests.EveryScoutKilledAtTheDoor_TheCapHolds_WhenTheHallStandsOnAGridCentre"`

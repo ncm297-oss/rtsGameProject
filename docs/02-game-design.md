@@ -340,7 +340,8 @@ of a seed and hashed with the rest of the data, so a save or a recording of a ma
 rebuilds the map from its id; a save names it by id only, its terrain loading from the save's own stored heightmap (as for
 a generated map), so the id is a label there, kept true by the data hash in the save's header (M6-SH1, BUG-1054). Each
 must keep the generator's start rules (every start on one level, at least half the map apart, two mines and a forest
-beside it); Raraku is the first (M6-S7, a placeholder layout), Pale Hills and Vathar Crossing follow. The skirmish setup's Map list offers every shipped map file ("Game flow" 2,
+beside it). All three ship: Raraku (M6-S7), Pale Hills and Vathar Crossing (M6-S8, each laid out as one quarter mirrored
+across both axes); Raraku's layout is a placeholder. The skirmish setup's Map list offers every shipped map file ("Game flow" 2,
 M6-V18).
 
 ## Controls and camera

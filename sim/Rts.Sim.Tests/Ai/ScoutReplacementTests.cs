@@ -1,3 +1,4 @@
+using System.Collections.Immutable;
 using System.Numerics;
 using Rts.Sim.Ai;
 using Rts.Sim.Combat;
@@ -5,6 +6,7 @@ using Rts.Sim.Data;
 using Rts.Sim.Entities;
 using Rts.Sim.Tests.QA;
 using Rts.Sim.Tests.Save;
+using Rts.Sim.ViewApi;
 using Xunit.Abstractions;
 
 namespace Rts.Sim.Tests;
@@ -360,6 +362,143 @@ public class ScoutReplacementTests
         probe();
         AllocationProbe.AssertZero(probe, _out);
         _out.WriteLine($"{sink}");
+    }
+
+    // ---------- BUG-1057: a hall whose centre is a scout grid centre ----------
+
+    /// <summary>
+    /// BUG-1057's scene: a flat 64 x 64 cell (128 m) map, not explored, combat on; player 0's 4 x 4 hall anchored at
+    /// (<paramref name="hx"/>, 30), player 1's at (52, 52), each with two mines, 12 trees and five workers beside it. With the
+    /// shipped <c>ai.scoutGrid</c> (56 m) the grid is 3 x 3 and its middle centre is (64, 64) m: the centre of a hall at (30, 30).
+    /// </summary>
+    private static Simulation GridCentreScene(int hx = 30)
+    {
+        const int size = 64;
+        GameData data = TestSim.Data;
+        var config = new SimConfig(7, s_seats.Length, 256, 512) { Data = data, Seats = s_seats.ToImmutableArray(), Combat = true };
+        var sim = new Simulation(config, LocalMovementTests.Flat(size));
+        World w = sim.World;
+        int mine = data.FindResource("gold_mine"), tree = data.FindResource("tree");
+        (int X, int Y)[] halls = { (hx, 30), (52, 52) };
+        for (int p = 0; p < s_seats.Length; p++)
+        {
+            (int x, int y) = halls[p];
+            Assert.True(w.Buildings.Spawn(p, StartBase.BuildingOfSlot(data, s_seats[p].Faction, BuildingSlot.TownHall), y * size + x, out _));
+            int toward = p == 0 ? 1 : -1;
+            for (int m = 0; m < 2; m++)
+                Assert.True(w.Resources.Spawn(mine, (y - 6) * size + x + toward * (2 + 3 * m), data.Rules.StartMineGold, out _));
+            for (int t = 0; t < 12; t++)
+                Assert.True(w.Resources.Spawn(tree, (p == 0 ? y + 9 + t / 4 : y - 12 + t / 4) * size + x + t % 4, data.Rules.TreeWood, out _));
+            int worker = StartBase.UnitOfSlot(data, s_seats[p].Faction, UnitSlot.Worker);
+            for (int k = 0; k < 5; k++)
+                CombatScenes.Place(sim, p, worker, w.NavGrid.CellCenter(x + k % 4, y + 5 + k / 4));
+        }
+        return sim;
+    }
+
+    /// <summary>
+    /// BUG-1057: with the hall's centre (64, 64) on the middle grid centre, the first scout is not marked; its replacement is,
+    /// by one moved grid point laid a quarter cell east of the hall's centre (not on the grid centre a first scout lays there)
+    /// and visited. Before the fix the mark was the grid centre itself and <see cref="ScoutManager.SentAgain"/> read false.
+    /// </summary>
+    [Fact]
+    public void AScoutSentAgain_FromAHallOnAGridCentre_IsMarkedAQuarterCellOff()
+    {
+        Simulation sim = GridCentreScene();
+        AiPlayer ai = sim.AiOf(0)!;
+        Vector2 hall = ReachRuleQaTests.HallCentre(sim.World, 0);
+        Assert.Equal(new Vector2(64f, 64f), hall);
+        UntilScoutOut(sim, 3000);
+        Vector2[] firstPoints = (Vector2[])ai.Board.ScoutPoints.Clone();
+        Assert.Contains(hall, firstPoints); // the setup: a first scout's grid holds the hall's centre
+        Assert.False(ScoutManager.SentAgain(ai), "the first scout is marked sent again");
+        Assert.True(KillScout(sim));
+        Assert.Equal(0, AfterTheDeath(sim));
+        UntilScoutOut(sim, 4000);
+        Assert.True(ScoutManager.SentAgain(ai), "the replacement isn't marked sent again");
+        int moved = 0;
+        for (int k = 0; k < firstPoints.Length; k++)
+        {
+            if (ai.Board.ScoutPoints[k] == firstPoints[k]) continue;
+            moved++;
+            Assert.True(k >= Blackboard.ScoutHead, $"head point {k} moved");
+            Assert.Equal(hall, firstPoints[k]);
+            Assert.Equal(hall + new Vector2(0.25f * Map.MapConstants.CellSize, 0f), ai.Board.ScoutPoints[k]);
+            Assert.True(ai.Board.ScoutVisited[k]);
+        }
+        Assert.Equal(1, moved);
+    }
+
+    /// <summary>
+    /// BUG-1057: every scout of the grid-centre hall killed on its first tick out loses <c>ai.scoutReplacements</c> + 1 (3)
+    /// scouts by tick 6,000, the sweep then ended with the reach lifted, as the control hall one cell west does (before the
+    /// fix: 9 killed, still sending at 6,000).
+    /// </summary>
+    [Theory]
+    [InlineData(30)]
+    [InlineData(29)]
+    public void EveryScoutOfAHallOnAGridCentre_Killed_TheSeatLosesThree(int hx)
+    {
+        Simulation sim = GridCentreScene(hx);
+        AiPlayer ai = sim.AiOf(0)!;
+        int killed = 0;
+        while (sim.TickNumber < 6000)
+        {
+            sim.Tick();
+            if (KillScout(sim)) killed++;
+        }
+        _out.WriteLine($"hall anchor ({hx}, 30): killed {killed}; own losses {sim.World.UnitLosses[0]}; phase {ai.Board.ScoutPhase}; lifted {ai.ReachLifted()}");
+        Assert.Equal(ai.Rules.ScoutReplacements + 1, killed);
+        Assert.Equal(2, ai.Board.ScoutPhase);
+        Assert.True(ai.ReachLifted());
+    }
+
+    /// <summary>
+    /// BUG-1057: a save taken while the grid-centre hall's replacement is out loads marked (the mark is in the saved points,
+    /// no new byte), plays on hash-equal to 6,000 with every scout killed on both, and the cap engages on the same tick.
+    /// </summary>
+    [Fact]
+    public void ASaveWhileAHallOnAGridCentreHasAScoutSentAgainOut_LoadsMarked_AndPlaysOnHashEqual()
+    {
+        Simulation a = GridCentreScene();
+        UntilScoutOut(a, 3000);
+        Assert.True(KillScout(a));
+        AfterTheDeath(a);
+        UntilScoutOut(a, 4000);
+        Assert.True(ScoutManager.SentAgain(a.AiOf(0)!), "setup: no scout sent again is out");
+        Simulation loaded = SaveTestRun.Load(TestSim.Data, SaveTestRun.Save(a));
+        SaveTestRun.AssertSameAi(a.AiOf(0), loaded.AiOf(0), $"on load at {a.TickNumber}");
+        Assert.True(ScoutManager.SentAgain(loaded.AiOf(0)!), "the loaded scout is not marked sent again");
+        int cappedA = -1, cappedL = -1;
+        while (a.TickNumber < 6000)
+        {
+            a.Tick();
+            loaded.Tick();
+            Assert.Equal(KillScout(a), KillScout(loaded));
+            Assert.True(a.StateHash() == loaded.StateHash(), $"diverged at tick {a.TickNumber}");
+            if (cappedA < 0 && a.AiOf(0)!.Board.ScoutPhase == 2) cappedA = a.TickNumber;
+            if (cappedL < 0 && loaded.AiOf(0)!.Board.ScoutPhase == 2) cappedL = loaded.TickNumber;
+        }
+        _out.WriteLine($"capped at {cappedA} / {cappedL}; own losses {a.World.UnitLosses[0]}");
+        Assert.True(cappedA > 0, "the cap never engaged");
+        Assert.Equal(cappedA, cappedL);
+    }
+
+    /// <summary>The grid-centre mark's read allocates nothing: <see cref="ScoutManager.SentAgain"/> on the grid-centre hall with a scout sent again out.</summary>
+    [Fact]
+    public void SentAgain_OnAHallOnAGridCentre_AllocatesNothing()
+    {
+        Simulation sim = GridCentreScene();
+        UntilScoutOut(sim, 3000);
+        Assert.True(KillScout(sim));
+        AfterTheDeath(sim);
+        UntilScoutOut(sim, 4000);
+        AiPlayer ai = sim.AiOf(0)!;
+        int sink = 0;
+        Action probe = () => { if (ScoutManager.SentAgain(ai)) sink++; };
+        probe();
+        AllocationProbe.AssertZero(probe, _out);
+        Assert.True(sink >= 1, "the scout sent again read unmarked");
     }
 
     /// <summary>The accessor reads the own seat's count, which moves with an own unit's death only.</summary>

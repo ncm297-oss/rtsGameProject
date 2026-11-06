@@ -34,7 +34,8 @@ public static class CliRunner
     /// <summary>The one-line usage text.</summary>
     public const string Usage =
         "usage: Rts.Cli run --seed <n> --units <n> [--ticks <n>] [--players 1|2] [--checkpoint <ticks>] [--forests <n>] [--mines <n>] [--workers <n>] [--record <path>] [--data <dir>]"
-        + " | Rts.Cli play <path> [--data <dir>]";
+        + " | Rts.Cli play <path> [--data <dir>]"
+        + " | Rts.Cli mirror-map <in.json> <out.json> --symmetry point|quad [--data <dir>]";
 
     private const int DefaultTicks = 1500;
 
@@ -54,6 +55,7 @@ public static class CliRunner
         {
             "run" => RunVerb(args, stdout, stderr),
             "play" => PlayVerb(args, stdout, stderr),
+            "mirror-map" => MirrorMapVerb(args, stdout, stderr),
             _ => UsageError(stderr, $"unknown verb '{args[0]}'"),
         };
     }
@@ -202,6 +204,93 @@ public static class CliRunner
             ? $"ok: 0 checkpoints (nothing compared) over {result.TicksRun.ToString(Inv)} ticks"
             : $"ok: {replay.Checkpoints.Length.ToString(Inv)} checkpoints matched over {result.TicksRun.ToString(Inv)} ticks");
         return ExitOk;
+    }
+
+    /// <summary>
+    /// M6-S8: <c>mirror-map</c> (<see cref="MirrorMap"/>): reads the source half or quarter, writes the whole map file to the
+    /// out path (the only file it writes), then checks it as the loader checks a <c>maps/*.json</c>
+    /// (<see cref="DataLoader.CheckMapFile"/>, against the data's rules and resources) and prints every error: exit 1 on any.
+    /// </summary>
+    private static int MirrorMapVerb(string[] args, TextWriter stdout, TextWriter stderr)
+    {
+        string? error = ParseOptions(args, 1, new[] { "--symmetry", "--data" }, out Dictionary<string, string> o, out List<string> positional);
+        if (error != null) return UsageError(stderr, error);
+        if (positional.Count != 2) return UsageError(stderr, "mirror-map takes a source path and an out path");
+        if (!o.TryGetValue("--symmetry", out string? symmetry)) return UsageError(stderr, "--symmetry is required");
+        if (symmetry is not ("point" or "quad")) return UsageError(stderr, "--symmetry must be point or quad");
+        string? dir = o.TryGetValue("--data", out string? d) ? d : FindDefaultDataDir();
+        if (dir == null)
+        {
+            stderr.WriteLine("error: cannot find game/data (no RtsGame.sln above the working or program directory); pass --data <dir>");
+            return ExitError;
+        }
+        (string inPath, string outPath) = (positional[0], positional[1]);
+        string source;
+        try
+        {
+            source = File.ReadAllText(inPath);
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
+        {
+            stderr.WriteLine($"error: cannot read '{inPath}': {e.Message}");
+            return ExitError;
+        }
+        if (!GoldMineFootprint(dir, out int mineWidth, out int mineHeight, out string why))
+        {
+            stderr.WriteLine($"error: {why}");
+            return ExitError;
+        }
+        string? text = MirrorMap.Mirror(source, symmetry == "quad", mineWidth, mineHeight, out string mirrorError);
+        if (text == null)
+        {
+            stderr.WriteLine($"error: '{inPath}': {mirrorError}");
+            return ExitError;
+        }
+        try
+        {
+            File.WriteAllBytes(outPath, System.Text.Encoding.UTF8.GetBytes(text));
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
+        {
+            stderr.WriteLine($"error: cannot write '{outPath}': {e.Message}");
+            return ExitError;
+        }
+        IReadOnlyList<DataError> errors = DataLoader.CheckMapFile(dir, outPath);
+        foreach (DataError e in errors) stderr.WriteLine($"error: {e}");
+        if (errors.Count > 0)
+        {
+            stderr.WriteLine($"error: '{outPath}' was written but does not load ({errors.Count.ToString(Inv)} {(errors.Count == 1 ? "error" : "errors")})");
+            return ExitError;
+        }
+        stdout.WriteLine($"wrote {outPath} ({symmetry} symmetry): it loads");
+        return ExitOk;
+    }
+
+    /// <summary>The first gold resource type's footprint in <c>common/resources.json</c> under <paramref name="dir"/> (the loader's mine type), which moves a mirrored mine's anchor.</summary>
+    private static bool GoldMineFootprint(string dir, out int width, out int height, out string error)
+    {
+        width = height = 0;
+        error = "";
+        string path = Path.Combine(dir, "common", "resources.json");
+        try
+        {
+            using var doc = System.Text.Json.JsonDocument.Parse(File.ReadAllText(path));
+            foreach (System.Text.Json.JsonElement r in doc.RootElement.GetProperty("resources").EnumerateArray())
+            {
+                if (r.GetProperty("resource").GetString() != "gold") continue;
+                System.Text.Json.JsonElement f = r.GetProperty("footprint");
+                width = f.GetProperty("width").GetInt32();
+                height = f.GetProperty("height").GetInt32();
+                return true;
+            }
+            error = $"'{path}' has no gold resource type";
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException or System.Text.Json.JsonException
+            or KeyNotFoundException or InvalidOperationException or FormatException)
+        {
+            error = $"cannot read the gold mine footprint from '{path}': {e.Message}";
+        }
+        return false;
     }
 
     /// <summary>A checkpoint line: <c>tick &lt;n&gt; hash &lt;16 hex&gt;</c>, the same for <c>run</c> and <c>play</c>.</summary>
