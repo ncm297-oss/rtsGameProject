@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S4 |
-| Status | open |
+| Status | fixed |
 | Found | 2026-10-26-2108, task D-R32 (QA, light) |
 | System | docs/factions/malazan.md, docs/factions/whirlwind.md; studio/bugs (BUG-1010, BUG-1011, BUG-1027) |
-| Fixed by | |
+| Fixed by | Items 1-2: D22 (session 2026-11-05-1716, data): malazan.md "not defeated at 20:00 (3 pop, no pop building left; 794 gold and 5 wood in hand)"; whirlwind.md's unmeasured wood clause dropped (92 = 2 x 10 + 9 x 8 still holds); every page table row identical to ab54ddb (QA). Item 3: the Producer at the 1716 ACCEPT: BUG-1011 and BUG-1027 already read fixed (D-R32 / M5-H4), BUG-1010's page line is in (its Status stays open: the sim-side counter rule) |
 
 ## Repro
 1. `dotnet test sim/Rts.Sim.Tests --filter "FullyQualifiedName~D21OpeningsQaTests.EveryPairing_SecondSeed" --logger "console;verbosity=detailed"`

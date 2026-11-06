@@ -70,7 +70,7 @@ public class SaveRefusalTests
     [InlineData(0)]
     [InlineData(1)] // M6-S3: slice 1's format (no AI section) has no reader
     [InlineData(2)] // M6-S4: M6-S3's format (no team byte) has no reader
-    [InlineData(5)] // M6-S6: format 4 is current, format 3 still reads (SaveFormatTests.AFormat3Save_LoadsAsStandard)
+    [InlineData(6)] // M6-S7: format 5 is current (a hand-made map; a generated map writes 4), formats 3-4 still read
     [InlineData(-1)]
     public void AnotherFormatVersion_IsFormatVersionMismatch(int version)
     {

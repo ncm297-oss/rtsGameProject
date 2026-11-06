@@ -18,7 +18,9 @@ internal static class SaveHeader
         SimConfig c = sim.World.Config;
         GameData data = c.Data;
         foreach (byte b in SaveFormat.Magic) w.Write(b);
-        w.Write(SaveFormat.CurrentVersion);
+        // M6-S7: the oldest format that holds the match: a generated map is format 4, byte for byte as before map files.
+        bool mapFile = !string.IsNullOrEmpty(c.MapId);
+        w.Write(mapFile ? SaveFormat.CurrentVersion : SaveFormat.MaplessVersion);
         w.Write(0L); // total length, patched at the end
         w.WriteString(SimInfo.Version);
         w.Write(data.ContentHash());
@@ -52,6 +54,8 @@ internal static class SaveHeader
         // Format 4 (M6-S6): the starting-resources preset's id (a string), after the team bytes: every format-3 field keeps
         // its offset, so the view's header-only reader (it stops after the team bytes) reads a format-4 header unchanged.
         w.WriteString(c.StartingResources);
+        // Format 5 (M6-S7): the hand-made map's id (a string), after the preset: every format-4 field keeps its offset.
+        if (mapFile) w.WriteString(c.MapId);
     }
 
     /// <summary>Every <see cref="MapGenParams"/> field, in declaration order.</summary>
@@ -119,8 +123,9 @@ internal static class SaveHeader
     /// Reads the header after the fixed prefix (the caller checked magic, version, length and checksum): the data hash
     /// (<see cref="SaveError.DataMismatch"/> against <paramref name="data"/>), then every field, each in its range
     /// (<see cref="SaveError.InvalidHeader"/>, an AI seat whose faction has no <c>ai.json</c> too, since format 3 a team
-    /// outside 0 to <see cref="PlayerSeat.MaxTeam"/>, and since format 4 a starting-resources preset the data lacks; a
-    /// <paramref name="version"/> 3 header has no preset and loads as <c>standard</c>). On success
+    /// outside 0 to <see cref="PlayerSeat.MaxTeam"/>, since format 4 a starting-resources preset the data lacks, and since
+    /// format 5 an empty map id or one the config refuses; a <paramref name="version"/> 3 header has no preset and loads as
+    /// <c>standard</c>, a version 3-4 header no map id and loads as a generated map). On success
     /// <paramref name="config"/> is the match's config and <paramref name="tick"/> the tick number the save was made at.
     /// </summary>
     public static SaveError TryRead(SaveReader r, GameData data, int version, out SimConfig? config, out int tick)
@@ -165,6 +170,11 @@ internal static class SaveHeader
         // Format 4 (M6-S6): the starting-resources preset, after the teams; a format-3 save was made before presets: standard.
         string? preset = version >= 4 ? r.ReadString() : StartingResourcesDef.StandardId;
         if (r.Failed || preset == null) return SaveError.Malformed;
+        // Format 5 (M6-S7): the hand-made map's id, after the preset; formats 3-4 were generated maps. A format-5 header always
+        // names one (a generated map is saved as format 4), so an empty id there is no save this build wrote.
+        string? mapId = version >= 5 ? r.ReadString() : "";
+        if (r.Failed || mapId == null) return SaveError.Malformed;
+        if (version >= 5 && mapId.Length == 0) return SaveError.InvalidHeader;
         // BUG-1040: the command capacity's range is the config's own (1 to SaveFormat.MaxCommandCapacity), so a header over
         // it is InvalidHeader before anything is built, as every other capacity out of range.
         if (!InCapacity(units, 1) || commands < 1 || commands > SaveFormat.MaxCommandCapacity || !InCapacity(resources, 1) || !InCapacity(buildings, 1)
@@ -185,6 +195,7 @@ internal static class SaveHeader
             StatsSampleCapacity = sampleCapacity,
             Seats = seats.MoveToImmutable(),
             StartingResources = preset,
+            MapId = mapId,
         };
         // An AI seat's faction needs a loaded ai.json, which the config's check asks (M6-S3: AI seats load); an unknown
         // starting-resources id is refused there too (M6-S6).

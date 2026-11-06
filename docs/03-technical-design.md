@@ -3164,8 +3164,9 @@ checked. The data-validation test is `DataValidationTests.ShippedData_LoadsWithN
 Shipped files: `common/damage_table.json`, `common/rules.json`, `common/resources.json` (M3-1), `common/techs.json`
 (M3-5), `common/projectiles.json` (M4-2b), and `faction.json` + `units.json` + `buildings.json` (M3-2) + `techs.json`
 (M3-5) for `malazan` and `whirlwind`, and `common/statuses.json` (M4-4a). All fourteen are required, and since M5-1 `factions/<id>/ai.json` for every faction (sixteen). `factions/<id>/abilities.json`
-(M4-4a) is optional: shipped for `malazan` and (M4-4b-2) `whirlwind`. Everything else in the tree above (`maps`, other factions) arrives with
-the milestone that consumes it.
+(M4-4a) is optional: shipped for `malazan` and (M4-4b-2) `whirlwind`. `maps/*.json` (M6-S7) is optional too: one file a
+hand-made map, shipped `maps/raraku.json`. Everything else in the tree above (other factions) arrives with the milestone that
+consumes it.
 
 | File | Shape |
 | --- | --- |
@@ -3179,6 +3180,7 @@ the milestone that consumes it.
 | `units.json` | `{ "units": [ ... ] }`, entries as in the example. `attack` also takes optional `minRange`, `splash` (m), and `friendlyFire` (docs/02 "Combat / Stats"); they default to 0 / false. Melee range is written as `0.5` (edge to edge). `abilities` (M4-4a, optional): ability ids of the unit's own faction, at most 4 (`DataLimits.MaxUnitAbilities`), no repeats; resolved to `UnitDef.Abilities`; shipped on the Cadre Mage (`telas_fire`), the Sapper (`cusser`) and the Priest of the Whirlwind (`sandstorm`). `passives` (M4-4b-3a, optional): at most 2 (`DataLimits.MaxUnitPassives`), one per `trigger` (`DataLimits.PassiveTriggerIds`): `{trigger: whenBelowHp, hpFraction, status, magnitude}` or `{trigger: onDeath, status, magnitude, duration, radius, units}` (see "Implementation (M4-4b-3a)"); resolved to `UnitDef.Passives`; shipped on the Zealot only. `detector` (M4-5, optional): meters, above 0, at most 64 (`UnitDef.Detector`; see "Implementation (M4-5)") |
 | `statuses.json` | `{ "statuses": [ ... ] }` (M4-4a), each `{id, displayName, description, kind, damageType?, sight?, reach?}`: `kind` `damageOverTime`, `slow`, (M4-4b-2) `blind`, (M4-4b-3a) `frenzied`, or (M4-5) `stealthed` / `revealed` (`DataLimits.StatusKindIds`; at most one `revealed`); `damageType` (a damage table type) required on `damageOverTime`, an error on any other kind; `sight` and `reach` (m, above 0, at most 64) required on `blind`, errors on any other kind. The magnitude and duration come from the effect applying it (a blind, stealthed or revealed status takes no magnitude). Ids unique; shipped `burning` (magic damage over time), `slowed`, `blinded` (2 / 3, M4-4b-2) and `frenzied` (M4-4b-3a; its magnitude, the attack-speed increase, any fraction above 0, is the applying effect's or passive's), `stealthed` and `revealed` (M4-5, "Implementation (M4-5)") |
 | `abilities.json` | `{ "abilities": [ ... ] }` (M4-4a, per faction, optional), each `{id, displayName, description, kind, range, radius, castTime, cooldown, duration?, affects, autocast?, effects}`: `kind` `targetGround` or (M4-4b-3a) `selfAura` (`targetUnit`, `summon`: "not supported yet"); `range` m above 0 and at most `DataLimits.MaxSight` (64), required on `targetGround` and an error on `selfAura` (0 included); `radius` m above 0 and at most `DataLimits.MaxAbilityRadius` (16); `castTime` s, 0 or more, to ticks; `cooldown` s above 0, to ticks (at least 1); `duration` s, optional (0), to ticks (required with a `createZone` effect, M4-4b-2); `affects` `enemy_units`, `own_units` or `all_units`; `autocast` only `false` ("not supported yet"); `effects` at least one, each `{kind: damage, type, amount, buildings?, friendlyFire?}` (a whole amount, at least 1; M4-4b-1: `buildings` true also hits other players' buildings as structure, not with `own_units`; `friendlyFire` 0-1, the fraction own units take, above 0 only with `enemy_units`) or `{kind: applyStatus, status, magnitude, duration}` (a `statuses.json` id; magnitude whole and at least 1 for damage over time, above 0 and below 1 for a slow; duration s, at least a tick, and for damage over time a whole number of seconds, at least 1, M4-4b-1); M4-4b-2: `{kind: createZone, blocksVision?, statuses: [{status, magnitude, duration}]}` (at least one status, each by the `applyStatus` rules, a blind status without a magnitude; the ability's `duration`, at least a tick, is then required: the zone's lifetime; at most one per ability); `teleport`, `spawn`: "not supported yet"; a field the effect kind doesn't use is an error. Ids unique across factions. Shipped: Malazan `telas_fire`, `cusser` (M4-4b-1); Whirlwind `sandstorm` (M4-4b-2) |
+| `maps/<file>.json` | (M6-S7, optional folder, one file a hand-made map, loaded in the files' names' ordinal order into `GameData.Maps`) `{id, displayName, description, players, size, terrain, ramps?, starts, mines, forests}`: see "Implementation (M6-S7)" for every field and check |
 | `ai.json` | (M5-1, per faction, required) `{difficulties {easy, normal, hard}, buildOrder, compositions, attack, retreat}`: the shape and every refusal in "AI architecture", "For the data track (M5-1)". Not in `ContentHash` yet (M5-2 adds it) |
 
 Validation rules: ids are `snake_case` and unique (a unit id is unique across all factions);
@@ -8307,7 +8309,10 @@ M5 criterion 8, the sim half: named AI openings (D14 b). Code: `Data/AiOpening.c
 
 - **Replay file** (M1-6, `Rts.Sim.Replays`): a `Replay` holds a header, the command log, and
   checkpoints.
-  - Header: format version (`Replay.CurrentFormatVersion` = 8 since M6-S6, which added the `starting-resources <id>` line
+  - Header: format version (`Replay.CurrentFormatVersion` = 9 since M6-S7, which added the `map <id>` line after
+    `starting-resources`, written only for a match on a hand-made map (`Replay.MaplessFormatVersion` = 8: a generated-map
+    match is still written in the oldest format that holds it, 6-8, byte for byte; formats 3-8 read as generated maps);
+    8 since M6-S6, which added the `starting-resources <id>` line
     after `combat` (formats 3-7 read as `standard`; the recorder writes the oldest format that holds the match: 8 for a preset
     other than `standard`, else 7 (`Replay.PresetlessFormatVersion`) for a match with a team, else 6, so a match at
     `standard` is written byte for byte as before); 7 since M6-S4, which added each seat's team as a fifth seat
@@ -8328,8 +8333,10 @@ M5 criterion 8, the sim half: named AI openings (D14 b). Code: `Data/AiOpening.c
     preset's snake_case id, `Replay.Validate` holds it to a snake_case token of at most 64 characters and to `standard` in
     formats 3-7: `InvalidHeader`), and every `MapGenParams` field (M3-1 added `map.forests`,
     `map.forest-min-trees`, `map.forest-max-trees`, `map.gold-mines`, `map.mine-spacing`; format 6, M5-4a, the five
-    `map.start-*` lines). There is no map id yet:
-    the map, resource nodes included, is rebuilt from seed + params.
+    `map.start-*` lines), and (format 9, M6-S7) `map <id>` (`Replay.MapId`, a snake_case id of at most 64 characters;
+    `Replay.Validate` holds formats 3-8 to none: `InvalidHeader`). A generated map, resource nodes included, is rebuilt
+    from seed + params; a hand-made one from its file, by its id (the `map.*` lines are still written: `map.width` and
+    `map.height` are the map's side, the rest unused).
   - Command log: every command `Simulation.Enqueue` accepted, as stamped (tick, player, sequence,
     kind, type id, position, unit handle, (format 4) attack target handle and building flag, flags), in enqueue order. Commands stamped for a tick after the
     recorded span are left out. Since M5-2 that includes an AI seat's commands, sent at the start of a tick and stamped for
@@ -8337,7 +8344,8 @@ M5 criterion 8, the sim half: named AI openings (D14 b). Code: `Data/AiOpening.c
   - Checkpoints: `(tick, StateHash())` right after each tick whose new `TickNumber` is a multiple of
     the interval (default 100, 5 s), so exactly `tickCount / interval` of them.
 - **Recording:** `new ReplayRecorder(sim)` attaches to a sim that hasn't ticked or queued anything
-  and wasn't built on a hand-made map; one recorder per sim. `Enqueue` reports each accepted command
+  and wasn't built on a hand-built heightmap (the `World(config, map)` test seam; a map file, M6-S7, is rebuilt from its id
+  and records); one recorder per sim. `Enqueue` reports each accepted command
   and `Tick` reports its end (phase 14). The checkpoint buffer is preallocated (default: one hour of
   ticks), so recording adds no allocation to `Tick()`; past that it doubles. The command log doubles
   when full inside `Enqueue`; since M5-2 an AI seat enqueues at the start of `Tick()`, so with AI seats
@@ -8369,7 +8377,8 @@ M5 criterion 8, the sim half: named AI openings (D14 b). Code: `Data/AiOpening.c
   The interval may exceed the tick count: the recorder writes replays shorter than one interval.
 - **Playback** (`ReplayPlayer.Run(replay, data)`): refuses before any tick with
   `FormatVersionMismatch`, another validation code, or `DataMismatch` when the data hash differs.
-  Otherwise it builds the `SimConfig` (since format 8 with the header's starting-resources preset, `InvalidHeader` before
+  Otherwise it builds the `SimConfig` (since format 9 with the header's map id, `InvalidHeader` before any tick for an id
+  the data lacks or a map the header's players or `map.width` / `map.height` / resource capacity don't fit; since format 8 with the header's starting-resources preset, `InvalidHeader` before
   any tick for an id the data lacks; since format 4 with the header's `combat`; `Run(replay, data, combat)` overrides
   it, for format 3 test replays recorded with combat off, which can't say so; since format 5 with the header's factions
   and **every seat human**: the AI's commands are in the log, so playback runs no AI; a seat naming a faction the data
@@ -8431,14 +8440,17 @@ version 2) stores the AI seats too, so every match saves. Code in `sim/Rts.Sim/S
   freshly built one. Each AI seat is built as a match builds it (see "The AI seats" below), so
   `Simulation.AiOpening(p)` is the saved seat's (-1 for a human seat). A
   `ReplayRecorder` attaches to a loaded sim only under the recorder's own rule (tick 0, nothing queued): only a save made
-  before the first tick and before any command. Saves of hand-made maps load too (the heightmap is stored; `HasGeneratedMap`
-  is restored, so the recorder still refuses them).
+  before the first tick and before any command. Saves of hand-built heightmaps (the test seam) load too (the heightmap is
+  stored; `HasGeneratedMap` is restored, so the recorder still refuses them). A save of a map-file match (M6-S7) stores the
+  heightmap as well and names the map in its header (format 5).
 - **Encoding:** binary, little-endian (`BinaryWriter` primitives; whole arrays of padding-free element types as their raw
   bytes, written only on little-endian machines), fixed field order, nothing optional. Floats are their exact bit
   patterns. Strings are an int32 byte count and printable ASCII (the sim version, snake_case faction ids). An array is its
   int32 length, then its elements; the reader requires the length the header's capacities give. Structs holding a bool
   (commands, ghosts, events) go field by field.
-- **Header**, in order: magic `RTSSAVE\0` (8 bytes); format version (int32, `SaveFormat.CurrentVersion` = 4 since M6-S6,
+- **Header**, in order: magic `RTSSAVE\0` (8 bytes); format version (int32, `SaveFormat.CurrentVersion` = 5 since M6-S7,
+  which added the map id after the starting-resources preset, written only for a match on a hand-made map: a generated-map
+  match is saved as `SaveFormat.MaplessVersion` = 4, byte for byte as before; 4 since M6-S6,
   which added the starting-resources preset after the team bytes; version 3 (M6-S4, which added the team byte) still loads,
   as `standard` (`SaveFormat.OldestReadVersion`); version 2 was M6-S3's and version 1 slice 1's, both refused
   `FormatVersionMismatch`, no reader); total length of the file (int64, checksum included); `SimInfo.Version` (string, informational); `GameData.ContentHash()` (uint64); seed
@@ -8455,7 +8467,12 @@ version 2) stores the AI seats too, so every match saves. Code in `sim/Rts.Sim/S
   starting-resources preset's id (string: int32 byte count, then the ASCII id), right after the team bytes, so every format-3
   field keeps its offset. **For the view:** the preset string starts at the team bytes' offset + the player count, i.e. after
   the tick (whose offset `SaveSummary` already computes) + 4 + players; `SaveSummary.TryParse`, which stops after the tick
-  (or, on the view's branch, after the team bytes), reads a format-4 header unchanged (`SaveFormatTests.ThePreset_FollowsTheTeamBytes_AndSaveSummaryStillReadsTheHeader`). Every seat is written out (the default ones too), so the loaded config has explicit seats.
+  (or, on the view's branch, after the team bytes), reads a format-4 header unchanged (`SaveFormatTests.ThePreset_FollowsTheTeamBytes_AndSaveSummaryStillReadsTheHeader`);
+  (format 5, M6-S7) the hand-made map's id (string: int32 byte count, then the ASCII id), right after the preset string, so
+  every format-4 field keeps its offset. **For the view:** the map id string starts at the preset string's offset + 4 + the
+  preset's length in bytes (= the tick's offset + 4 + players + 4 + preset length); a format-4 header ends at the preset, a
+  format-5 header names a map (never empty). `SaveSummary.TryParse` reads a format-5 header unchanged (it stops after the
+  team bytes; `SaveFormatTests.TheMapId_FollowsThePreset_AndSaveSummaryStillReadsAFormat5Header`). Every seat is written out (the default ones too), so the loaded config has explicit seats.
 - **Sections**, each opening with a four-letter tag, in this order:
 
   | Tag | Holds |
@@ -8536,7 +8553,8 @@ version 2) stores the AI seats too, so every match saves. Code in `sim/Rts.Sim/S
   it; `ChecksumMismatch`; `DataMismatch` (another `ContentHash`, so any data edit refuses a save, as a replay);
   `InvalidHeader` (a player count outside 1-16, a capacity outside its range, a faction id the data lacks, an unknown
   controller or difficulty, a team outside 0-8 (M6-S4), a starting-resources preset the data lacks, an empty id included (M6-S6),
-  a map parameter or config value `SimConfig.Validate` refuses, an AI seat whose faction has no
+  a map parameter or config value `SimConfig.Validate` refuses (M6-S7: a map id the data lacks, or one the header's players,
+  map size or resource capacity don't fit), (format 5) an empty map id, an AI seat whose faction has no
   `ai.json`); `Malformed` for a body too short for the header's capacities (the
   pre-check) or that doesn't parse (a tag out
   of place, an AI seat count or player that doesn't match the header's seats, a stored opening pick other than the load's, an array of the wrong length, a count past its capacity, a
@@ -8763,7 +8781,7 @@ that costs 0.01 ms per update, and still needs (a)'s byte-map union for the view
   (`common/rules.json` `ai.gatherReach`, **64 m**, required, 1-512 m (`DataLimits.MaxAiGatherReach`), in `ContentHash`,
   `DataValidationTests` / `DataContentHashTests` rows): `FoundEnough` counts a forest and a gold mine only within the reach
   of the hall's centre (the enemy building anywhere); and until the scout is done (`Board.ScoutPhase` 2: released, or
-  dead) `AiPlayer.InGatherReach` treats a node farther than the reach from every own finished drop-off as unknown, for
+  dead; M6-S7 changes when the reach lifts: "Implementation (M6-S7)") `AiPlayer.InGatherReach` treats a node farther than the reach from every own finished drop-off as unknown, for
   `NearestNode` and `KnowsNode` alike (so the per-kind "no node" path of M5-4g, not a new idle state). With no finished
   drop-off every node counts (no anchor); after the scout, every known node, wherever it is (a seat whose scout dies
   early falls back on any node it knows: intended). One squared-distance compare per own building, no list: nothing
@@ -8917,6 +8935,143 @@ Starting resources, the sim's half (docs/02 "Game flow" 2, Request 43). The setu
   (`AiSpendAbove` on each preset, a file edit).
 - **Not in this slice:** the setup screen's list and `--resources` (view), per-slot presets, a "low" preset, the presets'
   final text (data track), BUG-1047 / 1048.
+
+### Implementation (M6-S7)
+
+Hand-made maps, slice 1 (docs/05 M6 criterion 7; docs/02 "Map and terrain"): a map file format, its loader and checks,
+`SimConfig.MapId`, save format 5 / replay format 9, and the first shipped map, Raraku. Before it, BUG-1047 / 1048's gather
+rule (docs/01 2026-11-05), since a hand-made map may put a start's nearest forest past `ai.gatherReach`. Pale Hills, Vathar
+Crossing, the setup's map list (view) and mirrored-terrain tooling are slice 2.
+
+**The gather reach, BUG-1047 / 1048** (`AiPlayer.ReachLifted` / `InGatherReach` / `KnowsNode`, `ScoutManager.HeadRingSeen`,
+`ScoutManager.Sweep`'s death branch, `ScoutManager.Waypoints`):
+
+- **When the reach lifts** (`ReachLifted`, walked once a think, cleared with the think's reserve so nothing new is saved): once
+  every point of the scout's head ring (the 8 compass points `ai.scoutRadius` round the hall's current centre, clamped inside
+  the map, as the sweep lays them) is seen (its cell explored by the player, the team's bits with shared vision) or marked
+  visited on the scout's list (a point the scout could only get near, or one an ally's base covers); or once the sweep has
+  ended with the scout alive (`ScoutPhase` 2), as in M6-S5, so the reach never lifts later than it did. Not on the scout's
+  death, and no longer only after the whole-map sweep (the decision). Until it lifts, `InGatherReach` holds the gatherers'
+  search (`EconomyManager.NearestNode`) and `KnowsNode` to nodes within `ai.gatherReach` of an own finished drop-off, as in
+  M6-S5. The Producer's rule named only the ring; the sweep's end was kept as a second lift because without it the raider
+  scenes (whose scouts are released at tick 300, their raiders seeing an enemy base) kept the reach for the whole match, a
+  later lift than M6-S5's, which the decision did not ask for.
+- **A scout that dies before the ring is seen is replaced** (the death branch sets the phase back to 0, so the next think's
+  free worker is sent; `Waypoints` marks the ring points already explored visited for a replacement, told from a first scout
+  by its laid points, never (0, 0)). One that dies after is not (phase 2). Without the replacement nobody looks at home after
+  an early death, and BUG-1048's seat, whose home forest was never seen, gathers no wood.
+- **Not built: the fallback** ("while the reach holds, a kind with no node within it takes the nearest known node of that
+  kind"). Built and measured, then taken out, for the Producer to rule on: (1) as written it brings BUG-1045 back: with an
+  ally's vision every seat knows its ally's forests from tick 1, before its own home forest is seen, and sent its wood
+  gatherers 300 m to them at once (the mirror 2v2's seats gathered 40 / 250 / 350 / 360 wood by tick 4,000 where M6-S5's
+  gathered 90 / 440 / 330 / 350); (2) held to nodes the seat's own units had seen, it sent wood gatherers 171-195 m into the
+  next seat's base where its raiders saw a forest (four of `QA/StandardPresetPinQaTests`' AI rows moved, and two
+  `Stress/TeamAiSoakStressTests` seats starved: raided 1,133 and 1,931 ticks, under the soak's 2,000); (3) with the ring lift
+  and the replacement it changes nothing BUG-1047 and 1048 need: their rows give the same first-wood ticks and wood with and
+  without it. A kind with no node in reach is idle only until the ring is seen (the scout's first minute out), the M5-4g
+  "no node" path sending those workers to the other kind meanwhile.
+- **Measured**: `QA/GatherReachQaTests.NearestForestJustPastTheReach_AtTheShippedReach_WoodByTick5000` (BUG-1047, un-skipped)
+  first wood at tick 2,931 / 3,649 / 4,293 on seeds 1-3 (the 512 m control: 2,931 / 3,658 / 3,912; before: 10,651 / none /
+  none); `TheScoutDiesBeforeTheSweepEnds_TheSeatStillGathersWood_By4000` (BUG-1048, un-skipped) 330 wood by tick 4,000, its
+  wood gatherers at most 29 m from the hall (before: 0 wood, 453 m away); BUG-1045's `AiTeamTests.MirrorAllies_Seat3_*` 350
+  wood and `QA/SharedVisionQaTests.MirrorAllies_EverySeat_GathersWoodNearHome` 90 / 440 / 330 / 350, M6-S5's figures. QA's rows
+  that pinned M6-S5's death rule now pin this one: `TheScoutDiesBeforeTheSweepEnds_TheReachHolds_AndTheSeatSendsWorkersToWood`
+  (was `..._EveryKnownNodeIsInReach_...`: the reach held, another scout sent), `NoFinishedDropOff_*` on a generated map (the
+  flat scene is explored whole, so its ring is seen at once: `TheFlatScene_ExploredWhole_HasItsReachLifted_FromTheFirstThink`).
+- **Nothing pinned moved**: `Vision/SharedVisionFfaPinTests` 5 / 5, `QA/StandardPresetPinQaTests` 20 / 20 (its AI rows too:
+  the raider scenes' scouts are released alive, the same lift as before), the 27 pairing runs (`Content/AiOpeningPairsReportTests`
+  9, `QA/Content/D21OpeningsQaTests` 18) line for line against ab54ddb (wall-clock columns aside), the `Replays/premap/` AI
+  recording's checkpoints, `Stress/TeamAiSoakStressTests` as before.
+
+**The map file** (`game/data/maps/<file>.json`, `Data/DataLoader.Maps.cs`, `Data/MapDef.cs`): one JSON object a map, the
+folder optional, files read in the ordinal order of their names (that order is `GameData.Maps`' and the hash's), unknown
+fields refused as everywhere.
+
+| Field | Shape |
+| --- | --- |
+| `id` | snake_case, at most 64 characters (`DataLimits.MaxMapIdLength`), unique across the files (a repeat is one error at the second file's `id`) |
+| `displayName`, `description` | player-facing text, both required (the data track writes the final text) |
+| `players` | 2-4 (`DataLimits.MinMapPlayers` / `MaxMapPlayers`): its start locations, the most players a match on it may have |
+| `size` | 128 or 256 (`DataLimits.MapSizes`): the side in cells, square |
+| `terrain` | `size` strings of `size` characters, north row first: `0`, `1` or `2`, each cell's level (a ramp cell keeps its lower level) |
+| `ramps` | optional list of `{x, y, width, height, up}`: a rectangle of cells (left-top `x`, `y`) inside the border ring, all on one level below 2, sloping up toward `up` (`north`, `south`, `east`, `west`); its length along the slope (`height` for north / south, `width` for east / west) at least 3 cells (30 degrees over a 4 m level step and 2 m cells); the line past its up end on the next level, the line past its foot on its own; ramps don't overlap. Each cell's height steps evenly between the levels, as the generator's: `(level + (length + 1 - k) / (length + 1)) x 4 m`, k = 1 next to the top |
+| `starts` | one `{x, y}` cell per player, in player order |
+| `mines` | `{x, y, gold}`: a gold mine (the first gold resource type, as the generator places) anchored at its top-left cell, `gold` 1 to 1,000,000 |
+| `forests` | `{x, y, rows}`: rows of `T` (a tree, the first wood type, `rules.json` `treeWood` each) and `.` (none) from the anchor cell; at least one tree |
+
+Checked in stages so one mistake is one error (`DataValidationTests.AMapFile_BadOrMissing_IsOneError_AndTheMapIsLeftOut`, 19
+rows; a map with an error is left out): the own fields (no size, nothing more is read); the rows, ramps, starts, mines and
+forests as written (on the map, the row count and lengths, the level characters, the ramp sides, the tree characters, one
+start a player); the terrain built (`Heightmap`, `NavGrid`: pockets sealed as for a generated map) with each ramp's shape;
+the **generator's start contract** with its defaults (`MapGenParams.Default`): each start's site disc (`StartSiteRadius`, 10
+cells) open, flat ground (`ResourcePlacer.IsOpenGround`), every start on one level, every two at least half the map side apart
+and their discs apart (`MapGenerator.Apart`); each node on open ground of one level, off every start's clear disc
+(`StartClearRadius`, 8 cells), on no other node, a mine touching no node and a tree no mine; each start with
+`rules.json` `startMines.count` mines whose centre is within `StartMineDistance` (18 m) and a tree within
+`StartForestDistance` (24 m), centre to centre; and the nodes leaving every passable cell reachable from every other (a
+flood). The node checks need `rules.json` and `resources.json` clean, so a broken one is reported once. The loader builds
+the terrain once (`MapDef.Terrain`, a `Heightmap` with the starts, immutable and shared by every match on the map).
+
+**Selection** (`SimConfig.MapId`, `""` the default: generated). `Validate` throws `ArgumentException` for an id the data
+lacks (param `MapId`), more players than the map's starts, a `Map` whose `Width` / `Height` isn't the map's side (param
+`Map`: the save's and the replay's map size stay true; `SaveSummary.MapWidth` reads it) and a resource capacity below the
+map's nodes. `World` takes the file's terrain (`Heightmap` is the map's own), builds the nav grid from it and spawns the nodes
+in file order (`Map/MapFile.Place`) in place of the generator and the placer, so construction draws from no stream (the map
+stream stays fresh); `ResourcePlacement` is the file's counts. `HasGeneratedMap` is true (the recorder takes it: the id
+rebuilds it). Start bases go on the file's starts (`ViewApi/StartBase` reads `NavGrid.StartLocations`, unchanged). The map
+build runs once at construction; nothing per tick changed.
+
+**Save format 5 / replay format 9** (rule 36: no signature or error code added). The save writes the map id as a string after
+the preset string (offsets in "Save format (M6-S2)" above) and its version is 5 only when a map is named; a generated-map
+match writes version 4 byte for byte (`SaveFormat.MaplessVersion`). A format-5 header with an empty id is `InvalidHeader`
+(a generated map is saved as 4), an unknown id `InvalidHeader` through `Validate`; formats 3-4 load as generated maps. The
+replay writes `map <id>` after `starting-resources` in format 9, only for a hand-made map (with format 8's line and format 7's
+seat tokens); a generated-map match stays 6, 7 or 8 by the oldest-format rule. A `Replay` built without a version defaults
+to 8 (`MaplessFormatVersion`: format 9 must name a map). Playback refuses an unknown id, or one the header's players or map
+size don't fit, `InvalidHeader` before any tick.
+
+**The byte-for-byte proof** (`Save/PreMapFixtures`, `Replays/premap/`): two saves (the menu's scripted match, seed 1, and an AI
+v AI match, seed 2, at tick 400) and four recordings (a free-for-all at standard: format 6, teams at standard: 7, `high`:
+8, an AI v AI match over 1,600 ticks: 6) were written on the diff base ab54ddb (`RTS_WRITE_PREMAP_FIXTURES=1`, run once:
+the replays as text, the saves as their FNV-1a 64 digest and length) and `SaveFormatTests.AGeneratedMatch_SavesFormat4_ByteForByte_AsBeforeMapFiles`
+/ `ReplayFormatTests.AGeneratedMatch_RecordsFormats6To8_ByteForByte_AsBeforeMapFiles` compare this build's bytes with them,
+the data hash and the checksums aside (they follow the data, which `maps/` and the data track's text change).
+
+**Raraku** (`maps/raraku.json`, placeholder text): 2 players, 128, point-symmetric through the centre (x → 127 − x, y → 127 − y).
+Open desert, the starts west and east on level 0 (cells (22, 64) and (105, 63), 83 cells apart); a level-1 mesa on the north
+and the south flank (32 x 20 cells) with a level-2 butte (12 x 9), each reached by a ramp from the open centre, one from the
+outer flank and one up onto the butte (6 ramps). Each start: two 2,500-gold mines 17.3 / 17.7 m off, a 21-tree woodlot 20.9
+m off, a 19-tree stand 28 m south; each side's half also holds an expansion pair (2,000 gold) by the open centre 47-51 m
+from the start, another on the far flank, and a thin 9-tree stand on the flank: 12 mines and 6 forests in all (a
+generated menu map has 8 and 12). A first draft with only the woodlot and the far-flank pairs starved both Normal AIs (they
+emptied the start nodes and never saw another: no result in 60 minutes); the nearer pair and the second stand fixed it.
+`MapFileTests.NormalVersusNormal_OnRaraku_PlaysToTheEnd` (seed 1, Malazan v Whirlwind): Malazan won at 24:10 (29,001
+ticks), 4 waves to 3, gathered 8,810 gold / 4,240 wood v 5,300 / 3,540.
+
+- **Tests:** `Map/MapFileTests` (Raraku's fields; every shipped map keeps the start contract, measured on a built world; a
+  world on Raraku is the file's (terrain shared, starts, every node at its cell and amount in order, counts, the map stream
+  untouched, a ramp a ramp); same seed twice equal and unlike the generated map; **two processes** (a fresh child `dotnet
+  test` of the row) fold the same per-tick hashes over 3,000 ticks; saved at 137 and 1,000 (format 5) and followed hash for
+  hash for 1,000 ticks, save → load → save byte-identical; recorded 3,000 ticks (format 9, `map raraku` after
+  `starting-resources`) and played to all 30 checkpoints; the Normal v Normal match to its end); `DataValidationTests` (19
+  one-error rows, a duplicate id across files, the folder optional and file order, `SimConfig.Validate`'s map rows);
+  `DataContentHashTests` (every `MapDef` field, the ramp and node fields one by one, the count and the order, data without maps
+  hashing without a maps term, file edits of the text, a start, a mine's gold, a forest row and a terrain cell);
+  `SaveFormatTests` (version 5 / 4 / 3, the map id's place and `SaveSummary` on a format-5 header, forged ids refused, the
+  pre-change format-4 bytes); `ReplayFormatTests` (format 9's line, its checks, the pre-change format 6 / 7 / 8 text);
+  `QA/GatherReachQaTests` (the two rows un-skipped, two re-cut to the new rule, one added); `QA/ResourceQaTests` /
+  `QA/GridChangeQaTests` footprint rows and `DataContentHashTests.ResourceListLengthAndFootprintEdit_ChangeTheHash` run without
+  `maps/` (`TestDataDir.CopyOfShippedWithoutMaps`, `TestSim.DataWithoutMaps`): a mine footprint edit refuses Raraku now.
+- **The golden** (`cross_map_seed1.replay`) regenerated once for the data hash (the map joined it): `69E7B3B8E6732BC2` →
+  `30C51BB619A7E650`, every `k` line identical (a generated map, no AI seat); still format 6. The pin moved with it:
+  `QA/GatherWedgeQaTests.SameGameDataHashes`. Recordings and saves made before this commit refuse to play (data hash).
+- **Requests for the view** (M6-V18, the setup's map list): list "Generated" then `GameData.Maps` by `DisplayName` (file
+  order); a picked map sets `SimConfig.MapId` and `Map = MapGenParams.Default with { Width = size, Height = size }` (any other
+  generator field is unused; the Forests / Gold mines rows don't apply), at most `MapDef.Players` slots; `SimRunner.StartPlayback`
+  passes `replay.MapId` (as it passes the preset); Load Game may read format 5's map id after the preset string to name the
+  map (offsets above); `ReplayStore.TryReadHeader` accepts format 9 (it reads versions up to `Replay.CurrentFormatVersion`).
+- **Not in this slice:** Pale Hills and Vathar Crossing, a mirrored-terrain helper (Raraku was laid out by a one-off script,
+  not shipped), biome art and per-map props, per-map AI openings, water, the setup's list.
 
 ## Testing strategy
 

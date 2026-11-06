@@ -16,7 +16,7 @@ namespace Rts.Sim.Replays;
 /// One <c>key value</c> line per header field in a fixed order (format 4 adds <c>combat 0 / 1</c> after <c>ticks</c>; format 5
 /// one <c>seat p faction human|ai easy|normal|hard</c> line per player right after <c>players</c>; format 6 five
 /// <c>map.start-*</c> lines after <c>map.mine-spacing</c>; format 7, M6-S4, the seat's team as a fifth seat token; format 8,
-/// M6-S6, <c>starting-resources id</c> after <c>combat</c>),
+/// M6-S6, <c>starting-resources id</c> after <c>combat</c>; format 9, M6-S7, <c>map id</c> after it),
 /// then <c>commands N</c> and N <c>c</c> lines (format 4: 13 fields, the attack target's index, generation and
 /// building flag before the flags; format 3: 10), <c>checkpoints N</c> and N <c>k</c> lines, <c>end</c>, and last a
 /// <c>checksum</c> line: the FNV-1a 64 hash of every byte before it, so any changed byte is caught.
@@ -66,6 +66,7 @@ public static class ReplayFormat
         bool v4 = replay.FormatVersion >= 4;
         if (v4) Line(sb, "combat", replay.Combat ? "1" : "0");
         if (replay.FormatVersion >= 8) Line(sb, "starting-resources", replay.StartingResources); // M6-S6
+        if (replay.FormatVersion >= 9) Line(sb, "map", replay.MapId); // M6-S7
         MapGenParams m = replay.Map;
         Line(sb, "map.width", Int(m.Width));
         Line(sb, "map.height", Int(m.Height));
@@ -242,6 +243,13 @@ public static class ReplayFormat
             if (!r.Fields("starting-resources", 1, out f)) return ReplayError.Malformed;
             startingResources = f[0];
         }
+        // M6-S7 (format 9): the hand-made map's id (Validate checks it); formats 3-8 were recorded on generated maps.
+        string mapId = "";
+        if (version >= 9)
+        {
+            if (!r.Fields("map", 1, out f)) return ReplayError.Malformed;
+            mapId = f[0];
+        }
 
         if (!r.Int("map.width", out int width) || !r.Int("map.height", out int height)
             || !r.Int("map.edge-margin", out int edgeMargin)
@@ -346,6 +354,7 @@ public static class ReplayFormat
             FormatVersion = version,
             Combat = combat,
             StartingResources = startingResources,
+            MapId = mapId, // M6-S7
             Seats = seats,
             SimVersion = simVersion,
             DataHash = dataHash,

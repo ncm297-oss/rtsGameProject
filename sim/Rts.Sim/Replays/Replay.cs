@@ -13,8 +13,15 @@ namespace Rts.Sim.Replays;
 /// </remarks>
 public sealed class Replay
 {
-    /// <summary>The format version this build writes (8 since M6-S6: the <see cref="StartingResources"/> line; 7 since M6-S4: each seat's team, <see cref="ReplaySeat.Team"/>; 6 since M5-4a: the map's start-location fields; 5 since M5-2: one <see cref="Seats"/> line per player; 4 since M4-2a: the <see cref="Combat"/> switch in the header and an attack target on every command line; 3 since M3-1: the resource capacity and the resource placer's map fields; 2 since M1-7: command lines carry <see cref="Command.Flags"/>).</summary>
-    public const int CurrentFormatVersion = 8;
+    /// <summary>The format version this build writes (9 since M6-S7: the <see cref="MapId"/> line; 8 since M6-S6: the <see cref="StartingResources"/> line; 7 since M6-S4: each seat's team, <see cref="ReplaySeat.Team"/>; 6 since M5-4a: the map's start-location fields; 5 since M5-2: one <see cref="Seats"/> line per player; 4 since M4-2a: the <see cref="Combat"/> switch in the header and an attack target on every command line; 3 since M3-1: the resource capacity and the resource placer's map fields; 2 since M1-7: command lines carry <see cref="Command.Flags"/>).</summary>
+    public const int CurrentFormatVersion = 9;
+
+    /// <summary>
+    /// M6-S7: the newest format without the <c>map</c> line: 8. A match on a generated map is written in the oldest format
+    /// that holds it, 6-8 (<see cref="TeamlessFormatVersion"/>, <see cref="PresetlessFormatVersion"/>, this), byte for byte
+    /// as the build before map files; a match on a hand-made map is written in <see cref="CurrentFormatVersion"/>.
+    /// </summary>
+    public const int MaplessFormatVersion = 8;
 
     /// <summary>
     /// M6-S4: the format a recording of a free-for-all (every seat team 0) is written in: 6, the newest without team tokens,
@@ -43,8 +50,12 @@ public sealed class Replay
     /// <summary>Largest tick count a replay may declare: 24 hours at 20 Hz, so a small file can't declare a playback of years (BUG-0040).</summary>
     public const int MaxTickCount = 1_728_000;
 
-    /// <summary>Format version, <see cref="OldestFormatVersion"/> to <see cref="CurrentFormatVersion"/>; the writer writes the replay in this format.</summary>
-    public int FormatVersion { get; init; } = CurrentFormatVersion;
+    /// <summary>
+    /// Format version, <see cref="OldestFormatVersion"/> to <see cref="CurrentFormatVersion"/>; the writer writes the replay in
+    /// this format. Defaults to <see cref="MaplessFormatVersion"/> (M6-S7): format 9 must name a map (<see cref="MapId"/>),
+    /// which a replay built without one has not; the recorder sets the version itself.
+    /// </summary>
+    public int FormatVersion { get; init; } = MaplessFormatVersion;
 
     /// <summary><see cref="SimConfig.Combat"/> when recorded (format 4; a format 3 replay was recorded with combat on).</summary>
     public bool Combat { get; init; } = true;
@@ -54,6 +65,12 @@ public sealed class Replay
     /// <c>standard</c> for a format 3-7 replay, recorded before presets. Playback refuses an id the data lacks.
     /// </summary>
     public string StartingResources { get; init; } = Data.StartingResourcesDef.StandardId;
+
+    /// <summary>
+    /// M6-S7 (format 9): the id of the hand-made map it was recorded on (<see cref="SimConfig.MapId"/>); <c>""</c> for a
+    /// generated map, and for every format 3-8 replay. Playback refuses an id the data lacks.
+    /// </summary>
+    public string MapId { get; init; } = "";
 
     /// <summary><see cref="SimInfo.Version"/> of the build that recorded it (informational; playback does not check it).</summary>
     public required string SimVersion { get; init; }
@@ -111,6 +128,9 @@ public sealed class Replay
         // M6-S6: a snake_case preset id; formats 3-7 have no starting-resources line: they can only say standard.
         if (!IsFactionToken(StartingResources) || StartingResources == "-"
             || (FormatVersion < 8 && StartingResources != Data.StartingResourcesDef.StandardId)) return ReplayError.InvalidHeader;
+        // M6-S7: format 9 names a hand-made map (a snake_case id; a generated map is written as format 8 or older); formats
+        // 3-8 have no map line: they can only be generated.
+        if (FormatVersion >= 9 ? !IsFactionToken(MapId) || MapId == "-" : MapId != "") return ReplayError.InvalidHeader;
         if (PlayerCount < 1 || PlayerCount > MaxPlayers) return ReplayError.InvalidHeader;
         if (UnitCapacity < 1 || UnitCapacity > MaxCapacity) return ReplayError.InvalidHeader;
         // BUG-1040: the config's own bound, so a replay that reads also builds its sim (no recorder can write one over it).

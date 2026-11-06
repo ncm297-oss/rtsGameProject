@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S3 |
-| Status | open |
+| Status | fixed |
 | Found | 2026-11-05-0805, task M6-S5 (QA) |
 | System | AI economy / scout (`AiPlayer.InGatherReach` fallback at `ScoutPhase` 2), M6-S5 BUG-1045 fix |
-| Fixed by | |
+| Fixed by | M6-S7 (session 2026-11-05-1716): a dead scout no longer lifts the reach; one lost before its head ring is seen is replaced (`ScoutManager.Sweep`, phase back to 0; the replacement skips the ring points already seen). Regression: `QA/GatherReachQaTests.TheScoutDiesBeforeTheSweepEnds_TheSeatStillGathersWood_By4000` un-skipped (330 wood by tick 4,000, gatherers at most 29 m from the hall); `..._TheReachHolds_AndTheSeatSendsWorkersToWood` (was `..._EveryKnownNodeIsInReach_...`). docs/03 "Implementation (M6-S7)" |
 
 ## Repro
 1. `dotnet test sim/Rts.Sim.Tests --filter "FullyQualifiedName~GatherReachQaTests.TheScoutDiesBeforeTheSweepEnds"`

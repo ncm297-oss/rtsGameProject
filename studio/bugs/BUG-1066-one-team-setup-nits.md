@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S4 |
-| Status | open |
+| Status | fixed |
 | Found | 2026-11-05-1206, task M6-V16 (re-check of the BUG-1062 item 2 rider) |
 | System | `LaunchOptions` `--team`, skirmish setup buttons row |
-| Fixed by | |
+| Fixed by | M6-V17 (session 2026-11-05-1716, view): `LaunchOptions.OneTeamWarning` (a `--team` set that puts every one of the match's players on one team is warned about in the log and dropped: the match plays free-for-all); the one-team line sits in a fixed 300 px holder (`SkirmishSetup.OneTeamRoom`) with an equal spacer left of Back, so Back / Start never move. Tests: `StartingResourcesTest` (command line warned + FFA, two sides left alone, Back / Start equal shown / hidden), QA's `QaM6V17Test.CommandLineOneTeam` / `SetupOneTeam` (2 / 4 slots x 1152 x 648 / 1280 x 720). docs/03 "Implementation (M6-V17)" |
 
 ## Repro
 1. `& $env:GODOT --headless --path game --quit-after 200 -- --skirmish --players 4 --team 1 1 --team 2 1 --team 3 1 --team 4 1 --mute`:

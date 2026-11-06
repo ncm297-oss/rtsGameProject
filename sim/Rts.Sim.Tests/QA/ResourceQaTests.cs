@@ -680,14 +680,15 @@ public class ResourceQaTests
     [InlineData("\"id\": \"gold_mine\"", "\"id\": \"zz_mine\"")] // reorders the ids too
     public void ContentHash_ChangesWithEveryResourcesField(string from, string to)
     {
-        using TestDataDir dir = TestDataDir.CopyOfShipped();
+        // M6-S7: without maps/ on both sides (a 3-wide or 3-tall mine reaches a Raraku start's clear ground, refusing the map).
+        using TestDataDir dir = TestDataDir.CopyOfShippedWithoutMaps();
         string path = dir.FullPath(ResourcesFile);
         string text = File.ReadAllText(path);
         Assert.Contains(from, text);
         File.WriteAllText(path, text.Replace(from, to));
         DataLoadResult r = LoadNoThrow(dir.Path);
         Assert.True(r.Ok, string.Join(" | ", r.Errors));
-        Assert.NotEqual(TestSim.Data.ContentHash(), r.Data!.ContentHash());
+        Assert.NotEqual(TestSim.DataWithoutMaps.ContentHash(), r.Data!.ContentHash());
     }
 
     /// <summary>
@@ -728,7 +729,7 @@ public class ResourceQaTests
     [Fact]
     public void FourByFourMine_On16x16GeneratedMaps_KeepsTheOracle()
     {
-        using TestDataDir dir = TestDataDir.CopyOfShipped();
+        using TestDataDir dir = TestDataDir.CopyOfShippedWithoutMaps(); // M6-S7: a 4 x 4 mine refuses Raraku (not this row's subject)
         string path = dir.FullPath(ResourcesFile);
         File.WriteAllText(path, File.ReadAllText(path).Replace("{ \"width\": 2, \"height\": 2 }", "{ \"width\": 4, \"height\": 4 }"));
         GameData data = LoadNoThrow(dir.Path).Data!;

@@ -183,4 +183,19 @@ public static class DataLimits
 
     /// <summary>M5-8a: the longest an opening's optional <c>description</c> may be, in characters.</summary>
     public const int MaxAiOpeningDescriptionLength = 200;
+
+    /// <summary>M6-S7: the sides a hand-made map may have, in cells (docs/02 "Map and terrain": 128 for 2 players, 256 for 4).</summary>
+    public static readonly ImmutableArray<int> MapSizes = ImmutableArray.Create(128, 256);
+
+    /// <summary>M6-S7: the fewest and the most start locations a hand-made map may have (docs/02: 2-4 players).</summary>
+    public const int MinMapPlayers = 2, MaxMapPlayers = 4;
+
+    /// <summary>M6-S7: the longest a map id may be, in characters (one replay header token and one save string).</summary>
+    public const int MaxMapIdLength = 64;
+
+    /// <summary>M6-S7: a hand-made map ramp's <c>up</c> values, in <see cref="MapDirection"/> order.</summary>
+    public static readonly ImmutableArray<string> MapDirectionIds = ImmutableArray.Create("north", "south", "east", "west");
+
+    /// <summary>M6-S7: the most maps <c>game/data/maps/</c> may hold.</summary>
+    public const int MaxMaps = 64;
 }

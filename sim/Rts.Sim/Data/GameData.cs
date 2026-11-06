@@ -58,6 +58,13 @@ public sealed class GameData
     /// </summary>
     public AiRulesDef AiRules { get; init; } = new();
 
+    /// <summary>
+    /// M6-S7: the hand-made maps of <c>maps/*.json</c> in file order (the files' names in ordinal order), each checked against
+    /// the generator's start contract; empty without the folder (and for hand-built data). In <see cref="ContentHash"/>
+    /// (every field, the count and the order) when there is one: data without maps hashes as before.
+    /// </summary>
+    public ImmutableArray<MapDef> Maps { get; init; } = ImmutableArray<MapDef>.Empty;
+
     /// <summary>Per building type id, the tech ids it researches (a tech of its slot, common or of its faction), ascending; built at load (M3-5). Empty for hand-built data.</summary>
     /// <remarks>Derived from the techs' slot and faction and the buildings', which <see cref="ContentHash"/> covers.</remarks>
     public ImmutableArray<ImmutableArray<int>> Research { get; init; } = ImmutableArray<ImmutableArray<int>>.Empty;
@@ -325,6 +332,7 @@ public sealed class GameData
             }
         }
         AddAi(ref h);
+        if (!Maps.IsDefaultOrEmpty) AddMaps(ref h); // M6-S7: data without maps hashes as before
         return h.Value;
     }
 
@@ -380,6 +388,42 @@ public sealed class GameData
                 foreach (AiOpening o in a.Openings) AddOpening(ref h, o);
             h.Add(a.RetreatHpFraction);
             h.Add(a.RetreatLossFraction);
+        }
+    }
+
+    /// <summary>M6-S7: every field of every map, in file order (the order is the setup's list, so it is content too), the count first.</summary>
+    private void AddMaps(ref StateHasher h)
+    {
+        h.Add(Maps.Length);
+        foreach (MapDef m in Maps)
+        {
+            h.Add(m.Id);
+            h.Add(m.Key);
+            h.Add(m.DisplayName);
+            h.Add(m.Description);
+            h.Add(m.Players);
+            h.Add(m.Size);
+            h.Add(m.Levels.Length);
+            foreach (byte level in m.Levels) h.Add((int)level);
+            h.Add(m.Ramps.Length);
+            foreach (MapRampDef r in m.Ramps)
+            {
+                h.Add(r.X);
+                h.Add(r.Y);
+                h.Add(r.Width);
+                h.Add(r.Height);
+                h.Add((int)r.Up);
+            }
+            h.Add(m.Starts.Length);
+            foreach (int s in m.Starts) h.Add(s);
+            h.Add(m.Nodes.Length);
+            foreach (MapNodeDef n in m.Nodes)
+            {
+                h.Add(n.TypeId);
+                h.Add(n.Cell);
+                h.Add(n.Amount);
+            }
+            h.Add(m.ForestCount);
         }
     }
 
@@ -469,6 +513,14 @@ public sealed class GameData
 
     /// <summary>Ability id for a string id, or -1 (M4-4a).</summary>
     public int FindAbility(string key) => Find(Abilities, static x => x.Key, key);
+
+    /// <summary>M6-S7: the index in <see cref="Maps"/> of the map with id <paramref name="key"/>, or -1 (a walk in file order: the list is short and read at match setup only).</summary>
+    public int FindMap(string key)
+    {
+        for (int i = 0; i < Maps.Length; i++)
+            if (string.Equals(Maps[i].Key, key, StringComparison.Ordinal)) return i;
+        return -1;
+    }
 
     /// <summary>Faction id for a string id, or -1.</summary>
     public int FindFaction(string key) => Find(Factions, static f => f.Key, key);

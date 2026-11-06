@@ -797,8 +797,11 @@ open S1 / S2. Retro below; open S3 / S4 listed there.)_
       forward: the generator's mirrored start locations, each with 2 mines and a forest in reach, replay format 6. M5-H1, 2026-10-13:
       both bases on one level and at least half a map apart. M6-V15, 2026-10-18-1814: **the generator's options are in the skirmish
       setup**: Forests and Gold mines counts (defaults 12 / 8, floors one forest and two mines per player, cap 64) beside a Game speed
-      list, carried by the save and replay headers so a load or a replay rebuilds the same map. Left: the three hand-made maps and
-      mirrored terrain (no map format yet).)
+      list, carried by the save and replay headers so a load or a replay rebuilds the same map. M6-S7, 2026-11-05-1716: **the map-file
+      format** (`game/data/maps/<id>.json`: a text heightmap with ramps, starts, mines, forests, name and description; loaded, checked against
+      the generator's start contract and hashed; `SimConfig.MapId`, save format 5 / replay format 9 behind the oldest-format rule) and the
+      first map, **Raraku** (2 players, 128, a placeholder layout: Normal v Normal plays to the end, Malazan at 24:10). Left: Pale Hills and
+      Vathar Crossing, the setup's Map list (M6-V18), the maps' final text (data), mirrored-terrain tooling.)
 - [ ] `tools/export.ps1` produces a Windows zip that runs on a machine without Godot or .NET installed.
 - [ ] Revisit the .NET version (see [03 Platform](03-technical-design.md#platform-and-versions)).
 - [ ] Playable: a friend can unzip it and play a match without help.

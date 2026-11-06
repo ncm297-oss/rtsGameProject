@@ -958,6 +958,136 @@ public class DataValidationTests
         Assert.Equal(1, ai.FindOpening("second"));
     }
 
+    // ---------- M6-S7: hand-made maps (maps/*.json) ----------
+
+    private const string RarakuFile = "maps/raraku.json";
+
+    /// <summary>
+    /// M6-S7: a broken map file is one error at its path in its file, and the map is left out: a bad size (nothing else is
+    /// read then), players outside 2-4, a start off the map, a start on a cliff (on the mesa, its site disc crosses a cliff),
+    /// two starts too close, a start without its two mines, a start without a forest, an unknown level in a terrain row, a
+    /// terrain row of the wrong length, the wrong row count, a missing displayName, a ramp facing the wrong way, an unknown
+    /// ramp side, a mine on a start's clear ground, a tree on a ramp, a forest row with a stray character, a start count
+    /// other than the players, a non-snake_case id, a mine's gold of 0.
+    /// </summary>
+    [Theory]
+    [InlineData("size", "100", "size", "not a map size")]
+    [InlineData("players", "5", "players", "outside 2-4")]
+    [InlineData("starts[0].x", "200", "starts[0]", "off the 128 x 128 map")]
+    [InlineData("starts[0]", "{\"x\":60,\"y\":22}", "starts[0]", "not open and flat")]
+    [InlineData("starts[1]", "{\"x\":44,\"y\":70}", "starts[1]", "too close to starts[0]")]
+    [InlineData("-mines[0]", null, "starts[0]", "1 gold mine(s) within 18 m")]
+    [InlineData("-forests[0]", null, "starts[0]", "no tree within 24 m")]
+    [InlineData("terrain[5]", "row:3", "terrain[5]", "unknown level '3' at column 3")]
+    [InlineData("terrain[7]", "short", "terrain[7]", "127 cells, expected 128")]
+    [InlineData("-terrain[0]", null, "terrain", "127 rows, expected 128")]
+    [InlineData("-displayName", null, "displayName", "missing required text")]
+    [InlineData("ramps[0].up", "\"south\"", "ramps[0]", "below the ramp's foot (62, 27) is on level 1")]
+    [InlineData("ramps[0].up", "\"upward\"", "ramps[0].up", "unknown side 'upward'")]
+    [InlineData("mines[0].x", "20", "mines[0]", "within 8 cells of starts[0]")]
+    [InlineData("forests[0]", "{\"x\":62,\"y\":29,\"rows\":[\"T\"]}", "forests[0].rows[0][0]", "not open, flat ground")]
+    [InlineData("forests[0].rows[0]", "\"TTxT\"", "forests[0].rows[0]", "'x' at column 2")]
+    [InlineData("-starts[1]", null, "starts", "1 start locations for 2 players")]
+    [InlineData("id", "\"Raraku\"", "id", "not snake_case")]
+    [InlineData("mines[0].gold", "0", "mines[0].gold", "below the minimum 1")]
+    public void AMapFile_BadOrMissing_IsOneError_AndTheMapIsLeftOut(string edit, string? json, string path, string message)
+    {
+        using TestDataDir dir = TestDataDir.CopyOfShipped();
+        dir.EditJson(RarakuFile, root => EditMap(root, edit, json));
+        DataLoadResult load = DataLoader.LoadAll(dir.Path);
+        DataError e = Assert.Single(load.Errors);
+        Assert.Equal(RarakuFile, e.File);
+        Assert.Equal(path, e.Path);
+        Assert.Contains(message, e.Message);
+    }
+
+    /// <summary>Applies one row's edit: <c>-path</c> removes (a list item or a field), <c>row:n</c> puts digit n at column 3 of a terrain row, <c>short</c> drops a row's last cell, else the JSON replaces the value.</summary>
+    private static void EditMap(JsonObject root, string edit, string? json)
+    {
+        bool remove = edit.StartsWith('-');
+        string[] parts = edit.TrimStart('-').Split('.');
+        JsonNode parent = root;
+        for (int i = 0; i < parts.Length - 1; i++) parent = Step(parent, parts[i]);
+        string last = parts[^1];
+        int open = last.IndexOf('[');
+        if (open >= 0)
+        {
+            JsonArray list = parent[last[..open]]!.AsArray();
+            int index = int.Parse(last[(open + 1)..^1]);
+            if (remove) list.RemoveAt(index);
+            else if (json == "short") list[index] = list[index]!.GetValue<string>()[..^1];
+            else if (json!.StartsWith("row:", StringComparison.Ordinal))
+            {
+                string row = list[index]!.GetValue<string>();
+                list[index] = row[..3] + json[4..] + row[4..];
+            }
+            else list[index] = JsonNode.Parse(json);
+            return;
+        }
+        if (remove) parent.AsObject().Remove(last);
+        else parent[last] = JsonNode.Parse(json!);
+    }
+
+    private static JsonNode Step(JsonNode node, string part)
+    {
+        int open = part.IndexOf('[');
+        if (open < 0) return node[part]!;
+        return node[part[..open]]![int.Parse(part[(open + 1)..^1])]!;
+    }
+
+    /// <summary>M6-S7: two map files with one id: one error at the second file (ordinal file order), and the first map loads.</summary>
+    [Fact]
+    public void TwoMapFiles_WithOneId_IsOneErrorAtTheSecond()
+    {
+        using TestDataDir dir = TestDataDir.CopyOfShipped();
+        File.Copy(dir.FullPath(RarakuFile), dir.FullPath("maps/raraku_copy.json"));
+        DataLoadResult load = DataLoader.LoadAll(dir.Path);
+        DataError e = Assert.Single(load.Errors);
+        Assert.Equal("maps/raraku_copy.json", e.File);
+        Assert.Equal("id", e.Path);
+        Assert.Contains("duplicate map id 'raraku'", e.Message);
+    }
+
+    /// <summary>M6-S7: the maps folder is optional (no maps), unknown fields in a map file are one error each, and maps load in the file names' ordinal order.</summary>
+    [Fact]
+    public void TheMapsFolder_IsOptional_AndMapsLoadInFileNameOrder()
+    {
+        using (TestDataDir dir = TestDataDir.CopyOfShipped())
+        {
+            Directory.Delete(dir.FullPath("maps"), recursive: true);
+            Assert.Empty(Load(dir.Path).Maps);
+        }
+        using (TestDataDir dir = TestDataDir.CopyOfShipped())
+        {
+            dir.EditJson(RarakuFile, r => r["cliffs"] = 1);
+            DataError e = Assert.Single(DataLoader.LoadAll(dir.Path).Errors);
+            Assert.Equal(RarakuFile, e.File);
+        }
+        using (TestDataDir dir = TestDataDir.CopyOfShipped())
+        {
+            File.Copy(dir.FullPath(RarakuFile), dir.FullPath("maps/a_first.json"));
+            dir.EditJson("maps/a_first.json", r => r["id"] = "zz_sorted_by_file");
+            GameData d = Load(dir.Path);
+            Assert.Equal(new[] { "zz_sorted_by_file", "raraku" }, d.Maps.Select(m => m.Key));
+            Assert.Equal(new[] { 0, 1 }, d.Maps.Select(m => m.Id));
+            Assert.Equal(1, d.FindMap("raraku"));
+        }
+    }
+
+    /// <summary>M6-S7: <see cref="SimConfig.Validate"/> refuses an unknown map id, more players than the map's starts, a map size other than the map's, and a resource capacity below its nodes; "" (generated) and the shipped id pass.</summary>
+    [Fact]
+    public void SimConfig_RefusesABadMapId_OrAConfigTheMapDoesntFit()
+    {
+        SimConfig ok = new(1, 2, 16, 16) { Data = TestSim.Data, MapId = "raraku" };
+        ok.Validate();
+        new SimConfig(1, 2, 16, 16) { Data = TestSim.Data }.Validate();
+        Assert.Equal("MapId", Assert.Throws<ArgumentException>(() => (ok with { MapId = "nowhere" }).Validate()).ParamName);
+        Assert.Equal("MapId", Assert.Throws<ArgumentException>(() => new SimConfig(1, 3, 16, 16) { Data = TestSim.Data, MapId = "raraku" }.Validate()).ParamName);
+        Assert.Equal("Map", Assert.Throws<ArgumentException>(() => (ok with { Map = Map.MapGenParams.Default with { Width = 256, Height = 256 } }).Validate()).ParamName);
+        Assert.Equal("ResourceCapacity", Assert.Throws<ArgumentException>(() => (ok with { ResourceCapacity = 10 }).Validate()).ParamName);
+        Assert.Throws<ArgumentNullException>(() => (ok with { MapId = null! }).Validate());
+    }
+
     private static GameData Load(string dir)
     {
         DataLoadResult result = DataLoader.LoadAll(dir);

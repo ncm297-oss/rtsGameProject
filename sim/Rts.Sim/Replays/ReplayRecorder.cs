@@ -43,8 +43,10 @@ public sealed class ReplayRecorder
         // A replay rebuilds the sim from seed + params and replays from tick 0, so it must see everything.
         if (sim.TickNumber != 0 || sim.PendingCommandCount != 0)
             throw new InvalidOperationException("Attach the recorder before the first command and tick.");
+        // M6-S7: a map file (SimConfig.MapId) is rebuilt from its id, so it counts as generated here; only the test seam's
+        // hand-built heightmaps can't be.
         if (!sim.World.HasGeneratedMap)
-            throw new InvalidOperationException("A sim on a hand-made map can't be replayed from its seed.");
+            throw new InvalidOperationException("A sim on a hand-built map can't be replayed from its seed.");
         // The format has no building-capacity line, and the capacity is in the state hash (M3-2).
         if (sim.World.Config.BuildingCapacity != Entities.BuildingStore.DefaultCapacity)
             throw new InvalidOperationException("The replay format records only the default building capacity.");
@@ -139,9 +141,12 @@ public sealed class ReplayRecorder
             // M6-S6, a preset other than standard is format 8; M6-S4, a match with a team at standard is format 7; a
             // free-for-all at standard stays format 6 (every reader of format 6, the game's replay list among them, keeps
             // reading it).
-            FormatVersion = config.StartingResources != StartingResourcesDef.StandardId ? Replay.CurrentFormatVersion
+            // M6-S7: a match on a hand-made map is format 9 (with format 8's line and format 7's seat tokens).
+            FormatVersion = !string.IsNullOrEmpty(config.MapId) ? Replay.CurrentFormatVersion
+                : config.StartingResources != StartingResourcesDef.StandardId ? Replay.MaplessFormatVersion
                 : teams ? Replay.PresetlessFormatVersion : Replay.TeamlessFormatVersion,
             StartingResources = config.StartingResources,
+            MapId = config.MapId ?? "",
             Seats = seats.MoveToImmutable(),
             SimVersion = SimInfo.Version,
             DataHash = _dataHash,

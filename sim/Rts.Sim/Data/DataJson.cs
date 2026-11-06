@@ -453,3 +453,47 @@ internal sealed class AiRetreatJson
     public double? HpFraction { get; set; }
     public double? LossFraction { get; set; }
 }
+
+// M6-S7: one hand-made map, game/data/maps/<file>.json.
+internal sealed class MapJson
+{
+    public string? Id { get; set; }
+    public string? DisplayName { get; set; }
+    public string? Description { get; set; }
+    public int? Players { get; set; }
+    public int? Size { get; set; }
+    public List<string?>? Terrain { get; set; }
+    public List<MapRampJson?>? Ramps { get; set; } // optional: a map without ramps has no level above 0 that a unit can reach
+    public List<MapCellJson?>? Starts { get; set; }
+    public List<MapMineJson?>? Mines { get; set; }
+    public List<MapForestJson?>? Forests { get; set; }
+}
+
+internal sealed class MapRampJson
+{
+    public int? X { get; set; }
+    public int? Y { get; set; }
+    public int? Width { get; set; }
+    public int? Height { get; set; }
+    public string? Up { get; set; }
+}
+
+internal sealed class MapCellJson
+{
+    public int? X { get; set; }
+    public int? Y { get; set; }
+}
+
+internal sealed class MapMineJson
+{
+    public int? X { get; set; }
+    public int? Y { get; set; }
+    public int? Gold { get; set; }
+}
+
+internal sealed class MapForestJson
+{
+    public int? X { get; set; }
+    public int? Y { get; set; }
+    public List<string?>? Rows { get; set; }
+}

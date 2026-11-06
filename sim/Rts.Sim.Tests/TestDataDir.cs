@@ -36,6 +36,19 @@ public sealed class TestDataDir : IDisposable
         return new TestDataDir(path);
     }
 
+    /// <summary>
+    /// M6-S7: <see cref="CopyOfShipped"/> without the <c>maps/</c> folder: for a test that edits the resource types' footprints
+    /// (the shipped hand-made maps' mines are checked against the start contract, so such an edit refuses them, which is not
+    /// that test's subject). Compare its hash with <see cref="TestSim.DataWithoutMaps"/>.
+    /// </summary>
+    public static TestDataDir CopyOfShippedWithoutMaps()
+    {
+        TestDataDir dir = CopyOfShipped();
+        string maps = dir.FullPath("maps");
+        if (Directory.Exists(maps)) Directory.Delete(maps, recursive: true);
+        return dir;
+    }
+
     /// <summary>Full path of a file given relative to the data root with forward slashes.</summary>
     public string FullPath(string rel) => System.IO.Path.Combine(Path, rel.Replace('/', System.IO.Path.DirectorySeparatorChar));
 

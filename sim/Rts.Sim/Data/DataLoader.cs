@@ -20,7 +20,7 @@ namespace Rts.Sim.Data;
 /// </remarks>
 public static partial class DataLoader
 {
-    /// <summary>Loads <c>common/</c> and every <c>factions/&lt;id&gt;/</c> folder under <paramref name="dataDir"/>.</summary>
+    /// <summary>Loads <c>common/</c>, every <c>factions/&lt;id&gt;/</c> folder and (M6-S7) every <c>maps/*.json</c> under <paramref name="dataDir"/>.</summary>
     public static DataLoadResult LoadAll(string dataDir)
     {
         var c = new Checker(dataDir);
@@ -161,6 +161,11 @@ public static partial class DataLoader
         bool aiRefs = buildingsClean && unitFilesOk && techs.FilesOk && NoErrorIn(c, "/units.json", "/buildings.json", "/techs.json");
         AiDef[] ai = BuildAi(c, folders, aiRefs, unitKeys, units, buildings, techDefs);
 
+        // M6-S7: the hand-made maps (optional folder), checked against the rules and the resource types only when those
+        // files loaded clean, so a broken one is reported once, not again through every map's nodes.
+        bool mapRefs = NoErrorIn(c, "common/rules.json", "common/resources.json");
+        MapDef[] maps = BuildMaps(c, dataDir, mapRefs ? rules : null, mapRefs ? resources : null);
+
         if (c.Errors.Count > 0 || table == null || rules == null || aiRules == null || resources == null || projectiles == null || statuses == null)
             return new DataLoadResult(null, c.Errors);
         var data = new GameData
@@ -181,6 +186,7 @@ public static partial class DataLoader
             Abilities = ImmutableArray.Create(abilities),
             Ai = ImmutableArray.Create(ai),
             AiRules = aiRules!,
+            Maps = ImmutableArray.Create(maps), // M6-S7
         };
         return new DataLoadResult(data, c.Errors);
     }

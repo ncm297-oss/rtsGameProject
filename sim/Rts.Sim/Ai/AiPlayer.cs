@@ -287,6 +287,7 @@ internal sealed partial class AiPlayer
         ReserveGold = ReserveWood = 0;
         ReserveShortGold = ReserveShortWood = false;
         _knowsGold = _knowsWood = 0;
+        _reachLifted = 0;
     }
 
     // KnowsNode's answers this think (0 not walked yet, 1 yes, 2 no): BUG-1023 asks it for every candidate step, and the
@@ -311,7 +312,7 @@ internal sealed partial class AiPlayer
     /// <summary>
     /// M5-4g: whether the player knows a node of <paramref name="kind"/> the economy could send a worker to: one its
     /// gatherers' search would take (not marked dropped, not within <c>ai.workerFleeRadius</c> of the defense point while
-    /// the base is defended, and M6-S5 within <c>ai.gatherReach</c> of a drop-off until the scout is done: <see cref="InGatherReach"/>).
+    /// the base is defended, and M6-S5 in the gather reach until it lifts: <see cref="InGatherReach"/>).
     /// Walked once a think per kind.
     /// </summary>
     internal bool KnowsNode(ResourceKind kind)
@@ -336,16 +337,16 @@ internal sealed partial class AiPlayer
     }
 
     /// <summary>
-    /// M6-S5 (BUG-1045): whether a node centred at <paramref name="centre"/> (m) is one the economy may send a gatherer to, as
-    /// far as distance goes. Once the scout is done (<see cref="Blackboard.ScoutPhase"/> 2: released, or dead) every known
-    /// node is; before, only one within <c>ai.gatherReach</c> of an own finished drop-off (every node while the player has
-    /// none: no anchor to measure from). A node farther counts as unknown, so a seat that knows a forest only through an
-    /// ally's eyes (or a raider's) doesn't walk its wood gatherers across the map before its own scout has looked near home.
-    /// One distance compare per own building; allocates nothing.
+    /// M6-S5 (BUG-1045), M6-S7 (BUG-1047 / 1048): whether a node centred at <paramref name="centre"/> (m) is one the economy
+    /// may send a gatherer to, as far as distance goes: one within <c>ai.gatherReach</c> of an own finished drop-off, or any
+    /// once the reach has lifted (<see cref="ReachLifted"/>: home has been looked at) or while the player has no finished
+    /// drop-off (no anchor to measure from). A node farther counts as unknown, so a seat that knows a forest only through an
+    /// ally's eyes (or a raider's) doesn't walk its wood gatherers across the map before it has looked near home. One
+    /// distance compare per own building; allocates nothing.
     /// </summary>
     internal bool InGatherReach(Vector2 centre)
     {
-        if (Board.ScoutPhase == 2 || !HasDropOff) return true;
+        if (!HasDropOff || ReachLifted()) return true;
         float reach = Rules.GatherReach * Rules.GatherReach;
         for (int k = 0; k < OwnBuildingCount; k++)
         {
@@ -353,6 +354,27 @@ internal sealed partial class AiPlayer
             if (Vector2.DistanceSquared(BuildingCentre(OwnBuildingTypes[k], OwnBuildingCells[k]), centre) <= reach) return true;
         }
         return false;
+    }
+
+    // ReachLifted's answer this think (0 not walked yet, 1 yes, 2 no): asked for every node the gatherers' search looks at,
+    // and the fog it reads changes only between thinks. Cleared with the reserve, so between thinks a seat holds none (the
+    // AIST layout is unchanged and a loaded seat equals the saved one).
+    private byte _reachLifted;
+
+    /// <summary>
+    /// M6-S7 (BUG-1047 / 1048, docs/01 2026-11-05): whether the gather reach has lifted: every point of the scout's head ring
+    /// (the 8 compass points <c>ai.scoutRadius</c> round the hall, <see cref="ScoutManager.HeadRingSeen"/>) has been seen by the
+    /// player's sight (explored, the team's with shared vision) or marked visited by the scout: home has been looked at. Or
+    /// the scout's sweep has ended with the scout alive (<see cref="Blackboard.ScoutPhase"/> 2: it found a forest and a mine
+    /// near home and an enemy building, or walked every point), as in M6-S5, so the reach never lifts later than it did then.
+    /// Not the scout's death: a scout lost before the ring was seen is replaced and the reach holds (phase 2 then comes only
+    /// from a death after the ring was seen). Walked once a think.
+    /// </summary>
+    internal bool ReachLifted()
+    {
+        if (Board.ScoutPhase == 2) return true;
+        if (_reachLifted == 0) _reachLifted = ScoutManager.HeadRingSeen(this) ? (byte)1 : (byte)2;
+        return _reachLifted == 1;
     }
 
     /// <summary>
