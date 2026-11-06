@@ -45,7 +45,7 @@ public class SaveSummaryQaTests
                 Assert.True(SaveSummary.TryRead(stream, out SaveSummary? summary), $"{scene} @ {tick}: the header did not read");
                 Assert.True(stream.Position <= SaveSummary.MaxHeaderBytes, $"{scene} @ {tick}: read {stream.Position} bytes");
                 SimConfig c = sim.World.Config;
-                Assert.Equal(SaveFormat.CurrentVersion, summary!.FormatVersion);
+                Assert.Equal(SaveFormat.MaplessVersion, summary!.FormatVersion); // M6-S7: a generated map's save is format 4
                 Assert.Equal(c.Seed, summary.Seed);
                 Assert.Equal(c.Map.Width, summary.MapWidth);
                 Assert.Equal(sim.TickNumber, summary.Tick);

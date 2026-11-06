@@ -153,7 +153,7 @@ public sealed partial class Simulation : ICommandSink
         int prefix = Math.Min(bytes.Length, magic.Length);
         if (!bytes.AsSpan(0, prefix).SequenceEqual(magic[..prefix])) return SaveError.BadMagic;
         if (bytes.Length < SaveFormat.FixedPrefix) return SaveError.Truncated;
-        // M6-S6: format 3 (no starting-resources preset, read as standard) and the current one.
+        // M6-S6: format 3 (no starting-resources preset, read as standard) to the current one (M6-S7: 4 without a map id, 5 with).
         int version = System.Buffers.Binary.BinaryPrimitives.ReadInt32LittleEndian(bytes.AsSpan(SaveFormat.MagicLength));
         if (version < SaveFormat.OldestReadVersion || version > SaveFormat.CurrentVersion) return SaveError.FormatVersionMismatch;
         long declared = System.Buffers.Binary.BinaryPrimitives.ReadInt64LittleEndian(bytes.AsSpan(SaveFormat.LengthOffset));

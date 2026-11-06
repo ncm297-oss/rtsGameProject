@@ -21,7 +21,9 @@ namespace Rts.Sim.Ai;
 /// The sweep ends when every point is visited, or once a forest and a gold mine within <c>ai.gatherReach</c> of the hall
 /// (M6-S5, BUG-1045: one farther, known through an ally or a raider, doesn't count) and an enemy building (seen or ghost)
 /// are all known: the scout is released (stopped if still walking) and the economy sends it to gather. None is sent if all three are
-/// known already. A dead scout is not replaced.
+/// known already. M6-S7 (BUG-1047 / 1048): the sweep's end no longer decides the gather reach; the head ring being seen does
+/// (<see cref="HeadRingSeen"/>, <see cref="AiPlayer.ReachLifted"/>). So a scout that dies before the ring is seen is replaced
+/// by the next think's free worker, whose sweep starts with the ring points not yet seen; one that dies after is not.
 /// <para>
 /// M6-S5 (BUG-1042), a player with an ally: a head waypoint within <c>ai.scoutRadius</c> of an ally's building is dropped
 /// (the base there is the ally's: with teams the hall's mirror may be the ally's start), and past the head the next grid
@@ -75,7 +77,10 @@ internal static class ScoutManager
         int slot = board.ScoutSlot;
         if (!ai.View.TryGetUnit(slot, out SeenUnit u) || u.Owner != ai.Player || u.Handle.Generation != board.ScoutGeneration)
         {
-            board.ScoutPhase = 2; // dead: not replaced (periodic re-scouting is M5-4)
+            // Dead. M6-S7 (BUG-1048): a scout lost before its head ring was seen is replaced (phase 0: the next think sends
+            // another worker, which skips the ring points already seen), since the gather reach lifts only once the ring is
+            // seen; one lost after is not (periodic re-scouting is M5-4).
+            board.ScoutPhase = ai.ReachLifted() ? (byte)2 : (byte)0;
             board.ScoutSlot = -1;
             return;
         }
@@ -217,6 +222,34 @@ internal static class ScoutManager
         return wood && gold;
     }
 
+    /// <summary>
+    /// M6-S7 (BUG-1047 / 1048): whether every point of the head ring round the hall's current centre (the 8 compass points
+    /// <c>ai.scoutRadius</c> off, clamped inside the map, as <see cref="Waypoints"/> lays them) has been seen: its cell explored
+    /// by the player (the team's explored bits with shared vision), or the point marked visited on the scout's list (a point
+    /// the scout could only get near, or one an ally's base covers). False with no hall. At most 8 explored-bit reads plus
+    /// 8 x 8 point compares; allocates nothing. <see cref="AiPlayer.ReachLifted"/> asks it once a think.
+    /// </summary>
+    internal static bool HeadRingSeen(AiPlayer ai)
+    {
+        if (!ai.TryHallPoint(out Vector2 hall)) return false;
+        Blackboard board = ai.Board;
+        for (int k = 0; k < 8; k++)
+        {
+            Vector2 p = ai.ClampToMap(hall + s_compass[k] * ai.Rules.ScoutRadius);
+            if (Explored(ai, p) || VisitedHeadPoint(board, p)) continue;
+            return false;
+        }
+        return true;
+    }
+
+    /// <summary>Whether <paramref name="p"/> is one of the scout's head-ring points and marked visited.</summary>
+    private static bool VisitedHeadPoint(Blackboard board, Vector2 p)
+    {
+        for (int k = 0; k < 8; k++)
+            if (board.ScoutVisited[k] && board.ScoutPoints[k] == p) return true;
+        return false;
+    }
+
     /// <summary>The waypoint list (see the type's summary), computed once from the hall's centre and the map.</summary>
     private static void Waypoints(AiPlayer ai, Vector2 hall)
     {
@@ -232,6 +265,9 @@ internal static class ScoutManager
             first = k;
         }
         Vector2[] points = board.ScoutPoints;
+        // M6-S7 (BUG-1048): a replacement (the points were laid before: a laid point is never (0, 0), it is clamped half a
+        // cell inside the map) skips the ring points already seen; a first scout walks the whole ring, as before.
+        bool replacement = points[0] != Vector2.Zero;
         for (int k = 0; k < 8; k++)
             points[k] = ai.ClampToMap(hall + s_compass[(first + k) % 8] * ai.Rules.ScoutRadius);
         points[8] = ai.ClampToMap(size - hall);
@@ -241,5 +277,8 @@ internal static class ScoutManager
             for (int x = 0; x < cols; x++)
                 points[n++] = ai.ClampToMap(new Vector2((x + 0.5f) * size.X / cols, (y + 0.5f) * size.Y / rows));
         Array.Clear(board.ScoutVisited);
+        if (!replacement) return;
+        for (int k = 0; k < 8; k++)
+            if (Explored(ai, points[k])) board.ScoutVisited[k] = true;
     }
 }

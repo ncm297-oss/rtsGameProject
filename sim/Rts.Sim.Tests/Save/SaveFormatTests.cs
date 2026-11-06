@@ -15,11 +15,13 @@ namespace Rts.Sim.Tests.Save;
 public class SaveFormatTests
 {
     [Fact]
-    public void CurrentVersion_Is4_AndFormat3StillReads()
+    public void CurrentVersion_Is5_AGeneratedMapWrites4_AndFormat3StillReads()
     {
         // M6-S3: the AI seats' section bumped the format to 2 (rule 36); M6-S4: a team byte per seat to 3; M6-S6: the
-        // starting-resources preset to 4. Format 3 still loads (as standard); older files are refused, not read.
-        Assert.Equal(4, SaveFormat.CurrentVersion);
+        // starting-resources preset to 4; M6-S7: the map id to 5, written only for a hand-made map (a generated map's save is
+        // still 4). Formats 3-4 still load (3 as standard; both as generated maps); older files are refused, not read.
+        Assert.Equal(5, SaveFormat.CurrentVersion);
+        Assert.Equal(4, SaveFormat.MaplessVersion);
         Assert.Equal(3, SaveFormat.OldestReadVersion);
     }
 
@@ -33,7 +35,7 @@ public class SaveFormatTests
         byte[] bytes = SaveTestRun.Save(sim);
         using var r = new BinaryReader(new MemoryStream(bytes), Encoding.ASCII);
         r.ReadBytes(8);
-        Assert.Equal(SaveFormat.CurrentVersion, r.ReadInt32());
+        Assert.Equal(SaveFormat.MaplessVersion, r.ReadInt32()); // M6-S7: a generated map's save is format 4
         r.ReadInt64();
         ReadString(r);
         r.ReadUInt64();
@@ -82,6 +84,88 @@ public class SaveFormatTests
         Assert.Equal(new[] { ("malazan", SeatController.Human, AiDifficulty.Normal), ("whirlwind", SeatController.Ai, AiDifficulty.Hard) },
             summary.Seats.Select(x => (x.Faction, x.Controller, x.Difficulty)));
         Assert.Equal(sim.World.Config.Map.Width, summary.MapWidth);
+    }
+
+    /// <summary>
+    /// M6-S7 (format 5): a match on a hand-made map writes the map id as a string right after the preset string, so the
+    /// header-only reader the view owns (<see cref="Rts.Sim.ViewApi.SaveSummary"/>, which stops after the team bytes) reads a
+    /// format-5 header's seats, seed, map size and tick unchanged; the id's offset is the preset's + 4 + its length.
+    /// </summary>
+    [Fact]
+    public void TheMapId_FollowsThePreset_AndSaveSummaryStillReadsAFormat5Header()
+    {
+        var seats = System.Collections.Immutable.ImmutableArray.Create(new PlayerSeat(0, SeatController.Human, AiDifficulty.Normal, 1),
+            new PlayerSeat(1, SeatController.Ai, AiDifficulty.Hard, 2));
+        var sim = new Simulation(TestSim.Config(7, 2, 64, 64) with { Seats = seats, MapId = "raraku" });
+        sim.Tick();
+        byte[] bytes = SaveTestRun.Save(sim);
+        Assert.Equal(5, BitConverter.ToInt32(bytes, SaveFormat.MagicLength));
+        SaveBytes.Offsets at = SaveBytes.HeaderOffsets(bytes);
+        int teams = at.Seat0Team + 4 + "whirlwind".Length + 2;
+        Assert.Equal(new byte[] { 1, 2 }, bytes.AsSpan(teams, 2).ToArray());
+        int preset = teams + 2;
+        Assert.Equal("standard", SaveBytes.StringAt(bytes, preset));
+        int map = preset + 4 + "standard".Length;
+        Assert.Equal("raraku", SaveBytes.StringAt(bytes, map));
+        Assert.Equal("HMAP"u8.ToArray(), bytes.AsSpan(map + 4 + "raraku".Length, 4).ToArray());
+
+        Assert.True(Rts.Sim.ViewApi.SaveSummary.TryParse(bytes, out Rts.Sim.ViewApi.SaveSummary? summary));
+        Assert.Equal(5, summary!.FormatVersion);
+        Assert.Equal(7UL, summary.Seed);
+        Assert.Equal(1, summary.Tick);
+        Assert.Equal(128, summary.MapWidth);
+        Assert.Equal(new[] { 1, 2 }, summary.Teams.ToArray());
+        Simulation loaded = SaveTestRun.Load(TestSim.Data, bytes);
+        Assert.Equal("raraku", loaded.World.Config.MapId);
+        Assert.Equal(sim.StateHash(), loaded.StateHash());
+        Assert.Equal(bytes, SaveTestRun.Save(loaded));
+    }
+
+    /// <summary>
+    /// M6-S7: a format-5 header's map id is checked: an id the data lacks, an empty id (a generated map is saved as format 4)
+    /// and a format-4 file relabelled 5 (its map id would be read from the heightmap tag) are refused, never loaded.
+    /// </summary>
+    [Theory]
+    [InlineData("nowhere", SaveError.InvalidHeader)]
+    [InlineData("", SaveError.InvalidHeader)]
+    public void AForgedMapId_IsRefused(string id, SaveError expected)
+    {
+        var sim = new Simulation(TestSim.Config(7, 2, 64, 64) with { MapId = "raraku" });
+        byte[] bytes = SaveTestRun.Save(sim);
+        SaveBytes.Offsets at = SaveBytes.HeaderOffsets(bytes);
+        int map = at.Seat0Team + 4 + "whirlwind".Length + 2 + 2 + 4 + "standard".Length;
+        Assert.Equal("raraku", SaveBytes.StringAt(bytes, map));
+        byte[] idBytes = Encoding.ASCII.GetBytes(id);
+        byte[] forged = new byte[bytes.Length - "raraku".Length + idBytes.Length];
+        bytes.AsSpan(0, map).CopyTo(forged);
+        BinaryPrimitives.WriteInt32LittleEndian(forged.AsSpan(map), idBytes.Length);
+        idBytes.CopyTo(forged.AsSpan(map + 4));
+        bytes.AsSpan(map + 4 + "raraku".Length).CopyTo(forged.AsSpan(map + 4 + idBytes.Length));
+        BinaryPrimitives.WriteInt64LittleEndian(forged.AsSpan(SaveFormat.LengthOffset), forged.Length);
+        Assert.Equal(expected, SaveTestRun.TryLoad(TestSim.Data, SaveBytes.Rechecksum(forged)));
+
+        byte[] generated = SaveTestRun.Save(new Simulation(TestSim.Config(7, 2, 64, 64)));
+        byte[] relabelled = (byte[])generated.Clone();
+        BinaryPrimitives.WriteInt32LittleEndian(relabelled.AsSpan(SaveFormat.MagicLength), 5);
+        Assert.NotEqual(SaveError.None, SaveTestRun.TryLoad(TestSim.Data, SaveBytes.Rechecksum(relabelled)));
+    }
+
+    /// <summary>
+    /// M6-S7, criterion 4: a match on a generated map is saved in format 4 byte for byte as the build before map files: each
+    /// <see cref="PreMapFixtures"/> save scene (recorded on the diff base ab54ddb) gives the same bytes, the data hash and
+    /// the checksum aside (they follow the data, which this task and the data track change).
+    /// </summary>
+    [Theory]
+    [InlineData("save_menu_seed1")]
+    [InlineData("save_ai_seed2")]
+    public void AGeneratedMatch_SavesFormat4_ByteForByte_AsBeforeMapFiles(string name)
+    {
+        (string _, int length, ulong digest) = PreMapFixtures.SaveDigests.Single(d => d.Name == name);
+        byte[] bytes = SaveTestRun.Save(PreMapFixtures.SaveScene(name));
+        Assert.Equal(SaveFormat.MaplessVersion, BitConverter.ToInt32(bytes, SaveFormat.MagicLength));
+        byte[] normalized = PreMapFixtures.Normalize(bytes);
+        Assert.Equal(length, normalized.Length);
+        Assert.Equal(digest, PreMapFixtures.Digest(normalized));
     }
 
     /// <summary>M6-S6: a format-4 save round-trips the preset: the loaded config names it, the loaded ledger holds the saved banks, and save -> load -> save is byte-identical.</summary>
@@ -171,7 +255,7 @@ public class SaveFormatTests
 
         using var r = new BinaryReader(new MemoryStream(bytes), Encoding.ASCII);
         Assert.Equal("RTSSAVE\0"u8.ToArray(), r.ReadBytes(8));
-        Assert.Equal(SaveFormat.CurrentVersion, r.ReadInt32());
+        Assert.Equal(SaveFormat.MaplessVersion, r.ReadInt32()); // M6-S7: a generated map's save is format 4
         Assert.Equal(bytes.Length, r.ReadInt64());
         Assert.Equal(SimInfo.Version, ReadString(r));
         Assert.Equal(TestSim.Data.ContentHash(), r.ReadUInt64());

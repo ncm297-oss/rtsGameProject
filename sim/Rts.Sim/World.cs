@@ -45,15 +45,20 @@ public sealed partial class World
         _rngs = new SimRng[RngStream.Count(config.PlayerCount)];
         for (int i = 0; i < _rngs.Length; i++)
             _rngs[i] = new SimRng(config.Seed, (ulong)i);
+        // M6-S7: a hand-made map (SimConfig.MapId) is built from its file, the generator not run, so a replay or save
+        // rebuilds it from the id as it rebuilds a generated one from seed + params: both count as "generated" here.
+        MapDef? file = map == null ? config.MapFile : null;
         HasGeneratedMap = map == null;
-        Heightmap = map ?? MapGenerator.Generate(config.Map, ref _rngs[RngStream.MapGen]);
+        Heightmap = map ?? file?.Terrain ?? MapGenerator.Generate(config.Map, ref _rngs[RngStream.MapGen]);
         NavGrid = new NavGrid(Heightmap);
         // Before resources: plateaus are terrain only (BUG-0097).
         Plateaus = new Plateaus(NavGrid);
         // Resources before the flow-field cache, so its step mask starts from the grid with them.
         // The placer draws from the map stream after the terrain did, and nothing when counts are 0.
         Resources = new ResourceStore(config.ResourceCapacity, NavGrid, config.Data);
-        if (placeResources) ResourcePlacement = ResourcePlacer.Place(config.Map, NavGrid, Resources, config.Data, ref _rngs[RngStream.MapGen]);
+        if (placeResources)
+            ResourcePlacement = file != null ? MapFile.Place(file, Resources, config.Data) // M6-S7: draws nothing
+                : ResourcePlacer.Place(config.Map, NavGrid, Resources, config.Data, ref _rngs[RngStream.MapGen]);
         Buildings = new BuildingStore(config.BuildingCapacity, NavGrid, config.Data, _ledger);
         SiteWorkers = new int[config.BuildingCapacity];
         PushedUnits = new int[config.UnitCapacity];
@@ -541,7 +546,7 @@ public sealed partial class World
     /// </summary>
     internal int SeenBlockVersion { get; set; }
 
-    /// <summary>False for the test seam's hand-made maps, which a replay (seed + map params) can't rebuild.</summary>
+    /// <summary>False for the test seam's hand-built maps, which a replay (seed + map params) can't rebuild; true for a generated map and (M6-S7) a map file, which a replay rebuilds from its id.</summary>
     internal bool HasGeneratedMap { get; private set; }
 
     /// <summary>

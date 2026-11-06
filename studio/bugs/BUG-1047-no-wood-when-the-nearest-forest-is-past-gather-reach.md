@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S3 |
-| Status | open |
+| Status | fixed |
 | Found | 2026-11-05-0805, task M6-S5 (QA) |
 | System | AI economy / scout (`AiPlayer.InGatherReach`, `ScoutManager.FoundEnough`), M6-S5 BUG-1045 fix |
-| Fixed by | |
+| Fixed by | M6-S7 (session 2026-11-05-1716): the reach lifts once the head ring is seen (or the sweep ends with the scout alive), not after the whole-map sweep (`AiPlayer.ReachLifted`, `ScoutManager.HeadRingSeen`). The decided fallback (a kind with no node in reach takes the nearest known one) was measured and left out (it re-created BUG-1045 and starved two soak seats; this row gives the same ticks without it): docs/03. Regression: `QA/GatherReachQaTests.NearestForestJustPastTheReach_AtTheShippedReach_WoodByTick5000` un-skipped (first wood at tick 2,931 / 3,649 / 4,293 on seeds 1-3). docs/03 "Implementation (M6-S7)" |
 
 ## Repro
 1. `dotnet test sim/Rts.Sim.Tests --filter "FullyQualifiedName~GatherReachQaTests.NearestForestJustPastTheReach"`

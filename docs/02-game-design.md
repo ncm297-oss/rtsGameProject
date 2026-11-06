@@ -334,6 +334,12 @@ Shipped maps (working titles):
 | Pale Hills | 4 | Forest | Dense woods with paths between; favors Shadow ambushes |
 | Vathar Crossing | 2-4 | Steppe | A river of slopes with fords as chokepoints |
 
+The hand-made maps are files under `game/data/maps/` (one JSON file a map: a text heightmap of levels 0-2 with its ramps,
+the start locations, the gold mines and the forests, and a player-facing name and description), picked by their id instead
+of a seed and hashed with the rest of the data, so a save or a recording of a match on one names the map and rebuilds it
+exactly. Each must keep the generator's start rules (every start on one level, at least half the map apart, two mines and
+a forest beside it); Raraku is the first (M6-S7, a placeholder layout), Pale Hills and Vathar Crossing follow.
+
 ## Controls and camera
 
 | Input | Action |
@@ -424,11 +430,15 @@ own cues (select, order, refused, building placed or finished, unit or tech read
   BUG-0981, BUG-1021, BUG-1023, BUG-1025; the "at home or out on a wave" wording is BUG-1026, Producer 2026-10-19;
   [03 Implementation (M5-4g)](03-technical-design.md#implementation-m5-4g)).
 - The AI looks near home before it trusts what it sees far away: its scout sweeps until every waypoint is visited or the AI
-  knows an enemy building and a forest and a gold mine within `rules.json` `ai.gatherReach` (64 m) of its Town Hall, and until the scout
-  is done (released, or dead) its gatherers go only to a node within that reach of one of its own finished drop-offs. A
-  forest or mine it knows only through an ally's eyes or a raider's far sighting counts as unknown until then; after, the
-  nearest known node is taken wherever it is (so a seat whose scout dies early falls back on any node it knows, and a seat
-  with no finished drop-off may take any). Built in M6-S5 (BUG-1045; [03 Implementation (M6-S5)](03-technical-design.md#implementation-m6-s5)).
+  knows an enemy building and a forest and a gold mine within `rules.json` `ai.gatherReach` (64 m) of its Town Hall, and its
+  gatherers go only to a node within that reach of one of its own finished drop-offs until home has been looked at: the
+  scout's head ring (the eight points round the hall) seen, or the sweep ended with the scout alive. A forest or mine it
+  knows only through an ally's eyes or a raider's far sighting counts as unknown until then; after, the nearest known node
+  is taken wherever it is. So a start whose nearest forest lies past the reach gets its wood once the scout has circled home
+  (its first minute out), not after the whole map. A scout that dies before the ring is seen is replaced by another worker
+  and does not lift the reach; a seat with no finished drop-off may take any node. Built in M6-S5 (BUG-1045), the head ring
+  and the replacement in M6-S7 (BUG-1047, BUG-1048; [03 Implementation (M6-S7)](03-technical-design.md#implementation-m6-s7);
+  the decided fallback for a kind with no node in reach was measured and left out there, for the Producer).
 - Build orders, army compositions, and attack thresholds are per-faction data (`ai.json`), not code.
 - Each faction's `ai.json` holds one to eight named openings (a build order, an army mix and attack thresholds each);
   at match start an Easy AI always plays the first, and a Normal or Hard AI picks one at random from the match seed, so

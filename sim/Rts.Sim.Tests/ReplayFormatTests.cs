@@ -214,11 +214,11 @@ public class ReplayFormatTests
     [Theory]
     [InlineData(1)]
     [InlineData(2)]
-    [InlineData(9)]
+    [InlineData(10)]
     [InlineData(0)]
     public void OtherFormatVersion_IsRefusedAsVersionMismatch(int version)
     {
-        Assert.Equal(8, Replay.CurrentFormatVersion);
+        Assert.Equal(9, Replay.CurrentFormatVersion); // M6-S7: format 9 (the map id)
         Assert.Equal(3, Replay.OldestFormatVersion);
         string text = Text(Small).Replace($"rts-replay {Small.FormatVersion}\n", $"rts-replay {version}\n");
         Assert.Equal(ReplayError.FormatVersionMismatch, Read(Reseal(text)));
@@ -857,6 +857,93 @@ public class ReplayFormatTests
         Assert.Equal(15, back!.Checkpoints.Length);
         Replay ffa = ReplayTestRun.With(back, seats: back.Seats.Select(s => s with { Team = 0 }));
         Assert.Equal(ReplayError.CheckpointMismatch, ReplayPlayer.Run(ffa, TestSim.Data).Error);
+    }
+
+    // ---------- M6-S7: format 9 (the hand-made map's id); formats 3-8 read as generated maps ----------
+
+    /// <summary>A short recording of a 2-player human match on the shipped Raraku at <paramref name="preset"/>.</summary>
+    private static Replay OnRaraku(string preset = "standard")
+    {
+        SimConfig config = TestSim.Config(Seed: 6, PlayerCount: 2, UnitCapacity: 16, CommandCapacity: 16) with { MapId = "raraku", StartingResources = preset };
+        var sim = new Simulation(config);
+        var rec = new ReplayRecorder(sim, checkpointInterval: 10);
+        for (int t = 0; t < 20; t++) sim.Tick();
+        return rec.ToReplay();
+    }
+
+    /// <summary>
+    /// M6-S7: a match on a hand-made map is format 9 whatever its preset or teams: the <c>map</c> line follows
+    /// <c>starting-resources</c> (format 8's, written at standard too) and the seat lines have format 7's team token; it reads
+    /// back byte for byte and plays to every checkpoint.
+    /// </summary>
+    [Fact]
+    public void Format9_HasTheMapLine_AfterStartingResources_ReadsBackByteForByte_AndPlays()
+    {
+        Replay r = OnRaraku();
+        Assert.Equal(9, r.FormatVersion);
+        Assert.Equal("raraku", r.MapId);
+        string text = Text(r);
+        Assert.StartsWith("rts-replay 9\n", text);
+        Assert.Contains("\nseat 0 malazan human normal 0\nseat 1 whirlwind human normal 0\nunit-capacity ", text);
+        Assert.Contains("\nticks 20\ncombat 1\nstarting-resources standard\nmap raraku\nmap.width 128\n", text);
+        Assert.Equal(ReplayError.None, ReplayFormat.TryRead(Encoding.ASCII.GetBytes(text), out Replay? back));
+        ReplayTestRun.AssertEqual(r, back!);
+        Assert.Equal(Encoding.ASCII.GetBytes(text), ReplayFormat.Write(back!));
+        ReplayResult played = ReplayPlayer.Run(back!, TestSim.Data);
+        Assert.True(played.Ok, played.ToString());
+        Assert.Equal(9, OnRaraku("high").FormatVersion);
+        Assert.Contains("\nstarting-resources high\nmap raraku\n", Text(OnRaraku("high")));
+    }
+
+    /// <summary>
+    /// M6-S7: <see cref="Replay.Validate"/> holds format 9 to a snake_case map id and formats 3-8 to none; playback refuses an
+    /// id the data lacks before any tick; and a format-9 file relabelled 8 (its <c>map</c> line where 8 has <c>map.width</c>)
+    /// is malformed, and a format-8 file relabelled 9 lacks the line.
+    /// </summary>
+    [Fact]
+    public void Format9_TheMapId_IsChecked()
+    {
+        Replay r = OnRaraku();
+        Assert.Equal(ReplayError.InvalidHeader, ReplayTestRun.With(r, mapId: "").Validate());
+        Assert.Equal(ReplayError.InvalidHeader, ReplayTestRun.With(r, mapId: "Raraku").Validate());
+        Assert.Equal(ReplayError.InvalidHeader, ReplayTestRun.With(r, mapId: "-").Validate());
+        Assert.Equal(ReplayError.InvalidHeader, ReplayTestRun.With(r, formatVersion: 8, mapId: "raraku").Validate());
+        Assert.Equal(ReplayError.InvalidHeader, ReplayPlayer.Run(ReplayTestRun.With(r, mapId: "nowhere"), TestSim.Data).Error);
+        Assert.Equal(-1, ReplayPlayer.Run(ReplayTestRun.With(r, mapId: "nowhere"), TestSim.Data).Tick);
+        string text = Text(r);
+        Assert.Equal(ReplayError.Malformed, Read(Reseal(text.Replace("rts-replay 9\n", "rts-replay 8\n"))));
+        Assert.Equal(ReplayError.Malformed, Read(Reseal(text.Replace("map raraku\n", ""))));
+        // A format-9 file must name a map that, as recorded, fits the header: two players on a 2-start map, its size.
+        Assert.Equal(ReplayError.InvalidHeader, ReplayPlayer.Run(WithMapSize(r, 256), TestSim.Data).Error);
+    }
+
+    private static Replay WithMapSize(Replay r, int size) => new()
+    {
+        FormatVersion = r.FormatVersion, Combat = r.Combat, StartingResources = r.StartingResources, MapId = r.MapId, Seats = r.Seats,
+        SimVersion = r.SimVersion, DataHash = r.DataHash, Map = r.Map with { Width = size, Height = size }, Seed = r.Seed, PlayerCount = r.PlayerCount,
+        UnitCapacity = r.UnitCapacity, CommandCapacity = r.CommandCapacity, ResourceCapacity = r.ResourceCapacity, CheckpointInterval = r.CheckpointInterval,
+        TickCount = r.TickCount, Commands = r.Commands, Checkpoints = r.Checkpoints,
+    };
+
+    /// <summary>
+    /// M6-S7, criterion 4: a match on a generated map is recorded in the oldest format that holds it (6 free-for-all, 7 with
+    /// teams, 8 at another preset), byte for byte as the build before map files: each <see cref="Save.PreMapFixtures"/> replay
+    /// scene (recorded on the diff base ab54ddb, kept under <c>Replays/premap/</c>) writes the same text, the data hash and the
+    /// checksum aside (they follow the data, which this task and the data track change). The AI scene's checkpoints pin its play too.
+    /// </summary>
+    [Theory]
+    [InlineData("replay_ffa_standard", 6)]
+    [InlineData("replay_teams_standard", 7)]
+    [InlineData("replay_ffa_high", 8)]
+    [InlineData("replay_ai_ffa_standard", 6)]
+    public void AGeneratedMatch_RecordsFormats6To8_ByteForByte_AsBeforeMapFiles(string name, int format)
+    {
+        Replay replay = Save.PreMapFixtures.ReplayScene(name);
+        Assert.Equal(format, replay.FormatVersion);
+        string expected = File.ReadAllText(Save.PreMapFixtures.ReplayPath(name)).Replace("\r\n", "\n");
+        string actual = Save.PreMapFixtures.Normalize(Text(replay));
+        Assert.Equal(expected, actual);
+        Assert.DoesNotContain("\nmap ", actual);
     }
 
     // ---------- M6-S6: format 8 (the starting-resources preset); formats 3-7 read as standard ----------

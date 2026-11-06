@@ -650,7 +650,7 @@ public class GridChangeQaTests
     [Fact]
     public void AGoldTypeWith1x1Footprint_AndAWood1x1_StillLoad()
     {
-        using TestDataDir dir = TestDataDir.CopyOfShipped();
+        using TestDataDir dir = TestDataDir.CopyOfShippedWithoutMaps(); // M6-S7: a 1 x 1 mine takes Raraku's start mines past 18 m
         string path = dir.FullPath("common/resources.json");
         File.WriteAllText(path, File.ReadAllText(path).Replace("{ \"width\": 2, \"height\": 2 }", "{ \"width\": 1, \"height\": 1 }"));
         DataLoadResult r = DataLoader.LoadAll(dir.Path);

@@ -17,9 +17,10 @@ namespace Rts.Sim.Ai;
 /// nearest it, else the nearest gatherer), and such a stalled house site does not hold the house rule off. M5-H2 (BUG-0650):
 /// after <see cref="MaxJoins"/> joins with no rise in the site's hit points (no worker ever got to work it) it is left
 /// alone until they rise. M5-4g: the gold share is <see cref="AiPlayer.WantedGoldShare"/>, shifted by <c>ai.reserveShift</c>
-/// toward the kind the build order's reserved step lacks. M6-S5 (BUG-1045): until the scout is done, a node beyond
-/// <c>ai.gatherReach</c> of every own finished drop-off counts as unknown (<see cref="AiPlayer.InGatherReach"/>); after, the
-/// nearest known node is taken wherever it is.
+/// toward the kind the build order's reserved step lacks. M6-S5 (BUG-1045): until the reach lifts (M6-S7, BUG-1047 / 1048:
+/// the head ring round the hall seen, or the sweep ended with the scout alive: <see cref="AiPlayer.ReachLifted"/>), a node
+/// beyond <c>ai.gatherReach</c> of every own finished drop-off counts as unknown (<see cref="AiPlayer.InGatherReach"/>);
+/// after, the nearest known node is taken wherever it is.
 /// </summary>
 internal static class EconomyManager
 {
@@ -254,8 +255,8 @@ internal static class EconomyManager
 
     /// <summary>
     /// The anchor cell of the known node of <paramref name="kind"/> nearest worker <paramref name="u"/> (slot order on ties),
-    /// skipping nodes a Gather was dropped at and, until the scout is done, nodes beyond <c>ai.gatherReach</c> of every own
-    /// drop-off (M6-S5, BUG-1045: <see cref="AiPlayer.InGatherReach"/>); -1 for none.
+    /// skipping nodes a Gather was dropped at and, until the reach lifts, nodes beyond <c>ai.gatherReach</c> of every own
+    /// drop-off (M6-S5, BUG-1045; M6-S7 when it lifts: <see cref="AiPlayer.InGatherReach"/>); -1 for none.
     /// </summary>
     private static int NearestNode(AiPlayer ai, byte kind, in SeenUnit u, out int nodeType, out EntityHandle handle)
     {
@@ -271,7 +272,7 @@ internal static class EconomyManager
             if (ai.Data.Resources[node.TypeId].Resource != want || ai.Board.NodeDropped[s] == node.Handle.Generation) continue;
             System.Numerics.Vector2 centre = ai.NodeCentre(node.TypeId, node.Cell);
             if (System.Numerics.Vector2.DistanceSquared(centre, ai.Board.DefensePoint) <= flee) continue;
-            if (!ai.InGatherReach(centre)) continue; // M6-S5 (BUG-1045): too far from home while the scout is out: unknown
+            if (!ai.InGatherReach(centre)) continue; // M6-S5 (BUG-1045): too far from home while the reach holds: unknown
             float d = System.Numerics.Vector2.DistanceSquared(centre, u.Position);
             if (d >= bestDistance) continue;
             best = node.Cell;

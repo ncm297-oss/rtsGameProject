@@ -8,8 +8,20 @@ namespace Rts.Sim.Save;
 /// </summary>
 public static class SaveFormat
 {
-    /// <summary>The format version this build writes (4 since M6-S6: the starting-resources preset after the team bytes; 3 since M6-S4: a team byte per seat; 2 since M6-S3: the AI seats' section). It reads this one and <see cref="OldestReadVersion"/>.</summary>
-    public const int CurrentVersion = 4;
+    /// <summary>
+    /// The newest format version this build writes and reads (5 since M6-S7: the map id after the starting-resources preset,
+    /// written only for a match on a hand-made map; 4 since M6-S6: the starting-resources preset after the team bytes; 3 since
+    /// M6-S4: a team byte per seat; 2 since M6-S3: the AI seats' section). It reads every version from
+    /// <see cref="OldestReadVersion"/> to this one.
+    /// </summary>
+    public const int CurrentVersion = 5;
+
+    /// <summary>
+    /// M6-S7: the version a match on a generated map is saved in: 4, the newest without the map id, so such a save is byte for
+    /// byte what the build before map files wrote (the oldest-format rule, as the replay's). A match on a hand-made map is
+    /// saved in <see cref="CurrentVersion"/>.
+    /// </summary>
+    public const int MaplessVersion = 4;
 
     /// <summary>M6-S6: the oldest format version this build reads: 3 (M6-S4), which has no preset and loads as <c>standard</c>.</summary>
     internal const int OldestReadVersion = 3;

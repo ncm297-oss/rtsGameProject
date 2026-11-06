@@ -12,8 +12,8 @@ namespace Rts.Sim.Tests.QA;
 
 /// <summary>
 /// QA, M6-S5 fix (BUG-1045, <c>ai.gatherReach</c>, session 2026-11-05-0805). The reach rule's blind spots: a seat whose scout
-/// dies before the sweep ends (falls back to every known node: it must not idle), a seat with no finished drop-off (every
-/// node in reach), a start whose nearest forest lies just past the reach; <see cref="AiPlayer.InGatherReach"/> and
+/// dies before the sweep ends (M6-S7: the reach holds, and it must not idle), a seat with no finished drop-off (every
+/// node in reach), a start whose nearest forest lies just past the reach (M6-S7: BUG-1047 / 1048 fixed, both rows un-skipped); <see cref="AiPlayer.InGatherReach"/> and
 /// <see cref="ScoutManager.FoundEnough"/> allocate nothing; the BUG-1045 mirror-start 2v2 recorded through the scout's
 /// phases plays back (format 7) to every checkpoint.
 /// </summary>
@@ -71,8 +71,12 @@ public class GatherReachQaTests
         CombatSystem.HitUnit(w, new PendingHit(default, 0, h, false, w.Units.Hp[scout]));
         Assert.False(w.Units.IsAlive(h));
         for (int t = 0; t < 2 * ai.ThinkTicks; t++) sim.Tick();
-        Assert.Equal(2, ai.Board.ScoutPhase);
-        Assert.True(ai.InGatherReach(new Vector2(1f, 1f)) && ai.InGatherReach(new Vector2(511f, 511f)), "phase 2: a far corner is out of reach");
+        // M6-S7 (BUG-1048): a scout lost before its head ring was seen is replaced (the phase goes back to 0 and the next
+        // think sends another worker), and the dead scout no longer lifts the reach; only the head ring being seen does.
+        Assert.NotEqual(2, ai.Board.ScoutPhase);
+        Assert.NotEqual(scout, ai.Board.ScoutSlot);
+        Assert.False(ai.ReachLifted(), "the scout died on its first tick out: its head ring can't have been seen yet");
+        Assert.False(ai.InGatherReach(new Vector2(1f, 1f)) && ai.InGatherReach(new Vector2(511f, 511f)), "a dead scout lifted the reach: both far corners in reach");
         while (sim.TickNumber < 4000) sim.Tick();
         int woodWorkers = 0;
         float farthest = 0f;
@@ -93,12 +97,13 @@ public class GatherReachQaTests
     }
 
     /// <summary>
-    /// The docs/02 fallback: a seat whose scout dies before the sweep ends (BUG-1045's seat 3, scout killed on its first tick
-    /// out) has its scout "done" at the next think (phase 2), every known node is in reach, and it does not idle: workers
-    /// are sent to wood. (What that wood costs it is BUG-1048.)
+    /// A seat whose scout dies before the sweep ends (BUG-1045's seat 3, scout killed on its first tick out): M6-S7
+    /// (BUG-1048) its reach still holds (the head ring is unseen), another worker is sent to scout, and it does not idle:
+    /// workers are sent to wood. (Before M6-S7 the death ended the scouting and lifted the reach: this row was
+    /// <c>..._EveryKnownNodeIsInReach_...</c>.)
     /// </summary>
     [Fact]
-    public void TheScoutDiesBeforeTheSweepEnds_EveryKnownNodeIsInReach_AndTheSeatSendsWorkersToWood()
+    public void TheScoutDiesBeforeTheSweepEnds_TheReachHolds_AndTheSeatSendsWorkersToWood()
     {
         (Simulation sim, int killedAt, int woodWorkers, float known, float farthest) = ScoutKilledAtOnce();
         World w = sim.World;
@@ -108,11 +113,11 @@ public class GatherReachQaTests
     }
 
     /// <summary>
-    /// BUG-1048: the same seat should still get wood near home: by tick 4,000 it has gathered some (BUG-1045's own bar). Today
-    /// it knows only its ally's forests (its own, 17.5 m off, was never seen), so the fallback walks its wood gatherers
-    /// 300+ m north: 0 wood by tick 4,000, BUG-1045's symptom.
+    /// BUG-1048: the same seat still gets wood near home: by tick 4,000 it has gathered some (BUG-1045's own bar). Before
+    /// M6-S7 the dead scout lifted the reach, and knowing only its ally's forests (its own, 17.5 m off, unseen) it walked its
+    /// wood gatherers 300+ m north: 0 wood by tick 4,000.
     /// </summary>
-    [Fact(Skip = "BUG-1048 (open, S3): a seat whose scout dies before it looks near home gathers wood 300+ m away through its ally's eyes; remove the Skip with the fix")]
+    [Fact]
     public void TheScoutDiesBeforeTheSweepEnds_TheSeatStillGathersWood_By4000()
     {
         (Simulation sim, _, _, float known, float farthest) = ScoutKilledAtOnce();
@@ -122,18 +127,20 @@ public class GatherReachQaTests
     // ---------- (a) no finished drop-off ----------
 
     /// <summary>
-    /// The flat scene's AI seat with its hall killed: no finished drop-off, so every node is in reach (nothing to measure from);
-    /// with the hall standing and the scout not done, a point 100 m off is out of reach and one 20 m off is in.
+    /// A generated 2-seat match's player 0 at its first hall (its head ring unseen, so the reach holds): a point 100 m off its
+    /// hall is out of reach and one 20 m off in, the edge exact; with its hall killed (no finished drop-off) every node is in
+    /// reach (nothing to measure from). M6-S7: the flat scene this row used is explored whole, so its ring is seen at once
+    /// and the reach lifted (<see cref="TheFlatScene_ExploredWhole_HasItsReachLifted_FromTheFirstThink"/>).
     /// </summary>
     [Fact]
     public void NoFinishedDropOff_EveryNodeIsInReach_WithTheHall_OnlyNearOnes()
     {
-        PlayerSeat[] seats = AiScenes.Seats(AiDifficulty.Normal, SeatController.Ai, SeatController.Human);
-        Simulation sim = AiScenes.Flat(seats);
+        PlayerSeat[] seats = { new(0, SeatController.Ai, AiDifficulty.Normal), new(1, SeatController.Ai, AiDifficulty.Normal) };
+        Simulation sim = AiScenes.Generated(seats, 1, record: false, out _);
         World w = sim.World;
         AiPlayer ai = sim.AiOf(0)!;
-        sim.Tick();
-        Assert.True(ai.HasDropOff && ai.Board.ScoutPhase != 2, "setup");
+        while (!ai.HasDropOff && sim.TickNumber < 50) sim.Tick();
+        Assert.True(ai.HasDropOff && !ai.ReachLifted(), "setup");
         Vector2 hall = ai.HallPoint;
         Assert.True(ai.InGatherReach(hall + new Vector2(20f, 0f)));
         Assert.False(ai.InGatherReach(hall + new Vector2(100f, 0f)));
@@ -145,8 +152,23 @@ public class GatherReachQaTests
         CombatSystem.HitBuilding(w, new PendingHit(default, 1, new EntityHandle(hallSlot, w.Buildings.Generation[hallSlot]), true, w.Buildings.Hp[hallSlot]));
         for (int t = 0; t < 2 * ai.ThinkTicks; t++) sim.Tick();
         Assert.False(ai.HasDropOff);
-        Assert.NotEqual(2, ai.Board.ScoutPhase);
         Assert.True(ai.InGatherReach(hall + new Vector2(100f, 0f)), "no drop-off: a far node is out of reach");
+    }
+
+    /// <summary>
+    /// M6-S7: on the flat AI scene (every cell explored) the head ring round the hall is seen from the first think, so the
+    /// reach has lifted: a point 100 m off the hall is in reach.
+    /// </summary>
+    [Fact]
+    public void TheFlatScene_ExploredWhole_HasItsReachLifted_FromTheFirstThink()
+    {
+        PlayerSeat[] seats = AiScenes.Seats(AiDifficulty.Normal, SeatController.Ai, SeatController.Human);
+        Simulation sim = AiScenes.Flat(seats);
+        AiPlayer ai = sim.AiOf(0)!;
+        sim.Tick();
+        Assert.True(ai.HasDropOff && ai.Board.ScoutPhase != 2, "setup");
+        Assert.True(ai.ReachLifted());
+        Assert.True(ai.InGatherReach(ai.HallPoint + new Vector2(100f, 0f)));
     }
 
     // ---------- (a) the nearest forest just past the reach ----------
@@ -207,7 +229,7 @@ public class GatherReachQaTests
     /// walked every waypoint of the map (tick 8,741-9,641 on seeds 1-3), fields no army and is overrun; seeds 2 and 3 gathered
     /// 0 wood in 30,000 ticks. It should get its first wood about as soon as with every node in reach: by tick 5,000.
     /// </summary>
-    [Theory(Skip = "BUG-1047 (open, S3): a start whose nearest forest is past ai.gatherReach gets no wood until the scout's full sweep ends; remove the Skip with the fix")]
+    [Theory]
     [InlineData(1UL)]
     [InlineData(2UL)]
     [InlineData(3UL)]
@@ -267,7 +289,8 @@ public class GatherReachQaTests
     /// hall taken, seat 3 knows only its ally's forests, beyond the reach; on every tick to 1,500 <c>KnowsNode(Wood)</c>
     /// answers exactly whether a known, unmarked forest is in <see cref="AiPlayer.InGatherReach"/>. QA's mutation run found the reach clause in <c>WalkForNode</c> untested (removing
     /// it passed every test); this row fails then. Every Gather the seat sends meanwhile targets a node in reach
-    /// (<c>EconomyManager.NearestNode</c>'s half).
+    /// (<c>EconomyManager.NearestNode</c>'s half). M6-S7: unchanged by BUG-1047 / 1048's rule (a Gather sent once the reach has
+    /// lifted, the head ring seen, is in reach by definition).
     /// </summary>
     [Fact]
     public void KnowsNode_AndTheGathersSent_CountOnlyNodesInGatherReach_WhileTheScoutIsOut()

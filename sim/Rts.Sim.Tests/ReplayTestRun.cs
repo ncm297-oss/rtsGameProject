@@ -90,6 +90,7 @@ public static class ReplayTestRun
         Assert.Equal(expected.FormatVersion, actual.FormatVersion);
         Assert.Equal(expected.Combat, actual.Combat);
         Assert.Equal(expected.StartingResources, actual.StartingResources); // M6-S6
+        Assert.Equal(expected.MapId, actual.MapId); // M6-S7
         Assert.Equal(expected.Seats.IsDefault ? Array.Empty<ReplaySeat>() : expected.Seats.ToArray(), actual.Seats.IsDefault ? Array.Empty<ReplaySeat>() : actual.Seats.ToArray());
         Assert.Equal(expected.SimVersion, actual.SimVersion);
         Assert.Equal(expected.DataHash, actual.DataHash);
@@ -130,9 +131,11 @@ public static class ReplayTestRun
     /// <summary>A copy of <paramref name="r"/> with some fields replaced.</summary>
     public static Replay With(Replay r, int? formatVersion = null, ulong? dataHash = null,
         int? players = null, IEnumerable<Command>? commands = null, IEnumerable<ReplayCheckpoint>? checkpoints = null, string? simVersion = null,
-        bool? combat = null, IEnumerable<ReplaySeat>? seats = null, string? startingResources = null) => new()
+        bool? combat = null, IEnumerable<ReplaySeat>? seats = null, string? startingResources = null, string? mapId = null) => new()
     {
         FormatVersion = formatVersion ?? r.FormatVersion,
+        // M6-S7: the map id is format 9's; an older format was recorded on a generated map.
+        MapId = mapId ?? ((formatVersion ?? r.FormatVersion) >= 9 ? r.MapId : ""),
         Combat = combat ?? r.Combat,
         // M6-S6: the preset is format 8's; an older format was recorded at standard.
         StartingResources = startingResources ?? ((formatVersion ?? r.FormatVersion) >= 8 ? r.StartingResources : Data.StartingResourcesDef.StandardId),

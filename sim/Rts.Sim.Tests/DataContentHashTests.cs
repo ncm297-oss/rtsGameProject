@@ -96,6 +96,7 @@ public class DataContentHashTests
         AiRulesDef? aiRules = null, AiDef? ai = null, int aiSlot = 0) => new()
     {
         AiRules = aiRules ?? d.AiRules, // M5-3
+        Maps = d.Maps, // M6-S7
         Ai = ai == null ? d.Ai : d.Ai.SetItem(aiSlot, ai),
         Statuses = status == null ? d.Statuses : d.Statuses.SetItem(statusSlot, status),
         Abilities = ability == null ? d.Abilities : d.Abilities.SetItem(abilitySlot, ability),
@@ -339,11 +340,15 @@ public class DataContentHashTests
     {
         GameData d = TestSim.Data;
         Assert.NotEqual(d.ContentHash(), new GameData { DamageTable = d.DamageTable, Rules = d.Rules, Factions = d.Factions, Units = d.Units }.ContentHash());
-        using TestDataDir dir = TestDataDir.CopyOfShipped();
+        // M6-S7: without the maps folder on both sides: a 3-wide mine reaches into the shipped map's start clear ground and
+        // the map is refused, which this row is not about.
+        using TestDataDir plain = TestDataDir.CopyOfShipped(), dir = TestDataDir.CopyOfShipped();
+        Directory.Delete(plain.FullPath("maps"), recursive: true);
+        Directory.Delete(dir.FullPath("maps"), recursive: true);
         dir.EditJson("common/resources.json", root => root["resources"]![0]!["footprint"]!["width"] = 3);
-        DataLoadResult load = DataLoader.LoadAll(dir.Path);
-        Assert.True(load.Ok, string.Join("\n", load.Errors));
-        Assert.NotEqual(d.ContentHash(), load.Data!.ContentHash());
+        DataLoadResult baseline = DataLoader.LoadAll(plain.Path), load = DataLoader.LoadAll(dir.Path);
+        Assert.True(baseline.Ok && load.Ok, string.Join("\n", load.Errors));
+        Assert.NotEqual(baseline.Data!.ContentHash(), load.Data!.ContentHash());
     }
 
     [Fact]
@@ -482,6 +487,123 @@ public class DataContentHashTests
         Assert.Equal(new[] { "Key", "DisplayName", "Description", "Gold", "Wood", "AiSpendAbove" }, fields); // BUG-1050: AiSpendAbove
         Assert.NotEqual(baseline, WithPresets(presets.Reverse().ToImmutableArray()).ContentHash());
         Assert.NotEqual(baseline, WithPresets(presets.RemoveAt(presets.Length - 1)).ContentHash());
+    }
+
+    /// <summary>
+    /// M6-S7: every public field of a map (on the shipped Raraku: its id, names, players, size, every level, ramp field, start,
+    /// node field and the forest count), the maps' count and their order move the hash; data without maps hashes without a
+    /// maps term at all (so a data set with no <c>maps/</c> folder keeps its old hash).
+    /// </summary>
+    [Fact]
+    public void EveryMapField_TheCount_AndTheOrder_ChangeTheHash()
+    {
+        GameData d = TestSim.Data;
+        ulong baseline = d.ContentHash();
+        Assert.NotEmpty(d.Maps);
+        GameData WithMaps(System.Collections.Immutable.ImmutableArray<MapDef> maps) => new()
+        {
+            AiRules = d.AiRules, Ai = d.Ai, Statuses = d.Statuses, Abilities = d.Abilities, DamageTable = d.DamageTable, Rules = d.Rules,
+            Factions = d.Factions, Units = d.Units, Resources = d.Resources, Projectiles = d.Projectiles, Buildings = d.Buildings, Techs = d.Techs,
+            Maps = maps,
+        };
+        Assert.Equal(baseline, WithMaps(d.Maps).ContentHash());
+        MapDef m = d.Maps[0];
+        var fields = new List<string>();
+        foreach (PropertyInfo p in Settable(typeof(MapDef)))
+        {
+            object? value = p.GetValue(m);
+            object? changed = p.PropertyType == typeof(int) ? (int)value! + 1
+                : p.PropertyType == typeof(string) ? (string)value! + "x"
+                : p.PropertyType == typeof(ImmutableArray<byte>) ? ((ImmutableArray<byte>)value!).SetItem(0, (byte)(((ImmutableArray<byte>)value!)[0] + 1))
+                : p.PropertyType == typeof(ImmutableArray<int>) ? ((ImmutableArray<int>)value!).SetItem(0, ((ImmutableArray<int>)value!)[0] + 1)
+                : p.PropertyType == typeof(ImmutableArray<MapRampDef>) ? null
+                : p.PropertyType == typeof(ImmutableArray<MapNodeDef>) ? null
+                : throw new InvalidOperationException($"MapDef.{p.Name}: teach this test and ContentHash about {p.PropertyType}");
+            if (changed == null) continue; // the struct lists: field by field below
+            MapDef copy = Clone(m);
+            p.SetValue(copy, changed);
+            Assert.True(WithMaps(d.Maps.SetItem(0, copy)).ContentHash() != baseline, $"MapDef.{p.Name} is not in GameData.ContentHash");
+            fields.Add(p.Name);
+        }
+        void Expect(string what, Func<MapDef, MapDef> edit)
+        {
+            Assert.True(WithMaps(d.Maps.SetItem(0, edit(Clone(m)))).ContentHash() != baseline, $"{what} is not in GameData.ContentHash");
+            fields.Add(what);
+        }
+        MapDef With(MapDef x, string property, object list)
+        {
+            typeof(MapDef).GetProperty(property)!.SetValue(x, list);
+            return x;
+        }
+        MapRampDef r = m.Ramps[0];
+        Expect("Ramps.X", x => With(x, nameof(MapDef.Ramps), m.Ramps.SetItem(0, r with { X = r.X + 1 })));
+        Expect("Ramps.Y", x => With(x, nameof(MapDef.Ramps), m.Ramps.SetItem(0, r with { Y = r.Y + 1 })));
+        Expect("Ramps.Width", x => With(x, nameof(MapDef.Ramps), m.Ramps.SetItem(0, r with { Width = r.Width + 1 })));
+        Expect("Ramps.Height", x => With(x, nameof(MapDef.Ramps), m.Ramps.SetItem(0, r with { Height = r.Height + 1 })));
+        Expect("Ramps.Up", x => With(x, nameof(MapDef.Ramps), m.Ramps.SetItem(0, r with { Up = r.Up == MapDirection.North ? MapDirection.South : MapDirection.North })));
+        Expect("Ramps.Count", x => With(x, nameof(MapDef.Ramps), m.Ramps.RemoveAt(0)));
+        MapNodeDef n = m.Nodes[0];
+        Expect("Nodes.TypeId", x => With(x, nameof(MapDef.Nodes), m.Nodes.SetItem(0, n with { TypeId = n.TypeId + 1 })));
+        Expect("Nodes.Cell", x => With(x, nameof(MapDef.Nodes), m.Nodes.SetItem(0, n with { Cell = n.Cell + 1 })));
+        Expect("Nodes.Amount", x => With(x, nameof(MapDef.Nodes), m.Nodes.SetItem(0, n with { Amount = n.Amount + 1 })));
+        Expect("Nodes.Count", x => With(x, nameof(MapDef.Nodes), m.Nodes.RemoveAt(m.Nodes.Length - 1)));
+        Expect("Starts.Count", x => With(x, nameof(MapDef.Starts), m.Starts.RemoveAt(1)));
+        Assert.Equal(new[] { "Id", "Key", "DisplayName", "Description", "Players", "Size", "Levels", "Starts", "ForestCount" }, fields.Take(9));
+        // The count and the order (a second map, the first renamed).
+        MapDef second = Clone(m);
+        typeof(MapDef).GetProperty(nameof(MapDef.Key))!.SetValue(second, "second");
+        ulong two = WithMaps(d.Maps.Add(second)).ContentHash();
+        Assert.NotEqual(baseline, two);
+        Assert.NotEqual(two, WithMaps(System.Collections.Immutable.ImmutableArray.Create(second).AddRange(d.Maps)).ContentHash());
+        // No maps: no maps term (the hash a data set without the folder had before M6-S7).
+        Assert.Equal(WithMaps(System.Collections.Immutable.ImmutableArray<MapDef>.Empty).ContentHash(), WithMaps(default).ContentHash());
+        Assert.NotEqual(baseline, WithMaps(System.Collections.Immutable.ImmutableArray<MapDef>.Empty).ContentHash());
+    }
+
+    /// <summary>M6-S7: an edit to the shipped map file moves the hash: its text, a terrain cell, a ramp, a start, a mine's gold, a tree.</summary>
+    [Theory]
+    [InlineData("description", "\"Other text.\"")]
+    [InlineData("displayName", "\"Raraku Odhan\"")]
+    [InlineData("mines[2].gold", "1999")]
+    [InlineData("starts[0].y", "65")]
+    [InlineData("forests[2].rows[0]", "\"TTT.\"")]
+    public void AMapFileEdit_ChangesTheHash(string field, string json)
+    {
+        using TestDataDir dir = TestDataDir.CopyOfShipped();
+        dir.EditJson("maps/raraku.json", root =>
+        {
+            string[] parts = field.Split('.');
+            JsonNode parent = root;
+            for (int i = 0; i < parts.Length - 1; i++)
+            {
+                string part = parts[i];
+                int open = part.IndexOf('[');
+                parent = open < 0 ? parent[part]! : parent[part[..open]]![int.Parse(part[(open + 1)..^1])]!;
+            }
+            string last = parts[^1];
+            int at = last.IndexOf('[');
+            if (at < 0) parent[last] = JsonNode.Parse(json);
+            else parent[last[..at]]![int.Parse(last[(at + 1)..^1])] = JsonNode.Parse(json);
+        });
+        DataLoadResult load = DataLoader.LoadAll(dir.Path);
+        Assert.True(load.Ok, string.Join("; ", load.Errors));
+        Assert.NotEqual(TestSim.Data.ContentHash(), load.Data!.ContentHash());
+    }
+
+    /// <summary>M6-S7: a terrain cell edited in the file (a level-0 cell far from every start and node raised to 1) moves the hash.</summary>
+    [Fact]
+    public void AMapTerrainCellEdit_ChangesTheHash()
+    {
+        using TestDataDir dir = TestDataDir.CopyOfShipped();
+        dir.EditJson("maps/raraku.json", root =>
+        {
+            JsonArray rows = root["terrain"]!.AsArray();
+            string row = rows[3]!.GetValue<string>();
+            rows[3] = row[..3] + "1" + row[4..];
+        });
+        DataLoadResult load = DataLoader.LoadAll(dir.Path);
+        Assert.True(load.Ok, string.Join("; ", load.Errors));
+        Assert.NotEqual(TestSim.Data.ContentHash(), load.Data!.ContentHash());
     }
 
     /// <summary>M6-S6: an edit to a <c>rules.json</c> <c>startingResources</c> preset in the file moves the hash.</summary>

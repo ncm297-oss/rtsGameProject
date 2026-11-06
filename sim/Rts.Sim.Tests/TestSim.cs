@@ -16,6 +16,17 @@ public static class TestSim
     /// <summary>The shipped data (cached; GameData is immutable, so sharing it is safe).</summary>
     public static GameData Data => s_data.Value;
 
+    private static readonly Lazy<GameData> s_withoutMaps = new(() =>
+    {
+        using TestDataDir dir = TestDataDir.CopyOfShippedWithoutMaps();
+        DataLoadResult result = DataLoader.LoadAll(dir.Path);
+        Assert.True(result.Ok, string.Join(Environment.NewLine, result.Errors));
+        return result.Data!;
+    });
+
+    /// <summary>M6-S7: the shipped data without <c>maps/</c> (<see cref="TestDataDir.CopyOfShippedWithoutMaps"/>), loaded once: the hash baseline for a footprint edit.</summary>
+    public static GameData DataWithoutMaps => s_withoutMaps.Value;
+
     private static readonly Lazy<GameData> s_withoutBuildingRequires = new(() =>
     {
         using TestDataDir dir = TestDataDir.CopyOfShipped();

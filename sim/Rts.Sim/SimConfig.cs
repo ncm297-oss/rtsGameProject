@@ -115,6 +115,18 @@ public sealed record SimConfig(ulong Seed, int PlayerCount, int UnitCapacity, in
     /// </summary>
     public string StartingResources { get; init; } = StartingResourcesDef.StandardId;
 
+    /// <summary>
+    /// M6-S7: the id of the hand-made map the match plays (<see cref="GameData.Maps"/>, <c>game/data/maps/</c>), or <c>""</c>
+    /// (the default) for a map generated from <see cref="Seed"/> and <see cref="Map"/>. <see cref="Validate"/> refuses an id
+    /// the data lacks, more players than the map has starts, a <see cref="Map"/> whose width or height isn't the map's side
+    /// (so the headers' map size stays true) and a resource capacity below the map's node count. Configuration, not hashed
+    /// state: in the save header (format 5) and the replay header (format 9) only when set.
+    /// </summary>
+    public string MapId { get; init; } = "";
+
+    /// <summary>M6-S7: the map <see cref="MapId"/> names, or null for a generated map (call after <see cref="Validate"/>).</summary>
+    public MapDef? MapFile => string.IsNullOrEmpty(MapId) ? null : Data.Maps[Data.FindMap(MapId)];
+
     /// <summary>M6-S6: the preset <see cref="StartingResources"/> names (call after <see cref="Validate"/>, which refuses an unknown id).</summary>
     public StartingResourcesDef StartingPreset => Data.Rules.StartingResources[Data.Rules.FindStartingResources(StartingResources)];
 
@@ -138,7 +150,7 @@ public sealed record SimConfig(ulong Seed, int PlayerCount, int UnitCapacity, in
         }
     }
 
-    /// <summary>Throws if any size is out of range, (M6-S6) the starting-resources preset is not in the data, or (M5-2) a seat is bad: a count other than the players', an unknown faction, controller or difficulty, (M6-S4) a team outside 0 to <see cref="PlayerSeat.MaxTeam"/>, or an AI seat whose faction has no loaded <c>ai.json</c>.</summary>
+    /// <summary>Throws if any size is out of range, (M6-S6) the starting-resources preset is not in the data, (M6-S7) the map id is unknown or doesn't fit the config, or (M5-2) a seat is bad: a count other than the players', an unknown faction, controller or difficulty, (M6-S4) a team outside 0 to <see cref="PlayerSeat.MaxTeam"/>, or an AI seat whose faction has no loaded <c>ai.json</c>.</summary>
     public void Validate()
     {
         if (PlayerCount < 1) throw new ArgumentOutOfRangeException(nameof(PlayerCount));
@@ -157,7 +169,23 @@ public sealed record SimConfig(ulong Seed, int PlayerCount, int UnitCapacity, in
         Map.Validate();
         if (Data.Rules.FindStartingResources(StartingResources) < 0)
             throw new ArgumentException($"Unknown starting-resources preset '{StartingResources}'.", nameof(StartingResources));
+        ValidateMapFile();
         ValidateSeats();
+    }
+
+    // M6-S7: a hand-made map's id, players, size and node count.
+    private void ValidateMapFile()
+    {
+        if (MapId == null) throw new ArgumentNullException(nameof(MapId));
+        if (MapId.Length == 0) return;
+        int m = Data.FindMap(MapId);
+        if (m < 0) throw new ArgumentException($"Unknown map '{MapId}'.", nameof(MapId));
+        MapDef map = Data.Maps[m];
+        if (PlayerCount > map.Players) throw new ArgumentException($"{PlayerCount} players on map '{MapId}', which has {map.Players} starts.", nameof(MapId));
+        if (Map.Width != map.Size || Map.Height != map.Size)
+            throw new ArgumentException($"Map size {Map.Width} x {Map.Height} for map '{MapId}', which is {map.Size} x {map.Size}.", nameof(Map));
+        if (ResourceCapacity < map.Nodes.Length)
+            throw new ArgumentException($"Resource capacity {ResourceCapacity} below map '{MapId}''s {map.Nodes.Length} nodes.", nameof(ResourceCapacity));
     }
 
     private void ValidateSeats()
