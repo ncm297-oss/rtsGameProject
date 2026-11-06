@@ -6786,6 +6786,76 @@ ui.json                            setup.starting_resources, load.preset (setup:
   `-- --shots <dir>`, `StartingResourcesTest` writes the setup with High picked, the one-team line, and the Load Game list.
 - **Not in this slice:** per-slot presets, new presets (data), the map list (M6-V18 once M6-S7 lands).
 
+### Implementation (M6-V18)
+
+The setup's map list, the view's half of hand-made maps (docs/02 "Game flow" 2, docs/05 M6 criterion 7; the sim's half is
+"Implementation (M6-S7)", whose "Requests for the view" this answers). The one sim file is the view's own `ViewApi/SaveSummary.cs`.
+
+```
+game/scripts/SkirmishSetup.cs      MapOption / MapPick / PickMap / SlotCap / MapPlayersLabel; MatchArgs: --map <id>; the speed row moved
+game/scripts/LaunchOptions.cs      --map <id> (MapId)
+game/scripts/Match.cs              MapFor(data, id); --players capped at the map's starts (MapPlayersWarning); log lines name the map file; no shortfall line on a map file
+game/scripts/SimRunner.cs          MapId: Start's SimConfig (Map = Default with the side only); StartLoaded and StartPlayback take the header's
+game/scripts/ReplayStore.cs        TryReadHeader: format 9's map line after starting-resources (FirstMapVersion)
+game/scripts/SaveStore.cs, SaveEntry.cs, ReplayEntry.cs   MapId on each entry
+game/scripts/LoadGameScreen.cs     PlayersText(seats, preset, mapId): load.map round the cell for a map file
+sim/Rts.Sim/ViewApi/SaveSummary.cs MapId (format 5's string after the preset)
+ui.json                            setup.map, setup.map_generated, setup.map_players, load.map (setup: 31 keys, load: 25)
+```
+
+- **The list.** A **Map** row (`setup.map`) under the seed: item 0 Generated (`setup.map_generated`, the generator on the
+  seed, size and counts; no tooltip), then every `GameData.Maps` entry in data (file-name) order by `displayName`, its
+  `description` the item's tooltip (the list's own tooltip is the picked map's); default Generated. The setup holds the pick
+  (an index into `GameData.Maps`) and nothing of the map; the sim checks it (`SimConfig.Validate`). To keep four slots inside
+  648 px no row was added: the map size moved beside the map list, and the game speed beside the starting resources (it
+  was beside the map size, M6-V15); Start's bottom edge is where it was.
+- **A map file picked.** Map size shows the map's side and is greyed; Forests and Gold mines are greyed (not editable, no
+  focus, so the keyboard can't change them either) and keep their values, unused. The shown slots are capped at the map's
+  start locations (`MapDef.Players`, `SlotCap`): extra slots are hidden (their picks kept, as Remove player keeps them) and
+  Add player is disabled; the line `setup.map_players` ("{0} has room for {1} players": the map's name and its starts) shows
+  right of Remove player, in a 300 px holder with an empty spacer as wide left of Add player (BUG-1066's pattern), so the
+  buttons don't move. Generated again gives back the map size picked before and the slot count the cap took away (unless the
+  player removed a slot meanwhile), and the rows. `MatchArgs` adds `--map <id>` after `--resources`, only for a map file,
+  with `--map-size` the map's side; a Generated match's args are exactly as before.
+- **`--map <id>`.** One value, a snake_case id of at most 64 characters (`DataLimits.MaxMapIdLength`); junk (`""`, `Raraku`,
+  `ra-raku`, a path, unicode, 65 characters, a missing value; a flag is never taken as the value) is warned and ignored; the
+  last good one wins. `Match.MapFor` is the data's check: an id the data lacks is warned about ("... playing a generated
+  map") and the match plays a generated map. A match flag (skips the main menu). On a map file the match takes the map's
+  side (`--map-size` is ignored) and `--forests` / `--mines` are unused; `--players` over the map's starts is warned
+  (`Match.MapPlayersWarning`) and capped (`--players 4 --map raraku` plays 2).
+- **The match start, a load and playback.** `SimRunner.MapId` (an id, "" for generated) goes into `Start`'s `SimConfig.MapId`
+  with `Map = MapGenParams.Default with { Width = side, Height = side }` (the docs/03 M6-S7 request: no other generator field);
+  a generated match's config is exactly as before. `StartLoaded` takes the save's (`SimConfig.MapId`; the terrain is the
+  save's own heightmap, the id only names it); `StartPlayback` the recording's (`Replay.MapId`: without it a Raraku recording
+  built a generated map), refusing with `InvalidHeader`, before any sim, an id the data lacks or a header whose players, map
+  size or resource capacity don't fit the map (`ReplayPlayer`'s checks). The "Match started", "Save loaded" and "Replay started"
+  lines add `, map file <id>` after the starting resources for a map file (the id: the log is not player-facing); a generated
+  match's lines are as before. `Match`'s "placed fewer than asked" line (M6-VH4) is skipped on a map file (its counts are its own).
+- **Load Game.** `ReplayStore.TryReadHeader` reads, for format 9, the `map <id>` line right after `starting-resources` (one
+  token, 1-64 characters, no space, not `-`; anything else makes the header unreadable); before format 9 the entry's map is
+  "". `SaveSummary.MapId` reads format 5's string right after the preset (read-only, never throws): "" for formats 1-4, and
+  for a format-5 header cut before or inside the id, whose preset doesn't read, or whose id is not a 1-256-byte UTF-8 string
+  (the file still lists; Load refuses it). The players cell of a file on a map file is `load.map` ("{0}; map: {1}") round the
+  seats (and the preset's `load.preset`, if any) with the map's `displayName` (an id the data lacks shows as the id); a
+  generated file's cell is exactly as before.
+- **Tests.** `game/tests/MapListTest.tscn`: the items and tooltips against `GameData.Maps` (no map name in C#), the default,
+  each map's args round-tripping through `Parse`, the greyed rows, the slot cap from four slots (Add player a no-op), the
+  line's text and place (the buttons don't move), Generated giving back size, slots and rows, the four-slot layout with 8 px
+  under Start; Skirmish → Map → the map → Start (config, side, a Town Hall on each of the file's starts on level 0, the start
+  line, no shortfall line); `--map` junk (13 values) and the 64-character bound; `--players 4 --map <id>` capped; an unknown,
+  empty and 65-character id playing generated. `game/tests/QaM6V18Test.tscn`: a generated menu match saves format 4 with
+  nothing between the preset and the heightmap tag and its config's map parameters as before, and records format 6; a map
+  match saved at tick 200 (format 5, the summary's id) and recorded to 1,200 (format 9, `map <id>` after `starting-resources`);
+  Load Game names the map on both rows and leaves the generated pair as `SeatsText`; Watch plays all 12 checkpoints on the
+  map; Load resumes the save on the map with the saved hash and reaches the uninterrupted match's hash at tick 1,200; hostile
+  `map` lines unreadable, an unknown id listed as the id, and `StartPlayback` refusing an unknown map, another size and a
+  capacity under the map's nodes. `sim/Rts.Sim.Tests/ViewApi/SaveSummaryTests`: format 5's id, format 4 (and 4 relabelled 5)
+  without one, every cut of a format-5 header from the team bytes to the id's end, forged lengths and bad UTF-8, and a read
+  that leaves hash, tick and save bytes unchanged. `ShellTest`: the four new keys required, `load.map` / `setup.map_players`
+  bad formats refused, the key count.
+- **Not in this slice:** map content or text, per-biome art, per-map AI openings, Pale Hills / Vathar Crossing (they appear
+  in the list by themselves once their files ship), a map preview in the setup.
+
 ## AI architecture
 
 The AI lives in `Rts.Sim.Ai`, inside the sim assembly, because it must be deterministic (it uses
@@ -9070,6 +9140,7 @@ ticks), 4 waves to 3, gathered 8,810 gold / 4,240 wood v 5,300 / 3,540.
   generator field is unused; the Forests / Gold mines rows don't apply), at most `MapDef.Players` slots; `SimRunner.StartPlayback`
   passes `replay.MapId` (as it passes the preset); Load Game may read format 5's map id after the preset string to name the
   map (offsets above); `ReplayStore.TryReadHeader` accepts format 9 (it reads versions up to `Replay.CurrentFormatVersion`).
+  Built in M6-V18 ("Implementation (M6-V18)").
 - **Not in this slice:** Pale Hills and Vathar Crossing, a mirrored-terrain helper (Raraku was laid out by a one-off script,
   not shipped), biome art and per-map props, per-map AI openings, water, the setup's list.
 

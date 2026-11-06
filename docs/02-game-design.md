@@ -338,7 +338,8 @@ The hand-made maps are files under `game/data/maps/` (one JSON file a map: a tex
 the start locations, the gold mines and the forests, and a player-facing name and description), picked by their id instead
 of a seed and hashed with the rest of the data, so a save or a recording of a match on one names the map and rebuilds it
 exactly. Each must keep the generator's start rules (every start on one level, at least half the map apart, two mines and
-a forest beside it); Raraku is the first (M6-S7, a placeholder layout), Pale Hills and Vathar Crossing follow.
+a forest beside it); Raraku is the first (M6-S7, a placeholder layout), Pale Hills and Vathar Crossing follow. The
+skirmish setup's Map list offers every shipped map file ("Game flow" 2, M6-V18).
 
 ## Controls and camera
 
@@ -474,7 +475,11 @@ own cues (select, order, refused, building placed or finished, unit or tech read
    the preset (the older save and replay layouts read as Standard, though saves and recordings made before this change refuse
    to load anyway, since the game data changed with it). The setup's **Starting resources** list offers the presets by name,
    Standard picked by default, each one's description as its tooltip; Load Game names a save's or a replay's preset when it
-   isn't Standard (built in M6-V17). At High the AI plays its usual openings and spends the extra money as it goes: while it holds more than 200
+   isn't Standard (built in M6-V17). The setup's **Map** list offers Generated (the default: the map generator on the
+   seed, size and counts above) and then every hand-made map by name ("Map and terrain"), each one's description as its
+   tooltip; picking one greys Map size, Forests and Gold mines (the map has its own) and allows at most as many slots as the
+   map has start locations, with a line saying so; Generated gives them back. The save and the replay carry the map, and
+   Load Game names it (built in M6-V18). At High the AI plays its usual openings and spends the extra money as it goes: while it holds more than 200
    gold + wood it starts its opening's timed steps (Age II, the later buildings) early, trains at every producer and leans
    its gatherers toward the kind it is short of, so it doesn't sit on the start (BUG-1050; at Standard it plays exactly as
    before).

@@ -156,6 +156,12 @@ public sealed class UiText
     /// <summary>M6-V17: a Load Game players cell with its non-standard starting-resources preset (<c>load.preset</c>): <paramref name="seats"/> and the preset's <paramref name="preset"/> name.</summary>
     public string SeatsWithPreset(string seats, string preset) => string.Format(CultureInfo.InvariantCulture, LoadGame(LoadText.Preset), seats, preset);
 
+    /// <summary>M6-V18: a Load Game players cell of a match on a map file (<c>load.map</c>): <paramref name="seats"/> and the map's <paramref name="map"/> name.</summary>
+    public string SeatsWithMap(string seats, string map) => string.Format(CultureInfo.InvariantCulture, LoadGame(LoadText.Map), seats, map);
+
+    /// <summary>M6-V18: the setup's line while a map file is picked (<c>setup.map_players</c>): the map's <paramref name="map"/> name and its <paramref name="players"/> start locations.</summary>
+    public string MapPlayersLine(string map, int players) => string.Format(CultureInfo.InvariantCulture, Setup(SetupText.MapPlayers), map, players);
+
     /// <summary>The <c>setup</c> key of player colour <paramref name="index"/> (0-based): <c>colour_1</c> .. <c>colour_8</c>.</summary>
     public static string ColourKey(int index) => $"colour_{index + 1}";
 
@@ -364,6 +370,8 @@ public sealed class UiText
             TwoArgs(ui._load[(int)LoadText.Seat], $"load.{Key(LoadText.Seat)}", "the faction", "the seat", errors);
             TwoArgs(ui._load[(int)LoadText.SeatTeam], $"load.{Key(LoadText.SeatTeam)}", "the seat", "the team", errors); // M6-V16
             TwoArgs(ui._load[(int)LoadText.Preset], $"load.{Key(LoadText.Preset)}", "the seats", "the preset", errors); // M6-V17
+            TwoArgs(ui._load[(int)LoadText.Map], $"load.{Key(LoadText.Map)}", "the seats", "the map", errors); // M6-V18
+            TwoArgs(ui._setup[(int)SetupText.MapPlayers], $"setup.{Key(SetupText.MapPlayers)}", "the map", "the players", errors); // M6-V18
             string skipped = ui._load[(int)LoadText.Skipped];
             if (skipped.Length > 0 && !IsSizeFormat(skipped))
                 errors.Add($"ui.json: load.{Key(LoadText.Skipped)} must be a format with {{0}} (the count) and no other placeholder: '{skipped}'");

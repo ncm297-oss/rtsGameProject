@@ -20,7 +20,8 @@ namespace Rts.Game;
 /// folder whose save is gone is listed with the replays (BUG-1002, <see cref="SaveStore.LoneReplays"/>). Load resumes the picked
 /// save, Watch plays the picked replay (each greyed on any other row), Delete deletes the picked file (a save with the
 /// recording beside it), Back returns to the menu. Text from <c>ui.json</c> <c>load</c>, <c>save</c> and faction data. M6-V17: a
-/// file at a starting-resources preset other than Standard names it in the players cell (<see cref="PlayersText"/>).
+/// file at a starting-resources preset other than Standard names it in the players cell (<see cref="PlayersText"/>); M6-V18: so
+/// does a file on a map file name the map.
 /// </summary>
 /// <remarks>The screen only reads the folders and raises events; <see cref="Main"/> starts the playback or the loaded match.</remarks>
 public partial class LoadGameScreen : CanvasLayer
@@ -272,7 +273,7 @@ public partial class LoadGameScreen : CanvasLayer
                 ReplayEntry e = _entries[i];
                 item.SetText(0, _ui.ReplayDate(e.When));
                 item.SetText(1, e.Seed.ToString(System.Globalization.CultureInfo.InvariantCulture));
-                item.SetText(2, PlayersText(e.Seats, e.StartingResources));
+                item.SetText(2, PlayersText(e.Seats, e.StartingResources, e.MapId));
                 item.SetText(3, _ui.Clock(e.TickCount));
                 item.SetText(4, _ui.LoadGame(LoadText.ReplayTag));
                 break;
@@ -280,7 +281,7 @@ public partial class LoadGameScreen : CanvasLayer
                 SaveEntry s = _saves[i];
                 item.SetText(0, _ui.ReplayDate(s.When));
                 item.SetText(1, s.Seed.ToString(System.Globalization.CultureInfo.InvariantCulture));
-                item.SetText(2, PlayersText(s.Seats, s.StartingResources));
+                item.SetText(2, PlayersText(s.Seats, s.StartingResources, s.MapId));
                 item.SetText(3, _ui.Clock(s.Tick));
                 item.SetText(4, _ui.LoadGame(LoadText.SaveTag));
                 break;
@@ -352,14 +353,20 @@ public partial class LoadGameScreen : CanvasLayer
     /// M6-V17: a readable row's players cell: <see cref="SeatsText"/>, and for a match at a starting-resources preset other
     /// than Standard <c>load.preset</c> around it with the preset's <c>displayName</c> ("...; starting resources: High"); an id
     /// the data lacks shows as the id. Standard, and "" (a save header cut before its preset), add nothing, so a Standard file
-    /// reads as before.
+    /// reads as before. M6-V18: a file on a map file (<paramref name="mapId"/> not "") then gets <c>load.map</c> round that with
+    /// the map's <c>displayName</c> ("...; map: Raraku"); an id the data lacks shows as the id. A generated map's file adds nothing.
     /// </summary>
-    public string PlayersText(ImmutableArray<ReplaySeat> seats, string preset)
+    public string PlayersText(ImmutableArray<ReplaySeat> seats, string preset, string mapId = "")
     {
         string text = SeatsText(seats);
-        if (preset.Length == 0 || preset == StartingResourcesDef.StandardId) return text;
-        int i = _data.Rules.FindStartingResources(preset);
-        return _ui.SeatsWithPreset(text, i >= 0 ? _data.Rules.StartingResources[i].DisplayName : preset);
+        if (preset.Length > 0 && preset != StartingResourcesDef.StandardId)
+        {
+            int i = _data.Rules.FindStartingResources(preset);
+            text = _ui.SeatsWithPreset(text, i >= 0 ? _data.Rules.StartingResources[i].DisplayName : preset);
+        }
+        if (mapId.Length == 0) return text;
+        int m = _data.FindMap(mapId);
+        return _ui.SeatsWithMap(text, m >= 0 ? _data.Maps[m].DisplayName : mapId);
     }
 
     // A double-click: Load on a save row, Watch on a replay row, nothing on an unreadable one.

@@ -59,4 +59,13 @@ public enum SetupText
     OneTeam,
     /// <summary>The starting-resources list's label (M6-V17; the items are the presets' <c>displayName</c> from <c>rules.json</c>).</summary>
     StartingResources,
+    /// <summary>The map list's label (M6-V18; the items are <see cref="MapGenerated"/>, then the map files' <c>displayName</c>).</summary>
+    Map,
+    /// <summary>The map list's first item: a map made by the generator from the seed, size and counts (M6-V18).</summary>
+    MapGenerated,
+    /// <summary>
+    /// Beside Add player while a map file is picked (M6-V18): a format naming <c>{0}</c> (the map's <c>displayName</c>) and
+    /// <c>{1}</c> (its start locations, the most players it takes).
+    /// </summary>
+    MapPlayers,
 }

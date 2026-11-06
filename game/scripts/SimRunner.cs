@@ -111,6 +111,16 @@ public partial class SimRunner : Node
     /// </summary>
     public string StartingResources { get; set; } = StartingResourcesDef.StandardId;
 
+    /// <summary>
+    /// M6-V18: the hand-made map's data id the match plays (<see cref="SimConfig.MapId"/>: the setup's Map list, <c>--map</c>),
+    /// or "" (the default) for a map generated from <see cref="Seed"/>, <see cref="MapSize"/>, <see cref="Forests"/> and
+    /// <see cref="GoldMines"/>; set before <see cref="Start"/>, with <see cref="MapSize"/> the map's side. On a map file the
+    /// generator's fields are unused: <see cref="Start"/> passes <c>MapGenParams.Default</c> with only the side set (docs/03
+    /// "Implementation (M6-S7)", "Requests for the view"). <see cref="StartLoaded"/> and <see cref="StartPlayback"/> set it
+    /// from the save's or the recording's header. Only the id: the map is the sim's (<c>World.Data.Maps</c>).
+    /// </summary>
+    public string MapId { get; set; } = "";
+
     /// <summary>Player 1's AI difficulty (<see cref="SlotAi"/>[1]; the setup's AI slot, <c>--ai</c>; M6-V2), or null for a human seat; set before <see cref="Start"/>.</summary>
     public AiDifficulty? Player1Ai
     {
@@ -159,13 +169,17 @@ public partial class SimRunner : Node
     public void Start(GameData data)
     {
         Seats = SeatsFor(PlayerCount, data.Factions.Length, SlotFactions, SlotAi, SlotTeams);
+        bool mapFile = MapId.Length > 0;
         var config = new SimConfig(unchecked((ulong)Seed), PlayerCount, UnitCapacity, CommandCapacity)
         {
             Data = data,
-            Map = MapGenParams.Default with { Width = MapSize, Height = MapSize, Forests = Forests, GoldMines = GoldMines, StartLocations = StartLocations },
+            // M6-V18: a map file takes only the side from the generator's fields (the sim checks it is the map's own).
+            Map = mapFile ? MapGenParams.Default with { Width = MapSize, Height = MapSize }
+                : MapGenParams.Default with { Width = MapSize, Height = MapSize, Forests = Forests, GoldMines = GoldMines, StartLocations = StartLocations },
             Combat = Combat,
             Seats = Seats,
             StartingResources = StartingResources, // M6-V17
+            MapId = MapId, // M6-V18
         };
         Simulation = new Simulation(config);
         PlayedSeats = Seats;
@@ -193,6 +207,7 @@ public partial class SimRunner : Node
         StartLocations = c.Map.StartLocations;
         Combat = c.Combat;
         StartingResources = c.StartingResources; // M6-V17: the save header's preset
+        MapId = c.MapId; // M6-V18: the save header's map id (the terrain itself is the save's own)
         var seats = ImmutableArray.CreateBuilder<PlayerSeat>(c.PlayerCount);
         for (int p = 0; p < c.PlayerCount; p++) seats.Add(c.SeatOf(p));
         Seats = PlayedSeats = seats.MoveToImmutable();
@@ -204,7 +219,7 @@ public partial class SimRunner : Node
     /// Starts playing <paramref name="replay"/> (M6-V9). Refuses before any sim exists, returning the code, when it breaks
     /// <see cref="Replay.Validate"/>, was recorded with other data (<see cref="ReplayError.DataMismatch"/>: <c>ContentHash</c>
     /// differs) or names a faction the data lacks (<see cref="ReplayError.InvalidHeader"/>). Otherwise builds the sim from the
-    /// header (seed, players, capacities, map, combat, starting resources since M6-V17) with every seat human on the header's faction and team (no AI runs: its
+    /// header (seed, players, capacities, map, combat, starting resources since M6-V17, the map file since M6-V18) with every seat human on the header's faction and team (no AI runs: its
     /// commands are in the log; the team since M6-V16, format 7), attaches a fresh <see cref="Recorder"/>, queues the commands stamped for tick 1 and returns
     /// <see cref="ReplayError.None"/>; ticking starts on the next frame.
     /// </summary>
@@ -217,6 +232,15 @@ public partial class SimRunner : Node
         if (data.ContentHash() != replay.DataHash) return ReplayError.DataMismatch;
         // M6-V17: a preset the data lacks would make SimConfig.Validate throw (the data hash rules it out; a guard, not a path).
         if (data.Rules.FindStartingResources(replay.StartingResources) < 0) return ReplayError.InvalidHeader;
+        // M6-V18 (format 9): the recording's map file; one the data lacks, or that the header's players, map size or resource
+        // capacity don't fit, would make SimConfig.Validate throw: refused as ReplayPlayer refuses it.
+        if (replay.MapId.Length > 0)
+        {
+            int m = data.FindMap(replay.MapId);
+            if (m < 0 || replay.PlayerCount > data.Maps[m].Players || replay.Map.Width != data.Maps[m].Size || replay.Map.Height != data.Maps[m].Size
+                || replay.ResourceCapacity < data.Maps[m].Nodes.Length)
+                return ReplayError.InvalidHeader;
+        }
         ImmutableArray<PlayerSeat> seats = ImmutableArray<PlayerSeat>.Empty, played = ImmutableArray<PlayerSeat>.Empty;
         if (!replay.Seats.IsDefaultOrEmpty)
         {
@@ -243,6 +267,7 @@ public partial class SimRunner : Node
         StartLocations = replay.Map.StartLocations;
         Combat = replay.Combat;
         StartingResources = replay.StartingResources;
+        MapId = replay.MapId;
         Seats = seats;
         PlayedSeats = played;
         var config = new SimConfig(replay.Seed, replay.PlayerCount, replay.UnitCapacity, replay.CommandCapacity)
@@ -254,6 +279,8 @@ public partial class SimRunner : Node
             Seats = seats,
             // M6-V17: the recording's preset (format 8; standard before it): without it a High recording mismatches at its first checkpoint.
             StartingResources = replay.StartingResources,
+            // M6-V18: the recording's map file (format 9; "" before it): without it a Raraku recording builds a generated map.
+            MapId = replay.MapId,
         };
         Simulation = new Simulation(config);
         Recorder = new ReplayRecorder(Simulation, replay.CheckpointInterval, replay.TickCount, replay.Commands.Length);

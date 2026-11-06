@@ -63,6 +63,9 @@ public partial class Match : Node3D
     /// </summary>
     public string ShortfallLine { get; private set; } = "";
 
+    /// <summary>M6-V18: the dev-log warning a new match gave when <c>--players</c> asked for more players than the map file's start locations (the players were capped), else "".</summary>
+    public string MapPlayersWarning { get; private set; } = "";
+
     /// <summary>Starting workers per player this match asked for (<c>--workers</c>, else <c>rules.json</c> <c>startingWorkers</c>).</summary>
     public int WorkersPerPlayer { get; private set; }
 
@@ -85,6 +88,20 @@ public partial class Match : Node3D
         {
             _runner.PlayerCount = players;
             _runner.StartLocations = players;
+        }
+        // M6-V18: a map file sets the side and caps the players at its start locations (the generator's counts are unused).
+        _runner.MapId = "";
+        if (MapFor(data, options.MapId) is MapDef mapFile)
+        {
+            _runner.MapId = mapFile.Key;
+            _runner.MapSize = mapFile.Size;
+            if (_runner.PlayerCount > mapFile.Players)
+            {
+                MapPlayersWarning = $"Ignoring --players {_runner.PlayerCount}: map '{mapFile.Key}' has {mapFile.Players} start locations; playing {mapFile.Players} players.";
+                GD.PushWarning(MapPlayersWarning);
+                _runner.PlayerCount = mapFile.Players;
+                _runner.StartLocations = mapFile.Players;
+            }
         }
         PickSeats(data, options);
         _runner.StartingResources = PresetFor(data, options.StartingResources);
@@ -291,13 +308,13 @@ public partial class Match : Node3D
         if (!live)
         {
             GD.Print($"Replay started: {ReplayPath}, seed {replay!.Seed}, map {map.Width} x {map.Height}, {replay.TickCount} ticks, " +
-                $"{replay.Commands.Length} commands, {replay.Checkpoints.Length} checkpoints, starting resources {replay.StartingResources}, seats {SeatsText(data, _runner.PlayedSeats)}");
+                $"{replay.Commands.Length} commands, {replay.Checkpoints.Length} checkpoints, starting resources {replay.StartingResources}{MapText(replay.MapId)}, seats {SeatsText(data, _runner.PlayedSeats)}");
             return;
         }
         if (loaded)
         {
             StartLine = $"Save loaded: {SavePath}, seed {unchecked((ulong)_runner.Seed)}, map {map.Width} x {map.Height}, tick {sim.TickNumber}, " +
-                $"speed {_runner.GameSpeed.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)}x, starting resources {sim.World.Config.StartingResources}, seats {SeatsText(data, _runner.Seats)}, not recorded";
+                $"speed {_runner.GameSpeed.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)}x, starting resources {sim.World.Config.StartingResources}{MapText(sim.World.Config.MapId)}, seats {SeatsText(data, _runner.Seats)}, not recorded";
             GD.Print(StartLine);
             return;
         }
@@ -305,12 +322,13 @@ public partial class Match : Node3D
         StartLine = $"Match started: seed {unchecked((ulong)_runner.Seed)}, map {map.Width} x {map.Height}, " +
             $"speed {_runner.GameSpeed.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)}x, {options.UnitsPerPlayer} units per player, " +
             $"forests {placed.Forests} trees {placed.Trees} mines {placed.Mines}, " +
-            $"town halls {Halls(Bases)}, {WorkersPerPlayer} workers per player, starting resources {sim.World.Config.StartingResources}" +
+            $"town halls {Halls(Bases)}, {WorkersPerPlayer} workers per player, starting resources {sim.World.Config.StartingResources}{MapText(sim.World.Config.MapId)}" +
             (options.NoCombat ? ", combat off" : "") + (options.NoFog ? ", fog not drawn" : "") +
             $", seats {SeatsText(data, _runner.Seats)}";
         GD.Print(StartLine);
         MapGenParams asked = sim.World.Config.Map;
-        if (placed.Forests < asked.Forests || placed.Mines < asked.GoldMines)
+        // M6-V18: a map file's counts are its own (the generator's asked-for counts are unused), so there is nothing to fall short of.
+        if (sim.World.Config.MapId.Length == 0 && (placed.Forests < asked.Forests || placed.Mines < asked.GoldMines))
         {
             ShortfallLine = $"Map generator: placed {placed.Forests} of {asked.Forests} forests and {placed.Mines} of {asked.GoldMines} gold mines asked " +
                 $"(the {map.Width} x {map.Height} map has no more room at the generator's spacing, {asked.MineSpacing.ToString("0.#", System.Globalization.CultureInfo.InvariantCulture)} m between mines)";
@@ -454,6 +472,23 @@ public partial class Match : Node3D
         GD.PushWarning($"Ignoring --resources with bad or missing value '{id}': the data has no such starting-resources preset; playing {StartingResourcesDef.StandardId}.");
         return StartingResourcesDef.StandardId;
     }
+
+    /// <summary>
+    /// M6-V18: the map file a new match plays for <c>--map</c>'s <paramref name="id"/>: the data's map with that id, else null
+    /// (a generated map); an id the data lacks is warned about like any bad flag value and the match still starts, on a
+    /// generated map. Null (no flag) is a generated map.
+    /// </summary>
+    public static MapDef? MapFor(GameData data, string? id)
+    {
+        if (string.IsNullOrEmpty(id)) return null;
+        int m = data.FindMap(id);
+        if (m >= 0) return data.Maps[m];
+        GD.PushWarning($"Ignoring --map with bad or missing value '{id}': the data has no such map; playing a generated map.");
+        return null;
+    }
+
+    // M6-V18: the dev log's map file (its data id), or nothing for a generated map, whose lines read as before.
+    private static string MapText(string mapId) => mapId.Length > 0 ? $", map file {mapId}" : "";
 
     // M6-V2: the setup's (or --faction / --ai's) picks into the runner's seats. An id the data lacks, or an AI seat whose faction
     // has no ai.json (SimConfig.Validate would throw), is refused with a warning like any bad flag value; the match still starts.

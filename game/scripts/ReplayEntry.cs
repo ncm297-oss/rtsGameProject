@@ -14,4 +14,7 @@ public sealed record ReplayEntry(string Path, DateTime When, ulong Seed, Immutab
 {
     /// <summary>M6-V17: the header's starting-resources preset id (format 8's <c>starting-resources</c> line; <c>standard</c> before format 8).</summary>
     public string StartingResources { get; init; } = Rts.Sim.Data.StartingResourcesDef.StandardId;
+
+    /// <summary>M6-V18: the header's map file id (format 9's <c>map</c> line); "" for a generated map (formats 8 and older).</summary>
+    public string MapId { get; init; } = "";
 }

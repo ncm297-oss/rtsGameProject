@@ -140,7 +140,8 @@ public static class ReplayStore
     /// The list entry of the replay at <paramref name="path"/> from its header alone (BUG-0830: the list no longer reads whole
     /// files): the lines <c>rts-replay</c> (a format this build reads) through <c>ticks</c> in the writer's order, the seat
     /// lines of format 5 on (format 7's with the team as a fifth token, 0-8; M6-V16), format 8's <c>combat</c> and
-    /// <c>starting-resources</c> lines right after <c>ticks</c> (M6-V17; whatever follows them is not read), and a last line that is a <c>checksum</c> line (a cut file has none). The commands, checkpoints and
+    /// <c>starting-resources</c> lines right after <c>ticks</c> (M6-V17), format 9's <c>map</c> line after them (M6-V18; whatever
+    /// follows it is not read), and a last line that is a <c>checksum</c> line (a cut file has none). The commands, checkpoints and
     /// the checksum itself are checked when the replay is watched (<see cref="ReplayFormat.TryReadFile"/>), so a file damaged past
     /// its header is listed and then refused. False for anything else, and for a file that can't be opened.
     /// </summary>
@@ -191,7 +192,11 @@ public static class ReplayStore
                 string preset = StartingResourcesDef.StandardId;
                 if (version >= FirstPresetVersion && (!Fields(reader, "combat", out _) || !Fields(reader, "starting-resources", out preset) || !IsPresetToken(preset)))
                     return false;
-                entry = new ReplayEntry(path, DateOf(path), seed, seats, ticks) { StartingResources = preset };
+                // M6-V18: format 9 (M6-S7) writes `map <id>` right after `starting-resources`; before it, a generated map.
+                string mapId = "";
+                if (version >= FirstMapVersion && (!Fields(reader, "map", out mapId) || !IsMapToken(mapId)))
+                    return false;
+                entry = new ReplayEntry(path, DateOf(path), seed, seats, ticks) { StartingResources = preset, MapId = mapId };
                 return true;
             }
             return false;
@@ -204,6 +209,14 @@ public static class ReplayStore
 
     /// <summary>The first replay format whose header names the starting-resources preset (M6-S6).</summary>
     public const int FirstPresetVersion = 8;
+
+    /// <summary>The first replay format whose header names a map file (M6-S7: only a match on one is written as format 9).</summary>
+    public const int FirstMapVersion = 9;
+
+    // A format-9 map id: one token (no space, not "-") of at most DataLimits.MaxMapIdLength characters; whether the data has it
+    // is the full read's and the playback's check (Load Game shows an unknown id as it is).
+    private static bool IsMapToken(string id) =>
+        id.Length > 0 && id.Length <= DataLimits.MaxMapIdLength && id.IndexOf(' ') < 0 && id != "-";
 
     // A format-8 preset id: one token (no space) of at most DataLimits.MaxStartingResourcesIdLength characters; whether the data
     // has it is the full read's check (Load Game shows an unknown id as it is).

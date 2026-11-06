@@ -51,4 +51,6 @@ public enum LoadText
     SeatTeam,
     /// <summary>M6-V17: the players cell of a save or replay at a starting-resources preset other than Standard, a format naming <c>{0}</c> (the seats) and <c>{1}</c> (the preset's <c>displayName</c>).</summary>
     Preset,
+    /// <summary>M6-V18: the players cell of a save or replay on a map file, a format naming <c>{0}</c> (the seats, with the preset if any) and <c>{1}</c> (the map's <c>displayName</c>).</summary>
+    Map,
 }

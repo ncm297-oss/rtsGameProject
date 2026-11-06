@@ -19,7 +19,9 @@ namespace Rts.Game;
 /// <see cref="MapGenParams.MaxResourceGroups"/>). M6-V16: a team list per slot (None, Team 1 to <see cref="LaunchOptions.MaxTeam"/>;
 /// default None, the free-for-all; slots on one team are allies), passed as <c>--team</c>. M6-V17: a starting-resources list (the
 /// <c>rules.json</c> <c>startingResources</c> presets in file order, by <c>displayName</c>, the <c>description</c> as the
-/// tooltip; default <c>standard</c>), passed as <c>--resources</c>. Text from <c>ui.json</c> <c>setup</c> (the colours' names
+/// tooltip; default <c>standard</c>), passed as <c>--resources</c>. M6-V18: a map list (Generated, then <c>GameData.Maps</c> in data
+/// order by <c>displayName</c>, the <c>description</c> as the tooltip), passed as <c>--map</c>: a map file greys Map size,
+/// Forests and Gold mines (they don't apply) and caps the slots at its start locations, with a line saying so. Text from <c>ui.json</c> <c>setup</c> (the colours' names
 /// and swatches from its colour table), faction and preset names from the data's <c>displayName</c>.
 /// </summary>
 /// <remarks>
@@ -75,6 +77,13 @@ public partial class SkirmishSetup : CanvasLayer
     public const float OneTeamRoom = 300f;
 
     private string[] _presetKeys = Array.Empty<string>();
+
+    // M6-V18: the data the map list's items index (item i > 0 is GameData.Maps[i - 1]) and the text for its line; the map
+    // size list's pick and the slot count from before a map file was picked, given back when Generated is picked again (-1:
+    // nothing to give back).
+    private GameData? _data;
+    private UiText? _ui;
+    private int _sizeBeforeMap = -1, _slotsBeforeMap = -1;
 
     private readonly RandomNumberGenerator _rng = new();
     private int _startMines;
@@ -182,6 +191,94 @@ public partial class SkirmishSetup : CanvasLayer
         return true;
     }
 
+    /// <summary>
+    /// The map list (M6-V18): item 0 Generated (<c>setup.map_generated</c>: the map generator on the seed, the size and the
+    /// counts), then one item per <c>GameData.Maps</c> entry in data order, its <c>displayName</c> shown and its
+    /// <c>description</c> as the item's and (for the picked one) the list's tooltip; default Generated.
+    /// </summary>
+    public OptionButton MapOption { get; private set; } = null!;
+
+    /// <summary>The picked map file (M6-V18), or null for Generated.</summary>
+    public MapDef? MapPick
+    {
+        get
+        {
+            int i = MapOption.Selected - 1;
+            return _data != null && i >= 0 && i < _data.Maps.Length ? _data.Maps[i] : null;
+        }
+    }
+
+    /// <summary>The line right of Remove player while a map file is picked (<c>setup.map_players</c>: its name and start locations, M6-V18).</summary>
+    public Label MapPlayersLabel { get; private set; } = null!;
+
+    /// <summary>The most slots the setup shows now (M6-V18): the picked map file's start locations, else <see cref="MaxSlots"/>.</summary>
+    public int SlotCap => MapPick is MapDef map ? Math.Clamp(map.Players, LaunchOptions.MinPlayers, MaxSlots) : MaxSlots;
+
+    /// <summary>
+    /// Picks the map with data id <paramref name="id"/> in the list, or Generated for "" (as a click on its item); false
+    /// (nothing changed) for an id the list lacks.
+    /// </summary>
+    public bool PickMap(string id)
+    {
+        int item = 0;
+        if (id.Length > 0)
+        {
+            int m = _data?.FindMap(id) ?? -1;
+            if (m < 0) return false;
+            item = m + 1;
+        }
+        MapOption.Select(item);
+        ApplyMap();
+        return true;
+    }
+
+    // A pick in the map list: a map file greys the generator's rows (the size list showing its side) and caps the slots;
+    // Generated gives back the size and the slots from before.
+    private void ApplyMap()
+    {
+        int i = MapOption.Selected;
+        MapOption.TooltipText = i >= 0 && i < MapOption.ItemCount ? MapOption.GetItemTooltip(i) : "";
+        MapDef? map = MapPick;
+        bool file = map != null;
+        if (map != null)
+        {
+            if (_sizeBeforeMap < 0) _sizeBeforeMap = MapSizeOption.Selected;
+            int size = Array.IndexOf(LaunchOptions.MapSizes, map.Size);
+            if (size >= 0) MapSizeOption.Select(size);
+            if (SlotCount > SlotCap)
+            {
+                if (_slotsBeforeMap < 0) _slotsBeforeMap = SlotCount;
+                while (SlotCount > SlotCap) HideLastSlot();
+            }
+            MapPlayersLabel.Text = _ui?.MapPlayersLine(map.DisplayName, map.Players) ?? "";
+        }
+        else
+        {
+            if (_sizeBeforeMap >= 0) MapSizeOption.Select(_sizeBeforeMap);
+            _sizeBeforeMap = -1;
+            while (SlotCount < _slotsBeforeMap && SlotCount < MaxSlots) ShowNextSlot();
+            _slotsBeforeMap = -1;
+        }
+        MapSizeOption.Disabled = file;
+        SetEditable(ForestsSpin, !file);
+        SetEditable(MinesSpin, !file);
+        MapPlayersLabel.Visible = file;
+        GreyTakenColours();
+        UpdateSlotButtons();
+        Validate();
+    }
+
+    // A greyed count takes no typing, no arrows and no focus (M6-V18: the keyboard can't change it either).
+    private static void SetEditable(SpinBox spin, bool editable)
+    {
+        spin.Editable = editable;
+        spin.FocusMode = editable ? Control.FocusModeEnum.All : Control.FocusModeEnum.None;
+        LineEdit edit = spin.GetLineEdit();
+        edit.Editable = editable;
+        edit.FocusMode = editable ? Control.FocusModeEnum.All : Control.FocusModeEnum.None;
+        if (!editable && edit.HasFocus()) edit.ReleaseFocus();
+    }
+
     /// <summary>The forests count (M6-V15): <see cref="MinForestsFor"/> the shown slots to <see cref="MapGenParams.MaxResourceGroups"/>.</summary>
     public SpinBox ForestsSpin { get; private set; } = null!;
 
@@ -223,10 +320,8 @@ public partial class SkirmishSetup : CanvasLayer
     /// <summary>Shows one more slot (an AI slot), up to <see cref="MaxSlots"/>; its colour moves to the first free one if a shown slot holds it.</summary>
     public void AddSlot()
     {
-        if (SlotCount >= MaxSlots) return;
-        int slot = SlotCount++;
-        foreach (Control cell in _rows[slot]) cell.Visible = true;
-        PickColour(slot, ColourPick(slot));
+        if (SlotCount >= SlotCap) return; // M6-V18: a map file takes no more players than its start locations
+        ShowNextSlot();
         UpdateSlotButtons();
         Validate();
     }
@@ -235,11 +330,25 @@ public partial class SkirmishSetup : CanvasLayer
     public void RemoveSlot()
     {
         if (SlotCount <= LaunchOptions.MinPlayers) return;
-        int slot = --SlotCount;
-        foreach (Control cell in _rows[slot]) cell.Visible = false;
+        HideLastSlot();
+        _slotsBeforeMap = -1; // M6-V18: the player chose fewer slots; Generated doesn't give the old count back
         GreyTakenColours();
         UpdateSlotButtons();
         Validate();
+    }
+
+    // Shows the next slot; its colour moves to the first free one if a shown slot holds it.
+    private void ShowNextSlot()
+    {
+        int slot = SlotCount++;
+        foreach (Control cell in _rows[slot]) cell.Visible = true;
+        PickColour(slot, ColourPick(slot));
+    }
+
+    private void HideLastSlot()
+    {
+        int slot = --SlotCount;
+        foreach (Control cell in _rows[slot]) cell.Visible = false;
     }
 
     // Marks the colours the shown slots other than `slot` hold.
@@ -264,7 +373,7 @@ public partial class SkirmishSetup : CanvasLayer
 
     private void UpdateSlotButtons()
     {
-        AddSlotButton.Disabled = SlotCount >= MaxSlots;
+        AddSlotButton.Disabled = SlotCount >= SlotCap;
         RemoveSlotButton.Disabled = SlotCount <= LaunchOptions.MinPlayers;
         // M6-V15: the resource counts' floors follow the shown slots (one start forest and the start mines a base); a count
         // under a raised floor is raised to it, a count kept over a lowered one stays.
@@ -293,7 +402,9 @@ public partial class SkirmishSetup : CanvasLayer
     /// factions loaded) passes no <c>--faction</c>. M6-V15: <c>--speed &lt;x&gt; --forests &lt;n&gt; --mines &lt;n&gt;</c> after
     /// <c>--players</c> (the speed list's and the two counts' picks). M6-V16: <c>--team &lt;slot&gt; &lt;n&gt;</c> after the slot's
     /// colour and faction, only for a slot on a team (None passes nothing: team 0 is the default). M6-V17: <c>--resources &lt;id&gt;</c>
-    /// after the counts, only for a preset other than <c>standard</c> (the default).
+    /// after the counts, only for a preset other than <c>standard</c> (the default). M6-V18: <c>--map &lt;id&gt;</c> after that, only
+    /// for a map file (Generated passes nothing, so a generated match's args are as before); <c>--map-size</c> is then the map's
+    /// side and the two counts, passed as shown, are unused.
     /// </summary>
     public string[]? MatchArgs()
     {
@@ -313,6 +424,11 @@ public partial class SkirmishSetup : CanvasLayer
         {
             args.Add("--resources");
             args.Add(ResourcesPick);
+        }
+        if (MapPick is MapDef map)
+        {
+            args.Add("--map");
+            args.Add(map.Key);
         }
         for (int slot = 0; slot < SlotCount; slot++)
         {
@@ -345,6 +461,8 @@ public partial class SkirmishSetup : CanvasLayer
     public void Build(UiText ui, GameData data)
     {
         _rng.Randomize();
+        _data = data;
+        _ui = ui;
         AddChild(ShellUi.Backdrop(new Color(0.09f, 0.08f, 0.07f)));
         // M6-V17: 16 / 10 px spacing (was 20 / 12): the starting-resources row is one more, and four slots must still fit 648 px.
         VBoxContainer column = ShellUi.CentredColumn(this, 16);
@@ -366,20 +484,26 @@ public partial class SkirmishSetup : CanvasLayer
         grid.AddChild(new Control());
         grid.AddChild(new Control());
 
+        // M6-V18: the map list, the map size beside it (no row added: four slots must still fit 648 px).
+        grid.AddChild(ShellUi.Text(ui.Setup(SetupText.Map)));
+        MapOption = List("Map");
+        MapOption.AddItem(ui.Setup(SetupText.MapGenerated));
+        for (int m = 0; m < data.Maps.Length; m++)
+        {
+            MapOption.AddItem(data.Maps[m].DisplayName);
+            MapOption.SetItemTooltip(m + 1, data.Maps[m].Description);
+        }
+        MapOption.Select(0);
+        grid.AddChild(MapOption);
         grid.AddChild(ShellUi.Text(ui.Setup(SetupText.MapSize)));
         MapSizeOption = List("MapSize");
         foreach (int size in LaunchOptions.MapSizes) MapSizeOption.AddItem(ui.MapSizeItem(size));
         MapSizeOption.Select(0);
         grid.AddChild(MapSizeOption);
-        // M6-V15: the game speed beside the map size, the generator's two counts on a row of their own.
-        grid.AddChild(ShellUi.Text(ui.Setup(SetupText.Speed)));
-        SpeedOption = List("Speed");
-        foreach (SetupText key in SpeedKeys) SpeedOption.AddItem(ui.Setup(key));
-        SpeedOption.Select(DefaultSpeedIndex);
-        grid.AddChild(SpeedOption);
         grid.AddChild(new Control());
 
-        // M6-V17: the starting-resources presets on a row of their own under the map size and the game speed.
+        // M6-V17: the starting-resources presets on a row of their own; M6-V18: the game speed beside them (M6-V15 put it
+        // beside the map size, which now shares the map list's row), the generator's two counts on the row under them.
         grid.AddChild(ShellUi.Text(ui.Setup(SetupText.StartingResources)));
         ResourcesOption = List("Resources");
         ImmutableArray<StartingResourcesDef> presets = data.Rules.StartingResources;
@@ -395,8 +519,11 @@ public partial class SkirmishSetup : CanvasLayer
         ResourcesOption.ItemSelected += _ => ShowPresetTooltip();
         ShowPresetTooltip();
         grid.AddChild(ResourcesOption);
-        grid.AddChild(new Control());
-        grid.AddChild(new Control());
+        grid.AddChild(ShellUi.Text(ui.Setup(SetupText.Speed)));
+        SpeedOption = List("Speed");
+        foreach (SetupText key in SpeedKeys) SpeedOption.AddItem(ui.Setup(key));
+        SpeedOption.Select(DefaultSpeedIndex);
+        grid.AddChild(SpeedOption);
         grid.AddChild(new Control());
 
         _startMines = data.Rules.StartMineCount;
@@ -458,12 +585,24 @@ public partial class SkirmishSetup : CanvasLayer
         var slotButtons = new HBoxContainer { Name = "SlotButtons", Alignment = BoxContainer.AlignmentMode.Center };
         slotButtons.AddThemeConstantOverride("separation", 24);
         column.AddChild(slotButtons);
+        // M6-V18: as BUG-1066's line beside Start, the map's players line sits in a holder of fixed width right of Remove
+        // player and an empty spacer as wide is left of Add player, so the buttons stay centred and the row is no taller.
+        slotButtons.AddChild(new Control { Name = "MapPlayersSpacer", CustomMinimumSize = new Vector2(OneTeamRoom, 0f), MouseFilter = Control.MouseFilterEnum.Ignore });
         AddSlotButton = ShellUi.Button("AddSlot", ui.Setup(SetupText.AddSlot), 220f);
         AddSlotButton.Pressed += AddSlot;
         slotButtons.AddChild(AddSlotButton);
         RemoveSlotButton = ShellUi.Button("RemoveSlot", ui.Setup(SetupText.RemoveSlot), 220f);
         RemoveSlotButton.Pressed += RemoveSlot;
         slotButtons.AddChild(RemoveSlotButton);
+        var mapPlayersRoom = new Control { Name = "MapPlayersRoom", CustomMinimumSize = new Vector2(OneTeamRoom, 0f), MouseFilter = Control.MouseFilterEnum.Ignore };
+        slotButtons.AddChild(mapPlayersRoom);
+        MapPlayersLabel = ShellUi.Text("", 16);
+        MapPlayersLabel.Name = "MapPlayers";
+        MapPlayersLabel.AutowrapMode = TextServer.AutowrapMode.WordSmart;
+        MapPlayersLabel.SetAnchorsPreset(Control.LayoutPreset.FullRect);
+        MapPlayersLabel.Visible = false;
+        mapPlayersRoom.AddChild(MapPlayersLabel);
+        MapOption.ItemSelected += _ => ApplyMap();
 
         var buttons = new HBoxContainer { Name = "Buttons", Alignment = BoxContainer.AlignmentMode.Center };
         buttons.AddThemeConstantOverride("separation", 24);
@@ -511,7 +650,7 @@ public partial class SkirmishSetup : CanvasLayer
     private void Validate()
     {
         bool oneTeam = OneTeam;
-        StartButton.Disabled = Seed == null || oneTeam;
+        StartButton.Disabled = Seed == null || oneTeam || SlotCount > SlotCap;
         OneTeamLabel.Visible = oneTeam;
     }
 

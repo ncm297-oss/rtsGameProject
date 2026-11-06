@@ -117,7 +117,10 @@
     "team_none": "None",
     "team_item": "Team {0}",
     "one_team": "Everyone is on one team: put a player on another team or None",
-    "starting_resources": "Starting resources"
+    "starting_resources": "Starting resources",
+    "map": "Map",
+    "map_generated": "Generated",
+    "map_players": "{0} has room for {1} players"
   },
   "pause": {
     "title": "Paused",
@@ -223,7 +226,8 @@
     "save_tag": "Save",
     "replay_tag": "Replay",
     "seat_team": "{0} (T{1})",
-    "preset": "{0}; starting resources: {1}"
+    "preset": "{0}; starting resources: {1}",
+    "map": "{0}; map: {1}"
   },
   "alert": {
     "base_under_attack": "Your base is under attack",

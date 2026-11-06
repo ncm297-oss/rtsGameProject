@@ -14,4 +14,7 @@ public sealed record SaveEntry(string Path, DateTime When, ulong Seed, Immutable
 {
     /// <summary>M6-V17: the header's starting-resources preset id (<see cref="Rts.Sim.ViewApi.SaveSummary.StartingResources"/>: <c>standard</c> before format 4, "" when a format-4 header is cut before it).</summary>
     public string StartingResources { get; init; } = Rts.Sim.Data.StartingResourcesDef.StandardId;
+
+    /// <summary>M6-V18: the header's map file id (<see cref="Rts.Sim.ViewApi.SaveSummary.MapId"/>: format 5's; "" for a generated map or a header cut before it).</summary>
+    public string MapId { get; init; } = "";
 }

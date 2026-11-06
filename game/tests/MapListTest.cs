@@ -1,0 +1,332 @@
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
+using System.Threading.Tasks;
+using Godot;
+using Rts.Sim;
+using Rts.Sim.Data;
+using Rts.Sim.Map;
+
+namespace Rts.Game.Tests;
+
+/// <summary>
+/// M6-V18: the skirmish setup's Map list and the <c>--map</c> flag, through the shell (<c>Main.tscn</c>).
+/// <list type="bullet">
+/// <item>The list: item 0 <c>setup.map_generated</c>, then one item per <c>GameData.Maps</c> entry in data order, its text the
+/// map's <c>displayName</c> and its tooltip its <c>description</c> (from the data, no map name in C#); the label <c>setup.map</c>;
+/// default Generated, whose args carry no <c>--map</c>.</item>
+/// <item>A pick: <see cref="SkirmishSetup.MatchArgs"/> adds <c>--map &lt;id&gt;</c> and the map's side as <c>--map-size</c>; Map
+/// size, Forests and Gold mines greyed (no typing, no focus); the slots capped at the map's start locations (four shown
+/// become the map's, Add player disabled and a no-op), the <c>setup.map_players</c> line shown; Generated gives back the
+/// size, the slot count and the rows. The four-slot setup still fits 1152 x 648 with 8 px under Start, and showing the
+/// map's line moves no button.</item>
+/// <item>The start: Skirmish → Map → the map → Start plays it (<c>World.Config.MapId</c>, the side, a Town Hall on each of the
+/// file's starts, on level 0); the start line names the map file and no shortfall line is printed.</item>
+/// <item>The flag: <c>--map &lt;id&gt;</c> read; junk (missing, empty, 65 characters, upper case, a dash, path separators,
+/// unicode, a flag) warned and ignored; an id the data lacks plays a generated map; <c>--players 4</c> on a two-start map is
+/// capped at 2 with a warning.</item>
+/// </list>
+/// </summary>
+/// <remarks>
+/// Headless: <c>&amp; $env:GODOT --headless --path game res://tests/MapListTest.tscn</c>; prints "MAP LIST TEST PASS" or "MAP
+/// LIST TEST FAIL: ..." lines. Per-process folders under <c>user://</c> (BUG-0770's rule), removed at the end. Windowed with
+/// <c>-- --shots &lt;dir&gt;</c> it saves the setup with the map picked.
+/// </remarks>
+public partial class MapListTest : Node
+{
+    /// <summary>Game time each frame advances (<see cref="SimRunner.FixedFrameDelta"/>): five ticks.</summary>
+    public const double FrameSeconds = 0.25;
+
+    private readonly List<string> _failures = new();
+    private GameData _data = null!;
+    private UiText _ui = null!;
+    private string _root = "";
+    private string? _shots;
+    private MapDef _map = null!;
+
+    public override async void _Ready()
+    {
+        ProcessMode = ProcessModeEnum.Always; // the shell pauses the tree
+        try
+        {
+            GetTree().Root.Size = new Vector2I(1152, 648);
+            string[] args = OS.GetCmdlineUserArgs();
+            for (int i = 0; i + 1 < args.Length; i++) if (args[i] == "--shots") _shots = args[i + 1];
+            await Frames(1);
+            DataLoadResult loaded = DataLoader.LoadAll(ProjectSettings.GlobalizePath("res://data"));
+            if (!loaded.Ok) throw new InvalidOperationException("data failed to load");
+            _data = loaded.Data!;
+            _ui = UiText.Shared ?? throw new InvalidOperationException("ui.json failed to load");
+            // The rows below need a map file with fewer starts than the setup's slots (the shipped Raraku: 2).
+            _map = _data.Maps.FirstOrDefault(m => m.Players < SkirmishSetup.MaxSlots) ?? throw new InvalidOperationException("no map file with fewer than 4 starts");
+            _root = Path.GetFullPath(ProjectSettings.GlobalizePath($"user://map-list-test-{OS.GetProcessId()}"));
+            if (Directory.Exists(_root)) Directory.Delete(_root, true);
+            Directory.CreateDirectory(Path.Combine(_root, "replays"));
+            Directory.CreateDirectory(Path.Combine(_root, "saves"));
+            Flags();
+            Main main = NewMain();
+            AddChild(main);
+            await Frames(2);
+            try
+            {
+                await SetupList(main);
+                await SetupStart(main);
+                await FlagMatches(main);
+            }
+            finally
+            {
+                if (main.CurrentMatch != null) main.QuitToMenu();
+                RemoveChild(main);
+                main.QueueFree();
+                await Frames(2);
+            }
+            try { Directory.Delete(_root, true); } catch (IOException) { } catch (UnauthorizedAccessException) { }
+        }
+        catch (Exception ex)
+        {
+            _failures.Add($"exception: {ex}");
+        }
+        if (GetTree().Paused) GetTree().Paused = false;
+        foreach (string f in _failures.Take(60)) GD.Print($"MAP LIST TEST FAIL: {f}");
+        if (_failures.Count == 0) GD.Print("MAP LIST TEST PASS");
+        SceneExit.Quit(this, _failures.Count == 0 ? 0 : 1);
+    }
+
+    // ---- the command line ----
+
+    private void Flags()
+    {
+        Check(LaunchOptions.MatchFlags.Contains("--map") && LaunchOptions.HasMatchFlag(new[] { "--map", _map.Key }), "--map is no match flag");
+        Check(LaunchOptions.Parse(Array.Empty<string>()).MapId == null, "no --map: a map picked");
+        Check(LaunchOptions.Parse(new[] { "--map", _map.Key }).MapId == _map.Key, $"--map {_map.Key} not read");
+        Check(LaunchOptions.Parse(new[] { "--map", new string('a', DataLimits.MaxMapIdLength) }).MapId?.Length == DataLimits.MaxMapIdLength, "a 64-character id refused");
+        string[][] junk =
+        {
+            new[] { "--map" }, new[] { "--map", "" }, new[] { "--map", new string('a', DataLimits.MaxMapIdLength + 1) },
+            new[] { "--map", "Raraku" }, new[] { "--map", "ra-raku" }, new[] { "--map", "ra raku" }, new[] { "--map", "../raraku" },
+            new[] { "--map", "maps/raraku" }, new[] { "--map", "maps\\raraku" }, new[] { "--map", "rarakü" }, new[] { "--map", "-" },
+            new[] { "--map", "--seed", "4" }, new[] { "--map", "raraku.json" },
+        };
+        foreach (string[] j in junk)
+        {
+            LaunchOptions o = LaunchOptions.Parse(j);
+            Check(o.MapId == null, $"--map junk [{string.Join(' ', j)}] read as '{o.MapId}'");
+        }
+        Check(LaunchOptions.Parse(new[] { "--map", "--seed", "4" }).Seed == 4, "--map swallowed the next flag");
+        Check(LaunchOptions.Parse(new[] { "--map", "no_such_map", "--map", _map.Key }).MapId == _map.Key, "the last --map does not win");
+        // The data's check: an id it lacks is a generated map.
+        Check(Match.MapFor(_data, null) == null && Match.MapFor(_data, "") == null && Match.MapFor(_data, "no_such_map") == null
+            && Match.MapFor(_data, _map.Key) == _map, "Match.MapFor");
+    }
+
+    // ---- the setup's list ----
+
+    private async Task SetupList(Main main)
+    {
+        main.ShowSetup();
+        await Frames(2);
+        SkirmishSetup setup = main.Setup!;
+        OptionButton list = setup.MapOption;
+        string[] items = Enumerable.Range(0, list.ItemCount).Select(list.GetItemText).ToArray();
+        string[] tips = Enumerable.Range(0, list.ItemCount).Select(list.GetItemTooltip).ToArray();
+        string[] wantItems = new[] { _ui.Setup(SetupText.MapGenerated) }.Concat(_data.Maps.Select(m => m.DisplayName)).ToArray();
+        string[] wantTips = new[] { "" }.Concat(_data.Maps.Select(m => m.Description)).ToArray();
+        Check(items.SequenceEqual(wantItems) && tips.SequenceEqual(wantTips) && items.All(t => t.Length > 0) && tips.Skip(1).All(t => t.Length > 0),
+            $"map items [{string.Join("|", items)}] (want [{string.Join("|", wantItems)}]), tooltips [{string.Join("|", tips)}]");
+        Check(list.Selected == 0 && setup.MapPick == null && list.TooltipText == "", $"default pick {list.Selected}, tooltip '{list.TooltipText}'");
+        Check(_ui.Setup(SetupText.Map).Length > 0 && Labels(setup).Contains(_ui.Setup(SetupText.Map)), "the list's label is not ui.json's setup.map");
+        string[] plain = setup.MatchArgs()!;
+        Check(!plain.Contains("--map") && LaunchOptions.Parse(plain).MapId == null, $"Generated passes --map: {string.Join(' ', plain)}");
+        Check(!setup.MapSizeOption.Disabled && setup.ForestsSpin.Editable && setup.MinesSpin.Editable && !setup.MapPlayersLabel.Visible, "Generated greys a row or shows the map line");
+
+        // Four slots and a 192 map on Generated, then each map file picked as a click on its item.
+        for (int k = 0; k < SkirmishSetup.MaxSlots; k++) setup.AddSlot(); // bounded: a no-op on a capped map
+        setup.MapSizeOption.Select(Array.IndexOf(LaunchOptions.MapSizes, 192));
+        await Frames(2);
+        Rect2 add = setup.AddSlotButton.GetGlobalRect(), remove = setup.RemoveSlotButton.GetGlobalRect();
+        Rect2 start4 = setup.StartButton.GetGlobalRect();
+        Rect2 view = GetViewport().GetVisibleRect();
+        Check(start4.End.Y <= view.End.Y - 8f, $"Start {start4} is within 8 px of the window's bottom with four slots");
+        Check(view.Grow(0.5f).Encloses(list.GetGlobalRect()) && list.GetGlobalRect().End.Y <= setup.ResourcesOption.GetGlobalRect().Position.Y,
+            $"the map list {list.GetGlobalRect()} is off screen or not above the starting resources {setup.ResourcesOption.GetGlobalRect()}");
+        for (int i = 0; i < _data.Maps.Length; i++)
+        {
+            MapDef map = _data.Maps[i];
+            Click(list, i + 1);
+            string[] args = setup.MatchArgs()!;
+            LaunchOptions parsed = LaunchOptions.Parse(args);
+            int cap = Math.Min(map.Players, SkirmishSetup.MaxSlots);
+            Check(setup.MapPick?.Key == map.Key && parsed.MapId == map.Key && parsed.MapSize == map.Size && setup.MapSize == map.Size && list.TooltipText == map.Description,
+                $"item {i + 1} ({map.Key}): pick '{setup.MapPick?.Key}', args [{string.Join(' ', args)}], tooltip '{list.TooltipText}'");
+            Check(setup.MapSizeOption.Disabled && !setup.ForestsSpin.Editable && !setup.MinesSpin.Editable
+                && !setup.ForestsSpin.GetLineEdit().Editable && !setup.MinesSpin.GetLineEdit().Editable
+                && setup.ForestsSpin.GetLineEdit().FocusMode == Control.FocusModeEnum.None && setup.MinesSpin.GetLineEdit().FocusMode == Control.FocusModeEnum.None,
+                $"{map.Key}: the generator's rows are not greyed");
+            Check(setup.SlotCount == cap && setup.SlotCap == cap && parsed.Players == cap && setup.AddSlotButton.Disabled == (cap >= SkirmishSetup.MaxSlots || setup.SlotCount >= cap),
+                $"{map.Key}: {setup.SlotCount} slots shown (cap {setup.SlotCap}, want {cap}), --players {parsed.Players}, Add disabled {setup.AddSlotButton.Disabled}");
+            Check(setup.MapPlayersLabel.Visible && setup.MapPlayersLabel.Text == _ui.MapPlayersLine(map.DisplayName, map.Players) && setup.MapPlayersLabel.Text.Contains(map.DisplayName, StringComparison.Ordinal),
+                $"{map.Key}: the players line '{setup.MapPlayersLabel.Text}' (shown {setup.MapPlayersLabel.Visible})");
+        }
+
+        // The map with fewer starts: Add player does nothing; the line sits inside the window and moves no button.
+        Click(list, _map.Id + 1);
+        await Frames(2);
+        setup.AddSlot();
+        setup.AddSlotButton.EmitSignal(BaseButton.SignalName.Pressed);
+        Check(setup.SlotCount == _map.Players && setup.AddSlotButton.Disabled, $"Add player on {_map.Key}: {setup.SlotCount} slots");
+        Check(view.Grow(0.5f).Encloses(setup.MapPlayersLabel.GetGlobalRect()), $"the players line {setup.MapPlayersLabel.GetGlobalRect()} leaves the window");
+        Check(setup.AddSlotButton.GetGlobalRect().Position.X == add.Position.X && setup.RemoveSlotButton.GetGlobalRect().Position.X == remove.Position.X,
+            $"the slot buttons moved with the line: Add {setup.AddSlotButton.GetGlobalRect()} (was {add}), Remove {setup.RemoveSlotButton.GetGlobalRect()} (was {remove})");
+        Check(Mathf.Abs(add.GetCenter().X + remove.GetCenter().X - view.Size.X) <= 2f, $"Add {add} and Remove {remove} are not centred");
+        Check(!setup.StartButton.Disabled, "Start is disabled with a map picked");
+        await Shot("setup-map");
+
+        // Generated again: the 192 size, the four slots and the rows come back.
+        Click(list, 0);
+        await Frames(1);
+        Check(setup.MapPick == null && setup.SlotCount == SkirmishSetup.MaxSlots && setup.MapSize == 192 && !setup.MapSizeOption.Disabled
+            && setup.ForestsSpin.Editable && setup.MinesSpin.Editable && setup.ForestsSpin.GetLineEdit().Editable && setup.ForestsSpin.GetLineEdit().FocusMode == Control.FocusModeEnum.All
+            && !setup.MapPlayersLabel.Visible && setup.AddSlotButton.Disabled && list.TooltipText == "",
+            $"Generated again: {setup.SlotCount} slots, size {setup.MapSize}, size list disabled {setup.MapSizeOption.Disabled}, line {setup.MapPlayersLabel.Visible}");
+        string[] back = setup.MatchArgs()!;
+        Check(!back.Contains("--map") && LaunchOptions.Parse(back).Players == SkirmishSetup.MaxSlots && LaunchOptions.Parse(back).MapSize == 192,
+            $"Generated again passes [{string.Join(' ', back)}]");
+        // A slot removed while the map is picked: Generated keeps the player's count.
+        Click(list, _map.Id + 1);
+        Check(setup.SlotCount == _map.Players, "the cap again");
+        setup.RemoveSlot(); // at 2 already: nothing
+        Click(list, 0);
+        Check(setup.SlotCount == SkirmishSetup.MaxSlots, $"Generated after a no-op Remove: {setup.SlotCount} slots");
+        Check(setup.PickMap(_map.Key) && setup.MapPick?.Key == _map.Key && !setup.PickMap("no_such_map") && setup.MapPick?.Key == _map.Key && setup.PickMap("") && setup.MapPick == null, "PickMap");
+        setup.PickMap(""); // Generated, whatever the check found
+        while (setup.SlotCount > LaunchOptions.MinPlayers) setup.RemoveSlot();
+        setup.MapSizeOption.Select(0);
+        main.ShowMenu();
+        await Frames(1);
+    }
+
+    // ---- Skirmish -> Map -> the map -> Start ----
+
+    private async Task SetupStart(Main main)
+    {
+        main.ShowSetup();
+        await Frames(2);
+        SkirmishSetup setup = main.Setup!;
+        for (int k = 0; k < SkirmishSetup.MaxSlots; k++) setup.AddSlot(); // bounded: a no-op on a capped map
+        Click(setup.MapOption, _map.Id + 1);
+        setup.StartButton.EmitSignal(BaseButton.SignalName.Pressed);
+        Match? match = main.CurrentMatch;
+        if (!Check(match?.Simulation != null, "Start on the map started no match")) return;
+        Simulation sim = match!.Simulation!;
+        World w = sim.World;
+        Check(w.Config.MapId == _map.Key && w.Config.PlayerCount == _map.Players && w.NavGrid.Width == _map.Size && w.NavGrid.Height == _map.Size
+            && w.Config.Map == MapGenParams.Default with { Width = _map.Size, Height = _map.Size } && match.GetNode<SimRunner>("SimRunner").MapId == _map.Key,
+            $"the match plays map '{w.Config.MapId}' ({w.NavGrid.Width} x {w.NavGrid.Height}, {w.Config.PlayerCount} players, params {w.Config.Map})");
+        Check(match.StartLine.Contains($", map file {_map.Key},", StringComparison.Ordinal) && match.ShortfallLine == "",
+            $"the start line '{match.StartLine}', shortfall '{match.ShortfallLine}'");
+        var clock = System.Diagnostics.Stopwatch.StartNew();
+        while (sim.TickNumber < 5 && clock.Elapsed.TotalSeconds < 30) await Frames(1);
+        // A Town Hall on each of the file's starts, on level 0.
+        for (int p = 0; p < _map.Players; p++)
+        {
+            int start = _map.Starts[p], sx = start % _map.Size, sy = start / _map.Size;
+            bool onHall = false;
+            var b = w.Buildings;
+            for (int i = 0; i < b.Capacity; i++)
+            {
+                if (!b.Alive[i] || b.Owner[i] != p) continue;
+                BuildingDef def = _data.Buildings[b.TypeId[i]];
+                int ax = b.Cell[i] % w.NavGrid.Width, ay = b.Cell[i] / w.NavGrid.Width;
+                onHall |= sx >= ax && sx < ax + def.FootprintWidth && sy >= ay && sy < ay + def.FootprintHeight;
+            }
+            Check(onHall && w.Heightmap.LevelAt(sx, sy) == 0 && w.StartLocations[p].Cell == start, $"player {p}: no Town Hall on the start cell ({sx}, {sy}), level {w.Heightmap.LevelAt(sx, sy)}");
+            GD.Print($"  player {p}: start cell ({sx}, {sy})");
+        }
+        main.QuitToMenu();
+        await Frames(2);
+    }
+
+    // ---- the flag's matches ----
+
+    private async Task FlagMatches(Main main)
+    {
+        // --map <id>, with four players asked: capped at the map's starts, warned.
+        main.StartSkirmish(new[] { "--skirmish", "--players", "4", "--map-size", "256", "--forests", "40", "--seed", "3", "--mute", "--map", _map.Key });
+        Match? match = main.CurrentMatch;
+        if (Check(match?.Simulation != null, "--map started no match"))
+        {
+            World w = match!.Simulation!.World;
+            Check(w.Config.MapId == _map.Key && w.Config.PlayerCount == _map.Players && w.NavGrid.Width == _map.Size && match.MapPlayersWarning.Contains("--players", StringComparison.Ordinal),
+                $"--players 4 --map {_map.Key}: map '{w.Config.MapId}', {w.Config.PlayerCount} players, {w.NavGrid.Width} wide, warning '{match.MapPlayersWarning}'");
+            await QuitMatch(main);
+        }
+        // An id the data lacks, and junk: warned, a generated map, the start line as before (no map file named).
+        foreach (string[] args in new[]
+        {
+            new[] { "--seed", "3", "--units", "0", "--mute", "--map", "no_such_map" },
+            new[] { "--seed", "3", "--units", "0", "--mute", "--map", "" },
+            new[] { "--seed", "3", "--units", "0", "--mute", "--map", new string('r', DataLimits.MaxMapIdLength + 1) },
+        })
+        {
+            main.StartSkirmish(args);
+            match = main.CurrentMatch;
+            if (!Check(match?.Simulation != null, $"[{string.Join(' ', args)}] started no match")) continue;
+            World w = match!.Simulation!.World;
+            Check(w.Config.MapId == "" && w.NavGrid.Width == 128 && !match.StartLine.Contains("map file", StringComparison.Ordinal) && match.MapPlayersWarning == "",
+                $"[{string.Join(' ', args).Substring(0, Math.Min(60, string.Join(' ', args).Length))}]: map '{w.Config.MapId}', line '{match.StartLine}'");
+            await QuitMatch(main);
+        }
+    }
+
+    private static void Click(OptionButton list, int item)
+    {
+        list.Select(item);
+        list.EmitSignal(OptionButton.SignalName.ItemSelected, (long)item); // as a click on the item
+    }
+
+    private static List<string> Labels(Node root)
+    {
+        var texts = new List<string>();
+        foreach (Node n in root.FindChildren("*", nameof(Label), true, false)) texts.Add(((Label)n).Text);
+        return texts;
+    }
+
+    private async Task QuitMatch(Main main)
+    {
+        main.QuitToMenu();
+        await Frames(2);
+    }
+
+    private Main NewMain()
+    {
+        var main = GD.Load<PackedScene>("res://scenes/Main.tscn").Instantiate<Main>();
+        main.UserArgs = new[] { Main.NoConfineFlag };
+        main.SettingsPath = $"user://map-list-test-{OS.GetProcessId()}/settings.cfg"; // BUG-0770: never the player's file
+        main.ReplayDir = Path.Combine(_root, "replays");
+        main.SaveDir = Path.Combine(_root, "saves");
+        main.BeforeStart = m => m.GetNode<SimRunner>("SimRunner").FixedFrameDelta = FrameSeconds;
+        return main;
+    }
+
+    private async Task Frames(int n)
+    {
+        for (int i = 0; i < n; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+    }
+
+    // Windowed with `-- --shots <dir>`: the viewport as map-list-<name>.png.
+    private async Task Shot(string name)
+    {
+        if (_shots == null || DisplayServer.GetName() == "headless") return;
+        for (int i = 0; i < 3; i++) await ToSignal(RenderingServer.Singleton, RenderingServer.SignalName.FramePostDraw);
+        string path = $"{_shots}/map-list-{name}.png";
+        GetViewport().GetTexture().GetImage().SavePng(path);
+        GD.Print($"  screenshot {path}");
+    }
+
+    private bool Check(bool ok, string message)
+    {
+        if (!ok) _failures.Add(message);
+        return ok;
+    }
+}

@@ -38,7 +38,10 @@ namespace Rts.Game;
 /// slots on one team is warned about and dropped, so the match is a free-for-all, <see cref="OneTeamWarning"/>) and
 /// <c>--resources &lt;id&gt;</c> (the starting-resources preset with data id <c>id</c>, <c>rules.json</c> <c>startingResources</c>;
 /// default <c>standard</c>; an id the data lacks is warned about by <see cref="Match"/> and the match plays <c>standard</c>;
-/// M6-V17). A slot past
+/// M6-V17) and <c>--map &lt;id&gt;</c> (the hand-made map with data id <c>id</c>, <c>game/data/maps</c>; snake_case, at most
+/// <c>DataLimits.MaxMapIdLength</c> characters; default the generated map; an id the data lacks is warned about by
+/// <see cref="Match"/> and the match plays a generated map; on a map file <c>--map-size</c>, <c>--forests</c> and
+/// <c>--mines</c> don't apply and <c>--players</c> is capped at the map's start locations; M6-V18). A slot past
 /// the match's players is warned about and unused. Any of these flags
 /// on the command line skips the main menu (<see cref="HasMatchFlag"/>), so every dev and test run starts its match as
 /// before M6-V1. Bad values are warned about and ignored; a token starting with <c>--</c> is never taken as a value (BUG-0041).
@@ -74,7 +77,7 @@ public sealed class LaunchOptions
     {
         "--seed", "--speed", "--screenshot", "--screenshot-after", "--units", "--workers", "--forests", "--mines", "--zoom", "--bench",
         "--vsync", "--no-hud", "--debug-overlay", "--mute", "--no-bases", "--no-combat", "--no-fog", "--map-size", "--skirmish",
-        "--faction", "--ai", "--colour", "--players", "--team", "--resources",
+        "--faction", "--ai", "--colour", "--players", "--team", "--resources", "--map",
     };
 
     /// <summary>Whether <paramref name="args"/> holds any of <see cref="MatchFlags"/>: the boot then starts the match at once instead of showing the main menu (M6-V1).</summary>
@@ -113,6 +116,12 @@ public sealed class LaunchOptions
     /// <see cref="Match"/>'s check), or null for the default (<c>standard</c>).
     /// </summary>
     public string? StartingResources { get; private set; }
+
+    /// <summary>
+    /// M6-V18: the hand-made map's data id <c>--map &lt;id&gt;</c> named (snake_case, at most <c>DataLimits.MaxMapIdLength</c>
+    /// characters; whether the data has it is <see cref="Match"/>'s check), or null for a generated map (the default).
+    /// </summary>
+    public string? MapId { get; private set; }
 
     /// <summary>The dev-log warnings <see cref="Parse"/> gave for colour collisions (one per moved slot of the match), for tests.</summary>
     public System.Collections.Generic.IReadOnlyList<string> ColourWarnings => _colourWarnings;
@@ -328,6 +337,11 @@ public sealed class LaunchOptions
                 case "--resources":
                     // M6-V17: one value, a preset id (snake_case, at most the data's id length); Match checks the data has it.
                     if (value != null && IsId(value) && value.Length <= DataLimits.MaxStartingResourcesIdLength) o.StartingResources = value;
+                    else Warn(flag, value);
+                    break;
+                case "--map":
+                    // M6-V18: one value, a map id (snake_case, at most the data's id length); Match checks the data has it.
+                    if (value != null && IsId(value) && value.Length <= DataLimits.MaxMapIdLength) o.MapId = value;
                     else Warn(flag, value);
                     break;
                 case "--skirmish":
