@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S3 |
-| Status | open |
+| Status | fixed |
 | Found | 2026-11-06-0926, task M6-VH5 (QA, standard) |
 | System | view: skirmish setup, `SkirmishSetup.ApplyMap` / `AddSlot` (`_slotsBeforeMap`) |
-| Fixed by | |
+| Fixed by | M6-VH6 (commit 2733284, `SkirmishSetup.AddSlot` raises `_slotsBeforeMap`); regression: `QaVh5Test.SlotGiveBack` (hard `Check(afterAdd == 4)`), `MapListTest.MenuMaps` hand-sequence row, QA model fuzz `QaVh6Test.SlotFuzz`; all three fail on the pre-fix code (QA 2026-11-07-0236) |
 
 ## Repro
 1. `& $env:GODOT --headless --path game res://tests/QaVh5Test.tscn`: the log prints

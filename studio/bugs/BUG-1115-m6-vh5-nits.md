@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S4 |
-| Status | open |
+| Status | open (items 1-3 fixed in M6-VH6; item 4 left for the art pass) |
 | Found | 2026-11-06-0926, task M6-VH5 (QA, standard) |
 | System | docs/03; view: `game/scripts/TooltipWrap.cs`; Godot default tooltip style |
-| Fixed by | |
+| Fixed by | Items 1-3: M6-VH6 (commit 2733284); regression `TooltipWrapTest` edge rows, `QaVh5Test.WrapEdges` / `WrapFault`, `QaVh6Test.WrapEdges` / `WrapEdgeFuzz` (fail on the pre-fix wrap, QA 2026-11-07-0236). Item 4 open: no shell theme exists. Blank middle lines: BUG-1126 |
 
 ## Repro
 1. `awk 'NR==6820 {print length}' docs/03-technical-design.md` → 137. The task wrapped the `--map <id>` lines below it
