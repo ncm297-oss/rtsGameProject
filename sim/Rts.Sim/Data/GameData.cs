@@ -367,6 +367,7 @@ public sealed class GameData
         h.Add(r.GatherReach); // M6-S5, BUG-1045
         h.Add(r.ScoutReplacements); // M6-SH1, BUG-1052
         h.Add(r.SpendDownQueue); // M6-SH1, BUG-1051
+        h.Add(r.HuntMemoryTicks); // M5-4d
         h.Add(Ai.Length);
         foreach (AiDef a in Ai)
         {

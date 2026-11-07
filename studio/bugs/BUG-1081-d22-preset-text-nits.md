@@ -3,7 +3,7 @@
 | Field | Value |
 | --- | --- |
 | Severity | S4 |
-| Status | open (item 1 fixed by D23, 2026-11-05-2148; item 2 stays open, the view's) |
+| Status | fixed (item 1 D23 2026-11-05-2148; item 2 M6-VH5 2026-11-06-0926: `TooltipWrap.Wrap` pre-wraps every description tooltip at 60 characters, `TooltipWrapTest` + QA's `QaVh5Test` fuzz; closed by the Producer) |
 | Found | 2026-11-05-1716, task D22 (QA, light) |
 | System | sim/Rts.Sim.Tests/Content/StartingResourcesContentTests.cs; game/data/common/rules.json `startingResources[*].description` |
 | Fixed by | item 1: D23 (`Content/FactionWords`, shared with `Content/MapTextContentTests`; `StartingResourcesContentTests.ProperNames_HoldTheBareFactionWords` and the `AMutantDescription_IsCaught` rows "a Malazan quartermaster" / "a Whirlwind war chest") |
@@ -38,3 +38,12 @@ line.
 - D23 (2026-11-05-2148): item 1 fixed. `ProperNames` now starts from `FactionWords.All` (each faction id and the
   capitalised words of four letters or more of its display and bonus names, "Army" excepted as a generic word); the
   ratio words "fivefold" / "quintuple" / "a dozen" were not part of the fix's note and are not added.
+
+## QA verification (2026-11-06-0926, M6-VH5): item 2
+- Fixed, verified. `TooltipWrap.Wrap` (60 characters, breaks at spaces only) pre-wraps the Map and Starting resources item
+  tooltips, the stats screen's opening tooltips and the command card's description lines. Shipped text: Pale Hills 169 →
+  3 lines (longest 58), Raraku 180 → 4 (59), Vathar Crossing 151 → 3 (57), Standard 154 → 3 (60), High 164 → 3 (60); the
+  joined lines equal the data. QA's `QaVh5Test` fuzzes the helper (20,000 texts: length kept, only spaces become breaks,
+  no line with a space past the width, greedy). Windowed shot: Raraku's tooltip is a 4-line panel about 470 px wide at
+  1152 x 648 (the translucent default panel over the setup's labels is BUG-1115 item 4). Item 1 was fixed by D23, so the
+  Producer can close the bug.

@@ -278,7 +278,7 @@ public partial class AbilityViewTest : Node
         Check(_card.NameAt(0).Text == _def.DisplayName, $"seed {seed} card: name '{_card.NameAt(0).Text}', want '{_def.DisplayName}'");
         Check(_card.HintAt(0).Text == _card.GridKey(0) && _card.GridKey(0).Length > 0, $"seed {seed} card: hint '{_card.HintAt(0).Text}', grid key '{_card.GridKey(0)}'");
         string m = _ui.Hud(HudText.Meters), s = _ui.Hud(HudText.Seconds);
-        string tip = $"{_def.Description}\n{_ui.Hud(HudText.Range)} 16 {m}  {_ui.Hud(HudText.Radius)} 3 {m}  {_ui.Hud(HudText.Cooldown)} 25 {s}";
+        string tip = $"{TooltipWrap.Wrap(_def.Description)}\n{_ui.Hud(HudText.Range)} 16 {m}  {_ui.Hud(HudText.Radius)} 3 {m}  {_ui.Hud(HudText.Cooldown)} 25 {s}";
         Check(_card.ButtonAt(0).TooltipText == tip, $"seed {seed} card: tooltip '{_card.ButtonAt(0).TooltipText}', want '{tip}'");
         Check(_card.AbilitySecondsAt(0) == 0 && !_card.ButtonAt(0).Disabled && _card.CostAt(0).Text.Length == 0,
             $"seed {seed} card: ready button shows {_card.AbilitySecondsAt(0)} s, disabled {_card.ButtonAt(0).Disabled}, '{_card.CostAt(0).Text}'");
@@ -1504,7 +1504,7 @@ public partial class AbilityViewTest : Node
 
             // The card: both on the top row, the tooltip without a range.
             string m = _ui.Hud(HudText.Meters), s = _ui.Hud(HudText.Seconds);
-            string tip = $"{rallyDef.Description}\n{_ui.Hud(HudText.Radius)} 4 {m}  {_ui.Hud(HudText.Cooldown)} 10 {s}";
+            string tip = $"{TooltipWrap.Wrap(rallyDef.Description)}\n{_ui.Hud(HudText.Radius)} 4 {m}  {_ui.Hud(HudText.Cooldown)} 10 {s}";
             Check(_card.AbilityAt(0) == rally && _card.AbilityAt(1) == zone && _card.ButtonAt(0).TooltipText == tip,
                 $"seed {seed} aura card: cells {_card.AbilityAt(0)} {_card.AbilityAt(1)}, tooltip '{_card.ButtonAt(0).TooltipText}', want '{tip}'");
 
@@ -1717,7 +1717,7 @@ public partial class AbilityViewTest : Node
             await Select(lead, second);
 
             // The card: the summon on W, its tooltip without a range or a radius (a summon has neither).
-            string tip = $"{def.Description}\n{_ui.Hud(HudText.Cooldown)} 10 {_ui.Hud(HudText.Seconds)}";
+            string tip = $"{TooltipWrap.Wrap(def.Description)}\n{_ui.Hud(HudText.Cooldown)} 10 {_ui.Hud(HudText.Seconds)}";
             Check(_card.AbilityAt(1) == summon && _card.GridKey(1) == "W" && _card.ButtonAt(1).TooltipText == tip,
                 $"seed {seed} summon card: cell 1 {_card.AbilityAt(1)} key '{_card.GridKey(1)}', tooltip '{_card.ButtonAt(1).TooltipText}', want '{tip}'");
 

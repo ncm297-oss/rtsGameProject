@@ -3,7 +3,7 @@
 | Field | Value |
 | --- | --- |
 | Severity | S4 |
-| Status | open |
+| Status | fixed / closed by the Producer (2026-11-06-0926): item 1 was fixed in M6-V2 (`ui.json` `setup.map_size_item`, re-verified by M6-VH5's QA); item 2 settled by M5-4a's mirrored start locations and M6-S8's hand-made 256 maps; item 3 a process note long answered |
 | Found | 2026-10-11-0634, task M6-V1 (QA) |
 | System | view: skirmish setup (`SkirmishSetup.cs`), `--map-size`; studio process |
 | Fixed by | |
@@ -36,3 +36,10 @@
 - The CS8602 warning in `game/tests/QaShellTest.cs` (the brief's "item 4"): fixed, verified. `dotnet build RtsGame.sln
   --no-incremental` reports 0 warnings, on the worktree and on a fresh clone.
 - Items 2 and 3 are unchanged, so the bug stays open.
+
+## QA note (2026-11-06-0926, M6-VH5)
+- Item 1 re-checked on the three-map tree: `SkirmishSetup.Build` adds `ui.MapSizeItem(size)` (`setup.map_size_item`); no
+  player-facing string literal in `SkirmishSetup.cs` (every remaining literal is a node name or a command-line flag).
+- Item 2 (a generated 256 is a bigger empty field) was not re-checked; the hand-made 256 maps (Pale Hills / Vathar
+  Crossing) place their own starts, and generated start placement is the sim's. Item 3 was a process note answered long ago. The Producer
+  decides closure.

@@ -6816,14 +6816,16 @@ ui.json                            setup.map, setup.map_generated, setup.map_pla
   Add player is disabled; the line `setup.map_players` ("{0} has room for {1} players": the map's name and its starts) shows
   right of Remove player, in a 300 px holder with an empty spacer as wide left of Add player (BUG-1066's pattern), so the
   buttons don't move. Generated again gives back the map size picked before and the slot count the cap took away (unless the
-  player removed a slot meanwhile), and the rows. `MatchArgs` adds `--map <id>` after `--resources`, only for a map file,
+  player removed a slot meanwhile), and the rows; since M6-VH5 a map with more starts gives those slots back too, up to its
+  own cap (four slots, Raraku: two, Vathar Crossing: four again). `MatchArgs` adds `--map <id>` after `--resources`, only for a map file,
   with `--map-size` the map's side; a Generated match's args are exactly as before.
 - **`--map <id>`.** One value, a snake_case id of at most 64 characters (`DataLimits.MaxMapIdLength`); junk (`""`, `Raraku`,
   `ra-raku`, a path, unicode, 65 characters, a missing value; a flag is never taken as the value) is warned and ignored; the
   last good one wins. `Match.MapFor` is the data's check: an id the data lacks is warned about ("... playing a generated
   map") and the match plays a generated map. A match flag (skips the main menu). On a map file the match takes the map's
-  side (`--map-size` is ignored; since M6-V19 warned when it differs, `Match.MapSizeWarning`) and `--forests` / `--mines` are unused; `--players` over the map's starts is warned
-  (`Match.MapPlayersWarning`) and capped (`--players 4 --map raraku` plays 2).
+  side (`--map-size` is ignored; since M6-V19 warned when it differs, `Match.MapSizeWarning`) and `--forests` / `--mines`
+  are unused; `--players` over the map's starts is warned (`Match.MapPlayersWarning`) and capped (`--players 4 --map raraku`
+  plays 2).
 - **The match start, a load and playback.** `SimRunner.MapId` (an id, "" for generated) goes into `Start`'s `SimConfig.MapId`
   with `Map = MapGenParams.Default with { Width = side, Height = side }` (the docs/03 M6-S7 request: no other generator field);
   a generated match's config is exactly as before. `StartLoaded` takes the save's (`SimConfig.MapId`; the terrain is the
@@ -6890,7 +6892,74 @@ game/scripts/SkirmishSetup.cs   a map file's own forests / gold mines in the gre
   (`IsEnemy(0, 1)`, the warning), and the `--map-size 256 --map raraku` row reads `MapSizeWarning`.
 - **Not in this slice:** wrapping the long tooltips (BUG-1081 item 2). Godot draws an `OptionButton` item's tooltip in its
   popup with no wrap setting, so a fix would mean pre-wrapping the data text and changing every test that compares a tooltip
-  to a `description`, which is more than a few lines.
+  to a `description`, which is more than a few lines. Done in M6-VH5 (`TooltipWrap`, below).
+
+### Implementation (M6-VH5)
+
+View hardening now that three maps are on `main` (Raraku, Pale Hills, Vathar Crossing): the scene loop on the merged tree,
+the four-start maps from the menu, BUG-1093 and BUG-1081 item 2. No sim, data or `ui.json` change.
+
+```
+game/scripts/TooltipWrap.cs     Wrap(text): a line break at the last space before 60 characters (BUG-1081 item 2)
+game/scripts/SkirmishSetup.cs   the Map and Starting resources item tooltips through TooltipWrap; a bigger map gives slots back
+game/scripts/MatchStats.cs      the opening line's tooltip through TooltipWrap
+game/scripts/CommandCard.cs     the description line of every build / train / research / ability tooltip through TooltipWrap
+game/scripts/Main.cs            MatchScene: the match PackedScene loaded once and held (BUG-1093)
+game/tests/TooltipWrapTest.*    the helper, every shipped description, the setup's lists; windowed, the hovered tooltip
+game/tests/MapListTest.cs       MenuMaps: each four-start map from the menu with 4 and 2 slots, the frame cost line
+game/tests/QaM6V18Test.cs       the "other size" forgery: a side the first map file doesn't have
+```
+
+- **Tooltips (BUG-1081 item 2).** Godot draws a control's tooltip, and an `OptionButton` item's tooltip in its popup, as
+  one unwrapped line: Raraku's 180-character description was a panel about as wide as the 1152 px window.
+  `TooltipWrap.Wrap` (width `TooltipWrap.Width` = 60 characters, about 480 px at the 16 px font) turns the space before
+  each word that would take a line past 60 into a line break and changes nothing else: words stay whole (a word longer
+  than 60 gets a line of its own, unbroken), a line break already in the text is kept and each line wraps on its own, and
+  turning the added breaks back into spaces gives the data text. So the text stays the data's (rule 8) and needs no data
+  change. Wrapped: the setup's Map and Starting resources item tooltips, the stats screen's AI opening tooltips, and the
+  description line of the command card's tooltips; the card's cost and "Needs" lines are not, so a requirement's name never
+  splits. 57 shipped descriptions wrap to at most 4 lines (Raraku: 4). The tests that compared a tooltip to a
+  `description` compare to `TooltipWrap.Wrap(description)`.
+- **BUG-1093 (made robust; the cause not reproduced).** The error was GodotSharp's "Handle is not initialized" inside
+  `GD.Load<PackedScene>("res://scenes/Match.tscn")` at a match start right after a match was freed. That load is the only
+  managed reference to a cached `RefCounted`; its throwaway wrapper is left to the GC, and the next load swaps the native
+  object's weak handle to a strong one (`ScriptManagerBridge.SwapGCHandleForType`), which can meet a wrapper the finalizer
+  thread is disposing. No C# reference to a freed `Match` was found (its `Ended` / `Ticked` handlers live on the match and
+  the test, and go with them). A probe of 200,000 loads against a thread collecting without pause did not reproduce it, so
+  the fix removes the race's ingredients instead: `Main.MatchScene` loads the scene once and holds it for the process, so
+  its wrapper is never finalized and no match start (new, loaded or replay) calls `GD.Load`. `MapListTest.MenuMaps` runs a
+  full collection after each quit (its finalizers left running into the next start, the race's shape) and checks every
+  start instantiated the one held scene.
+- **The four-start maps from the menu.** `MapListTest.MenuMaps`: for each map with at least four starts, Skirmish with 4
+  and then 2 slots, Map → the map (a click on its item), Start. The `setup.map_players` line sits inside its 300 px
+  holder, in at most two lines, above Start; the match plays the map with the slots asked, the "Match started" line names
+  `map file <id>`, and each seat has a Town Hall on its own start cell (four halls with 4 slots, two with 2: the first
+  starts of the file; Vathar Crossing's starts are on its level-1 steppe, Raraku's on level 0).
+- **The loop on three maps.** 83 scenes with `TooltipWrapTest`. Besides the slots below, one row assumed the first map
+  file is Raraku: `QaM6V18Test`'s "other size" forgery used 256, which is Pale Hills' own side now (data order), so the
+  playback started; it now forges the side the map doesn't have (`OtherSide`).
+- **Slots on a bigger map (found by the loop on three maps).** `MapListTest`'s per-map row failed on the merged tree: four
+  slots, then Raraku (two starts) took two away, and Vathar Crossing (four) kept two. `SkirmishSetup.ApplyMap` now gives
+  back the slots an earlier map's cap took, up to the new map's cap, as Generated does; a slot the player removed is
+  still not given back. `MapListTest.MenuMaps` checks four slots, Raraku 2, Vathar Crossing 4, Generated 4, and a Remove
+  on the bigger map kept by Generated.
+- **Frame cost of a 256 map.** The first match of each map (4 slots, the menu's start: a hall and 5 workers each, real
+  speed) prints `frame cost <map>`: the Start press (the whole match build, synchronous: terrain, props, views, minimap),
+  then the first second's frames (count, FPS, first, average and worst frame), the trees the props view shows and the
+  minimap refreshes. Measured 2026-11-06 on the dev machine (RTX 4070, 1152 x 648 window, other worktrees' test suites
+  running), over the windowed runs logged: Pale Hills (3,796 trees, 60 forests) Start press 94-107 ms, first second
+  122-124 frames (about 123 FPS), first frame about 2 ms, average 8.1 ms, worst 12-66 ms; Vathar Crossing (1,540 trees)
+  Start press 99-114 ms, first second 123-133 frames, average 7.6-8.1 ms, worst 15-105 ms. Headless (no draw) the Start
+  press is 83-100 ms on both maps (two early runs, under heavy load from the other worktrees, measured Vathar Crossing at
+  660 ms). The trees are one `MultiMesh` per resource type (`PropsView`, one upload), not a node each, and the minimap's
+  resource layer is drawn once. The worst frame is one spike in a first second that still runs above 120 FPS, so the first
+  second never drops under 30 FPS: no S3. A 4-seat match on either map with the dev armies (`--players 4 --units 100`)
+  holds 120 FPS (the debug overlay's figure) at tick 60.
+- **The scene loop's screenshots.** `MapListTest.Shot` and `TooltipWrapTest`'s hover shot wait for three draws with a bound
+  (300 frames) and skip the file with a line when the window draws nothing: a minimized window (Windows minimized the test's
+  window in 1 of 25 diagnosed runs) never emits `FramePostDraw`, and the unbounded wait hung the run 4 times while
+  `MapListTest` was looped windowed. Other tests' `Shot` helpers still wait unbounded (windowed `--shots` runs only; the
+  headless loop never takes a shot).
 
 ## AI architecture
 
@@ -7183,8 +7252,9 @@ acting only through commands. Code: `sim/Rts.Sim/Ai/AiPlayer.cs`, `Blackboard.cs
   `houseWhenPopWithin` 2 (pop, a multiple of 0.5, at most `popCap`), `placementSearchRadius` 32 m, `buildingSpacing` 2 m,
   `expandHallReach` 40 m (meters above 0, at most 64; spacing 0-8; to whole cells rounded up: 16, 1, 20). In `ContentHash`
   since M5-3, with `ai.json`. Later knobs: M5-3, M5-4b, M5-4c, M5-4f (`defendRatio` / `defendMinValue` / `recallHallHp`)
-  and M5-4g (`reserveShift`, `reserveArmyShare`), M6-S5 (`gatherReach` 64 m, 1-512, "Implementation (M6-S5)"), each in
-  its own section.
+  and M5-4g (`reserveShift`, `reserveArmyShare`), M6-S5 (`gatherReach` 64 m, 1-512, "Implementation (M6-S5)"), M6-SH1
+  (`scoutReplacements`, `spendDownQueue`), M5-4d (`huntMemory` 120 s, 0-3,600, "Implementation (M5-4d)"), each in its own
+  section.
 - **Tests.** `Ai/AiPlayerTests` (criterion 3: the shipped steps of both factions run on every difficulty; a 10-step order
   with time / workers / pop triggers, counts, slack and concurrent steps fires in the documented order on Easy and Hard; a
   Build without wood waits and is sent at the first think after the wood, once; a Build the sim refuses (an enemy unit holding
@@ -7225,7 +7295,8 @@ six `rules.json` `ai` knobs in `Data/AiRulesDef.cs`; the hash in `GameData.Conte
 - **Enemy memory** (`Blackboard`, from the view only, rebuilt each think): the known enemy buildings are the ones the view shows
   now plus its ghosts (the fog's memory; no second copy is kept; `AiPlayer.NearestEnemyBuilding`, `EnemyBuildingKnown`); the
   last enemy army seen is the centroid, count and tick of the enemy non-worker units the view showed at the last think that
-  showed any (kept until replaced; read by nothing yet, M5-4's defense).
+  showed any (kept until replaced; read by nothing yet, M5-4's defense). M5-4d adds the last enemy unit seen, workers
+  too, the hunt's target ("Implementation (M5-4d)").
 - **Scout** (`ScoutManager`). At the first think at or after `ai.scoutAfter` the own worker nearest the hall's centre with no
   AI command pending (an idle one first, else a gathering or returning one: `PickBuilder`'s rule) becomes the scout; its slot
   and generation are kept, and the economy manager, the rebalance and `PickBuilder` skip it. If a forest, a gold mine and an
@@ -7260,7 +7331,8 @@ six `rules.json` `ai` knobs in `Data/AiRulesDef.cs`; the hash in `GameData.Conte
   half-pop below `(1 - retreat.lossFraction) x start` (or none left) is a **retreat**: every live member is owed a `Move` to the
   rally point, the wave ends, and `waveCooldownUntil = Now + ai.waveCooldown` again; a target no longer known (not seen alive,
   no ghost of that slot and generation) is replaced by the known enemy building nearest the members' centroid (every member
-  owed an `AttackMove` again), or with none known the wave ends and the members are owed a `Move` home. **Orders**: each free
+  owed an `AttackMove` again), or with none known the wave ends and the members are owed a `Move` home (since M5-4d it turns
+  into a hunt instead, "Implementation (M5-4d)"). **Orders**: each free
   army unit in slot order gets at most one command a think: what it is owed, else a member standing Idle within `rallyReach`
   of the target's footprint edge (`rallyReach` + half its larger side) while the target is seen gets `Attack` on it, unless its
   attack hits units only (BUG-0591): that member can't fight a building, so it is sent `Move` home and leaves the wave; one Idle
@@ -7584,6 +7656,160 @@ and docs).
   `DataValidationTests` / `DataContentHashTests` (the knob).
 - **Not yet:** slice 2 (`gatherBonus`, `focusFire`, `pullBackWounded`); `targetUnit` and `autocast`; own-unit abilities aimed at
   own units (a heal); expansion, rebuilding, re-scouting (M5-4d).
+
+### Implementation (M5-4d)
+
+The AI finishes the match, slice 1 (roadmap M5 criterion 3; docs/02 "AI opponent"; BUG-1068). Before it a wave targeted
+buildings only: once a beaten side had no building left that the winner knew of, the wave ended and the winner's army went
+home, so the loser's last unit out in the woods kept the match alive under M5-4e's win rule. Code: `Ai/MilitaryManager.cs`
+(the hunt), the memory in `AiPlayer.Census`, the fields in `Blackboard.cs`, their save in `Blackboard.Save.cs` /
+`AiPlayer.Save.cs` / `Simulation.TrySave` (the `HUNT` section), `PlayerView.MatchOver`, `ScoutManager.GridPoint` (now
+internal, shared), one knob. No `Command` kind: the hunt sends `AttackMove` (and the wave's `Move` home), which every player has.
+
+- **The memory** (`Blackboard.EnemyUnitPoint`, `EnemyUnitTick`): one point overall, not one per enemy (builder's call: the
+  hunt follows one trail). Each think's census walks `PlayerView.NextUnit` as before; of the enemy units it shows (workers
+  too, never an ally's) the one nearest the hunt's target while a hunt is on (the chase stays on what it follows), else
+  nearest the hall's centre (the map centre with no building), slot order on ties, becomes the point, stamped with the
+  think's tick. A think that sees none keeps the last. So the point is always a position the fog granted that think
+  (criterion 4). The hunt forgets it (`EnemyUnitTick` -1) once it went there and saw nobody (below). The M5-3 enemy-army
+  centroid is unchanged (non-workers only, still read by nothing).
+- **When a hunt starts.** No wave in progress, the base not defended, no wave started this think, and: no enemy building
+  known (`KnownEnemyBuildings` 0: none seen, no ghost), at least one wave sent before (`WavesStarted` > 0), the match not
+  over (`PlayerView.MatchOver`, the result every seat is shown), the cooldown over. Every free army unit (not casting, no
+  command pending) becomes a member, whatever their number: no `attack` threshold, and the hunt's kept threshold
+  (`WaveMinHalfPop` / `WaveMinCost`) is 0, so the defense may pull any member. The cooldown (`ai.waveCooldown`) starts, as
+  a wave's. A wave whose target is gone with no other building known **turns into a hunt** on the spot (the same members,
+  no trip home), unless the base is defended or the match is over (then it ends, as before). `HuntsStarted` counts both.
+- **The target**, a point (`WaveTargetPoint`; `WaveTarget` none, `WaveTargetType` -1): the remembered point while it is
+  fresh (`Now - EnemyUnitTick <= ai.huntMemory`, 120 s), else a **sweep** of the scout's map-grid geometry
+  (`MilitaryManager.HuntPoint`: the grid's cell centres, `ScoutManager.GridPoint`, then its interior corners, then a
+  **border ring**, all of `ai.scoutGrid`'s `GridLines`; the hunt's own marks, `HuntVisited`, never the scout's
+  `ScoutVisited`): first the unvisited point nearest the members' centroid, which becomes the sweep's origin
+  (`HuntOrigin`), then the unvisited point nearest the last point, every point within a map cell (2 m) of the least
+  distance being a tie that goes to the point nearer the origin (then list order; QA round 1: against the true least
+  distance, two passes over the points, not a running best that a chain of near-ties could drift up to a few metres
+  farther); with every point visited the marks clear, the pass count (`HuntPass`) goes up and the sweep starts over. The
+  first ring point reached starts the **perimeter leg** (`MilitaryManager.AfterReached`, below). Besides the target, **every unvisited sweep point whose cell the seat's own fog shows visible** at a think
+  is visited (`SeenPoints`: the ground there is being looked at, so the army need not walk to it). A sighting forgotten
+  restarts the sweep from the members (a new origin). `HuntSweep` is the point's index, -1 while the target is a sighting.
+  **Builder's calls, measured:** (1) *the corners.* The brief named the scout's grid points; the centres alone are a cell
+  apart (51.2 m on Pale Hills' 10 x 10 grid), far past a unit's sight (14 m): centres alone leave ground half a cell's
+  diagonal (36 m there) from every point, with the interior corners (81 more there) at most half a cell (25.6 m) inside
+  the interior. Pale Hills seed 5 with centres alone ran to 72,000 ticks with the loser's last six workers idle by a
+  forest 29-35 m from the nearest centre, every centre visited, that ground never explored; with the corners it ends.
+  (2) *the border ring* (BUG-1107, fix round 1). Centres and interior corners leave the band along the map's border half a
+  cell from any point along an edge and half a cell's diagonal (36 m) in a corner, so a last unit by an edge or in a
+  corner was never seen (Raraku: four corner workers 29.6-30.5 m from the nearest point, no result by 60:00). The ring is
+  the four map corners and, on each edge, the points level with the cell centres: `2 (cols + rows) + 4` points (44 on
+  Pale Hills, 24 on a 256 m map), listed after the interior corners in row order (the top edge's west corner, its points
+  west to east, its east corner; each cell row's west and east ends; the bottom edge likewise), so the old points keep
+  their indices. Each is clamped half a map cell inside the border (`ClampToMap`), so no stat sets where it stands. With
+  it every point of the map is within half a cell of a sweep point, the border band as the interior, and each map corner
+  has a point on it; but within half a cell (25.6 m) of a point is not within sight (14 m), which is what (5) and (6)
+  fix. Total `cols x rows + (cols - 1)(rows - 1) + 2 (cols + rows) + 4` (`HuntPoints`; 225 on Pale Hills,
+  65 on a 256 m map). A ring point on a cliff or in water is reached by the "every member stuck" rule, as an interior
+  point is. (3) *the walk.* With the ring, a sweep of a 512 m map is the limit on finishing the match: QA's hidden-worker
+  matrix (a human seat's five workers at the four corners and the centre, `Stress/HuntStressTests`) ran past 60:00 on
+  Pale Hills and Vathar Crossing (before (5)) in each of these measured variants: a ring every half cell (80 points on Pale Hills);
+  the least distance from the last point *plus* the distance from the origin as the order (the M5-4d rule; it pulled the
+  army back to inner points, 15 s of walking per point on Pale Hills); and no `SeenPoints`. The three changes together
+  end all 24 rows, the slowest at 57:36 (Vathar Crossing, `cadre_rush`), about 13 s of walking per point; with (5) the
+  slowest is 35:43 (Pale Hills, `crossbow_push`; Vathar `cadre_rush` 26:55), the corners being found on the leg. Rejected:
+  counting the *target* reached as soon as its cell is visible (faster still, but the army re-targeted every few seconds:
+  60 orders a minute to 4 members in QA's `AnUnreachableSighting_NeitherSpamsNorFreezesTheHunt`, past its bound of 12
+  per member). A single army sweeping a 512 m map still takes about 45 minutes; splitting the army to sweep is a later
+  slice's question. (4) *the origin tie-break.* Nearest-to-the-last with list order on ties walked away from where the
+  enemy was: on Pale Hills seed 1 the loser's last building stood 50 m from its razed hall and the sweep, on a four-way
+  tie, set off for the far edge (no result by 36,000). Broken toward the origin, the sweep starts outward from the razed
+  base and every `MapSlice2StressTests` sweep row and `MapFileTests` new-map row still ends. (5) *the perimeter leg*
+  (BUG-1107, fix round 2). Ring points are a scout cell apart along each edge (51.2 m) and sight is 14 m, so the stretch of
+  edge more than 14 m from both neighbouring ring points is seen only from the edge itself. Nearest-first never walked it:
+  from a ring point the cell centre half a cell inward beats the next ring point a cell along, and each pass took the same
+  route (QA's `HuntSweepWorstPointQaTests`, a human seat's workers on each edge level with a grid line: 11 of 16 rows
+  never ended). So the first ring point the sweep reaches (as its target, by a member within `ai.rallyReach` or the
+  stuck rule) starts a leg: every other ring point in clockwise order (north edge west to east, east edge north to
+  south, south edge east to west, west edge south to north; `MilitaryManager.RingNext`), visited by sight or not, then the
+  first again (`HuntRing`, the next ring point; `HuntRingLeft`, those still to reach); then every ring point counts
+  visited for the pass and nearest-first goes on. One leg a pass. Why visited points too: `SeenPoints` marks a ring
+  point once its cell is seen, and skipping it would skip the edge on either side. A sighting mid-leg keeps it: when the
+  sweep resumes it goes back to the leg's next ring point (Pale Hills `cadre_rush` without that: a sighting 175 m inland
+  mid-leg, and the north edge's east half was never walked). Not tried: ring points every `2 x sight` (about 80 on a
+  512 m map; marked by sight from inland as often as walked to, so the edge between them would still go unwalked). (6) *the odd pass* (fix round 2).
+  The centres and interior corners form a diamond lattice whose holes, the cell edges' midpoints, are half a cell
+  (25.6 m) from four points and 18 m from the diagonal walk between them: QA's interior hide on the generated map
+  (holy_war seed 3, a worker at (50.6, 76.2)) was never seen in three passes. On an odd pass (`HuntPass`) the indices
+  below the ring are those midpoints instead (`(cols - 1) rows` between vertically adjacent corners, then
+  `cols (rows - 1)` between horizontally adjacent centres, one spare index the map's centre: the same count), so
+  every point of the half-cell lattice is walked to or seen within two passes; it ends at 30:46.
+- **Each think of a hunt** (after the wave's retreat and BUG-0598 idle rules, which end it as they end a wave): an enemy
+  building known hands back to the wave rule (the known enemy building nearest the members becomes the target, every member
+  owed an `AttackMove`, `Hunting` cleared). Else the target is **reached** when a member is within `ai.rallyReach` of it, or
+  every member stands Idle with no order pending or owed after `MaxTries` orders toward it without getting a cell nearer (as
+  close as they get: a point in a forest or on a cliff). A reached sweep point is visited; a reached sighting not seen again
+  this think is forgotten. Then a fresh sighting more than `ai.rallyReach` from the target (or any fresh sighting while
+  sweeping) **re-targets** at once; with none fresh, a reached point (or a forgotten sighting) moves the sweep on, from the
+  last point (or from the members' centroid). Every re-target owes each member one `AttackMove`.
+- **Orders.** As a wave's: one command per unit per think, in slot order; a member owed an order gets `AttackMove` to the
+  point; an Idle member is sent `AttackMove` again until `MaxTries` orders without progress, then left standing, a member,
+  unordered (no `Attack` on a building, no going home: the "every member stuck" rule moves the point instead). The
+  `MaxTries` bound and its progress rule are the wave's.
+- **The match end.** A hunt in progress at the match's end ends (members home); none starts after it.
+- **Knob.** `common/rules.json` `ai.huntMemory`: seconds, 0-3,600 (`DataLimits.MaxSeconds`), to ticks, required, shipped
+  **120** (the brief's proposal); 0 is valid (only a sighting from the think itself is fresh). In `ContentHash`
+  (`DataContentHashTests` row), `DataValidationTests` rows (missing, negative, over the maximum; 0 and 3,600 load).
+- **Save format 6 / 7.** The hunt's fields (`EnemyUnitPoint`, `EnemyUnitTick`, `Hunting`, `HuntSweep`, `HuntOrigin`,
+  `HuntVisited`, `HuntRing`, `HuntRingLeft`, `HuntPass`, `HuntsStarted`; the leg's index range-checked and `HuntRing` -1
+  exactly when `HuntRingLeft` is 0) are written in their own section, `HUNT`, after `AIST`, only for a match with an AI seat: 6 is format 4
+  plus `HUNT` (a generated map), 7 is format 5 plus `HUNT` (a hand-made map); a human-only match is saved 4 / 5 byte for
+  byte as before ("Save format (M6-S2)"; `SaveHeader.VersionFor`). `AIST` keeps format 5's layout, so the M6-S7 fixtures
+  still prove the old bytes: a format-6 save with `HUNT` cut out and the version and length put back is the pre-map
+  fixture byte for byte (`PreMapFixtures.WithoutHunt`). A save of format 3-5 with an AI seat is refused
+  `FormatVersionMismatch` once the header is read (any real one is refused `DataMismatch` first: the knob moved the hash);
+  format 6 without its `HUNT` section, or with a forged seat count, is `Malformed`. The replay format is unchanged (playback
+  runs no AI; the AI's commands are in the log).
+- **Determinism and hashes.** The AI's state stays out of `StateHash`. The golden (no AI seat) is unchanged: no checkpoint
+  moved, and since M6-SH1 its `data-hash` header is not a pin. Pinned AI matches change only from the first hunt (or the first
+  wave that now turns into one) on. Of the 27 pairings' Age II pins two reach a hunt and were re-printed on the Malazan page
+  (`crossbow_push` v `raider_rush` seed 19: "never" to "never (defeated 10:24)"; `crossbow_push` v `standard` seed 32: "never"
+  to "never (defeated 14:48)": beaten sides that used to stand at 20:00 are finished off); every other pin, pairing and the
+  golden's `k` lines are unchanged. Seed 32 moved with each change to the sweep: 14:57 with the ring and `SeenPoints` (fix
+  round 1), **17:18** with the perimeter leg, the odd pass and the true-least tie (fix round 2: the sweep from the razed
+  base takes a different route).
+- **Measured** (Normal v Normal, Malazan v Whirlwind, starts 0 and 1, to 72,000 ticks, `Stress/MapSlice2StressTests`; at
+  e3fd8fb none of these ended): Pale Hills seeds 3, 4 and 6 (one match: a map file draws nothing from the seed but the
+  openings) end at tick 29,421 (24:31), Whirlwind winning after one hunt; seed 5 at 52,557 (43:48), Malazan winning after
+  one hunt (since BUG-1107 fix round 2; 41,337 after two hunts before it; with the centres alone it ran out the hour); the
+  generated map's seed 6 at 26,875 (22:24), Whirlwind after one
+  hunt. Seed 2 (both sides keep two halls) is untouched: no hunt starts while an enemy building is known. The rows that
+  ended before still end, none of them through a hunt but Pale Hills seed 1, now 34,856 (was 34,175: its last wave, its
+  target razed with one building of the loser's left unseen 50 m off, turns into a hunt, "Implementation (M6-S8)"; 35,569
+  since BUG-1107 fix round 2, the sweep taking another route: 431 ticks inside `MapFileTests`' 36,000); Vathar
+  Crossing seed 1 and Raraku seed 1 are unchanged (23,219 and 29,001), and so are the M6-S8 sweep rows (Vathar 2-6, Raraku
+  2-6, generated 2-5).
+- **Cost.** The census adds one distance compare per enemy unit seen; a hunt's think one pass over its members; a re-target
+  two passes over the sweep points (the least distance, then the tie; four at a restart; 65 on the 256 m map at the
+  shipped 56 m, 225 on Pale Hills' 512 m); a leg step none. No
+  allocation (`AiPerfTests`, the 1 ms think gate and 0 B a think, unchanged). **Memory:** per AI seat one bool per sweep
+  point (65 B on the 256 m map, 32 KB at the 16 m minimum on a 1,024-cell map) and a few scalars.
+- **Tests.** `Ai/HuntTests` (criterion 3 on the flat scene, combat off, by the command log: a sighting seen then hidden,
+  every army unit `AttackMove` to it, none before the first wave; the sweep's order, one `AttackMove` per member per point,
+  each point reached within `rallyReach`, a sighting re-targeting it; an enemy building seen ending the hunt and the wave
+  targeting it; the retreat ending a hunt with the cooldown; fix round 2: `TheRingOrder_IsClockwiseRoundTheBorder` (`RingNext`
+  against an order derived from the points' positions, square and non-square grids), `TheRingLeg_WalksEveryEdgeInOrder_BackToItsStart`
+  (the targets, the marks after it, a member within half a unit's sight of every edge spot level with a grid line),
+  `ALastUnitOnTheEdge_LevelWithAGridLine_IsSeen` x4 (the east row red with the leg switched off), `AnOddPass_SweepsTheCellEdgesMidpoints`,
+  `TheSweepTie_IsAgainstTheTrueLeastDistance` (4,096 picks against the true-least rule; the old rule differs on 8); criterion 4's fog oracle on two generated AI v AI seeds, every
+  think of both seats; criterion 5's save mid-hunt followed 1,000 ticks hash for hash, the seats field for field),
+  `Save/SaveRefusalTests` (formats 3-5 with an AI seat refused, with or without `HUNT`; format 6 without it or with a forged
+  count `Malformed`; a human seat forged into an AI one is now `FormatVersionMismatch` at format 4, `Malformed` at 6),
+  `Save/SaveFormatTests` (the versions, the fixtures through `WithoutHunt`), `AiDeterminismTests.PaleHillsSeed3_ToTheEnd_TwoProcesses_SamePerTickHashes`
+  (criterion 6, Stress), `Stress/MapSlice2StressTests.NormalVersusNormal_KnownStalls_EndWithin72000` (un-skipped, the fog
+  oracle at every think), `DataValidationTests` / `DataContentHashTests` (the knob).
+- **Not yet** (slice 2 and later): high ground and ramps before attacking up, periodic re-scouting, rebuilding; Pale Hills
+  seed 2's stalemate (both sides keep two halls; BUG-1068, narrowed to it) is not a hunt case. BUG-1067 (a seat whose scouts
+  all die at the door finds no wood for minutes) is not taken here: neither rider is a few lines (gatherers searching near home
+  is a new behaviour; the hall's sight reaching its woodlot is a faction-data change or a global `buildingSight` change that
+  moves every pinned match).
 
 ### Implementation (M5-4e)
 
@@ -8554,7 +8780,11 @@ version 2) stores the AI seats too, so every match saves. Code in `sim/Rts.Sim/S
   patterns. Strings are an int32 byte count and printable ASCII (the sim version, snake_case faction ids). An array is its
   int32 length, then its elements; the reader requires the length the header's capacities give. Structs holding a bool
   (commands, ghosts, events) go field by field.
-- **Header**, in order: magic `RTSSAVE\0` (8 bytes); format version (int32, `SaveFormat.CurrentVersion` = 5 since M6-S7,
+- **Header**, in order: magic `RTSSAVE\0` (8 bytes); format version (int32, `SaveFormat.CurrentVersion` = 7 since M5-4d,
+  which added the `HUNT` section after `AIST` for a match with an AI seat: 6 (`SaveFormat.HuntMaplessVersion`) is format 4
+  plus `HUNT` (a generated map), 7 is format 5 plus `HUNT` (a hand-made map), and a match with no AI seat is still saved 4 /
+  5 (`SaveFormat.MapVersion`) byte for byte; a save of format 3-5 with an AI seat is refused `FormatVersionMismatch`, after
+  the header is read, since its seats were saved without the hunt memory ("Implementation (M5-4d)"); 5 since M6-S7,
   which added the map id after the starting-resources preset, written only for a match on a hand-made map: a generated-map
   match is saved as `SaveFormat.MaplessVersion` = 4, byte for byte as before; 4 since M6-S6,
   which added the starting-resources preset after the team bytes; version 3 (M6-S4, which added the team byte) still loads,
@@ -8602,6 +8832,7 @@ version 2) stores the AI seats too, so every match saves. Code in `sim/Rts.Sim/S
   | `EVNT` | the last tick's `Deaths`, `Impacts`, `AbilityEvents`, `DefeatEvents` (`Tick()` clears them first, but a view reads them between ticks) |
   | `CMDS` | each player's next sequence number, then the pending queue: count, every command, every field, in queue order |
   | `AIST` | (format 2) the AI seat count, then per AI seat in player order its player index and its state (below) |
+  | `HUNT` | (formats 6 and 7, M5-4d, only with an AI seat) the AI seat count, then per AI seat in player order its player index and its hunt memory: `EnemyUnitPoint`, `EnemyUnitTick`, `Hunting`, `HuntSweep` (-1 to the last sweep point's index), `HuntOrigin`, `HuntVisited`, `HuntsStarted` |
   | `END!` | nothing: the body's end |
 
   Last, the checksum: FNV-1a 64 over every byte before it (the replay file's). A flow field's slot holds its keys
@@ -9273,7 +9504,7 @@ with five more stands of trees: 8 ramps, 24 mines, 1,540 trees in 28 forests.
 
 | Map | Result | Waves (Malazan / Whirlwind) | Gathered gold / wood (Malazan v Whirlwind) |
 | --- | --- | --- | --- |
-| Pale Hills | Whirlwind won at 28:28 (34,175 ticks) | 7 / 9 | 8,880 / 7,720 v 8,840 / 8,520 |
+| Pale Hills | Whirlwind won at 28:28 (34,175 ticks); since M5-4d at 29:02 (34,856: its last wave turns into a hunt), since BUG-1107 fix round 2 at 29:38 (35,569: the hunt's sweep takes another route) | 7 / 9 (M5-4d: 7 / 8) | 8,880 / 7,720 v 8,840 / 8,520 (M5-4d: 8,840 / 8,740; fix round 2: 8,840 / 8,990) |
 | Vathar Crossing | Whirlwind won at 19:20 (23,219 ticks) | 2 / 4 | 2,910 / 1,810 v 6,680 / 4,500 |
 
 What moved on the way (as Raraku's first draft did): Pale Hills' first draft (starts (60, 60), its expansion pair 57 cells out

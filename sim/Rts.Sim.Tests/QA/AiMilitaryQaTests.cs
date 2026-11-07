@@ -86,11 +86,12 @@ public class AiMilitaryQaTests
 
     /// <summary>
     /// The hall is razed while player 0 can't see it: its ghost stays. A wave sent at the ghost walks there, sees the ground empty
-    /// (the ghost clears), and with no other enemy building known ends and goes home: one AttackMove each (none re-sent while
-    /// walking), never an Attack (the target was never seen alive), every member a Move to the rally point, no second wave.
+    /// (the ghost clears): one AttackMove each to the ghost (none re-sent while walking), never an Attack (the target was never
+    /// seen alive), no second wave. M5-4d: with no other enemy building known it then turns into a hunt (player 1's workers
+    /// still live) instead of going home: no member is sent home then, and the hunt's orders are AttackMoves to other points.
     /// </summary>
     [Fact]
-    public void AWaveAtTheGhostOfABuildingRazedUnseen_EndsHome_WithoutResending()
+    public void AWaveAtTheGhostOfABuildingRazedUnseen_TurnsIntoAHunt_WithoutResending()
     {
         Simulation sim = Scene(s_onePop.Value, out EntityHandle hall, ghost: true);
         AiPlayer ai = sim.AiOf(0)!;
@@ -101,24 +102,26 @@ public class AiMilitaryQaTests
         List<EntityHandle> army = Army(sim, Unit("malazan_heavy_infantry"), 4, 18, 28);
         NextThink(sim);
         Assert.True(ai.Board.WaveActive);
-        int ended = -1;
+        System.Numerics.Vector2 ghostAt = ai.Board.WaveTargetPoint;
+        int hunted = -1;
         while (sim.TickNumber < 3000)
         {
             sim.Tick();
-            if (ended < 0 && !ai.Board.WaveActive) ended = sim.TickNumber;
+            if (hunted < 0 && ai.Board.Hunting) hunted = sim.TickNumber;
         }
         var mine = log.Where(c => army.Contains(c.Unit)).ToList();
-        _out.WriteLine($"wave ended at tick {ended}; {mine.Count} commands to the members: " +
+        _out.WriteLine($"the wave turned into a hunt at tick {hunted}; {mine.Count} commands to the members: " +
             string.Join(", ", mine.GroupBy(c => c.Kind).Select(g => $"{g.Key} {g.Count()}")));
-        Assert.True(ended > 0, "the wave at a razed ghost never ended");
+        _out.WriteLine("orders: " + string.Join("; ", mine.Select(c => $"{c.Tick} {c.Kind} {c.Unit.Index} {c.Position}")));
+        Assert.True(hunted > 0, "the wave at a razed ghost never turned into a hunt");
         Assert.False(ai.View.TryGetGhost(hall.Index, out _), "the ghost was never cleared");
         Assert.DoesNotContain(mine, c => c.Kind == CommandKind.Attack);
+        // Not sent home when the ghost cleared (combat off, the hunt may end later on its idle rule, as a wave does).
+        Assert.DoesNotContain(mine, c => c.Kind == CommandKind.Move && c.Tick <= hunted);
         foreach (EntityHandle h in army)
-        {
-            Assert.Equal(1, mine.Count(c => c.Unit == h && c.Kind == CommandKind.AttackMove));
-            Assert.Equal(1, mine.Count(c => c.Unit == h && c.Kind == CommandKind.Move));
-        }
+            Assert.Equal(1, mine.Count(c => c.Unit == h && c.Kind == CommandKind.AttackMove && c.Position == ghostAt));
         Assert.Equal(1, ai.Board.WavesStarted);
+        Assert.True(ai.Board.HuntsStarted >= 1); // combat off: a hunt by workers it can't kill ends idle and starts again after the cooldown
     }
 
     /// <summary>

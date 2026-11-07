@@ -26,6 +26,9 @@ namespace Rts.Game.Tests;
 /// <item>The flag: <c>--map &lt;id&gt;</c> read; junk (missing, empty, 65 characters, upper case, a dash, path separators,
 /// unicode, a flag) warned and ignored; an id the data lacks plays a generated map; <c>--players 4</c> on a two-start map is
 /// capped at 2 with a warning.</item>
+/// <item>M6-VH5: each four-start map (Pale Hills, Vathar Crossing) from the menu with 4 and 2 slots: the map's line in its
+/// 300 px holder, the start line naming the map file, a Town Hall on each seat's start; a bigger map gives back the slots a
+/// smaller map's cap took; every start uses the one held match scene (BUG-1093); a <c>frame cost</c> line per map.</item>
 /// </list>
 /// </summary>
 /// <remarks>
@@ -44,6 +47,7 @@ public partial class MapListTest : Node
     private string _root = "";
     private string? _shots;
     private MapDef _map = null!;
+    private PackedScene? _matchScene; // BUG-1093: the scene the first start used
 
     public override async void _Ready()
     {
@@ -72,6 +76,7 @@ public partial class MapListTest : Node
             {
                 await SetupList(main);
                 await SetupStart(main);
+                await MenuMaps(main);
                 await FlagMatches(main);
             }
             finally
@@ -131,7 +136,7 @@ public partial class MapListTest : Node
         string[] items = Enumerable.Range(0, list.ItemCount).Select(list.GetItemText).ToArray();
         string[] tips = Enumerable.Range(0, list.ItemCount).Select(list.GetItemTooltip).ToArray();
         string[] wantItems = new[] { _ui.Setup(SetupText.MapGenerated) }.Concat(_data.Maps.Select(m => m.DisplayName)).ToArray();
-        string[] wantTips = new[] { "" }.Concat(_data.Maps.Select(m => m.Description)).ToArray();
+        string[] wantTips = new[] { "" }.Concat(_data.Maps.Select(m => TooltipWrap.Wrap(m.Description))).ToArray();
         Check(items.SequenceEqual(wantItems) && tips.SequenceEqual(wantTips) && items.All(t => t.Length > 0) && tips.Skip(1).All(t => t.Length > 0),
             $"map items [{string.Join("|", items)}] (want [{string.Join("|", wantItems)}]), tooltips [{string.Join("|", tips)}]");
         Check(list.Selected == 0 && setup.MapPick == null && list.TooltipText == "", $"default pick {list.Selected}, tooltip '{list.TooltipText}'");
@@ -161,7 +166,7 @@ public partial class MapListTest : Node
             string[] args = setup.MatchArgs()!;
             LaunchOptions parsed = LaunchOptions.Parse(args);
             int cap = Math.Min(map.Players, SkirmishSetup.MaxSlots);
-            Check(setup.MapPick?.Key == map.Key && parsed.MapId == map.Key && parsed.MapSize == map.Size && setup.MapSize == map.Size && list.TooltipText == map.Description,
+            Check(setup.MapPick?.Key == map.Key && parsed.MapId == map.Key && parsed.MapSize == map.Size && setup.MapSize == map.Size && list.TooltipText == TooltipWrap.Wrap(map.Description),
                 $"item {i + 1} ({map.Key}): pick '{setup.MapPick?.Key}', args [{string.Join(' ', args)}], tooltip '{list.TooltipText}'");
             Check(setup.MapSizeOption.Disabled && !setup.ForestsSpin.Editable && !setup.MinesSpin.Editable
                 && !setup.ForestsSpin.GetLineEdit().Editable && !setup.MinesSpin.GetLineEdit().Editable
@@ -266,6 +271,155 @@ public partial class MapListTest : Node
         }
         main.QuitToMenu();
         await Frames(2);
+    }
+
+    // ---- M6-VH5: every four-start map from the menu, with two and with four slots ----
+
+    // Skirmish -> 2 or 4 slots -> Map -> the map (by click) -> Start, for each map file with room for every slot (Pale Hills and
+    // Vathar Crossing on the merged tree). Each start: the map's line inside its 300 px holder, above Back / Start; the match
+    // plays the map with the slots asked, the start line names the map file, and each seat has a Town Hall on its own start.
+    // The first match of each map is measured: the Start press (the whole match build, synchronous) and the first second of
+    // frames at real speed (the trees, the minimap's first raster); the numbers are a dev-log line, a GPU's only when windowed.
+    private async Task MenuMaps(Main main)
+    {
+        MapDef[] four = _data.Maps.Where(m => m.Players >= SkirmishSetup.MaxSlots).ToArray();
+        Check(four.Length > 0 || _data.Maps.Length == 1, "no map file with four starts");
+        // A map with more starts gives back the slots a smaller map's cap took (the loop on three maps found Raraku's cap kept
+        // on Vathar Crossing: 2 slots of its 4).
+        if (four.Length > 0)
+        {
+            main.ShowSetup();
+            await Frames(1);
+            SkirmishSetup setup = main.Setup!;
+            setup.PickMap("");
+            for (int k = 0; k < SkirmishSetup.MaxSlots; k++) setup.AddSlot();
+            Click(setup.MapOption, _map.Id + 1);
+            int capped = setup.SlotCount;
+            Click(setup.MapOption, four[0].Id + 1);
+            int back = setup.SlotCount;
+            Click(setup.MapOption, 0);
+            Check(capped == _map.Players && back == SkirmishSetup.MaxSlots && setup.SlotCount == SkirmishSetup.MaxSlots,
+                $"4 slots, {_map.Key} then {four[0].Key}: {capped} then {back} slots (want {_map.Players} then {SkirmishSetup.MaxSlots}), Generated {setup.SlotCount}");
+            // A slot removed on the bigger map is the player's: Generated then keeps the three.
+            Click(setup.MapOption, _map.Id + 1);
+            Click(setup.MapOption, four[0].Id + 1);
+            setup.RemoveSlot();
+            Click(setup.MapOption, 0);
+            Check(setup.SlotCount == SkirmishSetup.MaxSlots - 1, $"{_map.Key}, {four[0].Key}, Remove player, Generated: {setup.SlotCount} slots (want {SkirmishSetup.MaxSlots - 1})");
+            setup.PickMap("");
+            main.ShowMenu();
+            await Frames(1);
+        }
+        foreach (MapDef map in four)
+        {
+            foreach (int slots in new[] { SkirmishSetup.MaxSlots, LaunchOptions.MinPlayers })
+            {
+                string what = $"{map.Key} from the menu, {slots} slots";
+                main.ShowSetup();
+                await Frames(2);
+                SkirmishSetup setup = main.Setup!;
+                setup.PickMap(""); // the setup keeps the last pick: a capped map would hold the slots at its starts
+                for (int k = 0; k < SkirmishSetup.MaxSlots && setup.SlotCount < slots; k++) setup.AddSlot(); // bounded
+                for (int k = 0; k < SkirmishSetup.MaxSlots && setup.SlotCount > slots; k++) setup.RemoveSlot();
+                Click(setup.MapOption, map.Id + 1);
+                await Frames(2);
+                Check(setup.SlotCount == slots && setup.MapPick?.Key == map.Key && !setup.StartButton.Disabled, $"{what}: {setup.SlotCount} slots, pick '{setup.MapPick?.Key}', Start disabled {setup.StartButton.Disabled}");
+                Label line = setup.MapPlayersLabel;
+                Control holder = line.GetParent<Control>();
+                Rect2 lineRect = line.GetGlobalRect(), holderRect = holder.GetGlobalRect();
+                float textBottom = lineRect.Position.Y + line.GetLineCount() * line.GetLineHeight();
+                Check(line.Visible && line.Text == _ui.MapPlayersLine(map.DisplayName, map.Players) && holderRect.Size.X == SkirmishSetup.OneTeamRoom
+                    && lineRect.Position.X >= holderRect.Position.X - 0.5f && lineRect.End.X <= holderRect.End.X + 0.5f && line.GetLineCount() <= 2
+                    && textBottom <= setup.StartButton.GetGlobalRect().Position.Y && GetViewport().GetVisibleRect().Grow(0.5f).Encloses(lineRect),
+                    $"{what}: the line '{line.Text}' ({line.GetLineCount()} lines, text bottom {textBottom}) at {lineRect} in its holder {holderRect}, Start at {setup.StartButton.GetGlobalRect()}");
+                if (slots == SkirmishSetup.MaxSlots) await Shot($"setup-{map.Key}");
+
+                bool measure = slots == SkirmishSetup.MaxSlots;
+                // Real speed for the measured start (no fixed frame delta), the test's five ticks a frame otherwise.
+                Action<Match>? before = main.BeforeStart;
+                if (measure) main.BeforeStart = null;
+                var press = System.Diagnostics.Stopwatch.StartNew();
+                setup.StartButton.EmitSignal(BaseButton.SignalName.Pressed);
+                press.Stop();
+                main.BeforeStart = before;
+                Match? match = main.CurrentMatch;
+                if (!Check(match?.Simulation != null, $"{what}: Start started no match")) continue;
+                World w = match!.Simulation!.World;
+                Check(w.Config.MapId == map.Key && w.Config.PlayerCount == slots && w.NavGrid.Width == map.Size
+                    && match.StartLine.StartsWith("Match started:", StringComparison.Ordinal) && match.StartLine.Contains($", map file {map.Key},", StringComparison.Ordinal),
+                    $"{what}: map '{w.Config.MapId}', {w.Config.PlayerCount} players, {w.NavGrid.Width} wide, line '{match.StartLine}'");
+                // BUG-1093: every start (new, loaded, replay) instantiates the one held scene, never a fresh GD.Load whose
+                // throwaway wrapper the GC could be finalizing (each quit below is followed by a full collection).
+                Check(ReferenceEquals(_matchScene ??= Main.MatchScene, Main.MatchScene) && GodotObject.IsInstanceValid(Main.MatchScene)
+                    && match.SceneFilePath == Main.MatchScenePath, $"{what}: the match scene was not the one held (BUG-1093)");
+                if (measure) await FrameCost(match, map, press.Elapsed.TotalMilliseconds);
+                var clock = System.Diagnostics.Stopwatch.StartNew();
+                while (match.Simulation.TickNumber < 5 && clock.Elapsed.TotalSeconds < 30) await Frames(1);
+                int halls = HallsOnStarts(w, map, slots, what);
+                Check(halls == slots, $"{what}: {halls} Town Halls on the map's starts, want {slots}");
+                GD.Print($"  {what}: {halls} halls, {match.StartLine}");
+                main.QuitToMenu();
+                await Frames(2);
+                // BUG-1093's shape: a collection between matches, its finalizers left running into the next start.
+                GC.Collect();
+            }
+        }
+        main.ShowSetup();
+        await Frames(1);
+        SkirmishSetup s = main.Setup!;
+        s.PickMap("");
+        for (int k = 0; k < SkirmishSetup.MaxSlots && s.SlotCount > LaunchOptions.MinPlayers; k++) s.RemoveSlot();
+        main.ShowMenu();
+        await Frames(1);
+    }
+
+    // The first second of a fresh match at real speed: frames, average and worst frame, FPS; and the trees the props view
+    // shows and the minimap's refreshes. Headless frames have no draw, so the line says which.
+    private async Task FrameCost(Match match, MapDef map, double pressMs)
+    {
+        var props = match.GetNode<PropsView>("World3D/PropsView");
+        var mini = match.GetNode<Minimap>("Hud/Minimap");
+        var frames = new List<double>();
+        var watch = System.Diagnostics.Stopwatch.StartNew();
+        double last = 0;
+        while (watch.Elapsed.TotalSeconds < 1.0)
+        {
+            await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            double now = watch.Elapsed.TotalMilliseconds;
+            frames.Add(now - last);
+            last = now;
+        }
+        double seconds = watch.Elapsed.TotalSeconds;
+        int tree = _data.FindResource("tree");
+        int trees = tree >= 0 ? props.ShownCount(tree) : -1;
+        string mode = DisplayServer.GetName() == "headless" ? "headless, no draw" : $"windowed {GetViewport().GetVisibleRect().Size}";
+        GD.Print(string.Create(System.Globalization.CultureInfo.InvariantCulture,
+            $"  frame cost {map.Key} ({mode}): Start press {pressMs:0} ms; first second {frames.Count} frames ({frames.Count / seconds:0.0} FPS), " +
+            $"first frame {frames[0]:0.0} ms, avg {frames.Average():0.0} ms, worst {frames.Max():0.0} ms; {trees} trees shown, minimap refreshes {mini.Refreshes}"));
+        Check(trees > 0, $"{map.Key}: no tree shown");
+    }
+
+    // The Town Halls standing on the map's first `players` start cells (a hall of that seat's on each, at the sim's start
+    // location). The level is the map's own (Raraku's starts are on 0, Vathar Crossing's on its level-1 steppe).
+    private int HallsOnStarts(World w, MapDef map, int players, string what)
+    {
+        int found = 0;
+        var b = w.Buildings;
+        for (int p = 0; p < players; p++)
+        {
+            int start = map.Starts[p], sx = start % map.Size, sy = start / map.Size;
+            bool onHall = false;
+            for (int i = 0; i < b.Capacity; i++)
+            {
+                if (!b.Alive[i] || b.Owner[i] != p) continue;
+                BuildingDef def = _data.Buildings[b.TypeId[i]];
+                int ax = b.Cell[i] % w.NavGrid.Width, ay = b.Cell[i] / w.NavGrid.Width;
+                onHall |= sx >= ax && sx < ax + def.FootprintWidth && sy >= ay && sy < ay + def.FootprintHeight;
+            }
+            if (onHall && w.StartLocations[p].Cell == start) found++;
+            else Check(false, $"{what}: player {p} has no Town Hall on its start cell ({sx}, {sy}), level {w.Heightmap.LevelAt(sx, sy)}");
+        }
+        return found;
     }
 
     // ---- the flag's matches ----
@@ -382,11 +536,21 @@ public partial class MapListTest : Node
         for (int i = 0; i < n; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
     }
 
-    // Windowed with `-- --shots <dir>`: the viewport as map-list-<name>.png.
+    // Windowed with `-- --shots <dir>`: the viewport as map-list-<name>.png. M6-VH5: three draws waited for with a bound, since
+    // a minimized window draws nothing and an unbounded FramePostDraw wait hung the run (seen 4 times while looping it).
     private async Task Shot(string name)
     {
         if (_shots == null || DisplayServer.GetName() == "headless") return;
-        for (int i = 0; i < 3; i++) await ToSignal(RenderingServer.Singleton, RenderingServer.SignalName.FramePostDraw);
+        int drawn = 0;
+        void OnDraw() => drawn++;
+        RenderingServer.FramePostDraw += OnDraw;
+        for (int frames = 0; frames < 300 && drawn < 3; frames++) await Frames(1);
+        RenderingServer.FramePostDraw -= OnDraw;
+        if (drawn < 3)
+        {
+            GD.Print($"  screenshot map-list-{name} skipped: the window drew {drawn} frames (mode {DisplayServer.WindowGetMode()})");
+            return;
+        }
         string path = $"{_shots}/map-list-{name}.png";
         GetViewport().GetTexture().GetImage().SavePng(path);
         GD.Print($"  screenshot {path}");

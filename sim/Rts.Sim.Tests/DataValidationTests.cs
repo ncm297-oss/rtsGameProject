@@ -392,6 +392,9 @@ public class DataValidationTests
     [InlineData("spendDownQueue", "0", "ai.spendDownQueue", "not a whole number in 1-5")]
     [InlineData("spendDownQueue", "6", "ai.spendDownQueue", "not a whole number in 1-5")]
     [InlineData("spendDownQueue", "2.5", "ai.spendDownQueue", "not a whole number in 1-5")]
+    [InlineData("huntMemory", null, "ai.huntMemory", "missing required field")] // M5-4d
+    [InlineData("huntMemory", "-1", "ai.huntMemory", "must not be negative")]
+    [InlineData("huntMemory", "3600.5", "ai.huntMemory", "above the maximum 3600 s")]
     public void AiRulesBlock_MissingOrOutOfRange_IsOneError(string? field, string? value, string path, string message)
     {
         using TestDataDir dir = TestDataDir.CopyOfShipped();
@@ -523,6 +526,7 @@ public class DataValidationTests
         Assert.Equal((0.25f, 1f), (a.ReserveShift, a.ReserveArmyShare)); // M5-4g, BUG-1021
         Assert.Equal(64f, a.GatherReach); // M6-S5 (BUG-1045): meters
         Assert.Equal((2, 2), (a.ScoutReplacements, a.SpendDownQueue)); // M6-SH1 (BUG-1052, BUG-1051)
+        Assert.Equal(2400, a.HuntMemoryTicks); // M5-4d: 120 s
     }
 
     /// <summary>M5-4b: the defense knobs load at their edges (<c>defendFor</c> 0 and 600 s, <c>defendRadius</c> 8 and 256 m, <c>workerFleeRadius</c> 1 and 64 m).</summary>
@@ -551,6 +555,8 @@ public class DataValidationTests
     [InlineData("scoutReplacements", 8, 8)]
     [InlineData("spendDownQueue", 1, 1)] // M6-SH1, BUG-1051
     [InlineData("spendDownQueue", 5, 5)]
+    [InlineData("huntMemory", 0, 0)] // M5-4d: 0 is valid (only a sighting this think is fresh)
+    [InlineData("huntMemory", 3600, 72000)]
     public void AiDefenseKnobs_AtTheirEdges_Load(string knob, double value, double loaded)
     {
         using TestDataDir dir = TestDataDir.CopyOfShipped();
@@ -562,7 +568,7 @@ public class DataValidationTests
         {
             "defendFor" => a.DefendForTicks, "defendRadius" => a.DefendRadius, "castMinTargets" => a.CastMinTargets,
             "defendRatio" => a.DefendRatio, "defendMinValue" => a.DefendMinValue, "recallHallHp" => a.RecallHallHp, "reserveShift" => a.ReserveShift, "reserveArmyShare" => a.ReserveArmyShare, "gatherReach" => a.GatherReach,
-            "scoutReplacements" => a.ScoutReplacements, "spendDownQueue" => a.SpendDownQueue, _ => a.WorkerFleeRadius,
+            "scoutReplacements" => a.ScoutReplacements, "spendDownQueue" => a.SpendDownQueue, "huntMemory" => a.HuntMemoryTicks, _ => a.WorkerFleeRadius,
         }, 5);
     }
 

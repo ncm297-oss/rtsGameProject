@@ -79,7 +79,7 @@ public static class StatsScreenCheck
             Rts.Sim.Data.AiOpening o = data.Ai[w.FactionOf(p)].Openings[want[p]];
             string text = ui.OpeningLine(data.Factions[w.FactionOf(p)].DisplayName, o.DisplayName);
             if (stats.OpeningText(p) != text) bad.Add($"{how}: seat {p} line '{stats.OpeningText(p)}' (want '{text}')");
-            if (line >= stats.OpeningLines.Count || stats.OpeningLines[line].Text != text || stats.OpeningLines[line].TooltipText != o.Description)
+            if (line >= stats.OpeningLines.Count || stats.OpeningLines[line].Text != text || stats.OpeningLines[line].TooltipText != TooltipWrap.Wrap(o.Description))
                 bad.Add($"{how}: line {line} for seat {p}: '{(line < stats.OpeningLines.Count ? stats.OpeningLines[line].Text : "<none>")}'");
             line++;
         }

@@ -43,6 +43,14 @@ public partial class Main : Node3D
     /// <summary>The match scene the shell instantiates for each match.</summary>
     public const string MatchScenePath = "res://scenes/Match.tscn";
 
+    // BUG-1093: one PackedScene held for the process, not a GD.Load per match. A load's throwaway wrapper is left to the GC;
+    // under load its finalizer could race the next GD.Load's weak-to-strong handle swap on the cached resource ("Handle is not
+    // initialized" inside GD.Load). Held strongly, the wrapper is never finalized, and no match start calls GD.Load.
+    private static PackedScene? _matchScene;
+
+    /// <summary>The match scene (<see cref="MatchScenePath"/>), loaded once and held for the process (BUG-1093).</summary>
+    public static PackedScene MatchScene => _matchScene ??= GD.Load<PackedScene>(MatchScenePath);
+
     private GameData? _data;
     private MainMenu? _menu;
     private SkirmishSetup? _setup;
@@ -396,7 +404,7 @@ public partial class Main : Node3D
         if (_menu != null) _menu.Visible = false;
         if (_setup != null) _setup.Visible = false;
         if (_load != null) _load.Visible = false;
-        var match = GD.Load<PackedScene>(MatchScenePath).Instantiate<Match>();
+        var match = MatchScene.Instantiate<Match>();
         match.Name = "Match";
         match.ProcessMode = ProcessModeEnum.Pausable;
         AddChild(match);
@@ -425,7 +433,7 @@ public partial class Main : Node3D
         if (_menu != null) _menu.Visible = false;
         if (_setup != null) _setup.Visible = false;
         if (_load != null) _load.Visible = false;
-        var match = GD.Load<PackedScene>(MatchScenePath).Instantiate<Match>();
+        var match = MatchScene.Instantiate<Match>();
         match.Name = "Match";
         match.ProcessMode = ProcessModeEnum.Pausable;
         AddChild(match);
@@ -532,7 +540,7 @@ public partial class Main : Node3D
         if (_menu != null) _menu.Visible = false;
         if (_setup != null) _setup.Visible = false;
         if (_load != null) _load.Visible = false;
-        var match = GD.Load<PackedScene>(MatchScenePath).Instantiate<Match>();
+        var match = MatchScene.Instantiate<Match>();
         match.Name = "Match";
         // Main runs Always (it answers Esc while paused); the match must stop with the tree.
         match.ProcessMode = ProcessModeEnum.Pausable;

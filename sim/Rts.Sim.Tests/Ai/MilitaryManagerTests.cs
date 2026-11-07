@@ -127,11 +127,15 @@ public class MilitaryManagerTests
         }
     }
 
-    /// <summary>The target razed mid-wave: the next known enemy building is the new target (every member sent again), or with none the wave ends and the members Move home.</summary>
+    /// <summary>
+    /// The target razed mid-wave: the next known enemy building is the new target (every member sent again). With none known
+    /// the wave used to end and the members Move home; since M5-4d it turns into a hunt on the spot (player 1's workers still
+    /// live): the same members, each sent AttackMove to the hunt's first point, none sent home.
+    /// </summary>
     [Theory]
     [InlineData(true)]
     [InlineData(false)]
-    public void ARazedTarget_Retargets_OrTheWaveEndsHome(bool another)
+    public void ARazedTarget_Retargets_OrTheWaveTurnsIntoAHunt(bool another)
     {
         Simulation sim = Scene(s_four.Value, AiDifficulty.Normal, out EntityHandle hall, tent: another);
         AiPlayer ai = sim.AiOf(0)!;
@@ -154,10 +158,12 @@ public class MilitaryManagerTests
         }
         else
         {
-            Assert.False(ai.Board.WaveActive);
-            List<Command> home = log.Where(c => c.Kind == CommandKind.Move && army.Contains(c.Unit)).ToList();
-            Assert.Equal(army.OrderBy(h => h.Index), home.Select(c => c.Unit));
-            Assert.All(home, c => Assert.Equal(ai.Board.Rally, c.Position));
+            Assert.True(ai.Board.WaveActive && ai.Board.Hunting);
+            Assert.Equal(1, ai.Board.HuntsStarted);
+            Assert.DoesNotContain(log, c => c.Kind == CommandKind.Move && army.Contains(c.Unit));
+            List<Command> hunt = log.Where(c => c.Kind == CommandKind.AttackMove && army.Contains(c.Unit)).ToList();
+            Assert.Equal(army.OrderBy(h => h.Index), hunt.Select(c => c.Unit));
+            Assert.All(hunt, c => Assert.Equal(ai.Board.WaveTargetPoint, c.Position));
         }
     }
 

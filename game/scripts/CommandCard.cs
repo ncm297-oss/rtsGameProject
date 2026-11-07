@@ -266,7 +266,7 @@ public partial class CommandCard : Control
         {
             BuildingDef def = _data.Buildings[t];
             _costText[t] = string.Create(CultureInfo.InvariantCulture, $"{def.CostGold} / {def.CostWood}");
-            _tooltip[t] = string.Create(CultureInfo.InvariantCulture, $"{def.Description}\n{f.GoldName} {def.CostGold}  {f.WoodName} {def.CostWood}");
+            _tooltip[t] = string.Create(CultureInfo.InvariantCulture, $"{TooltipWrap.Wrap(def.Description)}\n{f.GoldName} {def.CostGold}  {f.WoodName} {def.CostWood}");
         }
         _unitCost = new string[_data.Units.Length];
         _unitTip = new string[_data.Units.Length];
@@ -397,7 +397,7 @@ public partial class CommandCard : Control
         string range = AbilityCaster.IsNoTarget(def.Kind) ? "" : string.Create(CultureInfo.InvariantCulture, $"{ui.Hud(HudText.Range)} {def.Range:0.##} {m}  ");
         string radius = def.Radius > 0f ? string.Create(CultureInfo.InvariantCulture, $"{ui.Hud(HudText.Radius)} {def.Radius:0.##} {m}  ") : "";
         return string.Create(CultureInfo.InvariantCulture,
-            $"{def.Description}\n{range}{radius}{ui.Hud(HudText.Cooldown)} {cooldown:0.##} {sec}");
+            $"{TooltipWrap.Wrap(def.Description)}\n{range}{radius}{ui.Hud(HudText.Cooldown)} {cooldown:0.##} {sec}");
     }
 
     // Greys each production button the sim would refuse now; touches a button only when its reason changed.
@@ -455,10 +455,11 @@ public partial class CommandCard : Control
         _names[i].Modulate = _hints[i].Modulate = ok ? Colors.White : Dimmed;
     }
 
-    // "<description>\n<gold> G  <wood> W" plus "\nNeeds A, B" when the def requires anything (display names).
+    // "<description>\n<gold> G  <wood> W" plus "\nNeeds A, B" when the def requires anything (display names). The description
+    // is pre-wrapped (TooltipWrap, BUG-1081); the cost and needs lines are not, so a requirement's name never splits.
     private string Tooltip(string description, FactionDef f, int gold, int wood, System.Collections.Immutable.ImmutableArray<string> requires, UiText ui)
     {
-        string tip = string.Create(CultureInfo.InvariantCulture, $"{description}\n{f.GoldName} {gold}  {f.WoodName} {wood}");
+        string tip = string.Create(CultureInfo.InvariantCulture, $"{TooltipWrap.Wrap(description)}\n{f.GoldName} {gold}  {f.WoodName} {wood}");
         if (requires.IsDefaultOrEmpty) return tip;
         var names = new string[requires.Length];
         for (int k = 0; k < names.Length; k++) names[k] = ProductionMenu.RequirementName(_data, requires[k]);

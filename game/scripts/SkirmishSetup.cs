@@ -252,6 +252,10 @@ public partial class SkirmishSetup : CanvasLayer
                 if (_slotsBeforeMap < 0) _slotsBeforeMap = SlotCount;
                 while (SlotCount > SlotCap) HideLastSlot();
             }
+            // M6-VH5: a map with more starts gives back the slots an earlier map's cap took (four slots, Raraku: 2, then
+            // Vathar Crossing: 4 again, as Generated would), up to its own cap.
+            if (_slotsBeforeMap >= 0)
+                while (SlotCount < Math.Min(_slotsBeforeMap, SlotCap)) ShowNextSlot();
             MapPlayersLabel.Text = _ui?.MapPlayersLine(map.DisplayName, map.Players) ?? "";
             // M6-V19: the greyed counts show the map's own (its forests and gold mines), not the generator's unused picks.
             if (_forestsBeforeMap < 0) _forestsBeforeMap = ForestsSpin.Value;
@@ -524,7 +528,7 @@ public partial class SkirmishSetup : CanvasLayer
         for (int m = 0; m < data.Maps.Length; m++)
         {
             MapOption.AddItem(data.Maps[m].DisplayName);
-            MapOption.SetItemTooltip(m + 1, data.Maps[m].Description);
+            MapOption.SetItemTooltip(m + 1, TooltipWrap.Wrap(data.Maps[m].Description));
         }
         MapOption.Select(0);
         grid.AddChild(MapOption);
@@ -545,7 +549,7 @@ public partial class SkirmishSetup : CanvasLayer
         {
             _presetKeys[i] = presets[i].Key;
             ResourcesOption.AddItem(presets[i].DisplayName);
-            ResourcesOption.SetItemTooltip(i, presets[i].Description);
+            ResourcesOption.SetItemTooltip(i, TooltipWrap.Wrap(presets[i].Description));
         }
         int standard = Array.IndexOf(_presetKeys, StartingResourcesDef.StandardId);
         if (presets.Length > 0) ResourcesOption.Select(Math.Max(standard, 0));

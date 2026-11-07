@@ -12,7 +12,7 @@ namespace Rts.Sim.Ai;
 /// sim state: not hashed, never read by a sim rule; allocated once, sized from the match; stored whole by a save (M6-S3,
 /// <c>Blackboard.Save.cs</c>). Since M5-4b the defense's kept
 /// building hp, point and per-unit marks; since M5-4c the casters' last casts; since M5-4f the defenders picked and the
-/// wave's start threshold.
+/// wave's start threshold; since M5-4d the last enemy unit seen and the hunt's sweep (saved in their own section, <c>HUNT</c>).
 /// </summary>
 internal sealed partial class Blackboard
 {
@@ -24,7 +24,7 @@ internal sealed partial class Blackboard
     private int _badNext;
 
     /// <summary>Sizes the bookkeeping for <paramref name="steps"/> build-order steps and the match's unit and building slots.</summary>
-    internal Blackboard(int steps, int unitSlots, int buildingSlots, int resourceSlots, int scoutGridPoints)
+    internal Blackboard(int steps, int unitSlots, int buildingSlots, int resourceSlots, int scoutGridPoints, int huntPoints)
     {
         ScoutPoints = new Vector2[ScoutHead + scoutGridPoints];
         ScoutVisited = new bool[ScoutPoints.Length];
@@ -68,6 +68,7 @@ internal sealed partial class Blackboard
         CastReadyAt = new int[unitSlots];
         CastAt = new Vector2[unitSlots];
         SeenEnemies = new Vector2[unitSlots];
+        HuntVisited = new bool[huntPoints];
     }
 
     /// <summary>
@@ -233,6 +234,56 @@ internal sealed partial class Blackboard
     /// <summary>See <see cref="EnemyArmyCentroid"/>.</summary>
     internal int EnemyArmyCount, EnemyArmyTick = -1;
 
+    // ---------- M5-4d: the last enemy unit seen, and the hunt (MilitaryManager) ----------
+
+    /// <summary>
+    /// The last enemy unit seen (workers too, never an ally's): its position (m) at <see cref="EnemyUnitTick"/>, the think that
+    /// last saw one (-1: never, or forgotten once the hunt went there and found nothing). Fed by the census from
+    /// <see cref="PlayerView.NextUnit"/> only: of the enemy units seen that think, the one nearest the hunt's target while
+    /// hunting, else nearest the hall.
+    /// </summary>
+    internal Vector2 EnemyUnitPoint;
+
+    /// <summary>See <see cref="EnemyUnitPoint"/>.</summary>
+    internal int EnemyUnitTick = -1;
+
+    /// <summary>Whether the wave in progress (<see cref="WaveActive"/>) is a hunt: no enemy building known, its target a point (<see cref="WaveTargetPoint"/>), not a building.</summary>
+    internal bool Hunting;
+
+    /// <summary>The hunt's sweep point it walks to (an index into <see cref="HuntVisited"/>, <c>MilitaryManager.HuntPoint</c>), -1 while it hunts the last sighting.</summary>
+    internal int HuntSweep = -1;
+
+    /// <summary>
+    /// Per sweep point, whether this hunt's sweep has visited it: the scout's map-grid cell centres, then the grid's interior
+    /// corners (on an odd <see cref="HuntPass"/> the cell edges' midpoints instead), then the border ring (the scout's
+    /// geometry, not its visited marks; <c>MilitaryManager.HuntPoint</c>).
+    /// </summary>
+    internal bool[] HuntVisited { get; }
+
+    /// <summary>
+    /// Where the sweep began (m): the members' centroid when it started (at the hunt's start, or when a forgotten sighting
+    /// sent it back to sweeping). The sweep favours points near it (<c>MilitaryManager.NextSweep</c>).
+    /// </summary>
+    internal Vector2 HuntOrigin;
+
+    /// <summary>
+    /// The border-ring point the hunt's perimeter leg walks to next, -1 while no leg is in progress (BUG-1107 fix round 2,
+    /// <c>MilitaryManager.AfterReached</c>): once the sweep reaches a ring point it walks the whole ring in order.
+    /// </summary>
+    internal int HuntRing = -1;
+
+    /// <summary>Ring points the perimeter leg still has to reach, <see cref="HuntRing"/> included (0 with no leg).</summary>
+    internal int HuntRingLeft;
+
+    /// <summary>
+    /// The sweep's passes completed in this hunt (its marks cleared, <c>MilitaryManager.NextSweep</c>): an odd pass sweeps
+    /// the cell edges' midpoints instead of the centres and interior corners (<c>MilitaryManager.HuntPoint</c>).
+    /// </summary>
+    internal int HuntPass;
+
+    /// <summary>Hunts started (tests and tooling; a wave that turns into a hunt counts).</summary>
+    internal int HuntsStarted;
+
     // ---------- M5-3: the military (MilitaryManager) ----------
 
     /// <summary>The rally point (m) and its version, bumped whenever the point moves.</summary>
@@ -244,7 +295,7 @@ internal sealed partial class Blackboard
     /// <summary>Per unit slot, the rally version the unit (of <see cref="UnitGeneration"/>) was last sent to: it isn't sent again to the same point.</summary>
     internal int[] RalliedVersion { get; }
 
-    /// <summary>Whether a wave is in progress.</summary>
+    /// <summary>Whether a wave is in progress (M5-4d: a hunt too, <see cref="Hunting"/>).</summary>
     internal bool WaveActive;
 
     /// <summary>The wave's target building (slot and generation), its type and anchor as known, and its footprint centre (m).</summary>

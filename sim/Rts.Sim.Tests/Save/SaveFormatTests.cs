@@ -15,14 +15,21 @@ namespace Rts.Sim.Tests.Save;
 public class SaveFormatTests
 {
     [Fact]
-    public void CurrentVersion_Is5_AGeneratedMapWrites4_AndFormat3StillReads()
+    public void CurrentVersion_Is7_AGeneratedMapWrites4Or6_AndFormat3StillReads()
     {
         // M6-S3: the AI seats' section bumped the format to 2 (rule 36); M6-S4: a team byte per seat to 3; M6-S6: the
         // starting-resources preset to 4; M6-S7: the map id to 5, written only for a hand-made map (a generated map's save is
         // still 4). Formats 3-4 still load (3 as standard; both as generated maps); older files are refused, not read.
-        Assert.Equal(5, SaveFormat.CurrentVersion);
+        // M5-4d: the AI seats' hunt section (HUNT) makes a match with an AI seat 6 (generated map) or 7 (hand-made map); one
+        // with no AI seat is still 4 / 5, and a save with an AI seat reads only from 6.
+        Assert.Equal(7, SaveFormat.CurrentVersion);
+        Assert.Equal(6, SaveFormat.HuntMaplessVersion);
+        Assert.Equal(5, SaveFormat.MapVersion);
         Assert.Equal(4, SaveFormat.MaplessVersion);
         Assert.Equal(3, SaveFormat.OldestReadVersion);
+        Assert.Equal(6, SaveFormat.FirstHuntVersion);
+        Assert.Equal((4, 5, 6, 7), (SaveHeader.VersionFor(false, false), SaveHeader.VersionFor(true, false), SaveHeader.VersionFor(false, true), SaveHeader.VersionFor(true, true)));
+        Assert.Equal(new[] { false, false, true, false, true }, new[] { 3, 4, 5, 6, 7 }.Select(SaveFormat.HasMapId).ToArray());
     }
 
     /// <summary>M6-S4: each seat's team is one byte, in player order, after the tick (0 for no team); every format-2 field keeps its offset.</summary>
@@ -35,7 +42,7 @@ public class SaveFormatTests
         byte[] bytes = SaveTestRun.Save(sim);
         using var r = new BinaryReader(new MemoryStream(bytes), Encoding.ASCII);
         r.ReadBytes(8);
-        Assert.Equal(SaveFormat.MaplessVersion, r.ReadInt32()); // M6-S7: a generated map's save is format 4
+        Assert.Equal(SaveFormat.HuntMaplessVersion, r.ReadInt32()); // M5-4d: a generated map with an AI seat is format 6 (4's header)
         r.ReadInt64();
         ReadString(r);
         r.ReadUInt64();
@@ -78,7 +85,7 @@ public class SaveFormatTests
         Assert.Equal("HMAP"u8.ToArray(), bytes.AsSpan(teams + 2 + 4 + preset.Length, 4).ToArray());
 
         Assert.True(Rts.Sim.ViewApi.SaveSummary.TryParse(bytes, out Rts.Sim.ViewApi.SaveSummary? summary));
-        Assert.Equal(4, summary!.FormatVersion);
+        Assert.Equal(SaveFormat.HuntMaplessVersion, summary!.FormatVersion); // M5-4d: an AI seat, so format 6 (4's header)
         Assert.Equal(7UL, summary.Seed);
         Assert.Equal(1, summary.Tick);
         Assert.Equal(new[] { ("malazan", SeatController.Human, AiDifficulty.Normal), ("whirlwind", SeatController.Ai, AiDifficulty.Hard) },
@@ -99,7 +106,7 @@ public class SaveFormatTests
         var sim = new Simulation(TestSim.Config(7, 2, 64, 64) with { Seats = seats, MapId = "raraku" });
         sim.Tick();
         byte[] bytes = SaveTestRun.Save(sim);
-        Assert.Equal(5, BitConverter.ToInt32(bytes, SaveFormat.MagicLength));
+        Assert.Equal(SaveFormat.CurrentVersion, BitConverter.ToInt32(bytes, SaveFormat.MagicLength)); // M5-4d: an AI seat, format 7 (5's header)
         SaveBytes.Offsets at = SaveBytes.HeaderOffsets(bytes);
         int teams = at.Seat0Team + 4 + "whirlwind".Length + 2;
         Assert.Equal(new byte[] { 1, 2 }, bytes.AsSpan(teams, 2).ToArray());
@@ -110,7 +117,7 @@ public class SaveFormatTests
         Assert.Equal("HMAP"u8.ToArray(), bytes.AsSpan(map + 4 + "raraku".Length, 4).ToArray());
 
         Assert.True(Rts.Sim.ViewApi.SaveSummary.TryParse(bytes, out Rts.Sim.ViewApi.SaveSummary? summary));
-        Assert.Equal(5, summary!.FormatVersion);
+        Assert.Equal(SaveFormat.CurrentVersion, summary!.FormatVersion); // M5-4d: format 7, format 5's header
         Assert.Equal(7UL, summary.Seed);
         Assert.Equal(1, summary.Tick);
         Assert.Equal(128, summary.MapWidth);
@@ -153,7 +160,9 @@ public class SaveFormatTests
     /// <summary>
     /// M6-S7, criterion 4: a match on a generated map is saved in format 4 byte for byte as the build before map files: each
     /// <see cref="PreMapFixtures"/> save scene (recorded on the diff base ab54ddb) gives the same bytes, the data hash and
-    /// the checksum aside (they follow the data, which this task and the data track change).
+    /// the checksum aside (they follow the data, which this task and the data track change). M5-4d: the AI scene now saves
+    /// format 6, which is format 4 plus the <c>HUNT</c> section: with that section taken out (and the version and length put
+    /// back) its bytes are still the fixture's (<see cref="PreMapFixtures.WithoutHunt"/>); the human scene is format 4 as it was.
     /// </summary>
     [Theory]
     [InlineData("save_menu_seed1")]
@@ -162,8 +171,10 @@ public class SaveFormatTests
     {
         (string _, int length, ulong digest) = PreMapFixtures.SaveDigests.Single(d => d.Name == name);
         byte[] bytes = SaveTestRun.Save(PreMapFixtures.SaveScene(name));
-        Assert.Equal(SaveFormat.MaplessVersion, BitConverter.ToInt32(bytes, SaveFormat.MagicLength));
-        byte[] normalized = PreMapFixtures.Normalize(bytes);
+        // save_menu_seed1 seats no AI (format 4 as it was); save_ai_seed2 does (format 6: 4 plus HUNT).
+        int version = BitConverter.ToInt32(bytes, SaveFormat.MagicLength);
+        Assert.Equal(name == "save_ai_seed2" ? SaveFormat.HuntMaplessVersion : SaveFormat.MaplessVersion, version);
+        byte[] normalized = PreMapFixtures.Normalize(version == SaveFormat.MaplessVersion ? bytes : PreMapFixtures.WithoutHunt(bytes));
         Assert.Equal(length, normalized.Length);
         Assert.Equal(digest, PreMapFixtures.Digest(normalized));
     }
@@ -190,7 +201,11 @@ public class SaveFormatTests
         }
     }
 
-    /// <summary>M6-S6: a format-3 save (no preset field) loads as <c>standard</c> and plays on exactly as its format-4 twin.</summary>
+    /// <summary>
+    /// M6-S6: a format-3 save (no preset field) loads as <c>standard</c> and plays on exactly as its format-4 twin. M5-4d: a
+    /// format-3 save with an AI seat (forged here from the format-6 one, its HUNT section taken out) is refused
+    /// <see cref="SaveError.FormatVersionMismatch"/>: its seats hold no hunt memory.
+    /// </summary>
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
@@ -199,9 +214,14 @@ public class SaveFormatTests
         byte[] current = SaveBytes.Small(ai);
         SaveBytes.Offsets at = SaveBytes.HeaderOffsets(current);
         Assert.Equal("standard", SaveBytes.StringAt(current, at.Preset));
-        byte[] old = SaveBytes.AsFormat3(current, at.Preset);
-        Assert.Equal(current.Length - 4 - "standard".Length, old.Length);
+        byte[] old = SaveBytes.AsFormat3(ai ? PreMapFixtures.WithoutHunt(current) : current, at.Preset);
         Assert.Equal("HMAP"u8.ToArray(), old.AsSpan(at.Preset, 4).ToArray());
+        if (ai)
+        {
+            Assert.Equal(SaveError.FormatVersionMismatch, SaveTestRun.TryLoad(TestSim.Data, old));
+            return;
+        }
+        Assert.Equal(current.Length - 4 - "standard".Length, old.Length);
         Simulation fromOld = SaveTestRun.Load(TestSim.Data, old);
         Simulation fromCurrent = SaveTestRun.Load(TestSim.Data, current);
         Assert.Equal(StartingResourcesDef.StandardId, fromOld.World.Config.StartingResources);

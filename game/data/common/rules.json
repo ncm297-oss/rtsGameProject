@@ -18,5 +18,6 @@
           "scoutAfter": 15, "scoutRadius": 40, "scoutReach": 6, "scoutGrid": 56, "rallyDistance": 12, "rallyReach": 6, "waveCooldown": 60,
           "defendRadius": 48, "defendFor": 20, "workerFleeRadius": 16, "defendRatio": 1.5, "defendMinValue": 150, "recallHallHp": 0.5,
           "castMinTargets": 2, "reserveShift": 0.25, "reserveArmyShare": 1,
-          "gatherReach": 64, "scoutReplacements": 2, "spendDownQueue": 2 }
+          "gatherReach": 64, "scoutReplacements": 2, "spendDownQueue": 2,
+          "huntMemory": 120 }
 }

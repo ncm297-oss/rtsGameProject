@@ -91,12 +91,12 @@ public partial class QaM6V18Test : Node
 
     private async Task Run(Main main)
     {
-        // ---- a generated menu match: format 4 / format 6, as before ----
+        // ---- a generated menu match: save format 6 (an AI seat, M5-4d: BUG-1108) / recording format 6 ----
         Menu gen = await MenuMatch(main, "", GeneratedSave, GeneratedTicks);
         if (!Check(gen.Replay != null && gen.Save != null && File.Exists(gen.Replay) && File.Exists(gen.Save), $"generated files: {gen.Replay} / {gen.Save}")) return;
         byte[] genBytes = File.ReadAllBytes(gen.Save!);
-        Check(SaveSummary.TryParse(genBytes, out SaveSummary? genSummary) && genSummary!.FormatVersion == SaveFormat.MaplessVersion && genSummary.MapId == "",
-            $"the generated save is format {genSummary?.FormatVersion} (want {SaveFormat.MaplessVersion}) with map id '{genSummary?.MapId}'");
+        Check(SaveSummary.TryParse(genBytes, out SaveSummary? genSummary) && genSummary!.FormatVersion == SaveFormat.HuntMaplessVersion && genSummary.MapId == "",
+            $"the generated save is format {genSummary?.FormatVersion} (want {SaveFormat.HuntMaplessVersion}) with map id '{genSummary?.MapId}'");
         // Right after the preset string comes the heightmap's tag: no map id string was written.
         byte[] preset = StringField(StartingResourcesDef.StandardId);
         int presetAt = IndexOf(genBytes, preset);
@@ -278,7 +278,8 @@ public partial class QaM6V18Test : Node
         foreach ((string name, Replay forged) in new[]
         {
             ("unknown map", Copy(replay!, mapId: "no_such_map")),
-            ("other size", Copy(replay!, map: replay!.Map with { Width = 256, Height = 256 })),
+            // M6-VH5: a side other than the map's (the first map was Raraku, 128; on three maps it is Pale Hills, 256).
+            ("other size", Copy(replay!, map: replay!.Map with { Width = OtherSide(_map.Size), Height = OtherSide(_map.Size) })),
             ("small capacity", Copy(replay!, resources: _map.Nodes.Length - 1)),
         })
         {
@@ -289,6 +290,8 @@ public partial class QaM6V18Test : Node
         runner.QueueFree();
         await Frames(1);
     }
+
+    private static int OtherSide(int side) => side == 256 ? 128 : 256;
 
     private static Replay Copy(Replay r, string? mapId = null, MapGenParams? map = null, int? resources = null) => new()
     {

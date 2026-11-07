@@ -387,7 +387,7 @@ public partial class ProductionHudTest : Node
                 var req = c == CardCommand.Train ? _data.Units[id].Requires : _data.Techs[id].Requires;
                 Check(_card.NameAt(i).Text == name && _card.HintAt(i).Text == _card.GridKey(i), $"{what}: cell {i} reads '{_card.NameAt(i).Text}' / '{_card.HintAt(i).Text}'");
                 string tip = _card.ButtonAt(i).TooltipText;
-                Check(tip.StartsWith(desc) && !tip.Contains("_"), $"{what}: cell {i} tooltip '{tip}'");
+                Check(tip.StartsWith(TooltipWrap.Wrap(desc)) && !tip.Contains("_"), $"{what}: cell {i} tooltip '{tip}'");
                 if (req.Length > 0)
                     Check(tip.Contains(_ui.Hud(HudText.Needs)) && req.All(r => tip.Contains(ProductionMenu.RequirementName(_data, r))), $"{what}: cell {i} tooltip lacks its needs: '{tip}'");
             }

@@ -7,7 +7,7 @@ namespace Rts.Sim.Tests.Stress;
 /// <summary>
 /// QA, M6-S7 (session 2026-11-05-1716): the shipped hand-made map Raraku, two Normal AI seats (Malazan v Whirlwind), seed 11,
 /// over 12,000 ticks (10 minutes, four times the developer's 3,000-tick twin): the fold of every tick's state hash is the
-/// same in a fresh child process, and a save at tick 6,000 (format 5) loaded and run on to 12,000 ends on the same hash.
+/// same in a fresh child process, and a save at tick 6,000 (format 5; M5-4d: 7, an AI match) loaded and run on to 12,000 ends on the same hash.
 /// </summary>
 [Collection(SerialCollection.Name)]
 public class RarakuTwinStressTests
@@ -49,7 +49,7 @@ public class RarakuTwinStressTests
             _out.WriteLine(Marker + mine);
             return;
         }
-        Assert.Equal(5, BitConverter.ToInt32(save, Rts.Sim.Save.SaveFormat.MagicLength));
+        Assert.Equal(Rts.Sim.Save.SaveFormat.CurrentVersion, BitConverter.ToInt32(save, Rts.Sim.Save.SaveFormat.MagicLength)); // M5-4d: an AI match on a map file, format 7
         Simulation loaded = SaveTestRun.Load(TestSim.Data, save);
         var ignored = new Determinism.StateHasher();
         Assert.Equal(last, Fold(loaded, Ticks, ref ignored));

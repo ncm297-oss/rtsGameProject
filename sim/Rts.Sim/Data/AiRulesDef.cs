@@ -103,4 +103,10 @@ public sealed class AiRulesDef
     /// with only empty queues (as at <c>standard</c>) a <c>high</c> Malazan side still floated 380-1,300 at 10:00 on three seeds.
     /// </summary>
     public int SpendDownQueue { get; init; }
+
+    /// <summary>
+    /// M5-4d: once no enemy building is known, the army hunts the last enemy unit seen while that sighting is at most this
+    /// old; with none that fresh it sweeps the map grid instead (<c>huntMemory</c> s, 0-3,600, to ticks).
+    /// </summary>
+    public int HuntMemoryTicks { get; init; }
 }

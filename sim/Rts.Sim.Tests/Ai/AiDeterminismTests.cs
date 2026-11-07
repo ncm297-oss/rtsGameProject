@@ -143,6 +143,39 @@ public class AiDeterminismTests
         Assert.Equal(mine, MapFileTests.RunChild(typeof(AiDeterminismTests), nameof(FourAiSeats_OnPaleHills_TwoProcesses_SamePerTickHashes), PaleHillsChildVariable, PaleHillsLine));
     }
 
+    private const string HuntChildVariable = "RTS_AI_PALE_HILLS_HUNT_CHILD";
+    private const string HuntLine = "PALE-HILLS-HUNT ";
+
+    /// <summary>
+    /// M5-4d criterion 6: Normal v Normal on Pale Hills, seed 3 (<see cref="MapFileTests.MapMatch"/>, a match that used to stall
+    /// with the loser's last unit unhunted, BUG-1068), played to its end (at most 72,000 ticks) is deterministic across
+    /// processes: this process and a fresh child <c>dotnet test</c> of this row fold the same per-tick hashes, end on the same
+    /// tick and count the same hunts. Asserted here too: the match ends and a hunt was started.
+    /// </summary>
+    [Fact]
+    [Trait("Category", "Stress")]
+    public void PaleHillsSeed3_ToTheEnd_TwoProcesses_SamePerTickHashes()
+    {
+        Simulation sim = MapFileTests.MapMatch(MapFileTests.PaleHills, 3, false, out _);
+        var h = new Determinism.StateHasher();
+        while (sim.TickNumber < 72_000 && !sim.MatchOver)
+        {
+            sim.Tick();
+            h.Add(sim.StateHash());
+        }
+        int hunts = sim.AiOf(0)!.Board.HuntsStarted + sim.AiOf(1)!.Board.HuntsStarted;
+        Assert.True(sim.MatchOver, "no result by 72,000 ticks");
+        Assert.True(hunts > 0, "no hunt started");
+        string mine = $"{h.Value:X16} {sim.StateHash():X16} {sim.TickNumber} {hunts}";
+        if (Environment.GetEnvironmentVariable(HuntChildVariable) == "1")
+        {
+            _out.WriteLine(HuntLine + mine);
+            return;
+        }
+        _out.WriteLine($"this process: {mine}");
+        Assert.Equal(mine, MapFileTests.RunChild(typeof(AiDeterminismTests), nameof(PaleHillsSeed3_ToTheEnd_TwoProcesses_SamePerTickHashes), HuntChildVariable, HuntLine, seconds: 1200));
+    }
+
     /// <summary>M6-S4 criterion 5: two runs of the 2v2 AI match (teams 1, 2, 1, 2; <see cref="AiTeamTests.Match"/>) hash equal after every tick, with the same commands and thinks per seat.</summary>
     [Theory]
     [InlineData(1UL)]
