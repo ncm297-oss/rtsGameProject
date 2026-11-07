@@ -659,7 +659,7 @@ open S1 / S2. Retro below; open S3 / S4 listed there.)_
       the AI casts through `UseAbility` at the enemy group in reach or an enemy building, when `useAbilities` is on;
       `rules.json` `ai.castMinTargets`); verified by `Ai/AbilityManagerTests`, QA's `AbilityManagerQaTests` and a 320-scene
       oracle fuzz.)
-- [ ] Expansion, defense, attack waves, retreat, rebuilding; scouts ramps and high ground before attacking up. (M5-3,
+- [x] Expansion, defense, attack waves, retreat, rebuilding; scouts ramps and high ground before attacking up. (M5-3,
       2026-10-12: attack waves, retreat and the rally are in. M5-4b, 2026-10-13: defense is in (`DefenseManager`: a hit
       building or an intruder near the hall pulls the army home and the workers to a drop-off; knobs in `rules.json` `ai`).
       Expansion is in as the build order's `expand` step (M5-2 / D14: `AiStepAction.Expand`, the difficulty's `expandAfter`,
@@ -668,7 +668,22 @@ open S1 / S2. Retro below; open S3 / S4 listed there.)_
       last units is in** (`MilitaryManager` hunt: once no enemy building is known the army goes to the last enemy unit seen
       within `rules.json` `ai.huntMemory` 120 s, else sweeps the scout grid + a border ring with a perimeter leg; save formats
       6 / 7 carry the hunt memory; BUG-1068 narrowed to Pale Hills seed 2's stalemate; docs/03 "Implementation (M5-4d)").
-      Left: rebuilding and the high-ground scouting (M5-4d slice 2).)
+      M5-4d slice 2, 2026-11-07-0236: **rebuilding and the look before attacking up are in**
+      (`BuildOrderExecutor.ReopenLost`: a done `build` step whose building is gone comes due again, the newest of its type
+      a think, a House at the hard cap excepted; `HallFirst`: with no Town Hall and a worker alive the hall is the first
+      Build, on its old anchor (`AiPlayer.LostHallCell`, kept in the saved `TownHallCell` as `-(anchor + 2)`, no format
+      change) or by the site search round it, its cost the reserve meanwhile; `MilitaryManager.LookPoint` / `Look`: a wave
+      on a target above the members' level goes first to the top of the ramp nearest the target on its own plateau, then to
+      the target once a member is within `ai.rallyReach` of the ramp top, the target's cell is in the seat's fog, or the
+      members are stuck; `PlayerView.LevelAt` / `IsRamp` / `PlateauAt` read static terrain only); verified by
+      `Ai/RebuildTests`, `Ai/HighGroundLookTests`, QA's `RebuildLookQaTests` / `RebuildThinkCostQaTests` /
+      `RebuildLookMatchQaStressTests` (the fog oracle on every think of 4-seat Pale Hills and Vathar Crossing to 36,000: 0
+      leaks; a real rebuilding match hash-equal across a save and in two processes; 8 seats rebuilding at every think 0.387
+      ms / 0 B); docs/03 "Implementation (M5-4d slice 2)". Ticked at the 2026-11-07-0236 ACCEPT. Open behind it: a lost
+      expansion is not rebuilt (docs/03 "Not yet"); BUG-1116 S3 (losing seats rebuild houses they don't need; the Pale Hills
+      4-seat seed-2 free-for-all is a skipped known stall with BUG-1068's gold starvation underneath); BUG-1119 S3 (a
+      defeated seat's remembered buildings keep a survivor from hunting); BUG-1118 S4; the look fires rarely in real
+      matches (0 times on Pale Hills seed 1, 2 on Vathar seed 1).)
 - [ ] Easy / Normal / Hard per [02 AI](02-game-design.md#ai-opponent). (D16, 2026-10-13: the three blocks pinned to docs/02 and
       the faction pages. M5-4c slice 1, 2026-10-13: `useAbilities` applied (Easy never cast then; D19, 2026-10-15, turned it on for Easy too). Left for M5-4c slice 2:
       `gatherBonus`, `focusFire`, `pullBackWounded`.)

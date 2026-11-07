@@ -12,10 +12,12 @@ namespace Rts.Game;
 /// characters becomes a line break, and nothing else changes (a word longer than the width gets a line of its own, unbroken).
 /// So turning every break the wrap added back into a space gives the data text again; a line break already in the text is
 /// kept and each of its lines is wrapped on its own. The text itself stays the data's: this only places the breaks.
+/// Spaces at the start or end of the text are left out of the wrap (never a break, not counted toward the width), since a
+/// break there would leave an empty first or last line (BUG-1115).
 /// </remarks>
 public static class TooltipWrap
 {
-    /// <summary>The longest line, in characters (roughly 450 px at the default 16 px font).</summary>
+    /// <summary>The longest line, in characters (about 470 px at the default 16 px font, measured on Raraku's widest line).</summary>
     public const int Width = 60;
 
     /// <summary><paramref name="text"/> with a line break at the last space before each line would pass <paramref name="width"/> characters.</summary>
@@ -23,8 +25,13 @@ public static class TooltipWrap
     {
         if (string.IsNullOrEmpty(text) || text.Length <= width) return text ?? "";
         var sb = new StringBuilder(text);
-        int lineStart = 0, lastSpace = -1;
-        for (int i = 0; i < sb.Length; i++)
+        // BUG-1115: spaces at the text's edges are neither a break nor counted toward the width, so they never leave an
+        // empty first or last line; the wrap runs on the text between them.
+        int start = 0, end = sb.Length;
+        while (start < end && sb[start] == ' ') start++;
+        while (end > start && sb[end - 1] == ' ') end--;
+        int lineStart = start, lastSpace = -1;
+        for (int i = start; i < end; i++)
         {
             char c = sb[i];
             if (c == '\n')

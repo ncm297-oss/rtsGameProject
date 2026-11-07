@@ -306,6 +306,22 @@ public partial class MapListTest : Node
             setup.RemoveSlot();
             Click(setup.MapOption, 0);
             Check(setup.SlotCount == SkirmishSetup.MaxSlots - 1, $"{_map.Key}, {four[0].Key}, Remove player, Generated: {setup.SlotCount} slots (want {SkirmishSetup.MaxSlots - 1})");
+            // BUG-1114, the hand sequence: 3 slots, the small map, the bigger map (3 back), Add player (4), the small map,
+            // Generated gives back the player's last count, 4 (it gave 3, the count from before the first map).
+            if (_map.Players < SkirmishSetup.MaxSlots - 1)
+            {
+                while (setup.SlotCount > LaunchOptions.MinPlayers) setup.RemoveSlot();
+                setup.AddSlot();
+                Click(setup.MapOption, _map.Id + 1);
+                Click(setup.MapOption, four[0].Id + 1);
+                int given = setup.SlotCount;
+                setup.AddSlot();
+                int added = setup.SlotCount;
+                Click(setup.MapOption, _map.Id + 1);
+                Click(setup.MapOption, 0);
+                Check(given == 3 && added == 4 && setup.SlotCount == 4,
+                    $"BUG-1114: 3 slots, {_map.Key}, {four[0].Key} ({given}), Add player ({added}), {_map.Key}, Generated: {setup.SlotCount} slots (want 3, 4, 4)");
+            }
             setup.PickMap("");
             main.ShowMenu();
             await Frames(1);

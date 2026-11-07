@@ -178,12 +178,24 @@ internal static class MilitaryManager
 
     /// <summary>
     /// M5-4d: the sweep (re)starts from the army at <paramref name="army"/>: its origin, and the point nearest it (BUG-1107
-    /// fix round 2: or the perimeter leg's next ring point while one is in progress).
+    /// fix round 2: or, while a perimeter leg is in progress, BUG-1111: the leg's ring point before <see cref="Blackboard.HuntRing"/>,
+    /// the last one it reached, so the stretch of edge the sighting cut is walked from its start; reaching it hands back to
+    /// the leg, <see cref="AfterReached"/>).
     /// </summary>
     private static void StartSweep(AiPlayer ai, Vector2 army)
     {
         ai.Board.HuntOrigin = army;
-        HuntTarget(ai, army, ai.Board.HuntRing >= 0 ? ai.Board.HuntRing : NextSweep(ai, army, -1)); // a leg in progress goes on
+        int ring = ai.Board.HuntRing;
+        HuntTarget(ai, army, ring >= 0 ? RingPrevious(Cols(ai), Rows(ai), ring) : NextSweep(ai, army, -1)); // a leg in progress goes on
+    }
+
+    /// <summary>BUG-1111: the ring point whose next (<see cref="RingNext"/>) is ring point <paramref name="k"/>; one pass over the ring.</summary>
+    internal static int RingPrevious(int cols, int rows, int k)
+    {
+        int ring = RingStart(cols, rows), end = HuntPoints(cols, rows);
+        for (int j = ring; j < end; j++)
+            if (RingNext(cols, rows, j) == k) return j;
+        return k;
     }
 
     /// <summary>M5-4d: whether the last enemy unit seen is a sighting the hunt follows: at most <c>ai.huntMemory</c> old.</summary>
@@ -489,7 +501,11 @@ internal static class MilitaryManager
             Hunt(ai, sum / live); // M5-4d
             return;
         }
-        if (ai.EnemyBuildingKnown(board.WaveTarget, out _)) return;
+        if (ai.EnemyBuildingKnown(board.WaveTarget, out _))
+        {
+            if (Looking(ai)) Look(ai); // M5-4d slice 2
+            return;
+        }
         // The target is gone (razed, or seen gone): the nearest known enemy building to the members; with none, M5-4d, a hunt
         // (the base not defended, the match not over), else home.
         if (!ai.NearestEnemyBuilding(sum / live, out EntityHandle target, out int type, out int cell))
@@ -522,6 +538,134 @@ internal static class MilitaryManager
         board.WaveTargetType = type;
         board.WaveTargetCell = cell;
         board.WaveTargetPoint = ai.BuildingCentre(type, cell);
+        if (LookPoint(ai, type, cell, out Vector2 look)) board.WaveTargetPoint = look; // M5-4d slice 2
+    }
+
+    /// <summary>
+    /// M5-4d slice 2 (docs/02 "High ground": the AI scouts ramps before attacking up them): the <b>look point</b> a wave on
+    /// building <paramref name="type"/> at <paramref name="cell"/> goes to first, when the building's level is above the
+    /// level under the members' centroid and the seat doesn't see its cell: the top of the ramp nearest the building onto
+    /// its plateau, the centre of the plateau cell (the building's own plateau by the terrain's labels, so joined to it by
+    /// same-level ground) with a ramp cell one level below beside it, nearest the building's centre (row order on ties),
+    /// not under the building. False with none (a flat map, a same-level target, a plateau with no ramp). Reads only
+    /// static terrain, the members and the seat's own fog through <see cref="PlayerView"/>; one pass over the map's ramp
+    /// tops (<see cref="AiPlayer.RampTops"/>, listed at construction), run only when a wave's target is set; no allocation.
+    /// </summary>
+    internal static bool LookPoint(AiPlayer ai, int type, int cell, out Vector2 look)
+    {
+        look = default;
+        int n = 0;
+        Vector2 sum = Vector2.Zero;
+        for (int k = 0; k < ai.ArmyCount; k++)
+        {
+            if (!Member(ai, ai.ArmySlots[k], out SeenUnit u)) continue;
+            sum += u.Position;
+            n++;
+        }
+        return n > 0 && LookPoint(ai, type, cell, ai.View.LevelAt(CellOf(ai, sum / n)), out look);
+    }
+
+    /// <summary>See <see cref="LookPoint(AiPlayer, int, int, out Vector2)"/>, from members standing at level <paramref name="fromLevel"/>.</summary>
+    internal static bool LookPoint(AiPlayer ai, int type, int cell, int fromLevel, out Vector2 look)
+    {
+        look = default;
+        PlayerView v = ai.View;
+        int level = v.LevelAt(cell);
+        if (level <= fromLevel || v.IsVisible(cell)) return false;
+        int plateau = v.PlateauAt(cell);
+        if (plateau < 0) return false;
+        BuildingDef def = ai.Data.Buildings[type];
+        int w = v.MapWidth, bx = cell % w, by = cell / w;
+        Vector2 centre = ai.BuildingCentre(type, cell);
+        int best = -1;
+        float bestDistance = float.MaxValue;
+        int[] tops = ai.RampTops; // row order, so a tie keeps the first
+        for (int k = 0; k < tops.Length; k++)
+        {
+            int c = tops[k], x = c % w, y = c / w;
+            if (v.PlateauAt(c) != plateau || x >= bx && x < bx + def.FootprintWidth && y >= by && y < by + def.FootprintHeight) continue;
+            float d = Vector2.DistanceSquared(ai.CellCentre(c), centre);
+            if (d >= bestDistance) continue;
+            bestDistance = d;
+            best = c;
+        }
+        if (best < 0) return false;
+        look = ai.CellCentre(best);
+        return true;
+    }
+
+    /// <summary>
+    /// M5-4d slice 2: every ramp top of the map in row order: a plateau cell (<see cref="PlayerView.PlateauAt"/>) with a ramp
+    /// cell one level below it beside it (4-neighbours). Static terrain, so listed once when a seat is built (two passes over
+    /// the map: count, then fill); <see cref="LookPoint(AiPlayer, int, int, int, out Vector2)"/> then reads only this list
+    /// (a Vathar Crossing bank is 27,000 cells, its tops a few dozen).
+    /// </summary>
+    internal static int[] RampTops(PlayerView v)
+    {
+        int w = v.MapWidth, n = w * v.MapHeight, count = 0;
+        int[]? tops = null;
+        for (int pass = 0; pass < 2; pass++)
+        {
+            for (int c = 0; c < n; c++)
+            {
+                if (v.PlateauAt(c) < 0) continue;
+                int level = v.LevelAt(c);
+                if (!RampBelow(v, c - 1, level) && !RampBelow(v, c + 1, level) && !RampBelow(v, c - w, level) && !RampBelow(v, c + w, level)) continue;
+                if (tops != null) tops[count] = c;
+                count++;
+            }
+            if (tops != null) break;
+            tops = new int[count];
+            count = 0;
+        }
+        return tops!;
+    }
+
+    /// <summary>Whether <paramref name="cell"/> is a ramp cell one level below <paramref name="level"/> (a plateau cell is never on the border, so its neighbours are on the map).</summary>
+    private static bool RampBelow(PlayerView v, int cell, int level) => v.IsRamp(cell) && v.LevelAt(cell) == level - 1;
+
+    /// <summary>The cell under <paramref name="p"/> (m), clamped onto the map.</summary>
+    private static int CellOf(AiPlayer ai, Vector2 p)
+    {
+        int w = ai.View.MapWidth, h = ai.View.MapHeight;
+        int x = Math.Clamp((int)(p.X / MapConstants.CellSize), 0, w - 1), y = Math.Clamp((int)(p.Y / MapConstants.CellSize), 0, h - 1);
+        return y * w + x;
+    }
+
+    /// <summary>
+    /// M5-4d slice 2: whether the wave in progress is on its way to a look point: a building wave whose point is not its
+    /// target's centre (<see cref="SetTarget"/> put it elsewhere; read from fields a save already holds, so no new one).
+    /// </summary>
+    internal static bool Looking(AiPlayer ai)
+    {
+        Blackboard board = ai.Board;
+        return board.WaveActive && !board.Hunting && board.WaveTargetType >= 0
+            && board.WaveTargetPoint != ai.BuildingCentre(board.WaveTargetType, board.WaveTargetCell);
+    }
+
+    /// <summary>
+    /// M5-4d slice 2: a wave think on the way to the look point: the building becomes the point (every member owed an
+    /// <c>AttackMove</c> to it) once a member is within <c>ai.rallyReach</c> of the look point, the seat's own fog shows the
+    /// target's cell, or every member stands Idle with no order pending or owed after <see cref="MaxTries"/> orders toward
+    /// it without getting nearer (as close as they get: the hunt's rule).
+    /// </summary>
+    private static void Look(AiPlayer ai)
+    {
+        Blackboard board = ai.Board;
+        bool done = ai.View.IsVisible(board.WaveTargetCell), stuck = true;
+        float reach = ai.Rules.RallyReach * ai.Rules.RallyReach;
+        for (int k = 0; k < ai.ArmyCount && !done; k++)
+        {
+            int slot = ai.ArmySlots[k];
+            if (!Member(ai, slot, out SeenUnit u)) continue;
+            if (Vector2.DistanceSquared(u.Position, board.WaveTargetPoint) <= reach) done = true;
+            if (u.State != UnitState.Idle || ai.OrderedNotApplied(slot, u.Handle.Generation) || board.WaveFlag[slot] == ToAttack
+                || board.WaveTries[slot] < MaxTries) stuck = false;
+        }
+        if (!done && !stuck) return;
+        board.WaveTargetPoint = ai.BuildingCentre(board.WaveTargetType, board.WaveTargetCell);
+        for (int k = 0; k < ai.ArmyCount; k++)
+            if (Member(ai, ai.ArmySlots[k], out _)) board.WaveFlag[ai.ArmySlots[k]] = ToAttack;
     }
 
     /// <summary>Every army unit's command this think, in slot order (one each at most).</summary>
@@ -529,7 +673,8 @@ internal static class MilitaryManager
     {
         Blackboard board = ai.Board;
         float near = 0f;
-        bool hunting = board.WaveActive && board.Hunting; // M5-4d: a point, no building
+        // M5-4d: a hunt's target is a point, no building; M5-4d slice 2: so is a look point, until Look hands over to the building.
+        bool hunting = board.WaveActive && (board.Hunting || Looking(ai));
         if (board.WaveActive && !hunting)
         {
             // Near the target: within rallyReach of its footprint's edge, roughly (a unit can't stand at the centre).

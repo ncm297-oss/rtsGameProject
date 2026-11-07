@@ -77,6 +77,7 @@ internal static class EconomyManager
             if (!ai.BuildAccepted(board.HousePending)) board.MarkBad(board.HousePending.TypeId, board.HousePending.Cell);
             board.HousePending = default;
         }
+        if (ai.HallReserved) return; // M5-4d slice 2: the hall rebuild is banked for and comes first
         PlayerView v = ai.View;
         if (v.HalfPopCap >= ai.Data.Rules.HalfPopCap || v.HalfPopCap - v.HalfPop > ai.Rules.HouseHalfPopMargin) return;
         for (int k = 0; k < ai.OwnBuildingCount; k++)

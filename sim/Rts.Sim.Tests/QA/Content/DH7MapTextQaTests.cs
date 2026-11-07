@@ -109,7 +109,7 @@ public class DH7MapTextQaTests
     public void AChangedPinnedDescription_IsReported_ById()
     {
         using TestDataDir dir = TestDataDir.CopyOfShipped();
-        dir.EditJson("maps/pale_hills.json", root => root["description"] = ProposedPale);
+        dir.EditJson("maps/pale_hills.json", root => root["description"] = "A changed sentence that no pin holds.");
         DataLoadResult r = DataLoader.LoadAll(dir.Path);
         Assert.True(r.Ok, string.Join("\n", r.Errors));
         List<string> pin = MapTextContentTests.PinProblems(MapTextContentTests.Shipped(r.Data!), MapTextContentTests.Pinned);

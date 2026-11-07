@@ -1,7 +1,7 @@
 {
   "id": "vathar_crossing",
   "displayName": "Vathar Crossing",
-  "description": "A sunken river of slopes cuts the steppe in two, crossed only at its fords. Hold a ford and the far bank is yours; lose it and the enemy pours through.",
+  "description": "A sunken riverbed cuts the steppe in two, its steep banks crossed only at a few fords. Gold waits on the banks beside them, and troops down in the bed cannot see up onto either side.",
   "players": 4,
   "size": 256,
   "terrain": [
