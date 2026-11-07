@@ -14,7 +14,8 @@ namespace Rts.Sim.Tests.Stress;
 /// QA, M5-4d re-check round 1 (session 2026-11-06-0926), BUG-1107's fix: the border ring and the seen-points rule. A human
 /// seat that never plays hides its five workers (1) at the sweep's worst border points (an edge point level with a grid line,
 /// half a scout cell from the two nearest ring points, and the interior's worst point): BUG-1107, 11 of 16 rows red at 6a3c83c
-/// (edge points level with a grid line are never seen). (Corner hides on the 2nd / 3rd seed of each opening were measured once
+/// (edge points level with a grid line were never seen), 16 of 16 green at 1eccd06 (the perimeter leg and the odd pass's
+/// cell-edge midpoints; re-check round 2, whose new hides are in <c>HuntSweepRound2QaStressTests.cs</c>). (Corner hides on the 2nd / 3rd seed of each opening were measured once
 /// and dropped: on the hand-made maps every seed of an opening ends on the same tick as the shipped row.) The seen-points rule is checked against
 /// the fog oracle on every hunting think (a point is marked only when the seat's own fog, own plus allies' byte maps, shows its
 /// cell visible, and every such point is marked), and a save taken mid-sweep after marks were set by sight follows the

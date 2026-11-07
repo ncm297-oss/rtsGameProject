@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S2 (the feature's purpose, docs/02 "The AI finishes the match ... a beaten side's last unit hiding ... is found", fails for any unit near the border) |
-| Status | open |
+| Status | fixed (re-check round 2, 2026-11-06-0926) |
 | Found | 2026-11-06-0926, task M5-4d (QA full) |
 | System | AI military manager, the hunt's sweep (`MilitaryManager.HuntPoint` / `NextSweep`) |
-| Fixed by | |
+| Fixed by | 6a3c83c (border ring, partial) + 1eccd06 (perimeter leg, odd pass); regression: `HuntSweepWorstPointQaTests` x16, `HuntSweepRound2HideQaTests` x8, `HuntTests.ALastUnitOnTheEdge_LevelWithAGridLine_IsSeen` x4 |
 
 ## Repro
 1. `dotnet test sim/Rts.Sim.Tests --filter "FullyQualifiedName~HuntQaTests.AHuntFindsALastUnitAtTheMapEdge"` (fast, flat 64-cell map, combat off):
@@ -60,3 +60,38 @@ The docs/03 claim "every point of the map is within half a cell of a sweep point
 (14 m). Direction (the developer's call): a coverage guarantee in terms of sight, not point spacing. For example, ring points every
 `2 x sight` along the edges, or make the sweep walk the edge between neighbouring ring points (the sweep's time budget, 57:36 of 60:00 on
 Vathar Crossing, is the constraint the developer measured).
+
+## Re-check round 2 (2026-11-06-0926, fix 1eccd06): fixed
+The fix has three parts:
+- **The perimeter leg.** The first ring point reached starts a clockwise walk of every ring point and back. After that,
+  every ring point counts as visited for the pass. A sighting mid-leg keeps the leg.
+- **The odd pass.** Every second pass sweeps the cell edges' midpoints instead of the centres and interior corners.
+- **The tie.** The nearest-point tie is now measured against the true least distance.
+
+QA's evidence, independent of the developer's rows:
+- `HuntSweepWorstPointQaTests` (the round-1 repro, 16 rows): all 16 end in the full run (at 6a3c83c, 11 never ended).
+- New hide points, `HuntSweepRound2HideQaTests` (`Stress/HuntSweepRound2QaStressTests.cs`): 4 maps x AI seat 0 / 1 on
+  opening 1. None of these points is named by the developer's rows:
+  - interior points a quarter cell off both lattices;
+  - edge points a quarter cell along;
+  - Vathar's river band where it meets the west and east borders;
+  - Raraku's north terrace corner (level 1, no even-pass point within sight);
+  - Pale Hills' level-2 plateau corner (low ground can't see up).
+
+  All 8 rows end: Raraku 17:04 / 20:14, generated 33:21 / 39:36, Vathar 47:52 / 51:53, Pale Hills 47:26 / 54:02. Every
+  leg that began finished, and none was dropped. The generated map reached the odd pass (max pass 1 / 2).
+- The leg against interruptions, on a flat 128 m map. Every one of the 252 border cells was visible during the leg with
+  0 interruptions, and again with 3 nearby ones (a Raider running at the army, then fleeing inland).
+- One sighting far across the map leaves one border cell unseen. The leg resumes at the next ring point, approached from
+  inland. Filed separately as **BUG-1111** (S3): the stretch is walked on the next pass, so it does not block this fix.
+- Save / load mid-leg and mid odd pass:
+  - generated: saved mid-leg at tick 14,761 (ring 52, 12 left) and on odd pass 1 at tick 27,801;
+  - Pale Hills: saved mid-leg at tick 26,341 (ring 185, 22 left).
+
+  Each load is field-equal at once (the new fields included) and hash-equal every tick to the end. Forged `HuntRing` /
+  `HuntRingLeft` / `HuntPass` values are refused as Malformed.
+- 0 B over 600 ticks of the leg and over 200 pass flips driven through `NextSweep`.
+
+Status: fixed. Regression tests:
+- `HuntTests.ALastUnitOnTheEdge_LevelWithAGridLine_IsSeen` x4 (developer);
+- `HuntSweepWorstPointQaTests` x16 and `HuntSweepRound2HideQaTests` x8 (QA).
