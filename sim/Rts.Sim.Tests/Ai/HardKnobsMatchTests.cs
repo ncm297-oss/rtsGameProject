@@ -127,9 +127,13 @@ public class HardKnobsMatchTests
 
     private static readonly Lazy<GameData> s_early = new(() => AiScenes.EarlyWaves());
 
+    /// <summary>BUG-1121 fix: the save row's Raider column (cells), east of the focus scene's, so the fight is outside the base and the focus falls mid-wave.</summary>
+    private const int RaiderX = 44;
+
     /// <summary>
-    /// Criterion 5: the focus scene on Hard (combat on), one member cut to 30 hp once the wave is out, before it meets the Raiders, saved at
-    /// the end of the first think whose focus is held by a member while the wounded one is out of the wave: the save is
+    /// Criterion 5: the focus scene on Hard (combat on, the Raiders at <see cref="RaiderX"/>), one member cut to 30 hp once the wave is out, before it meets the Raiders, saved at
+    /// the end of the first think whose focus is held by a member (a wave member flagged <see cref="MilitaryManager.Focused"/>,
+    /// BUG-1121) while the wounded one is out of the wave: the save is
     /// format 6 (the slice adds no state: <c>AIST</c> and <c>HUNT</c> as before), loads, re-saves byte for byte, follows the
     /// run hash for hash for 1,000 ticks, and the seats are equal field for field at both ends. The formats are unchanged:
     /// saves 6 / 7, replays 9.
@@ -139,7 +143,7 @@ public class HardKnobsMatchTests
     {
         Assert.Equal((7, 6), (SaveFormat.CurrentVersion, SaveFormat.HuntMaplessVersion));
         Assert.Equal(9, Replay.CurrentFormatVersion);
-        (Simulation sim, List<EntityHandle> members, _) = Focus(AiDifficulty.Hard);
+        (Simulation sim, List<EntityHandle> members, _) = Focus(AiDifficulty.Hard, raiderX: RaiderX);
         AiPlayer ai = sim.AiOf(0)!;
         NextThink(sim);
         Assert.True(ai.Board.WaveActive, "the wave did not start");
@@ -151,8 +155,10 @@ public class HardKnobsMatchTests
         {
             sim.Tick();
             bool pulled = sim.World.Units.IsAlive(members[3]) && ai.Board.WaveGeneration[members[3].Index] != members[3].Generation;
+            bool focused = members.Any(m => sim.World.Units.IsAlive(m) && ai.Board.WaveGeneration[m.Index] == m.Generation
+                && ai.Board.WaveFlag[m.Index] == MilitaryManager.Focused); // BUG-1121: the flag's new value is in the save
             bool held = focus.Generation != 0 && members.Any(m => sim.World.Units.IsAlive(m) && ai.View.TryGetAttackOrder(m.Index, out EntityHandle h) && h == focus);
-            ready = pulled && held && ai.Board.WaveActive;
+            ready = pulled && held && ai.Board.WaveActive && focused;
         }
         Assert.True(ready, "no tick with a focus held and the wounded member home");
         _out.WriteLine($"saved at tick {sim.TickNumber}, focus {focus.Index}");

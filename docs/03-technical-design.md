@@ -7695,7 +7695,7 @@ gather bonus"). `ai.json`'s difficulty blocks have carried `gatherBonus`, `focus
 (loaded, validated, hashed); the sim now reads them. Code: `World` (`GoldPerTickOf` / `WoodPerTickOf`, `GatherBonusOf`),
 `Economy/EconomySystem.cs` (`Work`), `Ai/MilitaryManager.cs` (`Wounded`, `PullBack`, `Focus`, `Fighter`), `Ai/AiPlayer.cs`
 (the focus scratch), three own-unit `PlayerView` answers, one `rules.json` `ai` knob. No `Command` kind, no new saved
-field, no format change. Easy and Normal play exactly as before: each new rule sits behind its difficulty's flag, and a
+field (fix round 1 adds one value, `Focused`, to the saved `Blackboard.WaveFlag` byte), no format change. Easy and Normal play exactly as before: each new rule sits behind its difficulty's flag, and a
 bonus of 0 multiplies the rate by exactly 1.
 
 - **Gather bonus.** A worker in reach adds its owner's rate to its progress each tick: `gatherRate.gold` (or `.wood`) /
@@ -7732,16 +7732,28 @@ bonus of 0 multiplies the rate by exactly 1.
   Why inside only (BUG-0670 kept): a defender out in the enemy's base walks home on the defense's `Move` first; with an
   `Attack` there it stayed in that fight and never got home to its `AttackMove` (`AiReplayTests.TwoAiSeats_PlayBackWithoutEither`
   caught it on Hard; `HardKnobsTests.ADefenderOutsideTheBase_IsNotFocused_UntilItIsHome`). No fighter (no wave and no
-  defense, or nobody free): nothing. The **focus**: of the enemy units the seat sees now (`PlayerView.NextUnit`, never an
-  ally's) within **`ai.focusReach`** of at least one fighter, the one with the fewest hp (`SeenUnit.Hp`), slot order on
+  defense, or nobody free): nothing. A fighter's **reach** (fix round 1, BUG-1121) is about its attack range: its type's
+  `attack.range` + its own radius + one map cell (2 m), at most **`ai.focusReach`** (Heavy Infantry 2.9 m; the archers'
+  15 m + 2.4 m capped at 14). The **focus**: of the enemy units the seat sees now (`PlayerView.NextUnit`, never an
+  ally's) within the reach of at least one fighter, the one with the fewest hp (`SeenUnit.Hp`), slot order on
   ties, an army unit (non-worker) before any worker. It is picked afresh at every think (`AiPlayer.FocusTarget`, think
   scratch), so a focus that dies or leaves sight is replaced at the next think, and the unit being focused, losing hp
-  fastest, keeps being picked. The **orders**: every fighter within `ai.focusReach` of the focus gets `Command.Attack` on
+  fastest, keeps being picked. The **orders**: every fighter with the focus in its own reach gets `Command.Attack` on
   it, unless it already holds an explicit Attack on it (`PlayerView.TryGetAttackOrder`) or gave that unit up chasing it
   (`PlayerView.TryGetGivenUp`: combat's BUG-0137 give-up memory, which the unit's next order clears). That second test is
   the **order-churn guard** (BUG-0595 / 0596): a focus a fighter can't reach is not re-sent at every think; only after
   another order (the wave's own re-send, bounded by `MaxTries`) may it be ordered onto it again
-  (`HardKnobsTests.TheFocusOrders_GoToTheMembersInReach_OnlyOnce` bounds it at 4 per member and target). No enemy unit in
+  (`HardKnobsTests.TheFocusOrders_GoToTheMembersInReach_OnlyOnce` bounds it at 4 per member and target). Every other
+  fighter keeps its own fight (its `AttackMove` or the defense's, auto-acquiring as before). A wave member sent the focus
+  is flagged **`MilitaryManager.Focused`** (a `WaveFlag` value; it stays a fighter, so it may take the next focus at the
+  next think): once Idle with the focus gone it is re-sent its `AttackMove` toward the wave's point **without spending
+  one of its `MaxTries`**, unless it gave the focus up (out of reach), which spends one as any order does, so the churn
+  stays bounded. **Why (BUG-1121):** the first rule ordered every fighter within `ai.focusReach` (14 m) onto the one
+  lowest-hp enemy. A melee army then crowded one target under `CombatMode.Ordered` (no re-pick while it lives) and did not
+  strike back at the units hitting it, and every focus kill left its members Idle, re-sent with a try spent, so healthy
+  members left waves (4-seat Pale Hills seed 1: 8/2/3/3 against Normal's 1/1/0/0). 20 Heavy Infantry against 20 Raiders:
+  Normal wins with 14 alive; the first rule lost all 20 with 13 Raiders left; this rule wins with 15 alive in 1,046 ticks
+  (`HardKnobsQaTests.A20HeavyWave_Against20Raiders_WinsOnEveryDifficulty`). No enemy unit in
   reach: the wave's and the defense's rules, unchanged. The defense's orders, sent earlier in the think, come first; a
   fighter they ordered is pending and gets the focus at the next think. **Builder's calls:** (1) *army before workers*:
   the brief's rule is the lowest hp alone; workers (36-40 hp) are below every soldier, so the literal rule would turn a
@@ -7755,21 +7767,25 @@ bonus of 0 multiplies the rate by exactly 1.
   on a unit), `TryGetGivenUp(slot, out target)` (the enemy unit it last gave up chasing), `MaxHpOf(unitType)` (the
   player's max hp for a type, its hp techs in). Values only (`PlayerViewArchitectureTests`); `PlayerViewOracle` compares
   all three with the stores for every unit slot and type at every checked tick (the oracle fuzz rows: 0 leaks).
-- **Knob** (`common/rules.json` `ai`, required, in `ContentHash`): `focusReach` **14** m (1-64, kept in meters): a unit's
-  base sight, so a fighter focuses what it could see itself, and the ranged units' 14-15 m range reaches the focus with
-  little walking. `DataValidationTests` rows: missing, 0, negative, above 64, a string (each one error at
+- **Knob** (`common/rules.json` `ai`, required, in `ContentHash`): `focusReach` **14** m (1-64, kept in meters): the cap
+  on a fighter's own reach (fix round 1; before it, every fighter's reach): a unit's base sight, so a fighter focuses
+  what it could see itself, and the ranged units' 14-15 m range reaches the focus with little walking. `DataValidationTests` rows: missing, 0, negative, above 64, a string (each one error at
   `ai.focusReach`), `NaN` (not JSON: one parse error at `common/rules.json`); 1 and 64 load. `DataContentHashTests` row.
   `retreat.hpFraction` gains `AiLoaderTests` rows (missing, negative; above 1 was there).
 - **Save and replay formats unchanged** (saves 6 / 7, replays 9): no field is added to the Blackboard or `AIST`; the
-  focus scratch (`FocusTarget`, `FocusSlots`, `FocusPoints`, the bucket grid) is empty between thinks, and the gather
-  rates are derived at construction.
+  focus scratch (`FocusTarget`, `FocusSlots`, `FocusPoints`, `FocusReach2`, the bucket grid) is empty between thinks, and
+  the gather rates are derived at construction. `Focused` is a value of the `WaveFlag` byte array the save already holds.
   `HardKnobsMatchTests.ASaveMidWave_WithAFocusAndAPulledBackMember_FollowsTheRunFor1000Ticks`: a save with a focus held by
-  members and a pulled-back member home is format 6, re-saves byte for byte, follows the run hash for hash for 1,000
-  ticks, and the seats are equal field for field at both ends.
+  wave members (one flagged `Focused`; the Raiders 8 cells further east than the focus scene's, so that fight is outside
+  the base and falls mid-wave under the fix's rule) and a pulled-back member home is format 6, re-saves byte for byte,
+  follows the run hash for hash for 1,000 ticks, and the seats are equal field for field at both ends.
 - **Determinism** (`HardKnobsMatchTests.Raraku_` / `PaleHills_HardVersusHard_TwoProcesses_SamePerTickHashes`, Stress):
   this process and a fresh child `dotnet test` of the row fold the same per-tick hashes over 20,000 ticks (neither match
   ends by then): Raraku `E454DEA93E681672` (final hash `DE90983BCF7E6964`), a focus picked at 831 / 663 thinks of the two
   seats, 28 / 15 wounded members sent home; Pale Hills `B20FD11984B0880D` (`3EBD278ADF5118AD`), 877 / 760 and 32 / 35.
+  With fix round 1's focus rule (no pinned value: the rows compare two processes): Raraku `18A19ECC5D810CED`
+  (`08ED813C6846F397`), focus at 402 / 254 thinks, 16 / 0 sent home; Pale Hills `27DAC2234F136FDA` (`75FC7ED59E988DA1`),
+  566 / 650 and 35 / 31. The fog row's picks: 206 and 275 (seeds 1 and 7).
 - **Fog** (criterion 7). The focus comes from `PlayerView.NextUnit` (what the fog grants this think); the fighters,
   their orders and give-ups and the max hp are own state. At every think with a focus, the focus is checked against the
   world (a live unit of an enemy of the seat that `Fog.CanSeeUnit` grants it): `HardKnobsMatchTests.TheFocus_IsAlwaysAnEnemyUnitTheSeatSees`
@@ -7784,8 +7800,8 @@ bonus of 0 multiplies the rate by exactly 1.
   against every zone). With the focus pass switched off the first row is 0.44-0.46 ms against the base's 0.45: the
   pull-back's tests cost nothing measurable. Run together in one process the rows read up to 0.93 ms under that load (a
   single row run alone: 0.50); rerun once per the shared-machine rule.
-- **Memory.** Per AI seat, new: per unit slot an int, a Vector2 and an int (the focus's fighters and the bucket chain):
-  **16 B x unit slots**, 40 KB for 2,500; the bucket grid, one int a bucket (32 x 32 on a 512 m map, 4 KB; at most 128 x
+- **Memory.** Per AI seat, new: per unit slot an int, a Vector2, a float and an int (the focus's fighters, their reach
+  and the bucket chain): **20 B x unit slots**, 50 KB for 2,500; the bucket grid, one int a bucket (32 x 32 on a 512 m map, 4 KB; at most 128 x
   128, 64 KB). The world: two floats a player.
 - **What moved.** Only matches with a Hard seat. Normal, Easy and human play are unchanged, pinned to the pre-slice code
   by `HardKnobsPinTests` (each pin printed by 6f6414b before the slice's code was written): the focus scene's and the
@@ -7805,10 +7821,17 @@ bonus of 0 multiplies the rate by exactly 1.
   seat 0's at tick 1,581 follows the changed game) and so do the checkpoints. Its playback row
   (`HuntTests.APreChangeAiRecording_WithNoHunt_PlaysBackAsBefore`) plays the new file. The faction pages' tables are
   Normal pairings and the difficulty table (still true: Hard 25%, focus fire yes, pulls back wounded yes): no cell moved.
-  `Stress/TeamAiSoakStressTests` 2v2 seed 1 adjacent now fails its "no AttackMove onto an ally's building" check at tick
-  10,600: a **Normal** seat's hunt (M5-4d) AttackMoves to its last sighting, an enemy unit attacking the ally's building
-  within the check's 0.5 m of it; the match reaches that because its Hard seats now play differently (reported, not
-  changed here: a fix moves Normal play).
+  `Stress/TeamAiSoakStressTests` 2v2 seed 1 adjacent failed its "no AttackMove onto an ally's building" check (tick
+  10,600; with fix round 1's focus rule, tick 10,320): a **Normal** seat's hunt (M5-4d) AttackMoves to its last
+  sighting, an enemy unit attacking the ally's building within the check's 0.5 m of it; the match reaches that because
+  its Hard seats now play differently. The hunt is not changed here (a fix moves Normal play: BUG-1120 stays open for the
+  hardening session); the check exempts exactly that case (`HuntToASighting`: a hunt's `AttackMove` to its target point
+  when that point is the seat's last enemy-unit sighting; 14 such orders on that row, 0 on the other 7). Fix round 1
+  re-pinned the Hard-seat rows that moved again (the focus rule): `StandardPresetPinQaTests` `ai_seed2_2seats_Normal`
+  `0x070CC85BB2A3B390` to `0xA796F8D89925CDD1`, `ai_seed3_3seats_Hard` `0xFB6DD578FA7A165E` to `0xFCD8F85C768FCED4`,
+  `ai_seed4_4seats_Normal` `0xE204EB9DE6D0FBF9` to `0xFB6A7E60CAB35D32`, `ai_seed5_2seats_Hard` `0xAD97F301BBCD12EE` to
+  `0x81B9C98852D87A97`; `ReserveTwinTests` (2, 2) and (4, 4) re-printed (from their 2,500 / 3,500 tick hashes). The
+  cramped Easy row, `SharedVisionFfaPinTests` and the (3, 3) twin row did not move.
 - **Hard against Normal** (the brief's measurement: Pale Hills and Raraku, seed 1, Malazan in seat 0 and Whirlwind in
   seat 1, Hard in either seat, to 72,000 ticks; `MapFileTests.MapMatch` / `RarakuMatch` on the shipped data, before the
   slice on an export of 6f6414b and with it):
@@ -7827,10 +7850,28 @@ bonus of 0 multiplies the rate by exactly 1.
   still loses seat 1 (26,826 and 24,331). Every knob flips these single matches, the plainly helpful gather bonus
   included, so one seed a map measures how sensitive these matches are, not Hard's strength; a several-seed Hard v Normal
   report is the measurement that would say (reported to the Producer).
+
+  **Fix round 1 (BUG-1121), seeds 1-3** (seed 4 plays as seed 3 on both maps: the seed picks the openings, and seeds 3
+  and 4 pick the same), the same matches, Hard in either seat: 12 matches a row; wins for Hard / for Normal / no
+  result by 72,000. The knob rows are data copies of the fixed tree with Hard's other knobs off.
+
+  | Tree | Hard wins | Normal wins | No result |
+  | --- | --- | --- | --- |
+  | Before the slice (6f6414b) | 6 | 2 | 4 |
+  | The slice before the fix (947a273) | 1 | 9 | 2 |
+  | The fix, every Hard knob | 3 | 6 | 3 |
+  | The fix, `pullBackWounded` off (bonus + focus) | 6 | 3 | 3 |
+  | The fix, the gather bonus alone | 7 | 2 | 3 |
+
+  Seed 1 with the fix: Raraku, Hard in seat 0: Normal wins at 29,327; Hard in seat 1: no result; Pale Hills, Hard in
+  seat 0: Hard wins at 46,629; Hard in seat 1: no result. Focus fire with the fix's rule costs about nothing against the
+  bonus alone (6 / 3 against 7 / 2, inside these matches' sensitivity); the first rule's focus was the large loss. What
+  still costs Hard its matches is the **pull-back** (6 / 3 to 3 / 6 when it is added): with no healing a wounded unit
+  never rejoins a wave, so a Hard army shrinks over a long match (reported to the Producer; not changed in fix round 1).
 - **Tests.** `Ai/HardKnobsTests` (criteria 3 and 4 on the flat scene, by the command log: a Hard wave meeting Raiders at
-  100, 40 and 70 hp sends `Attack` on the 40-hp one from exactly the members in reach, every unit `Attack` is on its
-  think's focus, the focus moves to the lowest-hp Raider left once it dies; focus orders only to members in reach,
-  bounded; a member below the fraction sent `Move` to the rally and out of the wave, the boundary at 39 of 130 hp; not in
+  100, 40 and 70 hp: every focus is the lowest-hp Raider in some fighter's own reach, the first sent `Attack` from
+  exactly the fighters with it in reach, every unit `Attack` is on its think's focus, the 40-hp one is focused and a
+  later Raider once it dies; focus orders only to fighters in their own reach, bounded; a member below the fraction sent `Move` to the rally and out of the wave, the boundary at 39 of 130 hp; not in
   the next wave while below, the fresh units are; Normal at the same hp not pulled; an army of only wounded units never
   waves on Hard, does on Normal, and production trains on both; a wounded unit answers the defense; a defender outside
   the base not focused), `Ai/HardKnobsPinTests`, `Economy/GatherBonusTests` (criterion 2: a Hard AI worker's first gold
@@ -7838,7 +7879,11 @@ bonus of 0 multiplies the rate by exactly 1.
   per-seat rates, bit for bit at a bonus of 0; the played-back Hard seat), `Ai/HardKnobsMatchTests` (criteria 5 and 7),
   `Ai/AiPerfTests.EightHardSeats_MidWave_WithFocusTargets_AThinkUnder1Ms_AllocationFree` (criterion 8),
   `DataValidationTests` / `DataContentHashTests` / `AiLoaderTests` (the knobs), `PlayerViewOracle` (the three answers),
-  `Stress/CommandDoorFuzzStressTests` (its AI-command oracle now admits an `Attack` on a live enemy unit).
+  `Stress/CommandDoorFuzzStressTests` (its AI-command oracle admits an `Attack` on a live enemy unit only from a seat
+  whose difficulty has `focusFire`, on a unit its fog granted at the think: BUG-1122 b). The wounded test is exact at the
+  boundary (BUG-1122 a): `Wounded` compares in decimal (`hp < (decimal)hpFraction x maxHp`; the float 0.3f reads back as
+  0.3), so a 50-hp unit at exactly 15 hp is not wounded
+  (`HardKnobsQaTests.Wounded_AtExactlyTheThreshold_IsNotWounded_ForEveryUnitType`).
 - **Not yet:** healing, and so a wounded unit's return to the waves; a focus kept across thinks, or split over two
   targets for a big army; a wounded defender's own retreat (only wave members are pulled back).
 

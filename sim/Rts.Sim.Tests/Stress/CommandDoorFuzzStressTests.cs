@@ -185,7 +185,7 @@ public class CommandDoorFuzzStressTests
     /// <summary>M5-2: what the AI seat (player 1) could see at its think: the units and buildings as the previous tick left them.</summary>
     private sealed class AiSnapshot
     {
-        public readonly bool[] UnitAlive;
+        public readonly bool[] UnitAlive, UnitSeen;
         public readonly int[] UnitOwner, UnitGeneration;
         public readonly bool[] BuildingAlive, BuildingSite;
         public readonly int[] BuildingOwner, BuildingType, BuildingCell;
@@ -197,6 +197,9 @@ public class CommandDoorFuzzStressTests
             UnitAlive = w.Units.Alive.ToArray();
             UnitOwner = w.Units.Owner.ToArray();
             UnitGeneration = w.Units.Generation.ToArray();
+            // BUG-1122 b: the AI seat's own fog at its think (its PlayerView's unit cursor answers the same).
+            UnitSeen = new bool[w.Units.Capacity];
+            for (int i = 0; i < UnitSeen.Length; i++) UnitSeen[i] = w.Fog.CanSeeUnit(1, i);
             BuildingAlive = w.Buildings.Alive.ToArray();
             BuildingSite = w.Buildings.UnderConstruction.ToArray();
             BuildingOwner = w.Buildings.Owner.ToArray();
@@ -241,10 +244,14 @@ public class CommandDoorFuzzStressTests
                 Assert.True(g.WorldToCell(c.Position, out _, out _), $"{at}: {c.Kind} off the map at {c.Position}");
             if (c.Kind == CommandKind.Attack && !c.TargetIsBuilding)
             {
-                // M5-4c slice 2: Hard's focus fire: an Attack on a live enemy unit (its fog rule: HardKnobsMatchTests).
+                // M5-4c slice 2: Hard's focus fire: an Attack on a live enemy unit the seat saw, from a seat whose
+                // difficulty focuses fire (BUG-1122 b).
+                PlayerSeat seat = w.Config.SeatOf(1);
+                Assert.True(w.Data.Ai[seat.Faction].Difficulty(seat.Difficulty).FocusFire, $"{at}: Attack on unit {c.Target} from a {seat.Difficulty} seat without focusFire");
                 int j = c.Target.Index;
                 Assert.True((uint)j < (uint)seen.UnitAlive.Length && seen.UnitAlive[j] && seen.UnitOwner[j] != 1 && seen.UnitGeneration[j] == c.Target.Generation,
                     $"{at}: Attack on unit {c.Target}, not a live enemy one");
+                Assert.True(seen.UnitSeen[j], $"{at}: Attack on unit {c.Target}, which the seat did not see");
             }
             else if (c.Kind == CommandKind.Attack)
             {

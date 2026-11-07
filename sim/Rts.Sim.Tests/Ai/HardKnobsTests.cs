@@ -22,14 +22,31 @@ public class HardKnobsTests
 
     private static float Reach => HardKnobsScenes.Data.Value.AiRules.FocusReach;
 
-    /// <summary>What a think's focus pass did: the focus picked, every member's position, and the live raiders' hp then.</summary>
-    private sealed record Pick(int Tick, EntityHandle Focus, Vector2 FocusAt, Dictionary<int, Vector2> Members, Dictionary<int, int> RaiderHp);
+    /// <summary>
+    /// BUG-1121: a fighter's own focus reach (m): its attack range + its radius + a cell, at most <c>ai.focusReach</c>
+    /// (docs/03 "Implementation (M5-4c slice 2)").
+    /// </summary>
+    internal static float OwnReach(Simulation sim, int slot)
+    {
+        UnitDef def = sim.World.Data.Units[sim.World.Units.TypeId[slot]];
+        return Math.Min(Reach, def.Attack.Range + def.Radius + Map.MapConstants.CellSize);
+    }
+
+    /// <summary>What a think's focus pass did: the focus picked, every member's position and reach, and the live raiders' hp and positions then.</summary>
+    private sealed record Pick(int Tick, EntityHandle Focus, Vector2 FocusAt, Dictionary<int, Vector2> Members, Dictionary<int, float> MemberReach,
+        Dictionary<int, int> RaiderHp, Dictionary<int, Vector2> RaiderAt)
+    {
+        public bool InReach(int member, Vector2 p) => Vector2.Distance(Members[member], p) <= MemberReach[member];
+
+        public bool InAnyReach(Vector2 p) => Members.Keys.Any(m => InReach(m, p));
+    }
 
     /// <summary>
-    /// Criterion 3: a Hard wave meeting three of the enemy's Raiders at 100, 40 and 70 hp (combat on). At the first think that
-    /// sees them every member within <c>ai.focusReach</c> of the 40-hp one is sent <c>Attack</c> on it, and only on it; every
-    /// unit <c>Attack</c> the seat sends is on the focus of its think; and once that Raider dies the next focus is the
-    /// lowest-hp Raider left, with <c>Attack</c>s on it.
+    /// Criterion 3 (BUG-1121's rule): a Hard wave meeting three of the enemy's Raiders at 100, 40 and 70 hp (combat on). At
+    /// every think with a focus, it is the lowest-hp Raider within some member's own reach (attack range + radius + a cell,
+    /// at most <c>ai.focusReach</c>), slot order on ties; at the first, exactly the members with it in their own reach are
+    /// sent <c>Attack</c> on it; every unit <c>Attack</c> the seat sends is on the focus of its think; the 40-hp Raider is
+    /// focused, and once it dies a later focus is another Raider, with <c>Attack</c>s on it.
     /// </summary>
     [Fact]
     public void AHardWave_MeetingThreeUnits_AttacksTheLowestHpFromEveryMemberInReach_AndRetargetsWhenItDies()
@@ -42,24 +59,33 @@ public class HardKnobsTests
         {
             if (a.FocusTarget.Generation == 0) return;
             var at = new Dictionary<int, Vector2>();
+            var reach = new Dictionary<int, float>();
             foreach (EntityHandle m in members)
-                if (sim.World.Units.IsAlive(m) && a.Board.WaveGeneration[m.Index] == m.Generation) at[m.Index] = sim.World.Units.Position[m.Index];
+                if (sim.World.Units.IsAlive(m)) // a wave member or, once the Raiders are at the base, a defender
+                {
+                    at[m.Index] = sim.World.Units.Position[m.Index];
+                    reach[m.Index] = OwnReach(sim, m.Index);
+                }
             var hp = new Dictionary<int, int>();
+            var rat = new Dictionary<int, Vector2>();
             foreach (EntityHandle r in raiders)
-                if (sim.World.Units.IsAlive(r)) hp[r.Index] = sim.World.Units.Hp[r.Index];
-            picks.Add(new Pick(a.Now, a.FocusTarget, sim.World.Units.Position[a.FocusTarget.Index], at, hp));
+                if (sim.World.Units.IsAlive(r))
+                {
+                    hp[r.Index] = sim.World.Units.Hp[r.Index];
+                    rat[r.Index] = sim.World.Units.Position[r.Index];
+                }
+            picks.Add(new Pick(a.Now, a.FocusTarget, sim.World.Units.Position[a.FocusTarget.Index], at, reach, hp, rat));
         };
         for (int t = 0; t < 2400 && raiders.Any(r => sim.World.Units.IsAlive(r)); t++) sim.Tick();
         Assert.NotEmpty(picks);
 
-        // The first pick: the 40-hp Raider, every member in reach ordered onto it in that think's commands.
+        // The first pick: every member with it in its own reach ordered onto it in that think's commands.
         Pick first = picks[0];
-        Assert.Equal(raiders[1], first.Focus);
         List<Command> firstAttacks = log.Where(c => c.Tick == first.Tick + 1 && c.Kind == CommandKind.Attack).ToList();
-        Assert.All(firstAttacks, c => Assert.Equal(raiders[1], c.Target));
+        Assert.All(firstAttacks, c => Assert.Equal(first.Focus, c.Target));
         Assert.NotEmpty(firstAttacks);
-        // Exactly the members within ai.focusReach of it (none held an Attack before: this is the first pick).
-        int[] inReach = first.Members.Where(kv => Vector2.Distance(kv.Value, first.FocusAt) <= Reach).Select(kv => kv.Key).OrderBy(k => k).ToArray();
+        // Exactly the members with it in their own reach (none held an Attack before: this is the first pick).
+        int[] inReach = first.Members.Keys.Where(k => first.InReach(k, first.FocusAt)).OrderBy(k => k).ToArray();
         Assert.Equal(inReach, firstAttacks.Select(c => c.Unit.Index).OrderBy(k => k).ToArray());
         _out.WriteLine($"first focus at tick {first.Tick}: {firstAttacks.Count} Attacks, members {first.Members.Count}");
 
@@ -71,22 +97,23 @@ public class HardKnobsTests
             Assert.Equal(f, c.Target);
         }
 
-        // Every pick is the lowest-hp live Raider (slot order on ties): after the 40-hp one dies, the next lowest.
+        // Every pick is the lowest-hp live Raider in some member's own reach (slot order on ties).
         foreach (Pick p in picks)
         {
-            int lowest = p.RaiderHp.OrderBy(kv => kv.Value).ThenBy(kv => kv.Key).First().Key;
-            Assert.True(p.Focus.Index == lowest, $"tick {p.Tick}: focus {p.Focus.Index}, the lowest-hp raider {lowest} ({string.Join(", ", p.RaiderHp)})");
+            int lowest = p.RaiderHp.Where(kv => p.InAnyReach(p.RaiderAt[kv.Key])).OrderBy(kv => kv.Value).ThenBy(kv => kv.Key).First().Key;
+            Assert.True(p.Focus.Index == lowest, $"tick {p.Tick}: focus {p.Focus.Index}, the lowest-hp raider in reach {lowest} ({string.Join(", ", p.RaiderHp)})");
         }
-        int died = picks.FindIndex(p => p.Focus != raiders[1]);
-        Assert.True(died > 0, "the focus never moved off the first Raider");
-        Assert.False(picks[died].RaiderHp.ContainsKey(raiders[1].Index), "the focus moved while the first was alive");
+        Assert.Contains(picks, p => p.Focus == raiders[1]);
+        int died = picks.FindIndex(p => !p.RaiderHp.ContainsKey(raiders[1].Index));
+        Assert.True(died > 0, "no focus after the 40-hp Raider died");
+        Assert.NotEqual(raiders[1], picks[died].Focus);
         Assert.Contains(log, c => c.Kind == CommandKind.Attack && c.Target == picks[died].Focus);
         _out.WriteLine($"re-targeted at tick {picks[died].Tick} to {picks[died].Focus.Index}; picks {picks.Select(p => p.Focus.Index).Distinct().Count()} distinct");
     }
 
     /// <summary>
-    /// Criterion 3, the reach: in each of the first picks, a member within <c>ai.focusReach</c> of the focus was sent
-    /// <c>Attack</c> on it unless it already held that order; one farther was not.
+    /// Criterion 3, the reach (BUG-1121's rule): in each pick, a member with the focus out of its own reach (attack range +
+    /// radius + a cell, at most <c>ai.focusReach</c>) was not sent <c>Attack</c> on it, nor one that already held that order.
     /// </summary>
     [Fact]
     public void TheFocusOrders_GoToTheMembersInReach_OnlyOnce()
@@ -102,8 +129,8 @@ public class HardKnobsTests
             Vector2 focus = sim.World.Units.Position[a.FocusTarget.Index];
             foreach (EntityHandle m in members)
             {
-                if (!sim.World.Units.IsAlive(m) || a.Board.WaveGeneration[m.Index] != m.Generation) continue;
-                bool inReach = Vector2.Distance(sim.World.Units.Position[m.Index], focus) <= Reach;
+                if (!sim.World.Units.IsAlive(m)) continue; // a wave member or, once the Raiders are at the base, a defender
+                bool inReach = Vector2.Distance(sim.World.Units.Position[m.Index], focus) <= OwnReach(sim, m.Index);
                 bool sent = log.Any(c => c.Tick == a.Now + 1 && c.Kind == CommandKind.Attack && c.Unit == m);
                 bool already = held.TryGetValue(m.Index, out EntityHandle h) && h == a.FocusTarget
                     && sim.World.Units.Mode[m.Index] == Combat.CombatMode.Ordered && sim.World.Units.Target[m.Index] == h;
@@ -213,6 +240,45 @@ public class HardKnobsTests
         else Assert.True(ai.Board.WavesStarted >= 1, "Normal's wounded army did not wave");
         Assert.Contains(log, c => c.Kind == CommandKind.Train);
         _out.WriteLine($"{difficulty}: waves {ai.Board.WavesStarted}, trains {log.Count(c => c.Kind == CommandKind.Train)}");
+    }
+
+    /// <summary>
+    /// BUG-1121 regression (the try rule): three Hard wave members stopped Idle mid-wave with 2 of their <c>MaxTries</c>
+    /// spent and no progress since. One flagged <see cref="MilitaryManager.Focused"/> (its focus died) is re-sent its
+    /// AttackMove at the next think with its tries still 2; one flagged so that gave its focus up (the give-up memory set)
+    /// spends one (3), as does the unflagged one (the wave's old rule). Before the fix every re-send after a focus spent a
+    /// try, so a member that killed three focuses where it stood left the wave.
+    /// </summary>
+    [Fact]
+    public void AMemberWhoseFocusDied_IsSentOn_WithoutSpendingATry_UnlessItGaveTheFocusUp()
+    {
+        Simulation sim = Scene(AiDifficulty.Hard, combat: false);
+        AiPlayer ai = sim.AiOf(0)!;
+        List<EntityHandle> members = Army(sim, 4, 18, 28);
+        EntityHandle far = Army(sim, 1, 60, 60, owner: 1, type: Raider)[0];
+        NextThink(sim);
+        Assert.True(ai.Board.WaveActive);
+        for (int k = 0; k < 3; k++) sim.Enqueue(Command.Stop(0, members[k]));
+        sim.Tick();
+        sim.Tick();
+        Blackboard board = ai.Board;
+        for (int k = 0; k < 3; k++)
+        {
+            int i = members[k].Index;
+            Assert.Equal(UnitState.Idle, sim.World.Units.State[i]);
+            board.WaveFlag[i] = k < 2 ? MilitaryManager.Focused : (byte)0;
+            board.WaveTries[i] = 2;
+            board.WaveBest[i] = Vector2.Distance(sim.World.Units.Position[i], board.WaveTargetPoint);
+        }
+        sim.World.Units.Ignored[members[1].Index] = far; // it gave its focus up: out of reach
+        List<Command> log = AiScenes.Log(sim, 0);
+        NextThink(sim);
+        for (int k = 0; k < 3; k++)
+            Assert.Equal(CommandKind.AttackMove, Assert.Single(log, c => c.Unit == members[k]).Kind);
+        Assert.Equal(2, board.WaveTries[members[0].Index]); // its focus died: no try spent
+        Assert.Equal(3, board.WaveTries[members[1].Index]); // it gave the focus up: a try spent, the churn stays bounded
+        Assert.Equal(3, board.WaveTries[members[2].Index]); // not focused: the wave's rule as before
+        for (int k = 0; k < 3; k++) Assert.Equal(0, board.WaveFlag[members[k].Index]);
     }
 
     /// <summary>

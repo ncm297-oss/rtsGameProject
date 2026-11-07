@@ -62,9 +62,10 @@ internal static class HardKnobsScenes
 
     /// <summary>
     /// The focus scene: four Heavy Infantry west of the middle, and three of player 1's Raiders in their way (cells (36, 27),
-    /// (36, 30), (36, 33), outside player 0's defend radius) at 100, 40 and 70 hp.
+    /// (36, 30), (36, 33), outside player 0's defend radius) at 100, 40 and 70 hp. <paramref name="raiderX"/> moves the
+    /// Raiders' column east (BUG-1121 fix: a fight well outside the base, so the focus falls while the wave is out).
     /// </summary>
-    internal static (Simulation Sim, List<EntityHandle> Members, EntityHandle[] Raiders) Focus(AiDifficulty difficulty, bool combat = true)
+    internal static (Simulation Sim, List<EntityHandle> Members, EntityHandle[] Raiders) Focus(AiDifficulty difficulty, bool combat = true, int raiderX = 36)
     {
         Simulation sim = Scene(difficulty, combat);
         List<EntityHandle> members = Army(sim, 4, 18, 28);
@@ -72,7 +73,7 @@ internal static class HardKnobsScenes
         int[] hp = { 100, 40, 70 };
         for (int k = 0; k < 3; k++)
         {
-            raiders[k] = CombatScenes.Place(sim, 1, Raider, sim.World.NavGrid.CellCenter(36, 27 + 3 * k));
+            raiders[k] = CombatScenes.Place(sim, 1, Raider, sim.World.NavGrid.CellCenter(raiderX, 27 + 3 * k));
             sim.World.Units.Hp[raiders[k].Index] = hp[k];
         }
         return (sim, members, raiders);

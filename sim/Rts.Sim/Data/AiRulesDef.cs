@@ -111,8 +111,8 @@ public sealed class AiRulesDef
     public int HuntMemoryTicks { get; init; }
 
     /// <summary>
-    /// M5-4c slice 2: a Hard seat's fighters (<c>focusFire</c>) focus on an enemy unit seen within this distance of one of
-    /// them, and those within it of the focus are ordered onto it (<c>focusReach</c> m, 1-64).
+    /// M5-4c slice 2: the cap on a Hard seat's fighter's focus reach (<c>focusFire</c>; BUG-1121: the reach is its attack range +
+    /// its radius + a cell, at most this): a fighter focuses an enemy unit seen within its reach (<c>focusReach</c> m, 1-64).
     /// </summary>
     public float FocusReach { get; init; }
 }

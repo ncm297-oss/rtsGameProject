@@ -66,6 +66,7 @@ internal sealed partial class AiPlayer
         RampTops = MilitaryManager.RampTops(view);
         FocusSlots = new int[view.UnitSlots];
         FocusPoints = new Vector2[view.UnitSlots];
+        FocusReach2 = new float[view.UnitSlots];
         FocusNext = new int[view.UnitSlots];
         // The bucket side: at least the reach (a fighter in reach is then in the 3 x 3 buckets round a point), at least
         // MilitaryManager.MinFocusBucket so a small reach on a big map stays a small grid.
@@ -246,6 +247,12 @@ internal sealed partial class AiPlayer
 
     /// <summary>See <see cref="FocusSlots"/>.</summary>
     internal Vector2[] FocusPoints { get; }
+
+    /// <summary>
+    /// BUG-1121: see <see cref="FocusSlots"/>: each fighter's own focus reach, squared (its attack's range + its radius + a
+    /// cell, at most <c>ai.focusReach</c>).
+    /// </summary>
+    internal float[] FocusReach2 { get; }
 
     /// <summary>
     /// M5-4c slice 2: the focus pass's bucket grid of its fighters: per bucket (<see cref="FocusBucket"/> m square, row
