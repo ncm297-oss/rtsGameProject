@@ -9,8 +9,8 @@ namespace Rts.Sim.Tests.QA.Content;
 /// pick (the 4th and 5th smallest in 1-500 making <c>cadre_rush</c> v <c>raider_rush</c>; the dev used 7, 8, 14), the
 /// same thresholds (18 / 16 / 14, cost the floor of the Age I mix at that pop) and the same Producer rule extended to all
 /// five seeds; Easy's opening read from the built simulation, not from the test-side pick helper; and the KnownBeatenAlive
-/// pattern (<c>crossbow_push</c> v <c>raider_rush</c>) looked for on that pairing's 4th and 5th seeds (since M5-4g seed
-/// 25 shows it too: a named allowance, BUG-1010).
+/// pattern (<c>crossbow_push</c> v <c>raider_rush</c>) looked for on that pairing's 4th and 5th seeds (seed 25 showed it
+/// from M5-4g to M5-4d as a named allowance, BUG-1010; taken out by D-R33).
 /// </summary>
 public class DH6ThresholdQaTests
 {
@@ -117,7 +117,7 @@ public class DH6ThresholdQaTests
     }
 
     /// <summary>
-    /// The KnownBeatenAlive pattern (<c>crossbow_push</c> v <c>raider_rush</c>, seed 19 = the 3rd seed): the pairing's 4th
+    /// The beaten-but-alive pattern (<c>crossbow_push</c> v <c>raider_rush</c>, seed 19 = the 3rd seed): the pairing's 4th
     /// and 5th seeds, printed (first wave, defeat, peak army, standing at 20:00). Fails only on the existing rule (no wave
     /// and not defeated), except for the seeds named in <see cref="KnownBeatenAlive"/>, so a further unlisted case shows here.
     /// </summary>
@@ -141,7 +141,7 @@ public class DH6ThresholdQaTests
                 if (fell < 0 && sim.World.IsDefeated(0)) fell = sim.TickNumber;
                 if (t % 20 == 0) peak = Math.Max(peak, ArmyHalfPop(sim, 0));
             }
-            _out.WriteLine($"seed {seed}: crossbow_push first wave {Sec(first)} ({sim.AiOf(0)!.Board.WavesStarted}), defeated {Sec(fell)}, peak {peak / 2.0}, at 20:00 pop {sim.World.HalfPop[0] / 2.0}; raider_rush waves {sim.AiOf(1)!.Board.WavesStarted}");
+            _out.WriteLine($"seed {seed}: crossbow_push first wave {Sec(first)} ({sim.AiOf(0)!.Board.WavesStarted}), defeated {Sec(fell)}{(fell >= 0 ? $" (tick {fell})" : "")}, peak {peak / 2.0}, at 20:00 pop {sim.World.HalfPop[0] / 2.0}; raider_rush waves {sim.AiOf(1)!.Board.WavesStarted}");
             bool known = Array.IndexOf(KnownBeatenAlive, seed) >= 0;
             if (first < 0 && fell < 0)
             {
@@ -155,14 +155,16 @@ public class DH6ThresholdQaTests
 
     /// <summary>
     /// The pairing's seeds (here the 4th and 5th) where <c>crossbow_push</c> may send no wave and still stand at 20:00, named
-    /// instead of loosening the rule (D-R32, 2026-10-26, BUG-1010; the 3rd seed, 19, is <c>D21OpeningsQaTests.KnownBeatenAlive</c>).
-    /// Seed 25: after M5-4g's reserve the Malazan side sends no wave, its army peaks at 12 pop (under its 14-pop wave, so the
-    /// reserve never engages), and at 20:00 it is down to 1 pop but not defeated (D-H6 read it defeated at 11:26).
-    /// Re-measured on main for D-H7 (2026-11-06, after M6-S5 / S7 / SH1 / S8): still failing the rule, unchanged (no wave,
-    /// peak 12 pop, 1 pop at 20:00, not defeated; <c>raider_rush</c> 2 waves), so the entry stays.
-    /// Take the entry out when the row passes the rule (the run prints so).
+    /// instead of loosening the rule. Empty since D-R33 (2026-11-07, BUG-1110): the one entry, seed 25 (D-R32, 2026-10-26,
+    /// BUG-1010: no wave, army peak 12 pop, down to 1 pop but standing at 20:00 through D-H7's re-measure on 2026-11-06),
+    /// passes the rule since M5-4d (the AI hunts the last units once it knows no enemy building). Re-measured on
+    /// <c>af7047b</c>: the run printed "the known case seed 25 now passes the rule: take it out of KnownBeatenAlive
+    /// (BUG-1010)"; the side still sends no wave (peak 12 pop, <c>raider_rush</c> 2 waves) and is defeated at 12:34
+    /// (tick 15,084), so "falls to the raider rush without attacking" still holds. With the entry out, the row fails again
+    /// if a later change leaves the side standing without a wave. The 3rd seed, 19, was <c>D21OpeningsQaTests.KnownBeatenAlive</c>'s
+    /// entry, taken out the same way.
     /// </summary>
-    private static readonly ulong[] KnownBeatenAlive = { 25 };
+    private static readonly ulong[] KnownBeatenAlive = { };
 
     private static int ArmyHalfPop(Simulation sim, int player)
     {

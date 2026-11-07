@@ -225,7 +225,7 @@ public class D21OpeningsQaTests
 
     /// <summary>
     /// D-H6: the same on a third seed per pairing (the third-smallest in 1-500), with the same allowance as the second (see
-    /// there), plus the one named case in <see cref="KnownBeatenAlive"/>.
+    /// there), plus any case named in <see cref="KnownBeatenAlive"/> (none since D-R33).
     /// </summary>
     [Theory]
     [Trait("Category", "Stress")]
@@ -261,7 +261,7 @@ public class D21OpeningsQaTests
                 for (int p = 0; p < 2; p++) peakArmy[p] = Math.Max(peakArmy[p], ArmyHalfPop(sim, p));
         }
         string Sec(int tick) => tick < 0 ? "never" : $"{tick / 20 / 60}:{tick / 20 % 60:00}";
-        string Side(int p) => $"{sim.World.Data.Factions[sim.AiOf(p)!.Faction].Key} {sim.AiOf(p)!.Opening.Id} first wave {Sec(first[p])} ({sim.AiOf(p)!.Board.WavesStarted} waves), Age II {Sec(ageTwo[p])}, defeated {Sec(fell[p])}, thinks defending {defending[p]}, at 20:00 pop {sim.World.HalfPop[p] / 2.0} / cap {sim.World.HalfPopCap[p] / 2.0}, gold {sim.World.Gold[p]}, wood {sim.World.Wood[p]}";
+        string Side(int p) => $"{sim.World.Data.Factions[sim.AiOf(p)!.Faction].Key} {sim.AiOf(p)!.Opening.Id} first wave {Sec(first[p])} ({sim.AiOf(p)!.Board.WavesStarted} waves), Age II {Sec(ageTwo[p])}, defeated {Sec(fell[p])}{(fell[p] >= 0 ? $" (tick {fell[p]})" : "")}, thinks defending {defending[p]}, at 20:00 pop {sim.World.HalfPop[p] / 2.0} / cap {sim.World.HalfPopCap[p] / 2.0}, gold {sim.World.Gold[p]}, wood {sim.World.Wood[p]}";
         _out.WriteLine($"seed {seed} (#{nth} of the pairing): {Side(0)}; {Side(1)}; peak army pop {peakArmy[0] / 2.0} / {peakArmy[1] / 2.0}");
         for (int p = 0; p < 2; p++)
         {
@@ -291,19 +291,17 @@ public class D21OpeningsQaTests
     }
 
     /// <summary>
-    /// D-H6's third seed found one case the "defeated" allowance doesn't cover, listed here by (Malazan opening, Whirlwind
-    /// opening, seed, player) instead of loosening the rule for every row: <c>crossbow_push</c> v <c>raider_rush</c> seed 19.
-    /// Re-measured after M5-4g's reserve (D-R32, 2026-10-26): the Malazan army peaks at 7 pop (under its 14-pop wave), the
-    /// base is held under the raids (282 thinks defending), and at 20:00 it is at 15 pop / cap 24 with 910 gold and 15
-    /// wood, no Age II, still standing (D-H6 read peak 8, 222 thinks, 6 pop / cap 16, 670 / 60). A lower wave would not
-    /// reach it either: the reserve waits for a wave-sized army, so it never engages here. It is BUG-0982's pattern (a
-    /// Malazan opening falls to the raider rush without attacking) on another opening, tracked as BUG-1010 (the sim-side
-    /// lever: send what you have when the base is being lost). Re-measured on main for D-H7 (2026-11-06, after M6-S5 / S7 /
-    /// SH1 / S8): still failing the rule, every number above unchanged (no wave, peak 7 pop, 282 thinks defending, 15 pop /
-    /// cap 24, 910 gold, 15 wood, no Age II, not defeated), so the entry stays. Take the entry out when the row passes the
-    /// rule (the run prints so). <c>DH6ThresholdQaTests</c> carries the pairing's 5th seed (25) the same way.
+    /// Cases the "defeated" allowance doesn't cover, by (Malazan opening, Whirlwind opening, seed, player), named here
+    /// instead of loosening the rule for every row. Empty since D-R33 (2026-11-07, BUG-1110): the one entry,
+    /// <c>crossbow_push</c> v <c>raider_rush</c> seed 19 player 0 (D-H6's finding, BUG-1010: no wave, army peak 7 pop,
+    /// still standing at 20:00 through D-H7's re-measure on 2026-11-06), passes the rule since M5-4d (the AI hunts the last
+    /// units once it knows no enemy building). Re-measured on <c>af7047b</c>: the run printed "the known case seed 19 player
+    /// 0 now passes the rule: take it out of KnownBeatenAlive (BUG-1010)"; the side still sends no wave (peak 7 pop, 876
+    /// thinks defending, no Age II) and is defeated at 10:24 (tick 12,484), so BUG-1010's "falls to the raider rush without
+    /// attacking" still holds and only "standing at 20:00" is gone. With the entry out, the row fails again if a later
+    /// change leaves the side standing without a wave. <c>DH6ThresholdQaTests</c> keeps the pairing's 4th and 5th seeds the same way.
     /// </summary>
-    private static readonly (int Malazan, int Whirlwind, ulong Seed, int Player)[] KnownBeatenAlive = { (1, 1, 19, 0) };
+    private static readonly (int Malazan, int Whirlwind, ulong Seed, int Player)[] KnownBeatenAlive = { };
 
     /// <summary>Determinism per pairing with the shipped openings: two Normal v Normal runs on the pair's smallest seed, equal state hashes every 50 ticks for 6,000 ticks, and the same commands sent.</summary>
     [Theory]

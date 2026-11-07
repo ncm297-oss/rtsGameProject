@@ -548,9 +548,9 @@ peaked at 7 pop, under its 14-pop wave, while it held the base, and at 20:00 it 
 15 wood and no Age II; on seed 25 it peaked at 12 pop and was down to 1 pop at 20:00 (re-measured unchanged on 2026-11-06
 by D-H7, on the `main` before M5-4d landed). Since M5-4d (the AI hunts the last units once it knows no enemy building)
 both are finished off without ever attacking: seed 19 is defeated at 10:24 and seed 25 at 12:34, so "falls to the rush
-without a wave" still holds and "standing at 20:00" does not. Both rows still name the seed as a known case
-(`KnownBeatenAlive`) instead of loosening their rule, and now print "now passes the rule: take it out"; the data track takes
-both entries out next (BUG-1110). Before M5-4g seed 19 read a peak of 8 pop and 6 pop / cap 16 with
+without a wave" still holds and "standing at 20:00" does not. Both test entries (`KnownBeatenAlive`, BUG-1110) were
+taken out by D-R33 (2026-11-07), so either row fails again if its side is left standing at 20:00 without a wave.
+Before M5-4g seed 19 read a peak of 8 pop and 6 pop / cap 16 with
 670 gold and 60 wood at 20:00, and seed 25 was destroyed at 11:26. Over the two openings, `raider_rush` beats the
 Malazans without a fight on 6 of 10 seeds (`cadre_rush` 4 of 5, `crossbow_push` 2 of 5). `standard` sent a wave on
 each of its 9 measured pairing seeds (3 Whirlwind openings x 3 seeds).
