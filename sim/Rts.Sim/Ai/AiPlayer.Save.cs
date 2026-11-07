@@ -98,7 +98,9 @@ internal sealed partial class AiPlayer
         IntruderCentroid = r.ReadVector2();
         IntruderWorth = r.ReadInt32();
         HallSlot = r.ReadInt32();
-        TownHallCell = r.ReadInt32();
+        // BUG-1118: -1 (no hall seen), a cell of the map, or a lost hall's anchor stored as -(cell + 2): one range.
+        int cells = View.MapWidth * View.MapHeight;
+        TownHallCell = r.ReadInt32In(-(cells + 1), cells - 1);
         Gold = r.ReadInt32();
         Wood = r.ReadInt32();
         ExecutorSent = r.ReadBool();

@@ -203,6 +203,39 @@ public class SaveRefusalTests
         Assert.Equal(SaveError.Malformed, SaveTestRun.TryLoad(Data, SaveBytes.Rechecksum(bad)));
     }
 
+    /// <summary>
+    /// BUG-1118 item 2: the AI seat's <c>TownHallCell</c> is range-checked on load: -1, a map cell, or a lost hall's anchor
+    /// -(cell + 2) loads; one past either end, or <see cref="int.MinValue"/>, is Malformed. The field is found as the
+    /// four ints <c>HallSlot, TownHallCell, Gold, Wood</c> the seat writes in a row.
+    /// </summary>
+    [Theory]
+    [InlineData(-1, true)]
+    [InlineData(0, true)]
+    [InlineData(255, true)]
+    [InlineData(-257, true)]
+    [InlineData(256, false)]
+    [InlineData(-258, false)]
+    [InlineData(int.MinValue, false)]
+    public void AForgedTownHallCell_OutsideTheMap_IsMalformed(int value, bool loads)
+    {
+        Simulation sim = SaveBytes.SmallAiSim();
+        Ai.AiPlayer ai = sim.AiOf(0)!;
+        Assert.Equal(256, ai.View.MapWidth * ai.View.MapHeight);
+        byte[] good = SaveTestRun.Save(sim);
+        var pattern = new byte[16];
+        BinaryPrimitives.WriteInt32LittleEndian(pattern.AsSpan(0), ai.HallSlot);
+        BinaryPrimitives.WriteInt32LittleEndian(pattern.AsSpan(4), ai.TownHallCell);
+        BinaryPrimitives.WriteInt32LittleEndian(pattern.AsSpan(8), ai.Gold);
+        BinaryPrimitives.WriteInt32LittleEndian(pattern.AsSpan(12), ai.Wood);
+        int aist = SaveBytes.AiSection(good);
+        int at = good.AsSpan(aist).IndexOf(pattern);
+        Assert.True(at > 0, "the seat's hall fields not found");
+        Assert.Equal(-1, good.AsSpan(aist + at + 1).IndexOf(pattern)); // found once
+        byte[] forged = (byte[])good.Clone();
+        BinaryPrimitives.WriteInt32LittleEndian(forged.AsSpan(aist + at + 4), value);
+        Assert.Equal(loads ? SaveError.None : SaveError.Malformed, SaveTestRun.TryLoad(Data, SaveBytes.Rechecksum(forged)));
+    }
+
     [Fact]
     public void TheLengthPreCheck_PassesRealSaves_HumanAndAi_SmallAndLarge()
     {

@@ -7778,7 +7778,8 @@ internal, shared), one knob. No `Command` kind: the hunt sends `AttackMove` (and
 - **Measured** (Normal v Normal, Malazan v Whirlwind, starts 0 and 1, to 72,000 ticks, `Stress/MapSlice2StressTests`; at
   e3fd8fb none of these ended): Pale Hills seeds 3, 4 and 6 (one match: a map file draws nothing from the seed but the
   openings) end at tick 29,421 (24:31), Whirlwind winning after one hunt; seed 5 at 52,557 (43:48), Malazan winning after
-  one hunt (since BUG-1107 fix round 2; 41,337 after two hunts before it; with the centres alone it ran out the hour); the
+  one hunt (since BUG-1107 fix round 2; 41,337 after two hunts before it; with the centres alone it ran out the hour;
+  **55,631** since M5-4d slice 2, QA's measurement, still inside the 72,000 bound: the seats rebuild what they lose); the
   generated map's seed 6 at 26,875 (22:24), Whirlwind after one
   hunt. Seed 2 (both sides keep two halls) is untouched: no hunt starts while an enemy building is known. The rows that
   ended before still end, none of them through a hunt but Pale Hills seed 1, now 34,856 (was 34,175: its last wave, its
@@ -7826,7 +7827,7 @@ rebuild losses"; docs/02 "High ground": the AI scouts ramps before attacking up 
   its newest done step becomes due again at once: `StepDone` false, `StepQueued` one less, `StepDueTick` this think less the
   difficulty's `buildOrderSlack` (so it acts this think, no slack), no pending order. Then it is a step like any other: the
   site search round the hall, the retry marks, `NoSiteRetryThinks`, the reserve. One step a type a think (a second loss
-  reopens the next one at the next think). A House step stays done while the population cap is the hard cap (D15 C). Why
+  reopens the next one at the next think). A House step at the hard cap stays done (D15 C). Why
   the newest: the file's earlier steps came first for a reason, and a reopened step later in the file can't take an
   earlier one's reserve. **The reserve** (criterion 2 d): the reopened step is the reserved step when it is the first step
   only its cost holds back, as any step is (`RebuildTests.ARebuildShortOfItsCost_IsTheReservedStep`); a step reserved before
@@ -7886,7 +7887,9 @@ rebuild losses"; docs/02 "High ground": the AI scouts ramps before attacking up 
   scratch arrays are empty between thinks. Saves mid-rebuild and mid-look follow their runs hash for hash
   (`RebuildTests.ASaveMidRebuild_FollowsTheRun_For1000Ticks`, `HighGroundLookTests.ASaveMidLook_FollowsTheRun_For1000Ticks`).
   A format-6 / 7 save from before this slice taken with the hall gone has `TownHallCell` -1: it rebuilds round its first
-  building or its workers instead of on the old spot.
+  building or its workers instead of on the old spot. The load range-checks `TownHallCell` (BUG-1118): -1, a map cell, or
+  `-(cell + 2)`, i.e. `[-(cells + 1), cells - 1]`; anything else is `Malformed`
+  (`SaveRefusalTests.AForgedTownHallCell_OutsideTheMap_IsMalformed`).
 - **Fog.** Every rebuild site comes from the census of own buildings and workers, `CanPlace` and the ring search (as any
   Build); the look point from static terrain (levels, ramps, plateau labels: the map every player loaded) and the members'
   positions; "the target's cell is visible" from the seat's own fog (`IsVisible`). `PlayerViewArchitectureTests` still
@@ -7916,11 +7919,20 @@ rebuild losses"; docs/02 "High ground": the AI scouts ramps before attacking up 
     steps (7-19), seeds 19 and 32 with the hall missing for 696 and 268 thinks; none looks. The prose round those tables
     still quotes the old times (data track's to re-word). The Whirlwind page's "Age II against the Malazans" `raider_rush` v
     `crossbow_push` seed 19 moves with it (Age II at 10:34 to 10:21; the same match as the Malazan seed-19 row).
-  - **A row that no longer ends** (BUG-1116, the report's): QA's `HuntStressTests.FourAiSeats_OnPaleHills_EndWithTheOracleOnEveryHunt(2, ffa)`
-    has no result by 144,000 ticks. Every seat is out of gold by 30:00 (wood piling up); a seat whose base was razed
-    rebuilds what it can and lives on with three workers and its rebuilt tents, so the others know an enemy building and
-    never hunt, and the one army left (13 units) is under its wave threshold with no gold to grow. Rebuilding is what
-    moved it; the stall (a wave threshold an army can never reach) is the old one of BUG-1068's seed 2. Not bounded here.
+  - **A row that no longer ends** (BUG-1116, open, the Producer's ruling): QA's
+    `HuntStressTests.FourAiSeats_OnPaleHills_EndWithTheOracleOnEveryHunt(2, ffa)` has no result by 144,000 ticks. QA's
+    probe: the losing seats rebuild houses they don't need (115 tents and 90 billets between ticks 24,000 and 48,000).
+    **Tried in fix round 1 and not kept:** a House step reopened only when the economy's house rule would want a house
+    (below the hard cap and `HalfPopCap - HalfPop <= ai.houseWhenPopWithin`). It removes the churn (16 tents, 0 billets in
+    that window) but the row still stalls: by 72,000 every seat is out of gold (p0 16, p1 24, p3 14, wood past 10,000
+    each); at 144,000 p0 (`standard`) has 28 workers, no army and 7 production buildings, p1 (`raider_rush`) 3 workers
+    and no building (hall lost about 47,000, never the gold for another), p2 was defeated at 67:23, and p3 (`standard`)
+    holds 7 army units (16 half-pop, under its threshold of 28) and still remembers 18 of the defeated p2's buildings, so
+    it neither waves nor hunts. And it turns three green rows red: `MapFileTests` Pale Hills seed 1 (no result by 36,000),
+    `MapSlice2StressTests` known stall Pale Hills seed 5 (no result by 72,000: the loser's last camp follower stands idle
+    at (391.8, 438.3) from 48,000 and the winner's 7-unit hunt never sees it; with every house rebuilt that worker's
+    new tent site was a known target that ended the match) and QA's `RebuildLookMatchQaStressTests` two-process row (no
+    hall lost any more). The stall is BUG-1068's gold starvation; rebuilt houses act as a beacon for the hunt.
 - **Tests:** `Ai/RebuildTests` (criterion 2: a razed Barracks built again within two thinks and its step done again,
   built once; a razed hall's Keep the first Build after it, at the old anchor, the Train step held, the workers depositing
   again after it stands; a tree on the old anchor: the Keep a few cells off; at the hard cap a razed Billet not rebuilt,
