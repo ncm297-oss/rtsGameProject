@@ -114,6 +114,29 @@ internal static class PreMapFixtures
         return copy;
     }
 
+    /// <summary>
+    /// M5-4d: a format-6 save (a generated map with an AI seat) as format 4 wrote it, or a format-7 one (a hand-made map) as
+    /// format 5: the <c>HUNT</c> section (its tag, the seat count and each seat's hunt memory, the last section before
+    /// <c>END!</c>) taken out, the version and the total length fixed. The checksum is left stale: <see cref="Normalize(byte[])"/>
+    /// zeroes it, <c>SaveBytes.Rechecksum</c> recomputes it.
+    /// </summary>
+    internal static byte[] WithoutHunt(byte[] save)
+    {
+        int version = Int32At(save, Rts.Sim.Save.SaveFormat.MagicLength);
+        Assert.True(version is Rts.Sim.Save.SaveFormat.HuntMaplessVersion or Rts.Sim.Save.SaveFormat.CurrentVersion, $"format {version} has no HUNT section");
+        int end = save.Length - Rts.Sim.Save.SaveFormat.ChecksumLength - 4;
+        Assert.Equal("END!"u8.ToArray(), save[end..(end + 4)]);
+        int hunt = save.AsSpan(0, end).LastIndexOf("HUNT"u8);
+        Assert.True(hunt > save.AsSpan().LastIndexOf("AIST"u8), "no HUNT section after AIST");
+        byte[] old = new byte[save.Length - (end - hunt)];
+        save.AsSpan(0, hunt).CopyTo(old);
+        save.AsSpan(end).CopyTo(old.AsSpan(hunt));
+        BinaryPrimitives.WriteInt32LittleEndian(old.AsSpan(Rts.Sim.Save.SaveFormat.MagicLength),
+            version == Rts.Sim.Save.SaveFormat.CurrentVersion ? Rts.Sim.Save.SaveFormat.MapVersion : Rts.Sim.Save.SaveFormat.MaplessVersion);
+        BinaryPrimitives.WriteInt64LittleEndian(old.AsSpan(Rts.Sim.Save.SaveFormat.LengthOffset), old.Length);
+        return old;
+    }
+
     /// <summary>A replay file's text with the data-hash value zeroed and the checksum line dropped (see the type's summary).</summary>
     internal static string Normalize(string replayText)
     {

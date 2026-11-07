@@ -19,8 +19,9 @@ internal static class SaveHeader
         GameData data = c.Data;
         foreach (byte b in SaveFormat.Magic) w.Write(b);
         // M6-S7: the oldest format that holds the match: a generated map is format 4, byte for byte as before map files.
+        // M5-4d: a match with an AI seat adds the HUNT section: 6 on a generated map, 7 on a hand-made one.
         bool mapFile = !string.IsNullOrEmpty(c.MapId);
-        w.Write(mapFile ? SaveFormat.CurrentVersion : SaveFormat.MaplessVersion);
+        w.Write(VersionFor(mapFile, HasAiSeat(c)));
         w.Write(0L); // total length, patched at the end
         w.WriteString(SimInfo.Version);
         w.Write(data.ContentHash());
@@ -119,6 +120,19 @@ internal static class SaveHeader
         StartForestDistance = r.ReadFloat(),
     };
 
+    /// <summary>M5-4d: the oldest format that holds a match on a hand-made map (<paramref name="mapFile"/>) or not, with an AI seat or not.</summary>
+    internal static int VersionFor(bool mapFile, bool aiSeat) => aiSeat
+        ? (mapFile ? SaveFormat.CurrentVersion : SaveFormat.HuntMaplessVersion)
+        : (mapFile ? SaveFormat.MapVersion : SaveFormat.MaplessVersion);
+
+    /// <summary>Whether <paramref name="c"/> seats an AI (the sim builds an <c>AiPlayer</c> for exactly those seats).</summary>
+    internal static bool HasAiSeat(SimConfig c)
+    {
+        for (int p = 0; p < c.PlayerCount; p++)
+            if (c.SeatOf(p).Controller == SeatController.Ai) return true;
+        return false;
+    }
+
     /// <summary>
     /// Reads the header after the fixed prefix (the caller checked magic, version, length and checksum): the data hash
     /// (<see cref="SaveError.DataMismatch"/> against <paramref name="data"/>), then every field, each in its range
@@ -171,10 +185,12 @@ internal static class SaveHeader
         string? preset = version >= 4 ? r.ReadString() : StartingResourcesDef.StandardId;
         if (r.Failed || preset == null) return SaveError.Malformed;
         // Format 5 (M6-S7): the hand-made map's id, after the preset; formats 3-4 were generated maps. A format-5 header always
-        // names one (a generated map is saved as format 4), so an empty id there is no save this build wrote.
-        string? mapId = version >= 5 ? r.ReadString() : "";
+        // names one (a generated map is saved as format 4), so an empty id there is no save this build wrote. M5-4d: format 7
+        // names one too, format 6 none (a generated map with an AI seat).
+        bool hasMapId = SaveFormat.HasMapId(version);
+        string? mapId = hasMapId ? r.ReadString() : "";
         if (r.Failed || mapId == null) return SaveError.Malformed;
-        if (version >= 5 && mapId.Length == 0) return SaveError.InvalidHeader;
+        if (hasMapId && mapId.Length == 0) return SaveError.InvalidHeader;
         // BUG-1040: the command capacity's range is the config's own (1 to SaveFormat.MaxCommandCapacity), so a header over
         // it is InvalidHeader before anything is built, as every other capacity out of range.
         if (!InCapacity(units, 1) || commands < 1 || commands > SaveFormat.MaxCommandCapacity || !InCapacity(resources, 1) || !InCapacity(buildings, 1)

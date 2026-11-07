@@ -3,7 +3,7 @@
 | Field | Value |
 | --- | --- |
 | Severity | S4 |
-| Status | open (item 1 fixed by D23, 2026-11-05-2148; item 2 stays open, the view's) |
+| Status | fixed (item 1 D23 2026-11-05-2148; item 2 M6-VH5 2026-11-06-0926: `TooltipWrap.Wrap` pre-wraps every description tooltip at 60 characters, `TooltipWrapTest` + QA's `QaVh5Test` fuzz; closed by the Producer) |
 | Found | 2026-11-05-1716, task D22 (QA, light) |
 | System | sim/Rts.Sim.Tests/Content/StartingResourcesContentTests.cs; game/data/common/rules.json `startingResources[*].description` |
 | Fixed by | item 1: D23 (`Content/FactionWords`, shared with `Content/MapTextContentTests`; `StartingResourcesContentTests.ProperNames_HoldTheBareFactionWords` and the `AMutantDescription_IsCaught` rows "a Malazan quartermaster" / "a Whirlwind war chest") |

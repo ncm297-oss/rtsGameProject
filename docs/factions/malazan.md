@@ -542,10 +542,14 @@ picks 18.
 
 The same thing happens to `crossbow_push` (BUG-1010; D-H6's third seed per pairing, `QA/Content/D21OpeningsQaTests`, and
 QA's 4th and 5th, `QA/Content/DH6ThresholdQaTests`). Against `raider_rush` it sends no wave on 2 of the pairing's 5
-smallest seeds (5, 11, 19, 25, 38), and both are still standing at 20:00, beaten down: on seed 19 its army peaks at 7
-pop, under its 14-pop wave, while it holds the base, and at 20:00 it has 15 pop with a cap of 24, 910 gold and 15 wood
-and no Age II; on seed 25 it peaks at 12 pop and is down to 1 pop at 20:00. Both rows name the seed as a known case
-(`KnownBeatenAlive`) instead of loosening their rule. Before M5-4g seed 19 read a peak of 8 pop and 6 pop / cap 16 with
+smallest seeds (5, 11, 19, 25, 38). Until M5-4d both were still standing at 20:00, beaten down: on seed 19 its army
+peaked at 7 pop, under its 14-pop wave, while it held the base, and at 20:00 it had 15 pop with a cap of 24, 910 gold and
+15 wood and no Age II; on seed 25 it peaked at 12 pop and was down to 1 pop at 20:00 (re-measured unchanged on 2026-11-06
+by D-H7, on the `main` before M5-4d landed). Since M5-4d (the AI hunts the last units once it knows no enemy building)
+both are finished off without ever attacking: seed 19 is defeated at 10:24 and seed 25 at 12:34, so "falls to the rush
+without a wave" still holds and "standing at 20:00" does not. Both rows still name the seed as a known case
+(`KnownBeatenAlive`) instead of loosening their rule, and now print "now passes the rule: take it out"; the data track takes
+both entries out next (BUG-1110). Before M5-4g seed 19 read a peak of 8 pop and 6 pop / cap 16 with
 670 gold and 60 wood at 20:00, and seed 25 was destroyed at 11:26. Over the two openings, `raider_rush` beats the
 Malazans without a fight on 6 of 10 seeds (`cadre_rush` 4 of 5, `crossbow_push` 2 of 5). `standard` sent a wave on
 each of its 9 measured pairing seeds (3 Whirlwind openings x 3 seeds).
@@ -558,15 +562,17 @@ every Malazan opening against every Whirlwind opening on the pairing's three sma
 `QA/Content/D21OpeningsQaTests`'; each run pins its cell here and on the Whirlwind page's twin table. Since M5-4g's
 reserve the Malazans reach Age II on 23 of the 27 sides: of the four that don't, `standard` seed 2 and `cadre_rush` seed
 14 are defeated first, `crossbow_push` seed 19 is BUG-1010's beaten side, and `crossbow_push` seed 32 is not defeated at
-20:00 (3 pop, no pop building left; 794 gold and 5 wood in hand) (docs/03 "Implementation (M5-4g)").
+20:00 (3 pop, no pop building left; 794 gold and 5 wood in hand) (docs/03 "Implementation (M5-4g)"). Since M5-4d (the AI
+hunts the last units once it knows no enemy building) those two are finished off: seed 19 is defeated at 10:24 and seed
+32 at 17:18 (docs/03 "Implementation (M5-4d)").
 
 | Malazan opening | Whirlwind opening | 1st seed | 2nd seed | 3rd seed |
 | --- | --- | --- | --- | --- |
 | `standard` | `standard` | seed 1: 12:22 | seed 22: 13:08 | seed 26: 11:48 |
 | `standard` | `raider_rush` | seed 2: never (defeated 16:45) | seed 10: 12:00 | seed 21: 8:19 |
 | `standard` | `holy_war` | seed 3: 13:51 | seed 4: 15:19 (defeated 19:53) | seed 6: 8:29 (defeated 15:39) |
-| `crossbow_push` | `standard` | seed 9: 12:01 | seed 32: never | seed 37: 14:20 |
-| `crossbow_push` | `raider_rush` | seed 5: 9:53 | seed 11: 8:47 | seed 19: never |
+| `crossbow_push` | `standard` | seed 9: 12:01 | seed 32: never (defeated 17:18) | seed 37: 14:20 |
+| `crossbow_push` | `raider_rush` | seed 5: 9:53 | seed 11: 8:47 | seed 19: never (defeated 10:24) |
 | `crossbow_push` | `holy_war` | seed 12: 12:13 | seed 45: 9:28 | seed 71: 9:43 |
 | `cadre_rush` | `standard` | seed 13: 6:05 | seed 16: 8:24 | seed 17: 8:44 |
 | `cadre_rush` | `raider_rush` | seed 7: 8:26 | seed 8: 8:41 (defeated 13:25) | seed 14: never (defeated 12:33) |

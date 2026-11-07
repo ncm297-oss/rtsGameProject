@@ -205,20 +205,29 @@ public class MapSlice2StressTests
     /// <summary>
     /// See <see cref="NormalVersusNormal_OnANewMap_OtherSeeds_EndWithin72000"/>: the rows with no result by 60:00 at e3fd8fb.
     /// Pale Hills 3 / 4 / 6 (one match: openings 0 / 2): Malazan razed, 1 unit left, Whirlwind 87 units; 5: the mirror
-    /// (Whirlwind razed, 6 units left); 2: both still hold 2 halls (37 v 27 units, 20,000+ wood each). Generated 6: Malazan
-    /// razed, 1 unit left (the AI's waves target buildings only).
+    /// (Whirlwind razed, 6 units left). Generated 6: Malazan razed, 1 unit left (the AI's waves targeted buildings only).
+    /// M5-4d (BUG-1068): the winner now hunts the last units once no enemy building is known, so each row must end by
+    /// 72,000; the fog oracle for the hunt's memory runs at every think of both seats (criterion 4).
     /// </summary>
-    [Theory(Skip = "BUG-1068 (open, S3): Normal v Normal on Pale Hills reaches no result by 60:00 on seeds 2-6; generated seed 6 the same last-unit stall")]
+    [Theory]
     [Trait("Category", "Stress")]
-    [InlineData(PaleHills, 2UL)]
     [InlineData(PaleHills, 3UL)]
     [InlineData(PaleHills, 4UL)]
     [InlineData(PaleHills, 5UL)]
     [InlineData(PaleHills, 6UL)]
     [InlineData("generated", 6UL)]
-    public void NormalVersusNormal_KnownStalls_EndWithin72000(string id, ulong seed) => SweepRow(id, seed);
+    public void NormalVersusNormal_KnownStalls_EndWithin72000(string id, ulong seed) => SweepRow(id, seed, oracle: true);
 
-    private void SweepRow(string id, ulong seed)
+    /// <summary>
+    /// Pale Hills seed 2 (BUG-1068's remaining case): both sides still hold two halls at 60:00 (37 v 27 units, 20,000+ wood
+    /// each at e3fd8fb), a true stalemate the hunt doesn't touch (enemy buildings stay known). Kept as a named known case.
+    /// </summary>
+    [Theory(Skip = "BUG-1068 (open, S3, narrowed to seed 2): Normal v Normal on Pale Hills seed 2 is a stalemate, both sides keep two halls past 60:00")]
+    [Trait("Category", "Stress")]
+    [InlineData(PaleHills, 2UL)]
+    public void NormalVersusNormal_PaleHillsSeed2_Stalemate_EndsWithin72000(string id, ulong seed) => SweepRow(id, seed);
+
+    private void SweepRow(string id, ulong seed, bool oracle = false)
     {
         PlayerSeat[] seats = { new(0, SeatController.Ai, AiDifficulty.Normal), new(1, SeatController.Ai, AiDifficulty.Normal) };
         Simulation sim = id switch
@@ -230,6 +239,22 @@ public class MapSlice2StressTests
         World w = sim.World;
         var waves = new int[2];
         var waving = new bool[2];
+        string? leak = null;
+        int sightings = 0;
+        if (oracle)
+            for (int p = 0; p < 2; p++)
+            {
+                int player = p;
+                sim.AiOf(p)!.ThoughtForTests = ai =>
+                {
+                    // M5-4d criterion 4: a sighting remembered this think is a unit the fog granted this think.
+                    if (leak != null || ai.Board.EnemyUnitTick != ai.Now) return;
+                    sightings++;
+                    for (int s = 0; s < w.Units.Capacity; s++)
+                        if (w.Units.Alive[s] && w.IsEnemy(player, w.Units.Owner[s]) && w.Units.Position[s] == ai.Board.EnemyUnitPoint && w.Fog.CanSeeUnit(player, s)) return;
+                    leak = $"tick {ai.Now}: player {player} remembers {ai.Board.EnemyUnitPoint}, where no enemy unit it sees stands";
+                };
+            }
         while (sim.TickNumber < 72_000 && !sim.MatchOver)
         {
             sim.Tick();
@@ -244,7 +269,11 @@ public class MapSlice2StressTests
         for (int i = 0; i < w.Units.Capacity; i++)
             if (w.Units.Alive[i]) { if (w.Units.Owner[i] == 0) units0++; else units1++; }
         _out.WriteLine($"ROW {id} seed {seed}: over {sim.MatchOver} at {Clock(sim.TickNumber)} ({sim.TickNumber} ticks, within 36,000 {sim.MatchOver && sim.TickNumber <= 36_000}); defeated {w.IsDefeated(0)} / {w.IsDefeated(1)}; openings {sim.AiOpening(0)} / {sim.AiOpening(1)}; waves {waves[0]} / {waves[1]}; halls {Halls(w, 0)} / {Halls(w, 1)}; units {units0} / {units1}; gathered gold {w.GatheredGold[0]} / {w.GatheredGold[1]} wood {w.GatheredWood[0]} / {w.GatheredWood[1]}");
-        Assert.True(sim.MatchOver, $"{id} seed {seed}: no result by 72,000 ticks");
+        int hunts = sim.AiOf(0)!.Board.HuntsStarted + sim.AiOf(1)!.Board.HuntsStarted;
+        string winner = !sim.MatchOver ? "none" : w.IsDefeated(0) ? "player 1" : w.IsDefeated(1) ? "player 0" : "?";
+        _out.WriteLine($"RESULT {id} seed {seed}: winner {winner} at tick {sim.TickNumber}; hunts {sim.AiOf(0)!.Board.HuntsStarted} / {sim.AiOf(1)!.Board.HuntsStarted}" + (oracle ? $"; {sightings} sightings checked by the fog oracle" : ""));
+        Assert.True(leak == null, leak);
+        Assert.True(sim.MatchOver, $"{id} seed {seed}: no result by 72,000 ticks (hunts {hunts})");
     }
 
     /// <summary>

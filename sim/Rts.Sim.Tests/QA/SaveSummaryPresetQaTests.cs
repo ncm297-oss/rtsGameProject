@@ -45,7 +45,7 @@ public class SaveSummaryPresetQaTests
             {
                 Assert.True(SaveSummary.TryRead(stream, out SaveSummary? s), $"tick {tick}: did not read");
                 Assert.Equal("high", s!.StartingResources);
-                Assert.Equal(4, s.FormatVersion);
+                Assert.Equal(Rts.Sim.Save.SaveHeader.VersionFor(false, Rts.Sim.Save.SaveHeader.HasAiSeat(sim.World.Config)), s.FormatVersion); // M5-4d: 6 with an AI seat
                 Assert.Equal(sim.TickNumber, s.Tick);
             }
             Assert.Equal(hash, sim.StateHash());

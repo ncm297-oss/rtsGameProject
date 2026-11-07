@@ -3,7 +3,7 @@
 | Field | Value |
 | --- | --- |
 | Severity | S4 |
-| Status | open |
+| Status | fixed / closed by the Producer (2026-11-06-0926): item 1 was fixed in M6-V2 (`ui.json` `setup.map_size_item`, re-verified by M6-VH5's QA); item 2 settled by M5-4a's mirrored start locations and M6-S8's hand-made 256 maps; item 3 a process note long answered |
 | Found | 2026-10-11-0634, task M6-V1 (QA) |
 | System | view: skirmish setup (`SkirmishSetup.cs`), `--map-size`; studio process |
 | Fixed by | |
