@@ -37,3 +37,26 @@ Raraku (end state after 72,000 ticks, AI seat 0, `standard`, seed 1): hall razed
 - Suggested direction (the developer's call): add border points to the sweep (the grid lines' intersections with the map's edges and the
   four corners, clamped inside the map/passable ground), or derive the point spacing from unit sight; then fix the docs/03 claim.
 - Related: BUG-1068 (the stalls this task targets).
+
+## Re-check round 1 (2026-11-06-0926, fix 6a3c83c): partly fixed, still open
+The fix adds a border ring (the four map corners plus, on each edge, a point level with each cell centre) and `SeenPoints`. The corners and
+the edge points level with cell centres are now found: `HuntQaTests.AHuntFindsALastUnitAtTheMapEdge` 5 / 5 and the shipped 24-row corner
+matrix both pass. But ring points are a whole scout cell apart along each edge (51.2 m), and sight is 14 m. So the stretch of edge more
+than 14 m from both neighbouring ring points (about 23 m of every 51 m) is seen only if the army happens to walk along the edge. Nearest-first
+never does: from a ring point it turns inward to the cell centre (about 25 m away) rather than to the next ring point (51 m away). The walk order
+is the same on every pass, so the gap is permanent.
+
+Repro: `dotnet test sim/Rts.Sim.Tests --filter "FullyQualifiedName~HuntSweepWorstPointQaTests"` (`Stress/HuntSweepQaStressTests.cs`).
+The human seat's 5 workers hide at the sweep's worst points: on each edge a point level with a grid line (half a cell from the two ring points beside
+it), plus one interior point half a cell from a centre and a corner. All four maps x AI seat 0 / 1 x openings 0 / 2: **11 / 16 rows never end**
+(at 53c4a92, before the fix: 16 / 16). Every unit left is an edge worker 24.7-25.4 m from the nearest sweep point, except one interior worker
+(generated, AI seat 1, `holy_war` seed 3, at (50.6, 76.2), 25.0 m; also missed before the fix, so not caused by `SeenPoints`). Examples:
+- Raraku AI seat 0 `standard` seed 1: hunting from 7:55, the worker at (3.7, 51.5) is still alive at 60:00. The army reached ring points 48
+  (1, 25.6) and 50 (1, 76.8) as targets on two full passes, each time turning inward next. Its nearest approach was 26.4 m.
+- Pale Hills AI seat 0 `standard` seed 1: (257.0, 3.9) and (508.9, 460.0) alive at 60:00, 64 / 225 marked on the current pass.
+- Vathar Crossing AI seat 1 `standard` seed 1: (256.4, 3.6) and (51.6, 508.2) alive at 60:00.
+
+The docs/03 claim "every point of the map is within half a cell of a sweep point" is true, but being within 25.6 m of a point is not being seen
+(14 m). Direction (the developer's call): a coverage guarantee in terms of sight, not point spacing. For example, ring points every
+`2 x sight` along the edges, or make the sweep walk the edge between neighbouring ring points (the sweep's time budget, 57:36 of 60:00 on
+Vathar Crossing, is the constraint the developer measured).
