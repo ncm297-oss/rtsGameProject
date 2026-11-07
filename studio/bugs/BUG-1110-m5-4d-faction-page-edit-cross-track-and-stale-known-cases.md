@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S3 since the 2026-11-06-0926 ACCEPT (was S2; the page is consistent again, the rest is two stale test allowances that print and don't fail). Original: S2 (track ownership: `docs/factions/**` is the data track's, producer.md "Tracks"; the Producer may judge the re-print brief-sanctioned, but the stale text below needs a data-track re-print either way) |
-| Status | open (narrowed: the Producer ruled the two-cell re-print brief-sanctioned (criterion 7: re-pin in the same commit) and re-printed the seed 19 / 25 paragraph on the sim branch; at the data merge the conductor takes HEAD for that paragraph. Left for the data track: take (1, 1, 19, 0) and 25 out of the two `KnownBeatenAlive` lists and fix their comments) |
+| Status | fixed (D-R33, 2026-11-07-0236: both KnownBeatenAlive lists emptied, rows green with no "take it out" line; guarded by `QA/Content/DR33QaTests.KnownBeatenAlive_StaysEmpty`). Was: open (narrowed: the Producer ruled the two-cell re-print brief-sanctioned (criterion 7: re-pin in the same commit) and re-printed the seed 19 / 25 paragraph on the sim branch; at the data merge the conductor takes HEAD for that paragraph. Left for the data track: take (1, 1, 19, 0) and 25 out of the two `KnownBeatenAlive` lists and fix their comments) |
 | Found | 2026-11-06-0926, task M5-4d (QA full; conductor question (b)) |
 | System | docs / content tests: `docs/factions/malazan.md`, `QA/Content/D21OpeningsQaTests.KnownBeatenAlive`, `QA/Content/DH6ThresholdQaTests.KnownBeatenAlive` |
-| Fixed by | |
+| Fixed by | D-R33 (2500f4d) |
 
 ## Repro
 1. `git diff 1e9e1e8...b7a3f83 -- docs/factions/` (sim branch): the Age II paragraph + two table cells re-printed (`crossbow_push` v `raider_rush`

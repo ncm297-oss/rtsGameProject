@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S3 (test-only; no shipped behavior is wrong, but it reopens the cross-track merge hazard BUG-1103 was about) |
-| Status | open |
+| Status | fixed |
 | Found | 2026-11-06-0926, task D-H7 (QA light) |
 | System | `sim/Rts.Sim.Tests/Content/MapTextContentTests.cs` (data track's content tests) |
-| Fixed by | |
+| Fixed by | D-R33 (2500f4d, 2026-11-07-0236): set equality dropped, unpinned maps printed; Raraku-first assert kept. QA-verified (DR33QaTests) |
 
 ## Repro
 1. Copy the shipped data dir and add a fourth map file (`aa_decoy`, clean text), as the sim's next map task would.

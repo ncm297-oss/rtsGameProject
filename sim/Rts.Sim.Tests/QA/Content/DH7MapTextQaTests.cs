@@ -71,7 +71,7 @@ public class DH7MapTextQaTests
         Assert.True(found, "the centre mutant should be visible to the spelling scan");
     }
 
-    /// <summary>A shipped map the pin doesn't name passes the pin (D24's design) but fails D-H7's every-map test's rule.</summary>
+    /// <summary>A shipped map the pin doesn't name passes the pin (D24's design); the pinned and shipped id sets differ, which D-H7's every-map row failed on until D-R33 (BUG-1104) made it print instead (see <c>DR33QaTests</c>).</summary>
     [Fact]
     public void AShippedButUnpinnedDecoy_PassesThePin_ButNotTheEveryMapRule()
     {
@@ -89,7 +89,7 @@ public class DH7MapTextQaTests
         Assert.Empty(MapTextContentTests.PinProblems(MapTextContentTests.Shipped(d), MapTextContentTests.Pinned));
         string[] pinned = MapTextContentTests.Pinned.Select(p => p.Id).OrderBy(x => x, StringComparer.Ordinal).ToArray();
         string[] shipped = d.Maps.Select(m => m.Key).OrderBy(x => x, StringComparer.Ordinal).ToArray();
-        Assert.NotEqual(shipped, pinned); // what ThePin_NamesEveryShippedMap_RarakuFirst would report for a sim-added map
+        Assert.NotEqual(shipped, pinned); // since D-R33 ThePin_NamesEveryShippedMap_RarakuFirst prints this as "not pinned yet", not a failure
         Assert.Equal("raraku", MapTextContentTests.Raraku(d).Key);
     }
 
