@@ -355,6 +355,8 @@ public partial class SkirmishSetup : CanvasLayer
     {
         if (SlotCount >= SlotCap) return; // M6-V18: a map file takes no more players than its start locations
         ShowNextSlot();
+        // BUG-1114: the player's added slot is their last count, so a later cap and Generated give it back, not the older one.
+        if (_slotsBeforeMap >= 0) _slotsBeforeMap = Math.Max(_slotsBeforeMap, SlotCount);
         UpdateSlotButtons();
         Validate();
     }

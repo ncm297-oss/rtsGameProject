@@ -6817,8 +6817,10 @@ ui.json                            setup.map, setup.map_generated, setup.map_pla
   right of Remove player, in a 300 px holder with an empty spacer as wide left of Add player (BUG-1066's pattern), so the
   buttons don't move. Generated again gives back the map size picked before and the slot count the cap took away (unless the
   player removed a slot meanwhile), and the rows; since M6-VH5 a map with more starts gives those slots back too, up to its
-  own cap (four slots, Raraku: two, Vathar Crossing: four again). `MatchArgs` adds `--map <id>` after `--resources`, only for a map file,
-  with `--map-size` the map's side; a Generated match's args are exactly as before.
+  own cap (four slots, Raraku: two, Vathar Crossing: four again). The count given back is the player's last: an Add player
+  meanwhile raises it (BUG-1114: three slots, Raraku, Vathar Crossing, Add player, Raraku, Generated gives four, not three).
+  `MatchArgs` adds `--map <id>` after `--resources`, only for a map file, with `--map-size` the map's side; a Generated
+  match's args are exactly as before.
 - **`--map <id>`.** One value, a snake_case id of at most 64 characters (`DataLimits.MaxMapIdLength`); junk (`""`, `Raraku`,
   `ra-raku`, a path, unicode, 65 characters, a missing value; a flag is never taken as the value) is warned and ignored; the
   last good one wins. `Match.MapFor` is the data's check: an id the data lacks is warned about ("... playing a generated
@@ -6912,14 +6914,16 @@ game/tests/QaM6V18Test.cs       the "other size" forgery: a side the first map f
 
 - **Tooltips (BUG-1081 item 2).** Godot draws a control's tooltip, and an `OptionButton` item's tooltip in its popup, as
   one unwrapped line: Raraku's 180-character description was a panel about as wide as the 1152 px window.
-  `TooltipWrap.Wrap` (width `TooltipWrap.Width` = 60 characters, about 480 px at the 16 px font) turns the space before
+  `TooltipWrap.Wrap` (width `TooltipWrap.Width` = 60 characters, about 470 px at the 16 px font) turns the space before
   each word that would take a line past 60 into a line break and changes nothing else: words stay whole (a word longer
   than 60 gets a line of its own, unbroken), a line break already in the text is kept and each line wraps on its own, and
   turning the added breaks back into spaces gives the data text. So the text stays the data's (rule 8) and needs no data
   change. Wrapped: the setup's Map and Starting resources item tooltips, the stats screen's AI opening tooltips, and the
   description line of the command card's tooltips; the card's cost and "Needs" lines are not, so a requirement's name never
   splits. 57 shipped descriptions wrap to at most 4 lines (Raraku: 4). The tests that compared a tooltip to a
-  `description` compare to `TooltipWrap.Wrap(description)`.
+  `description` compare to `TooltipWrap.Wrap(description)`. Since M6-VH6 (BUG-1115) spaces at the start or end of the
+  text are left out of the wrap (never a break, not counted toward the 60), so an edge space leaves no empty first or last
+  line; the text is still unchanged.
 - **BUG-1093 (made robust; the cause not reproduced).** The error was GodotSharp's "Handle is not initialized" inside
   `GD.Load<PackedScene>("res://scenes/Match.tscn")` at a match start right after a match was freed. That load is the only
   managed reference to a cached `RefCounted`; its throwaway wrapper is left to the GC, and the next load swaps the native
@@ -6960,6 +6964,31 @@ game/tests/QaM6V18Test.cs       the "other size" forgery: a side the first map f
   window in 1 of 25 diagnosed runs) never emits `FramePostDraw`, and the unbounded wait hung the run 4 times while
   `MapListTest` was looped windowed. Other tests' `Shot` helpers still wait unbounded (windowed `--shots` runs only; the
   headless loop never takes a shot).
+
+### Implementation (M6-VH6)
+
+Short view hardening: the scene loop on `main` after the BUG-1108 patch, BUG-1114 and BUG-1115 items 1-3. No sim, data or
+`ui.json` change.
+
+```
+game/scripts/SkirmishSetup.cs   AddSlot raises the slot count Generated gives back (BUG-1114)
+game/scripts/TooltipWrap.cs     spaces at the text's edges are outside the wrap (BUG-1115 item 3); the px figure ~470
+game/tests/QaVh5Test.cs         SlotGiveBack's BUG-1114 row a Check; the wrap edge row and fuzz follow the edge rule
+game/tests/MapListTest.cs       MenuMaps: the BUG-1114 hand sequence
+game/tests/TooltipWrapTest.cs   a leading / trailing space row each
+```
+
+- **BUG-1114.** `_slotsBeforeMap` was recorded the first time a cap bit and only `RemoveSlot` cleared it, so an Add player
+  on a bigger map after a smaller one (3 slots, Raraku, Vathar Crossing, Add player: 4) was forgotten: the next cap and
+  Generated gave back 3. `AddSlot` now raises the recorded count to the shown count while one is recorded (the
+  player's last count wins; raising and clearing behave the same here, since a give-back always restores up to the
+  recorded count, so an enabled Add is always past it). `QaVh5Test.SlotGiveBack` checks it, and `MapListTest.MenuMaps`
+  runs the hand sequence from two slots (Add, Raraku, the first four-start map, Add, Raraku, Generated: 3, 4, 4).
+- **BUG-1115.** Item 1: docs/03's M6-V18 sentence rewrapped. Item 2: one figure, about 470 px for 60 characters at the
+  16 px font (measured on Raraku's widest wrapped line), in `TooltipWrap.Width`'s summary and above. Item 3: see
+  "Tooltips" above. Item 4 (Godot's default tooltip panel is translucent over the setup's labels) is left for the art pass:
+  the project has no shell theme to add an opaque `TooltipPanel` style to, so it is a new theme resource plus a project
+  setting, not a one-resource change.
 
 ## AI architecture
 

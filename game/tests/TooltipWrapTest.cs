@@ -90,6 +90,18 @@ public partial class TooltipWrapTest : Node
         // A double space survives (only the break's own space is replaced).
         string spaced = "Two  spaces " + long180;
         CheckWrap(spaced, TooltipWrap.Wrap(spaced), "a double space");
+        // BUG-1115 item 3: a space at an edge of the text is never the break, so no empty first / last line; the text is unchanged.
+        string e60 = new string('e', TooltipWrap.Width);
+        string trailing = e60 + " ";
+        Check(TooltipWrap.Wrap(trailing) == trailing, $"a trailing space left an empty last line: '{TooltipWrap.Wrap(trailing)}'");
+        string leading = " " + e60;
+        Check(TooltipWrap.Wrap(leading) == leading, $"a leading space left an empty first line: '{TooltipWrap.Wrap(leading)}'");
+        // Only the edge space is skipped: the later spaces still break, and the lines joined give the text.
+        string leadWords = " " + e60 + " more words";
+        Check(TooltipWrap.Wrap(leadWords) == " " + e60 + "\nmore words", $"a leading space before words: '{TooltipWrap.Wrap(leadWords)}'");
+        string trailLong = long180 + "  ";
+        string wt = TooltipWrap.Wrap(trailLong);
+        Check(wt == wrapped + "  " && !wt.Split('\n').Any(l => l.Trim().Length == 0), $"two trailing spaces: '{wt}'");
     }
 
     // ---- every shipped description a tooltip shows ----

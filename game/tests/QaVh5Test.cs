@@ -98,7 +98,8 @@ public partial class QaVh5Test : Node
         string paraWant = new string('b', 60) + "\n" + new string('c', 30) + "\n" + new string('d', 30);
         Check(TooltipWrap.Wrap(para) == paraWant, $"a 60-character line then a 61-character line: '{TooltipWrap.Wrap(para)}'");
         // Text kept exactly as data: a trailing space at the width, leading line breaks (the shipped data has neither).
-        Check(TooltipWrap.Wrap(new string('e', 60) + " ") == new string('e', 60) + "\n", "a trailing space at the width");
+        // Since M6-VH6 (BUG-1115) an edge space is never the break, so no empty last line.
+        Check(TooltipWrap.Wrap(new string('e', 60) + " ") == new string('e', 60) + " ", "a trailing space at the width");
         Check(TooltipWrap.Wrap("\n\n" + w61) == "\n\n" + w61, "leading line breaks");
         // The three shipped map sentences and both presets: lines of whole words, 3-4 lines for 170+ characters.
         foreach (MapDef m in _data.Maps) CheckShipped($"map {m.Key}", m.Description);
@@ -152,8 +153,18 @@ public partial class QaVh5Test : Node
         for (int i = 0; i < w.Length; i++)
             if (w[i] != text[i] && !(text[i] == ' ' && w[i] == '\n')) return $"character {i} changed";
         string[] lines = w.Split('\n');
-        foreach (string l in lines)
+        // The text's own edge spaces are outside the wrap (BUG-1115): never a break, so the first / last line is measured
+        // without them, and neither line is blank unless the text is.
+        // (A blank line the wrap made: its break was a space in the text, not a line break of the data's own.)
+        if (lines.Length > 1 && (lines[0].Trim(' ').Length == 0 && text[lines[0].Length] == ' '
+            || lines[^1].Trim(' ').Length == 0 && text[w.Length - lines[^1].Length - 1] == ' ')) return "an edge space left a blank first or last line";
+        for (int li = 0; li < lines.Length; li++)
+        {
+            string l = lines[li];
+            if (li == 0) l = l.TrimStart(' ');
+            if (li == lines.Length - 1) l = l.TrimEnd(' ');
             if (l.Length > width && l.Contains(' ')) return $"line of {l.Length} with a space";
+        }
         if (!single) return null;
         // Greedy: an added break only where the next word would not fit on the line.
         int at = 0;
@@ -240,10 +251,8 @@ public partial class QaVh5Test : Node
         Click(s.MapOption, raraku + 1);
         Click(s.MapOption, 0);
         int afterAdd = s.SlotCount;
-        GD.Print($"  3 slots, Raraku, Vathar, Add (4), Raraku, Generated: {afterAdd} slots");
-        // BUG-1114 (S3, open): Add player doesn't update the count Generated gives back, so this gives 3. Turn this line into
-        // Check(afterAdd == 4, ...) with the fix; until then it reports without failing the loop.
-        if (afterAdd != 4) GD.Print($"  KNOWN BUG-1114: 3 slots, Raraku, Vathar, Add player (4), Raraku, Generated: {afterAdd} slots (want 4)");
+        // BUG-1114 (fixed in M6-VH6): Add player raises the count Generated gives back.
+        Check(afterAdd == 4, $"BUG-1114: 3 slots, Raraku, Vathar, Add player (4), Raraku, Generated: {afterAdd} slots (want 4)");
         Click(s.MapOption, 0);
         while (s.SlotCount > 2) s.RemoveSlot();
         Click(s.MapOption, vathar + 1);
