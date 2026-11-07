@@ -7932,7 +7932,11 @@ rebuild losses"; docs/02 "High ground": the AI scouts ramps before attacking up 
     `MapSlice2StressTests` known stall Pale Hills seed 5 (no result by 72,000: the loser's last camp follower stands idle
     at (391.8, 438.3) from 48,000 and the winner's 7-unit hunt never sees it; with every house rebuilt that worker's
     new tent site was a known target that ended the match) and QA's `RebuildLookMatchQaStressTests` two-process row (no
-    hall lost any more). The stall is BUG-1068's gold starvation; rebuilt houses act as a beacon for the hunt.
+    hall lost any more). The stall is BUG-1068's gold starvation; rebuilt houses act as a beacon for the hunt. **The
+    Producer's ruling (2026-11-07-0236 ACCEPT):** the row is a skipped known case under BUG-1116 / BUG-1068
+    (`FourAiSeats_OnPaleHills_Seed2_KnownStall`; seeds 1 / 3 and the teams row still run); the sim's hardening takes
+    BUG-1119 (a defeated seat's buildings forgotten at the census), the lone-idle-worker hunt gap, then the house rule
+    re-measured with both in.
 - **Tests:** `Ai/RebuildTests` (criterion 2: a razed Barracks built again within two thinks and its step done again,
   built once; a razed hall's Keep the first Build after it, at the old anchor, the Train step held, the workers depositing
   again after it stands; a tree on the old anchor: the Keep a few cells off; at the hard cap a razed Billet not rebuilt,
