@@ -207,7 +207,7 @@ public class CommandDoorFuzzStressTests
 
     /// <summary>
     /// M5-2: an AI command is legal for what its seat saw: its own player, one of the kinds it sends (Build, Train, Research,
-    /// Gather; M5-3 Move, Stop, AttackMove, Attack; M5-4c UseAbility), stamped for the next tick; a unit order names a live unit of its own (a
+    /// Gather; M5-3 Move, Stop, AttackMove, Attack on a building; M5-4c UseAbility; M5-4c slice 2 Attack on an enemy unit), stamped for the next tick; a unit order names a live unit of its own (a
     /// UseAbility: one of the abilities its type lists, at a point on the map); a Train or Research points into one of
     /// its own finished buildings that trains the unit or may research the tech; a Build names a building of its faction on
     /// ground its player had explored, at a cell inside the map.
@@ -239,10 +239,17 @@ public class CommandDoorFuzzStressTests
                 $"{at}: {c.Kind} for unit {c.Unit}, not a live unit of its own");
             if (c.Kind is CommandKind.Move or CommandKind.AttackMove)
                 Assert.True(g.WorldToCell(c.Position, out _, out _), $"{at}: {c.Kind} off the map at {c.Position}");
-            if (c.Kind == CommandKind.Attack)
+            if (c.Kind == CommandKind.Attack && !c.TargetIsBuilding)
+            {
+                // M5-4c slice 2: Hard's focus fire: an Attack on a live enemy unit (its fog rule: HardKnobsMatchTests).
+                int j = c.Target.Index;
+                Assert.True((uint)j < (uint)seen.UnitAlive.Length && seen.UnitAlive[j] && seen.UnitOwner[j] != 1 && seen.UnitGeneration[j] == c.Target.Generation,
+                    $"{at}: Attack on unit {c.Target}, not a live enemy one");
+            }
+            else if (c.Kind == CommandKind.Attack)
             {
                 int b = c.Target.Index;
-                Assert.True(c.TargetIsBuilding && (uint)b < (uint)seen.BuildingAlive.Length && seen.BuildingAlive[b] && seen.BuildingOwner[b] != 1,
+                Assert.True((uint)b < (uint)seen.BuildingAlive.Length && seen.BuildingAlive[b] && seen.BuildingOwner[b] != 1,
                     $"{at}: Attack on building {c.Target}, not a live enemy one");
             }
             return;

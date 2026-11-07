@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Immutable;
 using System.Numerics;
 using Rts.Sim.Combat;
 using Rts.Sim.Data;
@@ -41,6 +42,9 @@ public sealed partial class World
         // M6-S1: the stats buffers too; M6-S6: every seat's gold and wood from the match's starting-resources preset.
         _ledger = new PlayerLedger(config.PlayerCount, config.Data, config.StatsSampleCapacity, config.StartingPreset);
         Techs = new TechState(config.PlayerCount, config.Data);
+        // M5-4c slice 2: derived from the seats and the data (both in every save and replay header), never saved or hashed.
+        GoldPerTickOf = GatherRates(config, config.Data.Rules.GoldPerTick);
+        WoodPerTickOf = GatherRates(config, config.Data.Rules.WoodPerTick);
         Units = new UnitStore(config.UnitCapacity, _ledger, Techs);
         _rngs = new SimRng[RngStream.Count(config.PlayerCount)];
         for (int i = 0; i < _rngs.Length; i++)
@@ -398,6 +402,38 @@ public sealed partial class World
 
     /// <summary>Per-player totals and population, shared with the stores (M3-4).</summary>
     internal PlayerLedger Ledger => _ledger;
+
+    /// <summary>
+    /// M5-4c slice 2 (docs/02 "AI opponent": Hard's 25% gather bonus): per player, the gold a worker of theirs takes per tick
+    /// in reach of a mine, <c>rules.json</c> <c>gatherRate.gold</c> x (1 + its seat's <c>gatherBonus</c>, <see cref="GatherBonusOf"/>).
+    /// </summary>
+    internal float[] GoldPerTickOf { get; }
+
+    /// <summary>See <see cref="GoldPerTickOf"/>, for wood.</summary>
+    internal float[] WoodPerTickOf { get; }
+
+    /// <summary>
+    /// M5-4c slice 2: the gather bonus of <paramref name="player"/>'s seat: its difficulty's <c>gatherBonus</c> in its faction's
+    /// <c>ai.json</c> (0 for a faction without one). Keyed on the difficulty, not the controller: a replay plays every seat as
+    /// human with the recorded difficulty (<c>ReplayPlayer</c>, the view's playback), so an AI seat's recording gathers as it
+    /// was played; a seat a person plays is Normal (bonus 0) wherever the game builds one (<see cref="SimConfig.SeatOf"/>, the
+    /// skirmish setup).
+    /// </summary>
+    internal static float GatherBonusOf(SimConfig config, int player)
+    {
+        PlayerSeat seat = config.SeatOf(player);
+        ImmutableArray<AiDef> ai = config.Data.Ai;
+        if ((uint)seat.Faction >= (uint)ai.Length || ai[seat.Faction] == null || ai[seat.Faction].Difficulties.IsDefaultOrEmpty) return 0f;
+        return ai[seat.Faction].Difficulty(seat.Difficulty).GatherBonus;
+    }
+
+    /// <summary>Per player, <paramref name="rate"/> x (1 + its gather bonus): the rate itself, bit for bit, at a bonus of 0.</summary>
+    private static float[] GatherRates(SimConfig config, float rate)
+    {
+        var rates = new float[config.PlayerCount];
+        for (int p = 0; p < rates.Length; p++) rates[p] = rate * (1f + GatherBonusOf(config, p));
+        return rates;
+    }
 
     /// <summary>Largest unit collision radius in <see cref="Data"/>: a neighbor query of own radius plus this finds every unit that can touch.</summary>
     internal float MaxUnitRadius { get; }

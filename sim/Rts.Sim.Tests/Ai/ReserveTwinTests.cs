@@ -46,26 +46,31 @@ public class ReserveTwinTests
         { 3, 3, AiDifficulty.Easy, false },
     };
 
-    /// <summary>The base build's state hashes at ticks 500, 1,000 ... 6,000 for each row of <see cref="Rows"/>, in order.</summary>
+    /// <summary>
+    /// The base build's state hashes at ticks 500, 1,000 ... 6,000 for each row of <see cref="Rows"/>, in order. M5-4c slice 2:
+    /// re-printed on that slice's tree (the line each row writes), since every row has a Hard seat (the difficulties turn per
+    /// seat) and Hard now gathers faster, focuses fire and pulls back the wounded; the rows still prove a shift of 0 with no
+    /// reservable step sends no reserve (<c>reserved</c> 0).
+    /// </summary>
     private static readonly Dictionary<(int, int, bool), ulong[]> s_base = new()
     {
         [(2, 2, true)] = new ulong[]
         {
-            0xDB9FE45AA23D1B1C, 0x345A18C0C70ADE1D, 0xD531FF8881401A07, 0xE13FF0FA6C188E22,
-            0x4FA31AF5D1450E45, 0x00C76B8D7E78AFEE, 0x08E3905883E1EABD, 0x5C8699EBA8C67CE5,
-            0xB4D155B4E0D61BAE, 0xAF441C986F9CC223, 0x064106DFB44627D7, 0xC1EC306446263CE7,
+            0xBE3B530A28191C48, 0x10585E07BC597613, 0x2949F935A2594956, 0x99DB931F2548B72C,
+            0xEA095D860E94B34C, 0xB5A9555E5899A066, 0x6263D41ED23D50E7, 0x4B8F04F47F121146,
+            0xA4B92439F3770390, 0xE0532168DE033983, 0xC45D43387F462485, 0x313A21B99151BC3A,
         },
         [(4, 4, true)] = new ulong[]
         {
-            0xA9695A151B504CFF, 0xDFBAF2893E94337C, 0x930F127943870B5C, 0x2FFB87E6C189E083,
-            0x11C745D6C5719B33, 0xE30CB99709F51D72, 0xF6ACD0B704E66725, 0xAF9F8F8D975DDE76,
-            0x3187FE90ABAB5B61, 0xABD6FFC208A20560, 0x1542C3FFDF57DB93, 0x42E8FF6BE27539FD,
+            0xF670CF2993E9036E, 0x524B13E5CDF7BA75, 0x689C17F492F0D752, 0x532A94678967835D,
+            0x7C8C60851A3F3B2C, 0xEC78522DA1EA4236, 0x0354667396BF76E0, 0x28941A0F85F71993,
+            0xC1BFFCE07E849657, 0xF1A3ECAA15B97428, 0xCD83B5274B9AE32A, 0x09DB2E176D0038C8,
         },
         [(3, 3, false)] = new ulong[]
         {
-            0x49F09C36EC8E153B, 0x14EAE0C0CB3E25B4, 0x46C0F7D20E102E4F, 0xED970FF19BB6F12E,
-            0x258FA3B720BF3687, 0xDB634ABBE24863B7, 0x4EAE080632A05FE9, 0x2B79FA25E3E53C98,
-            0x8D04BA611A891596, 0x6735FC988446A2DE, 0x968540B4C7A973E4, 0x85C36B08F1A3E2B2,
+            0x55586CA407525F44, 0xCD6A2C9C6B223EC8, 0x63D5A1F15EA3EDAB, 0xF77AADAE0E8ED54E,
+            0x62AD7BDD5751634C, 0x59124CF270A054DA, 0x1C2D49EBEA235757, 0xC12695EC095397FF,
+            0x411F5C494FB67035, 0x5A040E4BA74DB9F0, 0x968955449FE785D6, 0x19DA0DEB6DA27111,
         },
     };
 

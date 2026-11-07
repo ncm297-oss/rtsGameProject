@@ -68,11 +68,11 @@ public class StandardPresetPinQaTests
     public static IEnumerable<object[]> AiRows() => new[]
     {
         new object[] { 1, 2, 0, false, 0xEF1691714BF6A76DUL },
-        new object[] { 2, 2, 1, false, 0x244EB8E19CE2992FUL },
-        new object[] { 3, 3, 2, false, 0x0FDF27B5B49AE41AUL }, // M5-4d slice 2: was 0x112526C6B3861467; a seat rebuilds a razed build-order building (2 steps reopened, the first at tick 10,480)
-        new object[] { 4, 4, 1, false, 0xC01AABF0FFE171A9UL },
-        new object[] { 5, 2, 2, false, 0x017E948DC0620D8BUL },
-        new object[] { 3, 3, 0, true, 0x44BFA38FE0466396UL }, // M5-4d slice 2: was 0xCFA79548E71F2987; a seat rebuilds a razed build-order building (2 steps reopened, the first at tick 440)
+        new object[] { 2, 2, 1, false, 0x070CC85BB2A3B390UL }, // M5-4c slice 2: was 0x244EB8E19CE2992F; seat 1 is Hard (gather bonus, focus fire, pull-back)
+        new object[] { 3, 3, 2, false, 0xFB6DD578FA7A165EUL }, // M5-4c slice 2: was 0x0FDF27B5B49AE41A (M5-4d slice 2: 0x112526C6B3861467); seat 0 is Hard
+        new object[] { 4, 4, 1, false, 0xE204EB9DE6D0FBF9UL }, // M5-4c slice 2: was 0xC01AABF0FFE171A9; seat 1 is Hard
+        new object[] { 5, 2, 2, false, 0xAD97F301BBCD12EEUL }, // M5-4c slice 2: was 0x017E948DC0620D8B; seat 0 is Hard
+        new object[] { 3, 3, 0, true, 0x3257C07089F858CAUL }, // M5-4c slice 2: was 0x44BFA38FE0466396 (M5-4d slice 2: 0xCFA79548E71F2987); seat 2 is Hard
         new object[] { 1, 4, -1, false, 0x0D5D208D3FE10FD7UL }, // the 2v2 (human + three AIs)
     };
 

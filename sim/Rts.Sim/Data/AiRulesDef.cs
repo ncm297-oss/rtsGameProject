@@ -109,4 +109,10 @@ public sealed class AiRulesDef
     /// old; with none that fresh it sweeps the map grid instead (<c>huntMemory</c> s, 0-3,600, to ticks).
     /// </summary>
     public int HuntMemoryTicks { get; init; }
+
+    /// <summary>
+    /// M5-4c slice 2: a Hard seat's fighters (<c>focusFire</c>) focus on an enemy unit seen within this distance of one of
+    /// them, and those within it of the focus are ordered onto it (<c>focusReach</c> m, 1-64).
+    /// </summary>
+    public float FocusReach { get; init; }
 }

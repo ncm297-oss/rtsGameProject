@@ -78,7 +78,7 @@ public static class EconomySystem
         else Wait(world, i, UnitState.Gathering);
     }
 
-    /// <summary>One tick of work in reach: progress at the data rate; each whole unit is taken from the node into the cargo.</summary>
+    /// <summary>One tick of work in reach: progress at the owner's rate (<see cref="World.GoldPerTickOf"/>); each whole unit is taken from the node into the cargo.</summary>
     private static void Work(World world, int i)
     {
         UnitStore u = world.Units;
@@ -90,7 +90,9 @@ public static class EconomySystem
             if (to != Vector2.Zero) u.Facing[i] = SimMath.Atan2(to.Y, to.X);
         }
         Stand(u, i, UnitState.Gathering);
-        float progress = u.GatherProgress[i] + (u.CargoKind[i] == ResourceKind.Gold ? rules.GoldPerTick : rules.WoodPerTick);
+        // M5-4c slice 2: the owner's rate, the data's x (1 + its seat's gather bonus): the data's itself at a bonus of 0.
+        int owner = u.Owner[i];
+        float progress = u.GatherProgress[i] + (u.CargoKind[i] == ResourceKind.Gold ? world.GoldPerTickOf[owner] : world.WoodPerTickOf[owner]);
         if (progress >= 1f)
         {
             int whole = progress >= int.MaxValue ? int.MaxValue : (int)progress;
