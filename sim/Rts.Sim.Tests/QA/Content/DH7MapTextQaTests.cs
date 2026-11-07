@@ -89,7 +89,7 @@ public class DH7MapTextQaTests
         Assert.Empty(MapTextContentTests.PinProblems(MapTextContentTests.Shipped(d), MapTextContentTests.Pinned));
         string[] pinned = MapTextContentTests.Pinned.Select(p => p.Id).OrderBy(x => x, StringComparer.Ordinal).ToArray();
         string[] shipped = d.Maps.Select(m => m.Key).OrderBy(x => x, StringComparer.Ordinal).ToArray();
-        Assert.NotEqual(shipped, pinned); // since D-R33 ThePin_NamesEveryShippedMap_RarakuFirst prints this as "not pinned yet", not a failure
+        Assert.NotEqual(shipped, pinned); // since D-R33 ThePin_HasRarakuFirst_AndPrintsUnpinnedMaps prints this as "not pinned yet", not a failure
         Assert.Equal("raraku", MapTextContentTests.Raraku(d).Key);
     }
 
