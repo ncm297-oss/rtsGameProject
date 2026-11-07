@@ -160,7 +160,8 @@ public class DH6ThresholdQaTests
     /// passes the rule since M5-4d (the AI hunts the last units once it knows no enemy building). Re-measured on
     /// <c>af7047b</c>: the run printed "the known case seed 25 now passes the rule: take it out of KnownBeatenAlive
     /// (BUG-1010)"; the side still sends no wave (peak 12 pop, <c>raider_rush</c> 2 waves) and is defeated at 12:34
-    /// (tick 15,084), so "falls to the raider rush without attacking" still holds. With the entry out, the row fails again
+    /// (tick 15,084), so "falls to the raider rush without attacking" still holds (since the sim's M5-4d slice 2, re-run
+    /// by QA in D-R34 on 2026-11-07: still no wave, defeated at 12:33, tick 15,068). With the entry out, the row fails again
     /// if a later change leaves the side standing without a wave. The 3rd seed, 19, was <c>D21OpeningsQaTests.KnownBeatenAlive</c>'s
     /// entry, taken out the same way.
     /// </summary>
