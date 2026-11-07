@@ -1,0 +1,63 @@
+diff --git a/docs/factions/malazan.md b/docs/factions/malazan.md
+index cb687c5..f368696 100644
+--- a/docs/factions/malazan.md
++++ b/docs/factions/malazan.md
+@@ -549,7 +549,9 @@ peaked at 7 pop, under its 14-pop wave, while it held the base, and at 20:00 it
+ by D-H7, on the `main` before M5-4d landed). Since M5-4d (the AI hunts the last units once it knows no enemy building)
+ both are finished off without ever attacking: seed 19 is defeated at 10:24 and seed 25 at 12:34, so "falls to the rush
+ without a wave" still holds and "standing at 20:00" does not. Both test entries (`KnownBeatenAlive`, BUG-1110) were
+-taken out by D-R33 (2026-11-07), so either row fails again if its side is left standing at 20:00 without a wave.
++taken out by D-R33 (2026-11-07), so either row fails again if its side is left standing at 20:00 without a wave;
++the same day M5-4d slice 2 (the AI rebuilds what it loses) put seed 19 back on the list: its last worker rebuilds and the
++side stands at 20:00 with 1 pop, no building and 522 gold (BUG-1116 / BUG-1119), while seed 25 stays defeated at 12:34.
+ Before M5-4g seed 19 read a peak of 8 pop and 6 pop / cap 16 with
+ 670 gold and 60 wood at 20:00, and seed 25 was destroyed at 11:26. Over the two openings, `raider_rush` beats the
+ Malazans without a fight on 6 of 10 seeds (`cadre_rush` 4 of 5, `crossbow_push` 2 of 5). `standard` sent a wave on
+diff --git a/sim/Rts.Sim.Tests/QA/Content/D21OpeningsQaTests.cs b/sim/Rts.Sim.Tests/QA/Content/D21OpeningsQaTests.cs
+index e91abf8..8aeba30 100644
+--- a/sim/Rts.Sim.Tests/QA/Content/D21OpeningsQaTests.cs
++++ b/sim/Rts.Sim.Tests/QA/Content/D21OpeningsQaTests.cs
+@@ -300,8 +300,12 @@ public class D21OpeningsQaTests
+     /// thinks defending, no Age II) and is defeated at 10:24 (tick 12,484), so BUG-1010's "falls to the raider rush without
+     /// attacking" still holds and only "standing at 20:00" is gone. With the entry out, the row fails again if a later
+     /// change leaves the side standing without a wave. <c>DH6ThresholdQaTests</c> keeps the pairing's 4th and 5th seeds the same way.
++    /// **Re-listed at the 2026-11-07-0236 merge (the Producer):** since M5-4d slice 2 (the AI rebuilds what it loses) the same
++    /// side stands at 20:00 again: its hall razed, its last worker rebuilds and the hunt has not found it (at 20:00 pop 1 / cap 0,
++    /// 522 gold, 210 wood, no wave, 340 thinks defending; the Whirlwind 1 wave, Age II 10:21). BUG-1010's pattern with BUG-1116 /
++    /// BUG-1119 underneath; <c>DR33QaTests.KnownBeatenAlive_HoldsOnlyTheNamedCases</c> pins this one entry. Seed 25 stays out.
+     /// </summary>
+-    private static readonly (int Malazan, int Whirlwind, ulong Seed, int Player)[] KnownBeatenAlive = { };
++    private static readonly (int Malazan, int Whirlwind, ulong Seed, int Player)[] KnownBeatenAlive = { (1, 1, 19, 0) };
+ 
+     /// <summary>Determinism per pairing with the shipped openings: two Normal v Normal runs on the pair's smallest seed, equal state hashes every 50 ticks for 6,000 ticks, and the same commands sent.</summary>
+     [Theory]
+diff --git a/sim/Rts.Sim.Tests/QA/Content/DR33QaTests.cs b/sim/Rts.Sim.Tests/QA/Content/DR33QaTests.cs
+index 516459a..19a16aa 100644
+--- a/sim/Rts.Sim.Tests/QA/Content/DR33QaTests.cs
++++ b/sim/Rts.Sim.Tests/QA/Content/DR33QaTests.cs
+@@ -38,15 +38,20 @@ public class DR33QaTests
+             p => p.Contains("a digit", StringComparison.Ordinal));
+     }
+ 
++    /// <summary>
++    /// The two lists hold exactly the named cases and nothing else (re-aimed at the 2026-11-07-0236 merge: the sim's M5-4d slice 2
++    /// put seed 19 back, see <c>D21OpeningsQaTests.KnownBeatenAlive</c>; a further entry needs a bug id and this pin moved).
++    /// </summary>
+     [Theory]
+-    [InlineData(typeof(D21OpeningsQaTests))]
+-    [InlineData(typeof(DH6ThresholdQaTests))]
+-    public void KnownBeatenAlive_StaysEmpty(Type owner)
++    [InlineData(typeof(D21OpeningsQaTests), "(1, 1, 19, 0)")]
++    [InlineData(typeof(DH6ThresholdQaTests), "")]
++    public void KnownBeatenAlive_HoldsOnlyTheNamedCases(Type owner, string expected)
+     {
+         FieldInfo? f = owner.GetField("KnownBeatenAlive", BindingFlags.NonPublic | BindingFlags.Static);
+         Assert.NotNull(f);
+         var list = (Array)f!.GetValue(null)!;
+-        Assert.True(list.Length == 0,
+-            $"{owner.Name}.KnownBeatenAlive has {list.Length} entr(y/ies) again: re-measure, and file a bug rather than re-allow (BUG-1110)");
++        string actual = string.Join(", ", list.Cast<object>().Select(e => e.ToString()));
++        Assert.True(actual == expected,
++            $"{owner.Name}.KnownBeatenAlive is [{actual}], expected [{expected}]: re-measure, and file a bug rather than re-allow (BUG-1110 / BUG-1116)");
+     }
+ }

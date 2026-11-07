@@ -287,8 +287,8 @@ public class MapFileTests
 
     /// <summary>M6-S8: the two new maps load with their fields: 4 players, 256 cells, the Producer's provisional text word for word, ramps, levels.</summary>
     [Theory]
-    [InlineData(PaleHills, "Pale Hills", "Four camps in dense hill woods, joined by narrow paths between the trees. Timber is everywhere, gold is scarce beyond the camps, and every path is a place for an ambush.")]
-    [InlineData(VatharCrossing, "Vathar Crossing", "A sunken river of slopes cuts the steppe in two, crossed only at its fords. Hold a ford and the far bank is yours; lose it and the enemy pours through.")]
+    [InlineData(PaleHills, "Pale Hills", "Camps in hill woods, linked by paths through rows of trees. A hill stands between each camp and the open center. Timber is everywhere, gold scarce beyond the camps; every path invites an ambush.")]
+    [InlineData(VatharCrossing, "Vathar Crossing", "A sunken riverbed cuts the steppe in two, its steep banks crossed only at a few fords. Gold waits on the banks beside them, and troops down in the bed cannot see up onto either side.")]
     public void TheNewMaps_Load_WithTheirFields(string id, string name, string description)
     {
         int index = TestSim.Data.FindMap(id);

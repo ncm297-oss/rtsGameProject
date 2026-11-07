@@ -25,9 +25,9 @@ public class MapTextContentTests
         ("raraku", "Raraku",
             "Rival camps face each other across open desert of sand, scrub and sparse palms. Forests are few, twin mesas flank a wide open center, and long sightlines leave little room to hide."),
         ("pale_hills", "Pale Hills",
-            "Four camps in dense hill woods, joined by narrow paths between the trees. Timber is everywhere, gold is scarce beyond the camps, and every path is a place for an ambush."),
+            "Camps in hill woods, linked by paths through rows of trees. A hill stands between each camp and the open center. Timber is everywhere, gold scarce beyond the camps; every path invites an ambush."),
         ("vathar_crossing", "Vathar Crossing",
-            "A sunken river of slopes cuts the steppe in two, crossed only at its fords. Hold a ford and the far bank is yours; lose it and the enemy pours through."),
+            "A sunken riverbed cuts the steppe in two, its steep banks crossed only at a few fords. Gold waits on the banks beside them, and troops down in the bed cannot see up onto either side."),
     };
 
     /// <summary>The longest description the setup shows (the presets' limit, <see cref="StartingResourcesContentTests.MaxDescriptionLength"/>).</summary>

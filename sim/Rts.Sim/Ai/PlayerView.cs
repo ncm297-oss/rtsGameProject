@@ -96,6 +96,25 @@ public sealed class PlayerView
     /// <summary>Whether <paramref name="cell"/> was inside one of the player's sight circles at the last fog update; false out of range.</summary>
     public bool IsVisible(int cell) => _fog.IsVisible(_player, cell);
 
+    // ---------- the terrain (M5-4d slice 2): static since load, the same for every player, so no fog ----------
+
+    /// <summary>The terrain level of <paramref name="cell"/> (a ramp reports its lower level); -1 off the map.</summary>
+    public int LevelAt(int cell)
+    {
+        NavGrid g = _world.NavGrid;
+        return (uint)cell < (uint)(g.Width * g.Height) ? g.LevelAt(cell % g.Width, cell / g.Width) : -1;
+    }
+
+    /// <summary>Whether <paramref name="cell"/> is a ramp cell (<see cref="NavFlags.Ramp"/>, a terrain flag); false off the map.</summary>
+    public bool IsRamp(int cell)
+    {
+        NavGrid g = _world.NavGrid;
+        return (uint)cell < (uint)(g.Width * g.Height) && (g.FlagsAt(cell % g.Width, cell / g.Width) & NavFlags.Ramp) != 0;
+    }
+
+    /// <summary>The terrain plateau of <paramref name="cell"/> (M3-H2: labelled at load, before any building or node), -1 for none.</summary>
+    public int PlateauAt(int cell) => _world.Plateaus.At(cell);
+
     // ---------- own economy ----------
 
     /// <summary>The player's gold.</summary>

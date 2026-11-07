@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S3 (the leg's "traces every edge once a pass" does not hold when a sighting interrupts it; the stretch is walked on the next pass's leg) |
-| Status | open |
+| Status | fixed (M5-4d slice 2, 8155ee4: `StartSweep` resumes at `RingPrevious(HuntRing)`, the leg's last point reached; the `(-1)` row un-skipped and green, 0 / 252 border cells missed; verified by the Producer at the 2026-11-07-0236 ACCEPT) |
 | Found | 2026-11-06-0926, task M5-4d (QA re-check round 2, fix 1eccd06) |
 | System | AI military manager, the hunt's perimeter leg (`MilitaryManager.StartSweep` / `AfterReached`, `Blackboard.HuntRing`) |
-| Fixed by | |
+| Fixed by | 8155ee4 (`MilitaryManager.RingPrevious`), proof `HuntSweepRound2LegQaTests.ARingLeg_InterruptedBySightings_StillSeesTheWholeBorder(-1)` |
 
 ## Repro
 1. Un-skip the row `HuntSweepRound2LegQaTests.ARingLeg_InterruptedBySightings_StillSeesTheWholeBorder(interrupts: -1)`

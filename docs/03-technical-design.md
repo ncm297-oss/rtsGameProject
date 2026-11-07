@@ -7807,7 +7807,8 @@ internal, shared), one knob. No `Command` kind: the hunt sends `AttackMove` (and
 - **Measured** (Normal v Normal, Malazan v Whirlwind, starts 0 and 1, to 72,000 ticks, `Stress/MapSlice2StressTests`; at
   e3fd8fb none of these ended): Pale Hills seeds 3, 4 and 6 (one match: a map file draws nothing from the seed but the
   openings) end at tick 29,421 (24:31), Whirlwind winning after one hunt; seed 5 at 52,557 (43:48), Malazan winning after
-  one hunt (since BUG-1107 fix round 2; 41,337 after two hunts before it; with the centres alone it ran out the hour); the
+  one hunt (since BUG-1107 fix round 2; 41,337 after two hunts before it; with the centres alone it ran out the hour;
+  **55,631** since M5-4d slice 2, QA's measurement, still inside the 72,000 bound: the seats rebuild what they lose); the
   generated map's seed 6 at 26,875 (22:24), Whirlwind after one
   hunt. Seed 2 (both sides keep two halls) is untouched: no hunt starts while an enemy building is known. The rows that
   ended before still end, none of them through a hunt but Pale Hills seed 1, now 34,856 (was 34,175: its last wave, its
@@ -7838,7 +7839,148 @@ internal, shared), one knob. No `Command` kind: the hunt sends `AttackMove` (and
   seed 2's stalemate (both sides keep two halls; BUG-1068, narrowed to it) is not a hunt case. BUG-1067 (a seat whose scouts
   all die at the door finds no wood for minutes) is not taken here: neither rider is a few lines (gatherers searching near home
   is a new behaviour; the hall's sight reaching its woodlot is a faction-data change or a global `buildingSight` change that
-  moves every pinned match).
+  moves every pinned match). Rebuilding and the look before attacking up came in slice 2, below.
+
+### Implementation (M5-4d slice 2)
+
+The AI finishes the match, slice 2 (roadmap M5 criterion 3's last two items; docs/02 "AI opponent": "... send attack waves →
+rebuild losses"; docs/02 "High ground": the AI scouts ramps before attacking up them). Code: `Ai/BuildOrderExecutor.cs`
+(`ReopenLost`, `HallFirst`), `Ai/AiPlayer.cs` (`LostHallCell`, `TryBuild`'s exact anchor, `HallReserved`),
+`Ai/EconomyManager.cs` (the house rule waits while the hall is banked for), `Ai/MilitaryManager.cs` (`LookPoint`, `Looking`,
+`Look`, `RampTops`; BUG-1111 in `StartSweep` / `RingPrevious`), three static terrain reads on `PlayerView` (`LevelAt`,
+`IsRamp`, `PlateauAt`). No knob, no `Command` kind, no new saved field, no format change.
+
+- **Rebuilding a build-order building** (`ReopenLost`, first in the executor's think): one pass over the steps counts, per
+  building type, the `build` steps done and the newest of them; one pass over the census counts the player's own buildings
+  of each type, sites included (what the fog grants of its own). A type held fewer times than its done steps lost one, and
+  its newest done step becomes due again at once: `StepDone` false, `StepQueued` one less, `StepDueTick` this think less the
+  difficulty's `buildOrderSlack` (so it acts this think, no slack), no pending order. Then it is a step like any other: the
+  site search round the hall, the retry marks, `NoSiteRetryThinks`, the reserve. One step a type a think (a second loss
+  reopens the next one at the next think). A House step at the hard cap stays done (D15 C). Why
+  the newest: the file's earlier steps came first for a reason, and a reopened step later in the file can't take an
+  earlier one's reserve. **The reserve** (criterion 2 d): the reopened step is the reserved step when it is the first step
+  only its cost holds back, as any step is (`RebuildTests.ARebuildShortOfItsCost_IsTheReservedStep`); a step reserved before
+  it in the file keeps the reserve (the unchanged M5-4g rule: build steps after the reserved one are not held to it).
+  Since `held` counts every own building of the type, a building the economy put up (a house) or one standing from the
+  start makes up for a lost one. The scratch (three ints a building type) is cleared at the end of the scan, so a seat
+  holds none between thinks.
+- **Rebuilding the hall** (`HallFirst`, after the scan and before any step): with no Town Hall, finished or a site
+  (`TownHallCell` negative), at least one worker and the faction's hall type known, a Build of it is the think's first
+  command. Where: the last hall's anchor (`AiPlayer.LostHallCell`) when `PlayerView.CanPlace` allows it there and it carries
+  no retry mark (no spacing rule: it is the hall's own spot), else the usual ring search round that anchor's centre; with no
+  anchor remembered (a save from before this slice), round the player's first building, else its workers' centroid. **Why
+  no new field:** the census rebuilt `TownHallCell` as -1 at every think's start; it now keeps the last hall seen as
+  `-(anchor + 2)` until a hall is found again (`LostHallCell` decodes it; -1 still means none ever seen, set at
+  construction). The field is saved in `AIST` already and every other reader only asks whether it is negative, so a seat
+  that lost its hall remembers the spot across a save with the layout unchanged. The command waits to be judged in
+  `Blackboard.HousePending` (one base Build at a time, judged as a house Build is: a refused anchor gets a retry mark and the
+  next search moves on); the executor judges it itself while the hall is still missing, the economy's house rule once the
+  site stands. The steps wait (the executor returns) while the hall's Build is sent or in flight, or while only its cost
+  or no worker free to build (all walking, a builder's command not yet applied) holds it back; then its cost is the think's reserve (`AiPlayer.HallReserved`; `ReserveStep` stays -1), so
+  production trains only above it, the gatherers lean toward what it lacks, and the economy sends no house. It can't be
+  built for another reason (no site found, its requires, the building store full, no node to fill a kind it lacks): the
+  steps go on, and it is tried again at the next think. Gathering goes on by itself: once the hall stands the economy's
+  idle workers find it as their drop-off.
+- **The look before attacking up** (`LookPoint`, when a wave's target building is set: a wave's start, a re-target, a
+  hunt turning into a wave): when the building's cell level (`PlayerView.LevelAt` of its anchor) is above the level under
+  the members' centroid and the seat's own fog doesn't show its cell, the wave's point (`WaveTargetPoint`) is a **look
+  point** first: the top of the ramp nearest the building onto its own plateau, i.e. the centre of the plateau cell
+  (`PlayerView.PlateauAt` equal to the building's: the M3-H2 terrain labels, so joined to the building by same-level
+  ground) with a ramp cell (`IsRamp`) one level below beside it (4-neighbours), nearest the building's footprint centre,
+  row order on ties, never a cell under the building. The map's ramp tops are listed once when the seat is built
+  (`AiPlayer.RampTops`, static terrain: two passes over the map; 64 tops on Pale Hills, 48 on Vathar Crossing), so the
+  search is one pass over that list, run only when a target is set and the levels differ (measured first as a pass over
+  the plateau's bounding box: 1.9 ms a call for a Vathar Crossing bank, 27,000 cells, past the 1 ms think gate). None
+  found (a plateau with no ramp): no look. The members are sent
+  `AttackMove` to it as to a hunt's point (`Orders` treats a look point as a point: no `Attack` on the building from
+  there, out of orders a member waits). **The hand-over** (`Look`, each wave think while the target is known): once a
+  member is within `ai.rallyReach` of the look point, the seat's fog shows the target's cell, or every member stands Idle
+  with no order pending or owed after `MaxTries` orders toward it (the hunt's stuck rule), the building's centre becomes the
+  point and every member is owed an `AttackMove` to it. **No new field:** "looking" is a building wave whose point is not
+  its target's centre (`MilitaryManager.Looking`), read from the saved wave fields. **Builder's call, the rule:** of the
+  brief's two, the ramp top. Reasoned, not measured: the other rule's point (the cell at the target's level within the
+  members' sight of it nearest them) can be a bank cell straight above the army, reached only through a ford elsewhere,
+  so the army would climb a ford it never looked at; the ramp top is where an attack up meets the high ground, and its
+  search is one pass over a short list with no sight radius to pick.
+- **Flat maps.** A flat map has no level above 0, so `LookPoint` returns at its first test and every wave is as before;
+  on the hand-made maps the bases stand on their maps' common level (Pale Hills level 0, Vathar Crossing level 1), so the
+  look comes in only when a target stands on a hill or knoll (Pale Hills) or the army is down in the riverbed (Vathar).
+- **BUG-1111** (S3, rider): a perimeter leg interrupted by a sighting resumed at `HuntRing`, the ring point it was heading
+  for, so the stretch of edge between the last ring point reached and the cut was approached from inland and never walked
+  that pass. `StartSweep` now resumes at the ring point before `HuntRing` (`RingPrevious`, one pass over the ring), the
+  leg's last point reached; reaching it hands back to the leg (`AfterReached`: "not a leg step: back to the leg"), so the
+  cut segment is walked whole. QA's `HuntSweepRound2QaStressTests.ARingLeg_InterruptedBySightings_StillSeesTheWholeBorder(-1)`
+  is un-skipped.
+- **Save and replay formats unchanged.** The new state lives in fields already saved (`TownHallCell`'s negative values,
+  the `build` steps' `StepDone` / `StepQueued` / `StepDueTick`, `HousePending`, the wave's `WaveTargetPoint`); the three
+  scratch arrays are empty between thinks. Saves mid-rebuild and mid-look follow their runs hash for hash
+  (`RebuildTests.ASaveMidRebuild_FollowsTheRun_For1000Ticks`, `HighGroundLookTests.ASaveMidLook_FollowsTheRun_For1000Ticks`).
+  A format-6 / 7 save from before this slice taken with the hall gone has `TownHallCell` -1: it rebuilds round its first
+  building or its workers instead of on the old spot. The load range-checks `TownHallCell` (BUG-1118): -1, a map cell, or
+  `-(cell + 2)`, i.e. `[-(cells + 1), cells - 1]`; anything else is `Malformed`
+  (`SaveRefusalTests.AForgedTownHallCell_OutsideTheMap_IsMalformed`).
+- **Fog.** Every rebuild site comes from the census of own buildings and workers, `CanPlace` and the ring search (as any
+  Build); the look point from static terrain (levels, ramps, plateau labels: the map every player loaded) and the members'
+  positions; "the target's cell is visible" from the seat's own fog (`IsVisible`). `PlayerViewArchitectureTests` still
+  holds (no AI file names the world). QA's `PlayerViewOracle` finds no leak at every think of every seat of QA's AI save
+  row seed 3 (three Easy seats, cramped, a generated map: a seat rebuilds from tick 440;
+  `RebuildTests.ARebuildingMatch_EverySeatSeesOnlyWhatItsFogGrants`) and of the looking seat on the plateau scene, left
+  unexplored for the oracle's node memory (`HighGroundLookTests.TheLookingSeat_SeesOnlyWhatItsFogGrants`).
+- **Cost.** The scan: three clears of one int a building type, one pass over the steps and one over the census, every
+  think. The hall rule: one test with a hall standing. The look: one pass over the ramp tops once per target set, only
+  with the levels differing: 0.5 µs a call on either shipped map (was 1.9 ms on a Vathar bank with the box scan). The list
+  is built once per seat when the match starts: 11 ms on a 256-cell map in a Debug build (two passes over 65,536 cells;
+  a 1,024-cell map is 16 times that, still load time, never a think). `AiPerfTests` (1 ms a think,
+  0 B a think): green, run alone (eight seats over 2,628 units: 400 thinks, average 0.458 ms, p95 0.782 ms; with the
+  storms 0.240 ms; no base pair was run, the scan's work is a few hundred array reads a think).
+- **Measured** (what moved, and why: a probe counting, per seat and think, steps reopened, thinks with the hall missing,
+  and thinks on a look point; no pin moved through the look or BUG-1111):
+  - `MapFileTests.NormalVersusNormal_OnANewMap_EndsWithin36000Ticks`: Pale Hills seed 1 ends at **34,219** (28:30; was
+    35,569, 1,781 ticks inside the 36,000 bound, which is unchanged), Malazan reopening 28 steps from tick 30,940; Vathar
+    Crossing at 22,794 (18:59; was 23,219), Malazan reopening 9 from 11,980. The M6-S8 table is re-printed.
+  - QA's `StandardPresetPinQaTests` AI rows seed 3 / 3 seats (Hard, and Easy cramped) re-pinned: in each a seat rebuilds
+    (2 steps reopened, first at tick 10,480 and 440); the other five rows are unmoved.
+  - The Malazan page's tables (rule 40, table cells only): "Age II against the Whirlwind" `standard` v `holy_war` seed 6
+    (defeated 15:39 to 15:37), `crossbow_push` v `standard` seed 32 (17:18 to 16:54), `crossbow_push` v `raider_rush`
+    seed 19 ("never (defeated 10:24)" to "never": the beaten side, its hall razed, lives on to 20:00 with what it
+    rebuilt), `cadre_rush` v `raider_rush` seeds 8 (13:25 to 13:50) and 14 (12:33 to 15:03); BUG-0982's table the same two
+    seeds at each threshold and seed 7's peak at 16 and 14 pop (46 to 47, 40 to 41). Each row's Malazan side reopens
+    steps (7-19), seeds 19 and 32 with the hall missing for 696 and 268 thinks; none looks. The prose round those tables
+    still quotes the old times (data track's to re-word). The Whirlwind page's "Age II against the Malazans" `raider_rush` v
+    `crossbow_push` seed 19 moves with it (Age II at 10:34 to 10:21; the same match as the Malazan seed-19 row).
+  - **A row that no longer ends** (BUG-1116, open, the Producer's ruling): QA's
+    `HuntStressTests.FourAiSeats_OnPaleHills_EndWithTheOracleOnEveryHunt(2, ffa)` has no result by 144,000 ticks. QA's
+    probe: the losing seats rebuild houses they don't need (115 tents and 90 billets between ticks 24,000 and 48,000).
+    **Tried in fix round 1 and not kept:** a House step reopened only when the economy's house rule would want a house
+    (below the hard cap and `HalfPopCap - HalfPop <= ai.houseWhenPopWithin`). It removes the churn (16 tents, 0 billets in
+    that window) but the row still stalls: by 72,000 every seat is out of gold (p0 16, p1 24, p3 14, wood past 10,000
+    each); at 144,000 p0 (`standard`) has 28 workers, no army and 7 production buildings, p1 (`raider_rush`) 3 workers
+    and no building (hall lost about 47,000, never the gold for another), p2 was defeated at 67:23, and p3 (`standard`)
+    holds 7 army units (16 half-pop, under its threshold of 28) and still remembers 18 of the defeated p2's buildings, so
+    it neither waves nor hunts. And it turns three green rows red: `MapFileTests` Pale Hills seed 1 (no result by 36,000),
+    `MapSlice2StressTests` known stall Pale Hills seed 5 (no result by 72,000: the loser's last camp follower stands idle
+    at (391.8, 438.3) from 48,000 and the winner's 7-unit hunt never sees it; with every house rebuilt that worker's
+    new tent site was a known target that ended the match) and QA's `RebuildLookMatchQaStressTests` two-process row (no
+    hall lost any more). The stall is BUG-1068's gold starvation; rebuilt houses act as a beacon for the hunt. **The
+    Producer's ruling (2026-11-07-0236 ACCEPT):** the row is a skipped known case under BUG-1116 / BUG-1068
+    (`FourAiSeats_OnPaleHills_Seed2_KnownStall`; seeds 1 / 3 and the teams row still run); the sim's hardening takes
+    BUG-1119 (a defeated seat's buildings forgotten at the census), the lone-idle-worker hunt gap, then the house rule
+    re-measured with both in.
+- **Tests:** `Ai/RebuildTests` (criterion 2: a razed Barracks built again within two thinks and its step done again,
+  built once; a razed hall's Keep the first Build after it, at the old anchor, the Train step held, the workers depositing
+  again after it stands; a tree on the old anchor: the Keep a few cells off; at the hard cap a razed Billet not rebuilt,
+  below it rebuilt; the reopened step the reserved one; the hall banked for with no step or house sent, then the first
+  Build; criterion 5: a save mid-rebuild of either kind, 1,000 ticks hash-equal, the seats field for field; criterion 6:
+  a hall rebuild in two processes; criterion 4: the oracle row above), `Ai/HighGroundLookTests` (criterion 3 on a 64-cell map with a
+  level-1 plateau and one ramp: the wave `AttackMove`d to the ramp top, then to the hall once a member is there or the hall
+  is seen; no look from the target's level, from above, for a level-0 target or on the flat scene; on Vathar Crossing a
+  south-bank building from the riverbed looks at a south ford's top, on Pale Hills a hill's and a knoll's building at a ramp
+  top of their own (level 1 at (80, 80), level 2 at (91, 91)); criterion 5: a save mid-look; criterion 4: the oracle at
+  every think of the looking seat), `Stress/HuntSweepRound2QaStressTests` (BUG-1111's row).
+- **Not yet:** a lost expansion is not rebuilt (an `expand` step is never reopened; the hall rule rebuilds a hall only
+  when the player has none); a seat whose hall was its only drop-off can't gather toward the new one (its workers' loads
+  have nowhere to go), so it rebuilds only from its bank; periodic re-scouting; splitting the army to sweep; the Hard
+  knobs (M5-4c slice 2).
 
 ### Implementation (M5-4e)
 
@@ -9533,8 +9675,8 @@ with five more stands of trees: 8 ramps, 24 mines, 1,540 trees in 28 forests.
 
 | Map | Result | Waves (Malazan / Whirlwind) | Gathered gold / wood (Malazan v Whirlwind) |
 | --- | --- | --- | --- |
-| Pale Hills | Whirlwind won at 28:28 (34,175 ticks); since M5-4d at 29:02 (34,856: its last wave turns into a hunt), since BUG-1107 fix round 2 at 29:38 (35,569: the hunt's sweep takes another route) | 7 / 9 (M5-4d: 7 / 8) | 8,880 / 7,720 v 8,840 / 8,520 (M5-4d: 8,840 / 8,740; fix round 2: 8,840 / 8,990) |
-| Vathar Crossing | Whirlwind won at 19:20 (23,219 ticks) | 2 / 4 | 2,910 / 1,810 v 6,680 / 4,500 |
+| Pale Hills | Whirlwind won at 28:28 (34,175 ticks); since M5-4d at 29:02 (34,856: its last wave turns into a hunt), since BUG-1107 fix round 2 at 29:38 (35,569: the hunt's sweep takes another route), since M5-4d slice 2 at 28:30 (34,219: Malazan rebuilds what it loses) | 7 / 9 (M5-4d: 7 / 8; slice 2: 7 / 8) | 8,880 / 7,720 v 8,840 / 8,520 (M5-4d: 8,840 / 8,740; fix round 2: 8,840 / 8,990; slice 2: 8,880 / 7,600 v 8,840 / 8,480) |
+| Vathar Crossing | Whirlwind won at 19:20 (23,219 ticks); since M5-4d slice 2 at 18:59 (22,794: Malazan rebuilds what it loses) | 2 / 4 (slice 2: 1 / 4) | 2,910 / 1,810 v 6,680 / 4,500 (slice 2: 2,700 / 1,770 v 6,460 / 4,440) |
 
 What moved on the way (as Raraku's first draft did): Pale Hills' first draft (starts (60, 60), its expansion pair 57 cells out
 in the west woods) starved both seats (about 4,900 gold each, the start mines) with no result by 30:00. With the pair moved to

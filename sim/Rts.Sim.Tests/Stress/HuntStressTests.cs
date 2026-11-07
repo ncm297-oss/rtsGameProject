@@ -111,10 +111,22 @@ public class HuntStressTests
     [Theory]
     [Trait("Category", "Stress")]
     [InlineData(1UL, false)]
-    [InlineData(2UL, false)]
     [InlineData(3UL, false)]
     [InlineData(1UL, true)]
-    public void FourAiSeats_OnPaleHills_EndWithTheOracleOnEveryHunt(ulong seed, bool teams)
+    public void FourAiSeats_OnPaleHills_EndWithTheOracleOnEveryHunt(ulong seed, bool teams) => FourSeatsRow(seed, teams);
+
+    /// <summary>
+    /// Pale Hills free-for-all seed 2 (BUG-1116 / BUG-1068's remaining case, the Producer's ruling at the 2026-11-07-0236 ACCEPT):
+    /// green at 052c39e, no result by 144,000 since M5-4d slice 2 (the losing seats rebuild until every seat is out of gold by
+    /// 72,000; p3 keeps the defeated p2's buildings as known, BUG-1119, so it neither waves nor hunts). Kept as a named known case;
+    /// the hardening re-runs it with BUG-1119 and the lone-idle-worker hunt gap fixed.
+    /// </summary>
+    [Theory(Skip = "BUG-1116 / BUG-1068 (open, S3): Pale Hills 4-seat free-for-all seed 2 stalls on gold starvation since M5-4d slice 2 (rebuilding); no result by 144,000")]
+    [Trait("Category", "Stress")]
+    [InlineData(2UL, false)]
+    public void FourAiSeats_OnPaleHills_Seed2_KnownStall(ulong seed, bool teams) => FourSeatsRow(seed, teams);
+
+    private void FourSeatsRow(ulong seed, bool teams)
     {
         var seats = new PlayerSeat[4];
         for (int p = 0; p < 4; p++) seats[p] = new PlayerSeat(p % 2, SeatController.Ai, AiDifficulty.Normal, teams ? 1 + p % 2 : 0);
