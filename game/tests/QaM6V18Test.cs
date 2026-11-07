@@ -91,12 +91,12 @@ public partial class QaM6V18Test : Node
 
     private async Task Run(Main main)
     {
-        // ---- a generated menu match: format 4 / format 6, as before ----
+        // ---- a generated menu match: save format 6 (an AI seat, M5-4d: BUG-1108) / recording format 6 ----
         Menu gen = await MenuMatch(main, "", GeneratedSave, GeneratedTicks);
         if (!Check(gen.Replay != null && gen.Save != null && File.Exists(gen.Replay) && File.Exists(gen.Save), $"generated files: {gen.Replay} / {gen.Save}")) return;
         byte[] genBytes = File.ReadAllBytes(gen.Save!);
-        Check(SaveSummary.TryParse(genBytes, out SaveSummary? genSummary) && genSummary!.FormatVersion == SaveFormat.MaplessVersion && genSummary.MapId == "",
-            $"the generated save is format {genSummary?.FormatVersion} (want {SaveFormat.MaplessVersion}) with map id '{genSummary?.MapId}'");
+        Check(SaveSummary.TryParse(genBytes, out SaveSummary? genSummary) && genSummary!.FormatVersion == SaveFormat.HuntMaplessVersion && genSummary.MapId == "",
+            $"the generated save is format {genSummary?.FormatVersion} (want {SaveFormat.HuntMaplessVersion}) with map id '{genSummary?.MapId}'");
         // Right after the preset string comes the heightmap's tag: no map id string was written.
         byte[] preset = StringField(StartingResourcesDef.StandardId);
         int presetAt = IndexOf(genBytes, preset);

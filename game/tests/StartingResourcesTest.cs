@@ -283,7 +283,7 @@ public partial class StartingResourcesTest : Node
         Check(ReplayStore.TryReadHeader(replayPath!, out ReplayEntry? entry) && entry!.StartingResources == _high.Key, $"the High recording's header reads '{entry?.StartingResources}'");
         Check(ReplayStore.TryReadHeader(stdReplay!, out ReplayEntry? stdEntry) && stdEntry!.StartingResources == StartingResourcesDef.StandardId, "the Standard recording's header");
         using (FileStream stream = File.OpenRead(savePath!))
-            Check(SaveSummary.TryRead(stream, out SaveSummary? summary) && summary!.StartingResources == _high.Key && summary.FormatVersion == 4,
+            Check(SaveSummary.TryRead(stream, out SaveSummary? summary) && summary!.StartingResources == _high.Key && summary.FormatVersion == Rts.Sim.Save.SaveFormat.HuntMaplessVersion, // M5-4d: an AI seat (BUG-1108)
                 $"the High save's summary reads '{summary?.StartingResources}' (format {summary?.FormatVersion})");
         Check(SaveStore.TryReadHeader(stdSave!, out SaveEntry? stdSaveEntry) && stdSaveEntry!.StartingResources == StartingResourcesDef.StandardId, "the Standard save's header");
         HostileHeaders(replayPath!, savePath!);

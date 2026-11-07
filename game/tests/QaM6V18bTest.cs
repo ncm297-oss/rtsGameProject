@@ -522,18 +522,18 @@ public partial class QaM6V18bTest : Node
         }
     }
 
-    // ---- Load Game: formats 4 / 5 saves and 6 / 7 / 8 / 9 recordings ----
+    // ---- Load Game: formats 6 / 7 saves (an AI seat, M5-4d: BUG-1108) and 6 / 7 / 8 / 9 recordings ----
 
     private async Task MixedFormats()
     {
         var files = new List<(string Replay, string Save, string Preset, string Map, int Format, int SaveFormat, string How)>();
         foreach ((string preset, string map, int[] teams, int format, int saveFormat, string how) in new[]
         {
-            (StartingResourcesDef.StandardId, "", new[] { 0, 0 }, 6, 4, "generated ffa"),
-            (StartingResourcesDef.StandardId, "", new[] { 1, 2, 0 }, 7, 4, "generated teamed"),
-            (_high.Key, "", new[] { 0, 0 }, 8, 4, "generated high"),
-            (StartingResourcesDef.StandardId, _map.Key, new[] { 0, 0 }, 9, 5, "raraku standard"),
-            (_high.Key, _map.Key, new[] { 1, 2 }, 9, 5, "raraku high teamed"),
+            (StartingResourcesDef.StandardId, "", new[] { 0, 0 }, 6, SaveFormat.HuntMaplessVersion, "generated ffa"),
+            (StartingResourcesDef.StandardId, "", new[] { 1, 2, 0 }, 7, SaveFormat.HuntMaplessVersion, "generated teamed"),
+            (_high.Key, "", new[] { 0, 0 }, 8, SaveFormat.HuntMaplessVersion, "generated high"),
+            (StartingResourcesDef.StandardId, _map.Key, new[] { 0, 0 }, 9, SaveFormat.CurrentVersion, "raraku standard"),
+            (_high.Key, _map.Key, new[] { 1, 2 }, 9, SaveFormat.CurrentVersion, "raraku high teamed"),
         })
         {
             _main.ShowSetup();
