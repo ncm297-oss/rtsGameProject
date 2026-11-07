@@ -338,7 +338,8 @@ public partial class ShellTest : Node
         // M6-V14: pause 5 (save), load 22 (kind, load, save_tag, replay_tag), save 12; M6-V15: setup 23 (speed, speed_slow / normal / fast, forests, mines)
         // M6-V16: setup 26 (team, team_none, team_item), match_over 29 (team), load 23 (seat_team); BUG-1061: match_over 30 (no_team); BUG-1062: setup 27 (one_team)
         // M6-V17: setup 28 (starting_resources), load 24 (preset); M6-V18: setup 31 (map, map_generated, map_players), load 25 (map)
-        Check(keys.Count == 5 + 31 + 5 + 22 + 30 + 15 + 2 + 25 + 2 + 12, $"{keys.Count} shell keys");
+        // M5-V2: setup 34 (difficulty_easy_tip / normal_tip / hard_tip)
+        Check(keys.Count == 5 + 34 + 5 + 22 + 30 + 15 + 2 + 25 + 2 + 12, $"{keys.Count} shell keys");
         string json = File.ReadAllText(UiText.DefaultPath).Replace("\r\n", "\n");
         foreach ((string section, string key, string text) in keys)
         {

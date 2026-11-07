@@ -6990,6 +6990,34 @@ game/tests/TooltipWrapTest.cs   a leading / trailing space row each
   the project has no shell theme to add an opaque `TooltipPanel` style to, so it is a new theme resource plus a project
   setting, not a one-resource change.
 
+### Implementation (M5-V2)
+
+Each difficulty's rules in the skirmish setup, with Hard's gather bonus from the data (docs/02 "AI opponent": "a 25% gather
+bonus, shown in the skirmish setup"). No sim or `game/data/factions` change; `ui.json` is outside
+`GameData.ContentHash`.
+
+```
+game/scripts/SetupText.cs, ui.json  setup.difficulty_easy_tip / _normal_tip / _hard_tip (setup: 34 keys)
+game/scripts/UiText.cs              DifficultyTipKeys, DifficultyTip(difficulty, gatherBonus), Percent; the tips' load rule
+game/scripts/SkirmishSetup.cs       ShowDifficultyTips(slot), GatherBonus(data, faction, difficulty)
+game/tests/QaM5V2Test.*             the tips on shipped and forged data, a faction pick, the load rule
+game/tests/ShellTest.cs             the shell key count (setup 34)
+```
+
+- **The tips.** Each AI slot's Difficulty item has a tooltip: its `setup.difficulty_*_tip` text (one sentence each from
+  docs/02) formatted with `{0}` = that difficulty's `gatherBonus` in the slot's faction's `ai.json`, times 100, invariant,
+  `0.##` (`UiText.Percent`: 0.25 is "25"), wrapped by `TooltipWrap`. The list's own tooltip is the picked item's, as the
+  starting-resources list's. The tips are set at build and again when the slot's faction list is picked from, since each
+  faction's `ai.json` carries its own bonus. Hand-built data with no `Ai` reads 0. Only Hard's text names `{0}` today.
+- **The load rule.** `setup.difficulty_hard_tip` must be a format naming `{0}` (two numbers give two texts) with no other
+  placeholder; the Easy and Normal tips may name `{0}` and nothing else. Otherwise one error naming the key.
+- **The tips' other words are text, not data.** "Every 2 seconds" and "every half second" are typed in `ui.json` from
+  docs/02, not read from `thinkInterval`; only the gather bonus is formatted in (the brief's scope).
+- **BUG-1126 left open.** Fixing it in `TooltipWrap.Wrap` (break only between two words) leaves some lines over the width
+  with a space in them (a trailing or leading space beside a long word), which `QaVh5Test`'s wrap fuzz fails. For
+  `e60 + "  " + w61` every output breaks one rule or the other, so the fix needs a ruling on which rule wins (or the data
+  checker rejecting double and edge spaces), not a few lines.
+
 ## AI architecture
 
 The AI lives in `Rts.Sim.Ai`, inside the sim assembly, because it must be deterministic (it uses

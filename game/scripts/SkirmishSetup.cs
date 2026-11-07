@@ -21,7 +21,8 @@ namespace Rts.Game;
 /// <c>rules.json</c> <c>startingResources</c> presets in file order, by <c>displayName</c>, the <c>description</c> as the
 /// tooltip; default <c>standard</c>), passed as <c>--resources</c>. M6-V18: a map list (Generated, then <c>GameData.Maps</c> in data
 /// order by <c>displayName</c>, the <c>description</c> as the tooltip), passed as <c>--map</c>: a map file greys Map size,
-/// Forests and Gold mines (they don't apply; M6-V19: they show the map's own counts) and caps the slots at its start locations, with a line saying so. Text from <c>ui.json</c> <c>setup</c> (the colours' names
+/// Forests and Gold mines (they don't apply; M6-V19: they show the map's own counts) and caps the slots at its start locations, with a line saying so.
+/// M5-V2: each difficulty item's tooltip is its rules, Hard's with the slot's faction's <c>ai.json</c> gather bonus (<see cref="ShowDifficultyTips"/>). Text from <c>ui.json</c> <c>setup</c> (the colours' names
 /// and swatches from its colour table), faction and preset names from the data's <c>displayName</c>.
 /// </summary>
 /// <remarks>
@@ -604,6 +605,10 @@ public partial class SkirmishSetup : CanvasLayer
                 list.Select((int)LaunchOptions.DefaultAi); // --skirmish's seats too (BUG-0630)
                 DifficultyOptions[slot] = list;
                 difficulty = list;
+                // M5-V2: each item's tooltip is its rules for the slot's faction (Hard's gather bonus from that faction's ai.json).
+                list.ItemSelected += _ => ShowDifficultyTooltip(list);
+                FactionOptions[slot].ItemSelected += _ => ShowDifficultyTips(picker);
+                ShowDifficultyTips(slot);
             }
             // M6-V16: the team list, None (team 0, the free-for-all default) then Team 1 .. MaxTeam.
             OptionButton team = List($"Team{slot}");
@@ -670,6 +675,36 @@ public partial class SkirmishSetup : CanvasLayer
         GreyTakenColours();
         UpdateSlotButtons();
         Validate();
+    }
+
+    /// <summary>
+    /// M5-V2 (docs/02 "AI opponent"): sets each item of <paramref name="slot"/>'s difficulty list's tooltip to the difficulty's
+    /// <c>setup</c> tip, <c>{0}</c> its gather bonus from the slot's faction's <c>ai.json</c> in percent, and the list's own to the
+    /// picked item's. Runs at build and when the slot's faction list is picked from; nothing for slot 0 (no difficulty list).
+    /// </summary>
+    public void ShowDifficultyTips(int slot)
+    {
+        OptionButton? list = (uint)slot < (uint)MaxSlots ? DifficultyOptions[slot] : null;
+        if (list == null || _ui == null || _data == null) return;
+        int faction = FactionOptions[slot].Selected;
+        for (int d = 0; d < list.ItemCount && d < DifficultyKeys.Length; d++)
+            list.SetItemTooltip(d, TooltipWrap.Wrap(_ui.DifficultyTip((AiDifficulty)d, GatherBonus(_data, faction, (AiDifficulty)d))));
+        ShowDifficultyTooltip(list);
+    }
+
+    /// <summary>Difficulty <paramref name="difficulty"/>'s gather bonus (a fraction) in faction <paramref name="faction"/>'s <c>ai.json</c>; 0 when the data has none (hand-built data).</summary>
+    public static float GatherBonus(GameData data, int faction, AiDifficulty difficulty)
+    {
+        if ((uint)faction >= (uint)data.Ai.Length) return 0f;
+        ImmutableArray<AiDifficultyDef> difficulties = data.Ai[faction].Difficulties;
+        return !difficulties.IsDefault && (uint)difficulty < (uint)difficulties.Length ? difficulties[(int)difficulty].GatherBonus : 0f;
+    }
+
+    // The list's tooltip is the picked difficulty's (each item carries its own in the popup), as ShowPresetTooltip.
+    private static void ShowDifficultyTooltip(OptionButton list)
+    {
+        int i = list.Selected;
+        list.TooltipText = i >= 0 && i < list.ItemCount ? list.GetItemTooltip(i) : "";
     }
 
     // The list's tooltip is the picked preset's description (each item carries its own in the popup).
