@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S2 (cross-track merge gate: the Godot scene loop goes red on `main` at the merge; test-only, the game's behaviour is right) |
-| Status | open |
+| Status | fixed (at the 2026-11-06-0926 merge: the Producer's patch `studio/qa/2026-11-06-0926-bug-1108-view-tests.patch` applied by the conductor after the view branch; rehearsed on the merged tree, the three scenes PASS) |
 | Found | 2026-11-06-0926, task M5-4d (QA full; the conductor asked for this check) |
 | System | `game/tests/` (view track's files): `QaM6V18Test.cs`, `QaM6V18bTest.cs`, `StartingResourcesTest.cs` |
-| Fixed by | |
+| Fixed by | the patch: `QaM6V18Test` line 98 / `QaM6V18bTest` MixedFormats rows / `StartingResourcesTest` line 286 compare to `SaveFormat.HuntMaplessVersion` (6, a generated AI match) and `SaveFormat.CurrentVersion` (7, a map-file AI match) |
 
 ## Repro
 1. On `studio/2026-11-06-0926-sim` (b7a3f83): `dotnet build RtsGame.sln`, then

@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S3 |
-| Status | open |
+| Status | fixed (robust, cause not proven; M6-VH5 2026-11-06-0926: `Main.MatchScene` holds the PackedScene for the process, no `GD.Load` at a match start; two loops, 13 `TeamsTest` and 9 parallel `MapListTest` runs without a recurrence. Reopen on any recurrence) |
 | Found | 2026-11-05-2148, task M6-V18 |
 | System | Godot side: scene loop, `Main.StartMatch` (engine interop) |
-| Fixed by | |
+| Fixed by | M6-VH5 ca99057 (`Main.MatchScene`; `MapListTest.MenuMaps` regression row) |
 
 ## Repro
 1. `powershell -File tools/qa/scene-loop.ps1` on the view worktree at afba408 (81 scenes, 19 m 09 s, while other tracks'

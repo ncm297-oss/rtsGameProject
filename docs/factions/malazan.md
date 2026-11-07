@@ -542,10 +542,14 @@ picks 18.
 
 The same thing happens to `crossbow_push` (BUG-1010; D-H6's third seed per pairing, `QA/Content/D21OpeningsQaTests`, and
 QA's 4th and 5th, `QA/Content/DH6ThresholdQaTests`). Against `raider_rush` it sends no wave on 2 of the pairing's 5
-smallest seeds (5, 11, 19, 25, 38), and both are still standing at 20:00, beaten down: on seed 19 its army peaks at 7
-pop, under its 14-pop wave, while it holds the base, and at 20:00 it has 15 pop with a cap of 24, 910 gold and 15 wood
-and no Age II; on seed 25 it peaks at 12 pop and is down to 1 pop at 20:00. Both rows name the seed as a known case
-(`KnownBeatenAlive`) instead of loosening their rule. Before M5-4g seed 19 read a peak of 8 pop and 6 pop / cap 16 with
+smallest seeds (5, 11, 19, 25, 38). Until M5-4d both were still standing at 20:00, beaten down: on seed 19 its army
+peaked at 7 pop, under its 14-pop wave, while it held the base, and at 20:00 it had 15 pop with a cap of 24, 910 gold and
+15 wood and no Age II; on seed 25 it peaked at 12 pop and was down to 1 pop at 20:00 (re-measured unchanged on 2026-11-06
+by D-H7, on the `main` before M5-4d landed). Since M5-4d (the AI hunts the last units once it knows no enemy building)
+both are finished off without ever attacking: seed 19 is defeated at 10:24 and seed 25 at 12:34, so "falls to the rush
+without a wave" still holds and "standing at 20:00" does not. Both rows still name the seed as a known case
+(`KnownBeatenAlive`) instead of loosening their rule, and now print "now passes the rule: take it out"; the data track takes
+both entries out next (BUG-1110). Before M5-4g seed 19 read a peak of 8 pop and 6 pop / cap 16 with
 670 gold and 60 wood at 20:00, and seed 25 was destroyed at 11:26. Over the two openings, `raider_rush` beats the
 Malazans without a fight on 6 of 10 seeds (`cadre_rush` 4 of 5, `crossbow_push` 2 of 5). `standard` sent a wave on
 each of its 9 measured pairing seeds (3 Whirlwind openings x 3 seeds).

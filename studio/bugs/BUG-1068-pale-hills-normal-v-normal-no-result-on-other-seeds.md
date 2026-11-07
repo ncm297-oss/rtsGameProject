@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S3 |
-| Status | open |
+| Status | open, narrowed to seed 2 (M5-4d 2026-11-06-0926: Pale Hills seeds 3 / 4 / 5 / 6 and generated seed 6 end (`MapSlice2StressTests.NormalVersusNormal_KnownStalls_EndWithin72000`, un-skipped: 29,421 / 29,421 / 52,557 / 29,421 / 26,875 ticks); seed 2 is a stalemate, both sides holding two halls at 60:00: `NormalVersusNormal_PaleHillsSeed2_Stalemate_EndsWithin72000`, skipped under this id) |
 | Found | 2026-11-06-0326, task M6-S8 (QA) |
 | System | Map data (`game/data/maps/pale_hills.json`) x AI waves (`MilitaryManager`: waves target buildings only) |
-| Fixed by | |
+| Fixed by | seeds 3-6 and generated 6: M5-4d (b7a3f83 + 6a3c83c + 1eccd06, the hunt); seed 2: not a hunt case, the sim's next hardening or M5-4d slice 2 |
 
 ## Repro
 1. Remove the `Skip` from `Stress/MapSlice2StressTests.NormalVersusNormal_KnownStalls_EndWithin72000`.

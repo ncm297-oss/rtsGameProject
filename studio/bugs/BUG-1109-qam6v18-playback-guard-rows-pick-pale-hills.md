@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S3 (test-only, pre-existing on `main` at 1e9e1e8; the scene loop is red regardless of M5-4d) |
-| Status | open |
+| Status | fixed (M6-VH5, 2026-11-06-0926: `QaM6V18Test.OtherSide` forges the side the first map file doesn't have; verified by the Producer on the merged tree, `QaM6V18Test` PASS) |
 | Found | 2026-11-06-0926, task M5-4d (QA full, while checking BUG-1108 at the diff base) |
 | System | `game/tests/QaM6V18Test.cs` (view track) |
-| Fixed by | |
+| Fixed by | M6-VH5 ca99057 (`QaM6V18Test.cs` `OtherSide(_map.Size)`) |
 
 ## Repro
 1. Clone 1e9e1e8 (the M5-4d diff base, i.e. `main` with M6-S8's maps), build, `powershell -File tools/qa/scene-loop.ps1 -Filter QaM6V18Test`.

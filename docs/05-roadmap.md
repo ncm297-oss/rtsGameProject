@@ -664,16 +664,20 @@ open S1 / S2. Retro below; open S3 / S4 listed there.)_
       building or an intruder near the hall pulls the army home and the workers to a drop-off; knobs in `rules.json` `ai`).
       Expansion is in as the build order's `expand` step (M5-2 / D14: `AiStepAction.Expand`, the difficulty's `expandAfter`,
       `rules.json` `ai.expandHallReach`; `BuildOrderExecutor.ExpansionMine`), a time- and build-order-driven expansion, not a
-      "mines running low" one (drift fixed by the Producer 2026-11-06-0926). Left: hunting the last units (M5-4d slice 1),
-      rebuilding and the high-ground scouting (M5-4d slice 2).)
+      "mines running low" one (drift fixed by the Producer 2026-11-06-0926). M5-4d slice 1, 2026-11-06-0926: **hunting the
+      last units is in** (`MilitaryManager` hunt: once no enemy building is known the army goes to the last enemy unit seen
+      within `rules.json` `ai.huntMemory` 120 s, else sweeps the scout grid + a border ring with a perimeter leg; save formats
+      6 / 7 carry the hunt memory; BUG-1068 narrowed to Pale Hills seed 2's stalemate; docs/03 "Implementation (M5-4d)").
+      Left: rebuilding and the high-ground scouting (M5-4d slice 2).)
 - [ ] Easy / Normal / Hard per [02 AI](02-game-design.md#ai-opponent). (D16, 2026-10-13: the three blocks pinned to docs/02 and
       the faction pages. M5-4c slice 1, 2026-10-13: `useAbilities` applied (Easy never cast then; D19, 2026-10-15, turned it on for Easy too). Left for M5-4c slice 2:
       `gatherBonus`, `focusFire`, `pullBackWounded`.)
 - [ ] AI-vs-AI headless test: a 20-minute match completes without errors and one side wins. (M5-4b, 2026-10-13: the defeat
       rule and `Simulation.MatchOver` are in, a razed hall ends the match and the loser's AI goes silent on seeds 1-3. M5-4e,
       2026-10-14: the rule is the owner's (out = no unit and no finished unit-producing building; `World.LiveUnits` /
-      `ProductionBuildings`); an AI match can now stall on a hidden worker until M5-4d hunts the last units; the
-      20-minute winner test is M5-5.)
+      `ProductionBuildings`); M5-4d (2026-11-06-0926) hunts the last units, so a hidden worker no longer stalls an AI
+      match (Pale Hills seeds 3-6 and the generated seed 6 end; seed 2 is a stalemate, BUG-1068); the 20-minute winner
+      test is M5-5.)
 - [ ] Playable: the owner can win on Easy and lose to a Whirlwind AI on Hard.
 - [x] Owner request 2026-10-14 (D14 a): **proportional defense**: a raid pulls home only what it is worth (home army first, then part of the
       wave, the whole wave only for a real threat or a dying hall); a lone raider never recalls a wave. (M5-4f, 2026-10-16: `Ai/DefenseManager`
@@ -813,7 +817,9 @@ open S1 / S2. Retro below; open S3 / S4 listed there.)_
       tooling; `DataLoader.CheckMapFile`), each proven by a Normal v Normal match to a result (Whirlwind at 34,175 / 23,219 ticks, seed 1),
       saved / recorded / replayed hash-equal; M6-V19 the same session: the greyed Forests / Gold mines show the picked map's own counts.
       **Ticked 2026-11-06-0326 (Producer).** Polish left, not blocking: the two new maps' final text (D25; provisional sentences ship),
-      BUG-1068 S3 (Pale Hills AI v AI stalls on most seeds: M5-4d's hunt), BUG-1067 S3, Raraku's placeholder layout.)
+      BUG-1068 S3 narrowed to Pale Hills seed 2's stalemate by M5-4d (2026-11-06-0926), BUG-1067 S3, Raraku's placeholder
+      layout; the two new maps' final sentences (D-H7's, 2026-11-06-0926) land with the sim's next task (the text is pinned
+      in sim-owned tests and the map sources too).)
 - [ ] `tools/export.ps1` produces a Windows zip that runs on a machine without Godot or .NET installed.
 - [ ] Revisit the .NET version (see [03 Platform](03-technical-design.md#platform-and-versions)).
 - [ ] Playable: a friend can unzip it and play a match without help.
