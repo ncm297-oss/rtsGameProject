@@ -38,15 +38,20 @@ public class DR33QaTests
             p => p.Contains("a digit", StringComparison.Ordinal));
     }
 
+    /// <summary>
+    /// The two lists hold exactly the named cases and nothing else (re-aimed at the 2026-11-07-0236 merge: the sim's M5-4d slice 2
+    /// put seed 19 back, see <c>D21OpeningsQaTests.KnownBeatenAlive</c>; a further entry needs a bug id and this pin moved).
+    /// </summary>
     [Theory]
-    [InlineData(typeof(D21OpeningsQaTests))]
-    [InlineData(typeof(DH6ThresholdQaTests))]
-    public void KnownBeatenAlive_StaysEmpty(Type owner)
+    [InlineData(typeof(D21OpeningsQaTests), "(1, 1, 19, 0)")]
+    [InlineData(typeof(DH6ThresholdQaTests), "")]
+    public void KnownBeatenAlive_HoldsOnlyTheNamedCases(Type owner, string expected)
     {
         FieldInfo? f = owner.GetField("KnownBeatenAlive", BindingFlags.NonPublic | BindingFlags.Static);
         Assert.NotNull(f);
         var list = (Array)f!.GetValue(null)!;
-        Assert.True(list.Length == 0,
-            $"{owner.Name}.KnownBeatenAlive has {list.Length} entr(y/ies) again: re-measure, and file a bug rather than re-allow (BUG-1110)");
+        string actual = string.Join(", ", list.Cast<object>().Select(e => e.ToString()));
+        Assert.True(actual == expected,
+            $"{owner.Name}.KnownBeatenAlive is [{actual}], expected [{expected}]: re-measure, and file a bug rather than re-allow (BUG-1110 / BUG-1116)");
     }
 }

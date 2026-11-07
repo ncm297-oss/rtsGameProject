@@ -300,8 +300,12 @@ public class D21OpeningsQaTests
     /// thinks defending, no Age II) and is defeated at 10:24 (tick 12,484), so BUG-1010's "falls to the raider rush without
     /// attacking" still holds and only "standing at 20:00" is gone. With the entry out, the row fails again if a later
     /// change leaves the side standing without a wave. <c>DH6ThresholdQaTests</c> keeps the pairing's 4th and 5th seeds the same way.
+    /// **Re-listed at the 2026-11-07-0236 merge (the Producer):** since M5-4d slice 2 (the AI rebuilds what it loses) the same
+    /// side stands at 20:00 again: its hall razed, its last worker rebuilds and the hunt has not found it (at 20:00 pop 1 / cap 0,
+    /// 522 gold, 210 wood, no wave, 340 thinks defending; the Whirlwind 1 wave, Age II 10:21). BUG-1010's pattern with BUG-1116 /
+    /// BUG-1119 underneath; <c>DR33QaTests.KnownBeatenAlive_HoldsOnlyTheNamedCases</c> pins this one entry. Seed 25 stays out.
     /// </summary>
-    private static readonly (int Malazan, int Whirlwind, ulong Seed, int Player)[] KnownBeatenAlive = { };
+    private static readonly (int Malazan, int Whirlwind, ulong Seed, int Player)[] KnownBeatenAlive = { (1, 1, 19, 0) };
 
     /// <summary>Determinism per pairing with the shipped openings: two Normal v Normal runs on the pair's smallest seed, equal state hashes every 50 ticks for 6,000 ticks, and the same commands sent.</summary>
     [Theory]

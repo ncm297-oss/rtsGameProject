@@ -549,7 +549,9 @@ peaked at 7 pop, under its 14-pop wave, while it held the base, and at 20:00 it 
 by D-H7, on the `main` before M5-4d landed). Since M5-4d (the AI hunts the last units once it knows no enemy building)
 both are finished off without ever attacking: seed 19 is defeated at 10:24 and seed 25 at 12:34, so "falls to the rush
 without a wave" still holds and "standing at 20:00" does not. Both test entries (`KnownBeatenAlive`, BUG-1110) were
-taken out by D-R33 (2026-11-07), so either row fails again if its side is left standing at 20:00 without a wave.
+taken out by D-R33 (2026-11-07), so either row fails again if its side is left standing at 20:00 without a wave;
+the same day M5-4d slice 2 (the AI rebuilds what it loses) put seed 19 back on the list: its last worker rebuilds and the
+side stands at 20:00 with 1 pop, no building and 522 gold (BUG-1116 / BUG-1119), while seed 25 stays defeated at 12:34.
 Before M5-4g seed 19 read a peak of 8 pop and 6 pop / cap 16 with
 670 gold and 60 wood at 20:00, and seed 25 was destroyed at 11:26. Over the two openings, `raider_rush` beats the
 Malazans without a fight on 6 of 10 seeds (`cadre_rush` 4 of 5, `crossbow_push` 2 of 5). `standard` sent a wave on
