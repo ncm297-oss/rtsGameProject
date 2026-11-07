@@ -59,6 +59,11 @@ internal sealed partial class AiPlayer
         CampType = OfSlot(BuildingSlot.Camp);
         IsWorkerType = new bool[data.Units.Length];
         for (int t = 0; t < data.Units.Length; t++) IsWorkerType[t] = data.Units[t].IsWorker;
+        DoneOfType = new int[data.Buildings.Length];
+        NewestDoneStep = new int[data.Buildings.Length];
+        HeldOfType = new int[data.Buildings.Length];
+        TownHallCell = -1; // no hall seen yet: nothing to rebuild (LostHallCell)
+        RampTops = MilitaryManager.RampTops(view);
         ClearReserve();
     }
 
@@ -197,8 +202,29 @@ internal sealed partial class AiPlayer
     internal bool IsFleeing(int slot, int generation) =>
         Board.FledGeneration[slot] == generation && Now - Board.FledAt[slot] <= Rules.DefendForTicks;
 
-    /// <summary>The player's Town Hall the AI builds round: its first finished one, else its first site; -1 for none.</summary>
+    /// <summary>
+    /// The player's Town Hall the AI builds round: its first finished one, else its first site; negative for none. M5-4d
+    /// slice 2: with none, it keeps the anchor of the last hall the census saw as <c>-(anchor + 2)</c> (-1: none ever seen),
+    /// read through <see cref="LostHallCell"/>. Why in this field: it is saved already (<c>AIST</c>), so a seat that lost its
+    /// hall remembers where it stood across a save with no new field and no format bump; every other reader asks only
+    /// whether it is negative.
+    /// </summary>
     internal int TownHallCell { get; private set; }
+
+    /// <summary>M5-4d slice 2: with no Town Hall, the anchor of the last one the player had (razed, or a site cancelled); -1 with a hall or none ever seen.</summary>
+    internal int LostHallCell => TownHallCell <= -2 ? -TownHallCell - 2 : -1;
+
+    /// <summary>M5-4d slice 2: scratch of the executor's rebuild scan, per building type: done <c>build</c> steps, the newest of them, own buildings held (sites included).</summary>
+    internal int[] DoneOfType { get; }
+
+    /// <summary>See <see cref="DoneOfType"/>.</summary>
+    internal int[] NewestDoneStep { get; }
+
+    /// <summary>See <see cref="DoneOfType"/>.</summary>
+    internal int[] HeldOfType { get; }
+
+    /// <summary>M5-4d slice 2: the map's ramp tops in row order (<see cref="MilitaryManager.RampTops"/>; static terrain, listed at construction).</summary>
+    internal int[] RampTops { get; }
 
     /// <summary>The faction's Town Hall, House and Camp building types (-1 when the data has none).</summary>
     internal int TownHallType { get; }
@@ -236,10 +262,17 @@ internal sealed partial class AiPlayer
     // ---------- M5-4g: the reserve, think scratch set by the executor (docs/03 "Implementation (M5-4g)") ----------
 
     /// <summary>
-    /// M5-4g: the index in the build order of this think's reserved step (<see cref="BuildOrderExecutor"/>), -1 for none.
+    /// M5-4g: the index in the build order of this think's reserved step (<see cref="BuildOrderExecutor"/>), -1 for none
+    /// (M5-4d slice 2: also while the reserve is the Town Hall rebuild's, <see cref="HallReserved"/>).
     /// Set during a think only: cleared at its start and its end (<see cref="ThoughtForTests"/> sees it).
     /// </summary>
     internal int ReserveStep { get; private set; }
+
+    /// <summary>
+    /// M5-4d slice 2: whether this think's reserve (<see cref="ReserveGold"/> / <see cref="ReserveWood"/>) is the Town Hall
+    /// rebuild's (<see cref="BuildOrderExecutor.HallFirst"/>), not a step's (<see cref="ReserveStep"/> stays -1). Think scratch, as the reserve.
+    /// </summary>
+    internal bool HallReserved { get; private set; }
 
     /// <summary>M5-4g: the gold and wood the reserved step costs, a kind with no known node left out (0 / 0 with no reserved step).</summary>
     internal int ReserveGold { get; private set; }
@@ -287,6 +320,7 @@ internal sealed partial class AiPlayer
         ReserveStep = -1;
         ReserveGold = ReserveWood = 0;
         ReserveShortGold = ReserveShortWood = false;
+        HallReserved = false;
         _knowsGold = _knowsWood = 0;
         _reachLifted = 0;
     }
@@ -308,6 +342,13 @@ internal sealed partial class AiPlayer
         ReserveWood = woodKnown ? wood : 0;
         ReserveShortGold = goldKnown && Gold < gold;
         ReserveShortWood = woodKnown && Wood < wood;
+    }
+
+    /// <summary>M5-4d slice 2: the think's reserve is the Town Hall rebuild's cost (<see cref="HallReserved"/>; the no-node guard as <see cref="SetReserve"/>'s).</summary>
+    internal void SetHallReserve(int gold, int wood)
+    {
+        SetReserve(-1, gold, wood);
+        HallReserved = true;
     }
 
     /// <summary>
@@ -442,7 +483,8 @@ internal sealed partial class AiPlayer
         WorkerCount = 0;
         ArmyCount = 0;
         OwnBuildingCount = 0;
-        TownHallCell = -1;
+        // M5-4d slice 2: a hall seen last think is remembered (LostHallCell) until the buildings' pass finds one again.
+        if (TownHallCell >= 0) TownHallCell = -TownHallCell - 2;
         HasDropOff = false;
         IntruderCount = 0;
         IntruderWorth = 0;
@@ -666,7 +708,14 @@ internal sealed partial class AiPlayer
     /// worker (the nearest) else the nearest gatherer; fills <paramref name="pending"/> to judge it. False when there is no
     /// site, no worker, not enough left this think, or the queue is full.
     /// </summary>
-    internal bool TryBuild(int type, int centreCell, ref PendingOrder pending)
+    internal bool TryBuild(int type, int centreCell, ref PendingOrder pending) => TryBuild(type, centreCell, -1, ref pending);
+
+    /// <summary>
+    /// See <see cref="TryBuild(int, int, ref PendingOrder)"/>; M5-4d slice 2: with <paramref name="exactAnchor"/> &gt;= 0, that
+    /// anchor first when <see cref="PlayerView.CanPlace"/> allows it and it carries no retry mark (no spacing rule: the old
+    /// hall's own spot), else the ring search round <paramref name="centreCell"/>.
+    /// </summary>
+    internal bool TryBuild(int type, int centreCell, int exactAnchor, ref PendingOrder pending)
     {
         if ((uint)type >= (uint)Data.Buildings.Length || centreCell < 0) return false;
         BuildingDef def = Data.Buildings[type];
@@ -678,7 +727,7 @@ internal sealed partial class AiPlayer
         if (!View.CanPlaceAnywhere(type, out _)) return false;
         if (_queueFull || !AnyBuilder()) return false;
         int searchesBefore = SiteSearches;
-        int anchor = FindSite(type, centreCell);
+        int anchor = exactAnchor >= 0 && !Board.IsBad(type, exactAnchor) && View.CanPlace(type, exactAnchor, out _) ? exactAnchor : FindSite(type, centreCell);
         if (anchor < 0)
         {
             // BUG-0910: only a ring search that ran and found nothing makes the step wait. FindSite's cell-free test (requires

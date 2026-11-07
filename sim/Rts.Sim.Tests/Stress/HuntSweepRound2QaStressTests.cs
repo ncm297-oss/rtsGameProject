@@ -187,7 +187,7 @@ public class HuntSweepRound2LegQaTests
     [Theory]
     [InlineData(0)]
     [InlineData(3)]
-    [InlineData(-1, Skip = "BUG-1111: a sighting mid-leg resumes at the next ring point; the edge stretch before it is approached from inland")]
+    [InlineData(-1)] // BUG-1111 fixed (M5-4d slice 2): the leg resumes at the ring point before HuntRing
     public void ARingLeg_InterruptedBySightings_StillSeesTheWholeBorder(int interrupts)
     {
         Simulation sim = AiScenes.Flat(AiScenes.Seats(AiDifficulty.Normal, SeatController.Ai, SeatController.Human), s_quiet.Value);

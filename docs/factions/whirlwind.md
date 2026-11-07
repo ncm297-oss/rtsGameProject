@@ -459,7 +459,7 @@ the Whirlwind"). The two sides without Age II (`standard` against `crossbow_push
 | `standard` | `crossbow_push` | seed 9: never | seed 32: 10:10 | seed 37: 9:20 |
 | `standard` | `cadre_rush` | seed 13: never | seed 16: 10:10 | seed 17: 9:46 |
 | `raider_rush` | `standard` | seed 2: 9:47 | seed 10: 9:46 | seed 21: 12:14 |
-| `raider_rush` | `crossbow_push` | seed 5: 13:13 | seed 11: 14:07 | seed 19: 10:34 |
+| `raider_rush` | `crossbow_push` | seed 5: 13:13 | seed 11: 14:07 | seed 19: 10:21 |
 | `raider_rush` | `cadre_rush` | seed 7: 9:52 | seed 8: 10:00 | seed 14: 9:53 |
 | `holy_war` | `standard` | seed 3: 9:14 | seed 4: 10:39 | seed 6: 10:22 |
 | `holy_war` | `crossbow_push` | seed 12: 9:20 | seed 45: 7:35 | seed 71: 10:04 |

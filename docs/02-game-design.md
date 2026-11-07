@@ -432,6 +432,16 @@ own cues (select, order, refused, building placed or finished, unit or tech read
   a raid at home), and becomes a wave again on the first enemy building it finds. So a beaten side's last unit hiding in
   the woods is found, and AI-against-AI matches end (built in M5-4d, BUG-1068;
   [03 Implementation (M5-4d)](03-technical-design.md#implementation-m5-4d)).
+- The AI rebuilds what it loses: a building its build order put up that is razed (or a site cancelled) is ordered again
+  within a think or two, as a build order step due again, with the same reserve and site search as before; a House is
+  not rebuilt once the population cap is at the hard cap. With no Town Hall left and a worker alive, the Town Hall comes
+  before every other step: on its old spot when that is free, else as near it as a site is, banking for it when it can't
+  pay yet (army production spends only what is above its cost). A lost expansion is not rebuilt yet (built in M5-4d
+  slice 2; [03 Implementation (M5-4d slice 2)](03-technical-design.md#implementation-m5-4d-slice-2)).
+- The AI looks before it attacks uphill: a wave whose target stands on higher ground than the army goes first to the
+  top of the ramp nearest the target, onto the target's own plateau, and on to the target once a member is there or the
+  target is in its sight. On level ground, or against a target on the army's own level or below, nothing changes (built
+  in M5-4d slice 2).
 - The build order comes before the army once the army is wave-sized: when a due building, research or
   expansion step can't be paid yet, the AI keeps its cost in reserve (army production and the build order's later unit
   steps spend only what is above it; earlier steps, houses and the defense are unaffected) and moves its gatherers toward

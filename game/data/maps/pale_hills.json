@@ -1,7 +1,7 @@
 {
   "id": "pale_hills",
   "displayName": "Pale Hills",
-  "description": "Four camps in dense hill woods, joined by narrow paths between the trees. Timber is everywhere, gold is scarce beyond the camps, and every path is a place for an ambush.",
+  "description": "Camps in hill woods, linked by paths through rows of trees. A hill stands between each camp and the open center. Timber is everywhere, gold scarce beyond the camps; every path invites an ambush.",
   "players": 4,
   "size": 256,
   "terrain": [

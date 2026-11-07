@@ -35,12 +35,13 @@ internal static class AiScenes
 
     /// <summary>The flat scene (see the type's summary) with <paramref name="data"/> (shipped by default).</summary>
     internal static Simulation Flat(PlayerSeat[] seats, GameData? data = null, int units = 256, int commands = 512, ulong seed = 3,
-        int workers = 5, bool combat = false, bool expansionMine = false, string startingResources = StartingResourcesDef.StandardId)
+        int workers = 5, bool combat = false, bool expansionMine = false, string startingResources = StartingResourcesDef.StandardId,
+        Heightmap? map = null, bool explored = true)
     {
         data ??= TestSim.Data;
         var config = new SimConfig(seed, seats.Length, units, commands)
             { Data = data, Seats = seats.ToImmutableArray(), Combat = combat, StartingResources = startingResources }; // M6-S6 / BUG-1050
-        var sim = new Simulation(config, LocalMovementTests.Flat(FlatSize));
+        var sim = new Simulation(config, map ?? LocalMovementTests.Flat(FlatSize)); // M5-4d slice 2: or a two-level map of the same size
         World w = sim.World;
         int mine = data.FindResource("gold_mine"), tree = data.FindResource("tree");
         for (int p = 0; p < seats.Length; p++)
@@ -67,7 +68,7 @@ internal static class AiScenes
         }
         // An expansion: a mine in the middle, more than 20 cells (the shipped expandHallReach, 40 m) from every hall.
         if (expansionMine) Assert.True(w.Resources.Spawn(mine, 30 * FlatSize + 31, data.Rules.ExpansionMineGold, out _));
-        return TestSim.Explored(sim);
+        return explored ? TestSim.Explored(sim) : sim; // M5-4d slice 2: unexplored for QA's fog oracle, whose node memory starts at tick 0
     }
 
     /// <summary>The shipped data with player faction <paramref name="faction"/>'s ai.json edited by <paramref name="edit"/> (a temp copy, loaded once per call).</summary>

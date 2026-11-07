@@ -28,6 +28,10 @@ namespace Rts.Sim.Ai;
 /// <item><c>build</c> searches round the player's Town Hall (a camp round the known tree nearest it); <c>expand</c> places a
 /// Town Hall round the known gold mine nearest the player's hall with no own or seen hall within
 /// <see cref="AiRulesDef.ExpandReachCells"/>, else waits.</item>
+/// <item>M5-4d slice 2, <b>rebuilding</b> (docs/03 "Implementation (M5-4d slice 2)"): before the steps, a <c>build</c> step
+/// done whose type the player now holds fewer of (sites included) than its done <c>build</c> steps of that type comes due
+/// again, the newest such step a type a think (<see cref="ReopenLost"/>); and with no Town Hall and a worker alive the hall
+/// comes first (<see cref="HallFirst"/>): no step is worked while it is sent, in flight or banked for.</item>
 /// </list>
 /// </remarks>
 internal static class BuildOrderExecutor
@@ -38,6 +42,8 @@ internal static class BuildOrderExecutor
         Blackboard board = ai.Board;
         var steps = ai.Opening.BuildOrder; // M5-8a: the picked opening's
         int slack = ai.Knobs.BuildOrderSlackTicks;
+        ReopenLost(ai); // M5-4d slice 2
+        if (HallFirst(ai)) return;
         bool mayReserve = ai.MayReserve(); // BUG-1021 / BUG-1025: a wave-sized army, the base not defended
         bool pulled = false; // BUG-1050: a time step pulled due early this think
         for (int i = 0; i < steps.Length; i++)
@@ -88,6 +94,110 @@ internal static class BuildOrderExecutor
             if (Act(ai, step, ref pending, ai.ReserveStep >= 0)) ai.ExecutorSent = true;
             else if (ai.NoSiteFound) board.StepNoSiteUntil[i] = ai.Now + NoSiteRetryThinks * ai.ThinkTicks;
         }
+    }
+
+    /// <summary>
+    /// M5-4d slice 2: one pass over the steps counts, per building type, the <c>build</c> steps done and the newest of them;
+    /// one over the census counts the player's buildings of each type (sites included, what the fog grants of its own). A
+    /// type held fewer times than its done steps lost one: its newest done step becomes due again now (<c>StepDone</c> false,
+    /// one accepted command fewer, due at this think less the slack, so it acts at once; the site search, the reserve and
+    /// <see cref="NoSiteRetryThinks"/> as for any step). One step a type a think: a second loss reopens the next one at the next
+    /// think. A House step at the hard cap stays done (D15 C). An <c>expand</c> step is never reopened (a lost expansion is
+    /// not rebuilt yet). Why the newest: the file's earlier steps came first for a reason, so the last one built is the
+    /// least needed of them, and a reopened step later in the file never holds an earlier one's reserve.
+    /// </summary>
+    internal static void ReopenLost(AiPlayer ai)
+    {
+        Blackboard board = ai.Board;
+        var steps = ai.Opening.BuildOrder;
+        int[] done = ai.DoneOfType, newest = ai.NewestDoneStep, held = ai.HeldOfType;
+        int types = ai.Data.Buildings.Length;
+        Array.Clear(done);
+        bool any = false;
+        for (int i = 0; i < steps.Length; i++)
+        {
+            AiStep step = steps[i];
+            if (!board.StepDone[i] || step.Action != AiStepAction.Build || (uint)step.Target >= (uint)types) continue;
+            done[step.Target]++;
+            newest[step.Target] = i;
+            any = true;
+        }
+        if (!any) return;
+        Array.Clear(held);
+        for (int k = 0; k < ai.OwnBuildingCount; k++) held[ai.OwnBuildingTypes[k]]++;
+        bool atCap = ai.View.HalfPopCap >= ai.Data.Rules.HalfPopCap;
+        for (int t = 0; t < types; t++)
+        {
+            if (done[t] <= held[t] || t == ai.HouseType && atCap) continue;
+            int i = newest[t];
+            board.StepDone[i] = false;
+            board.StepQueued[i] = Math.Max(0, board.StepQueued[i] - 1);
+            board.StepDueTick[i] = Math.Max(0, ai.Now - ai.Knobs.BuildOrderSlackTicks); // no slack: due now
+            board.StepPending[i] = default;
+        }
+        // Scratch: left empty between thinks, so a loaded seat equals the saved one with nothing stored (the AIST layout is unchanged).
+        Array.Clear(done);
+        Array.Clear(newest);
+        Array.Clear(held);
+    }
+
+    /// <summary>
+    /// M5-4d slice 2: with no Town Hall (finished or a site) and a worker alive, a Build of the faction's Town Hall comes
+    /// before any step: at the last hall's anchor (<see cref="AiPlayer.LostHallCell"/>) when the player may place it there,
+    /// else by the usual ring search round that anchor's centre (round the player's first building, or its workers'
+    /// centroid, with no anchor remembered). Its command waits to be judged in <see cref="Blackboard.HousePending"/> (one
+    /// base Build at a time, judged as the economy judges a house: a refused anchor gets a retry mark). True (the steps
+    /// wait this think) while it is sent, in flight, or held back only by its cost or by no worker free to build it this
+    /// think: then its cost is the think's reserve (<see cref="AiPlayer.HallReserved"/>), so production spends
+    /// only above it and the gatherers lean to what it lacks. False when there is nothing to rebuild or it can't be built
+    /// for another reason (no site found, its requires, the building store full, a kind it lacks with no node to fill it):
+    /// the steps go on rather than wait for good, and it is tried again at the next think.
+    /// </summary>
+    internal static bool HallFirst(AiPlayer ai)
+    {
+        if (ai.TownHallCell >= 0 || ai.WorkerCount == 0 || ai.TownHallType < 0) return false;
+        Blackboard board = ai.Board;
+        ref PendingOrder pending = ref board.HousePending;
+        if (pending.Kind != PendingKind.None)
+        {
+            if (ai.Now <= pending.AppliesAt) return pending.TypeId == ai.TownHallType; // in flight (a house Build: steps go on)
+            if (!ai.BuildAccepted(pending)) board.MarkBad(pending.TypeId, pending.Cell);
+            pending = default;
+        }
+        int lost = ai.LostHallCell, centre = RebuildCentre(ai, lost);
+        if (centre < 0) return false;
+        BuildingDef d = ai.Data.Buildings[ai.TownHallType];
+        ai.NoSiteFound = false;
+        if (ai.TryBuild(ai.TownHallType, centre, lost, ref pending))
+        {
+            ai.ExecutorSent = true;
+            return true;
+        }
+        if (ai.NoSiteFound || !PlaceableButForCost(ai, ai.TownHallType) || !Fillable(ai, d.CostGold, d.CostWood)) return false;
+        ai.SetHallReserve(d.CostGold, d.CostWood); // short of its cost, or no builder free this think
+        return true;
+    }
+
+    /// <summary>M5-4d slice 2: the cell the hall rebuild searches round: the lost hall's centre, else <see cref="HallCentre"/>, else the workers' centroid's cell.</summary>
+    private static int RebuildCentre(AiPlayer ai, int lost)
+    {
+        BuildingDef d = ai.Data.Buildings[ai.TownHallType];
+        if (lost >= 0) return ai.CentreCellOf(d.FootprintWidth, d.FootprintHeight, lost);
+        int hall = HallCentre(ai);
+        if (hall >= 0) return hall;
+        float x = 0f, y = 0f;
+        int n = 0;
+        for (int k = 0; k < ai.WorkerCount; k++)
+        {
+            if (!ai.View.TryGetUnit(ai.WorkerSlots[k], out SeenUnit u)) continue;
+            x += u.Position.X;
+            y += u.Position.Y;
+            n++;
+        }
+        if (n == 0) return -1;
+        int w = ai.View.MapWidth, h = ai.View.MapHeight;
+        int cx = Math.Clamp((int)(x / n / Map.MapConstants.CellSize), 0, w - 1), cy = Math.Clamp((int)(y / n / Map.MapConstants.CellSize), 0, h - 1);
+        return cy * w + cx;
     }
 
     /// <summary>Thinks a build or expand step waits after its site search found no anchor before it searches again (BUG-0791).</summary>
