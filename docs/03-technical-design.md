@@ -7616,9 +7616,11 @@ internal, shared), one knob. No `Command` kind: the hunt sends `AttackMove` (and
   (`MilitaryManager.HuntPoint`: the grid's cell centres, `ScoutManager.GridPoint`, then its interior corners, then a
   **border ring**, all of `ai.scoutGrid`'s `GridLines`; the hunt's own marks, `HuntVisited`, never the scout's
   `ScoutVisited`): first the unvisited point nearest the members' centroid, which becomes the sweep's origin
-  (`HuntOrigin`), then the unvisited point nearest the last point, distances within a map cell (2 m) of each other being a
-  tie that goes to the point nearer the origin (then list order); with every point visited the marks clear and the sweep
-  starts over. Besides the target, **every unvisited sweep point whose cell the seat's own fog shows visible** at a think
+  (`HuntOrigin`), then the unvisited point nearest the last point, every point within a map cell (2 m) of the least
+  distance being a tie that goes to the point nearer the origin (then list order; QA round 1: against the true least
+  distance, two passes over the points, not a running best that a chain of near-ties could drift up to a few metres
+  farther); with every point visited the marks clear, the pass count (`HuntPass`) goes up and the sweep starts over. The
+  first ring point reached starts the **perimeter leg** (`MilitaryManager.AfterReached`, below). Besides the target, **every unvisited sweep point whose cell the seat's own fog shows visible** at a think
   is visited (`SeenPoints`: the ground there is being looked at, so the army need not walk to it). A sighting forgotten
   restarts the sweep from the members (a new origin). `HuntSweep` is the point's index, -1 while the target is a sighting.
   **Builder's calls, measured:** (1) *the corners.* The brief named the scout's grid points; the centres alone are a cell
@@ -7634,21 +7636,42 @@ internal, shared), one knob. No `Command` kind: the hunt sends `AttackMove` (and
   west to east, its east corner; each cell row's west and east ends; the bottom edge likewise), so the old points keep
   their indices. Each is clamped half a map cell inside the border (`ClampToMap`), so no stat sets where it stands. With
   it every point of the map is within half a cell of a sweep point, the border band as the interior, and each map corner
-  has a point on it. Total `cols x rows + (cols - 1)(rows - 1) + 2 (cols + rows) + 4` (`HuntPoints`; 225 on Pale Hills,
+  has a point on it; but within half a cell (25.6 m) of a point is not within sight (14 m), which is what (5) and (6)
+  fix. Total `cols x rows + (cols - 1)(rows - 1) + 2 (cols + rows) + 4` (`HuntPoints`; 225 on Pale Hills,
   65 on a 256 m map). A ring point on a cliff or in water is reached by the "every member stuck" rule, as an interior
   point is. (3) *the walk.* With the ring, a sweep of a 512 m map is the limit on finishing the match: QA's hidden-worker
   matrix (a human seat's five workers at the four corners and the centre, `Stress/HuntStressTests`) ran past 60:00 on
-  Pale Hills and Vathar Crossing in each of these measured variants: a ring every half cell (80 points on Pale Hills);
+  Pale Hills and Vathar Crossing (before (5)) in each of these measured variants: a ring every half cell (80 points on Pale Hills);
   the least distance from the last point *plus* the distance from the origin as the order (the M5-4d rule; it pulled the
   army back to inner points, 15 s of walking per point on Pale Hills); and no `SeenPoints`. The three changes together
-  end all 24 rows, the slowest at 57:36 (Vathar Crossing, `cadre_rush`), about 13 s of walking per point. Rejected:
+  end all 24 rows, the slowest at 57:36 (Vathar Crossing, `cadre_rush`), about 13 s of walking per point; with (5) the
+  slowest is 35:43 (Pale Hills, `crossbow_push`; Vathar `cadre_rush` 26:55), the corners being found on the leg. Rejected:
   counting the *target* reached as soon as its cell is visible (faster still, but the army re-targeted every few seconds:
   60 orders a minute to 4 members in QA's `AnUnreachableSighting_NeitherSpamsNorFreezesTheHunt`, past its bound of 12
   per member). A single army sweeping a 512 m map still takes about 45 minutes; splitting the army to sweep is a later
   slice's question. (4) *the origin tie-break.* Nearest-to-the-last with list order on ties walked away from where the
   enemy was: on Pale Hills seed 1 the loser's last building stood 50 m from its razed hall and the sweep, on a four-way
   tie, set off for the far edge (no result by 36,000). Broken toward the origin, the sweep starts outward from the razed
-  base and every `MapSlice2StressTests` sweep row and `MapFileTests` new-map row still ends.
+  base and every `MapSlice2StressTests` sweep row and `MapFileTests` new-map row still ends. (5) *the perimeter leg*
+  (BUG-1107, fix round 2). Ring points are a scout cell apart along each edge (51.2 m) and sight is 14 m, so the stretch of
+  edge more than 14 m from both neighbouring ring points is seen only from the edge itself. Nearest-first never walked it:
+  from a ring point the cell centre half a cell inward beats the next ring point a cell along, and each pass took the same
+  route (QA's `HuntSweepWorstPointQaTests`, a human seat's workers on each edge level with a grid line: 11 of 16 rows
+  never ended). So the first ring point the sweep reaches (as its target, by a member within `ai.rallyReach` or the
+  stuck rule) starts a leg: every other ring point in clockwise order (north edge west to east, east edge north to
+  south, south edge east to west, west edge south to north; `MilitaryManager.RingNext`), visited by sight or not, then the
+  first again (`HuntRing`, the next ring point; `HuntRingLeft`, those still to reach); then every ring point counts
+  visited for the pass and nearest-first goes on. One leg a pass. Why visited points too: `SeenPoints` marks a ring
+  point once its cell is seen, and skipping it would skip the edge on either side. A sighting mid-leg keeps it: when the
+  sweep resumes it goes back to the leg's next ring point (Pale Hills `cadre_rush` without that: a sighting 175 m inland
+  mid-leg, and the north edge's east half was never walked). Not tried: ring points every `2 x sight` (about 80 on a
+  512 m map; marked by sight from inland as often as walked to, so the edge between them would still go unwalked). (6) *the odd pass* (fix round 2).
+  The centres and interior corners form a diamond lattice whose holes, the cell edges' midpoints, are half a cell
+  (25.6 m) from four points and 18 m from the diagonal walk between them: QA's interior hide on the generated map
+  (holy_war seed 3, a worker at (50.6, 76.2)) was never seen in three passes. On an odd pass (`HuntPass`) the indices
+  below the ring are those midpoints instead (`(cols - 1) rows` between vertically adjacent corners, then
+  `cols (rows - 1)` between horizontally adjacent centres, one spare index the map's centre: the same count), so
+  every point of the half-cell lattice is walked to or seen within two passes; it ends at 30:46.
 - **Each think of a hunt** (after the wave's retreat and BUG-0598 idle rules, which end it as they end a wave): an enemy
   building known hands back to the wave rule (the known enemy building nearest the members becomes the target, every member
   owed an `AttackMove`, `Hunting` cleared). Else the target is **reached** when a member is within `ai.rallyReach` of it, or
@@ -7666,7 +7689,8 @@ internal, shared), one knob. No `Command` kind: the hunt sends `AttackMove` (and
   **120** (the brief's proposal); 0 is valid (only a sighting from the think itself is fresh). In `ContentHash`
   (`DataContentHashTests` row), `DataValidationTests` rows (missing, negative, over the maximum; 0 and 3,600 load).
 - **Save format 6 / 7.** The hunt's fields (`EnemyUnitPoint`, `EnemyUnitTick`, `Hunting`, `HuntSweep`, `HuntOrigin`,
-  `HuntVisited`, `HuntsStarted`) are written in their own section, `HUNT`, after `AIST`, only for a match with an AI seat: 6 is format 4
+  `HuntVisited`, `HuntRing`, `HuntRingLeft`, `HuntPass`, `HuntsStarted`; the leg's index range-checked and `HuntRing` -1
+  exactly when `HuntRingLeft` is 0) are written in their own section, `HUNT`, after `AIST`, only for a match with an AI seat: 6 is format 4
   plus `HUNT` (a generated map), 7 is format 5 plus `HUNT` (a hand-made map); a human-only match is saved 4 / 5 byte for
   byte as before ("Save format (M6-S2)"; `SaveHeader.VersionFor`). `AIST` keeps format 5's layout, so the M6-S7 fixtures
   still prove the old bytes: a format-6 save with `HUNT` cut out and the version and length put back is the pre-map
@@ -7679,24 +7703,33 @@ internal, shared), one knob. No `Command` kind: the hunt sends `AttackMove` (and
   wave that now turns into one) on. Of the 27 pairings' Age II pins two reach a hunt and were re-printed on the Malazan page
   (`crossbow_push` v `raider_rush` seed 19: "never" to "never (defeated 10:24)"; `crossbow_push` v `standard` seed 32: "never"
   to "never (defeated 14:48)": beaten sides that used to stand at 20:00 are finished off); every other pin, pairing and the
-  golden's `k` lines are unchanged.
+  golden's `k` lines are unchanged. Seed 32 moved with each change to the sweep: 14:57 with the ring and `SeenPoints` (fix
+  round 1), **17:18** with the perimeter leg, the odd pass and the true-least tie (fix round 2: the sweep from the razed
+  base takes a different route).
 - **Measured** (Normal v Normal, Malazan v Whirlwind, starts 0 and 1, to 72,000 ticks, `Stress/MapSlice2StressTests`; at
   e3fd8fb none of these ended): Pale Hills seeds 3, 4 and 6 (one match: a map file draws nothing from the seed but the
-  openings) end at tick 29,421 (24:31), Whirlwind winning after one hunt; seed 5 at 41,337 (34:27), Malazan winning after
-  two hunts (with the centres alone it ran out the hour); the generated map's seed 6 at 26,875 (22:24), Whirlwind after one
+  openings) end at tick 29,421 (24:31), Whirlwind winning after one hunt; seed 5 at 52,557 (43:48), Malazan winning after
+  one hunt (since BUG-1107 fix round 2; 41,337 after two hunts before it; with the centres alone it ran out the hour); the
+  generated map's seed 6 at 26,875 (22:24), Whirlwind after one
   hunt. Seed 2 (both sides keep two halls) is untouched: no hunt starts while an enemy building is known. The rows that
   ended before still end, none of them through a hunt but Pale Hills seed 1, now 34,856 (was 34,175: its last wave, its
-  target razed with one building of the loser's left unseen 50 m off, turns into a hunt, "Implementation (M6-S8)"); Vathar
+  target razed with one building of the loser's left unseen 50 m off, turns into a hunt, "Implementation (M6-S8)"; 35,569
+  since BUG-1107 fix round 2, the sweep taking another route: 431 ticks inside `MapFileTests`' 36,000); Vathar
   Crossing seed 1 and Raraku seed 1 are unchanged (23,219 and 29,001), and so are the M6-S8 sweep rows (Vathar 2-6, Raraku
   2-6, generated 2-5).
 - **Cost.** The census adds one distance compare per enemy unit seen; a hunt's think one pass over its members; a re-target
-  one pass over the sweep points (two at a restart; 41 on the 256 m map at the shipped 56 m, 181 on Pale Hills' 512 m). No
+  two passes over the sweep points (the least distance, then the tie; four at a restart; 65 on the 256 m map at the
+  shipped 56 m, 225 on Pale Hills' 512 m); a leg step none. No
   allocation (`AiPerfTests`, the 1 ms think gate and 0 B a think, unchanged). **Memory:** per AI seat one bool per sweep
-  point (41 B on the 256 m map, 32 KB at the 16 m minimum on a 1,024-cell map) and a few scalars.
+  point (65 B on the 256 m map, 32 KB at the 16 m minimum on a 1,024-cell map) and a few scalars.
 - **Tests.** `Ai/HuntTests` (criterion 3 on the flat scene, combat off, by the command log: a sighting seen then hidden,
   every army unit `AttackMove` to it, none before the first wave; the sweep's order, one `AttackMove` per member per point,
   each point reached within `rallyReach`, a sighting re-targeting it; an enemy building seen ending the hunt and the wave
-  targeting it; the retreat ending a hunt with the cooldown; criterion 4's fog oracle on two generated AI v AI seeds, every
+  targeting it; the retreat ending a hunt with the cooldown; fix round 2: `TheRingOrder_IsClockwiseRoundTheBorder` (`RingNext`
+  against an order derived from the points' positions, square and non-square grids), `TheRingLeg_WalksEveryEdgeInOrder_BackToItsStart`
+  (the targets, the marks after it, a member within half a unit's sight of every edge spot level with a grid line),
+  `ALastUnitOnTheEdge_LevelWithAGridLine_IsSeen` x4 (the east row red with the leg switched off), `AnOddPass_SweepsTheCellEdgesMidpoints`,
+  `TheSweepTie_IsAgainstTheTrueLeastDistance` (4,096 picks against the true-least rule; the old rule differs on 8); criterion 4's fog oracle on two generated AI v AI seeds, every
   think of both seats; criterion 5's save mid-hunt followed 1,000 ticks hash for hash, the seats field for field),
   `Save/SaveRefusalTests` (formats 3-5 with an AI seat refused, with or without `HUNT`; format 6 without it or with a forged
   count `Malformed`; a human seat forged into an AI one is now `FormatVersionMismatch` at format 4, `Malformed` at 6),
@@ -9402,7 +9435,7 @@ with five more stands of trees: 8 ramps, 24 mines, 1,540 trees in 28 forests.
 
 | Map | Result | Waves (Malazan / Whirlwind) | Gathered gold / wood (Malazan v Whirlwind) |
 | --- | --- | --- | --- |
-| Pale Hills | Whirlwind won at 28:28 (34,175 ticks); since M5-4d at 29:02 (34,856: its last wave turns into a hunt) | 7 / 9 (M5-4d: 7 / 8) | 8,880 / 7,720 v 8,840 / 8,520 (M5-4d: 8,840 / 8,740) |
+| Pale Hills | Whirlwind won at 28:28 (34,175 ticks); since M5-4d at 29:02 (34,856: its last wave turns into a hunt), since BUG-1107 fix round 2 at 29:38 (35,569: the hunt's sweep takes another route) | 7 / 9 (M5-4d: 7 / 8) | 8,880 / 7,720 v 8,840 / 8,520 (M5-4d: 8,840 / 8,740; fix round 2: 8,840 / 8,990) |
 | Vathar Crossing | Whirlwind won at 19:20 (23,219 ticks) | 2 / 4 | 2,910 / 1,810 v 6,680 / 4,500 |
 
 What moved on the way (as Raraku's first draft did): Pale Hills' first draft (starts (60, 60), its expansion pair 57 cells out

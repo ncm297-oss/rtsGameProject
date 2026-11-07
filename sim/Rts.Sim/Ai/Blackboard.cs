@@ -255,7 +255,8 @@ internal sealed partial class Blackboard
 
     /// <summary>
     /// Per sweep point, whether this hunt's sweep has visited it: the scout's map-grid cell centres, then the grid's interior
-    /// corners (the scout's geometry, not its visited marks; <c>MilitaryManager.HuntPoint</c>).
+    /// corners (on an odd <see cref="HuntPass"/> the cell edges' midpoints instead), then the border ring (the scout's
+    /// geometry, not its visited marks; <c>MilitaryManager.HuntPoint</c>).
     /// </summary>
     internal bool[] HuntVisited { get; }
 
@@ -264,6 +265,21 @@ internal sealed partial class Blackboard
     /// sent it back to sweeping). The sweep favours points near it (<c>MilitaryManager.NextSweep</c>).
     /// </summary>
     internal Vector2 HuntOrigin;
+
+    /// <summary>
+    /// The border-ring point the hunt's perimeter leg walks to next, -1 while no leg is in progress (BUG-1107 fix round 2,
+    /// <c>MilitaryManager.AfterReached</c>): once the sweep reaches a ring point it walks the whole ring in order.
+    /// </summary>
+    internal int HuntRing = -1;
+
+    /// <summary>Ring points the perimeter leg still has to reach, <see cref="HuntRing"/> included (0 with no leg).</summary>
+    internal int HuntRingLeft;
+
+    /// <summary>
+    /// The sweep's passes completed in this hunt (its marks cleared, <c>MilitaryManager.NextSweep</c>): an odd pass sweeps
+    /// the cell edges' midpoints instead of the centres and interior corners (<c>MilitaryManager.HuntPoint</c>).
+    /// </summary>
+    internal int HuntPass;
 
     /// <summary>Hunts started (tests and tooling; a wave that turns into a hunt counts).</summary>
     internal int HuntsStarted;

@@ -36,11 +36,12 @@ namespace Rts.Sim.Ai;
 /// defended and a wave sent before, the free army goes whatever its size (a wave with no threshold, <see cref="Blackboard.Hunting"/>),
 /// and a wave whose last known target is gone turns into one. Its target is a point: the last enemy unit seen
 /// (<see cref="Blackboard.EnemyUnitPoint"/>) while that sighting is at most <c>ai.huntMemory</c> old, else a sweep of the
-/// scout's map grid (<see cref="HuntPoint"/>: its cell centres, its interior corners and a border ring, the hunt's own
-/// marks), the unvisited point nearest the army first, then the one nearest the last, a tie within a map cell going to the
-/// one nearer where the sweep began (<see cref="NextSweep"/>). A point is reached when a member comes within
-/// <c>ai.rallyReach</c> of it, or every member stands Idle having had <see cref="MaxTries"/> orders toward it without getting
-/// nearer (as close as they get): a sweep point is then visited, a sighting not seen again since is forgotten. Any other
+/// scout's map grid (<see cref="HuntPoint"/>: its cell centres and interior corners, on odd passes the cell edges' midpoints
+/// instead, and a border ring; the hunt's own marks), the unvisited point nearest the army first, then the one nearest the
+/// last, a tie within a map cell of the least distance going to the one nearer where the sweep began
+/// (<see cref="NextSweep"/>); the first ring point reached starts the perimeter leg, the whole ring in order
+/// (<see cref="AfterReached"/>). A point is reached when a member comes within <c>ai.rallyReach</c> of it, or every member
+/// stands Idle having had <see cref="MaxTries"/> orders toward it without getting nearer (as close as they get): a sweep point is then visited, a sighting not seen again since is forgotten. Any other
 /// sweep point the seat sees is visited too (<see cref="SeenPoints"/>). A fresher sighting (more than
 /// <c>ai.rallyReach</c> from the target) re-targets at once. Members are sent <c>AttackMove</c> only. It ends as a wave does
 /// (the retreat, the idle cooldown, the defense); an enemy building coming into view makes it a wave on that building.
@@ -168,16 +169,21 @@ internal static class MilitaryManager
         board.WaveTargetType = board.WaveTargetCell = -1;
         board.WaveMinHalfPop = board.WaveMinCost = 0f;
         Array.Clear(board.HuntVisited);
+        board.HuntRing = -1;
+        board.HuntRingLeft = board.HuntPass = 0;
         board.HuntsStarted++;
         if (Fresh(ai)) HuntTarget(ai, board.EnemyUnitPoint, -1);
         else StartSweep(ai, army);
     }
 
-    /// <summary>M5-4d: the sweep (re)starts from the army at <paramref name="army"/>: its origin, and the point nearest it.</summary>
+    /// <summary>
+    /// M5-4d: the sweep (re)starts from the army at <paramref name="army"/>: its origin, and the point nearest it (BUG-1107
+    /// fix round 2: or the perimeter leg's next ring point while one is in progress).
+    /// </summary>
     private static void StartSweep(AiPlayer ai, Vector2 army)
     {
         ai.Board.HuntOrigin = army;
-        HuntTarget(ai, army, NextSweep(ai, army, -1));
+        HuntTarget(ai, army, ai.Board.HuntRing >= 0 ? ai.Board.HuntRing : NextSweep(ai, army, -1)); // a leg in progress goes on
     }
 
     /// <summary>M5-4d: whether the last enemy unit seen is a sighting the hunt follows: at most <c>ai.huntMemory</c> old.</summary>
@@ -205,32 +211,40 @@ internal static class MilitaryManager
     /// (Pale Hills seed 1: a last building 50 m from the razed hall, the sweep heading for the far edge on a four-way tie).
     /// Why only a tie-break (BUG-1107 fix round 1; before it, the least distance from the last point plus distance from the
     /// origin): that sum pulled the army back to inner points it had left, 15 s of walking per point on Pale Hills, and with
-    /// the border ring a sweep there outlasted the 60-minute match; nearest-first walks 13 s per point. One pass over the
-    /// grid points (two at a restart).
+    /// the border ring a sweep there outlasted the 60-minute match; nearest-first walks 13 s per point. A restart counts the
+    /// pass (<see cref="Blackboard.HuntPass"/>, BUG-1107 fix round 2), so the next pass sweeps the other interior lattice
+    /// (<see cref="HuntPoint"/>). Two passes over the grid points (four at a restart).
     /// </summary>
-    private static int NextSweep(AiPlayer ai, Vector2 from, int skip)
+    internal static int NextSweep(AiPlayer ai, Vector2 from, int skip)
     {
         bool[] visited = ai.Board.HuntVisited;
         int best = NearestUnvisited(ai, visited, from, skip);
         if (best >= 0) return best;
         Array.Clear(visited);
+        ai.Board.HuntPass++; // the other interior lattice (HuntPoint)
         best = NearestUnvisited(ai, visited, from, skip);
         return best >= 0 ? best : 0; // a one-point grid: that point again
     }
 
-    private static int NearestUnvisited(AiPlayer ai, bool[] visited, Vector2 from, int skip)
+    /// <summary>
+    /// The unvisited point (not <paramref name="skip"/>) nearest <paramref name="from"/>, ties (within a map cell of the
+    /// least distance, QA round 1: of the true least, so the pick does not hang on list order) to the one nearer
+    /// <see cref="Blackboard.HuntOrigin"/>, then list order; -1 with none left. Two passes over the points, no allocation.
+    /// </summary>
+    internal static int NearestUnvisited(AiPlayer ai, bool[] visited, Vector2 from, int skip)
     {
         int best = -1, cols = Cols(ai), rows = Rows(ai);
-        float bestDistance = float.MaxValue, bestOrigin = float.MaxValue;
+        float least = float.MaxValue, bestOrigin = float.MaxValue;
+        for (int i = 0; i < visited.Length; i++)
+            if (!visited[i] && i != skip) least = Math.Min(least, Vector2.Distance(from, HuntPoint(ai, cols, rows, i)));
         Vector2 origin = ai.Board.HuntOrigin;
         for (int i = 0; i < visited.Length; i++)
         {
             if (visited[i] || i == skip) continue;
             Vector2 p = HuntPoint(ai, cols, rows, i);
-            float d = Vector2.Distance(from, p), o = Vector2.Distance(origin, p);
-            // Nearer by a map cell or more wins; within a cell it is a tie, and the one nearer the origin wins (list order after).
-            if (d > bestDistance - MapConstants.CellSize && (d >= bestDistance + MapConstants.CellSize || o >= bestOrigin)) continue;
-            bestDistance = d;
+            if (Vector2.Distance(from, p) >= least + MapConstants.CellSize) continue;
+            float o = Vector2.Distance(origin, p);
+            if (o >= bestOrigin) continue;
             bestOrigin = o;
             best = i;
         }
@@ -247,7 +261,8 @@ internal static class MilitaryManager
     /// nearest interior point on Raraku) was never seen. The ring is the four map corners and each edge's points level with
     /// the cell centres, <c>2 (cols + rows) + 4</c> points: with it every point of the map is within half a cell of a sweep
     /// point, the border band as the interior, and a corner on one. Why not every half cell along the border (twice the
-    /// points): measured, a sweep of Pale Hills then outlasted the 60-minute match.
+    /// points): measured, a sweep of Pale Hills then outlasted the 60-minute match (with the old order; the perimeter leg,
+    /// <see cref="AfterReached"/>, is what sees the edge between ring points now). The count is the same on an odd pass.
     /// </summary>
     internal static int HuntPoints(int cols, int rows) => cols * rows + (cols - 1) * (rows - 1) + 2 * (cols + rows) + 4;
 
@@ -261,13 +276,27 @@ internal static class MilitaryManager
     /// then the grid's interior corners in row order, then (BUG-1107) the border ring in row order: the top edge's west corner,
     /// its points level with the cell centres west to east, its east corner; each cell row's west and east ends; the bottom
     /// edge likewise. Clamping puts a ring point half a map cell inside the border, so no stat sets where it stands.
-    /// Allocates nothing.
+    /// BUG-1107 fix round 2: on an odd pass (<see cref="Blackboard.HuntPass"/>) the indices below the ring are the cell
+    /// edges' midpoints instead, the spots half a cell from four even-pass points (QA's interior hide, 25 m from every
+    /// point and passed 18 m off by the diagonal walk between them, was never seen on the generated map); the two passes
+    /// together are every point of the half-cell lattice. Allocates nothing.
     /// </summary>
     internal static Vector2 HuntPoint(AiPlayer ai, int cols, int rows, int k)
     {
         int centres = cols * rows, corners = (cols - 1) * (rows - 1);
-        if (k < centres) return ScoutManager.GridPoint(ai, Blackboard.ScoutHead + k);
         Vector2 size = ai.MapSize;
+        if (k < centres + corners && ai.Board.HuntPass % 2 == 1)
+        {
+            // BUG-1107 fix round 2, an odd pass: the cell edges' midpoints, the west / east edges' (between vertically
+            // adjacent corners) in row order, then the north / south edges' (between horizontally adjacent centres); one
+            // index more than they need is the map's centre.
+            int vertical = (cols - 1) * rows, j = k;
+            if (j < vertical) return ai.ClampToMap(new Vector2((j % (cols - 1) + 1) * size.X / cols, (j / (cols - 1) + 0.5f) * size.Y / rows));
+            j -= vertical;
+            if (j < cols * (rows - 1)) return ai.ClampToMap(new Vector2((j % cols + 0.5f) * size.X / cols, (j / cols + 1) * size.Y / rows));
+            return ai.ClampToMap(size * 0.5f);
+        }
+        if (k < centres) return ScoutManager.GridPoint(ai, Blackboard.ScoutHead + k);
         if (k < centres + corners)
         {
             int j = k - centres, x = j % (cols - 1), y = j / (cols - 1);
@@ -307,7 +336,8 @@ internal static class MilitaryManager
         {
             // Back to the wave rule: the hunt's members attack the building (no start threshold to keep: the defense may still pull any).
             board.Hunting = false;
-            board.HuntSweep = -1;
+            board.HuntSweep = board.HuntRing = -1;
+            board.HuntRingLeft = 0;
             SetTarget(ai, target, type, cell);
             for (int k = 0; k < ai.ArmyCount; k++)
                 if (Member(ai, ai.ArmySlots[k], out _)) board.WaveFlag[ai.ArmySlots[k]] = ToAttack;
@@ -346,7 +376,61 @@ internal static class MilitaryManager
             return;
         }
         if (board.HuntSweep < 0) StartSweep(ai, army); // a sighting forgotten (or none): sweep from here
-        else if (next) HuntTarget(ai, board.WaveTargetPoint, NextSweep(ai, board.WaveTargetPoint, board.HuntSweep));
+        else if (next) HuntTarget(ai, board.WaveTargetPoint, AfterReached(ai, board.HuntSweep));
+    }
+
+    /// <summary>
+    /// M5-4d (BUG-1107 fix round 2): the sweep point after <paramref name="reached"/> (just visited). Reaching a border-ring
+    /// point with no leg in progress starts the <b>perimeter leg</b>: every other ring point in clockwise order, visited or
+    /// not, then this one again (<see cref="Blackboard.HuntRing"/>, <see cref="Blackboard.HuntRingLeft"/>); then every ring
+    /// point counts visited for this pass and the sweep goes on nearest-first (<see cref="NextSweep"/>). Why: ring points are
+    /// a scout cell apart (51 m) and sight is 14 m, so an edge spot level with a grid line is seen only from the edge between
+    /// its two ring points. Nearest-first never walked it: from a ring point the cell centre half a cell inward beats the
+    /// next ring point a cell along, and each pass took the same route (QA's worst-point hides, 11 of 16 never found).
+    /// Walking the ring in order traces every edge once a pass. Why visited points too: <see cref="SeenPoints"/> marks a ring
+    /// point once its cell is seen, and skipping it would skip the edge on either side. A leg interrupted by a sighting is
+    /// picked up where it stopped (<see cref="StartSweep"/>), else the edge past the sighting went unwalked (Pale Hills
+    /// <c>cadre_rush</c>: a sighting 175 m inland mid-leg, the north edge's east half never walked).
+    /// </summary>
+    private static int AfterReached(AiPlayer ai, int reached)
+    {
+        Blackboard board = ai.Board;
+        int cols = Cols(ai), rows = Rows(ai), ring = RingStart(cols, rows);
+        if (board.HuntRing >= 0)
+        {
+            if (reached != board.HuntRing) return board.HuntRing; // not a leg step: back to the leg
+            if (--board.HuntRingLeft > 0) return board.HuntRing = RingNext(cols, rows, reached);
+            board.HuntRing = -1; // round the ring: one leg a pass
+            for (int i = ring; i < board.HuntVisited.Length; i++) board.HuntVisited[i] = true;
+        }
+        else if (reached >= ring)
+        {
+            board.HuntRingLeft = board.HuntVisited.Length - ring;
+            return board.HuntRing = RingNext(cols, rows, reached);
+        }
+        return NextSweep(ai, HuntPoint(ai, cols, rows, reached), reached);
+    }
+
+    /// <summary>M5-4d: the index of the first border-ring point (after the cell centres and the interior corners).</summary>
+    internal static int RingStart(int cols, int rows) => cols * rows + (cols - 1) * (rows - 1);
+
+    /// <summary>
+    /// M5-4d (BUG-1107 fix round 2): the ring point after ring point <paramref name="k"/> going clockwise round the map
+    /// (north edge west to east, east edge north to south, south edge east to west, west edge south to north), in
+    /// <see cref="HuntPoint"/>'s numbering.
+    /// </summary>
+    internal static int RingNext(int cols, int rows, int k)
+    {
+        int ring = RingStart(cols, rows), r = k - ring, across = cols + 2, bottom = across + 2 * rows, next;
+        if (r < across) next = r < across - 1 ? r + 1 : across + 1;                     // north edge; its east corner turns south
+        else if (r >= bottom) next = r > bottom ? r - 1 : across + 2 * (rows - 1);      // south edge; its west corner turns north
+        else
+        {
+            int side = r - across, row = side / 2;
+            if (side % 2 == 1) next = row < rows - 1 ? across + 2 * (row + 1) + 1 : bottom + across - 1; // east edge, down
+            else next = row > 0 ? across + 2 * (row - 1) : 0;                                             // west edge, up
+        }
+        return ring + next;
     }
 
     /// <summary>
@@ -427,7 +511,8 @@ internal static class MilitaryManager
             if (Member(ai, ai.ArmySlots[k], out _)) board.WaveFlag[ai.ArmySlots[k]] = ToRally;
         board.WaveActive = false;
         board.Hunting = false;
-        board.HuntSweep = -1;
+        board.HuntSweep = board.HuntRing = -1;
+        board.HuntRingLeft = 0;
     }
 
     private static void SetTarget(AiPlayer ai, EntityHandle target, int type, int cell)

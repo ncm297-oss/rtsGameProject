@@ -220,7 +220,7 @@ internal sealed partial class Blackboard
     }
 
     /// <summary>
-    /// M5-4d: writes the hunt's fields (the last enemy unit seen, the hunt flag, the sweep, its origin and marks, the count) for the
+    /// M5-4d: writes the hunt's fields (the last enemy unit seen, the hunt flag, the sweep, its origin, marks, perimeter leg and passes, the count) for the
     /// save's <c>HUNT</c> section (formats 6 and 7). Kept out of <see cref="WriteTo"/> so the <c>AIST</c> layout is format 5's
     /// byte for byte, and a format-6 save is a format-4 one plus this section.
     /// </summary>
@@ -232,6 +232,9 @@ internal sealed partial class Blackboard
         w.Write(HuntSweep);
         w.Write(HuntOrigin);
         w.WriteArray(HuntVisited);
+        w.Write(HuntRing);
+        w.Write(HuntRingLeft);
+        w.Write(HuntPass);
         w.Write(HuntsStarted);
     }
 
@@ -244,6 +247,10 @@ internal sealed partial class Blackboard
         HuntSweep = r.ReadInt32In(-1, HuntVisited.Length - 1);
         HuntOrigin = r.ReadVector2();
         r.ReadBools(HuntVisited);
+        HuntRing = r.ReadInt32In(-1, HuntVisited.Length - 1);
+        HuntRingLeft = r.ReadInt32In(0, HuntVisited.Length);
+        r.Check((HuntRing < 0) == (HuntRingLeft == 0));
+        HuntPass = r.ReadInt32In(0, int.MaxValue);
         HuntsStarted = r.ReadInt32();
         r.Check(!Hunting || WaveActive);
     }
