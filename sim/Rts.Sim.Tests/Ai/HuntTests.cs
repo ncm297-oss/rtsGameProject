@@ -56,30 +56,82 @@ public class HuntTests
 
     /// <summary>
     /// The sweep's points, written out again from the map size and <c>ai.scoutGrid</c>: the grid's cell centres in row order,
-    /// then its interior corners in row order.
+    /// then its interior corners in row order, then (BUG-1107) the border ring in row order (the top edge's two corners and its
+    /// cell centres, each cell row's west and east ends, the bottom edge likewise), half a map cell inside the border.
     /// </summary>
     private static Vector2[] GridPoints(Simulation sim)
     {
-        float size = AiScenes.FlatSize * MapConstants.CellSize;
+        float size = AiScenes.FlatSize * MapConstants.CellSize, m = MapConstants.CellSize * 0.5f, half;
         int lines = (int)MathF.Ceiling(size / sim.AiOf(0)!.Rules.ScoutGrid), inner = lines - 1;
-        var points = new Vector2[lines * lines + inner * inner];
+        half = size / (2 * lines);
+        var points = new List<Vector2>();
         for (int k = 0; k < lines * lines; k++)
-            points[k] = new Vector2((k % lines + 0.5f) * size / lines, (k / lines + 0.5f) * size / lines);
+            points.Add(new Vector2((k % lines + 0.5f) * size / lines, (k / lines + 0.5f) * size / lines));
         for (int j = 0; j < inner * inner; j++)
-            points[lines * lines + j] = new Vector2((j % inner + 1) * size / lines, (j / inner + 1) * size / lines);
-        return points;
+            points.Add(new Vector2((j % inner + 1) * size / lines, (j / inner + 1) * size / lines));
+        Vector2 Ring(int hx, int hy) => Vector2.Clamp(new Vector2(hx * half, hy * half), new Vector2(m), new Vector2(size - m));
+        foreach (int edge in new[] { 0, 2 * lines })
+        {
+            if (edge > 0)
+                for (int hy = 1; hy < 2 * lines; hy += 2)
+                {
+                    points.Add(Ring(0, hy));
+                    points.Add(Ring(2 * lines, hy));
+                }
+            points.Add(Ring(0, edge));
+            for (int hx = 1; hx < 2 * lines; hx += 2) points.Add(Ring(hx, edge));
+            points.Add(Ring(2 * lines, edge));
+        }
+        return points.ToArray();
     }
 
-    /// <summary>The sweep's rule written out again: the unvisited point with the least distance from <paramref name="from"/> plus distance from <paramref name="origin"/> (list order on ties).</summary>
+    /// <summary>
+    /// BUG-1107: the sweep's points are the list <see cref="GridPoints"/> writes out (count and order), and every cell of the
+    /// map, the border band and the corners included, lies within half a scout cell of one (plus a map cell of slack for the
+    /// clamp and the cell centre), and each corner cell within a map cell of one. Before the ring a corner cell was half a
+    /// cell's diagonal (30 m on this map) from any point.
+    /// </summary>
+    [Fact]
+    public void TheSweepPoints_CoverTheBorderBandAndTheCorners()
+    {
+        Simulation sim = Scene();
+        AiPlayer ai = sim.AiOf(0)!;
+        Vector2[] expected = GridPoints(sim);
+        int cols = ScoutManager.GridLines(AiScenes.FlatSize, ai.Rules.ScoutGrid);
+        Assert.Equal(expected.Length, MilitaryManager.HuntPoints(cols, cols));
+        Assert.Equal(expected.Length, ai.Board.HuntVisited.Length);
+        for (int k = 0; k < expected.Length; k++)
+            Assert.True(Vector2.Distance(expected[k], MilitaryManager.HuntPoint(ai, cols, cols, k)) < 1e-3f, $"point {k}");
+        float cell = AiScenes.FlatSize * MapConstants.CellSize / cols;
+        for (int y = 0; y < AiScenes.FlatSize; y++)
+            for (int x = 0; x < AiScenes.FlatSize; x++)
+            {
+                Vector2 at = sim.World.NavGrid.CellCenter(x, y);
+                float best = float.MaxValue;
+                for (int k = 0; k < expected.Length; k++) best = Math.Min(best, Vector2.Distance(at, expected[k]));
+                bool corner = (x == 0 || x == AiScenes.FlatSize - 1) && (y == 0 || y == AiScenes.FlatSize - 1);
+                float limit = corner ? MapConstants.CellSize : cell * 0.5f + MapConstants.CellSize;
+                Assert.True(best <= limit, $"cell ({x}, {y}) is {best:F1} m from the nearest sweep point (limit {limit:F1})");
+            }
+    }
+
+    /// <summary>
+    /// The sweep's rule written out again: the unvisited point nearest <paramref name="from"/>; points within a map cell of
+    /// each other in that distance tie, and the one nearer <paramref name="origin"/> wins (list order after).
+    /// </summary>
     private static int Next(Vector2[] points, bool[] visited, Vector2 from, Vector2 origin)
     {
         int best = -1;
-        float bestCost = float.MaxValue;
+        float bestDistance = float.MaxValue, bestOrigin = float.MaxValue;
         for (int k = 0; k < points.Length; k++)
         {
-            float cost = Vector2.Distance(from, points[k]) + Vector2.Distance(origin, points[k]);
-            if (visited[k] || cost >= bestCost) continue;
-            bestCost = cost;
+            if (visited[k]) continue;
+            float d = Vector2.Distance(from, points[k]), o = Vector2.Distance(origin, points[k]);
+            bool nearer = d <= bestDistance - MapConstants.CellSize;
+            bool tieNearerOrigin = Math.Abs(d - bestDistance) < MapConstants.CellSize && o < bestOrigin;
+            if (!nearer && !tieNearerOrigin) continue;
+            bestDistance = d;
+            bestOrigin = o;
             best = k;
         }
         return best;
@@ -167,9 +219,23 @@ public class HuntTests
                 Assert.Equal(army.OrderBy(h => h.Index), orders.Select(c => c.Unit));
                 Assert.All(orders, c => Assert.True(c.Kind == CommandKind.AttackMove && c.Position == grid[target]));
                 visited[target] = true;
-                expected.Add(Next(grid, visited, grid[target], origin));
             }
             NextThink(sim);
+            // BUG-1107 fix: a point other than the target whose cell the seat's fog shows visible this think is visited too.
+            var view = new PlayerView(sim.World, 0);
+            for (int k = 0; k < grid.Length; k++)
+            {
+                if (visited[k] || k == target) continue;
+                int cell = (int)(grid[k].Y / MapConstants.CellSize) * AiScenes.FlatSize + (int)(grid[k].X / MapConstants.CellSize);
+                if (view.IsVisible(cell)) visited[k] = true;
+            }
+            Assert.True(ai.Board.HuntSweep == target || visited.SequenceEqual(ai.Board.HuntVisited.Select((v, k) => v || k == target)),
+                $"tick {sim.TickNumber}: the AI's marks differ from the visible points plus the targets");
+            if (ai.Board.HuntSweep != target)
+            {
+                var before = (bool[])visited.Clone();
+                expected.Add(Next(grid, before, grid[target], origin));
+            }
             if (ai.Board.HuntSweep != target)
                 Assert.Contains(army, h => Vector2.Distance(sim.World.Units.Position[h.Index], grid[target]) <= reach + 0.5f);
         }

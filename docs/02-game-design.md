@@ -426,8 +426,8 @@ own cues (select, order, refused, building placed or finished, unit or tech read
 - The AI finishes the match: once it knows no enemy building (every one razed, or out of sight with nothing left of it in
   its memory of the map) and has sent at least one wave, it **hunts** with its whole army, whatever its size. The army goes to
   where the AI last saw an enemy unit (a worker counts) if that was at most `rules.json` `ai.huntMemory` (120 s) ago, else
-  it sweeps the map (the centres and the corners of the scout's grid, from the point nearest the army outward, point to
-  point), and turns at once toward any enemy unit it sees. A hunt ends like a wave (heavy losses, nobody busy for a while,
+  it sweeps the map (the centres and the corners of the scout's grid plus the map's edges and corners, from the point
+  nearest the army, then always the nearest one not yet walked to or seen), and turns at once toward any enemy unit it sees. A hunt ends like a wave (heavy losses, nobody busy for a while,
   a raid at home), and becomes a wave again on the first enemy building it finds. So a beaten side's last unit hiding in
   the woods is found, and AI-against-AI matches end (built in M5-4d, BUG-1068;
   [03 Implementation (M5-4d)](03-technical-design.md#implementation-m5-4d)).

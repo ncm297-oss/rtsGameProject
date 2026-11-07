@@ -3,6 +3,7 @@ using System.Numerics;
 using Rts.Sim.Commands;
 using Rts.Sim.Data;
 using Rts.Sim.Entities;
+using Rts.Sim.Map;
 
 namespace Rts.Sim.Ai;
 
@@ -35,11 +36,12 @@ namespace Rts.Sim.Ai;
 /// defended and a wave sent before, the free army goes whatever its size (a wave with no threshold, <see cref="Blackboard.Hunting"/>),
 /// and a wave whose last known target is gone turns into one. Its target is a point: the last enemy unit seen
 /// (<see cref="Blackboard.EnemyUnitPoint"/>) while that sighting is at most <c>ai.huntMemory</c> old, else a sweep of the
-/// scout's map grid (<see cref="HuntPoint"/>: its cell centres and its interior corners, the hunt's own marks), the point
-/// nearest the army first, then the unvisited one with the least distance from the last plus distance from where the sweep
-/// began (<see cref="NextSweep"/>). A point is reached when a member comes within <c>ai.rallyReach</c> of it, or every
-/// member stands Idle having had <see cref="MaxTries"/> orders toward it without getting nearer (as close as they get):
-/// a sweep point is then visited, a sighting not seen again since is forgotten. A fresher sighting (more than
+/// scout's map grid (<see cref="HuntPoint"/>: its cell centres, its interior corners and a border ring, the hunt's own
+/// marks), the unvisited point nearest the army first, then the one nearest the last, a tie within a map cell going to the
+/// one nearer where the sweep began (<see cref="NextSweep"/>). A point is reached when a member comes within
+/// <c>ai.rallyReach</c> of it, or every member stands Idle having had <see cref="MaxTries"/> orders toward it without getting
+/// nearer (as close as they get): a sweep point is then visited, a sighting not seen again since is forgotten. Any other
+/// sweep point the seat sees is visited too (<see cref="SeenPoints"/>). A fresher sighting (more than
 /// <c>ai.rallyReach</c> from the target) re-targets at once. Members are sent <c>AttackMove</c> only. It ends as a wave does
 /// (the retreat, the idle cooldown, the defense); an enemy building coming into view makes it a wave on that building.
 /// </para>
@@ -196,12 +198,15 @@ internal static class MilitaryManager
     }
 
     /// <summary>
-    /// M5-4d: the next sweep point: the unvisited one with the least distance from <paramref name="from"/> (the last point,
-    /// or the army) plus distance from <see cref="Blackboard.HuntOrigin"/>, never <paramref name="skip"/> (list order on ties);
-    /// once all are visited the marks clear and the sweep starts over. Why the origin term: nearest-first alone walked
-    /// straight away from where the enemy was last (Pale Hills seed 1: a last building 50 m from the razed hall, the sweep
-    /// heading for the far edge on a tie); with it the sweep spreads outward from there, still walking point to point.
-    /// One pass over the grid points (two at a restart).
+    /// M5-4d: the next sweep point: the unvisited one nearest <paramref name="from"/> (the last point, or the army), never
+    /// <paramref name="skip"/>; distances within a map cell of each other tie, and the tie goes to the point nearer
+    /// <see cref="Blackboard.HuntOrigin"/> (then list order); once all are visited the marks clear and the sweep starts over.
+    /// Why the origin tie-break: nearest-first with list order on ties walked straight away from where the enemy was last
+    /// (Pale Hills seed 1: a last building 50 m from the razed hall, the sweep heading for the far edge on a four-way tie).
+    /// Why only a tie-break (BUG-1107 fix round 1; before it, the least distance from the last point plus distance from the
+    /// origin): that sum pulled the army back to inner points it had left, 15 s of walking per point on Pale Hills, and with
+    /// the border ring a sweep there outlasted the 60-minute match; nearest-first walks 13 s per point. One pass over the
+    /// grid points (two at a restart).
     /// </summary>
     private static int NextSweep(AiPlayer ai, Vector2 from, int skip)
     {
@@ -216,15 +221,17 @@ internal static class MilitaryManager
     private static int NearestUnvisited(AiPlayer ai, bool[] visited, Vector2 from, int skip)
     {
         int best = -1, cols = Cols(ai), rows = Rows(ai);
-        float bestDistance = float.MaxValue;
+        float bestDistance = float.MaxValue, bestOrigin = float.MaxValue;
         Vector2 origin = ai.Board.HuntOrigin;
         for (int i = 0; i < visited.Length; i++)
         {
             if (visited[i] || i == skip) continue;
             Vector2 p = HuntPoint(ai, cols, rows, i);
-            float d = Vector2.Distance(from, p) + Vector2.Distance(origin, p);
-            if (d >= bestDistance) continue;
+            float d = Vector2.Distance(from, p), o = Vector2.Distance(origin, p);
+            // Nearer by a map cell or more wins; within a cell it is a tie, and the one nearer the origin wins (list order after).
+            if (d > bestDistance - MapConstants.CellSize && (d >= bestDistance + MapConstants.CellSize || o >= bestOrigin)) continue;
             bestDistance = d;
+            bestOrigin = o;
             best = i;
         }
         return best;
@@ -232,12 +239,17 @@ internal static class MilitaryManager
 
     /// <summary>
     /// M5-4d: how many sweep points a <paramref name="cols"/> x <paramref name="rows"/> scout grid gives the hunt: its cell
-    /// centres, then its interior corners. Why the corners too: the centres alone are a cell apart (51 m on Pale Hills at the
-    /// shipped <c>ai.scoutGrid</c>), past a unit's sight (14 m), and a side's last units standing 29-35 m from the nearest
-    /// centre were missed for 40,000 ticks (seed 5). Centres alone leave ground half a cell's diagonal from any point (36 m
-    /// there); with the corners, at most half a cell (25.6 m).
+    /// centres, then its interior corners, then the border ring. Why the corners too: the centres alone are a cell apart
+    /// (51 m on Pale Hills at the shipped <c>ai.scoutGrid</c>), past a unit's sight (14 m), and a side's last units standing
+    /// 29-35 m from the nearest centre were missed for 40,000 ticks (seed 5). Centres alone leave ground half a cell's
+    /// diagonal from any point (36 m there); with the corners, at most half a cell (25.6 m) inside the interior. Why the ring
+    /// (BUG-1107): nothing else lies near the map's border, and a last unit by an edge or in a corner (29-30 m from the
+    /// nearest interior point on Raraku) was never seen. The ring is the four map corners and each edge's points level with
+    /// the cell centres, <c>2 (cols + rows) + 4</c> points: with it every point of the map is within half a cell of a sweep
+    /// point, the border band as the interior, and a corner on one. Why not every half cell along the border (twice the
+    /// points): measured, a sweep of Pale Hills then outlasted the 60-minute match.
     /// </summary>
-    internal static int HuntPoints(int cols, int rows) => cols * rows + (cols - 1) * (rows - 1);
+    internal static int HuntPoints(int cols, int rows) => cols * rows + (cols - 1) * (rows - 1) + 2 * (cols + rows) + 4;
 
     private static int Cols(AiPlayer ai) => ScoutManager.GridLines(ai.View.MapWidth, ai.Rules.ScoutGrid);
 
@@ -246,15 +258,36 @@ internal static class MilitaryManager
     /// <summary>
     /// M5-4d: sweep point <paramref name="k"/> of a <paramref name="cols"/> x <paramref name="rows"/> grid, clamped inside the
     /// map: below <c>cols x rows</c> the scout's grid point (<see cref="ScoutManager.GridPoint"/>'s cell centre, row order),
-    /// past it the grid's interior corners in row order.
+    /// then the grid's interior corners in row order, then (BUG-1107) the border ring in row order: the top edge's west corner,
+    /// its points level with the cell centres west to east, its east corner; each cell row's west and east ends; the bottom
+    /// edge likewise. Clamping puts a ring point half a map cell inside the border, so no stat sets where it stands.
+    /// Allocates nothing.
     /// </summary>
     internal static Vector2 HuntPoint(AiPlayer ai, int cols, int rows, int k)
     {
-        int centres = cols * rows;
+        int centres = cols * rows, corners = (cols - 1) * (rows - 1);
         if (k < centres) return ScoutManager.GridPoint(ai, Blackboard.ScoutHead + k);
         Vector2 size = ai.MapSize;
-        int j = k - centres, x = j % (cols - 1), y = j / (cols - 1);
-        return ai.ClampToMap(new Vector2((x + 1) * size.X / cols, (y + 1) * size.Y / rows));
+        if (k < centres + corners)
+        {
+            int j = k - centres, x = j % (cols - 1), y = j / (cols - 1);
+            return ai.ClampToMap(new Vector2((x + 1) * size.X / cols, (y + 1) * size.Y / rows));
+        }
+        // The ring, on the lattice of half cells (hx in 0..2 cols, hy in 0..2 rows): an edge's corners and its odd half cells.
+        int r = k - centres - corners, across = cols + 2, hx, hy;
+        if (r < across || r >= across + 2 * rows)
+        {
+            int j = r < across ? r : r - across - 2 * rows;
+            hx = j == 0 ? 0 : j == across - 1 ? 2 * cols : 2 * j - 1;
+            hy = r < across ? 0 : 2 * rows;
+        }
+        else
+        {
+            int side = r - across;
+            hx = side % 2 == 0 ? 0 : 2 * cols;
+            hy = 2 * (side / 2) + 1;
+        }
+        return ai.ClampToMap(new Vector2(hx * size.X / (2 * cols), hy * size.Y / (2 * rows)));
     }
 
     /// <summary>
@@ -291,6 +324,7 @@ internal static class MilitaryManager
             if (u.State != UnitState.Idle || ai.OrderedNotApplied(slot, u.Handle.Generation) || board.WaveFlag[slot] == ToAttack
                 || board.WaveTries[slot] < MaxTries) stuck = false;
         }
+        if (board.HuntSweep >= 0) SeenPoints(ai);
         bool next = false;
         if (reached || stuck)
         {
@@ -313,6 +347,29 @@ internal static class MilitaryManager
         }
         if (board.HuntSweep < 0) StartSweep(ai, army); // a sighting forgotten (or none): sweep from here
         else if (next) HuntTarget(ai, board.WaveTargetPoint, NextSweep(ai, board.WaveTargetPoint, board.HuntSweep));
+    }
+
+    /// <summary>
+    /// M5-4d (BUG-1107, fix round 1): every unvisited sweep point other than the target whose cell the seat's own fog shows
+    /// visible this think is visited too: the ground there is being looked at, so the army need not walk to it. Why: with
+    /// the border ring a pass over Pale Hills' grid outlasted the 60-minute match, the army walking to points its members'
+    /// sight had already swept on the way to others. The target keeps its own rule (a member within
+    /// <c>ai.rallyReach</c>, or every member stuck), so each point the army aims at it walks right up to; counting the target
+    /// reached once visible was measured and rejected (the army re-targeted every few seconds, past QA's order bound).
+    /// Reads only the seat's <see cref="PlayerView"/>; allocates nothing.
+    /// </summary>
+    private static void SeenPoints(AiPlayer ai)
+    {
+        Blackboard board = ai.Board;
+        bool[] visited = board.HuntVisited;
+        int cols = Cols(ai), rows = Rows(ai), width = ai.View.MapWidth, height = ai.View.MapHeight;
+        for (int i = 0; i < visited.Length; i++)
+        {
+            if (visited[i] || i == board.HuntSweep) continue;
+            Vector2 p = HuntPoint(ai, cols, rows, i);
+            int x = Math.Clamp((int)(p.X / MapConstants.CellSize), 0, width - 1), y = Math.Clamp((int)(p.Y / MapConstants.CellSize), 0, height - 1);
+            if (ai.View.IsVisible(y * width + x)) visited[i] = true;
+        }
     }
 
     private static void Wave(AiPlayer ai)

@@ -7613,20 +7613,42 @@ internal, shared), one knob. No `Command` kind: the hunt sends `AttackMove` (and
   no trip home), unless the base is defended or the match is over (then it ends, as before). `HuntsStarted` counts both.
 - **The target**, a point (`WaveTargetPoint`; `WaveTarget` none, `WaveTargetType` -1): the remembered point while it is
   fresh (`Now - EnemyUnitTick <= ai.huntMemory`, 120 s), else a **sweep** of the scout's map-grid geometry
-  (`MilitaryManager.HuntPoint`: the grid's cell centres, `ScoutManager.GridPoint`, then its interior corners, both of
-  `ai.scoutGrid`'s `GridLines`; the hunt's own marks, `HuntVisited`, never the scout's `ScoutVisited`): first the point
-  nearest the members' centroid, which becomes the sweep's origin (`HuntOrigin`), then the unvisited point with the least
-  distance from the last point plus distance from the origin (list order on ties); with every point visited the marks
-  clear and the sweep starts over. A sighting forgotten restarts the sweep from the members (a new origin). `HuntSweep` is
-  the point's index, -1 while the target is a sighting. **Builder's calls, measured:** (1) *the corners.* The brief named
-  the scout's grid points; the centres alone are a cell apart (51.2 m on Pale Hills' 10 x 10 grid), far past a unit's
-  sight (14 m): centres alone leave ground half a cell's diagonal (36 m there) from every point, with the interior corners
-  (81 more there) at most half a cell (25.6 m). Pale Hills seed 5 with centres alone ran to 72,000 ticks with the loser's
-  last six workers idle by a forest 29-35 m from the nearest centre, every centre visited, that ground never explored;
-  with the corners it ends. (2) *the origin term.* Nearest-to-the-last alone walked away from where the enemy was: on
-  Pale Hills seed 1 the loser's last building stood 50 m from its razed hall and the sweep, on a four-way tie, set off for
-  the far edge (no result by 36,000); weighted by the distance from the origin the sweep spreads outward from the razed
-  base, still walking point to point, and seed 1 ends at 34,856.
+  (`MilitaryManager.HuntPoint`: the grid's cell centres, `ScoutManager.GridPoint`, then its interior corners, then a
+  **border ring**, all of `ai.scoutGrid`'s `GridLines`; the hunt's own marks, `HuntVisited`, never the scout's
+  `ScoutVisited`): first the unvisited point nearest the members' centroid, which becomes the sweep's origin
+  (`HuntOrigin`), then the unvisited point nearest the last point, distances within a map cell (2 m) of each other being a
+  tie that goes to the point nearer the origin (then list order); with every point visited the marks clear and the sweep
+  starts over. Besides the target, **every unvisited sweep point whose cell the seat's own fog shows visible** at a think
+  is visited (`SeenPoints`: the ground there is being looked at, so the army need not walk to it). A sighting forgotten
+  restarts the sweep from the members (a new origin). `HuntSweep` is the point's index, -1 while the target is a sighting.
+  **Builder's calls, measured:** (1) *the corners.* The brief named the scout's grid points; the centres alone are a cell
+  apart (51.2 m on Pale Hills' 10 x 10 grid), far past a unit's sight (14 m): centres alone leave ground half a cell's
+  diagonal (36 m there) from every point, with the interior corners (81 more there) at most half a cell (25.6 m) inside
+  the interior. Pale Hills seed 5 with centres alone ran to 72,000 ticks with the loser's last six workers idle by a
+  forest 29-35 m from the nearest centre, every centre visited, that ground never explored; with the corners it ends.
+  (2) *the border ring* (BUG-1107, fix round 1). Centres and interior corners leave the band along the map's border half a
+  cell from any point along an edge and half a cell's diagonal (36 m) in a corner, so a last unit by an edge or in a
+  corner was never seen (Raraku: four corner workers 29.6-30.5 m from the nearest point, no result by 60:00). The ring is
+  the four map corners and, on each edge, the points level with the cell centres: `2 (cols + rows) + 4` points (44 on
+  Pale Hills, 24 on a 256 m map), listed after the interior corners in row order (the top edge's west corner, its points
+  west to east, its east corner; each cell row's west and east ends; the bottom edge likewise), so the old points keep
+  their indices. Each is clamped half a map cell inside the border (`ClampToMap`), so no stat sets where it stands. With
+  it every point of the map is within half a cell of a sweep point, the border band as the interior, and each map corner
+  has a point on it. Total `cols x rows + (cols - 1)(rows - 1) + 2 (cols + rows) + 4` (`HuntPoints`; 225 on Pale Hills,
+  65 on a 256 m map). A ring point on a cliff or in water is reached by the "every member stuck" rule, as an interior
+  point is. (3) *the walk.* With the ring, a sweep of a 512 m map is the limit on finishing the match: QA's hidden-worker
+  matrix (a human seat's five workers at the four corners and the centre, `Stress/HuntStressTests`) ran past 60:00 on
+  Pale Hills and Vathar Crossing in each of these measured variants: a ring every half cell (80 points on Pale Hills);
+  the least distance from the last point *plus* the distance from the origin as the order (the M5-4d rule; it pulled the
+  army back to inner points, 15 s of walking per point on Pale Hills); and no `SeenPoints`. The three changes together
+  end all 24 rows, the slowest at 57:36 (Vathar Crossing, `cadre_rush`), about 13 s of walking per point. Rejected:
+  counting the *target* reached as soon as its cell is visible (faster still, but the army re-targeted every few seconds:
+  60 orders a minute to 4 members in QA's `AnUnreachableSighting_NeitherSpamsNorFreezesTheHunt`, past its bound of 12
+  per member). A single army sweeping a 512 m map still takes about 45 minutes; splitting the army to sweep is a later
+  slice's question. (4) *the origin tie-break.* Nearest-to-the-last with list order on ties walked away from where the
+  enemy was: on Pale Hills seed 1 the loser's last building stood 50 m from its razed hall and the sweep, on a four-way
+  tie, set off for the far edge (no result by 36,000). Broken toward the origin, the sweep starts outward from the razed
+  base and every `MapSlice2StressTests` sweep row and `MapFileTests` new-map row still ends.
 - **Each think of a hunt** (after the wave's retreat and BUG-0598 idle rules, which end it as they end a wave): an enemy
   building known hands back to the wave rule (the known enemy building nearest the members becomes the target, every member
   owed an `AttackMove`, `Hunting` cleared). Else the target is **reached** when a member is within `ai.rallyReach` of it, or
