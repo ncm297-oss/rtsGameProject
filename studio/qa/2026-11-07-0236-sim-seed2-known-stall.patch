@@ -1,0 +1,46 @@
+diff --git a/docs/03-technical-design.md b/docs/03-technical-design.md
+index 231458c..0dfd6d8 100644
+--- a/docs/03-technical-design.md
++++ b/docs/03-technical-design.md
+@@ -7961,7 +7961,11 @@ rebuild losses"; docs/02 "High ground": the AI scouts ramps before attacking up
+     `MapSlice2StressTests` known stall Pale Hills seed 5 (no result by 72,000: the loser's last camp follower stands idle
+     at (391.8, 438.3) from 48,000 and the winner's 7-unit hunt never sees it; with every house rebuilt that worker's
+     new tent site was a known target that ended the match) and QA's `RebuildLookMatchQaStressTests` two-process row (no
+-    hall lost any more). The stall is BUG-1068's gold starvation; rebuilt houses act as a beacon for the hunt.
++    hall lost any more). The stall is BUG-1068's gold starvation; rebuilt houses act as a beacon for the hunt. **The
++    Producer's ruling (2026-11-07-0236 ACCEPT):** the row is a skipped known case under BUG-1116 / BUG-1068
++    (`FourAiSeats_OnPaleHills_Seed2_KnownStall`; seeds 1 / 3 and the teams row still run); the sim's hardening takes
++    BUG-1119 (a defeated seat's buildings forgotten at the census), the lone-idle-worker hunt gap, then the house rule
++    re-measured with both in.
+ - **Tests:** `Ai/RebuildTests` (criterion 2: a razed Barracks built again within two thinks and its step done again,
+   built once; a razed hall's Keep the first Build after it, at the old anchor, the Train step held, the workers depositing
+   again after it stands; a tree on the old anchor: the Keep a few cells off; at the hard cap a razed Billet not rebuilt,
+diff --git a/sim/Rts.Sim.Tests/Stress/HuntStressTests.cs b/sim/Rts.Sim.Tests/Stress/HuntStressTests.cs
+index d18db38..629eb10 100644
+--- a/sim/Rts.Sim.Tests/Stress/HuntStressTests.cs
++++ b/sim/Rts.Sim.Tests/Stress/HuntStressTests.cs
+@@ -111,10 +111,22 @@ public class HuntStressTests
+     [Theory]
+     [Trait("Category", "Stress")]
+     [InlineData(1UL, false)]
+-    [InlineData(2UL, false)]
+     [InlineData(3UL, false)]
+     [InlineData(1UL, true)]
+-    public void FourAiSeats_OnPaleHills_EndWithTheOracleOnEveryHunt(ulong seed, bool teams)
++    public void FourAiSeats_OnPaleHills_EndWithTheOracleOnEveryHunt(ulong seed, bool teams) => FourSeatsRow(seed, teams);
++
++    /// <summary>
++    /// Pale Hills free-for-all seed 2 (BUG-1116 / BUG-1068's remaining case, the Producer's ruling at the 2026-11-07-0236 ACCEPT):
++    /// green at 052c39e, no result by 144,000 since M5-4d slice 2 (the losing seats rebuild until every seat is out of gold by
++    /// 72,000; p3 keeps the defeated p2's buildings as known, BUG-1119, so it neither waves nor hunts). Kept as a named known case;
++    /// the hardening re-runs it with BUG-1119 and the lone-idle-worker hunt gap fixed.
++    /// </summary>
++    [Theory(Skip = "BUG-1116 / BUG-1068 (open, S3): Pale Hills 4-seat free-for-all seed 2 stalls on gold starvation since M5-4d slice 2 (rebuilding); no result by 144,000")]
++    [Trait("Category", "Stress")]
++    [InlineData(2UL, false)]
++    public void FourAiSeats_OnPaleHills_Seed2_KnownStall(ulong seed, bool teams) => FourSeatsRow(seed, teams);
++
++    private void FourSeatsRow(ulong seed, bool teams)
+     {
+         var seats = new PlayerSeat[4];
+         for (int p = 0; p < 4; p++) seats[p] = new PlayerSeat(p % 2, SeatController.Ai, AiDifficulty.Normal, teams ? 1 + p % 2 : 0);

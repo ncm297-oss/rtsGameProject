@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S1 (red build; a one-constant fix) |
-| Status | open |
+| Status | fixed (fix round 1, 8a1e588: the row writes "A changed sentence that no pin holds." instead of the now-shipped D25 sentence; only line 112 of `DH7MapTextQaTests.cs` changed, so it merges beside the data track's comment edits at lines 74 / 92; green on the Producer's merge rehearsal of sim → view → data) |
 | Found | 2026-11-07-0236, task M5-4d-2 |
 | System | data QA tests (map text pin) |
-| Fixed by | |
+| Fixed by | 8a1e588, proof `DH7MapTextQaTests.AChangedPinnedDescription_IsReported_ById` |
 
 ## Repro
 1. `dotnet test sim/Rts.Sim.Tests --filter "FullyQualifiedName~DH7MapTextQaTests.AChangedPinnedDescription_IsReported_ById"`

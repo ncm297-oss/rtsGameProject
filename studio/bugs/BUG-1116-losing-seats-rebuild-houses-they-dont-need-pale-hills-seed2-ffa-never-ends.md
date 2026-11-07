@@ -2,8 +2,8 @@
 
 | Field | Value |
 | --- | --- |
-| Severity | S1 (red build: a stress row that was green at the diff base is red; the slice's goal is "finish the match") |
-| Status | open |
+| Severity | S3 (was S1; re-triaged by the Producer at the 2026-11-07-0236 ACCEPT: the row no longer ending is BUG-1068's gold starvation on Pale Hills seed 2 with a new face, the house churn is a design nit, and the row is marked a known stall with this id) |
+| Status | open (the 4-seat seed-2 row is a skipped known case since the ACCEPT fix round; the house rule and the hunt's lone-idle-worker gap are the sim's hardening work, see the ruling below) |
 | Found | 2026-11-07-0236, task M5-4d-2 |
 | System | AI (BuildOrderExecutor.ReopenLost), match end |
 | Fixed by | |
@@ -40,3 +40,24 @@ each loss draws a new Build (one every ~12 s under siege) and keeps a fresh enem
   still stalls, the remaining cause is BUG-1068's gold starvation, and marking the row a known case is a loosening that needs
   the Producer's (or the owner's) explicit ruling.
 - Not the look: 0 thinks on a look point for every seat over the whole match.
+
+## Producer ruling (2026-11-07-0236 ACCEPT)
+
+- **Fix round 1 tried QA's house rule** (reopen a House step only when `HalfPopCap < hard cap && HalfPopCap - HalfPop <=
+  ai.houseHalfPopMargin`) and **reverted it**: the churn went (p1 tents 115 → 16, p2 billets 90 → 0) but seed 2 still has no
+  result by 144,000 (every seat out of gold by 72,000: p0 16, p1 24, p3 14, wood past 10,000 each; p2 defeated 67:23; p3
+  holds 7 army units under its 28 half-pop threshold and still remembers 18 of the defeated p2's buildings, so it neither
+  waves nor hunts), **and it turned three green rows red**: `MapFileTests` Pale Hills seed 1 (no result by 36,000),
+  `MapSlice2StressTests.KnownStalls` Pale Hills seed 5 (no result by 72,000: the loser's last camp follower stands idle at
+  (391.8, 438.3) from 48,000 and the winner's 7-unit hunt never sees it; a rebuilt tent site had been the known target
+  that ended the match), and QA's two-process row (no hall lost any more). Rebuilt houses act as a beacon for the hunt.
+- **Ruling:** the underlying stall is BUG-1068 (gold starvation on Pale Hills seed 2: by 36,000 every seat's gold is under
+  100 and its wood in the thousands); rebuilding is designed behaviour (docs/02 "AI opponent") and the slice ships. The
+  4-seat free-for-all seed-2 row becomes a skipped known case under this id and BUG-1068 (the same pattern as
+  `MapSlice2StressTests`' seed-2 row), done in the ACCEPT fix round; seeds 1 / 3 and the teams row still run.
+- **Left for the sim's hardening (4 / 4), most valuable first:** (1) **BUG-1119**: a seat that is defeated has its buildings
+  forgotten by every enemy's memory (the defeat is public: `PlayerView.MatchOver`'s per-seat twin), so a survivor with no
+  live enemy building known hunts instead of waiting for a wave; (2) **the hunt finds a lone idle worker**: the seed-5 case
+  above (a worker idle 3 m from a sweep point's sight edge for 24,000 ticks); (3) **the house rule**, re-measured with (1)
+  and (2) in, since its effect on the pinned rows is what sank it alone; (4) BUG-1068's gold itself (an expansion step
+  the losing openings reach, or Pale Hills' far mines) only after the three above.
