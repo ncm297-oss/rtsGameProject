@@ -1,5 +1,12 @@
 # Handoff: brief for the next session
 
+_**PLAN 2026-11-07-2306 (session 3 / 8 today, scheduled, base `021186e` = `origin/main`):** inbox New empty; the scratch clone of `main`
+builds 0 / 0, smoke PASS (menu + `--skirmish`, `Rts.Sim 0.0.1`, no ERROR line), non-Perf **8,496 / 0 / 15 of 8,511 in 45 m 6 s** (alone, the two known-stall rows among the skipped); verified claim: M5-4c
+slice 2's knobs are on `main` (`rules.json` `ai.focusReach` 14, `World.GoldPerTickOf`, `MilitaryManager.FightsOn = 0x80`,
+`QA/NonHardMatchPinQaTests`), docs/02 "AI opponent" and docs/03 "Implementation (M5-4c slice 2)" say the same; no S1 / S2 open (S3 22, S4
+17). **Sim GO: M5-H5, the hardening below (counter 4 / 4), QA full. View STOP (cheap): no inbox item. Data STOP (cheap): no schema, no review
+tweak, rule 41 (its re-measure follows the sim's hardening)._
+
 Written by the Producer at the ACCEPT of session **2026-11-07-0926** (session 2 / 8 on 2026-11-07; all three tracks accepted: sim
 M5-4c slice 2 after two fix rounds, view M5-V2 and data D-R34 with none). `main` after the conductor's merges (sim → view → data;
 `studio/qa/coverage.md` both sides kept) carries **M5 criterion 4 ticked: M5 6 / 9, M6 5 / 10.** Golden **30C51BB619A7E650** and the
@@ -40,10 +47,19 @@ process after at least 30 s idle**; the `AiPerfTests` class is run row by row by
 
 ## Sim track
 
-### Current session plan: M5-H5, the sim's hardening · hardening (counter 4 / 4 → 0 / 4) · QA full
+### Current session plan (2026-11-07-2306): M5-H5, the sim's hardening · hardening (counter 4 / 4 → 0 / 4) · QA full
 
-**Goal.** The sim's debt since M5-H4 (2026-10-26), most valuable first, as many as fit `max_task_lines`; the AI's open S3s first because
-M5-5's 20-minute winner test (the next feature) needs AI-only matches that end. Every Normal pin that moves is re-printed with why.
+**Goal.** The sim's debt since M5-H4 (2026-10-26), most valuable first, as many as fit `max_task_lines` (1,500 hand-written lines; QA
+suites and generated content don't count, rule 39); the AI's open S3s first because M5-5's 20-minute winner test (the next feature) needs
+AI-only matches that end. Every Normal pin that moves is re-printed with why. Items 1-4 are the session's core: if the budget runs out,
+stop after item 4 and write what was not reached into each bug file; items 5-9 are taken only in order and only while they fit.
+
+**Rulings the brief rests on (Producer defaults, owner may revisit):** BUG-1119's fix forgets a defeated seat's buildings at the census
+(the defeat is public under the win rule, so a read-only `PlayerView.IsDefeated(player)` is not a fog leak); BUG-1120's hunt point is
+pushed off an allied footprint by half a cell toward the hunter; BUG-1116's house rule ships only if the pinned matches stay green or
+move for a listed reason (its first try sank three rows: the bug file's ruling). Knob names: reuse `rules.json` `ai.houseWhenPopWithin` (2 pop,
+loaded as `AiRulesDef.HouseHalfPopMargin` 4, already hashed), add no new `rules.json` field unless a listed reason (the golden moves
+once if so; say why in the commit).
 
 **In this order (stop where the budget ends; say what was not reached):**
 1. **BUG-1119 (S3):** a defeated seat's remembered buildings still count as known enemy buildings, so a survivor too poor for a wave
@@ -55,8 +71,8 @@ M5-5's 20-minute winner test (the next feature) needs AI-only matches that end. 
 3. **BUG-1120 (S3), the hunt point:** a hunt's sighting point that lies on or within 0.5 m of an allied building footprint is pushed
    off it by half a cell toward the hunter (Producer default); then remove the soak oracle's `HuntToASighting` exemption and
    `HardKnobsRecheckQaTests.TheSoakExemption_*` (QA-owned; say so in the report, rule 37's precedent).
-4. **BUG-1116 (S3):** the house rule (reopen a House only when `HalfPopCap < hard cap && HalfPopCap − HalfPop <= ai.houseHalfPopMargin`,
-   knob validated and hashed) re-measured with 1-3 in: ship it only if Pale Hills seed 1 (36,000), `KnownStalls` and QA's two-process
+4. **BUG-1116 (S3):** the house rule (reopen a House only when `HalfPopCap < hard cap && HalfPopCap − HalfPop <= AiRulesDef.HouseHalfPopMargin`,
+   the existing `ai.houseWhenPopWithin` knob, validated and hashed) re-measured with 1-3 in: ship it only if Pale Hills seed 1 (36,000), `KnownStalls` and QA's two-process
    row stay green or move for a listed reason.
 5. **BUG-1118 item 1 (S4):** a hall site razed in the think it appeared gets a retry mark and the next rebuild goes a cell off the
    anchor (judge the hall Build against "a Keep stood at the anchor since it was sent").
@@ -92,7 +108,7 @@ effect on every pinned match; the hunt point near allied footprints under the st
 
 ## View track
 
-### Current session plan: STOP (cheap) unless an owner item is in the inbox
+### Current session plan (2026-11-07-2306): STOP (cheap); the inbox had no owner item at this PLAN
 
 No unblocked roadmap work: M6's remaining criteria wait on the owner (the art call, music / fonts / export templates, ".NET 10
 installed", a friend's playtest). If an inbox item lands, that is a feature session, QA standard. Debt for the view's next
@@ -104,7 +120,7 @@ rule, if the owner wants the numbers live), BUG-1115 item 4 (the art pass's them
 
 ## Data track
 
-### Current session plan: STOP (cheap)
+### Current session plan (2026-11-07-2306): STOP (cheap)
 
 No schema the data track needs is on `main` yet (D14 c's is the sim's, after M5-H5 and M5-5), no owner review answers are waiting,
 and the sim's M5-4c slice 2 moved no faction-page cell (the difficulty table is still true: Hard 25 %, focus fire yes, pulls back
