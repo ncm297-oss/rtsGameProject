@@ -118,8 +118,8 @@ public class HuntStressTests
     /// <summary>
     /// Pale Hills free-for-all seed 2 (BUG-1116 / BUG-1068's remaining case, the Producer's ruling at the 2026-11-07-0236 ACCEPT):
     /// green at 052c39e, no result by 144,000 since M5-4d slice 2 (the losing seats rebuild until every seat is out of gold by
-    /// 72,000; p3 keeps the defeated p2's buildings as known, BUG-1119, so it neither waves nor hunts). Kept as a named known case;
-    /// the hardening re-runs it with BUG-1119 and the lone-idle-worker hunt gap fixed.
+    /// 72,000). M5-H5 fixed the two hunt causes once named here (BUG-1119, a defeated seat's buildings kept as known, and the
+    /// lone-idle-worker hunt gap); the stall left is BUG-1068's gold starvation alone. Kept as a named known case.
     /// </summary>
     [Theory(Skip = "BUG-1116 / BUG-1068 (open, S3): Pale Hills 4-seat free-for-all seed 2 stalls on gold starvation since M5-4d slice 2 (rebuilding); no result by 144,000")]
     [Trait("Category", "Stress")]

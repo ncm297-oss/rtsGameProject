@@ -19,7 +19,7 @@ internal struct PendingOrder
     /// <summary>A Build's anchor cell.</summary>
     public int Cell;
 
-    /// <summary>A Train's building slot.</summary>
+    /// <summary>A Train's building slot; a hall rebuild's Build: 1 when it is the excused retry at the lost hall's anchor (M5-H5, BUG-1148), else 0.</summary>
     public int Slot;
 
     /// <summary>A Train's building generation.</summary>

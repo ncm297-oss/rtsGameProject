@@ -8195,9 +8195,12 @@ rebuild losses"; docs/02 "High ground": the AI scouts ramps before attacking up 
   construction). The field is saved in `AIST` already and every other reader only asks whether it is negative, so a seat
   that lost its hall remembers the spot across a save with the layout unchanged. The command waits to be judged in
   `Blackboard.HousePending` (one base Build at a time, judged as a house Build is: a refused anchor gets a retry mark and the
-  next search moves on; M5-H5, BUG-1118 item 1: not the lost hall's own anchor while `CanPlace` still allows a hall there,
-  since then the Build was not refused for its ground, e.g. its site was razed before the judge, and the next rebuild goes
-  back to the old spot); the executor judges it itself while the hall is still missing, the economy's house rule once the
+  next search moves on; M5-H5, BUG-1118 item 1 and BUG-1148: a Build refused at the lost hall's own anchor while
+  `PlayerView.CanPlace` still allows a hall there gets no mark the first time, and the next rebuild goes back to the old
+  spot, since its site may have been razed before the judge; that retry carries a flag in the pending order's unused
+  `Slot` (saved already, no format change), and refused again it is marked, since `CanPlace` can't see every refusal (a
+  unit in the way, hidden or not, the never-seal rule), so one enemy unit parked on the ruins costs one wasted Build, not
+  the rebuild); the executor judges it itself while the hall is still missing, the economy's house rule once the
   site stands. The steps wait (the executor returns) while the hall's Build is sent or in flight, or while only its cost
   or no worker free to build (all walking, a builder's command not yet applied) holds it back; then its cost is the think's reserve (`AiPlayer.HallReserved`; `ReserveStep` stays -1), so
   production trains only above it, the gatherers lean toward what it lacks, and the economy sends no house. It can't be

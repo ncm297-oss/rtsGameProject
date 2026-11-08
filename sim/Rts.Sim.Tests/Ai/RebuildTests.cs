@@ -190,6 +190,53 @@ public class RebuildTests
         Assert.False(ai.Board.IsBad(Keep, anchor));
     }
 
+    /// <summary>
+    /// M5-H5 (BUG-1148; fail-first at cd211f2, where the anchor took a refused Keep Build every think for good): an enemy unit
+    /// parked on the lost hall's footprint refuses the Build there, which <see cref="PlayerView.CanPlace"/> can't see. The
+    /// first refusal is excused (one retry at the old spot, flagged in the pending order), the retry's refusal is marked, and
+    /// the next Build goes a few cells off: exactly two Keep Builds at the old anchor. A save taken with the flagged retry in
+    /// flight keeps the flag: the loaded run follows the original tick for tick.
+    /// </summary>
+    [Fact]
+    public void AUnitParkedOnTheLostHallsAnchor_CostsOneRetryThere_ThenTheHallGoesUpOffIt()
+    {
+        Simulation sim = Scene(s_workers.Value);
+        AiPlayer ai = sim.AiOf(0)!;
+        World w = sim.World;
+        List<Command> log = AiScenes.Log(sim, 0);
+        for (int k = 0; k < 10; k++) NextThink(sim);
+        EntityHandle hall = Own(w, Keep);
+        int anchor = w.Buildings.Cell[hall.Index];
+        Rts.Sim.Combat.CombatSystem.FootprintRect(w, Keep, anchor, out System.Numerics.Vector2 min, out System.Numerics.Vector2 max);
+        int razed = sim.TickNumber;
+        Assert.True(w.Buildings.Free(hall));
+        CombatScenes.Place(sim, 1, CombatScenes.HeavyInfantry, (min + max) * 0.5f);
+        NextThink(sim); // the first Build at the old anchor sent
+        NextThink(sim); // judged refused, excused; the flagged retry sent there
+        Assert.Equal(PendingKind.Build, ai.Board.HousePending.Kind);
+        Assert.Equal(anchor, ai.Board.HousePending.Cell);
+        Assert.Equal(1, ai.Board.HousePending.Slot);
+        Assert.False(ai.Board.IsBad(Keep, anchor));
+        byte[] bytes = SaveTestRun.Save(sim);
+        Simulation load = SaveTestRun.Load(s_workers.Value, bytes);
+        Assert.Equal(bytes, SaveTestRun.Save(load));
+        EntityHandle site = default;
+        for (int t = 0; t < 20 * ai.ThinkTicks && site.Generation == 0; t++)
+        {
+            sim.Tick();
+            load.Tick();
+            Assert.True(sim.StateHash() == load.StateHash(), $"diverged at tick {sim.TickNumber}");
+            site = Own(w, Keep);
+        }
+        Assert.True(site.Generation != 0, "no Keep site");
+        Assert.NotEqual(anchor, w.Buildings.Cell[site.Index]);
+        Assert.True(ai.Board.IsBad(Keep, anchor));
+        int atAnchor = 0;
+        foreach (Command c in log)
+            if (c.Tick > razed && c.Kind == CommandKind.Build && c.TypeId == Keep && c.Position == ai.CellCentre(anchor)) atAnchor++;
+        Assert.Equal(2, atAnchor);
+    }
+
     /// <summary>Criterion 2 (b), the anchor taken: a tree on the old anchor, so the Keep goes up by the ring search round it, a few cells off.</summary>
     [Fact]
     public void ARazedHall_WhoseAnchorIsTaken_IsRebuiltNearby()

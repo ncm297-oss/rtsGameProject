@@ -146,7 +146,8 @@ internal static class BuildOrderExecutor
     /// before any step: at the last hall's anchor (<see cref="AiPlayer.LostHallCell"/>) when the player may place it there,
     /// else by the usual ring search round that anchor's centre (round the player's first building, or its workers'
     /// centroid, with no anchor remembered). Its command waits to be judged in <see cref="Blackboard.HousePending"/> (one
-    /// base Build at a time, judged as the economy judges a house: a refused anchor gets a retry mark). True (the steps
+    /// base Build at a time, judged as the economy judges a house: a refused anchor gets a retry mark, but the lost hall's
+    /// own anchor gets one excused retry first while the query still allows it, <see cref="HallRetry"/>). True (the steps
     /// wait this think) while it is sent, in flight, or held back only by its cost or by no worker free to build it this
     /// think: then its cost is the think's reserve (<see cref="AiPlayer.HallReserved"/>), so production spends
     /// only above it and the gatherers lean to what it lacks. False when there is nothing to rebuild or it can't be built
@@ -158,14 +159,21 @@ internal static class BuildOrderExecutor
         if (ai.TownHallCell >= 0 || ai.WorkerCount == 0 || ai.TownHallType < 0) return false;
         Blackboard board = ai.Board;
         ref PendingOrder pending = ref board.HousePending;
+        bool excused = false;
         if (pending.Kind != PendingKind.None)
         {
             if (ai.Now <= pending.AppliesAt) return pending.TypeId == ai.TownHallType; // in flight (a house Build: steps go on)
-            // M5-H5 (BUG-1118 item 1): a hall Build at the lost hall's own anchor that the anchor still takes was not refused
-            // for its ground (its site was razed before this judge, or a unit stood there and moved): no retry mark, so the
-            // next rebuild goes back to the old spot instead of a cell off it.
-            if (!ai.BuildAccepted(pending) && !(pending.TypeId == ai.TownHallType && pending.Cell == ai.LostHallCell && ai.View.CanPlace(pending.TypeId, pending.Cell, out _)))
-                board.MarkBad(pending.TypeId, pending.Cell);
+            if (!ai.BuildAccepted(pending))
+            {
+                // M5-H5 (BUG-1118 item 1, BUG-1148): a hall Build at the lost hall's own anchor that the anchor still takes as
+                // far as the player can tell gets one excused retry there with no retry mark: its site may have been razed
+                // before this judge (then the old spot is rebuilt, not a cell off it). A refusal the query can't see (a unit
+                // in the way, hidden or not, or the never-seal rule) refuses the retry too, and that one is marked, so the
+                // next search moves off the spot rather than send the same Build every think.
+                excused = pending.TypeId == ai.TownHallType && pending.Cell == ai.LostHallCell && pending.Slot != HallRetry
+                    && ai.View.CanPlace(pending.TypeId, pending.Cell, out _);
+                if (!excused) board.MarkBad(pending.TypeId, pending.Cell);
+            }
             pending = default;
         }
         int lost = ai.LostHallCell, centre = RebuildCentre(ai, lost);
@@ -174,6 +182,7 @@ internal static class BuildOrderExecutor
         ai.NoSiteFound = false;
         if (ai.TryBuild(ai.TownHallType, centre, lost, ref pending))
         {
+            if (excused && pending.Cell == lost) pending.Slot = HallRetry; // saved with the pending order: no new field
             ai.ExecutorSent = true;
             return true;
         }
@@ -181,6 +190,12 @@ internal static class BuildOrderExecutor
         ai.SetHallReserve(d.CostGold, d.CostWood); // short of its cost, or no builder free this think
         return true;
     }
+
+    /// <summary>
+    /// M5-H5 (BUG-1148): <see cref="PendingOrder.Slot"/> of a hall Build that is the excused retry at the lost hall's anchor
+    /// (a Build's <c>Slot</c> is otherwise unused, 0): refused again, it gets the retry mark.
+    /// </summary>
+    private const int HallRetry = 1;
 
     /// <summary>M5-4d slice 2: the cell the hall rebuild searches round: the lost hall's centre, else <see cref="HallCentre"/>, else the workers' centroid's cell.</summary>
     private static int RebuildCentre(AiPlayer ai, int lost)
