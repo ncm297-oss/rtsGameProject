@@ -83,6 +83,7 @@ internal sealed class AiRulesJson
     public double? ScoutReplacements { get; set; } // M6-SH1 (BUG-1052)
     public double? SpendDownQueue { get; set; } // M6-SH1 (BUG-1051)
     public double? HuntMemory { get; set; } // M5-4d
+    public double? FocusReach { get; set; } // M5-4c slice 2
 }
 
 internal sealed class StealthJson

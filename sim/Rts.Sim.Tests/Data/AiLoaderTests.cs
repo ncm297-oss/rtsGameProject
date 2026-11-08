@@ -127,6 +127,8 @@ public class AiLoaderTests
     [InlineData("openings[0].attack.minArmyCost", "-1", "openings[0].attack.minArmyCost", "below the minimum 0")]
     [InlineData("openings[0].attack", null, "openings[0].attack", "missing required field")]
     [InlineData("retreat.hpFraction", "1.01", "retreat.hpFraction", "outside 0-1")]
+    [InlineData("retreat.hpFraction", "-0.01", "retreat.hpFraction", "outside 0-1")] // M5-4c slice 2: the pull-back threshold
+    [InlineData("retreat.hpFraction", null, "retreat.hpFraction", "missing required field")]
     [InlineData("retreat.lossFraction", null, "retreat.lossFraction", "missing required field")]
     [InlineData("openings[0].compositions[0].units", "{}", "openings[0].compositions[0].units", "no units (at least one)")]
     [InlineData("openings[0].compositions[0].units", "{ \"malazan_heavy_infantry\": 0 }", "openings[0].compositions[0].units.malazan_heavy_infantry", "must be positive")]

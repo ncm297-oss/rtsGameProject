@@ -147,6 +147,21 @@ public sealed class UiText
     /// <summary>One named team's list item (M6-V16): <c>setup.team_item</c> with <paramref name="team"/> (1 and up) for its <c>{0}</c>.</summary>
     public string TeamItem(int team) => string.Format(CultureInfo.InvariantCulture, Setup(SetupText.TeamItem), team);
 
+    /// <summary>The difficulty tip keys (M5-V2), indexed by <see cref="AiDifficulty"/>.</summary>
+    public static readonly SetupText[] DifficultyTipKeys = { SetupText.DifficultyEasyTip, SetupText.DifficultyNormalTip, SetupText.DifficultyHardTip };
+
+    /// <summary>
+    /// Difficulty <paramref name="difficulty"/>'s tooltip (M5-V2): its <c>setup</c> tip with <c>{0}</c> the gather bonus
+    /// <paramref name="gatherBonus"/> (a fraction, <c>ai.json</c> <c>gatherBonus</c>) in percent, invariant, at most two decimals.
+    /// </summary>
+    public string DifficultyTip(AiDifficulty difficulty, float gatherBonus) =>
+        (uint)difficulty < (uint)DifficultyTipKeys.Length
+            ? string.Format(CultureInfo.InvariantCulture, Setup(DifficultyTipKeys[(int)difficulty]), Percent(gatherBonus))
+            : "";
+
+    /// <summary><paramref name="fraction"/> in percent as the tips show it: 0.25 is "25", 0.125 "12.5" (invariant, at most two decimals).</summary>
+    public static string Percent(float fraction) => ((double)fraction * 100.0).ToString("0.##", CultureInfo.InvariantCulture);
+
     /// <summary>A team's label row in the stats table (M6-V16): <c>match_over.team</c> with <paramref name="team"/> for its <c>{0}</c>.</summary>
     public string TeamLabel(int team) => string.Format(CultureInfo.InvariantCulture, MatchOver(MatchOverText.Team), team);
 
@@ -348,6 +363,14 @@ public sealed class UiText
             string teamItem = ui._setup[(int)SetupText.TeamItem];
             if (teamItem.Length > 0 && !IsSizeFormat(teamItem))
                 errors.Add($"ui.json: setup.{Key(SetupText.TeamItem)} must be a format with {{0}} (the team number) and no other placeholder: '{teamItem}'");
+            // M5-V2: the difficulty tips format with one number, {0} (the gather bonus in percent); Hard's must name it (docs/02).
+            foreach (SetupText tip in DifficultyTipKeys)
+            {
+                string f = ui._setup[(int)tip];
+                bool named = tip == SetupText.DifficultyHardTip;
+                if (f.Length > 0 && !IsPercentFormat(f, named))
+                    errors.Add($"ui.json: setup.{Key(tip)} must be a format {(named ? "with" : "with at most")} {{0}} (the gather bonus in percent) and no other placeholder: '{f}'");
+            }
             ReadColours(root, ui, errors);
             Section<PauseText>(root, "pause", ui._pause, skipZero: false, forward: false, errors);
             Section<SettingsText>(root, "settings", ui._settings, skipZero: false, forward: false, errors);
@@ -475,6 +498,20 @@ public sealed class UiText
         try
         {
             return string.Format(CultureInfo.InvariantCulture, format, 128) != string.Format(CultureInfo.InvariantCulture, format, 256);
+        }
+        catch (FormatException)
+        {
+            return false;
+        }
+    }
+
+    // A difficulty tip format (M5-V2): it formats with one number, and with `named` it names it (two numbers give two texts).
+    private static bool IsPercentFormat(string format, bool named)
+    {
+        try
+        {
+            string a = string.Format(CultureInfo.InvariantCulture, format, "25");
+            return !named || a != string.Format(CultureInfo.InvariantCulture, format, "40");
         }
         catch (FormatException)
         {

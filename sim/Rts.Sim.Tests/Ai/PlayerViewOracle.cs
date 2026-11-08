@@ -28,6 +28,7 @@ internal static class PlayerViewOracle
         public long OwnBuildings, EnemyBuildingsSeen, Ghosts, GhostsOfDeadBuildings, GhostSites, Resources, ResourcesUnknownAmount, ResourcesRemembered;
         public long QueueItems;
         public long AbilityCooldowns, OwnCasts; // M5-4c
+        public long OwnAttackOrders; // M5-4c slice 2
         public long AlliedUnitsSeen, AlliedStealthSeen; // M6-S4
         public long SeenThroughAlly; // M6-S5: an enemy unit the player sees only by an ally's eyes
         public string First = "";
@@ -41,7 +42,7 @@ internal static class PlayerViewOracle
             $"leaks {Leaks}, misses {Misses}, field mismatches {FieldMismatches}, oracle v fog {OracleDisagreements}; units own {OwnUnits} / enemy seen {EnemyUnitsSeen} / hidden {EnemyUnitsHidden} " +
             $"(stealth hidden {StealthHidden}, detected {StealthDetected}, high-ground revealed {Revealed}, in a storm {InStorm}); buildings own {OwnBuildings} / enemy seen {EnemyBuildingsSeen}; " +
             $"ghosts {Ghosts} (of dead buildings {GhostsOfDeadBuildings}, sites {GhostSites}); resources {Resources} (amount unknown {ResourcesUnknownAmount}, remembered gone {ResourcesRemembered}); queue items {QueueItems}; " +
-            $"own cooldowns running {AbilityCooldowns}, own casts {OwnCasts}; allied units seen {AlliedUnitsSeen} (stealthed {AlliedStealthSeen}); enemy units seen only through an ally {SeenThroughAlly}";
+            $"own cooldowns running {AbilityCooldowns}, own casts {OwnCasts}, own attack orders {OwnAttackOrders}; allied units seen {AlliedUnitsSeen} (stealthed {AlliedStealthSeen}); enemy units seen only through an ally {SeenThroughAlly}";
     }
 
     /// <summary>Compares every answer of <paramref name="view"/> (player <paramref name="p"/>) with the oracle, adding to <paramref name="t"/>.</summary>
@@ -108,6 +109,8 @@ internal static class PlayerViewOracle
         End(t, view.NextUnit(ref cursor, out SeenUnit end), cursor, u.Capacity, end == default, $"{at}: the unit cursor");
         Field(t, !view.TryGetUnit(-1, out _) && !view.TryGetUnit(u.Capacity, out _) && !view.TryGetUnit(int.MaxValue, out _), $"{at}: a unit slot out of range");
         Field(t, !view.TryGetAbilityReady(-1, 0, out _) && !view.TryGetAbilityReady(u.Capacity, 0, out _) && !view.TryGetCast(int.MaxValue, out _), $"{at}: an ability answer for a slot out of range");
+        Field(t, !view.TryGetAttackOrder(-1, out _) && !view.TryGetAttackOrder(u.Capacity, out _) && !view.TryGetGivenUp(int.MaxValue, out _), $"{at}: an attack-order answer for a slot out of range");
+        for (int type = -1; type <= w.Data.Units.Length; type++) Same(t, view.MaxHpOf(type), w.MaxHpOf(p, type), $"{at}: max hp of type {type}"); // M5-4c slice 2: own techs
         int past = int.MaxValue;
         Field(t, !view.NextUnit(ref past, out _), $"{at}: a unit cursor at int.MaxValue");
 
@@ -228,6 +231,16 @@ internal static class PlayerViewOracle
         Compare(t, gotCast, cast >= 0, $"{at}: unit {j}'s cast (owner {u.Owner[j]})");
         Field(t, index == cast, $"{at}: unit {j}'s cast {index}, want {cast}");
         if (cast >= 0) t.OwnCasts++;
+        // M5-4c slice 2: the own unit's explicit Attack on a unit, the unit it gave up on, and its type's max hp; nothing of another player's.
+        bool ordered = own && u.Mode[j] == Combat.CombatMode.Ordered && !u.TargetIsBuilding[j] && u.Target[j].Generation != 0;
+        bool gotOrder = view.TryGetAttackOrder(j, out EntityHandle held);
+        Compare(t, gotOrder, ordered, $"{at}: unit {j}'s attack order (owner {u.Owner[j]})");
+        Field(t, held == (ordered ? u.Target[j] : default), $"{at}: unit {j}'s attack order target");
+        bool gaveUp = own && !u.IgnoredIsBuilding[j] && u.Ignored[j].Generation != 0;
+        bool gotGiven = view.TryGetGivenUp(j, out EntityHandle given);
+        Compare(t, gotGiven, gaveUp, $"{at}: unit {j}'s given-up target (owner {u.Owner[j]})");
+        Field(t, given == (gaveUp ? u.Ignored[j] : default), $"{at}: unit {j}'s given-up target");
+        if (ordered) t.OwnAttackOrders++;
     }
 
     /// <summary>M6-S4: the alliance rule from the seats: the same player, or both on one named team (team 0 is no team).</summary>

@@ -64,6 +64,15 @@ internal sealed partial class AiPlayer
         HeldOfType = new int[data.Buildings.Length];
         TownHallCell = -1; // no hall seen yet: nothing to rebuild (LostHallCell)
         RampTops = MilitaryManager.RampTops(view);
+        FocusSlots = new int[view.UnitSlots];
+        FocusPoints = new Vector2[view.UnitSlots];
+        FocusReach2 = new float[view.UnitSlots];
+        FocusNext = new int[view.UnitSlots];
+        // The bucket side: at least the reach (a fighter in reach is then in the 3 x 3 buckets round a point), at least
+        // MilitaryManager.MinFocusBucket so a small reach on a big map stays a small grid.
+        FocusBucket = Math.Max(Rules.FocusReach, MilitaryManager.MinFocusBucket);
+        FocusColumns = Math.Max(1, (int)MathF.Ceiling(view.MapWidth * MapConstants.CellSize / FocusBucket));
+        FocusHeads = new int[FocusColumns * Math.Max(1, (int)MathF.Ceiling(view.MapHeight * MapConstants.CellSize / FocusBucket))];
         ClearReserve();
     }
 
@@ -225,6 +234,41 @@ internal sealed partial class AiPlayer
 
     /// <summary>M5-4d slice 2: the map's ramp tops in row order (<see cref="MilitaryManager.RampTops"/>; static terrain, listed at construction).</summary>
     internal int[] RampTops { get; }
+
+    /// <summary>
+    /// M5-4c slice 2 (<c>focusFire</c>): the enemy unit this think's focus pass picked (<see cref="MilitaryManager"/>), default
+    /// for none. Think scratch, as the reserve: cleared at a think's start and end (<see cref="ThoughtForTests"/> sees it), so
+    /// between thinks a seat holds none and a loaded seat equals the saved one with nothing stored.
+    /// </summary>
+    internal EntityHandle FocusTarget { get; set; }
+
+    /// <summary>M5-4c slice 2: the focus pass's fighters (unit slots and positions), first entries only, cleared after the pass.</summary>
+    internal int[] FocusSlots { get; }
+
+    /// <summary>See <see cref="FocusSlots"/>.</summary>
+    internal Vector2[] FocusPoints { get; }
+
+    /// <summary>
+    /// BUG-1121: see <see cref="FocusSlots"/>: each fighter's own focus reach, squared (its attack's range + its radius + a
+    /// cell, at most <c>ai.focusReach</c>).
+    /// </summary>
+    internal float[] FocusReach2 { get; }
+
+    /// <summary>
+    /// M5-4c slice 2: the focus pass's bucket grid of its fighters: per bucket (<see cref="FocusBucket"/> m square, row
+    /// order, <see cref="FocusColumns"/> a row) the first fighter's index + 1 (0: none), and per fighter the next one's in
+    /// its bucket (<see cref="FocusNext"/>). Built and emptied within the pass, so all zero between thinks.
+    /// </summary>
+    internal int[] FocusHeads { get; }
+
+    /// <summary>See <see cref="FocusHeads"/>.</summary>
+    internal int[] FocusNext { get; }
+
+    /// <summary>See <see cref="FocusHeads"/>: the bucket side (m).</summary>
+    internal float FocusBucket { get; }
+
+    /// <summary>See <see cref="FocusHeads"/>: buckets a row.</summary>
+    internal int FocusColumns { get; }
 
     /// <summary>The faction's Town Hall, House and Camp building types (-1 when the data has none).</summary>
     internal int TownHallType { get; }
@@ -458,6 +502,7 @@ internal sealed partial class AiPlayer
         Wood = View.Wood;
         ExecutorSent = false;
         ClearReserve();
+        FocusTarget = default;
         _queueFull = false;
         _plannedCount = 0;
         Census();
@@ -471,8 +516,9 @@ internal sealed partial class AiPlayer
         Thinks++;
         ThoughtForTests?.Invoke(this);
         // M5-4g: the reserve lives for the think only, so between thinks (where a save is taken) a seat holds none and a
-        // loaded seat equals the saved one with nothing stored (the AIST layout is unchanged).
+        // loaded seat equals the saved one with nothing stored (the AIST layout is unchanged). M5-4c slice 2: the focus too.
         ClearReserve();
+        FocusTarget = default;
         return true;
     }
 

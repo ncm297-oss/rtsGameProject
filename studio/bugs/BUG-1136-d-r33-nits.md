@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S4 |
-| Status | open |
+| Status | fixed (D-R34, 2026-11-07-0926; QA light PASS) |
 | Found | 2026-11-07-0236, task D-R33 (QA light) |
 | System | content tests / docs: `sim/Rts.Sim.Tests/Content/MapTextContentTests.cs`, `docs/factions/malazan.md` |
-| Fixed by | |
+| Fixed by | D-R34 (d990ade): renamed to `ThePin_HasRarakuFirst_AndPrintsUnpinnedMaps` (refs in `DH7MapTextQaTests` / `DR33QaTests` updated), the `_out` field and constructor moved to the class top, the Malazan page re-wrapped (the seed 19 / 25 paragraph rewritten). Proof: the data filter 1,778 / 1,778; `rg ThePin_NamesEveryShippedMap` finds only dated studio history |
 
 ## Repro
 1. `git diff 052c39e...2500f4d -- sim/Rts.Sim.Tests/Content/MapTextContentTests.cs docs/factions/malazan.md`

@@ -395,6 +395,11 @@ public class DataValidationTests
     [InlineData("huntMemory", null, "ai.huntMemory", "missing required field")] // M5-4d
     [InlineData("huntMemory", "-1", "ai.huntMemory", "must not be negative")]
     [InlineData("huntMemory", "3600.5", "ai.huntMemory", "above the maximum 3600 s")]
+    [InlineData("focusReach", null, "ai.focusReach", "missing required field")] // M5-4c slice 2
+    [InlineData("focusReach", "0", "ai.focusReach", "outside 1-64 m")]
+    [InlineData("focusReach", "-14", "ai.focusReach", "outside 1-64 m")]
+    [InlineData("focusReach", "64.5", "ai.focusReach", "outside 1-64 m")]
+    [InlineData("focusReach", "\"14\"", "$.ai.focusReach", "")]
     public void AiRulesBlock_MissingOrOutOfRange_IsOneError(string? field, string? value, string path, string message)
     {
         using TestDataDir dir = TestDataDir.CopyOfShipped();
@@ -527,6 +532,21 @@ public class DataValidationTests
         Assert.Equal(64f, a.GatherReach); // M6-S5 (BUG-1045): meters
         Assert.Equal((2, 2), (a.ScoutReplacements, a.SpendDownQueue)); // M6-SH1 (BUG-1052, BUG-1051)
         Assert.Equal(2400, a.HuntMemoryTicks); // M5-4d: 120 s
+        Assert.Equal(14f, a.FocusReach); // M5-4c slice 2: meters
+    }
+
+    /// <summary>M5-4c slice 2: <c>ai.focusReach</c> written as NaN is not JSON: one parse error in rules.json, nothing thrown.</summary>
+    [Fact]
+    public void AiFocusReach_NaN_IsOneParseError()
+    {
+        using TestDataDir dir = TestDataDir.CopyOfShipped();
+        string path = dir.FullPath("common/rules.json");
+        string text = File.ReadAllText(path);
+        Assert.Contains("\"focusReach\": 14", text);
+        File.WriteAllText(path, text.Replace("\"focusReach\": 14", "\"focusReach\": NaN"));
+        DataError e = Assert.Single(DataLoader.LoadAll(dir.Path).Errors);
+        Assert.Equal("common/rules.json", e.File);
+        Assert.Contains("malformed JSON", e.Message);
     }
 
     /// <summary>M5-4b: the defense knobs load at their edges (<c>defendFor</c> 0 and 600 s, <c>defendRadius</c> 8 and 256 m, <c>workerFleeRadius</c> 1 and 64 m).</summary>
@@ -557,6 +577,8 @@ public class DataValidationTests
     [InlineData("spendDownQueue", 5, 5)]
     [InlineData("huntMemory", 0, 0)] // M5-4d: 0 is valid (only a sighting this think is fresh)
     [InlineData("huntMemory", 3600, 72000)]
+    [InlineData("focusReach", 1, 1)] // M5-4c slice 2
+    [InlineData("focusReach", 64, 64)]
     public void AiDefenseKnobs_AtTheirEdges_Load(string knob, double value, double loaded)
     {
         using TestDataDir dir = TestDataDir.CopyOfShipped();
@@ -568,7 +590,7 @@ public class DataValidationTests
         {
             "defendFor" => a.DefendForTicks, "defendRadius" => a.DefendRadius, "castMinTargets" => a.CastMinTargets,
             "defendRatio" => a.DefendRatio, "defendMinValue" => a.DefendMinValue, "recallHallHp" => a.RecallHallHp, "reserveShift" => a.ReserveShift, "reserveArmyShare" => a.ReserveArmyShare, "gatherReach" => a.GatherReach,
-            "scoutReplacements" => a.ScoutReplacements, "spendDownQueue" => a.SpendDownQueue, "huntMemory" => a.HuntMemoryTicks, _ => a.WorkerFleeRadius,
+            "scoutReplacements" => a.ScoutReplacements, "spendDownQueue" => a.SpendDownQueue, "huntMemory" => a.HuntMemoryTicks, "focusReach" => a.FocusReach, _ => a.WorkerFleeRadius,
         }, 5);
     }
 

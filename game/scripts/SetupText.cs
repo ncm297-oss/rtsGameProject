@@ -68,4 +68,10 @@ public enum SetupText
     /// <c>{1}</c> (its start locations, the most players it takes).
     /// </summary>
     MapPlayers,
+    /// <summary>The Easy difficulty item's tooltip (M5-V2, docs/02 "AI opponent"); a format that may name <c>{0}</c>, Easy's gather bonus in percent.</summary>
+    DifficultyEasyTip,
+    /// <summary>The Normal difficulty item's tooltip (M5-V2); a format that may name <c>{0}</c>, Normal's gather bonus in percent.</summary>
+    DifficultyNormalTip,
+    /// <summary>The Hard difficulty item's tooltip (M5-V2): a format that must name <c>{0}</c>, Hard's gather bonus in percent (from <c>ai.json</c>).</summary>
+    DifficultyHardTip,
 }
