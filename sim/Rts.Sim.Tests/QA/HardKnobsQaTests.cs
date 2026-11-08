@@ -300,6 +300,8 @@ public class HardKnobsQaTests
         int picks = 0, attacks = 0;
         var leaves = new int[4];
         var pulls = new int[4];
+        var free = new int[4]; // round 1: AttackMoves to a member flagged Focused (BUG-1121's free re-send)
+        var orders = new Dictionary<EntityHandle, int>(); // Attack + AttackMove per unit, over the match
         for (int p = 0; p < 4; p++)
         {
             int seat = p;
@@ -315,6 +317,8 @@ public class HardKnobsQaTests
             ai.SentForTests = c =>
             {
                 int i = c.Unit.Index;
+                if (c.Kind is CommandKind.Attack or CommandKind.AttackMove) orders[c.Unit] = orders.GetValueOrDefault(c.Unit) + 1;
+                if (c.Kind == CommandKind.AttackMove && ai.Board.WaveGeneration[i] == c.Unit.Generation && ai.Board.WaveFlag[i] == MilitaryManager.Focused) free[seat]++;
                 if (c.Kind == CommandKind.Attack && !c.TargetIsBuilding)
                 {
                     attacks++;
@@ -329,7 +333,8 @@ public class HardKnobsQaTests
             };
         }
         while (sim.TickNumber < 20_000 && !sim.MatchOver && bad == null) sim.Tick();
-        _out.WriteLine($"tick {sim.TickNumber}, over {sim.MatchOver}: {picks} focus picks, {attacks} unit Attacks checked; pulls {string.Join("/", pulls)}, leaves {string.Join("/", leaves)}");
+        _out.WriteLine($"tick {sim.TickNumber}, over {sim.MatchOver}: {picks} focus picks, {attacks} unit Attacks checked; pulls {string.Join("/", pulls)}, leaves {string.Join("/", leaves)}; " +
+            $"free re-sends {string.Join("/", free)}; Attack + AttackMove per unit: max {orders.Values.DefaultIfEmpty(0).Max()}, units {orders.Count}, total {orders.Values.Sum()}");
         Assert.True(bad == null, bad);
         if (difficulty == AiDifficulty.Hard) Assert.True(picks > 0, "nobody focused");
         else Assert.Equal((0, 0), (picks, attacks)); // a Normal seat focuses nothing (its "pulls" are the old Leave of a member below the fraction)

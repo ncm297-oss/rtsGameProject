@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S4 |
-| Status | open |
+| Status | fixed (re-verified by QA 2026-11-07-0926 round 1) |
 | Found | 2026-11-07-0926, task M5-4c-2 |
 | System | AI (MilitaryManager.Wounded), QA oracle |
-| Fixed by | |
+| Fixed by | 9f7423b ((a) `Wounded` compares in decimal; (b) `CommandDoorFuzzStressTests` admits a unit Attack only from a focusFire seat on a unit its fog showed); regression `HardKnobsQaTests.Wounded_AtExactlyTheThreshold_IsNotWounded_ForEveryUnitType` |
 
 ## Repro
 1. `dotnet test sim/Rts.Sim.Tests --filter "FullyQualifiedName~HardKnobsQaTests.Wounded_AtExactlyTheThreshold_IsNotWounded_ForEveryUnitType"`
@@ -32,3 +32,10 @@ sending a unit Attack, or an Attack on a unit it can't see, would pass that orac
 - (a) Fix idea (the developer's call): keep the loaded fraction as the data's double and compare in double, or compare
   against the product rounded to a few decimals. Converting the stored 0.3f back to double keeps its error.
 - (b) Fix idea: require `ai.Knobs.FocusFire` (or the seat's difficulty block) for a unit Attack, and the seat's fog grant.
+
+## Re-verify (2026-11-07-0926, round 1, HEAD 9f7423b)
+- (a) `Wounded_AtExactlyTheThreshold_IsNotWounded_ForEveryUnitType` is green: at exactly the threshold no type is wounded,
+  and one hp less every type is. `(decimal)float` cannot throw here: the loader's `Fraction` rejects NaN and anything
+  outside 0-1 (`DataLoader.Ai.cs`), and both factions ship 0.3. A decimal multiply allocates nothing.
+- (b) The oracle now asserts the seat's difficulty has `focusFire` and that `Fog.CanSeeUnit(1, target)` held in the
+  think's snapshot. `CommandDoorFuzzStressTests` is green in the full run.

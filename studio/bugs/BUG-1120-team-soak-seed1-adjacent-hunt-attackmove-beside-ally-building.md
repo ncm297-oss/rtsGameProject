@@ -2,8 +2,8 @@
 
 | Field | Value |
 | --- | --- |
-| Severity | S2 |
-| Status | open |
+| Severity | S3 (was S2; QA re-triage in round 1, Producer to confirm) |
+| Status | open (the red row is green through a narrow oracle exemption; the hunt-point question is left for the sim hardening session) |
 | Found | 2026-11-07-0926, task M5-4c-2 (proposed by the developer as BUG-1120; confirmed by QA) |
 | System | AI hunt (M5-4d `MilitaryManager.Hunt` / `HuntTarget`), QA team soak oracle |
 | Fixed by | |
@@ -32,3 +32,15 @@ Seat 3 is Normal (the row's difficulties turn per seat: `(p + seed) % 3`); seats
   a Normal-play change, outside this slice's "nothing but Hard moved"), or the oracle's "AttackMove onto an ally's
   building" should exempt a hunt's sighting point (a QA change to a permanent test, which QA does not do without the
   Producer's say). Until one lands the suite is red.
+
+## Re-verify (2026-11-07-0926, round 1, HEAD 9f7423b)
+- The row is green. QA's full non-Perf run on a `git archive HEAD` export includes all 8 `TeamAiSoakStressTests` rows. The
+  developer's exemption `HuntToASighting` excuses 14 AttackMoves on seed 1 adjacent and 0 on the other 7 rows.
+- The exemption is narrow. `QA/HardKnobsRecheckQaTests.TheSoakExemption_ExcusesOnlyAHuntToItsSighting` calls the private
+  predicate through reflection. It excuses only a hunt in progress whose target point is the order's point and the seat's
+  last enemy-unit sighting (still remembered). Six forged near-misses are still reported: no wave; a wave on a building;
+  the sighting forgotten (`EnemyUnitTick` -1); a hunt to a sweep point; an order to the sighting while the hunt walks
+  elsewhere; a point 1 cm off the hunt's.
+- Why S3 now: the suite is no longer red, and an AttackMove to a point beside an ally's building targets no ally (it walks
+  to where an enemy unit was seen). What is left is the open question for the hardening session: should a hunt snap such a
+  point off allied footprints? That would change Normal play.

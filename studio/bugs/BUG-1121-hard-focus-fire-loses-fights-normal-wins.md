@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S2 |
-| Status | open |
+| Status | fixed (re-verified by QA 2026-11-07-0926 round 1) |
 | Found | 2026-11-07-0926, task M5-4c-2 |
 | System | AI (MilitaryManager.Focus), combat (explicit Attack) |
-| Fixed by | |
+| Fixed by | 9f7423b (each fighter's own focus reach, about its attack range; `MilitaryManager.Focused` and the free re-send); regression `HardKnobsQaTests.A20HeavyWave_Against20Raiders_WinsOnEveryDifficulty(Hard)` + `HardKnobsTests.AMemberWhoseFocusDied_IsSentOn_WithoutSpendingATry_UnlessItGaveTheFocusUp` |
 
 ## Repro
 1. `dotnet test sim/Rts.Sim.Tests --filter "FullyQualifiedName~HardKnobsQaTests.A20HeavyWave_Against20Raiders_WinsOnEveryDifficulty"`
@@ -48,3 +48,16 @@ focus on, but takes 899 ticks instead of 595 and sends 400 Attack commands (one 
   the gather bonus alone made Hard win sooner.
 - Possible directions (the developer's call): focus only within a member's own reach (weapon range plus a margin) or only
   for ranged members; keep melee on AttackMove; split the focus over several targets for a big army.
+
+## Re-verify (2026-11-07-0926, round 1, HEAD 9f7423b)
+- The controlled repro passes. 20 Heavy Infantry v 20 Raiders: Hard 15 alive, 0 Raiders left in 1,046 ticks; Normal 14
+  alive in 1,123. Churn in that fight: 106 unit Attacks, at most 2 per member and target, at most 14 per member.
+- The secondary effect is gone. 4-seat Hard Pale Hills seed 1, 20,000 ticks: healthy members leaving a wave in progress
+  1/0/0/0 (was 8/2/3/3; Normal 1/1/0/0). Free re-sends 55/62/61/11 per seat, at most 47 Attack + AttackMove for one unit
+  over the whole match (Normal: 14). Fog oracle: 2,050 focus picks and 1,210 unit Attacks, 0 faults.
+- The flicker attack on the try rule (`QA/HardKnobsRecheckQaTests.AFocusFlickeringInAndOutOfSight_*`): a Sandstorm made
+  and removed every 20 / 60 ticks on an immortal Raider. As wave members, Crossbowmen get at most 8 Attacks and 6
+  AttackMoves each over 6,000 ticks, and 17 free re-sends in all over 152 re-sightings. As defenders, one Attack per
+  re-sighting (148 over 149). The cost is bounded by the flicker: at most one order per member per re-sighting.
+- The match-level weakness of Hard against Normal is not closed by this fix. It is filed as BUG-1123: what remains is
+  the pull-back plus a residual cost of the other knobs, not the focus crowding this bug was about.
