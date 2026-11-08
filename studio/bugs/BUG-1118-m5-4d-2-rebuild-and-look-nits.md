@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S4 |
-| Status | open (item 2 fixed in fix round 1, 8a1e588: `AiPlayer.Save` reads `TownHallCell` with `ReadInt32In(-(cells + 1), cells - 1)`, proof `SaveRefusalTests.AForgedTownHallCell_OutsideTheMap_IsMalformed` (7 cases, fail-first); item 1 open, the sim's hardening; item 3 open, the data track's next task: the Malazan page's prose round the re-printed tables, plus the seed 19 paragraph (the beaten side now stands at 20:00 again by rebuilding, see BUG-1116's notes)) |
+| Status | open (item 2 fixed in fix round 1, 8a1e588: `AiPlayer.Save` reads `TownHallCell` with `ReadInt32In(-(cells + 1), cells - 1)`, proof `SaveRefusalTests.AForgedTownHallCell_OutsideTheMap_IsMalformed` (7 cases, fail-first); item 1 open, the sim's hardening; item 3 **fixed by D-R34 (d990ade, 2026-11-07-0926)**: the Malazan page's prose round both tables matches the cells (13:50 / 15:03 / 10:44 / 18:27 / 16:54) and the seed 19 / 25 paragraph is rewritten; QA re-ran DH6 and matched every figure) |
 | Found | 2026-11-07-0236, task M5-4d-2 |
 | System | AI (HallFirst, TownHallCell encoding), docs |
-| Fixed by | item 2: 8a1e588 |
+| Fixed by | item 2: 8a1e588; item 3: D-R34 d990ade (docs only) |
 
 ## Repro / Actual
 1. **A hall site razed before its Build is judged moves the rebuild off the old anchor.** On the flat scene, raze the

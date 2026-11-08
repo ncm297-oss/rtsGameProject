@@ -2,8 +2,8 @@
 
 | Field | Value |
 | --- | --- |
-| Severity | S3 (was S2; QA re-triage in round 1, Producer to confirm) |
-| Status | open (the red row is green through a narrow oracle exemption; the hunt-point question is left for the sim hardening session) |
+| Severity | S3 (was S2; QA re-triage in round 1, **confirmed by the Producer at the 2026-11-07-0926 ACCEPT**) |
+| Status | open (the red row is green through a narrow oracle exemption; **the hunt-point question is an item of the sim's hardening M5-H5**: the Producer's default is that a hunt's sighting point is pushed off any allied building footprint by half a cell toward the hunter, a Normal-play change that re-measures the pins; the exemption is then removed) |
 | Found | 2026-11-07-0926, task M5-4c-2 (proposed by the developer as BUG-1120; confirmed by QA) |
 | System | AI hunt (M5-4d `MilitaryManager.Hunt` / `HuntTarget`), QA team soak oracle |
 | Fixed by | |

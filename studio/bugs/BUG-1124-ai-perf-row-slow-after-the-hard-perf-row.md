@@ -3,7 +3,7 @@
 | Field | Value |
 | --- | --- |
 | Severity | S3 |
-| Status | open: diagnosed as the machine (the CPU clock falls under sustained load), not test state; needs the Producer's / owner's Perf-run rule |
+| Status | open as the record of **rule 42 (Producer, 2026-11-07-0926 ACCEPT)**: on this PC a Perf failure counts only when the row fails **alone in its own process after at least 30 s idle**; the Producer and QA run the `AiPerfTests` class row by row; no code change; BUG-0764's 0.6x gates stay. Closes when the owner changes the power plan (STATE "Waiting on you" item 2) or a reference-workload ratio gate is built in a hardening session |
 | Found | 2026-11-07-0926, task M5-4c-2 (QA re-verify round 1) |
 | System | Perf tests (`Ai/AiPerfTests`), AI think cost |
 | Fixed by | |
