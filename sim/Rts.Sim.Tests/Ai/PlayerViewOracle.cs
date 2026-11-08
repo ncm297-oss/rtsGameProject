@@ -69,6 +69,8 @@ internal static class PlayerViewOracle
         {
             Same(t, view.IsEnemy(q) ? 1 : 0, Allied(w, p, q) ? 0 : 1, $"{at}: IsEnemy({q})");
             Same(t, view.TeamOf(q), (uint)q < (uint)w.Config.PlayerCount ? w.Config.SeatOf(q).Team : 0, $"{at}: TeamOf({q})");
+            // M5-H5 (BUG-1119): the public defeat flag, false off the seats.
+            Same(t, view.IsDefeated(q) ? 1 : 0, (uint)q < (uint)w.Config.PlayerCount && w.IsDefeated(q) ? 1 : 0, $"{at}: IsDefeated({q})");
         }
         bool hasAlly = false;
         for (int q = 0; q < w.Config.PlayerCount; q++) hasAlly |= q != p && Allied(w, p, q);

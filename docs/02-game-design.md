@@ -424,13 +424,16 @@ own cues (select, order, refused, building placed or finished, unit or tech read
   is hit and below half hp (`rules.json` `ai.defendRatio` / `defendMinValue` / `recallHallHp`; built in M5-4f; wording
   aligned with [03 Implementation (M5-4f)](03-technical-design.md#implementation-m5-4f) on 2026-10-17, BUG-0871).
 - The AI finishes the match: once it knows no enemy building (every one razed, or out of sight with nothing left of it in
-  its memory of the map) and has sent at least one wave, it **hunts** with its whole army, whatever its size. The army goes to
+  its memory of the map; a defeated player's buildings, gone with its defeat, are forgotten at once, since every player is
+  told who is out) and has sent at least one wave, it **hunts** with its whole army, whatever its size. A wave on its way to
+  a defeated player's remembered building turns into a hunt. The army goes to
   where the AI last saw an enemy unit (a worker counts) if that was at most `rules.json` `ai.huntMemory` (120 s) ago, else
   it sweeps the map (the centres and the corners of the scout's grid, every second pass the midpoints between them instead,
   plus the map's edges and corners, from the point nearest the army, then always the nearest one not yet walked to or seen;
-  once it reaches the map's edge it walks the whole border round once), and turns at once toward any enemy unit it sees. A hunt ends like a wave (heavy losses, nobody busy for a while,
+  once it reaches the map's edge it walks the whole border round once), and turns at once toward any enemy unit it sees. In a team match a
+  sighting on or right beside an ally's building is aimed just off that building, on the army's side. A hunt ends like a wave (heavy losses, nobody busy for a while,
   a raid at home), and becomes a wave again on the first enemy building it finds. So a beaten side's last unit hiding in
-  the woods is found, and AI-against-AI matches end (built in M5-4d, BUG-1068;
+  the woods is found, and AI-against-AI matches end (built in M5-4d, BUG-1068; hardened in M5-H5, BUG-1119 / BUG-1120;
   [03 Implementation (M5-4d)](03-technical-design.md#implementation-m5-4d)).
 - The AI rebuilds what it loses: a building its build order put up that is razed (or a site cancelled) is ordered again
   within a think or two, as a build order step due again, with the same reserve and site search as before; a House is

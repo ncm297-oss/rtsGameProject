@@ -8000,14 +8000,15 @@ internal, shared), one knob. No `Command` kind: the hunt sends `AttackMove` (and
   (criterion 4). The hunt forgets it (`EnemyUnitTick` -1) once it went there and saw nobody (below). The M5-3 enemy-army
   centroid is unchanged (non-workers only, still read by nothing).
 - **When a hunt starts.** No wave in progress, the base not defended, no wave started this think, and: no enemy building
-  known (`KnownEnemyBuildings` 0: none seen, no ghost), at least one wave sent before (`WavesStarted` > 0), the match not
+  known (`KnownEnemyBuildings` 0: none seen, no ghost; M5-H5, BUG-1119: a ghost of a **defeated** seat's building is not
+  counted, below), at least one wave sent before (`WavesStarted` > 0), the match not
   over (`PlayerView.MatchOver`, the result every seat is shown), the cooldown over. Every free army unit (not casting, no
   command pending) becomes a member, whatever their number: no `attack` threshold, and the hunt's kept threshold
   (`WaveMinHalfPop` / `WaveMinCost`) is 0, so the defense may pull any member. The cooldown (`ai.waveCooldown`) starts, as
   a wave's. A wave whose target is gone with no other building known **turns into a hunt** on the spot (the same members,
   no trip home), unless the base is defended or the match is over (then it ends, as before). `HuntsStarted` counts both.
 - **The target**, a point (`WaveTargetPoint`; `WaveTarget` none, `WaveTargetType` -1): the remembered point while it is
-  fresh (`Now - EnemyUnitTick <= ai.huntMemory`, 120 s), else a **sweep** of the scout's map-grid geometry
+  fresh (`Now - EnemyUnitTick <= ai.huntMemory`, 120 s; M5-H5, BUG-1120: pushed off an allied building, below), else a **sweep** of the scout's map-grid geometry
   (`MilitaryManager.HuntPoint`: the grid's cell centres, `ScoutManager.GridPoint`, then its interior corners, then a
   **border ring**, all of `ai.scoutGrid`'s `GridLines`; the hunt's own marks, `HuntVisited`, never the scout's
   `ScoutVisited`): first the unvisited point nearest the members' centroid, which becomes the sweep's origin
@@ -8075,6 +8076,24 @@ internal, shared), one knob. No `Command` kind: the hunt sends `AttackMove` (and
   this think is forgotten. Then a fresh sighting more than `ai.rallyReach` from the target (or any fresh sighting while
   sweeping) **re-targets** at once; with none fresh, a reached point (or a forgotten sighting) moves the sweep on, from the
   last point (or from the members' centroid). Every re-target owes each member one `AttackMove`.
+- **A defeated seat's buildings are forgotten (M5-H5, BUG-1119).** The fog keeps a ghost of every enemy building last
+  seen, and a seat's buildings collapse on its defeat tick (M5-H2) out of the others' sight, so their ghosts stayed: on
+  Pale Hills seed 2 (4 seats) p3 counted 18 of the defeated p2's and waited for a wave it could not afford instead of
+  hunting. `PlayerView.IsDefeated(player)` answers `World.IsDefeated` (public: the result every seat is shown, as
+  `MatchOver`), and `AiPlayer.IsLiveEnemy(owner)` (an enemy not defeated) filters every ghost the AI reads as an enemy
+  building: the census's `KnownEnemyBuildings`, `NearestEnemyBuilding` (wave targets, the rally direction),
+  `EnemyBuildingKnown` (a wave's target still known) and `ScoutManager`'s door rule. A wave on such a ghost finds its
+  target gone at the next think and turns into a hunt (or re-targets), as on a razed one. The fog's list and the player's
+  screen are untouched. Not applied to `BuildOrderExecutor.HallNear` (expansion spacing reads any hall ghost). A 2-seat
+  match ends on the first defeat, so it plays as before; no pin moved.
+- **A sighting by an ally's building (M5-H5, BUG-1120, the Producer's default).** In a team match an enemy hitting an
+  ally's building is seen right by its wall, and the hunt's `AttackMove` to that sighting was an order "onto an ally's
+  building" (QA's team soak, seed 1 adjacent). `MilitaryManager.SightingPoint`: a sighting's point on or within
+  `AllySlack` (0.5 m) of a building of an ally the seat sees is moved along the line toward the members' centroid until it
+  is 0.5 m clear of the footprint, then half a map cell (1 m) more (from the footprint's centre with the members on the
+  point; at most 4 footprints). The re-target rule compares the pushed point, so a pushed sighting is not re-sent every
+  think. Only with an ally (`PlayerView.HasAlly`): free-for-all and 1v1 play are unchanged. QA's soak oracle has no
+  exemption any more.
 - **Orders.** As a wave's: one command per unit per think, in slot order; a member owed an order gets `AttackMove` to the
   point; an Idle member is sent `AttackMove` again until `MaxTries` orders without progress, then left standing, a member,
   unordered (no `Attack` on a building, no going home: the "every member stuck" rule moves the point instead). The
@@ -8084,7 +8103,8 @@ internal, shared), one knob. No `Command` kind: the hunt sends `AttackMove` (and
   **120** (the brief's proposal); 0 is valid (only a sighting from the think itself is fresh). In `ContentHash`
   (`DataContentHashTests` row), `DataValidationTests` rows (missing, negative, over the maximum; 0 and 3,600 load).
 - **Save format 6 / 7.** The hunt's fields (`EnemyUnitPoint`, `EnemyUnitTick`, `Hunting`, `HuntSweep`, `HuntOrigin`,
-  `HuntVisited`, `HuntRing`, `HuntRingLeft`, `HuntPass`, `HuntsStarted`; the leg's index range-checked and `HuntRing` -1
+  `HuntVisited`, `HuntRing`, `HuntRingLeft`, `HuntPass`, `HuntsStarted`; the leg's index range-checked, since M5-H5 to -1
+  or a border-ring index (`RingStart` up: a leg on an interior point is `Malformed`), and `HuntRing` -1
   exactly when `HuntRingLeft` is 0) are written in their own section, `HUNT`, after `AIST`, only for a match with an AI seat: 6 is format 4
   plus `HUNT` (a generated map), 7 is format 5 plus `HUNT` (a hand-made map); a human-only match is saved 4 / 5 byte for
   byte as before ("Save format (M6-S2)"; `SaveHeader.VersionFor`). `AIST` keeps format 5's layout, so the M6-S7 fixtures
@@ -8132,7 +8152,11 @@ internal, shared), one knob. No `Command` kind: the hunt sends `AttackMove` (and
   `Save/SaveFormatTests` (the versions, the fixtures through `WithoutHunt`), `AiDeterminismTests.PaleHillsSeed3_ToTheEnd_TwoProcesses_SamePerTickHashes`
   (criterion 6, Stress), `Stress/MapSlice2StressTests.NormalVersusNormal_KnownStalls_EndWithin72000` (un-skipped, the fog
   oracle at every think), `DataValidationTests` / `DataContentHashTests` (the knob).
-- **Not yet** (slice 2 and later): high ground and ramps before attacking up, periodic re-scouting, rebuilding; Pale Hills
+- **Not yet** (slice 2 and later): high ground and ramps before attacking up, periodic re-scouting, rebuilding; the sweep
+  walks the perimeter leg as soon as it reaches a ring point, before the ground round where it began (M5-H5 measured,
+  BUG-1116: a lone worker 75 m from the origin is seen only after the 2 km leg; the two fixes tried, the points round the
+  origin first and the leg waiting for them, each sank a QA hide or leg row; the skipped row
+  `EndGameHardeningTests.ALoneIdleWorker_NearWhereTheHuntBegins_IsSeenBeforeThePerimeterLeg` keeps the case); Pale Hills
   seed 2's stalemate (both sides keep two halls; BUG-1068, narrowed to it) is not a hunt case. BUG-1067 (a seat whose scouts
   all die at the door finds no wood for minutes) is not taken here: neither rider is a few lines (gatherers searching near home
   is a new behaviour; the hall's sight reaching its woodlot is a faction-data change or a global `buildingSight` change that
@@ -8171,7 +8195,9 @@ rebuild losses"; docs/02 "High ground": the AI scouts ramps before attacking up 
   construction). The field is saved in `AIST` already and every other reader only asks whether it is negative, so a seat
   that lost its hall remembers the spot across a save with the layout unchanged. The command waits to be judged in
   `Blackboard.HousePending` (one base Build at a time, judged as a house Build is: a refused anchor gets a retry mark and the
-  next search moves on); the executor judges it itself while the hall is still missing, the economy's house rule once the
+  next search moves on; M5-H5, BUG-1118 item 1: not the lost hall's own anchor while `CanPlace` still allows a hall there,
+  since then the Build was not refused for its ground, e.g. its site was razed before the judge, and the next rebuild goes
+  back to the old spot); the executor judges it itself while the hall is still missing, the economy's house rule once the
   site stands. The steps wait (the executor returns) while the hall's Build is sent or in flight, or while only its cost
   or no worker free to build (all walking, a builder's command not yet applied) holds it back; then its cost is the think's reserve (`AiPlayer.HallReserved`; `ReserveStep` stays -1), so
   production trains only above it, the gatherers lean toward what it lacks, and the economy sends no house. It can't be
@@ -8262,7 +8288,11 @@ rebuild losses"; docs/02 "High ground": the AI scouts ramps before attacking up 
     Producer's ruling (2026-11-07-0236 ACCEPT):** the row is a skipped known case under BUG-1116 / BUG-1068
     (`FourAiSeats_OnPaleHills_Seed2_KnownStall`; seeds 1 / 3 and the teams row still run); the sim's hardening takes
     BUG-1119 (a defeated seat's buildings forgotten at the census), the lone-idle-worker hunt gap, then the house rule
-    re-measured with both in.
+    re-measured with both in. **M5-H5 (2026-11-08):** BUG-1119 and BUG-1120 shipped; the house rule tried again on top
+    and reverted (`MapFileTests` Pale Hills seed 1 no result by 36,000: 55,311, the loser's last production building never
+    seen without a rebuilt house to show the way; `KnownStalls` seed 5 no result by 72,000); the lone-worker gap is the
+    sweep's order (above, "Not yet"), not shipped either. The seed-2 row still stalls on BUG-1068's gold (every seat
+    under 25 gold from about 48,000). Both stay in BUG-1116's file with the measurements.
 - **Tests:** `Ai/RebuildTests` (criterion 2: a razed Barracks built again within two thinks and its step done again,
   built once; a razed hall's Keep the first Build after it, at the old anchor, the Train step held, the workers depositing
   again after it stands; a tree on the old anchor: the Keep a few cells off; at the hard cap a razed Billet not rebuilt,
@@ -9883,7 +9913,9 @@ ticks), 4 waves to 3, gathered 8,810 gold / 4,240 wood v 5,300 / 3,540.
 5, the `AIST` layout and `Blackboard.Save.cs` unchanged).
 
 - **The golden is decoupled from the data hash** ("Testing strategy"): its `data-hash` line is the hash at recording time,
-  the tests play it with the shipped hash substituted, the `k` lines are the pin. `QA/GatherWedgeQaTests` dropped its
+  the tests play it with the shipped hash substituted, the `k` lines are the pin. (M5-H5, BUG-1059: no test names the
+  header's value any more; `QA/GoldenDecouplingQaTests.TheCheckedInHeader_ParsesAsADataHash_WhateverItsValue` checks
+  only that it parses and the file plays decoupled, so a regen touches the replay file alone.) `QA/GatherWedgeQaTests` dropped its
   list of shipped hashes (its checkpoints are the proof), and `QA/Content/DescriptionWordingQaTests.TheShippedContentHash_IsTheGoldenReplaysHeader`
   is gone. This task moved the shipped hash and left the file byte-identical.
 - **Scout replacements are bounded (BUG-1052)** by `rules.json` `ai.scoutReplacements` (a whole number 0-8, default 2,

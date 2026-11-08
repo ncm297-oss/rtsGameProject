@@ -1,5 +1,4 @@
 using System.Numerics;
-using System.Reflection;
 using Rts.Sim.Ai;
 using Rts.Sim.Commands;
 using Rts.Sim.Data;
@@ -13,8 +12,8 @@ namespace Rts.Sim.Tests.QA;
 /// <summary>
 /// QA M5-4c-2 round 1 (2026-11-07-0926): the BUG-1121 fix's try rule (a <see cref="MilitaryManager.Focused"/> member whose
 /// focus ended without a give-up is re-sent its AttackMove without spending one of its <c>MaxTries</c>) under a focus that
-/// flickers in and out of the seat's sight, and the narrowness of the BUG-1120 oracle exemption
-/// (<c>TeamAiSoakStressTests.HuntToASighting</c>).
+/// flickers in and out of the seat's sight. (The BUG-1120 oracle exemption's narrowness row is gone with the exemption:
+/// M5-H5 pushes a hunt's sighting off allied buildings, <c>EndGameHardeningTests</c>.)
 /// </summary>
 public class HardKnobsRecheckQaTests
 {
@@ -96,47 +95,5 @@ public class HardKnobsRecheckQaTests
         }
         Assert.True(free <= members.Count * sightings, $"{free} free re-sends over {sightings} sightings");
         if (difficulty != AiDifficulty.Hard) Assert.Equal(0, free);
-    }
-
-    private static readonly MethodInfo s_huntToASighting = typeof(TeamAiSoakStressTests)
-        .GetMethod("HuntToASighting", BindingFlags.NonPublic | BindingFlags.Static)!;
-
-    private static bool Exempt(AiPlayer ai, Vector2 point) => (bool)s_huntToASighting.Invoke(null, new object[] { ai, point })!;
-
-    /// <summary>
-    /// BUG-1120's oracle exemption is narrow: an AttackMove beside an ally's building is excused only for a hunt in progress
-    /// whose target point is the order's point and the seat's last enemy-unit sighting. A forged order that is any other
-    /// (no wave, a wave that isn't a hunt, a point that is the hunt's but not the sighting, a sighting forgotten, a point off
-    /// the hunt's) is not excused, so the soak still reports it.
-    /// </summary>
-    [Fact]
-    public void TheSoakExemption_ExcusesOnlyAHuntToItsSighting()
-    {
-        Assert.NotNull(s_huntToASighting);
-        Simulation sim = AiScenes.Flat(AiScenes.Seats(AiDifficulty.Normal, SeatController.Ai, SeatController.Ai));
-        AiPlayer ai = sim.AiOf(0)!;
-        Blackboard b = ai.Board;
-        var sighting = new Vector2(40.5f, 22.25f);
-        void Set(bool wave, bool hunting, int tick, Vector2 target, Vector2 seen)
-        {
-            b.WaveActive = wave;
-            b.Hunting = hunting;
-            b.EnemyUnitTick = tick;
-            b.WaveTargetPoint = target;
-            b.EnemyUnitPoint = seen;
-        }
-        Set(true, true, 100, sighting, sighting);
-        Assert.True(Exempt(ai, sighting), "the hunt to its sighting is the excused case");
-        Assert.False(Exempt(ai, sighting + new Vector2(0.01f, 0f)), "a point beside the hunt's is not excused");
-        Set(false, true, 100, sighting, sighting);
-        Assert.False(Exempt(ai, sighting), "no wave in progress: not excused");
-        Set(true, false, 100, sighting, sighting);
-        Assert.False(Exempt(ai, sighting), "a wave on a building, not a hunt: not excused");
-        Set(true, true, -1, sighting, sighting);
-        Assert.False(Exempt(ai, sighting), "the sighting forgotten: not excused");
-        Set(true, true, 100, sighting, new Vector2(10f, 10f));
-        Assert.False(Exempt(ai, sighting), "a hunt to a sweep point, not the sighting: not excused");
-        Set(true, true, 100, new Vector2(10f, 10f), sighting);
-        Assert.False(Exempt(ai, sighting), "an order to the sighting while the hunt walks elsewhere: not excused");
     }
 }

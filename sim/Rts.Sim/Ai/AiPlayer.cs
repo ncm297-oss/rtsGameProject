@@ -619,7 +619,7 @@ internal sealed partial class AiPlayer
         }
         s = -1;
         while (View.NextGhost(ref s, out Vision.BuildingGhost g))
-            if (View.IsEnemy(g.Owner)) known++;
+            if (IsLiveEnemy(g.Owner)) known++; // BUG-1119: a defeated seat's ghosts are forgotten
         Board.KnownEnemyBuildings = known;
     }
 
@@ -650,7 +650,7 @@ internal sealed partial class AiPlayer
         s = -1;
         while (View.NextGhost(ref s, out Vision.BuildingGhost g))
         {
-            if (!View.IsEnemy(g.Owner)) continue;
+            if (!IsLiveEnemy(g.Owner)) continue;
             float d = Vector2.DistanceSquared(BuildingCentre(g.TypeId, g.Cell), from);
             if (d >= best) continue;
             best = d;
@@ -663,8 +663,17 @@ internal sealed partial class AiPlayer
     internal bool EnemyBuildingKnown(EntityHandle building, out bool seen)
     {
         seen = View.TryGetBuilding(building.Index, out SeenBuilding b) && b.Handle == building && View.IsEnemy(b.Owner);
-        return seen || View.TryGetGhost(building.Index, out Vision.BuildingGhost g) && g.Generation == building.Generation && View.IsEnemy(g.Owner);
+        return seen || View.TryGetGhost(building.Index, out Vision.BuildingGhost g) && g.Generation == building.Generation && IsLiveEnemy(g.Owner);
     }
+
+    /// <summary>
+    /// M5-H5 (BUG-1119): whether <paramref name="owner"/> is an enemy still in the match: an enemy (<see cref="PlayerView.IsEnemy"/>)
+    /// not defeated (<see cref="PlayerView.IsDefeated"/>, public under the win rule). The ghosts of a defeated seat's
+    /// buildings are fog-correct memory of buildings that collapsed with its defeat (M5-H2); counting them kept a survivor
+    /// waiting for a wave it could not afford instead of hunting (Pale Hills seed 2: 18 of a defeated seat's ghosts). So the
+    /// AI forgets them: they are no known enemy building, no wave target, and a wave on one turns into a hunt.
+    /// </summary>
+    internal bool IsLiveEnemy(int owner) => View.IsEnemy(owner) && !View.IsDefeated(owner);
 
     /// <summary>The centre (m) of the player's Town Hall (as <see cref="BuildOrderExecutor.HallCentre"/> picks it, else its first building); false with no building.</summary>
     internal bool TryHallPoint(out Vector2 point) => TryHallPoint(out point, out _);

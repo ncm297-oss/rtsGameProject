@@ -419,7 +419,7 @@ internal static class ScoutManager
             if (ai.View.IsEnemy(b.Owner) && Vector2.DistanceSquared(ai.BuildingCentre(b.TypeId, b.Cell), forest) <= door) return true;
         s = -1;
         while (ai.View.NextGhost(ref s, out Vision.BuildingGhost g))
-            if (ai.View.IsEnemy(g.Owner) && Vector2.DistanceSquared(ai.BuildingCentre(g.TypeId, g.Cell), forest) <= door) return true;
+            if (ai.IsLiveEnemy(g.Owner) && Vector2.DistanceSquared(ai.BuildingCentre(g.TypeId, g.Cell), forest) <= door) return true;
         return false;
     }
 }

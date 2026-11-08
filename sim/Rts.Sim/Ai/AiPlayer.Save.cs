@@ -62,8 +62,16 @@ internal sealed partial class AiPlayer
     /// <summary>M5-4d: writes the seat's hunt memory for the save's <c>HUNT</c> section (<see cref="Blackboard.WriteHuntTo"/>).</summary>
     internal void WriteHuntTo(SaveWriter w) => Board.WriteHuntTo(w);
 
-    /// <summary>M5-4d: reads what <see cref="WriteHuntTo"/> wrote, after <see cref="ReadFrom"/>.</summary>
-    internal void ReadHuntFrom(SaveReader r) => Board.ReadHuntFrom(r);
+    /// <summary>
+    /// M5-4d: reads what <see cref="WriteHuntTo"/> wrote, after <see cref="ReadFrom"/>. M5-H5: a perimeter leg's next point is a
+    /// border-ring index (<see cref="MilitaryManager.RingStart"/> and up) or -1, never an interior point.
+    /// </summary>
+    internal void ReadHuntFrom(SaveReader r)
+    {
+        Board.ReadHuntFrom(r);
+        int cols = ScoutManager.GridLines(View.MapWidth, Rules.ScoutGrid), rows = ScoutManager.GridLines(View.MapHeight, Rules.ScoutGrid);
+        r.Check(Board.HuntRing < 0 || Board.HuntRing >= MilitaryManager.RingStart(cols, rows));
+    }
 
     /// <summary>Reads what <see cref="WriteTo"/> wrote over this seat, freshly built for the same match (its pick already drawn).</summary>
     internal void ReadFrom(SaveReader r)

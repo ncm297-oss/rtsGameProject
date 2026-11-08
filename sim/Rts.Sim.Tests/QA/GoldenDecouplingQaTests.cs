@@ -66,12 +66,18 @@ public class GoldenDecouplingQaTests
         Assert.Equal(tick, played.Tick);
     }
 
-    /// <summary>The checked-in golden's header is still the recording-time hash, and the shipped hash has moved off it (the brief's proof).</summary>
+    /// <summary>
+    /// The checked-in golden's header is a data hash the reader parses, whatever its value: the <c>k</c> lines are the pin.
+    /// M5-H5 (BUG-1059): no literal and no "differs from the shipped hash" half any more, so a deliberate regen touches the
+    /// replay file alone (the literal re-coupled every regen to this test, and the inequality was red in the session that
+    /// regenerated it). That the header is informational is proved by <see cref="AJunkDataHashLine_StillPlaysEveryCheckpoint_Decoupled_AndIsRefusedAsRecorded"/>.
+    /// </summary>
     [Fact]
-    public void TheCheckedInHeader_IsTheRecordingTimeHash_NotTheShippedOne()
+    public void TheCheckedInHeader_ParsesAsADataHash_WhateverItsValue()
     {
         Assert.Equal(ReplayError.None, ReplayFormat.TryReadFile(ReplayTestRun.GoldenPath, out Replay? r));
-        Assert.Equal(0x30C51BB619A7E650UL, r!.DataHash);
-        Assert.NotEqual(r.DataHash, TestSim.Data.ContentHash());
+        Assert.NotEqual(0UL, r!.DataHash);
+        ReplayResult played = ReplayPlayer.Run(ReplayTestRun.WithShippedDataHash(r), TestSim.Data);
+        Assert.True(played.Ok, played.ToString());
     }
 }

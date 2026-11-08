@@ -47,19 +47,6 @@ public class TeamAiSoakStressTests
         return false;
     }
 
-    /// <summary>
-    /// BUG-1120 (a narrow exemption, ruled by the Producer for M5-4c-2): an AttackMove of a hunt (M5-4d) to its target point
-    /// when that point is the seat's last enemy-unit sighting (<c>Blackboard.EnemyUnitPoint</c>) is legal even beside an
-    /// ally's building: it walks to where an enemy unit was seen (on seed 1 adjacent, an enemy attacking the ally's
-    /// building), it targets no ally. Whether a hunt should snap such a point off allied footprints is open in BUG-1120 for
-    /// the sim's hardening session (a Normal-play change, outside M5-4c-2).
-    /// </summary>
-    private static bool HuntToASighting(AiPlayer ai, Vector2 point)
-    {
-        Blackboard board = ai.Board;
-        return board.WaveActive && board.Hunting && board.EnemyUnitTick >= 0 && point == board.WaveTargetPoint && point == board.EnemyUnitPoint;
-    }
-
     private static bool EnemyArmyNear(World w, int p, Vector2 at, float radius)
     {
         UnitStore u = w.Units;
@@ -102,7 +89,7 @@ public class TeamAiSoakStressTests
             configure: c => c with { Map = c.Map with { Width = 256, Height = 256, Forests = 24, GoldMines = 16, StartLocations = 4 } });
         World w = sim.World;
         var bad = new List<string>();
-        int attacks = 0, attackMoves = 0, casts = 0, defenses = 0, huntSightings = 0;
+        int attacks = 0, attackMoves = 0, casts = 0, defenses = 0;
         for (int p = 0; p < 4; p++)
         {
             int seat = p;
@@ -118,11 +105,8 @@ public class TeamAiSoakStressTests
                         break;
                     case CommandKind.AttackMove:
                         attackMoves++;
-                        if (NearAlliedBuilding(w, seat, c.Position, 0.5f))
-                        {
-                            if (HuntToASighting(sim.AiOf(seat)!, c.Position)) huntSightings++; // BUG-1120: legal, see HuntToASighting
-                            else bad.Add($"tick {sim.TickNumber}: seat {seat} AttackMove onto an ally's building at {c.Position}");
-                        }
+                        // BUG-1120: no exemption since M5-H5 (a hunt's sighting is pushed off allied buildings).
+                        if (NearAlliedBuilding(w, seat, c.Position, 0.5f)) bad.Add($"tick {sim.TickNumber}: seat {seat} AttackMove onto an ally's building at {c.Position}");
                         break;
                     case CommandKind.UseAbility:
                         casts++;
@@ -169,7 +153,7 @@ public class TeamAiSoakStressTests
             if (sim.MatchOver) break;
         }
         int[] waves = Enumerable.Range(0, 4).Select(p => sim.AiOf(p)!.Board.WavesStarted).ToArray();
-        _out.WriteLine($"seed {seed} adjacent {adjacent}: {sim.TickNumber} ticks, {attacks} Attacks, {attackMoves} AttackMoves ({huntSightings} hunts to a sighting beside an ally's building), {casts} casts, {defenses} defenses; " +
+        _out.WriteLine($"seed {seed} adjacent {adjacent}: {sim.TickNumber} ticks, {attacks} Attacks, {attackMoves} AttackMoves, {casts} casts, {defenses} defenses; " +
             $"waves {string.Join(", ", waves)}; defeated {string.Join(", ", Enumerable.Range(0, 4).Select(p => w.IsDefeated(p)))}; over {sim.MatchOver}");
         // Both sides wave at the enemy. Not every seat: on seed 3 the Easy seat 3 falls behind and never waves, the same with every
         // team 0 (QA checked the free-for-all twin: equal counts), so that is the economy, not the teams.

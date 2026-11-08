@@ -202,7 +202,7 @@ internal static class MilitaryManager
         board.HuntRing = -1;
         board.HuntRingLeft = board.HuntPass = 0;
         board.HuntsStarted++;
-        if (Fresh(ai)) HuntTarget(ai, board.EnemyUnitPoint, -1);
+        if (Fresh(ai)) HuntTarget(ai, board.EnemyUnitPoint, -1, army);
         else StartSweep(ai, army);
     }
 
@@ -216,7 +216,7 @@ internal static class MilitaryManager
     {
         ai.Board.HuntOrigin = army;
         int ring = ai.Board.HuntRing;
-        HuntTarget(ai, army, ring >= 0 ? RingPrevious(Cols(ai), Rows(ai), ring) : NextSweep(ai, army, -1)); // a leg in progress goes on
+        HuntTarget(ai, army, ring >= 0 ? RingPrevious(Cols(ai), Rows(ai), ring) : NextSweep(ai, army, -1), army); // a leg in progress goes on
     }
 
     /// <summary>BUG-1111: the ring point whose next (<see cref="RingNext"/>) is ring point <paramref name="k"/>; one pass over the ring.</summary>
@@ -234,16 +234,65 @@ internal static class MilitaryManager
 
     /// <summary>
     /// M5-4d: the hunt's target becomes <paramref name="sweep"/>'s grid point, or with -1 <paramref name="point"/> (a
-    /// sighting), clamped inside the map; every member is owed an AttackMove to it.
+    /// sighting), clamped inside the map and (M5-H5, BUG-1120) pushed off any allied building toward the members at
+    /// <paramref name="army"/> (<see cref="SightingPoint"/>); every member is owed an AttackMove to it.
     /// </summary>
-    private static void HuntTarget(AiPlayer ai, Vector2 point, int sweep)
+    private static void HuntTarget(AiPlayer ai, Vector2 point, int sweep, Vector2 army)
     {
         Blackboard board = ai.Board;
         board.HuntSweep = sweep;
-        board.WaveTargetPoint = sweep >= 0 ? HuntPoint(ai, Cols(ai), Rows(ai), sweep) : ai.ClampToMap(point);
+        board.WaveTargetPoint = sweep >= 0 ? HuntPoint(ai, Cols(ai), Rows(ai), sweep) : SightingPoint(ai, point, army);
         for (int k = 0; k < ai.ArmyCount; k++)
             if (Member(ai, ai.ArmySlots[k], out _)) Owe(board, ai.ArmySlots[k], ToAttack);
     }
+
+    /// <summary>
+    /// M5-H5 (BUG-1120, the Producer's default): the point a hunt sends its members to for a sighting at
+    /// <paramref name="seen"/>: clamped inside the map, and when it lies on or within <see cref="AllySlack"/> of a building of
+    /// an ally the seat sees (not its own, not an enemy's), moved along the line toward the members at
+    /// <paramref name="army"/> until it is <see cref="AllySlack"/> clear of that footprint, then half a map cell more (a point
+    /// on the members themselves goes out from the footprint's centre). An enemy unit hitting an ally's building was seen
+    /// right by its wall, and an AttackMove there was an order "onto an ally's building" (QA's team soak, seed 1 adjacent);
+    /// the push keeps the order beside the fight, on the hunter's side. At most <see cref="MaxPushes"/> pushes (one per
+    /// footprint met; a point boxed in by allied buildings keeps the last). Reads the seat's view only; no allocation.
+    /// </summary>
+    internal static Vector2 SightingPoint(AiPlayer ai, Vector2 seen, Vector2 army)
+    {
+        Vector2 p = ai.ClampToMap(seen);
+        if (!ai.View.HasAlly) return p;
+        for (int push = 0; push < MaxPushes; push++)
+        {
+            bool moved = false;
+            int s = -1;
+            while (ai.View.NextBuilding(ref s, out SeenBuilding b))
+            {
+                if (b.Owner == ai.Player || ai.View.IsEnemy(b.Owner)) continue;
+                BuildingDef def = ai.Data.Buildings[b.TypeId];
+                int w = ai.View.MapWidth;
+                Vector2 min = new Vector2(b.Cell % w, b.Cell / w) * MapConstants.CellSize - new Vector2(AllySlack);
+                Vector2 max = min + new Vector2(def.FootprintWidth, def.FootprintHeight) * MapConstants.CellSize + new Vector2(2 * AllySlack);
+                if (p.X < min.X || p.Y < min.Y || p.X > max.X || p.Y > max.Y) continue;
+                Vector2 d = army - p;
+                if (d.LengthSquared() < 1e-6f) d = p - (min + max) * 0.5f;
+                if (d.LengthSquared() < 1e-6f) d = Vector2.UnitX;
+                d = Vector2.Normalize(d);
+                // The ray p + t d leaves the slack box at the least exit t over the axes it moves along.
+                float tx = d.X > 0 ? (max.X - p.X) / d.X : d.X < 0 ? (min.X - p.X) / d.X : float.MaxValue;
+                float ty = d.Y > 0 ? (max.Y - p.Y) / d.Y : d.Y < 0 ? (min.Y - p.Y) / d.Y : float.MaxValue;
+                p = ai.ClampToMap(p + d * (Math.Min(tx, ty) + MapConstants.CellSize * 0.5f));
+                moved = true;
+                break;
+            }
+            if (!moved) break;
+        }
+        return p;
+    }
+
+    /// <summary>M5-H5 (BUG-1120): how close (m) to an allied building's footprint a hunt's point may lie (QA's soak oracle's slack).</summary>
+    internal const float AllySlack = 0.5f;
+
+    /// <summary>M5-H5 (BUG-1120): the most footprints <see cref="SightingPoint"/> pushes a point off (a bound, not a balance number).</summary>
+    private const int MaxPushes = 4;
 
     /// <summary>
     /// M5-4d: the next sweep point: the unvisited one nearest <paramref name="from"/> (the last point, or the army), never
@@ -413,12 +462,13 @@ internal static class MilitaryManager
         }
         if (Fresh(ai))
         {
-            if (board.HuntSweep >= 0 || Vector2.DistanceSquared(board.EnemyUnitPoint, board.WaveTargetPoint) > reach)
-                HuntTarget(ai, board.EnemyUnitPoint, -1);
+            // BUG-1120: against the point the sighting would be sent to, so a pushed one is not re-sent every think.
+            if (board.HuntSweep >= 0 || Vector2.DistanceSquared(SightingPoint(ai, board.EnemyUnitPoint, army), board.WaveTargetPoint) > reach)
+                HuntTarget(ai, board.EnemyUnitPoint, -1, army);
             return;
         }
         if (board.HuntSweep < 0) StartSweep(ai, army); // a sighting forgotten (or none): sweep from here
-        else if (next) HuntTarget(ai, board.WaveTargetPoint, AfterReached(ai, board.HuntSweep));
+        else if (next) HuntTarget(ai, board.WaveTargetPoint, AfterReached(ai, board.HuntSweep), army);
     }
 
     /// <summary>

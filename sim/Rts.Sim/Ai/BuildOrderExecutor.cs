@@ -161,7 +161,11 @@ internal static class BuildOrderExecutor
         if (pending.Kind != PendingKind.None)
         {
             if (ai.Now <= pending.AppliesAt) return pending.TypeId == ai.TownHallType; // in flight (a house Build: steps go on)
-            if (!ai.BuildAccepted(pending)) board.MarkBad(pending.TypeId, pending.Cell);
+            // M5-H5 (BUG-1118 item 1): a hall Build at the lost hall's own anchor that the anchor still takes was not refused
+            // for its ground (its site was razed before this judge, or a unit stood there and moved): no retry mark, so the
+            // next rebuild goes back to the old spot instead of a cell off it.
+            if (!ai.BuildAccepted(pending) && !(pending.TypeId == ai.TownHallType && pending.Cell == ai.LostHallCell && ai.View.CanPlace(pending.TypeId, pending.Cell, out _)))
+                board.MarkBad(pending.TypeId, pending.Cell);
             pending = default;
         }
         int lost = ai.LostHallCell, centre = RebuildCentre(ai, lost);

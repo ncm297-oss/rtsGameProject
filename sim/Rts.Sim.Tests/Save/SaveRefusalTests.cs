@@ -523,4 +523,31 @@ public class SaveRefusalTests
             Assert.True(allocated < 1024 * 1024, $"{allocated:N0} bytes allocated");
         }
     }
+
+    /// <summary>
+    /// M5-H5 (the M5-4d note; fail-first): the perimeter leg's next point (<c>HuntRing</c>, written just before
+    /// <c>HuntRingLeft</c>, <c>HuntPass</c> and <c>HuntsStarted</c> at the end of the <c>HUNT</c> section) is a border-ring index
+    /// or -1: a forged leg on a cell centre (index 0) or on the last interior point is <see cref="SaveError.Malformed"/> (both
+    /// loaded before), the first ring index loads.
+    /// </summary>
+    [Fact]
+    public void AForgedLeg_OnAPointBelowTheRing_IsMalformed()
+    {
+        byte[] good = SaveBytes.SmallAi();
+        int end = good.Length - SaveFormat.ChecksumLength - 4;
+        Assert.Equal("END!"u8.ToArray(), good[end..(end + 4)]);
+        Rts.Sim.Ai.AiPlayer ai = SaveTestRun.Load(TestSim.Data, good).AiOf(0)!;
+        int cols = Rts.Sim.Ai.ScoutManager.GridLines(ai.View.MapWidth, ai.Rules.ScoutGrid), rows = Rts.Sim.Ai.ScoutManager.GridLines(ai.View.MapHeight, ai.Rules.ScoutGrid);
+        int ring = Rts.Sim.Ai.MilitaryManager.RingStart(cols, rows);
+        SaveError Forged(int huntRing)
+        {
+            byte[] bad = (byte[])good.Clone();
+            BinaryPrimitives.WriteInt32LittleEndian(bad.AsSpan(end - 16), huntRing);
+            BinaryPrimitives.WriteInt32LittleEndian(bad.AsSpan(end - 12), 1);
+            return SaveTestRun.TryLoad(TestSim.Data, SaveBytes.Rechecksum(bad));
+        }
+        Assert.Equal(SaveError.Malformed, Forged(0));
+        Assert.Equal(SaveError.Malformed, Forged(ring - 1));
+        Assert.Equal(SaveError.None, Forged(ring));
+    }
 }

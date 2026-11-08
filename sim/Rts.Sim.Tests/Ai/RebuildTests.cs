@@ -157,6 +157,39 @@ public class RebuildTests
         Assert.True(deposits >= 3, $"{deposits} deposits after the hall stood again");
     }
 
+    /// <summary>
+    /// M5-H5 (BUG-1118 item 1; fail-first): the rebuilt Keep's site razed the moment it appears, before the think that judges
+    /// its Build: the anchor still takes a Keep, so the Build is not judged refused and gets no retry mark; the next Keep
+    /// Build goes to the old anchor again (before: a cell or so off, by the ring search, and that spot became "the old spot").
+    /// </summary>
+    [Fact]
+    public void AHallSite_RazedBeforeItsBuildIsJudged_IsRebuiltAtTheSameAnchor()
+    {
+        Simulation sim = Scene(s_workers.Value);
+        AiPlayer ai = sim.AiOf(0)!;
+        World w = sim.World;
+        List<Command> log = AiScenes.Log(sim, 0);
+        for (int k = 0; k < 10; k++) NextThink(sim);
+        EntityHandle hall = Own(w, Keep);
+        int anchor = w.Buildings.Cell[hall.Index];
+        Assert.True(w.Buildings.Free(hall));
+        EntityHandle site = default;
+        for (int t = 0; t < 2000 && site.Generation == 0; t++)
+        {
+            sim.Tick();
+            site = Own(w, Keep);
+        }
+        Assert.True(site.Generation != 0, "no Keep site");
+        Assert.Equal(anchor, w.Buildings.Cell[site.Index]);
+        int razed = sim.TickNumber;
+        Assert.True(w.Buildings.Free(site)); // before the next think judges its Build
+        EntityHandle again = UntilFinished(sim, Keep);
+        Assert.Equal(anchor, w.Buildings.Cell[again.Index]);
+        Command rebuild = log.First(c => c.Kind == CommandKind.Build && c.TypeId == Keep && c.Tick > razed);
+        Assert.Equal(ai.CellCentre(anchor), rebuild.Position);
+        Assert.False(ai.Board.IsBad(Keep, anchor));
+    }
+
     /// <summary>Criterion 2 (b), the anchor taken: a tree on the old anchor, so the Keep goes up by the ring search round it, a few cells off.</summary>
     [Fact]
     public void ARazedHall_WhoseAnchorIsTaken_IsRebuiltNearby()

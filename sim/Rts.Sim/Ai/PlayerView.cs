@@ -83,6 +83,12 @@ public sealed class PlayerView
     /// <summary>M5-4d: whether the match has a result (<see cref="World.MatchOver"/>): the result screen every seat is shown, so nothing hidden.</summary>
     public bool MatchOver => _world.MatchOver;
 
+    /// <summary>
+    /// M5-H5 (BUG-1119): whether <paramref name="player"/> is defeated (<see cref="World.IsDefeated"/>; false for no such
+    /// player). Public under the win rule: every seat is told who is out (the result banner), so this reveals nothing the fog hides.
+    /// </summary>
+    public bool IsDefeated(int player) => _world.IsDefeated(player);
+
     // ---------- the fog grid ----------
 
     /// <summary>Map width in cells (cells are row-major, <c>y * MapWidth + x</c>).</summary>
