@@ -19,5 +19,8 @@
           "defendRadius": 48, "defendFor": 20, "workerFleeRadius": 16, "defendRatio": 1.5, "defendMinValue": 150, "recallHallHp": 0.5,
           "castMinTargets": 2, "reserveShift": 0.25, "reserveArmyShare": 1,
           "gatherReach": 64, "scoutReplacements": 2, "spendDownQueue": 2,
-          "huntMemory": 120, "focusReach": 14 }
+          "huntMemory": 120, "focusReach": 14,
+          "counterMemory": 180,
+          "counters": { "worker": ["shock"], "line": ["caster", "siege"], "ranged": ["shock"], "shock": ["line"],
+                        "caster": ["shock", "ranged"], "siege": ["line", "shock"], "unique": [] } }
 }

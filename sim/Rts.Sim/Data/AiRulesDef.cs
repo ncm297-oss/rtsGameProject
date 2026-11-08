@@ -1,3 +1,5 @@
+using System.Collections.Immutable;
+
 namespace Rts.Sim.Data;
 
 /// <summary>
@@ -115,4 +117,20 @@ public sealed class AiRulesDef
     /// its radius + a cell, at most this): a fighter focuses an enemy unit seen within its reach (<c>focusReach</c> m, 1-64).
     /// </summary>
     public float FocusReach { get; init; }
+
+    /// <summary>
+    /// M5-9a: a sighting of enemy units of one slot fades linearly to nothing over this many ticks in the AI's counter memory
+    /// (<c>counterMemory</c> s, above 0, to ticks; docs/03 "Implementation (M5-9a)").
+    /// </summary>
+    public int CounterMemoryTicks { get; init; }
+
+    /// <summary>
+    /// M5-9a: <c>ai.counters</c> as bit masks, indexed by the enemy's <see cref="UnitSlot"/>: bit <c>s</c> is set when own slot
+    /// <c>s</c> counters it (docs/02 "Faction template", the "Countered by" column). Default (no <c>ai</c>) or all 0: no shift.
+    /// </summary>
+    public ImmutableArray<byte> CounterMasks { get; init; }
+
+    /// <summary>M5-9a: whether own slot <paramref name="own"/> counters enemy slot <paramref name="enemy"/> (<see cref="CounterMasks"/>).</summary>
+    public bool Counters(UnitSlot own, UnitSlot enemy) =>
+        !CounterMasks.IsDefault && (uint)enemy < (uint)CounterMasks.Length && (CounterMasks[(int)enemy] & (1 << (int)own)) != 0;
 }

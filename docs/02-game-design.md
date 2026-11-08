@@ -477,6 +477,16 @@ own cues (select, order, refused, building placed or finished, unit or tech read
   two matches against the same faction can open differently while a replay or a save still reproduces the pick
   (built in M5-8a; since D21, 2026-10-18, each faction ships three, listed on its page under "AI build order (Normal)":
   the Malazans Combined arms, Crossbow push and Fast Age II, the Whirlwind Swarm, Raider rush and Holy war).
+- The AI adapts its army to what it has seen. It remembers, per unit slot, how many enemy combat units of that slot it saw
+  at once (workers never count, nor an ally's units; only what its own fog-of-war view shows, a teammate's shared sight
+  included), and that memory fades linearly to nothing over `rules.json` `ai.counterMemory` (180 s) unless a sighting at
+  least as big renews it. When it picks the next unit to train, each unit of its opening's army mix weighs more by the
+  share of the remembered enemy its slot counters (`ai.counters`, the template's "Countered by" column above: Line
+  counters Shock and siege; Ranged counters casters; Shock counters Ranged, casters, siege and workers; casters and siege
+  counter Line), times the difficulty's `counterStrength` (`ai.json`: Easy 0, so an Easy AI never adapts; Normal 0.5;
+  Hard 1.0). A Hard AI that has seen only cavalry gives its Line twice the usual weight, a Normal one 1.5 times. No unit
+  is weighted below its opening's mix and a unit the mix doesn't list is not added, so the shift tilts the army, it
+  doesn't replace it (built in M5-9a, D14 c; [03 Implementation (M5-9a)](03-technical-design.md#implementation-m5-9a)).
 - The AI sees only its own fog-of-war view. It never reads hidden enemy state.
 
 ## Game flow

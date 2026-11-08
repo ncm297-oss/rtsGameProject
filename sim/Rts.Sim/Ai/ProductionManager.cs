@@ -10,7 +10,9 @@ namespace Rts.Sim.Ai;
 /// reserved step (<see cref="AiPlayer.CanAffordAboveReserve"/>). BUG-1050: while the AI spends down
 /// (<see cref="AiPlayer.SpendingDown"/>, a starting-resources preset's <c>aiSpendAbove</c>) it trains even on a think the build
 /// order sent, one Train per producer, at producers whose queue holds fewer than <see cref="AiRulesDef.SpendDownQueue"/> (<c>ai.spendDownQueue</c>), until the bank
-/// is down to the threshold or nothing more can be trained.
+/// is down to the threshold or nothing more can be trained. M5-9a: each composition weight is shifted toward what counters the
+/// enemy units the AI remembers seeing: weight x (1 + <c>counterStrength</c> x <see cref="AiPlayer.CounterShare"/> of the
+/// unit's slot); no unit is added and none weighted below the opening's own.
 /// </summary>
 internal static class ProductionManager
 {
@@ -34,8 +36,12 @@ internal static class ProductionManager
         for (int k = 0; k < mix.Units.Length; k++)
         {
             int type = mix.Units[k];
+            UnitDef def = ai.Data.Units[type];
+            // M5-9a: the weight shifted up by the share of the remembered enemy the unit's slot counters, times the
+            // difficulty's counterStrength; never below the opening's own (strength 0 multiplies by exactly 1).
+            float weight = mix.Weights[k] * (1f + ai.Knobs.CounterStrength * ai.CounterShare[(int)def.Slot]);
             // Weights are population shares (Requests 36 a): a 3-pop unit fills three times what a 1-pop one does.
-            float share = (ai.Live[type] + ai.Queued[type]) * ai.Data.Units[type].HalfPop / mix.Weights[k];
+            float share = (ai.Live[type] + ai.Queued[type]) * def.HalfPop / weight;
             if (share >= pickShare || !CanTrainSomewhere(ai, type)) continue;
             pick = type;
             pickShare = share;

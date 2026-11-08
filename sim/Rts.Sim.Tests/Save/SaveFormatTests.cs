@@ -15,21 +15,27 @@ namespace Rts.Sim.Tests.Save;
 public class SaveFormatTests
 {
     [Fact]
-    public void CurrentVersion_Is7_AGeneratedMapWrites4Or6_AndFormat3StillReads()
+    public void CurrentVersion_Is9_AGeneratedMapWrites4Or8_AndFormat3StillReads()
     {
         // M6-S3: the AI seats' section bumped the format to 2 (rule 36); M6-S4: a team byte per seat to 3; M6-S6: the
         // starting-resources preset to 4; M6-S7: the map id to 5, written only for a hand-made map (a generated map's save is
         // still 4). Formats 3-4 still load (3 as standard; both as generated maps); older files are refused, not read.
         // M5-4d: the AI seats' hunt section (HUNT) makes a match with an AI seat 6 (generated map) or 7 (hand-made map); one
-        // with no AI seat is still 4 / 5, and a save with an AI seat reads only from 6.
-        Assert.Equal(7, SaveFormat.CurrentVersion);
-        Assert.Equal(6, SaveFormat.HuntMaplessVersion);
+        // with no AI seat is still 4 / 5, and a save with an AI seat reads only from 6. M5-9a: the AI seats' counter memory
+        // (CTRM, after HUNT) makes a match with an AI seat 8 (generated map) or 9 (hand-made map); a save with an AI seat
+        // reads only from 8, one with none still from 3.
+        Assert.Equal(9, SaveFormat.CurrentVersion);
+        Assert.Equal(8, SaveFormat.HuntMaplessVersion);
+        Assert.Equal((6, 7), (SaveFormat.HuntOnlyMaplessVersion, SaveFormat.HuntOnlyMapVersion));
         Assert.Equal(5, SaveFormat.MapVersion);
         Assert.Equal(4, SaveFormat.MaplessVersion);
         Assert.Equal(3, SaveFormat.OldestReadVersion);
         Assert.Equal(6, SaveFormat.FirstHuntVersion);
-        Assert.Equal((4, 5, 6, 7), (SaveHeader.VersionFor(false, false), SaveHeader.VersionFor(true, false), SaveHeader.VersionFor(false, true), SaveHeader.VersionFor(true, true)));
-        Assert.Equal(new[] { false, false, true, false, true }, new[] { 3, 4, 5, 6, 7 }.Select(SaveFormat.HasMapId).ToArray());
+        Assert.Equal(8, SaveFormat.FirstCounterVersion);
+        Assert.Equal((4, 5, 8, 9), (SaveHeader.VersionFor(false, false), SaveHeader.VersionFor(true, false), SaveHeader.VersionFor(false, true), SaveHeader.VersionFor(true, true)));
+        Assert.Equal(new[] { false, false, true, false, true, false, true }, new[] { 3, 4, 5, 6, 7, 8, 9 }.Select(SaveFormat.HasMapId).ToArray());
+        Assert.Equal(new[] { false, false, false, true, true, true, true }, new[] { 3, 4, 5, 6, 7, 8, 9 }.Select(SaveFormat.HasHunt).ToArray());
+        Assert.Equal(new[] { false, false, false, false, false, true, true }, new[] { 3, 4, 5, 6, 7, 8, 9 }.Select(SaveFormat.HasCounters).ToArray());
     }
 
     /// <summary>M6-S4: each seat's team is one byte, in player order, after the tick (0 for no team); every format-2 field keeps its offset.</summary>
@@ -163,6 +169,7 @@ public class SaveFormatTests
     /// the checksum aside (they follow the data, which this task and the data track change). M5-4d: the AI scene now saves
     /// format 6, which is format 4 plus the <c>HUNT</c> section: with that section taken out (and the version and length put
     /// back) its bytes are still the fixture's (<see cref="PreMapFixtures.WithoutHunt"/>); the human scene is format 4 as it was.
+    /// M5-9a: the AI scene saves format 8, format 6 plus <c>CTRM</c>; <see cref="PreMapFixtures.WithoutHunt"/> takes both out.
     /// </summary>
     [Theory]
     [InlineData("save_menu_seed1")]
@@ -171,7 +178,7 @@ public class SaveFormatTests
     {
         (string _, int length, ulong digest) = PreMapFixtures.SaveDigests.Single(d => d.Name == name);
         byte[] bytes = SaveTestRun.Save(PreMapFixtures.SaveScene(name));
-        // save_menu_seed1 seats no AI (format 4 as it was); save_ai_seed2 does (format 6: 4 plus HUNT).
+        // save_menu_seed1 seats no AI (format 4 as it was); save_ai_seed2 does (format 8: 4 plus HUNT plus CTRM).
         int version = BitConverter.ToInt32(bytes, SaveFormat.MagicLength);
         Assert.Equal(name == "save_ai_seed2" ? SaveFormat.HuntMaplessVersion : SaveFormat.MaplessVersion, version);
         byte[] normalized = PreMapFixtures.Normalize(version == SaveFormat.MaplessVersion ? bytes : PreMapFixtures.WithoutHunt(bytes));

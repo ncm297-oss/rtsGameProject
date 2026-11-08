@@ -11,7 +11,7 @@ namespace Rts.Sim.Tests.Content;
 /// the match itself. Asserted: both sides started a wave, and no step is a dead end: at 20:00 every step of each side is
 /// done or legitimately waiting, which is one of (a) its <c>pop</c> trigger was never reached, (b) the side was defeated
 /// first, (c) a house step at the hard cap, or one of the reasons <see cref="WhyWaiting"/> lists (a requirement not had
-/// yet, its gold or wood not in hand, no known free mine, its building razed). Everything else
+/// yet, its gold or wood not in hand, no known free mine, its building razed; M5-9a: a build step with no worker alive). Everything else
 /// is printed for the owner: the first wave, Age II, the defeat, the steps done. D-H6: a step waiting on gold or wood also
 /// prints since when it has been due, how long it waited and the banks at the end; a wait over 5:00 is marked as
 /// BUG-0981's pattern (printed, not failed: since the sim's M5-4g the AI reserves for a due step, but only while its army
@@ -289,6 +289,9 @@ public class AiOpeningPairsReportTests
             return s.Trigger == AiStepTrigger.Pop ? $"pop {s.At / 2.0} never reached (pop {w.HalfPop[p] / 2.0} at the end)" : null;
         if (s.Action == AiStepAction.Build && s.Target == ai.HouseType && w.HalfPopCap[p] >= d.Rules.HalfPopCap)
             return "a house step at the hard cap";
+        // M5-9a: a side beaten to its last building (no worker alive, not yet defeated) can't build: not a dead end.
+        if (s.Action is AiStepAction.Build or AiStepAction.Expand && Pop(sim, p).Workers == 0)
+            return "no worker alive to build it (the side is beaten, its buildings still stand)";
         (int gold, int wood) = s.Action switch
         {
             AiStepAction.Build => (d.Buildings[s.Target].CostGold, d.Buildings[s.Target].CostWood),

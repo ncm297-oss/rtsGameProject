@@ -20,22 +20,31 @@ public class MatchCriterionTests
     /// <summary>One criterion row: the map, seed, seats, teams (null: none) and the tick bound it must end within.</summary>
     internal sealed record Row(string Id, string Map, ulong Seed, int Players, int[]? Teams, int Bound);
 
-    /// <summary>The literal row's bound: 20 minutes. Vathar Crossing seed 1 ends at 22,794 (18:59), seat 1 (Whirlwind) the winner.</summary>
+    /// <summary>The literal row's bound: 20 minutes. Vathar Crossing seed 1 ends at 23,043 (19:12; M5-9a's counter shift, was 22,794), seat 1 (Whirlwind) the winner.</summary>
     internal const int VatharBound = 24_000;
 
-    /// <summary>Pale Hills seed 1 ends at 34,219 (28:30; <c>MapFileTests</c>' pin), seat 1 the winner: the Producer's 36,000.</summary>
+    /// <summary>
+    /// Pale Hills seed 1 ended at 34,219 (28:30; <c>MapFileTests</c>' pin), seat 1 the winner: the Producer's 36,000. M5-9a:
+    /// with Normal's counter shift it no longer ends (both sides out of gold by 24:00, a stalemate past 60:00): BUG-1153, a
+    /// finding for the Producer, not a re-bound.
+    /// </summary>
     internal const int PaleHillsBound = 36_000;
 
-    /// <summary>Raraku seed 1 ends at 28,083 (23:24), seat 0 the winner: the next 6,000 above it with at least 10 % slack (30,891).</summary>
+    /// <summary>Raraku seed 1 ends at 28,083 (23:24), seat 0 the winner: the next 6,000 above it with at least 10 % slack (30,891). Unchanged by M5-9a.</summary>
     internal const int RarakuBound = 36_000;
 
-    /// <summary>The generated map: seed 1 is the lowest of 1-6 ending under 24,000 (21,789 = 18:09, seat 0 the winner).</summary>
-    internal const int GeneratedBound = 24_000;
+    /// <summary>
+    /// The generated map: seed 1 was the lowest of 1-6 ending under 24,000 (21,789 = 18:09, seat 0 the winner). M5-9a: Normal's
+    /// counter shift lengthens it to 26,853 (22:22), the same winner; the bound moves by Raraku's rule (the next 6,000 above
+    /// the end with at least 10 % slack: 29,538, so 30,000) and the row keeps its seed (seed 2, 15,691, is now the lowest
+    /// under 24,000; the Producer may prefer it).
+    /// </summary>
+    internal const int GeneratedBound = 30_000;
 
-    /// <summary>The four-seat rows' bound (60 minutes, QA's M5-H5 sweep): the FFA (Vathar seed 2) ends at 52,305 (43:35), the 2v2 (Vathar seed 1) at 34,510 (28:45).</summary>
+    /// <summary>The four-seat rows' bound (60 minutes, QA's M5-H5 sweep): the FFA (Vathar seed 2) ends at 58,155 (48:27; was 52,305 before M5-9a), the 2v2 (Vathar seed 1) at 35,648 (29:42; was 34,510).</summary>
     internal const int FourSeatBound = 72_000;
 
-    /// <summary>The tick the literal row is saved at: half its end (22,794 / 2).</summary>
+    /// <summary>The tick the literal row is saved at: half its end before M5-9a (22,794 / 2; any mid-match tick serves).</summary>
     internal const int HalfWay = 11_397;
 
     internal static readonly Row[] Rows =

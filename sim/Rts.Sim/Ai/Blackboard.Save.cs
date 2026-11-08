@@ -255,6 +255,29 @@ internal sealed partial class Blackboard
         r.Check(!Hunting || WaveActive);
     }
 
+    /// <summary>
+    /// M5-9a: writes the counter memory (<see cref="SeenSlotCount"/>, <see cref="SeenSlotTick"/>) for the save's <c>CTRM</c>
+    /// section (formats 8 and 9). Kept out of <see cref="WriteTo"/> and <see cref="WriteHuntTo"/> so a format-8 save is a
+    /// format-6 one plus this section.
+    /// </summary>
+    internal void WriteCountersTo(SaveWriter w)
+    {
+        w.WriteArray(SeenSlotCount);
+        w.WriteArray(SeenSlotTick);
+    }
+
+    /// <summary>
+    /// Reads what <see cref="WriteCountersTo"/> wrote over this board: each count 0 to <paramref name="unitSlots"/> (no more
+    /// units than the match holds), each tick 0 to <paramref name="now"/> (no sighting after the seat's last think).
+    /// </summary>
+    internal void ReadCountersFrom(SaveReader r, int unitSlots, int now)
+    {
+        r.ReadArray(SeenSlotCount);
+        r.ReadArray(SeenSlotTick);
+        for (int s = 0; s < SlotCount && !r.Failed; s++)
+            r.Check(SeenSlotCount[s] >= 0 && SeenSlotCount[s] <= unitSlots && SeenSlotTick[s] >= 0 && SeenSlotTick[s] <= now);
+    }
+
     /// <summary>A pending order field by field (its byte kind leaves padding, so it isn't written as raw bytes).</summary>
     private static void Write(SaveWriter w, in PendingOrder p)
     {

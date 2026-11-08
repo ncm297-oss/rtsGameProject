@@ -19,7 +19,8 @@ internal static class SaveHeader
         GameData data = c.Data;
         foreach (byte b in SaveFormat.Magic) w.Write(b);
         // M6-S7: the oldest format that holds the match: a generated map is format 4, byte for byte as before map files.
-        // M5-4d: a match with an AI seat adds the HUNT section: 6 on a generated map, 7 on a hand-made one.
+        // M5-4d: a match with an AI seat adds the HUNT section: 6 on a generated map, 7 on a hand-made one; M5-9a: and CTRM,
+        // 8 / 9.
         bool mapFile = !string.IsNullOrEmpty(c.MapId);
         w.Write(VersionFor(mapFile, HasAiSeat(c)));
         w.Write(0L); // total length, patched at the end
@@ -121,7 +122,7 @@ internal static class SaveHeader
     };
 
     /// <summary>M5-4d: the oldest format that holds a match on a hand-made map (<paramref name="mapFile"/>) or not, with an AI seat or not.</summary>
-    internal static int VersionFor(bool mapFile, bool aiSeat) => aiSeat
+    internal static int VersionFor(bool mapFile, bool aiSeat) => aiSeat // M5-9a: 9 / 8 with an AI seat (HUNT and CTRM)
         ? (mapFile ? SaveFormat.CurrentVersion : SaveFormat.HuntMaplessVersion)
         : (mapFile ? SaveFormat.MapVersion : SaveFormat.MaplessVersion);
 
@@ -186,7 +187,7 @@ internal static class SaveHeader
         if (r.Failed || preset == null) return SaveError.Malformed;
         // Format 5 (M6-S7): the hand-made map's id, after the preset; formats 3-4 were generated maps. A format-5 header always
         // names one (a generated map is saved as format 4), so an empty id there is no save this build wrote. M5-4d: format 7
-        // names one too, format 6 none (a generated map with an AI seat).
+        // names one too, format 6 none (a generated map with an AI seat); M5-9a: 9 names one, 8 none.
         bool hasMapId = SaveFormat.HasMapId(version);
         string? mapId = hasMapId ? r.ReadString() : "";
         if (r.Failed || mapId == null) return SaveError.Malformed;

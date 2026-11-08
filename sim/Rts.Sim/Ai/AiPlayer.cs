@@ -519,6 +519,7 @@ internal sealed partial class AiPlayer
         // loaded seat equals the saved one with nothing stored (the AIST layout is unchanged). M5-4c slice 2: the focus too.
         ClearReserve();
         FocusTarget = default;
+        Array.Clear(CounterShare); // M5-9a: think scratch, as the reserve
         return true;
     }
 
@@ -561,6 +562,7 @@ internal sealed partial class AiPlayer
                 }
                 if (IsWorkerType[u.TypeId]) continue;
                 enemies++;
+                _slotSeen[(int)Data.Units[u.TypeId].Slot]++; // M5-9a: the counter memory's sighting
                 sum += u.Position;
                 if (HasHall && Vector2.DistanceSquared(u.Position, hall) <= defend)
                 {
@@ -587,6 +589,61 @@ internal sealed partial class AiPlayer
             Board.EnemyArmyTick = Now;
         }
         IntruderCentroid = IntruderCount > 0 ? intruders / IntruderCount : default;
+        UpdateCounterMemory();
+    }
+
+    // ---------- M5-9a: the counter memory and the share each own slot counters ----------
+
+    // The census's count of enemy non-worker units seen this think per UnitSlot: emptied as the memory takes it.
+    private readonly int[] _slotSeen = new int[Blackboard.SlotCount];
+
+    /// <summary>
+    /// M5-9a: per own <see cref="UnitSlot"/>, the share (0-1) of the remembered enemy (<see cref="FadedSlot"/> summed over the
+    /// slots) that the slot counters (<c>rules.json</c> <c>ai.counters</c>); all 0 with nothing remembered. Think scratch:
+    /// filled by the census, read by <see cref="ProductionManager"/>, cleared at the think's end (a seat between thinks holds
+    /// none, so a loaded seat equals the saved one with nothing stored).
+    /// </summary>
+    internal float[] CounterShare { get; } = new float[Blackboard.SlotCount];
+
+    /// <summary>
+    /// M5-9a: enemy slot <paramref name="slot"/>'s remembered count at <see cref="Now"/>: the sighting's count (<see cref="Blackboard.SeenSlotCount"/>)
+    /// x max(0, 1 - its age / <c>ai.counterMemory</c>), so it fades linearly to 0 over the memory; 0 for a slot never seen or
+    /// with no memory configured.
+    /// </summary>
+    internal float FadedSlot(int slot)
+    {
+        int count = Board.SeenSlotCount[slot];
+        if (count == 0 || Rules.CounterMemoryTicks <= 0) return 0f;
+        float left = 1f - (float)(Now - Board.SeenSlotTick[slot]) / Rules.CounterMemoryTicks;
+        return left > 0f ? count * left : 0f;
+    }
+
+    /// <summary>
+    /// M5-9a (docs/03 "Implementation (M5-9a)"): a slot seen this think at least as many as its faded value takes the new
+    /// sighting (count and tick); a smaller one leaves the fading one. Then <see cref="CounterShare"/> for this think.
+    /// </summary>
+    private void UpdateCounterMemory()
+    {
+        float total = 0f;
+        for (int e = 0; e < Blackboard.SlotCount; e++)
+        {
+            int seen = _slotSeen[e];
+            _slotSeen[e] = 0;
+            if (seen > 0 && seen >= FadedSlot(e))
+            {
+                Board.SeenSlotCount[e] = seen;
+                Board.SeenSlotTick[e] = Now;
+            }
+            total += FadedSlot(e);
+        }
+        for (int own = 0; own < Blackboard.SlotCount; own++)
+        {
+            float countered = 0f;
+            if (total > 0f)
+                for (int e = 0; e < Blackboard.SlotCount; e++)
+                    if (Rules.Counters((UnitSlot)own, (UnitSlot)e)) countered += FadedSlot(e);
+            CounterShare[own] = total > 0f ? countered / total : 0f;
+        }
     }
 
     /// <summary>The census's buildings: own ones (sites included) with their queues, the hall, and the known enemy buildings.</summary>

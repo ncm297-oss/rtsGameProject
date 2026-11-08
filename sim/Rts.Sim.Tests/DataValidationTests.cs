@@ -400,6 +400,13 @@ public class DataValidationTests
     [InlineData("focusReach", "-14", "ai.focusReach", "outside 1-64 m")]
     [InlineData("focusReach", "64.5", "ai.focusReach", "outside 1-64 m")]
     [InlineData("focusReach", "\"14\"", "$.ai.focusReach", "")]
+    [InlineData("counterMemory", null, "ai.counterMemory", "missing required field")] // M5-9a
+    [InlineData("counterMemory", "0", "ai.counterMemory", "must be positive")]
+    [InlineData("counterMemory", "-180", "ai.counterMemory", "must be positive")]
+    [InlineData("counterMemory", "0.01", "ai.counterMemory", "rounds to 0 ticks")]
+    [InlineData("counterMemory", "3600.5", "ai.counterMemory", "above the maximum 3600 s")]
+    [InlineData("counters", null, "ai.counters", "missing required field")]
+    [InlineData("counters", "[]", "$.ai.counters", "")]
     public void AiRulesBlock_MissingOrOutOfRange_IsOneError(string? field, string? value, string path, string message)
     {
         using TestDataDir dir = TestDataDir.CopyOfShipped();
@@ -412,6 +419,80 @@ public class DataValidationTests
         DataError e = Assert.Single(DataLoader.LoadAll(dir.Path).Errors);
         Assert.Equal("common/rules.json", e.File);
         Assert.Equal(path, e.Path);
+        Assert.Contains(message, e.Message);
+    }
+
+    /// <summary>
+    /// M5-9a: <c>ai.counters</c>, each refusal one error at its path: an unknown slot as a key or in a list, a slot twice in a
+    /// list, a slot missing as a key (an empty list is fine, so <c>unique: []</c> loads), a list that is not a list, an empty name.
+    /// </summary>
+    [Theory]
+    [InlineData("knight", "[\"line\"]", "ai.counters.knight", "unknown slot 'knight' (expected one of worker, line, ranged, shock, caster, siege, unique)")]
+    [InlineData("shock", "[\"line\", \"pikes\"]", "ai.counters.shock[1]", "unknown slot 'pikes'")]
+    [InlineData("caster", "[\"shock\", \"ranged\", \"shock\"]", "ai.counters.caster[2]", "duplicate slot 'shock'")]
+    [InlineData("siege", null, "ai.counters", "no entry for slot 'siege'")]
+    [InlineData("ranged", "\"shock\"", "$.ai.counters.ranged", "")]
+    [InlineData("line", "[\"\"]", "ai.counters.line[0]", "missing required text")]
+    [InlineData("worker", "null", "ai.counters.worker", "missing required field")]
+    public void AiCounters_ABadEntry_IsOneError(string key, string? value, string path, string message)
+    {
+        using TestDataDir dir = TestDataDir.CopyOfShipped();
+        dir.EditJson("common/rules.json", r =>
+        {
+            JsonObject counters = r["ai"]!["counters"]!.AsObject();
+            if (value == null) counters.Remove(key);
+            else counters[key] = JsonNode.Parse(value);
+        });
+        DataError e = Assert.Single(DataLoader.LoadAll(dir.Path).Errors);
+        Assert.Equal("common/rules.json", e.File);
+        Assert.Equal(path, e.Path);
+        Assert.Contains(message, e.Message);
+    }
+
+    /// <summary>M5-9a: the shipped table is docs/02's "Countered by" column, and every list emptied still loads (a table that shifts nothing).</summary>
+    [Fact]
+    public void AiCounters_Shipped_IsTheTemplateTable_AndEmptyListsLoad()
+    {
+        AiRulesDef a = TestSim.Data.AiRules;
+        string[] want = { "worker: shock", "line: caster siege", "ranged: shock", "shock: line", "caster: ranged shock", "siege: line shock", "unique:" };
+        for (int e = 0; e < DataLimits.SlotIds.Length; e++)
+        {
+            var own = new List<string>();
+            for (int s = 0; s < DataLimits.SlotIds.Length; s++)
+                if (a.Counters((UnitSlot)s, (UnitSlot)e)) own.Add(DataLimits.SlotIds[s]);
+            Assert.Equal(want[e], (DataLimits.SlotIds[e] + ": " + string.Join(" ", own)).TrimEnd());
+        }
+        Assert.Equal(180 * SimConstants.TicksPerSecond, a.CounterMemoryTicks);
+
+        using TestDataDir dir = TestDataDir.CopyOfShipped();
+        dir.EditJson("common/rules.json", r =>
+        {
+            JsonObject counters = r["ai"]!["counters"]!.AsObject();
+            foreach (string slot in DataLimits.SlotIds) counters[slot] = new JsonArray();
+        });
+        DataLoadResult load = DataLoader.LoadAll(dir.Path);
+        Assert.True(load.Ok, string.Join(" | ", load.Errors));
+        Assert.All(load.Data!.AiRules.CounterMasks, m => Assert.Equal(0, m));
+    }
+
+    /// <summary>M5-9a: a difficulty's <c>counterStrength</c> is required and a fraction 0-1: missing, 1.5 and -0.1 are one error each at its path.</summary>
+    [Theory]
+    [InlineData("easy", null, "missing required field")]
+    [InlineData("normal", "1.5", "1.5 is outside 0-1")]
+    [InlineData("hard", "-0.1", "-0.1 is outside 0-1")]
+    [InlineData("hard", "\"1\"", "")]
+    public void AiCounterStrength_MissingOrOutOfRange_IsOneError(string difficulty, string? value, string message)
+    {
+        using TestDataDir dir = TestDataDir.CopyOfShipped();
+        dir.EditJson("factions/whirlwind/ai.json", r =>
+        {
+            JsonObject block = r["difficulties"]![difficulty]!.AsObject();
+            if (value == null) block.Remove("counterStrength");
+            else block["counterStrength"] = JsonNode.Parse(value);
+        });
+        DataError e = Assert.Single(DataLoader.LoadAll(dir.Path).Errors);
+        Assert.Equal("factions/whirlwind/ai.json", e.File);
+        Assert.Equal((value != null && value.StartsWith('"') ? "$." : "") + $"difficulties.{difficulty}.counterStrength", e.Path);
         Assert.Contains(message, e.Message);
     }
 

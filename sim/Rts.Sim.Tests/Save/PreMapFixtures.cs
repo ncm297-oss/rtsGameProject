@@ -117,22 +117,54 @@ internal static class PreMapFixtures
     /// <summary>
     /// M5-4d: a format-6 save (a generated map with an AI seat) as format 4 wrote it, or a format-7 one (a hand-made map) as
     /// format 5: the <c>HUNT</c> section (its tag, the seat count and each seat's hunt memory, the last section before
-    /// <c>END!</c>) taken out, the version and the total length fixed. The checksum is left stale: <see cref="Normalize(byte[])"/>
-    /// zeroes it, <c>SaveBytes.Rechecksum</c> recomputes it.
+    /// <c>END!</c>) taken out, the version and the total length fixed. M5-9a: a format-8 / 9 save first loses its <c>CTRM</c>
+    /// section (<see cref="WithoutCounters"/>), so this is still "as format 4 / 5 wrote it". The checksum is left stale:
+    /// <see cref="Normalize(byte[])"/> zeroes it, <c>SaveBytes.Rechecksum</c> recomputes it.
     /// </summary>
     internal static byte[] WithoutHunt(byte[] save)
     {
         int version = Int32At(save, Rts.Sim.Save.SaveFormat.MagicLength);
-        Assert.True(version is Rts.Sim.Save.SaveFormat.HuntMaplessVersion or Rts.Sim.Save.SaveFormat.CurrentVersion, $"format {version} has no HUNT section");
+        if (version is Rts.Sim.Save.SaveFormat.HuntMaplessVersion or Rts.Sim.Save.SaveFormat.CurrentVersion)
+        {
+            save = WithoutCounters(save);
+            version = Int32At(save, Rts.Sim.Save.SaveFormat.MagicLength);
+        }
+        Assert.True(version is Rts.Sim.Save.SaveFormat.HuntOnlyMaplessVersion or Rts.Sim.Save.SaveFormat.HuntOnlyMapVersion, $"format {version} has no HUNT section");
+        return WithoutLastSection(save, "HUNT"u8, "AIST"u8,
+            version == Rts.Sim.Save.SaveFormat.HuntOnlyMapVersion ? Rts.Sim.Save.SaveFormat.MapVersion : Rts.Sim.Save.SaveFormat.MaplessVersion);
+    }
+
+    /// <summary>
+    /// M5-9a: a format-8 save (a generated map with an AI seat) as format 6 wrote it, or a format-9 one (a hand-made map) as
+    /// format 7: the <c>CTRM</c> section (its tag, the seat count and each seat's counter memory, the last section before
+    /// <c>END!</c>) taken out, the version and the total length fixed; the checksum left stale.
+    /// </summary>
+    internal static byte[] WithoutCounters(byte[] save)
+    {
+        int version = Int32At(save, Rts.Sim.Save.SaveFormat.MagicLength);
+        Assert.True(version is Rts.Sim.Save.SaveFormat.HuntMaplessVersion or Rts.Sim.Save.SaveFormat.CurrentVersion, $"format {version} has no CTRM section");
+        return WithoutLastSection(save, "CTRM"u8, "HUNT"u8,
+            version == Rts.Sim.Save.SaveFormat.CurrentVersion ? Rts.Sim.Save.SaveFormat.HuntOnlyMapVersion : Rts.Sim.Save.SaveFormat.HuntOnlyMaplessVersion);
+    }
+
+    /// <summary>
+    /// M5-9a: the offset of the <c>CTRM</c> tag of a format-8 / 9 save: the section is the last before <c>END!</c> and its size
+    /// follows from the AI seat count (tag, count, per seat its index and two 7-int arrays with their lengths).
+    /// </summary>
+    internal static int CountersAt(byte[] save, int aiSeats) =>
+        save.Length - Rts.Sim.Save.SaveFormat.ChecksumLength - 4 - (8 + aiSeats * (4 + 2 * (4 + 4 * Rts.Sim.Ai.Blackboard.SlotCount)));
+
+    /// <summary>The save with its last section before <c>END!</c> (tagged <paramref name="tag"/>, after a <paramref name="after"/> section) cut out, relabelled <paramref name="version"/>.</summary>
+    private static byte[] WithoutLastSection(byte[] save, ReadOnlySpan<byte> tag, ReadOnlySpan<byte> after, int version)
+    {
         int end = save.Length - Rts.Sim.Save.SaveFormat.ChecksumLength - 4;
         Assert.Equal("END!"u8.ToArray(), save[end..(end + 4)]);
-        int hunt = save.AsSpan(0, end).LastIndexOf("HUNT"u8);
-        Assert.True(hunt > save.AsSpan().LastIndexOf("AIST"u8), "no HUNT section after AIST");
-        byte[] old = new byte[save.Length - (end - hunt)];
-        save.AsSpan(0, hunt).CopyTo(old);
-        save.AsSpan(end).CopyTo(old.AsSpan(hunt));
-        BinaryPrimitives.WriteInt32LittleEndian(old.AsSpan(Rts.Sim.Save.SaveFormat.MagicLength),
-            version == Rts.Sim.Save.SaveFormat.CurrentVersion ? Rts.Sim.Save.SaveFormat.MapVersion : Rts.Sim.Save.SaveFormat.MaplessVersion);
+        int at = save.AsSpan(0, end).LastIndexOf(tag);
+        Assert.True(at > save.AsSpan().LastIndexOf(after), "the section is not after the one it follows");
+        byte[] old = new byte[save.Length - (end - at)];
+        save.AsSpan(0, at).CopyTo(old);
+        save.AsSpan(end).CopyTo(old.AsSpan(at));
+        BinaryPrimitives.WriteInt32LittleEndian(old.AsSpan(Rts.Sim.Save.SaveFormat.MagicLength), version);
         BinaryPrimitives.WriteInt64LittleEndian(old.AsSpan(Rts.Sim.Save.SaveFormat.LengthOffset), old.Length);
         return old;
     }

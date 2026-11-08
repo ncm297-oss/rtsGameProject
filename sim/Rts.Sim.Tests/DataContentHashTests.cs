@@ -51,6 +51,11 @@ public class DataContentHashTests
             var a = (ImmutableArray<float>)value!;
             return a.Length > 0 ? a.SetItem(0, a[0] + 0.5f) : a.Add(1f);
         }
+        if (t == typeof(ImmutableArray<byte>)) // M5-9a: ai.counters' masks
+        {
+            var a = (ImmutableArray<byte>)value!;
+            return a.Length > 0 ? a.SetItem(0, (byte)(a[0] ^ 1)) : a.Add(1);
+        }
         if (t == typeof(ImmutableArray<bool>))
         {
             var a = (ImmutableArray<bool>)value!;
@@ -432,7 +437,7 @@ public class DataContentHashTests
         foreach (string f in new[] { "GoldShare", "HouseHalfPopMargin", "PlacementSearchCells", "SpacingCells", "ExpandReachCells", "ScoutAfterTicks",
             "ScoutRadius", "ScoutReach", "ScoutGrid", "RallyDistance", "RallyReach", "WaveCooldownTicks", "DefendRadius", "DefendForTicks", "WorkerFleeRadius", "CastMinTargets",
             "DefendRatio", "DefendMinValue", "RecallHallHp", "ReserveShift", "ReserveArmyShare", "GatherReach",
-            "ScoutReplacements", "SpendDownQueue", "HuntMemoryTicks", "FocusReach" })
+            "ScoutReplacements", "SpendDownQueue", "HuntMemoryTicks", "FocusReach", "CounterMemoryTicks", "CounterMasks" })
             Assert.Contains($"AiRulesDef.{f}", checkedFields);
         for (int slot = 0; slot < d.Ai.Length; slot++)
             Check(d.Ai[slot], x => With(d, ai: x, aiSlot: slot));
@@ -704,8 +709,8 @@ public class DataContentHashTests
                 ExpectInOpening($"AiComposition.{p.Name}", nameof(AiOpening.Compositions), first.Compositions.SetItem(0, WithField(first.Compositions[0], p)));
         }
         // A new field must be added to ContentHash (these counts fail first).
-        Assert.Equal((8, 6, 3), (typeof(AiDifficultyDef).GetProperties().Length, typeof(AiStep).GetProperties().Length, typeof(AiComposition).GetProperties().Length));
-        Assert.Equal(17 * d.Ai.Length, fields);
+        Assert.Equal((9, 6, 3), (typeof(AiDifficultyDef).GetProperties().Length, typeof(AiStep).GetProperties().Length, typeof(AiComposition).GetProperties().Length));
+        Assert.Equal(18 * d.Ai.Length, fields); // M5-9a: counterStrength
         GameData noAi = With(d);
         typeof(GameData).GetProperty(nameof(GameData.Ai))!.SetValue(noAi, ImmutableArray<AiDef>.Empty);
         Assert.NotEqual(baseline, noAi.ContentHash());
@@ -798,6 +803,7 @@ public class DataContentHashTests
     [InlineData("spendDownQueue", 3)] // M6-SH1, BUG-1051
     [InlineData("huntMemory", 90)] // M5-4d
     [InlineData("focusReach", 12)] // M5-4c slice 2
+    [InlineData("counterMemory", 120)] // M5-9a
     public void AnAiRulesFieldEdit_ChangesTheHash(string field, double value)
     {
         using TestDataDir dir = TestDataDir.CopyOfShipped();
@@ -805,6 +811,19 @@ public class DataContentHashTests
         DataLoadResult load = DataLoader.LoadAll(dir.Path);
         Assert.True(load.Ok, string.Join("\n", load.Errors));
         Assert.NotEqual(TestSim.Data.ContentHash(), load.Data!.ContentHash());
+    }
+
+    /// <summary>M5-9a: an edit to <c>ai.counters</c> (a slot added to a list, or one list's order alone not) moves the hash only when the table changes.</summary>
+    [Fact]
+    public void AnAiCountersEdit_ChangesTheHash_ButNotAListsOrder()
+    {
+        using TestDataDir dir = TestDataDir.CopyOfShipped(), reordered = TestDataDir.CopyOfShipped();
+        dir.EditJson("common/rules.json", r => r["ai"]!["counters"]!["unique"] = new System.Text.Json.Nodes.JsonArray("line"));
+        reordered.EditJson("common/rules.json", r => r["ai"]!["counters"]!["caster"] = new System.Text.Json.Nodes.JsonArray("ranged", "shock"));
+        DataLoadResult load = DataLoader.LoadAll(dir.Path), same = DataLoader.LoadAll(reordered.Path);
+        Assert.True(load.Ok && same.Ok, string.Join(" | ", load.Errors.Concat(same.Errors)));
+        Assert.NotEqual(TestSim.Data.ContentHash(), load.Data!.ContentHash());
+        Assert.Equal(TestSim.Data.ContentHash(), same.Data!.ContentHash()); // a set of slots: the order in a list is not content
     }
 
     /// <summary>M5-3: an edit to any field of a faction's <c>ai.json</c> moves the hash (a dotted path; the value as JSON).</summary>
@@ -817,6 +836,7 @@ public class DataContentHashTests
     [InlineData("difficulties.normal.pullBackWounded", "true")]
     [InlineData("difficulties.normal.useAbilities", "false")]
     [InlineData("difficulties.normal.expandAfter", "500")]
+    [InlineData("difficulties.normal.counterStrength", "0.25")] // M5-9a
     [InlineData("openings.0.buildOrder.0.at", "{ \"time\": 1 }")]
     [InlineData("openings.0.buildOrder.0.do", "\"build\"")]
     [InlineData("openings.0.buildOrder.0.count", "3")]

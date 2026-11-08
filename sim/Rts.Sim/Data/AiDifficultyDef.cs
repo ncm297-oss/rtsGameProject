@@ -26,4 +26,10 @@ public readonly record struct AiDifficultyDef
 
     /// <summary>The earliest match time it expands, in ticks (<c>expandAfter</c> s).</summary>
     public int ExpandAfterTicks { get; init; }
+
+    /// <summary>
+    /// M5-9a: how far its army mix shifts toward what counters the enemy units it has seen (<c>counterStrength</c>, 0-1; 0 is
+    /// no shift): a composition unit's weight is multiplied by 1 + this x the share of the remembered enemy its slot counters.
+    /// </summary>
+    public float CounterStrength { get; init; }
 }

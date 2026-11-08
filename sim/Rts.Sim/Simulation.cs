@@ -103,7 +103,7 @@ public sealed partial class Simulation : ICommandSink
             w.Write(p);
             _ai[p]!.WriteTo(w);
         }
-        // M5-4d (formats 6 and 7): each AI seat's hunt memory, written only when there is an AI seat, so a human-only match
+        // M5-4d (formats 6 to 9): each AI seat's hunt memory, written only when there is an AI seat, so a human-only match
         // keeps format 4 / 5 byte for byte (the header's version says which: SaveHeader.VersionFor).
         if (_aiSeats > 0)
         {
@@ -114,6 +114,15 @@ public sealed partial class Simulation : ICommandSink
                 if (_ai[p] == null) continue;
                 w.Write(p);
                 _ai[p]!.WriteHuntTo(w);
+            }
+            // M5-9a (formats 8 and 9): each AI seat's counter memory, after HUNT, under the same rule.
+            w.Tag(SaveFormat.TagCounters);
+            w.Write(_aiSeats);
+            for (int p = 0; p < _ai.Length; p++)
+            {
+                if (_ai[p] == null) continue;
+                w.Write(p);
+                _ai[p]!.WriteCountersTo(w);
             }
         }
         w.Tag(SaveFormat.TagEnd);
@@ -181,8 +190,9 @@ public sealed partial class Simulation : ICommandSink
         SaveError header = SaveHeader.TryRead(r, data, version, out SimConfig? config, out int tick);
         if (header != SaveError.None) return header;
         // M5-4d: an AI seat's state before format 6 has no hunt memory: such a save is another format's, not this build's.
-        bool hunt = SaveFormat.HasHunt(version);
-        if (!hunt && SaveHeader.HasAiSeat(config!)) return SaveError.FormatVersionMismatch;
+        // M5-9a: nor before format 8 its counter memory.
+        bool hunt = SaveFormat.HasHunt(version), counters = SaveFormat.HasCounters(version);
+        if (!counters && SaveHeader.HasAiSeat(config!)) return SaveError.FormatVersionMismatch;
         Heightmap? map = World.ReadHeightmap(r);
         if (map == null || r.Failed) return SaveError.Malformed;
         // BUG-0960 item 1: a body too short for the header's capacities is refused before the world is allocated for them
@@ -208,6 +218,15 @@ public sealed partial class Simulation : ICommandSink
             {
                 if (loaded._ai[p] == null) continue;
                 if (r.Check(r.ReadInt32() == p)) loaded._ai[p]!.ReadHuntFrom(r);
+            }
+        }
+        if (counters)
+        {
+            if (!r.Expect(SaveFormat.TagCounters) || !r.Check(r.ReadInt32() == loaded._aiSeats)) return SaveError.Malformed;
+            for (int p = 0; p < loaded._ai.Length && !r.Failed; p++)
+            {
+                if (loaded._ai[p] == null) continue;
+                if (r.Check(r.ReadInt32() == p)) loaded._ai[p]!.ReadCountersFrom(r);
             }
         }
         if (!r.Expect(SaveFormat.TagEnd) || r.Remaining != 0) return SaveError.Malformed;

@@ -12,7 +12,8 @@ namespace Rts.Sim.Ai;
 /// sim state: not hashed, never read by a sim rule; allocated once, sized from the match; stored whole by a save (M6-S3,
 /// <c>Blackboard.Save.cs</c>). Since M5-4b the defense's kept
 /// building hp, point and per-unit marks; since M5-4c the casters' last casts; since M5-4f the defenders picked and the
-/// wave's start threshold; since M5-4d the last enemy unit seen and the hunt's sweep (saved in their own section, <c>HUNT</c>).
+/// wave's start threshold; since M5-4d the last enemy unit seen and the hunt's sweep (saved in their own section, <c>HUNT</c>); since M5-9a the counter memory of
+/// enemy unit slots seen (<c>CTRM</c>).
 /// </summary>
 internal sealed partial class Blackboard
 {
@@ -283,6 +284,23 @@ internal sealed partial class Blackboard
 
     /// <summary>Hunts started (tests and tooling; a wave that turns into a hunt counts).</summary>
     internal int HuntsStarted;
+
+    // ---------- M5-9a: the counter memory (AiPlayer's census, ProductionManager) ----------
+
+    /// <summary>
+    /// M5-9a: per <see cref="Data.UnitSlot"/>, the enemy non-worker units of that slot counted in the sighting the memory holds, and
+    /// the think it was made at (<see cref="SeenSlotTick"/>). The value the AI acts on fades linearly from the count to 0 over
+    /// <c>ai.counterMemory</c> (<see cref="AiPlayer.FadedSlot"/>); a sighting at least as big as the faded value replaces it.
+    /// Fed by the census from <see cref="PlayerView.NextUnit"/> only (fog-limited); 0 / 0 for a slot never seen. Saved in
+    /// <c>CTRM</c> (formats 8 and 9).
+    /// </summary>
+    internal readonly int[] SeenSlotCount = new int[SlotCount];
+
+    /// <summary>See <see cref="SeenSlotCount"/>.</summary>
+    internal readonly int[] SeenSlotTick = new int[SlotCount];
+
+    /// <summary>The seven template unit slots (<see cref="Data.UnitSlot"/>, <see cref="Data.DataLimits.SlotIds"/>).</summary>
+    internal const int SlotCount = 7;
 
     // ---------- M5-3: the military (MilitaryManager) ----------
 

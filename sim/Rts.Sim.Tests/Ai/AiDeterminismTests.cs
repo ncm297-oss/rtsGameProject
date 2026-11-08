@@ -147,16 +147,18 @@ public class AiDeterminismTests
     private const string HuntLine = "PALE-HILLS-HUNT ";
 
     /// <summary>
-    /// M5-4d criterion 6: Normal v Normal on Pale Hills, seed 3 (<see cref="MapFileTests.MapMatch"/>, a match that used to stall
+    /// M5-4d criterion 6: Normal v Normal on Pale Hills, seed 3 until M5-9a (<see cref="MapFileTests.MapMatch"/>, a match that used to stall
     /// with the loser's last unit unhunted, BUG-1068), played to its end (at most 72,000 ticks) is deterministic across
     /// processes: this process and a fresh child <c>dotnet test</c> of this row fold the same per-tick hashes, end on the same
-    /// tick and count the same hunts. Asserted here too: the match ends and a hunt was started.
+    /// tick and count the same hunts. Asserted here too: the match ends and a hunt was started. M5-9a: with Normal's counter
+    /// shift seed 3 ends at 31,891 with no hunt (the winner razes the rest), so the row plays seed 5 (<see cref="HuntSeed"/>:
+    /// ends at 45,358 after one hunt, QA's sweep) to keep a hunt in the two-process proof.
     /// </summary>
     [Fact]
     [Trait("Category", "Stress")]
-    public void PaleHillsSeed3_ToTheEnd_TwoProcesses_SamePerTickHashes()
+    public void PaleHills_ToTheEndWithAHunt_TwoProcesses_SamePerTickHashes()
     {
-        Simulation sim = MapFileTests.MapMatch(MapFileTests.PaleHills, 3, false, out _);
+        Simulation sim = MapFileTests.MapMatch(MapFileTests.PaleHills, HuntSeed, false, out _);
         var h = new Determinism.StateHasher();
         while (sim.TickNumber < 72_000 && !sim.MatchOver)
         {
@@ -173,8 +175,11 @@ public class AiDeterminismTests
             return;
         }
         _out.WriteLine($"this process: {mine}");
-        Assert.Equal(mine, MapFileTests.RunChild(typeof(AiDeterminismTests), nameof(PaleHillsSeed3_ToTheEnd_TwoProcesses_SamePerTickHashes), HuntChildVariable, HuntLine, seconds: 1200));
+        Assert.Equal(mine, MapFileTests.RunChild(typeof(AiDeterminismTests), nameof(PaleHills_ToTheEndWithAHunt_TwoProcesses_SamePerTickHashes), HuntChildVariable, HuntLine, seconds: 1200));
     }
+
+    /// <summary>The Pale Hills seed the hunt row plays: 3 until M5-9a, 5 since (see the row).</summary>
+    private const ulong HuntSeed = 5;
 
     /// <summary>M6-S4 criterion 5: two runs of the 2v2 AI match (teams 1, 2, 1, 2; <see cref="AiTeamTests.Match"/>) hash equal after every tick, with the same commands and thinks per seat.</summary>
     [Theory]

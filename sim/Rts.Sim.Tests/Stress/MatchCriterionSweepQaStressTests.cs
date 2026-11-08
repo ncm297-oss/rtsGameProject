@@ -52,7 +52,8 @@ public class MatchCriterionSweepQaStressTests
         [("generated", 4)] = "BUG-1151",
         // A losing seat whose last worker gathers only gold, wood under the cost of anything, sends nothing for 4+ minutes.
         [("raraku", 1)] = "BUG-1152",
-        [("raraku", 2)] = "BUG-1152",
+        // M5-9a: Raraku seed 2 no longer fails (the Normal counter shift changed the match: it ends at 29,190 with every
+        // oracle clean), so its entry is out; BUG-1152 stays open (seed 1 still shows it).
     };
 
     /// <summary>The extra oracles' state over one match.</summary>

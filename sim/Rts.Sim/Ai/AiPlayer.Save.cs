@@ -73,6 +73,15 @@ internal sealed partial class AiPlayer
         r.Check(Board.HuntRing < 0 || Board.HuntRing >= MilitaryManager.RingStart(cols, rows));
     }
 
+    /// <summary>M5-9a: writes the seat's counter memory for the save's <c>CTRM</c> section (<see cref="Blackboard.WriteCountersTo"/>).</summary>
+    internal void WriteCountersTo(SaveWriter w) => Board.WriteCountersTo(w);
+
+    /// <summary>
+    /// M5-9a: reads what <see cref="WriteCountersTo"/> wrote, after <see cref="ReadFrom"/> (so <see cref="Now"/>, the last
+    /// think's tick, is the saved one): a count from 0 to the match's unit slots, a tick from 0 to <see cref="Now"/>.
+    /// </summary>
+    internal void ReadCountersFrom(SaveReader r) => Board.ReadCountersFrom(r, View.UnitSlots, Now);
+
     /// <summary>Reads what <see cref="WriteTo"/> wrote over this seat, freshly built for the same match (its pick already drawn).</summary>
     internal void ReadFrom(SaveReader r)
     {

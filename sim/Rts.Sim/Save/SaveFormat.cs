@@ -9,19 +9,33 @@ namespace Rts.Sim.Save;
 public static class SaveFormat
 {
     /// <summary>
-    /// The newest format version this build writes and reads (7 since M5-4d: format 5 plus the AI seats' hunt section,
-    /// <c>HUNT</c>, written for a match with an AI seat on a hand-made map; 5 since M6-S7: the map id after the
-    /// starting-resources preset, written only for a match on a hand-made map; 4 since M6-S6: the starting-resources preset
-    /// after the team bytes; 3 since M6-S4: a team byte per seat; 2 since M6-S3: the AI seats' section). It reads every version
-    /// from <see cref="OldestReadVersion"/> to this one, but a save with an AI seat only from <see cref="FirstHuntVersion"/>.
+    /// The newest format version this build writes and reads (9 since M5-9a: format 7 plus the AI seats' counter memory,
+    /// <c>CTRM</c>, written for a match with an AI seat on a hand-made map; 7 since M5-4d: format 5 plus the AI seats' hunt
+    /// section, <c>HUNT</c>; 5 since M6-S7: the map id after the starting-resources preset, written only for a match on a
+    /// hand-made map; 4 since M6-S6: the starting-resources preset after the team bytes; 3 since M6-S4: a team byte per seat;
+    /// 2 since M6-S3: the AI seats' section). It reads every version from <see cref="OldestReadVersion"/> to this one, but a
+    /// save with an AI seat only from <see cref="FirstCounterVersion"/>.
     /// </summary>
-    public const int CurrentVersion = 7;
+    public const int CurrentVersion = 9;
 
     /// <summary>
-    /// M5-4d: the version a match with an AI seat on a generated map is saved in: 6, format 4 plus the <c>HUNT</c> section
-    /// after <c>AIST</c> (no map id). A match with no AI seat is saved as before (4, or 5 on a hand-made map).
+    /// The version a match with an AI seat on a generated map is saved in (the name is M5-4d's): 8 since M5-9a, format 6 plus
+    /// the <c>CTRM</c> section after <c>HUNT</c>; 6 in M5-4d, format 4 plus <c>HUNT</c> after <c>AIST</c> (no map id). A match
+    /// with no AI seat is saved as before (4, or 5 on a hand-made map).
     /// </summary>
-    public const int HuntMaplessVersion = 6;
+    public const int HuntMaplessVersion = 8;
+
+    /// <summary>M5-4d's format for an AI seat on a generated map (4 plus <c>HUNT</c>): read only for a human-only match since M5-9a.</summary>
+    internal const int HuntOnlyMaplessVersion = 6;
+
+    /// <summary>M5-4d's format for an AI seat on a hand-made map (5 plus <c>HUNT</c>): read only for a human-only match since M5-9a.</summary>
+    internal const int HuntOnlyMapVersion = 7;
+
+    /// <summary>
+    /// M5-9a: the oldest format that holds an AI seat's counter memory (<c>CTRM</c>). A save of an older format with an AI seat
+    /// is refused <see cref="SaveError.FormatVersionMismatch"/> (its seats were saved without it), as M5-4d did for the hunt.
+    /// </summary>
+    internal const int FirstCounterVersion = 8;
 
     /// <summary>M5-4d: the version a match on a hand-made map with no AI seat is saved in: 5, as M6-S7 wrote it.</summary>
     public const int MapVersion = 5;
@@ -32,11 +46,14 @@ public static class SaveFormat
     /// </summary>
     internal const int FirstHuntVersion = 6;
 
-    /// <summary>Whether a header of format <paramref name="version"/> names a hand-made map after the preset: 5 (M6-S7) and 7 (M5-4d).</summary>
-    internal static bool HasMapId(int version) => version == MapVersion || version >= CurrentVersion;
+    /// <summary>Whether a header of format <paramref name="version"/> names a hand-made map after the preset: 5 (M6-S7), 7 (M5-4d) and 9 (M5-9a).</summary>
+    internal static bool HasMapId(int version) => version == MapVersion || version == HuntOnlyMapVersion || version == CurrentVersion;
 
-    /// <summary>Whether a save of format <paramref name="version"/> holds the <c>HUNT</c> section after <c>AIST</c> (M5-4d: 6 and 7).</summary>
+    /// <summary>Whether a save of format <paramref name="version"/> holds the <c>HUNT</c> section after <c>AIST</c> (M5-4d: 6 and up).</summary>
     internal static bool HasHunt(int version) => version >= FirstHuntVersion;
+
+    /// <summary>Whether a save of format <paramref name="version"/> holds the <c>CTRM</c> section after <c>HUNT</c> (M5-9a: 8 and 9).</summary>
+    internal static bool HasCounters(int version) => version >= FirstCounterVersion;
 
     /// <summary>
     /// M6-S7: the version a match on a generated map is saved in: 4, the newest without the map id, so such a save is byte for
@@ -104,7 +121,8 @@ public static class SaveFormat
     internal const uint TagEvents = 0x544E5645;    // "EVNT"
     internal const uint TagCommands = 0x53444D43;  // "CMDS"
     internal const uint TagAi = 0x54534941;        // "AIST" (M6-S3, format 2)
-    internal const uint TagHunt = 0x544E5548;      // "HUNT" (M5-4d, formats 6 and 7)
+    internal const uint TagHunt = 0x544E5548;      // "HUNT" (M5-4d, formats 6 to 9)
+    internal const uint TagCounters = 0x4D525443;  // "CTRM" (M5-9a, formats 8 and 9)
     internal const uint TagEnd = 0x21444E45;       // "END!"
 
     /// <summary>FNV-1a 64 over raw bytes, the replay file's checksum.</summary>

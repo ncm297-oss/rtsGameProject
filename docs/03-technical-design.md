@@ -8150,7 +8150,7 @@ internal, shared), one knob. No `Command` kind: the hunt sends `AttackMove` (and
   `Save/SaveRefusalTests` (formats 3-5 with an AI seat refused, with or without `HUNT`; format 6 without it or with a forged
   count `Malformed`; a human seat forged into an AI one is now `FormatVersionMismatch` at format 4, `Malformed` at 6),
   `Save/SaveFormatTests` (the versions, the fixtures through `WithoutHunt`), `AiDeterminismTests.PaleHillsSeed3_ToTheEnd_TwoProcesses_SamePerTickHashes`
-  (criterion 6, Stress), `Stress/MapSlice2StressTests.NormalVersusNormal_KnownStalls_EndWithin72000` (un-skipped, the fog
+  (criterion 6, Stress; since M5-9a `PaleHills_ToTheEndWithAHunt_*` on seed 5, seed 3 no longer hunts), `Stress/MapSlice2StressTests.NormalVersusNormal_KnownStalls_EndWithin72000` (un-skipped, the fog
   oracle at every think), `DataValidationTests` / `DataContentHashTests` (the knob).
 - **Not yet** (slice 2 and later): high ground and ramps before attacking up, periodic re-scouting, rebuilding; the sweep
   walks the perimeter leg as soon as it reaches a ring point, before the ground round where it began (M5-H5 measured,
@@ -9149,10 +9149,10 @@ tests `Ai/CriterionMatch.cs` (the harness), `Ai/MatchCriterionTests`, `CommandRe
 
 - **The reading (the Producer's, 2026-11-08).** The literal row is two Normal AI seats (Malazan v Whirlwind, starts 0 and 1)
   ending with exactly one side defeated **within 24,000 ticks (20:00)**, error-free: Vathar Crossing seed 1, which ends at
-  22,794 (18:59). It runs in the default test loop (26 s with every check). The other maps have the same row shape with a
+  22,794 (18:59; 23,043 = 19:12 since M5-9a). It runs in the default test loop (26 s with every check). The other maps have the same row shape with a
   documented bound, a constant in the test with the measured end in its comment: Pale Hills seed 1, 36,000 (the Producer's);
   Raraku seed 1, the next 6,000 above its end with at least 10 % slack, 36,000; the generated map, the lowest seed of 1-6
-  that ends under 24,000 (seed 1), bound 24,000. Plus a four-seat free-for-all and a 2v2 (teams 1 / 2 / 1 / 2) on seeds
+  that ends under 24,000 (seed 1), bound 24,000 (30,000 since M5-9a, which lengthens it to 26,853). Plus a four-seat free-for-all and a 2v2 (teams 1 / 2 / 1 / 2) on seeds
   QA's M5-H5 sweep measured as ending, bound 72,000.
 - **"Without errors"** is checked inside the row (`CriterionMatch.Play` with `checks`), on every tick and every think:
   (a) **no exception** from `Tick()` (caught with the tick in the message); (b) **`PlayerViewOracle.Check`** clean on every
@@ -9182,14 +9182,19 @@ tests `Ai/CriterionMatch.cs` (the harness), `Ai/MatchCriterionTests`, `CommandRe
 
   | Row | Map, seed | Ends (bound) | Winner | Waves | Hunts | Refused (kind count) |
   | --- | --- | --- | --- | --- | --- | --- |
-  | literal | Vathar Crossing 1 | 22,794 = 18:59 (24,000) | seat 1 (Whirlwind) | 5 | 0 | none |
+  | literal | Vathar Crossing 1 | 23,043 = 19:12 (24,000) | seat 1 (Whirlwind) | 5 | 0 | none |
   | | Raraku 1 | 28,083 = 23:24 (36,000) | seat 0 (Malazan) | 7 | 1 | none |
-  | | Pale Hills 1 | 34,219 = 28:30 (36,000) | seat 1 | 15 | 1 | Build UnitInTheWay 6 |
-  | | generated 1 | 21,789 = 18:09 (24,000) | seat 0 | 5 | 0 | AttackMove UnitGone 1 |
-  | FFA | Vathar Crossing 2, 4 seats | 52,305 = 43:35 (72,000) | seat 3 | 18 | 7 | Build SealsGround 2, UnitInTheWay 9; Gather NoResourceNode 1 |
-  | 2v2 | Vathar Crossing 1, 4 seats | 34,510 = 28:45 (72,000) | team 1 | 15 | 7 | Build Blocked 1, SealsGround 2, UnitInTheWay 4; Gather UnitGone 1 |
+  | | Pale Hills 1 | no result by 36,000 (nor 72,000): BUG-1153 | none | 17 | 0 | Build UnitInTheWay 1 (to 72,000) |
+  | | generated 1 | 26,853 = 22:22 (30,000) | seat 0 | 6 | 0 | AttackMove UnitGone 1; Build UnitInTheWay 1; Gather NoResourceNode 5 |
+  | FFA | Vathar Crossing 2, 4 seats | 58,155 = 48:27 (72,000) | seat 3 | 18 | 9 | AttackMove UnitGone 4; Build SealsGround 2, UnitInTheWay 6 |
+  | 2v2 | Vathar Crossing 1, 4 seats | 35,648 = 29:42 (72,000) | team 1 | 18 | 8 | AttackMove UnitGone 1; Build Blocked 1, SealsGround 2, UnitInTheWay 8; Gather UnitGone 1 |
 
   Waves and hunts are the match's totals over its seats. The longest refusal run on any row is 1 think (no command refused twice on one target).
+  **Re-measured for M5-9a** (Normal's counter shift; "Implementation (M5-9a)"): before it the rows read Vathar 22,794,
+  Pale Hills 34,219 (seat 1, 15 waves, 1 hunt, Build UnitInTheWay 6), generated 21,789 (bound 24,000; 5 waves, AttackMove
+  UnitGone 1), FFA 52,305 (7 hunts; Build SealsGround 2, UnitInTheWay 9; Gather NoResourceNode 1), 2v2 34,510 (15 waves, 7
+  hunts; Build UnitInTheWay 4); Raraku unchanged. The generated map, seeds 1-6, now: 26,853 / 15,691 / 29,548 / seed 4
+  stopped by the checks at 18,382 (BUG-1151's refusal streak, QA's sweep) / 14,490 / 25,941.
   The generated map, seeds 1-6, Normal v Normal: 21,789 / 15,691 / 29,533 / 20,677 / 14,490 / 26,034: all end, four under
   24,000. Vathar FFA seed 3 ends at 55,321; Pale Hills 2v2 seed 4 at 34,772; Vathar 2v2 seed 2 at 29,019.
 - **The refusal kinds seen, and why.** Every order is judged from the seat's view a tick before it applies.
@@ -9224,6 +9229,114 @@ tests `Ai/CriterionMatch.cs` (the harness), `Ai/MatchCriterionTests`, `CommandRe
   fills its 1,024 commands), and nor is a queued (shift) order dropped when phase 7 pops it later (the AI queues none).
 - **No pin moved.** The apply methods' return values change no behaviour: the golden header, the replay and save formats,
   the data hash and every pinned match are unchanged.
+
+### Implementation (M5-9a)
+
+M5 criterion 9's sim half (the owner's D14 c, 2026-10-14): the AI shifts its army mix toward what counters the enemy units it
+has seen, from a fog-limited memory that fades over a few minutes, by a strength per difficulty (Easy 0). Code:
+`Blackboard.SeenSlotCount` / `SeenSlotTick` (+ `WriteCountersTo` / `ReadCountersFrom`), `AiPlayer.UpdateCounterMemory` /
+`FadedSlot` / `CounterShare` (the census), `ProductionManager.TrainOne`, `AiRulesDef.CounterMemoryTicks` / `CounterMasks` /
+`Counters`, `AiDifficultyDef.CounterStrength`, `DataLoader.Ai.cs` (`CounterMasks`), `GameData.AddAi`, `SaveFormat` /
+`SaveHeader.VersionFor` / `Simulation.TrySave` / `Load` (the `CTRM` section). Tests: `Ai/CounterCompositionTests`,
+`DataValidationTests.AiCounters_*` / `AiCounterStrength_*` / the `counterMemory` rows, `Content/CounterStrengthContentTests`,
+`DataContentHashTests` (the new fields), `Save/SaveRefusalTests` (formats 6 / 7 with an AI seat, `CTRM` cut or forged).
+
+- **The schema.** `ai.json` `difficulties.<d>.counterStrength`: required, a fraction 0-1 (`Fraction`, as `gatherBonus`),
+  hashed after `expandAfter`. Shipped in both factions: Easy **0**, Normal **0.5**, Hard **1.0** (docs/05's "0 on Easy"; the
+  rest the recommended values, D26 tunes them). `rules.json` `ai.counterMemory`: seconds, above 0, at most 3,600, to ticks
+  (`Checker.Ticks` with a 1-tick minimum); shipped **180**. `rules.json` `ai.counters`: an object keyed by the enemy slot seen
+  (`DataLimits.SlotIds`: `worker`, `line`, `ranged`, `shock`, `caster`, `siege`, `unique`), each the list of own slots that
+  counter it, from docs/02 "Faction template"'s "Countered by" column: `worker: [shock]`, `line: [caster, siege]`,
+  `ranged: [shock]`, `shock: [line]`, `caster: [shock, ranged]`, `siege: [line, shock]`, `unique: []`. Every key and name a slot
+  id, no name twice in a list, every slot present as a key (an empty list loads). Loaded as one bit mask per enemy slot
+  (`AiRulesDef.CounterMasks`, bit `s` = own slot `s` counters it; all 0 after any error in the table) and hashed as the mask
+  list, so a list's order is not content. `AiRulesDef.Counters(own, enemy)` reads it.
+- **The memory** (`Blackboard`, two 7-int arrays indexed by `UnitSlot`). The census's `View.NextUnit` pass, which already
+  counted the enemy army, counts the enemy **non-worker** units seen this think per `Data.Units[type].Slot` (an ally's units
+  are skipped by `View.IsEnemy` as before; workers are never counted: every AI sees workers, and a cavalry shift because it
+  saw a laborer is no counter). After the pass, for each slot: when the count seen now is above 0 and at least the slot's
+  faded value, the slot takes the new sighting (`SeenSlotCount[s] = count`, `SeenSlotTick[s] = Now`); a smaller sighting
+  leaves the fading one. The faded value is `SeenSlotCount[s] x max(0, 1 - (Now - SeenSlotTick[s]) / CounterMemoryTicks)`
+  (`AiPlayer.FadedSlot`, float), so a sighting fades linearly to nothing after `counterMemory`. A slot never seen stays
+  0 / 0 (the brief's rule read as "count above 0": a sighting of none would only re-stamp a 0, which changes nothing the AI
+  acts on and would leave the tick moving on a seat that has seen nothing). Fog-limited by construction: the loop reads only
+  what `PlayerView` answers (own sight, a teammate's shared sight since M6-S5, reveals), exactly what `PlayerViewOracle`
+  checks.
+- **The shift** (`ProductionManager.TrainOne`). After the memory update the census fills `AiPlayer.CounterShare[own]` for
+  each own slot: the faded values of the enemy slots `ai.counters` says it counters, over the faded total of all seven
+  (0 when the total is 0: no division). The pick's weight for composition entry k is then
+  `mix.Weights[k] x (1 + counterStrength x CounterShare[slot of k])`, in place of `mix.Weights[k]` in the M5-3 rule (fewest
+  own live + queued half-pop per unit of weight). The multiplier is at least 1, so no unit is weighted below its opening's
+  share and every composition unit is still trained; a unit the composition does not list is not added. With strength 0 the
+  multiplier is exactly 1 in float (`1f + 0f x share`), so Easy's play is bit for bit as before (criterion 4 below). The
+  share is the memory's composition, not its size: a memory holding one slot shifts in full until it fades to exactly 0, and
+  the fade only matters between slots (6 Shock fading under 2 fresh Ranged moves weight from Line to Shock).
+  `CounterShare` is think scratch, cleared at the think's end like the reserve, so a seat between thinks holds none.
+- **Worked example** (a Normal Malazan `standard` seat in Age II, Line 35 / Ranged 30 / Shock 10 / caster 10 / unique 10 /
+  siege 5, that has just seen 6 Horse Raiders (Whirlwind Shock) and 2 Desert Archers (Ranged)): Line counters Shock, share
+  6 / 8 = 0.75; Shock counters Ranged, 2 / 8 = 0.25; casters and siege counter neither (0). Weights after: Heavy Infantry
+  35 x (1 + 0.5 x 0.75) = **48.1**, Wickan Lancer 10 x 1.125 = **11.25**, the rest unchanged (Hard: 61.25 and 12.5). In Age I
+  (35 / 30) only Heavy Infantry moves, to 48.1. The brief's example named "6 Raiders and 2 Crossbowmen"; in the shipped data
+  the Whirlwind Raider is the **Line** slot and the Crossbowman is the Malazans' own, hence the Horse Raiders and Desert
+  Archers above. Six Raiders (Line) and two Desert Archers would move the Cadre Mage and the Catapult (both counter Line,
+  0.75: 13.75 and 6.9) and the Lancer (0.25: 11.25), and nothing in Age I, where the `standard` mix has no Line counter:
+  against a Whirlwind army a Malazan Age I mix shifts only on Horse Raiders (D26's content question).
+- **Save / load** (formats 8 and 9). The memory is written in its own section, `CTRM`, after `HUNT`, only for a match with
+  an AI seat: the AI seat count, then per seat its player index, `SeenSlotCount` and `SeenSlotTick` (each a 7-int array).
+  A match with an AI seat is saved **8** on a generated map (format 6 plus `CTRM`; `SaveFormat.HuntMaplessVersion`, whose name
+  is M5-4d's, is now 8 so the view's tests that compare a summary's version with it hold) and **9** on a hand-made map (7
+  plus `CTRM`; `CurrentVersion`); a human-only match is saved 4 / 5 byte for byte as before (`SaveHeader.VersionFor`).
+  M5-4d's formats are `HuntOnlyMaplessVersion` 6 and `HuntOnlyMapVersion` 7; a save of format 3-7 with an AI seat is refused
+  `FormatVersionMismatch` after the header (its seats were saved without the memory: M5-4d's rule for the hunt), one with no
+  AI seat still loads. The reader requires each count 0 to the match's unit capacity and each tick 0 to the seat's saved
+  `Now` (its last think): a forged count or a sighting in the future is `Malformed`, as are a missing `CTRM` in format 8 / 9
+  and a forged seat count or player index. `PreMapFixtures.WithoutHunt` now takes `CTRM` and `HUNT` out (8 to 4), so the
+  pre-map fixture `save_ai_seed2` still compares byte for byte; `WithoutCounters` takes `CTRM` out (8 to 6, 9 to 7). The AI's
+  state stays out of `StateHash`. **The replay format is unchanged (9):** playback runs no AI (the AI's commands are in the
+  log), and the data hash in the header already ties a recording to the strengths and the table.
+- **Data hash, golden.** The new knob, memory and table move `GameData.ContentHash`. The golden replay is **not** regenerated:
+  since M6-SH1 its `data-hash` line is the hash at recording time and the test plays it under the shipped hash; it seats no AI
+  and its `k` lines are unchanged, so the file stays byte-identical (header `30C51BB619A7E650`).
+- **Pins moved (rule 43; Normal and Hard play changed, Easy did not).** Re-measured in this change:
+  - `MatchCriterionTests` (the M5-5 table above is re-printed with these): Vathar seed 1 **23,043** (19:12; was 22,794),
+    seat 1, inside 24,000; Raraku seed 1 **28,083** unchanged; the generated map seed 1 **26,853** (22:22; was 21,789), seat
+    0, outside its 24,000, so its bound moves to **30,000** by Raraku's rule (the next 6,000 above the end with 10 % slack;
+    seed 2, 15,691 and unchanged, is now the lowest of 1-6 under 24,000, the Producer's alternative); the FFA **58,155**
+    (48:27; was 52,305), seat 3; the 2v2 **35,648** (29:42; was 34,510), team 1. **Pale Hills seed 1 no longer ends** (no
+    result at 30:00, nor at 60:00 in QA's sweep): both sides are out of gold by about 24:00 (the map's start mines, BUG-1068's
+    economy) and the shifted Whirlwind side is left with ten Desert Archers and a priest, under its wave threshold and unable
+    to train, while the Malazan side keeps a few laborers: a stalemate. **BUG-1153, a finding, not a re-bound**: the row and
+    its two-process twin fail on this branch. With Normal's strength at 0.1 it ends (34,545), at 0.25 at 51,696.
+  - `MapFileTests.NormalVersusNormal_OnANewMap_*`: Vathar **23,043**; Pale Hills fails as above (BUG-1153).
+  - `MapSlice2StressTests.KnownStalls`: Pale Hills 3 / 4 / 6 **31,891** (was 29,562), Pale Hills 5 **45,358** (was 55,631),
+    generated 6 **25,941** (was 26,034); all inside 72,000.
+  - QA's `NonHardMatchPinQaTests`: seven of the eight digests move (every row has a Normal seat; Raraku seed 1 Normal v
+    Normal does not), re-pinned with the old digest in each row's comment. **Easy itself is unchanged:** with Normal's
+    `counterStrength` at 0 all eight rows give their pre-task digests (`CounterCompositionTests.TheNonHardPins_WithNormalStrengthZero_PlayAsBeforeThisTask`),
+    and an Easy v Easy match with sightings sends the same commands as with `ai.counters` emptied.
+  - QA's `StandardPresetPinQaTests`: one AI row moves (seed 5, a Hard and a Normal seat: `0x12C3558D5A1F3C6C` to
+    `0x19A8D59E908C2B31`); the save scenes and the other AI rows are unchanged. `HardKnobsPinTests`: unchanged.
+  - The faction pages (rule 40, the cells only): "Age II against ..." 9 cells (Malazan `crossbow_push` v `standard` seeds
+    9 / 32 / 37, v `raider_rush` seed 5, `standard` v `raider_rush` seed 2; Whirlwind `raider_rush` v `crossbow_push` seeds 5 /
+    11, `standard` v `standard` seed 22, `standard` v `crossbow_push` seed 9) and the BUG-0982 table's peak-army column (seed 7:
+    42 / 52 / 44). The pages' prose counts ("23 of the 27 sides") are the data track's to re-word (D26).
+  - `D21OpeningsQaTests` / `DH6ThresholdQaTests`: green; `KnownBeatenAlive` unchanged ({(1, 1, 19, 0)} and {}).
+    `AiOpeningPairsReportTests`' dead-end judge gains one legitimate wait: a build step of a side with no worker alive
+    (Malazan `crossbow_push` v Whirlwind `holy_war`, seed 12: the Whirlwind side is down to its buildings at 20:00).
+  - QA's `MatchCriterionSweepQaStressTests.Known`: Raraku seed 2 no longer fails (it ends at 29,190, every oracle clean):
+    its entry is out (BUG-1152 stays open, seed 1 still shows it). Two rows newly fail: Pale Hills seed 1 (BUG-1153 above;
+    a seat silent 5,479 ticks at the end) and Raraku seed 5 (a seat silent from 35,081 to 72,000 with 1,970 gold and 5 wood:
+    BUG-1152's wood-starved pattern on another seed; the same match fails
+    `MapSlice2StressTests.NormalVersusNormal_OnANewMap_OtherSeeds_EndWithin72000(raraku, 5)`). Not added to `Known`: the
+    Producer's call with BUG-1153. Also failing with BUG-1153 (Pale Hills end games): `HuntStressTests.FourAiSeats_OnPaleHills_*`
+    (seed 1 FFA, no result by 144,000) and QA's `RebuildLookMatchQaStressTests.FourAiSeats_*(pale_hills, 1)` (no look or hall
+    rebuild left to check). `HuntStressTests`' mid-hunt save row moves from Pale Hills seed 3 to seed 5 as the determinism row
+    did (renamed `PaleHills_SavedMidHunt_FollowsTheRunToTheEnd`).
+  - The golden replay and the golden header: unchanged (see above). Formats: saves 8 / 9, replay 9.
+  - `AiDeterminismTests`' hunt row (M5-4d criterion 6) moves from Pale Hills seed 3 (now 31,891 with no hunt) to seed 5
+    (45,358, one hunt), renamed `PaleHills_ToTheEndWithAHunt_TwoProcesses_SamePerTickHashes`, so the two-process proof still
+    covers a hunt.
+  - `AiPerfTests`: 5 / 5 alone (8 seats: avg 0.52 ms, p95 0.86 ms; 8 Hard mid-wave: avg 0.61 ms, p95 0.96 ms; 0 B a think).
 
 ## Save/load and replays
 
@@ -9368,8 +9481,12 @@ version 2) stores the AI seats too, so every match saves. Code in `sim/Rts.Sim/S
   patterns. Strings are an int32 byte count and printable ASCII (the sim version, snake_case faction ids). An array is its
   int32 length, then its elements; the reader requires the length the header's capacities give. Structs holding a bool
   (commands, ghosts, events) go field by field.
-- **Header**, in order: magic `RTSSAVE\0` (8 bytes); format version (int32, `SaveFormat.CurrentVersion` = 7 since M5-4d,
-  which added the `HUNT` section after `AIST` for a match with an AI seat: 6 (`SaveFormat.HuntMaplessVersion`) is format 4
+- **Header**, in order: magic `RTSSAVE\0` (8 bytes); format version (int32, `SaveFormat.CurrentVersion` = 9 since M5-9a,
+  which added the `CTRM` section after `HUNT` for a match with an AI seat: 8 (`SaveFormat.HuntMaplessVersion`, the name
+  M5-4d's) is format 6 plus `CTRM` (a generated map), 9 is format 7 plus `CTRM` (a hand-made map), a match with no AI seat
+  is still saved 4 / 5 byte for byte, and a save of format 3-7 with an AI seat is refused `FormatVersionMismatch` since its
+  seats were saved without the counter memory ("Implementation (M5-9a)"); 7 since M5-4d,
+  which added the `HUNT` section after `AIST` for a match with an AI seat: 6 (`SaveFormat.HuntOnlyMaplessVersion` since M5-9a) is format 4
   plus `HUNT` (a generated map), 7 is format 5 plus `HUNT` (a hand-made map), and a match with no AI seat is still saved 4 /
   5 (`SaveFormat.MapVersion`) byte for byte; a save of format 3-5 with an AI seat is refused `FormatVersionMismatch`, after
   the header is read, since its seats were saved without the hunt memory ("Implementation (M5-4d)"); 5 since M6-S7,
@@ -9420,7 +9537,8 @@ version 2) stores the AI seats too, so every match saves. Code in `sim/Rts.Sim/S
   | `EVNT` | the last tick's `Deaths`, `Impacts`, `AbilityEvents`, `DefeatEvents` (`Tick()` clears them first, but a view reads them between ticks) |
   | `CMDS` | each player's next sequence number, then the pending queue: count, every command, every field, in queue order |
   | `AIST` | (format 2) the AI seat count, then per AI seat in player order its player index and its state (below) |
-  | `HUNT` | (formats 6 and 7, M5-4d, only with an AI seat) the AI seat count, then per AI seat in player order its player index and its hunt memory: `EnemyUnitPoint`, `EnemyUnitTick`, `Hunting`, `HuntSweep` (-1 to the last sweep point's index), `HuntOrigin`, `HuntVisited`, `HuntsStarted` |
+  | `HUNT` | (formats 6 to 9, M5-4d, only with an AI seat) the AI seat count, then per AI seat in player order its player index and its hunt memory: `EnemyUnitPoint`, `EnemyUnitTick`, `Hunting`, `HuntSweep` (-1 to the last sweep point's index), `HuntOrigin`, `HuntVisited`, `HuntsStarted` |
+  | `CTRM` | (formats 8 and 9, M5-9a, only with an AI seat) the AI seat count, then per AI seat in player order its player index and its counter memory: `SeenSlotCount` (7 int32, each 0 to the match's unit capacity), `SeenSlotTick` (7 int32, each 0 to the seat's last think) |
   | `END!` | nothing: the body's end |
 
   Last, the checksum: FNV-1a 64 over every byte before it (the replay file's). A flow field's slot holds its keys

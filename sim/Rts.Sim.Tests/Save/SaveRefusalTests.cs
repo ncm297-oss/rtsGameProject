@@ -71,7 +71,7 @@ public class SaveRefusalTests
     [InlineData(0)]
     [InlineData(1)] // M6-S3: slice 1's format (no AI section) has no reader
     [InlineData(2)] // M6-S4: M6-S3's format (no team byte) has no reader
-    [InlineData(8)] // M5-4d: format 7 is current (6 / 7 with an AI seat, 4 / 5 without), formats 3-6 still read
+    [InlineData(10)] // M5-9a: format 9 is current (8 / 9 with an AI seat, 4 / 5 without), formats 3-8 still read
     [InlineData(-1)]
     public void AnotherFormatVersion_IsFormatVersionMismatch(int version)
     {
@@ -119,7 +119,7 @@ public class SaveRefusalTests
     public void AHumanSeatForgedIntoAnAiOne_IsMalformed()
     {
         // The header now builds an AI for the seat, whose state the body (no AI section entry) doesn't hold. M5-4d: the
-        // human save is format 4, which can't hold an AI seat (no HUNT): FormatVersionMismatch; relabelled 6, Malformed.
+        // human save is format 4, which can't hold an AI seat (no HUNT): FormatVersionMismatch; relabelled 8, Malformed.
         byte[] bad = SaveBytes.Small();
         SaveBytes.Offsets at = SaveBytes.HeaderOffsets(bad);
         Assert.Equal((byte)SeatController.Human, bad[at.Seat0Controller]);
@@ -127,6 +127,8 @@ public class SaveRefusalTests
         Assert.Equal(SaveError.FormatVersionMismatch, SaveTestRun.TryLoad(Data, SaveBytes.Rechecksum(bad)));
         BinaryPrimitives.WriteInt32LittleEndian(bad.AsSpan(SaveFormat.MagicLength), SaveFormat.HuntMaplessVersion);
         Assert.Equal(SaveError.Malformed, SaveTestRun.TryLoad(Data, SaveBytes.Rechecksum(bad)));
+        BinaryPrimitives.WriteInt32LittleEndian(bad.AsSpan(SaveFormat.MagicLength), SaveFormat.HuntOnlyMaplessVersion); // M5-9a: 6 lacks CTRM
+        Assert.Equal(SaveError.FormatVersionMismatch, SaveTestRun.TryLoad(Data, SaveBytes.Rechecksum(bad)));
     }
 
     /// <summary>
@@ -140,7 +142,7 @@ public class SaveRefusalTests
     [InlineData(5)]
     public void AnAiSave_InAFormatBeforeTheHunt_IsFormatVersionMismatch(int version)
     {
-        // Format 5 names a map: its source is an AI match on Raraku (format 7); 3 and 4 the small generated one (format 6).
+        // Format 5 names a map: its source is an AI match on Raraku (format 9); 3 and 4 the small generated one (format 8).
         byte[] good = version == 5 ? SaveTestRun.Save(MapFileTests.RarakuMatch(1, false, out _)) : SaveBytes.SmallAi();
         Assert.Equal(version == 5 ? SaveFormat.CurrentVersion : SaveFormat.HuntMaplessVersion, BinaryPrimitives.ReadInt32LittleEndian(good.AsSpan(SaveFormat.MagicLength)));
         byte[] relabelled = (byte[])good.Clone();
@@ -153,9 +155,12 @@ public class SaveRefusalTests
         Assert.Equal(SaveError.None, SaveTestRun.TryLoad(Data, SaveBytes.Small()));
     }
 
-    /// <summary>M5-4d: the HUNT section is required in format 6: taken out (the version left at 6), or its seat count forged, Malformed.</summary>
+    /// <summary>
+    /// M5-4d: the HUNT section is required in format 6: taken out (the version left at 6), or its seat count forged, Malformed.
+    /// M5-9a: likewise in format 8 (HUNT and CTRM taken out, the version left at 8).
+    /// </summary>
     [Fact]
-    public void AFormat6Save_WithoutItsHuntSection_OrAForgedSeatCount_IsMalformed()
+    public void AFormat8Save_WithoutItsHuntSection_OrAForgedSeatCount_IsMalformed()
     {
         byte[] good = SaveBytes.SmallAi();
         byte[] cut = PreMapFixtures.WithoutHunt(good);
@@ -525,6 +530,61 @@ public class SaveRefusalTests
     }
 
     /// <summary>
+    /// M5-9a: a save with an AI seat in M5-4d's formats (6 on a generated map, 7 on a hand-made one: no counter memory) is
+    /// refused <see cref="SaveError.FormatVersionMismatch"/>, whether the <c>CTRM</c> section is there or taken out; the
+    /// version alone tells.
+    /// </summary>
+    [Theory]
+    [InlineData(6)]
+    [InlineData(7)]
+    public void AnAiSave_InAFormatBeforeTheCounterMemory_IsFormatVersionMismatch(int version)
+    {
+        byte[] good = version == 7 ? SaveTestRun.Save(MapFileTests.RarakuMatch(1, false, out _)) : SaveBytes.SmallAi();
+        Assert.Equal(version + 2, BinaryPrimitives.ReadInt32LittleEndian(good.AsSpan(SaveFormat.MagicLength)));
+        byte[] relabelled = (byte[])good.Clone();
+        BinaryPrimitives.WriteInt32LittleEndian(relabelled.AsSpan(SaveFormat.MagicLength), version);
+        Assert.Equal(SaveError.FormatVersionMismatch, SaveTestRun.TryLoad(Data, SaveBytes.Rechecksum(relabelled)));
+        byte[] old = PreMapFixtures.WithoutCounters(good);
+        Assert.Equal(version, BinaryPrimitives.ReadInt32LittleEndian(old.AsSpan(SaveFormat.MagicLength)));
+        Assert.Equal(SaveError.FormatVersionMismatch, SaveTestRun.TryLoad(Data, SaveBytes.Rechecksum(old)));
+    }
+
+    /// <summary>
+    /// M5-9a: the <c>CTRM</c> section is required in format 8: taken out (the version left at 8), or its seat count or a seat's
+    /// player index forged, <see cref="SaveError.Malformed"/>; so is a forged memory: a count below 0 or above the match's unit
+    /// slots, a tick below 0 or after the seat's last think. The unforged bytes load.
+    /// </summary>
+    [Fact]
+    public void AFormat8Save_WithoutItsCounterSection_OrAForgedMemory_IsMalformed()
+    {
+        byte[] good = SaveBytes.SmallAi();
+        Assert.Equal(SaveError.None, SaveTestRun.TryLoad(Data, good));
+        byte[] cut = PreMapFixtures.WithoutCounters(good);
+        BinaryPrimitives.WriteInt32LittleEndian(cut.AsSpan(SaveFormat.MagicLength), SaveFormat.HuntMaplessVersion);
+        Assert.Equal(SaveError.Malformed, SaveTestRun.TryLoad(Data, SaveBytes.Rechecksum(cut)));
+
+        int at = PreMapFixtures.CountersAt(good, 1);
+        Assert.Equal("CTRM"u8.ToArray(), good[at..(at + 4)]);
+        Rts.Sim.Ai.AiPlayer ai = SaveTestRun.Load(Data, good).AiOf(0)!;
+        int counts = at + 4 + 4 + 4 + 4, ticks = counts + 4 * Rts.Sim.Ai.Blackboard.SlotCount + 4; // tag, seats, player, length
+        SaveError Forged(int offset, int value)
+        {
+            byte[] bad = (byte[])good.Clone();
+            BinaryPrimitives.WriteInt32LittleEndian(bad.AsSpan(offset), value);
+            return SaveTestRun.TryLoad(Data, SaveBytes.Rechecksum(bad));
+        }
+        Assert.Equal(SaveError.Malformed, Forged(at + 4, 2)); // the seat count
+        Assert.Equal(SaveError.Malformed, Forged(at + 8, 1)); // the seat's player index
+        Assert.Equal(SaveError.Malformed, Forged(counts - 4, 6)); // the array's length
+        Assert.Equal(SaveError.Malformed, Forged(counts + 4 * 3, -1));
+        Assert.Equal(SaveError.Malformed, Forged(counts + 4 * 3, ai.View.UnitSlots + 1));
+        Assert.Equal(SaveError.None, Forged(counts + 4 * 3, ai.View.UnitSlots));
+        Assert.Equal(SaveError.Malformed, Forged(ticks + 4 * 3, -1));
+        Assert.Equal(SaveError.Malformed, Forged(ticks + 4 * 3, ai.Now + 1)); // a sighting after the last think
+        Assert.Equal(SaveError.None, Forged(ticks + 4 * 3, ai.Now));
+    }
+
+    /// <summary>
     /// M5-H5 (the M5-4d note; fail-first): the perimeter leg's next point (<c>HuntRing</c>, written just before
     /// <c>HuntRingLeft</c>, <c>HuntPass</c> and <c>HuntsStarted</c> at the end of the <c>HUNT</c> section) is a border-ring index
     /// or -1: a forged leg on a cell centre (index 0) or on the last interior point is <see cref="SaveError.Malformed"/> (both
@@ -534,8 +594,8 @@ public class SaveRefusalTests
     public void AForgedLeg_OnAPointBelowTheRing_IsMalformed()
     {
         byte[] good = SaveBytes.SmallAi();
-        int end = good.Length - SaveFormat.ChecksumLength - 4;
-        Assert.Equal("END!"u8.ToArray(), good[end..(end + 4)]);
+        int end = PreMapFixtures.CountersAt(good, 1); // M5-9a: HUNT ends where CTRM starts
+        Assert.Equal("CTRM"u8.ToArray(), good[end..(end + 4)]);
         Rts.Sim.Ai.AiPlayer ai = SaveTestRun.Load(TestSim.Data, good).AiOf(0)!;
         int cols = Rts.Sim.Ai.ScoutManager.GridLines(ai.View.MapWidth, ai.Rules.ScoutGrid), rows = Rts.Sim.Ai.ScoutManager.GridLines(ai.View.MapHeight, ai.Rules.ScoutGrid);
         int ring = Rts.Sim.Ai.MilitaryManager.RingStart(cols, rows);

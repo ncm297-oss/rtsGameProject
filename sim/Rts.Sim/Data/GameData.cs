@@ -369,6 +369,10 @@ public sealed class GameData
         h.Add(r.SpendDownQueue); // M6-SH1, BUG-1051
         h.Add(r.HuntMemoryTicks); // M5-4d
         h.Add(r.FocusReach); // M5-4c slice 2
+        h.Add(r.CounterMemoryTicks); // M5-9a
+        h.Add(r.CounterMasks.IsDefault ? -1 : r.CounterMasks.Length);
+        if (!r.CounterMasks.IsDefault)
+            foreach (byte mask in r.CounterMasks) h.Add((int)mask);
         h.Add(Ai.Length);
         foreach (AiDef a in Ai)
         {
@@ -385,6 +389,7 @@ public sealed class GameData
                     h.Add(d.PullBackWounded);
                     h.Add(d.UseAbilities);
                     h.Add(d.ExpandAfterTicks);
+                    h.Add(d.CounterStrength); // M5-9a
                 }
             // M5-8a: every opening, in file order (the order is the pick's index, so it is content too).
             h.Add(a.Openings.IsDefault ? -1 : a.Openings.Length);

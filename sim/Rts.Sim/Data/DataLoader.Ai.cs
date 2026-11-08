@@ -143,6 +143,7 @@ public static partial class DataLoader
             PullBackWounded = Flag(c, j.PullBackWounded, p + ".pullBackWounded"),
             UseAbilities = Flag(c, j.UseAbilities, p + ".useAbilities"),
             ExpandAfterTicks = c.Ticks(j.ExpandAfter, p + ".expandAfter", 0),
+            CounterStrength = (float)Fraction(c, j.CounterStrength, p + ".counterStrength"), // M5-9a
         };
     }
 
@@ -355,7 +356,7 @@ public static partial class DataLoader
     /// to whole cells, rounded up. M5-3: <c>scoutAfter</c> and <c>waveCooldown</c> s (0-3,600, to ticks); <c>scoutRadius</c> and
     /// <c>rallyDistance</c> m (1-64), <c>scoutReach</c> and <c>rallyReach</c> m (1-16), <c>scoutGrid</c> m (16-256, BUG-0593), kept in meters. M5-4b: <c>defendRadius</c> m (8-256), <c>defendFor</c> s (0-600, to
     /// ticks), <c>workerFleeRadius</c> m (1-64). M5-4c: <c>castMinTargets</c> a whole number 1-50. M5-4f: <c>defendRatio</c> 0.5-10,
-    /// <c>defendMinValue</c> gold + wood 0-5,000, <c>recallHallHp</c> a fraction 0-1. M5-4g: <c>reserveShift</c> and <c>reserveArmyShare</c> fractions 0-1. M6-S5: <c>gatherReach</c> m (1-<see cref="DataLimits.MaxAiGatherReach"/>, BUG-1045). M6-SH1: <c>scoutReplacements</c> a whole number 0-8 (BUG-1052), <c>spendDownQueue</c> a whole number 1-5 (BUG-1051). M5-4d: <c>huntMemory</c> s (0-3,600, to ticks). M5-4c slice 2: <c>focusReach</c> m (1-64). A refused <c>popCap</c> is reported once: the cap rule is skipped then.
+    /// <c>defendMinValue</c> gold + wood 0-5,000, <c>recallHallHp</c> a fraction 0-1. M5-4g: <c>reserveShift</c> and <c>reserveArmyShare</c> fractions 0-1. M6-S5: <c>gatherReach</c> m (1-<see cref="DataLimits.MaxAiGatherReach"/>, BUG-1045). M6-SH1: <c>scoutReplacements</c> a whole number 0-8 (BUG-1052), <c>spendDownQueue</c> a whole number 1-5 (BUG-1051). M5-4d: <c>huntMemory</c> s (0-3,600, to ticks). M5-4c slice 2: <c>focusReach</c> m (1-64). M5-9a: <c>counterMemory</c> s (above 0, to ticks), <c>counters</c> (see <see cref="CounterMasks"/>). A refused <c>popCap</c> is reported once: the cap rule is skipped then.
     /// </summary>
     private static AiRulesDef BuildAiRules(Checker c, AiRulesJson? j, RulesDef? rules)
     {
@@ -394,7 +395,49 @@ public static partial class DataLoader
             SpendDownQueue = WholeNumber(c, j.SpendDownQueue, "ai.spendDownQueue", 1, DataLimits.MaxAiSpendDownQueue), // M6-SH1, BUG-1051
             HuntMemoryTicks = c.Ticks(j.HuntMemory, "ai.huntMemory", 0), // M5-4d
             FocusReach = Meters(c, j.FocusReach, "ai.focusReach", DataLimits.MaxAiSearchRadius), // M5-4c slice 2
+            CounterMemoryTicks = c.Ticks(j.CounterMemory, "ai.counterMemory", 1), // M5-9a
+            CounterMasks = CounterMasks(c, j.Counters), // M5-9a
         };
+    }
+
+    /// <summary>
+    /// M5-9a: <c>ai.counters</c> (required): an object with one key per unit slot (<see cref="DataLimits.SlotIds"/>), the enemy
+    /// slot seen, whose value is the list of own slots that counter it (an empty list is fine); every key and listed name a
+    /// slot id, no name twice in a list. Returned as one bit mask per enemy slot (<see cref="AiRulesDef.CounterMasks"/>); all 0
+    /// after an error. Load time only.
+    /// </summary>
+    private static ImmutableArray<byte> CounterMasks(Checker c, Dictionary<string, List<string?>?>? map)
+    {
+        var masks = new byte[DataLimits.SlotIds.Length];
+        if (c.Obj(map, "ai.counters") == null) return ImmutableArray.Create(masks);
+        int errors = c.Errors.Count;
+        var keys = new List<string>(map!.Keys);
+        keys.Sort(StringComparer.Ordinal); // errors in a fixed order, not the dictionary's
+        foreach (string key in keys)
+        {
+            string p = "ai.counters." + key;
+            int enemy = DataLimits.SlotIds.IndexOf(key);
+            if (enemy < 0)
+            {
+                c.Error(p, $"unknown slot '{key}' (expected one of {string.Join(", ", DataLimits.SlotIds)})");
+                continue;
+            }
+            List<string?>? list = c.Obj(map[key], p);
+            if (list == null) continue;
+            for (int i = 0; i < list.Count; i++)
+            {
+                string name = c.Text(list[i], $"{p}[{i}]");
+                if (name.Length == 0) continue;
+                int own = DataLimits.SlotIds.IndexOf(name);
+                if (own < 0) c.Error($"{p}[{i}]", $"unknown slot '{name}' (expected one of {string.Join(", ", DataLimits.SlotIds)})");
+                else if ((masks[enemy] & (1 << own)) != 0) c.Error($"{p}[{i}]", $"duplicate slot '{name}'");
+                else masks[enemy] |= (byte)(1 << own);
+            }
+        }
+        foreach (string slot in DataLimits.SlotIds)
+            if (!map.ContainsKey(slot)) c.Error("ai.counters", $"no entry for slot '{slot}' (every slot is a key; an empty list is fine)");
+        if (c.Errors.Count != errors) Array.Clear(masks);
+        return ImmutableArray.Create(masks);
     }
 
     /// <summary>M5-4f: a required number, <paramref name="min"/> to <paramref name="max"/> inclusive; 0 when refused.</summary>

@@ -181,12 +181,14 @@ public class HuntStressTests
     /// <summary>
     /// Pale Hills seed 3 (a BUG-1068 stall before M5-4d): saved at the first think a seat hunts by a sweep and at the first
     /// it hunts a sighting; each load follows the uninterrupted run hash for hash to the match's end, the AI seats field for field equal there.
+    /// M5-9a: with Normal's counter shift seed 3 ends at 31,891 without a hunt, so the row plays seed 5 (<see cref="MidHuntSeed"/>,
+    /// one hunt, ends at 45,358) to keep a save taken mid-hunt.
     /// </summary>
     [Fact]
     [Trait("Category", "Stress")]
-    public void PaleHillsSeed3_SavedMidHunt_FollowsTheRunToTheEnd()
+    public void PaleHills_SavedMidHunt_FollowsTheRunToTheEnd()
     {
-        Simulation sim = Match("pale_hills", new[] { new PlayerSeat(0, SeatController.Ai, AiDifficulty.Normal), new PlayerSeat(1, SeatController.Ai, AiDifficulty.Normal) }, 3);
+        Simulation sim = Match("pale_hills", new[] { new PlayerSeat(0, SeatController.Ai, AiDifficulty.Normal), new PlayerSeat(1, SeatController.Ai, AiDifficulty.Normal) }, MidHuntSeed);
         var loads = new List<(string What, Simulation Sim)>();
         bool sweepSaved = false, sightSaved = false;
         while (sim.TickNumber < 72_000 && !sim.MatchOver)
@@ -218,6 +220,9 @@ public class HuntStressTests
         Assert.True(sweepSaved || sightSaved, "no hunt to save in");
         foreach ((string what, Simulation l) in loads) SaveTestRun.AssertSameState(sim, l, what + " at the end");
     }
+
+    /// <summary>The Pale Hills seed the mid-hunt save row plays: 3 until M5-9a, 5 since.</summary>
+    private const ulong MidHuntSeed = 5;
 
     private static Simulation Reload(Simulation sim)
     {

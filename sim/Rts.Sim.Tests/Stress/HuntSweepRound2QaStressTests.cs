@@ -376,16 +376,16 @@ public class HuntSweepRound2LegQaTests
     }
 
     /// <summary>
-    /// The HUNT section's leg / pass fields (the last 16 bytes before <c>END!</c> with one AI seat: ring, ring left, pass,
-    /// hunts started) forged: a ring with nothing left, a ring index past the points, ring left past the points, a negative
-    /// pass, each Malformed; the unforged save loads.
+    /// The HUNT section's leg / pass fields (the last 16 bytes of the section with one AI seat: ring, ring left, pass,
+    /// hunts started; M5-9a: before <c>CTRM</c>, which follows <c>HUNT</c> since format 8) forged: a ring with nothing left, a
+    /// ring index past the points, ring left past the points, a negative pass, each Malformed; the unforged save loads.
     /// </summary>
     [Fact]
     public void ForgedLegFields_AreMalformed()
     {
         byte[] good = SaveBytes.SmallAi();
-        int end = good.Length - SaveFormat.ChecksumLength - 4;
-        Assert.Equal("END!"u8.ToArray(), good[end..(end + 4)]);
+        int end = Rts.Sim.Tests.Save.PreMapFixtures.CountersAt(good, 1);
+        Assert.Equal("CTRM"u8.ToArray(), good[end..(end + 4)]);
         Simulation loaded = SaveTestRun.Load(TestSim.Data, good);
         AiPlayer ai = loaded.AiOf(0)!;
         int len = ai.Board.HuntVisited.Length;

@@ -84,6 +84,8 @@ internal sealed class AiRulesJson
     public double? SpendDownQueue { get; set; } // M6-SH1 (BUG-1051)
     public double? HuntMemory { get; set; } // M5-4d
     public double? FocusReach { get; set; } // M5-4c slice 2
+    public double? CounterMemory { get; set; } // M5-9a
+    public Dictionary<string, List<string?>?>? Counters { get; set; } // M5-9a: enemy slot -> own slots that counter it
 }
 
 internal sealed class StealthJson
@@ -423,6 +425,7 @@ internal sealed class AiDifficultyJson
     public bool? PullBackWounded { get; set; }
     public bool? UseAbilities { get; set; }
     public double? ExpandAfter { get; set; }
+    public double? CounterStrength { get; set; } // M5-9a
 }
 
 internal sealed class AiStepJson
