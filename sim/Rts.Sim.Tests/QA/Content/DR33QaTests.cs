@@ -27,7 +27,7 @@ public class DR33QaTests
         Assert.True(r.Ok, string.Join("\n", r.Errors));
         GameData d = r.Data!;
 
-        // The new ThePin_NamesEveryShippedMap_RarakuFirst rule, applied to this data: Raraku first, no pin problem.
+        // The new ThePin_HasRarakuFirst_AndPrintsUnpinnedMaps rule (D-R33; named so since D-R34, BUG-1136), applied to this data: Raraku first, no pin problem.
         Assert.Equal("raraku", MapTextContentTests.Pinned[0].Id);
         Assert.Equal("raraku", MapTextContentTests.Raraku(d).Key);
         Assert.Empty(MapTextContentTests.PinProblems(MapTextContentTests.Shipped(d), MapTextContentTests.Pinned));

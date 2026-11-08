@@ -375,11 +375,12 @@ train), so its weights sum to 30.
   Infantry at 74 a pop). Mages cast Telas Fire on the largest enemy clump.
 
 **This opening can fall to a rush without ever attacking (BUG-0982, D-H6, 2026-10-18).** It is the greedy opening: one
-Barracks in Age I and the gold saved for Age II. Against the Whirlwind's raider rush, the Malazan army stays small
-while the base is defended. On the pairing's five smallest seeds (7, 8, 14, 18, 23) it sends no wave on four, and three
-of those are destroyed (seed 8 at 13:25, 14 at 12:33, 23 at 15:36); seed 18 is still standing at 20:00, its army never
-past 6 pop (BUG-1010). A lower wave threshold doesn't help: at 16 or 14 army pop the same four seeds still send no wave,
-because the army never grows past 11 pop (seed 8), 7 (seed 14), 6 (seed 18) or 10 (seed 23). So the wave stays at 18
+Barracks in Age I and the gold saved for Age II. Against the Whirlwind's raider rush, the Malazan army stays small while
+the base is defended. On the pairing's five smallest seeds (7, 8, 14, 18, 23) it sends no wave on three, and all three
+are destroyed (seed 8 at 13:50, 14 at 15:03, 18 at 10:44); seed 23 sends one wave (13:53) and still falls, at 18:27
+(measured 2026-11-07 after the sim's M5-4d slice 2; before it seed 23 sent none, peaked at 10 pop and fell at 15:36, and
+seed 18 stood at 20:00, BUG-1010). A lower wave threshold doesn't help: at 16 or 14 army pop the same three seeds still
+send no wave, because the army never grows past 11 pop (seed 8), 7 (seed 14) or 6 (seed 18). So the wave stays at 18
 (the Producer's default, measured; re-read after M5-4g on 2026-10-26, the same pick; the owner may revisit). The
 measurement is under "Fast Age II against the raider rush" at the end of this page.
 
@@ -528,7 +529,10 @@ waves), Age II, the defeat, and the largest army it had (read once a second).
 
 Re-printed 2026-10-26 for the sim's M5-4g (the reserve). Before it the 18-pop rows read seed 7: waved at 8:42 (3), Age
 II at 8:24, peak 25; seed 8: Age II at 8:44, defeated at 13:14; seed 14: defeated at 11:19, peak 8. Seed 7 now waves
-later at 18 pop (10:16) with a larger army.
+later at 18 pop (10:16) with a larger army. Re-printed again 2026-11-07 for the sim's M5-4d slice 2 (the AI rebuilds
+what it loses; docs/03 "Implementation (M5-4d slice 2)"): at every threshold seed 8 now falls at 13:50 (was 13:25) and
+seed 14 at 15:03 (was 12:33), both still without a wave and with the same peaks; seed 7's peak at 16 and 14 pop is 47
+and 41 (was 46 and 40).
 
 **The rule (the Producer's default for D-H6, the owner may revisit):** take the lowest threshold of 16 or less at which
 seed 8 waves and Age II comes on every measured seed no more than 60 s later than at 18; else keep 18. Age II is not
@@ -537,25 +541,33 @@ re-printed table, 2026-10-26: the same pick, no data change). Lowering it only b
 to 7:59). On seeds 8 and 14 the army never reaches 14 pop, so no threshold in this range would send a wave. A fix would
 have to be something other than this number, for example the sim-side "send what you have when the base is being lost"
 that BUG-0982's notes name. That is a new mechanic, so it is not data. QA's `QA/Content/DH6ThresholdQaTests` runs the
-same thresholds on the pairing's 4th and 5th seeds too (18 and 23): neither sends a wave at any of the three, seed 23
-is destroyed at 15:36 and seed 18 is still standing at 20:00 with a 6-pop peak, and the rule over all five seeds still
-picks 18.
+same thresholds on the pairing's 4th and 5th seeds too (18 and 23). Since M5-4d slice 2 (its printout, 2026-11-07) seed
+18 sends no wave at any of the three and is destroyed at 10:44 with a 6-pop peak; seed 23 sends one wave at each (13:53,
+13:34, 13:31), peaks at 20 to 21 pop and reaches Age II at 8:11, and is destroyed at 18:27 at 18 pop and 18:39 at 14,
+but stands at 20:00 at 16. Before slice 2 neither sent a wave, seed 23 was destroyed at 15:36 and seed 18 stood at
+20:00. The rule over all five seeds still picks 18.
 
 The same thing happens to `crossbow_push` (BUG-1010; D-H6's third seed per pairing, `QA/Content/D21OpeningsQaTests`, and
 QA's 4th and 5th, `QA/Content/DH6ThresholdQaTests`). Against `raider_rush` it sends no wave on 2 of the pairing's 5
-smallest seeds (5, 11, 19, 25, 38). Until M5-4d both were still standing at 20:00, beaten down: on seed 19 its army
-peaked at 7 pop, under its 14-pop wave, while it held the base, and at 20:00 it had 15 pop with a cap of 24, 910 gold and
-15 wood and no Age II; on seed 25 it peaked at 12 pop and was down to 1 pop at 20:00 (re-measured unchanged on 2026-11-06
-by D-H7, on the `main` before M5-4d landed). Since M5-4d (the AI hunts the last units once it knows no enemy building)
-both are finished off without ever attacking: seed 19 is defeated at 10:24 and seed 25 at 12:34, so "falls to the rush
-without a wave" still holds and "standing at 20:00" does not. Both test entries (`KnownBeatenAlive`, BUG-1110) were
-taken out by D-R33 (2026-11-07), so either row fails again if its side is left standing at 20:00 without a wave;
-the same day M5-4d slice 2 (the AI rebuilds what it loses) put seed 19 back on the list: its last worker rebuilds and the
-side stands at 20:00 with 1 pop, no building and 522 gold (BUG-1116 / BUG-1119), while seed 25 stays defeated at 12:34.
-Before M5-4g seed 19 read a peak of 8 pop and 6 pop / cap 16 with
-670 gold and 60 wood at 20:00, and seed 25 was destroyed at 11:26. Over the two openings, `raider_rush` beats the
-Malazans without a fight on 6 of 10 seeds (`cadre_rush` 4 of 5, `crossbow_push` 2 of 5). `standard` sent a wave on
-each of its 9 measured pairing seeds (3 Whirlwind openings x 3 seeds).
+smallest seeds (5, 11, 19, 25, 38). Today seed 19's side is beaten down but still standing at 20:00, and seed 25's is
+defeated at 12:33 (tick 15,068); neither ever attacks, so "falls to the rush without a wave" holds on both. Since the
+sim's M5-4d slice 2 (the AI rebuilds what it loses, 2026-11-07) seed 19's hall is razed but its last worker keeps
+rebuilding, and at 20:00 the side has 1 pop, no building and 522 gold (BUG-1116 / BUG-1119; docs/03 "Implementation
+(M5-4d slice 2)"). So seed 19 is a named allowance again (`QA/Content/D21OpeningsQaTests.KnownBeatenAlive`, pinned by
+`QA/Content/DR33QaTests`): its row passes while the side stands without a wave, until the sim's hardening re-measures
+it. Seed 25 is not on either list, so its row fails if the side is ever left standing at 20:00 without a wave.
+
+How the two seeds got here: before M5-4g seed 19 read a peak of 8 pop and 6 pop / cap 16 with 670 gold and 60 wood at
+20:00, and seed 25 was destroyed at 11:26. From M5-4g both stood at 20:00: on seed 19 the army peaked at 7 pop, under
+its 14-pop wave, while it held the base, and at 20:00 it had 15 pop with a cap of 24, 910 gold and 15 wood and no Age
+II; on seed 25 it peaked at 12 pop and was down to 1 pop at 20:00 (re-measured unchanged on 2026-11-06 by D-H7). M5-4d
+(the AI hunts the last units once it knows no enemy building) finished both off, seed 19 at 10:24 and seed 25 at 12:34
+(tick 15,084; 12:33 since slice 2), and D-R33 (2026-11-07) took both `KnownBeatenAlive` entries out (BUG-1110); slice 2
+put seed 19's back the same day.
+
+Over the two openings, `raider_rush` beats the Malazans without a fight on 5 of 10 seeds (`cadre_rush` 3 of 5,
+`crossbow_push` 2 of 5; 6 of 10 before slice 2, when seed 23 sent no wave). `standard` sent a wave on each of its 9
+measured pairing seeds (3 Whirlwind openings x 3 seeds).
 
 ## Age II against the Whirlwind (M5-4g, 2026-10-26)
 
@@ -564,10 +576,11 @@ every Malazan opening against every Whirlwind opening on the pairing's three sma
 20 minutes, and the defeat if the side fell. The 1st seed is `Content/AiOpeningPairsReportTests`' run, the 2nd and 3rd
 `QA/Content/D21OpeningsQaTests`'; each run pins its cell here and on the Whirlwind page's twin table. Since M5-4g's
 reserve the Malazans reach Age II on 23 of the 27 sides: of the four that don't, `standard` seed 2 and `cadre_rush` seed
-14 are defeated first, `crossbow_push` seed 19 is BUG-1010's beaten side, and `crossbow_push` seed 32 is not defeated at
-20:00 (3 pop, no pop building left; 794 gold and 5 wood in hand) (docs/03 "Implementation (M5-4g)"). Since M5-4d (the AI
-hunts the last units once it knows no enemy building) those two are finished off: seed 19 is defeated at 10:24 and seed
-32 at 17:18 (docs/03 "Implementation (M5-4d)").
+14 are defeated first, `crossbow_push` seed 19 is BUG-1010's beaten side, still standing at 20:00, and `crossbow_push`
+seed 32 is defeated at 16:54. Under M5-4g alone seed 32 stood at 20:00 (3 pop, no pop building left; 794 gold and 5 wood
+in hand; docs/03 "Implementation (M5-4g)") until M5-4d's hunt (the AI hunts the last units once it knows no enemy
+building) finished it, and seed 19 with it; since M5-4d slice 2 (the AI rebuilds what it loses) seed 19's side rebuilds
+and lives to 20:00 again (docs/03 "Implementation (M5-4d slice 2)", BUG-1116).
 
 | Malazan opening | Whirlwind opening | 1st seed | 2nd seed | 3rd seed |
 | --- | --- | --- | --- | --- |

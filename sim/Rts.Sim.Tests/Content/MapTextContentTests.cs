@@ -13,6 +13,10 @@ namespace Rts.Sim.Tests.Content;
 /// </summary>
 public class MapTextContentTests
 {
+    private readonly Xunit.Abstractions.ITestOutputHelper _out;
+
+    public MapTextContentTests(Xunit.Abstractions.ITestOutputHelper output) => _out = output;
+
     /// <summary>
     /// The setup list's text by map id: id, display name, description (D23, 2026-11-05; Raraku's "center" D24). Raraku stays
     /// first (the pin's own rule test reads it as <c>Pinned[0]</c>). Pale Hills and Vathar Crossing joined in D-H7
@@ -65,17 +69,13 @@ public class MapTextContentTests
         Assert.Contains(PinProblems(reworded, rarakuOnly), p => p.Contains("raraku: description", StringComparison.Ordinal));
     }
 
-    private readonly Xunit.Abstractions.ITestOutputHelper _out;
-
-    public MapTextContentTests(Xunit.Abstractions.ITestOutputHelper output) => _out = output;
-
     /// <summary>
     /// Raraku is pinned first (the rule test above reads it there). The pin does not have to name every shipped map (D24:
     /// the sim may ship a map with provisional text and the data task pins it later, BUG-1104), so an unpinned shipped map
     /// is printed, not failed; <see cref="EveryShippedMapText_HasNoProblem"/> still checks its text.
     /// </summary>
     [Fact]
-    public void ThePin_NamesEveryShippedMap_RarakuFirst()
+    public void ThePin_HasRarakuFirst_AndPrintsUnpinnedMaps()
     {
         Assert.Equal("raraku", Pinned[0].Id);
         foreach (MapDef m in Data.Maps)
