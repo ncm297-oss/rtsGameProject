@@ -683,7 +683,10 @@ open S1 / S2. Retro below; open S3 / S4 listed there.)_
       expansion is not rebuilt (docs/03 "Not yet"); BUG-1116 S3 (losing seats rebuild houses they don't need; the Pale Hills
       4-seat seed-2 free-for-all is a skipped known stall with BUG-1068's gold starvation underneath); BUG-1119 S3 (a
       defeated seat's remembered buildings keep a survivor from hunting); BUG-1118 S4; the look fires rarely in real
-      matches (0 times on Pale Hills seed 1, 2 on Vathar seed 1).)
+      matches (0 times on Pale Hills seed 1, 2 on Vathar seed 1). **M5-H5 (2026-11-08, the sim's hardening):** BUG-1119
+      and BUG-1118 item 1 fixed (`PlayerView.IsDefeated` / `AiPlayer.IsLiveEnemy`; one excused hall retry at the lost
+      anchor, BUG-1148 found and fixed in the round); BUG-1116 stays (the house rule reverted again, the lone-worker gap
+      is the sweep's order) and BUG-1068's gold is measured (the `expand` step's 40 m reach), not fixed.)
 - [x] Easy / Normal / Hard per [02 AI](02-game-design.md#ai-opponent). (D16, 2026-10-13: the three blocks pinned to docs/02 and
       the faction pages. M5-4c slice 1, 2026-10-13: `useAbilities` applied (Easy never cast then; D19, 2026-10-15, turned it on for Easy too).
       M5-4c slice 2, 2026-11-07-0926: **the three Hard knobs are read**: `gatherBonus` (per-player gather rates derived at
@@ -693,7 +696,7 @@ open S1 / S2. Retro below; open S3 / S4 listed there.)_
       bit-identical to the pre-slice code (8 pinned matches); Hard v Normal 28 / 9 / 5 over 42 matches (27 / 10 / 5 before). M5-V2 the
       same session: each difficulty's rules as a tooltip in the skirmish setup, Hard's bonus from `ai.json` ("shown in the skirmish
       setup"). Ticked at the 2026-11-07-0926 ACCEPT. Open behind it: BUG-1120 S3 (a Normal hunt's sighting point on an ally's building
-      edge), BUG-1124 S3 (Perf rows and this PC's clock), BUG-1147 S4 (the tips' think intervals typed, not from data); Hard is not
+      edge; **fixed by M5-H5 2026-11-08**, `MilitaryManager.SightingPoint`; BUG-1149 S3 is the defense's twin), BUG-1124 S3 (Perf rows and this PC's clock), BUG-1147 S4 (the tips' think intervals typed, not from data); Hard is not
       measurably stronger than before the knobs on this sample (tuning later).)
 - [ ] AI-vs-AI headless test: a 20-minute match completes without errors and one side wins. (M5-4b, 2026-10-13: the defeat
       rule and `Simulation.MatchOver` are in, a razed hall ends the match and the loser's AI goes silent on seeds 1-3. M5-4e,

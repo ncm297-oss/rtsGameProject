@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S3 (was S2; QA re-triage in round 1, **confirmed by the Producer at the 2026-11-07-0926 ACCEPT**) |
-| Status | open (the red row is green through a narrow oracle exemption; **the hunt-point question is an item of the sim's hardening M5-H5**: the Producer's default is that a hunt's sighting point is pushed off any allied building footprint by half a cell toward the hunter, a Normal-play change that re-measures the pins; the exemption is then removed) |
+| Status | fixed (M5-H5, 2026-11-08; the Producer's default ruling) |
 | Found | 2026-11-07-0926, task M5-4c-2 (proposed by the developer as BUG-1120; confirmed by QA) |
 | System | AI hunt (M5-4d `MilitaryManager.Hunt` / `HuntTarget`), QA team soak oracle |
-| Fixed by | |
+| Fixed by | M5-H5 cd211f2 (fix round 1: 6c3639a); `Ai/EndGameHardeningTests.AHuntsSighting_ByAnAllysBuilding_IsPushedOffItTowardTheHunters(true)` (red before the fix: the point 0.30 m from the ally's hall) |
 
 ## Repro
 1. `dotnet test sim/Rts.Sim.Tests --filter "FullyQualifiedName~TeamAiSoakStressTests"`
@@ -49,3 +49,16 @@ Seat 3 is Normal (the row's difficulties turn per seat: `(p + seed) % 3`); seats
 - Unchanged and still open as S3. All 8 `TeamAiSoakStressTests` rows pass in QA's full non-Perf run. The exemption
   excuses 14 AttackMoves on seed 1 adjacent, the same count as round 1, and 0 on the other 7 rows. The round-2 fix doesn't
   change the hunt-point rule.
+
+## Fix (M5-H5, 2026-11-08)
+- `MilitaryManager.SightingPoint`: a hunt's sighting point (the target when it follows a sighting, not a sweep point) on
+  or within `AllySlack` (0.5 m, the oracle's slack) of an allied building the seat sees (not its own, not an enemy's) is
+  moved along the line toward the members' centroid until it is 0.5 m clear of the footprint, then half a map cell (1 m)
+  more; at most 4 footprints. Only with an ally (`PlayerView.HasAlly`), so free-for-all and 1v1 play is unchanged. The
+  re-target test compares the pushed point, so a pushed sighting is not re-sent every think (the same test row's second
+  think).
+- The oracle exemption is removed (QA-owned files, per the brief and rule 37's precedent): `Stress/TeamAiSoakStressTests`
+  no longer has `HuntToASighting` (every AttackMove within 0.5 m of an ally's building is reported again), and
+  `QA/HardKnobsRecheckQaTests.TheSoakExemption_ExcusesOnlyAHuntToItsSighting` is deleted with it. All 8 soak rows pass with
+  no exemption (seed 1 adjacent: 214 AttackMoves, none beside an ally's building).
+- Pins: none moved (`TeamAiSoakStressTests` asserts no pin; the 2v2 `HuntStressTests` row still ends).

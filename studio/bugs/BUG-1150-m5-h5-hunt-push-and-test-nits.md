@@ -36,4 +36,9 @@ Rows 5 and 6 are red; 1, 3 and 4 pass the oracle but move the point the row's wh
 - Also, while there: `Stress/HuntStressTests.FourAiSeats_OnPaleHills_Seed2_KnownStall`'s summary still names BUG-1119
   ("p3 keeps the defeated p2's buildings as known, BUG-1119, so it neither waves nor hunts") as a live cause and says "the
   hardening re-runs it with BUG-1119 and the lone-idle-worker hunt gap fixed"; after M5-H5 the stall is BUG-1068's gold
-  alone (docs/03's own M5-H5 note). The skip reason is still right.
+  alone (docs/03's own M5-H5 note). The skip reason is still right. **Fixed in fix round 1 (6c3639a).**
+- **Added by the Producer at the ACCEPT (QA's round-1 note, S4):** the BUG-1148 retry flag lives only in the pending order
+  (`PendingOrder.Slot = 1`). If the excused think cannot send the retry (no free builder), the order is dropped and the next
+  Build at the old anchor is excused again: one wasted Build per such cycle, never a hang (a loop needs builders unavailable
+  on exactly every excused think). Fix if wanted: remember the excuse in a saved fact, or mark the anchor when the retry
+  cannot be sent. Open with this id.

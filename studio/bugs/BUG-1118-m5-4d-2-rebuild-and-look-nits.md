@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S4 |
-| Status | open (item 2 fixed in fix round 1, 8a1e588: `AiPlayer.Save` reads `TownHallCell` with `ReadInt32In(-(cells + 1), cells - 1)`, proof `SaveRefusalTests.AForgedTownHallCell_OutsideTheMap_IsMalformed` (7 cases, fail-first); item 1 open, the sim's hardening; item 3 **fixed by D-R34 (d990ade, 2026-11-07-0926)**: the Malazan page's prose round both tables matches the cells (13:50 / 15:03 / 10:44 / 18:27 / 16:54) and the seed 19 / 25 paragraph is rewritten; QA re-ran DH6 and matched every figure) |
+| Status | fixed (item 1 fixed by M5-H5, 2026-11-08; item 2 fixed in fix round 1, 8a1e588: `AiPlayer.Save` reads `TownHallCell` with `ReadInt32In(-(cells + 1), cells - 1)`, proof `SaveRefusalTests.AForgedTownHallCell_OutsideTheMap_IsMalformed` (7 cases, fail-first); item 3 **fixed by D-R34 (d990ade, 2026-11-07-0926)**: the Malazan page's prose round both tables matches the cells (13:50 / 15:03 / 10:44 / 18:27 / 16:54) and the seed 19 / 25 paragraph is rewritten; QA re-ran DH6 and matched every figure) |
 | Found | 2026-11-07-0236, task M5-4d-2 |
 | System | AI (HallFirst, TownHallCell encoding), docs |
-| Fixed by | item 2: 8a1e588; item 3: D-R34 d990ade (docs only) |
+| Fixed by | item 2: 8a1e588; item 3: D-R34 d990ade (docs only); item 1: M5-H5 cd211f2 (fix round 1: 6c3639a), `Ai/RebuildTests.AHallSite_RazedBeforeItsBuildIsJudged_IsRebuiltAtTheSameAnchor` (red before: the next Keep went up off the anchor); fix round 1 (BUG-1148) narrows the excuse to one retry at the anchor, proof `Ai/RebuildTests.AUnitParkedOnTheLostHallsAnchor_CostsOneRetryThere_ThenTheHallGoesUpOffIt` |
 
 ## Repro / Actual
 1. **A hall site razed before its Build is judged moves the rebuild off the old anchor.** On the flat scene, raze the
@@ -31,3 +31,13 @@
 ## Notes
 All three are cheap. Item 1 could be fixed by judging the hall Build against "a Keep stood at the anchor at any point
 since it was sent", which is more than a few lines, or it can be accepted as is.
+
+## Item 1 fix (M5-H5, 2026-11-08)
+`BuildOrderExecutor.HallFirst`: a hall Build at the lost hall's own anchor (`LostHallCell`) is not given a retry mark when
+it is judged not accepted while `PlayerView.CanPlace` still allows a hall there: it was not refused for its ground (its site
+was razed before the judge, or a unit stood there and moved off), so the next rebuild goes back to the old spot. A Build
+refused because the ground is taken (a tree, a building) still gets the mark and the ring search moves on
+(`RebuildTests.ARazedHall_WhoseAnchorIsTaken_IsRebuiltNearby` unchanged). Builder's call: the brief's "a Keep stood at the
+anchor since it was sent" needs a remembered fact across thinks (a new saved field); "the anchor still takes a Keep" needs
+none and gives the same answer in the razed-site case.
+

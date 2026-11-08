@@ -42,3 +42,25 @@ the other in an hour.
   splitting the waves) and check seed 2's stalemate.
 - Seeds 3, 4 and 6 are one match on every map file: a map file draws nothing from the map stream, so the seed only
   changes the AI's opening picks (the same is true on Raraku). Not a bug, but "seeds 2-6" gives 3 distinct matches, not 5.
+
+## M5-H5 (2026-11-08): seed 2's gold measured, not fixed (more than a few lines)
+
+- **The map's gold runs out by design of the AI's reach, not of the map.** Pale Hills holds 36,000 gold: per start two
+  2,500 mines beside the hall and two 2,000 mines about 50 m off (cells (83, 49) / (87, 49) for the north-west start), all
+  inside `ai.gatherReach` (64 m) of the hall, so each seat mines its own 9,000 and nothing else. In a 2-seat match (starts
+  0 and 1) the two empty starts' 18,000 (cells (192, 63) and (63, 192), about 260 m from either hall) are never touched:
+  the one `expand` step (at 480 s) looks for a mine within `ai.expandHallReach` (40 m) of the hall, and nothing later
+  reaches farther.
+- Probe, items 1 and 3 in (BUG-1119, BUG-1120), Pale Hills seed 2 to the limit:
+  - 2 seats: at 36,000 p0 gold 18 / wood 3,255 (7 army, 20 half-pop, threshold 32), p1 gold 2 / wood 4,154 (1 army); at
+    48,000 the same gold, wood 6,965 / 8,494; both keep their halls and production; no result by 72,000.
+  - 4 seats: every seat under 25 gold from about 48,000; at 144,000 p0 gold 6 / wood 31,230 with 13 army under its 32
+    threshold, p1 gold 4 with 3 workers and 3 production buildings (so p0 and p3 know an enemy building and never hunt),
+    p3 gold 22 / wood 30,250 with no army.
+- So the stall is: no gold, no army growth, a wave threshold never reached, and an enemy building still known, so no
+  hunt either. Fix candidates, each a rule change past this hardening's "a few lines": (a) a seat whose known gold is
+  spent reopens `expand` toward the nearest known unclaimed mine at any distance (needs the scout to have seen it: on
+  seed 2 the far starts lie outside the scout's head ring); (b) a seat that can no longer add to its army (gold under its
+  cheapest unit's, no gold node left in reach) waves with what it has; (c) map data (more or nearer neutral gold; the data
+  track's). Both seed-2 rows stay skipped under this id.
+
