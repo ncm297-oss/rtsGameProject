@@ -477,3 +477,5 @@ bugs outrank new features.
 | [BUG-1148](BUG-1148-hall-rebuild-loops-on-an-anchor-a-unit-stands-on.md) | S2 | fixed | A lost hall is never rebuilt while any enemy unit stands on its old anchor (M5-H5's BUG-1118 judge reads CanPlace, which ignores units) |
 | [BUG-1149](BUG-1149-defense-attackmove-onto-an-allys-building-2v2.md) | S3 | open | In a 2v2 the defense sends AttackMove onto an ally's building edge (pre-existing; BUG-1120's case through the defense) |
 | [BUG-1150](BUG-1150-m5-h5-hunt-push-and-test-nits.md) | S4 | open | M5-H5 nits: the sighting push chains through a row of touching allied buildings; stale seed-2 comments |
+| [BUG-1151](BUG-1151-rebalance-resends-gather-to-a-gone-mine-every-think.md) | S3 | open | The economy's rebalance re-sends a Gather to a remembered mine that is gone, every think (BUG-0570's mark is for idle workers only; generated seed 4) |
+| [BUG-1152](BUG-1152-losing-seat-last-worker-stays-on-gold-silent-for-minutes.md) | S3 | open | A losing AI seat's last worker stays on gold with wood under any cost; the seat sends nothing for 5-8 minutes (Raraku seeds 1 and 2; the Raraku criterion row) |
