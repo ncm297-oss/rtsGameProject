@@ -109,9 +109,13 @@ public class HardKnobsQaTests
         Assert.True(left == 0 && alive > 0, $"{difficulty} lost the fight: {alive} Heavy Infantry alive, {left} Raiders alive");
     }
 
-    /// <summary>Pull-back, the whole wave wounded: every member is sent home once, the wave ends with its cooldown, and none is re-sent out while wounded.</summary>
+    /// <summary>
+    /// Pull-back, the whole wave wounded: every member is sent home once and the wave ends with its cooldown. BUG-1123's rule
+    /// (fix round 2; the row asserted "nobody goes out again" before it): the next wave takes all four out again, each flagged
+    /// <see cref="MilitaryManager.FightsOn"/> and sent one AttackMove, and none is sent home a second time.
+    /// </summary>
     [Fact]
-    public void PullBack_TheWholeWaveWounded_EndsTheWave_AndNobodyGoesOutAgain()
+    public void PullBack_TheWholeWaveWounded_EndsTheWave_ThenTheNextWaveTakesThemAndKeepsThem()
     {
         Simulation sim = Scene(AiDifficulty.Hard, combat: false);
         AiPlayer ai = sim.AiOf(0)!;
@@ -124,39 +128,45 @@ public class HardKnobsQaTests
         Assert.False(ai.Board.WaveActive, "a wave of only wounded members went on");
         foreach (EntityHandle m in members)
             Assert.Equal(CommandKind.Move, Assert.Single(log, c => c.Unit == m).Kind);
-        for (int k = 0; k < 30; k++) NextThink(sim);
+        for (int k = 0; k < 30 && ai.Board.WavesStarted < 2; k++) NextThink(sim);
+        Assert.Equal(2, ai.Board.WavesStarted);
+        for (int k = 0; k < 6; k++) NextThink(sim);
         foreach (EntityHandle m in members)
         {
-            Assert.DoesNotContain(log, c => c.Unit == m && c.Kind is CommandKind.AttackMove or CommandKind.Attack);
-            Assert.True(log.Count(c => c.Unit == m) <= 2, $"member {m.Index} sent {log.Count(c => c.Unit == m)} commands at home");
+            Assert.Equal(m.Generation, ai.Board.WaveGeneration[m.Index]);
+            Assert.NotEqual(0, ai.Board.WaveFlag[m.Index] & MilitaryManager.FightsOn);
+            Assert.Equal(1, log.Count(c => c.Unit == m && c.Kind == CommandKind.Move));
+            Assert.Equal(1, log.Count(c => c.Unit == m && c.Kind == CommandKind.AttackMove));
         }
-        Assert.Equal(1, ai.Board.WavesStarted);
     }
 
     /// <summary>
-    /// The wave gate with 3 wounded + 2 healthy (a wave needs 4): no wave; 2 more healthy: a wave of exactly the 4 healthy,
-    /// its start half-pop theirs, the wounded home.
+    /// The wave gate with 3 wounded + 2 healthy (a wave needs 4). BUG-1123's rule (fix round 2; before it the wounded didn't
+    /// count and no wave started): all five go, the start half-pop theirs, the three wounded flagged
+    /// <see cref="MilitaryManager.FightsOn"/> and the two healthy not.
     /// </summary>
     [Fact]
-    public void WaveGate_ThreeWoundedAndTwoHealthy_DoesNotStart_ThenFourHealthyGoWithoutTheWounded()
+    public void WaveGate_ThreeWoundedAndTwoHealthy_StartsAWaveOfAllFive_TheWoundedFightingItOut()
     {
         Simulation sim = Scene(AiDifficulty.Hard, combat: false);
         AiPlayer ai = sim.AiOf(0)!;
         List<EntityHandle> wounded = Army(sim, 3, 18, 28);
         foreach (EntityHandle h in wounded) sim.World.Units.Hp[h.Index] = 38; // below 39 = 0.3 x 130
         List<EntityHandle> healthy = Army(sim, 2, 18, 30);
-        for (int k = 0; k < 10; k++) NextThink(sim);
-        Assert.Equal(0, ai.Board.WavesStarted);
-        healthy.AddRange(Army(sim, 2, 18, 32));
         List<Command> log = AiScenes.Log(sim, 0);
         for (int k = 0; k < 10 && ai.Board.WavesStarted == 0; k++) NextThink(sim);
         Assert.Equal(1, ai.Board.WavesStarted);
-        Assert.Equal(4 * TestSim.Data.Units[Heavy].HalfPop, ai.Board.WaveStartHalfPop);
-        foreach (EntityHandle h in healthy) Assert.Equal(h.Generation, ai.Board.WaveGeneration[h.Index]);
+        Assert.Equal(5 * TestSim.Data.Units[Heavy].HalfPop, ai.Board.WaveStartHalfPop);
+        foreach (EntityHandle h in healthy)
+        {
+            Assert.Equal(h.Generation, ai.Board.WaveGeneration[h.Index]);
+            Assert.Equal(0, ai.Board.WaveFlag[h.Index] & MilitaryManager.FightsOn);
+        }
         foreach (EntityHandle h in wounded)
         {
-            Assert.NotEqual(h.Generation, ai.Board.WaveGeneration[h.Index]);
-            Assert.DoesNotContain(log, c => c.Unit == h && c.Kind is CommandKind.AttackMove or CommandKind.Attack);
+            Assert.Equal(h.Generation, ai.Board.WaveGeneration[h.Index]);
+            Assert.NotEqual(0, ai.Board.WaveFlag[h.Index] & MilitaryManager.FightsOn);
+            Assert.Contains(log, c => c.Unit == h && c.Kind == CommandKind.AttackMove);
         }
     }
 
@@ -318,7 +328,7 @@ public class HardKnobsQaTests
             {
                 int i = c.Unit.Index;
                 if (c.Kind is CommandKind.Attack or CommandKind.AttackMove) orders[c.Unit] = orders.GetValueOrDefault(c.Unit) + 1;
-                if (c.Kind == CommandKind.AttackMove && ai.Board.WaveGeneration[i] == c.Unit.Generation && ai.Board.WaveFlag[i] == MilitaryManager.Focused) free[seat]++;
+                if (c.Kind == CommandKind.AttackMove && ai.Board.WaveGeneration[i] == c.Unit.Generation && MilitaryManager.Owed(ai.Board, i) == MilitaryManager.Focused) free[seat]++;
                 if (c.Kind == CommandKind.Attack && !c.TargetIsBuilding)
                 {
                     attacks++;

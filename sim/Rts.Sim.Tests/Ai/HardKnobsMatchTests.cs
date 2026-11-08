@@ -156,7 +156,7 @@ public class HardKnobsMatchTests
             sim.Tick();
             bool pulled = sim.World.Units.IsAlive(members[3]) && ai.Board.WaveGeneration[members[3].Index] != members[3].Generation;
             bool focused = members.Any(m => sim.World.Units.IsAlive(m) && ai.Board.WaveGeneration[m.Index] == m.Generation
-                && ai.Board.WaveFlag[m.Index] == MilitaryManager.Focused); // BUG-1121: the flag's new value is in the save
+                && MilitaryManager.Owed(ai.Board, m.Index) == MilitaryManager.Focused); // BUG-1121: the flag's new value is in the save
             bool held = focus.Generation != 0 && members.Any(m => sim.World.Units.IsAlive(m) && ai.View.TryGetAttackOrder(m.Index, out EntityHandle h) && h == focus);
             ready = pulled && held && ai.Board.WaveActive && focused;
         }
@@ -177,5 +177,42 @@ public class HardKnobsMatchTests
         }
         SaveTestRun.AssertSameState(sim, load, "mid-focus + 1,000");
         Assert.True(focuses > 0, "no focus after the save");
+    }
+
+    /// <summary>
+    /// BUG-1123 (fix round 2): a Hard wave that started with a wounded member (flagged <see cref="MilitaryManager.FightsOn"/>,
+    /// a bit of the saved <c>WaveFlag</c> byte, no new field) saved mid-wave: format 6, re-saves byte for byte, the loaded
+    /// seat holds the bit, and the two runs are hash-equal for 1,000 ticks, the wounded member never sent home in either.
+    /// </summary>
+    [Fact]
+    public void ASaveMidWave_WithAMemberThatFightsOn_FollowsTheRunFor1000Ticks()
+    {
+        (Simulation sim, List<EntityHandle> members, _) = Focus(AiDifficulty.Hard, raiderX: RaiderX);
+        AiPlayer ai = sim.AiOf(0)!;
+        EntityHandle wounded = members[3];
+        sim.World.Units.Hp[wounded.Index] = 30; // below 39 = 0.3 x 130 before the start: it goes, to stay
+        NextThink(sim);
+        Assert.True(ai.Board.WaveActive, "the wave did not start");
+        for (int t = 0; t < 200; t++) sim.Tick();
+        Assert.Equal(wounded.Generation, ai.Board.WaveGeneration[wounded.Index]);
+        Assert.NotEqual(0, ai.Board.WaveFlag[wounded.Index] & MilitaryManager.FightsOn);
+        byte[] bytes = SaveTestRun.Save(sim);
+        Assert.Equal(SaveFormat.HuntMaplessVersion, BitConverter.ToInt32(bytes, SaveFormat.MagicLength));
+        Simulation load = SaveTestRun.Load(HardKnobsScenes.Data.Value, bytes);
+        Assert.Equal(bytes, SaveTestRun.Save(load));
+        SaveTestRun.AssertSameState(sim, load, "fights on");
+        Assert.Equal(ai.Board.WaveFlag[wounded.Index], load.AiOf(0)!.Board.WaveFlag[wounded.Index]);
+        List<Command> log = AiScenes.Log(sim, 0), loadLog = AiScenes.Log(load, 0);
+        for (int t = 0; t < 1000; t++)
+        {
+            sim.Tick();
+            load.Tick();
+            Assert.True(sim.StateHash() == load.StateHash(), $"diverged at tick {sim.TickNumber}");
+            // A Move home while the wave goes on is a pull-back (a wave's end clears WaveActive in the same think).
+            Assert.False(ai.Board.WaveActive && log.Any(c => c.Unit == wounded && c.Kind == CommandKind.Move), $"pulled back at tick {sim.TickNumber}");
+        }
+        SaveTestRun.AssertSameState(sim, load, "fights on + 1,000");
+        Assert.Equal(log.Count, loadLog.Count);
+        _out.WriteLine($"commands after the save: {log.Count}; the wounded member's: {string.Join(", ", log.Where(c => c.Unit == wounded).Select(c => $"{c.Tick}:{c.Kind}"))}");
     }
 }

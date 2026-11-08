@@ -52,6 +52,8 @@ public class ReserveTwinTests
     /// seat) and Hard now gathers faster, focuses fire and pulls back the wounded; the rows still prove a shift of 0 with no
     /// reservable step sends no reserve (<c>reserved</c> 0). M5-4c-2 fix round 1 (BUG-1121's focus rule: a fighter focuses
     /// only about its attack range): the (2, 2) and (4, 4) rows re-printed again on that tree (from tick 2,500 and 3,500).
+    /// M5-4c-2 fix round 2 (BUG-1123: a pulled-back unit goes out with the next wave, <c>MilitaryManager.FightsOn</c>): the same
+    /// two rows' hashes at 5,500 and 6,000 re-printed (a Hard seat's second wave takes its wounded along).
     /// </summary>
     private static readonly Dictionary<(int, int, bool), ulong[]> s_base = new()
     {
@@ -59,13 +61,13 @@ public class ReserveTwinTests
         {
             0xBE3B530A28191C48, 0x10585E07BC597613, 0x2949F935A2594956, 0x99DB931F2548B72C,
             0x7DC40E5AAC61ACEA, 0xCCB9E07E292835F2, 0x8AAD56D9E1ECA2F6, 0xBC71FD3D6A280DE8,
-            0x669D77D61898240E, 0x9302F3DA6809A2B9, 0xFFA061226680379A, 0xC689C66B180D6DBF,
+            0x669D77D61898240E, 0x9302F3DA6809A2B9, 0xCE9E0ED1E83D2104, 0x4A59B309B2CDE613,
         },
         [(4, 4, true)] = new ulong[]
         {
             0xF670CF2993E9036E, 0x524B13E5CDF7BA75, 0x689C17F492F0D752, 0x532A94678967835D,
             0x7C8C60851A3F3B2C, 0xEC78522DA1EA4236, 0x32FC1AD96B32D299, 0x8D0F3AD2E3744008,
-            0x6DB5753F06E39B62, 0x873706930D3B0028, 0x1C1EA230C69E4074, 0x0BFEE6963E57B4AE,
+            0x6DB5753F06E39B62, 0x873706930D3B0028, 0x1EC56C878FA3FC71, 0xF2F4F3C068C2B868,
         },
         [(3, 3, false)] = new ulong[]
         {

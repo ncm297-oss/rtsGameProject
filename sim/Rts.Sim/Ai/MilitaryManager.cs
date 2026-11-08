@@ -47,9 +47,9 @@ namespace Rts.Sim.Ai;
 /// (the retreat, the idle cooldown, the defense); an enemy building coming into view makes it a wave on that building.
 /// </para>
 /// <para>
-/// M5-4c slice 2, the Hard knobs (docs/03 "Implementation (M5-4c slice 2)"): with <c>pullBackWounded</c> a member below its
-/// faction's <c>retreat.hpFraction</c> of its max hp goes home out of the wave and is in no new one while below
-/// (<see cref="Wounded"/>, <see cref="PullBack"/>); with <c>focusFire</c> the wave's members and the defenders about in
+/// M5-4c slice 2, the Hard knobs (docs/03 "Implementation (M5-4c slice 2)"): with <c>pullBackWounded</c> a member that falls
+/// below its faction's <c>retreat.hpFraction</c> of its max hp goes home out of the wave, and goes out again with the next
+/// one, which it fights out (<see cref="Wounded"/>, <see cref="PullBack"/>, <see cref="FightsOn"/>); with <c>focusFire</c> the wave's members and the defenders about in
 /// attack range of the lowest-hp enemy unit seen are sent <c>Attack</c> on it (<see cref="Focus"/>). Both are off on Easy
 /// and Normal, which play exactly as before.
 /// </para>
@@ -69,6 +69,14 @@ internal static class MilitaryManager
     /// Only ever set on a <c>focusFire</c> seat.
     /// </summary>
     internal const byte Focused = 3;
+
+    /// <summary>
+    /// BUG-1123: a bit of <see cref="Blackboard.WaveFlag"/> beside the order owed (<see cref="Owed"/>): the member was wounded
+    /// (<see cref="Wounded"/>) when its wave or hunt started, so it fights that one out: <see cref="PullBack"/> leaves it in.
+    /// Set only at a start (<see cref="TryStart"/>, <see cref="TryHunt"/>) and so only on a <c>pullBackWounded</c> seat; an order
+    /// owed is set keeping it (<see cref="Owe"/>), and the member's leaving (a <see cref="ToRally"/>, the defense's pull) drops it.
+    /// </summary>
+    internal const byte FightsOn = 0x80;
 
     /// <summary>
     /// Orders (<c>AttackMove</c> or <c>Attack</c>) a member gets toward one target without getting a cell nearer it before the
@@ -113,7 +121,7 @@ internal static class MilitaryManager
         int half = 0, cost = 0, count = 0;
         for (int k = 0; k < ai.ArmyCount; k++)
         {
-            if (!Free(ai, ai.ArmySlots[k], out SeenUnit u) || Wounded(ai, u)) continue; // M5-4c slice 2: the wounded stay home
+            if (!Free(ai, ai.ArmySlots[k], out SeenUnit u)) continue;
             UnitDef def = ai.Data.Units[u.TypeId];
             half += def.HalfPop;
             cost += def.CostGold + def.CostWood;
@@ -127,9 +135,9 @@ internal static class MilitaryManager
         for (int k = 0; k < ai.ArmyCount; k++)
         {
             int slot = ai.ArmySlots[k];
-            if (!Free(ai, slot, out SeenUnit u) || Wounded(ai, u)) continue;
+            if (!Free(ai, slot, out SeenUnit u)) continue;
             board.WaveGeneration[slot] = u.Handle.Generation;
-            board.WaveFlag[slot] = ToAttack;
+            board.WaveFlag[slot] = Wounded(ai, u) ? (byte)(ToAttack | FightsOn) : ToAttack; // BUG-1123: a wounded unit goes, to stay
         }
         SetTarget(ai, target, type, cell);
         board.WaveActive = true;
@@ -156,7 +164,7 @@ internal static class MilitaryManager
         Vector2 sum = Vector2.Zero;
         for (int k = 0; k < ai.ArmyCount; k++)
         {
-            if (!Free(ai, ai.ArmySlots[k], out SeenUnit u) || Wounded(ai, u)) continue; // M5-4c slice 2
+            if (!Free(ai, ai.ArmySlots[k], out SeenUnit u)) continue;
             half += ai.Data.Units[u.TypeId].HalfPop;
             sum += u.Position;
             count++;
@@ -167,9 +175,9 @@ internal static class MilitaryManager
         for (int k = 0; k < ai.ArmyCount; k++)
         {
             int slot = ai.ArmySlots[k];
-            if (!Free(ai, slot, out SeenUnit u) || Wounded(ai, u)) continue;
+            if (!Free(ai, slot, out SeenUnit u)) continue;
             board.WaveGeneration[slot] = u.Handle.Generation;
-            board.WaveFlag[slot] = ToAttack;
+            board.WaveFlag[slot] = Wounded(ai, u) ? (byte)(ToAttack | FightsOn) : ToAttack; // BUG-1123: a wounded unit goes, to stay
         }
         board.WaveActive = true;
         board.WaveStartHalfPop = half;
@@ -234,7 +242,7 @@ internal static class MilitaryManager
         board.HuntSweep = sweep;
         board.WaveTargetPoint = sweep >= 0 ? HuntPoint(ai, Cols(ai), Rows(ai), sweep) : ai.ClampToMap(point);
         for (int k = 0; k < ai.ArmyCount; k++)
-            if (Member(ai, ai.ArmySlots[k], out _)) board.WaveFlag[ai.ArmySlots[k]] = ToAttack;
+            if (Member(ai, ai.ArmySlots[k], out _)) Owe(board, ai.ArmySlots[k], ToAttack);
     }
 
     /// <summary>
@@ -374,7 +382,7 @@ internal static class MilitaryManager
             board.HuntRingLeft = 0;
             SetTarget(ai, target, type, cell);
             for (int k = 0; k < ai.ArmyCount; k++)
-                if (Member(ai, ai.ArmySlots[k], out _)) board.WaveFlag[ai.ArmySlots[k]] = ToAttack;
+                if (Member(ai, ai.ArmySlots[k], out _)) Owe(board, ai.ArmySlots[k], ToAttack);
             return;
         }
         float reach = ai.Rules.RallyReach * ai.Rules.RallyReach;
@@ -385,7 +393,7 @@ internal static class MilitaryManager
             if (!Member(ai, slot, out SeenUnit u)) continue;
             if (Vector2.DistanceSquared(u.Position, board.WaveTargetPoint) <= reach) reached = true;
             // Not stuck: walking or fighting, an order pending or owed, or orders toward the point left to give.
-            if (u.State != UnitState.Idle || ai.OrderedNotApplied(slot, u.Handle.Generation) || board.WaveFlag[slot] == ToAttack
+            if (u.State != UnitState.Idle || ai.OrderedNotApplied(slot, u.Handle.Generation) || Owed(board, slot) == ToAttack
                 || board.WaveTries[slot] < MaxTries) stuck = false;
         }
         if (board.HuntSweep >= 0) SeenPoints(ai);
@@ -539,7 +547,7 @@ internal static class MilitaryManager
         }
         SetTarget(ai, target, type, cell);
         for (int k = 0; k < ai.ArmyCount; k++)
-            if (Member(ai, ai.ArmySlots[k], out _)) board.WaveFlag[ai.ArmySlots[k]] = ToAttack;
+            if (Member(ai, ai.ArmySlots[k], out _)) Owe(board, ai.ArmySlots[k], ToAttack);
     }
 
     /// <summary>Ends the wave (M5-4d: or the hunt): every live member owes a Move to the rally point (also the defense's, M5-4b).</summary>
@@ -682,13 +690,13 @@ internal static class MilitaryManager
             int slot = ai.ArmySlots[k];
             if (!Member(ai, slot, out SeenUnit u)) continue;
             if (Vector2.DistanceSquared(u.Position, board.WaveTargetPoint) <= reach) done = true;
-            if (u.State != UnitState.Idle || ai.OrderedNotApplied(slot, u.Handle.Generation) || board.WaveFlag[slot] == ToAttack
+            if (u.State != UnitState.Idle || ai.OrderedNotApplied(slot, u.Handle.Generation) || Owed(board, slot) == ToAttack
                 || board.WaveTries[slot] < MaxTries) stuck = false;
         }
         if (!done && !stuck) return;
         board.WaveTargetPoint = ai.BuildingCentre(board.WaveTargetType, board.WaveTargetCell);
         for (int k = 0; k < ai.ArmyCount; k++)
-            if (Member(ai, ai.ArmySlots[k], out _)) board.WaveFlag[ai.ArmySlots[k]] = ToAttack;
+            if (Member(ai, ai.ArmySlots[k], out _)) Owe(board, ai.ArmySlots[k], ToAttack);
     }
 
     /// <summary>Every army unit's command this think, in slot order (one each at most).</summary>
@@ -718,7 +726,7 @@ internal static class MilitaryManager
             else if (tagged && board.WaveActive)
             {
                 float d = Vector2.Distance(u.Position, board.WaveTargetPoint);
-                if (board.WaveFlag[slot] == ToAttack)
+                if (Owed(board, slot) == ToAttack)
                 {
                     // A new target (wave start or re-target): progress is measured from here.
                     board.WaveBest[slot] = d;
@@ -734,7 +742,7 @@ internal static class MilitaryManager
                         board.WaveTries[slot] = 0;
                     }
                     // BUG-1121: its focus killed (not given up): back on toward the point, no try spent.
-                    resume = board.WaveFlag[slot] == Focused && !ai.View.TryGetGivenUp(slot, out _);
+                    resume = Owed(board, slot) == Focused && !ai.View.TryGetGivenUp(slot, out _);
                     // M5-4d: a hunt's member is only ever sent on toward the point; out of orders it waits there, a member,
                     // until the hunt moves the point (every member as close as it gets counts as reached).
                     if (hunting && !resume && board.WaveTries[slot] >= MaxTries) continue;
@@ -763,7 +771,7 @@ internal static class MilitaryManager
             ai.MarkOrdered(slot, generation, 0);
             bool home = c.Kind == CommandKind.Move;
             board.RalliedVersion[slot] = home ? board.RallyVersion : 0;
-            if (tagged) board.WaveFlag[slot] = 0;
+            if (tagged) Owe(board, slot, 0);
             if (tagged && !home) board.WaveBusyTick = ai.Now;
             if (tagged && !home && !resume && board.WaveTries[slot] < byte.MaxValue) board.WaveTries[slot]++;
             if (tagged && home) board.WaveGeneration[slot] = 0; // home: no longer a member
@@ -794,11 +802,13 @@ internal static class MilitaryManager
         ai.Knobs.PullBackWounded && u.Hp < (decimal)ai.Def.RetreatHpFraction * ai.View.MaxHpOf(u.TypeId);
 
     /// <summary>
-    /// M5-4c slice 2: every wounded member (<see cref="Wounded"/>) leaves the wave alive: it is owed a Move to the rally point
-    /// (sent by <see cref="Orders"/>, kept if the queue is full) and its half-pop leaves the start's, so it counts neither as
-    /// live nor as a loss toward the retreat (M5-3's "a member that leaves alive is not a loss", as <see cref="Leave"/>).
-    /// Nothing heals yet, so there is no return: while below the fraction it is in no new wave or hunt (<see cref="TryStart"/>
-    /// and <see cref="TryHunt"/> leave it out), and it still answers the defense from home.
+    /// M5-4c slice 2: every wounded member (<see cref="Wounded"/>) leaves the wave alive, unless it was wounded when the wave
+    /// started (<see cref="FightsOn"/>): it is owed a Move to the rally point (sent by <see cref="Orders"/>, kept if the queue
+    /// is full) and its half-pop leaves the start's, so it counts neither as live nor as a loss toward the retreat (M5-3's "a
+    /// member that leaves alive is not a loss", as <see cref="Leave"/>). At home it answers the defense. BUG-1123: nothing
+    /// heals yet, so the next wave or hunt takes it along like any unit (counted toward its start), flagged
+    /// <see cref="FightsOn"/>, and it fights that one out: each unit is pulled back once, and a pulled-back unit fights again
+    /// (before the fix it was in no wave again, so a Hard army shrank over a long match and lost to Normal).
     /// </summary>
     private static void PullBack(AiPlayer ai)
     {
@@ -806,8 +816,8 @@ internal static class MilitaryManager
         for (int k = 0; k < ai.ArmyCount; k++)
         {
             int slot = ai.ArmySlots[k];
-            if (!Member(ai, slot, out SeenUnit u) || !Wounded(ai, u)) continue;
-            board.WaveFlag[slot] = ToRally;
+            if (!Member(ai, slot, out SeenUnit u) || (board.WaveFlag[slot] & FightsOn) != 0 || !Wounded(ai, u)) continue;
+            board.WaveFlag[slot] = ToRally; // drops FightsOn: it leaves
             board.WaveStartHalfPop -= ai.Data.Units[u.TypeId].HalfPop;
         }
     }
@@ -881,7 +891,7 @@ internal static class MilitaryManager
                 ai.View.TryGetUnit(slot, out SeenUnit u);
                 if (!ai.Send(Command.Attack(ai.Player, u.Handle, best, isBuilding: false))) break; // queue full
                 ai.MarkOrdered(slot, u.Handle.Generation, 0);
-                if (board.WaveActive && board.WaveGeneration[slot] == u.Handle.Generation) board.WaveFlag[slot] = Focused;
+                if (board.WaveActive && board.WaveGeneration[slot] == u.Handle.Generation) Owe(board, slot, Focused);
             }
         }
         // Scratch: empty between thinks, so a loaded seat equals the saved one.
@@ -932,7 +942,7 @@ internal static class MilitaryManager
         if (def.Attack.Value <= 0 || def.Attack.Targets == AttackTargets.Buildings) return false;
         Blackboard board = ai.Board;
         bool tagged = board.WaveGeneration[slot] == generation;
-        if (tagged && board.WaveFlag[slot] != 0 && board.WaveFlag[slot] != Focused) return false;
+        if (tagged && Owed(board, slot) != 0 && Owed(board, slot) != Focused) return false;
         if (tagged && board.WaveActive) return true;
         if (!board.Defending || !board.DefendAll && board.DefenderGeneration[slot] != generation) return false;
         // A defender out of the base walks home on the defense's Move first (BUG-0670): an Attack there would keep it in
@@ -944,6 +954,12 @@ internal static class MilitaryManager
     /// <summary>Own army unit <paramref name="slot"/> as seen, if it is free for an order: alive, not casting, no AI command pending.</summary>
     private static bool Free(AiPlayer ai, int slot, out SeenUnit u) =>
         ai.View.TryGetUnit(slot, out u) && u.State != UnitState.Casting && !ai.OrderedNotApplied(slot, u.Handle.Generation);
+
+    /// <summary>The order owed to the member in unit slot <paramref name="slot"/>: its <see cref="Blackboard.WaveFlag"/> without the <see cref="FightsOn"/> bit.</summary>
+    internal static byte Owed(Blackboard board, int slot) => (byte)(board.WaveFlag[slot] & ~FightsOn);
+
+    /// <summary>Sets the order owed to the member in unit slot <paramref name="slot"/> (0 none, <see cref="ToAttack"/>, <see cref="Focused"/>), keeping its <see cref="FightsOn"/> bit.</summary>
+    private static void Owe(Blackboard board, int slot, byte order) => board.WaveFlag[slot] = (byte)(board.WaveFlag[slot] & FightsOn | order);
 
     /// <summary>Whether own unit slot <paramref name="slot"/> holds a live member of the wave in progress (or just ended, not yet sent home).</summary>
     internal static bool Member(AiPlayer ai, int slot, out SeenUnit u) =>

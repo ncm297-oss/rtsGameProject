@@ -68,10 +68,10 @@ public class StandardPresetPinQaTests
     public static IEnumerable<object[]> AiRows() => new[]
     {
         new object[] { 1, 2, 0, false, 0xEF1691714BF6A76DUL },
-        new object[] { 2, 2, 1, false, 0xA796F8D89925CDD1UL }, // M5-4c-2 fix round 1 (BUG-1121 focus rule): was 0x070CC85BB2A3B390 (M5-4c slice 2; before it 0x244EB8E19CE2992F); seat 1 is Hard (gather bonus, focus fire, pull-back)
+        new object[] { 2, 2, 1, false, 0x08DAC14990BB29C5UL }, // M5-4c-2 fix round 2 (BUG-1123: the pulled-back rejoin): was 0xA796F8D89925CDD1 (fix round 1, BUG-1121 focus rule; before it 0x070CC85BB2A3B390 (M5-4c slice 2; before it 0x244EB8E19CE2992F)); seat 1 is Hard (gather bonus, focus fire, pull-back)
         new object[] { 3, 3, 2, false, 0xFCD8F85C768FCED4UL }, // M5-4c-2 fix round 1: was 0xFB6DD578FA7A165E (M5-4c slice 2; 0x0FDF27B5B49AE41A; M5-4d slice 2: 0x112526C6B3861467); seat 0 is Hard
         new object[] { 4, 4, 1, false, 0xFB6A7E60CAB35D32UL }, // M5-4c-2 fix round 1: was 0xE204EB9DE6D0FBF9 (M5-4c slice 2; 0xC01AABF0FFE171A9); seat 1 is Hard
-        new object[] { 5, 2, 2, false, 0x81B9C98852D87A97UL }, // M5-4c-2 fix round 1: was 0xAD97F301BBCD12EE (M5-4c slice 2; 0x017E948DC0620D8B); seat 0 is Hard
+        new object[] { 5, 2, 2, false, 0x12C3558D5A1F3C6CUL }, // M5-4c-2 fix round 2: was 0x81B9C98852D87A97 (fix round 1; before it 0xAD97F301BBCD12EE (M5-4c slice 2; 0x017E948DC0620D8B)); seat 0 is Hard
         new object[] { 3, 3, 0, true, 0x3257C07089F858CAUL }, // M5-4c slice 2: was 0x44BFA38FE0466396 (M5-4d slice 2: 0xCFA79548E71F2987); seat 2 is Hard
         new object[] { 1, 4, -1, false, 0x0D5D208D3FE10FD7UL }, // the 2v2 (human + three AIs)
     };

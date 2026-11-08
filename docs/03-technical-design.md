@@ -7693,9 +7693,10 @@ and docs), built in "Implementation (M5-4c slice 2)" below.
 The Hard knobs (roadmap M5 criterion 4; docs/02 "AI opponent": Hard "focus fire, pulls back wounded units ... plus a 25%
 gather bonus"). `ai.json`'s difficulty blocks have carried `gatherBonus`, `focusFire` and `pullBackWounded` since M5-2
 (loaded, validated, hashed); the sim now reads them. Code: `World` (`GoldPerTickOf` / `WoodPerTickOf`, `GatherBonusOf`),
-`Economy/EconomySystem.cs` (`Work`), `Ai/MilitaryManager.cs` (`Wounded`, `PullBack`, `Focus`, `Fighter`), `Ai/AiPlayer.cs`
+`Economy/EconomySystem.cs` (`Work`), `Ai/MilitaryManager.cs` (`Wounded`, `PullBack`, `FightsOn`, `Focus`, `Fighter`), `Ai/AiPlayer.cs`
 (the focus scratch), three own-unit `PlayerView` answers, one `rules.json` `ai` knob. No `Command` kind, no new saved
-field (fix round 1 adds one value, `Focused`, to the saved `Blackboard.WaveFlag` byte), no format change. Easy and Normal play exactly as before: each new rule sits behind its difficulty's flag, and a
+field (fix round 1 adds one value, `Focused`, and fix round 2 one bit, `FightsOn`, to the saved `Blackboard.WaveFlag`
+byte), no format change. Easy and Normal play exactly as before: each new rule sits behind its difficulty's flag, and a
 bonus of 0 multiplies the rate by exactly 1.
 
 - **Gather bonus.** A worker in reach adds its owner's rate to its progress each tick: `gatherRate.gold` (or `.wood`) /
@@ -7715,11 +7716,19 @@ bonus of 0 multiplies the rate by exactly 1.
   of its max hp (its type's plus its owner's hp techs, `PlayerView.MaxHpOf`). At each wave think, before the live count,
   every wounded member is owed a `Move` to the rally point (sent by the wave's orders, kept if the queue is full) and
   leaves the wave; its half-pop comes off the start's, so leaving alive is no loss toward the retreat (M5-3's rule; a
-  wave all of whose members left ends, with the cooldown). Nothing heals yet, so there is no return timer. The form built
-  is **"never a member while below the fraction"**: a wave's start and a hunt's leave the wounded out of both the count
-  and the members, so their half-pop and cost don't count toward `attack.minArmyPop` / `minArmyCost`, and an army of only
-  wounded units starts no wave or hunt (production goes on: it doesn't read the wave). A wounded unit at home still
-  answers the defense (it may be picked as a defender; `DefenseManager` is unchanged). **Builder's call, the knob:** the
+  wave all of whose members left ends, with the cooldown). A wounded unit at home answers the defense (it may be picked
+  as a defender; `DefenseManager` is unchanged). Nothing heals yet. **The return (fix round 2, BUG-1123): pulled back
+  once, then it fights.** A wave's or hunt's start takes every free army unit, wounded or not, as on Normal (all count
+  toward `attack.minArmyPop` / `minArmyCost`); a member that is wounded at the start is flagged
+  **`MilitaryManager.FightsOn`** (a bit of its `WaveFlag` byte, beside the order owed: `Owed` reads past it, `Owe` sets
+  an order keeping it) and the pull-back leaves it in: it fights that wave or hunt out. So each unit is pulled back the
+  first time it falls below the fraction in a wave, and goes out again with the next one. Its leaving (a `Move` home at
+  the wave's end, the defense's pull) drops the bit. *Why:* the first form was "never a member while below the
+  fraction" (the wounded out of a start's count and members, so an army of only wounded units waved no more). With
+  nothing to heal them, a pulled-back unit never fought again, and over a long match a Hard army shrank: 18 Hard v
+  Normal matches went from 12 Hard wins / 2 losses before the slice to 5 / 10 (QA's measurement, the table below). The
+  brief's other options were not measured better (the table below): a wounded unit that follows the next wave's first
+  AttackMove as a non-member "rear" (6 / 7), or that rejoins without counting toward the start (7 / 7). **Builder's call, the knob:** the
   brief proposed a new `rules.json` `ai.pullBackHpFraction` (default 0.3). `ai.json`'s `retreat.hpFraction` already says
   exactly this, per faction, at 0.3, loaded, validated and hashed since M5-1 and read by nothing, and both faction pages
   describe it so ("a unit under 30% hp counts as wounded (`retreat`, ...; Hard pulls it back)"). A second knob for the same
@@ -7774,7 +7783,10 @@ bonus of 0 multiplies the rate by exactly 1.
   `retreat.hpFraction` gains `AiLoaderTests` rows (missing, negative; above 1 was there).
 - **Save and replay formats unchanged** (saves 6 / 7, replays 9): no field is added to the Blackboard or `AIST`; the
   focus scratch (`FocusTarget`, `FocusSlots`, `FocusPoints`, `FocusReach2`, the bucket grid) is empty between thinks, and
-  the gather rates are derived at construction. `Focused` is a value of the `WaveFlag` byte array the save already holds.
+  the gather rates are derived at construction. `Focused` is a value, and `FightsOn` (0x80) a bit, of the `WaveFlag` byte
+  array the save already holds. `HardKnobsMatchTests.ASaveMidWave_WithAMemberThatFightsOn_FollowsTheRunFor1000Ticks`: a
+  wave started with a wounded member saved mid-wave is format 6, re-saves byte for byte, the loaded seat holds the bit, and
+  the runs are hash-equal for 1,000 ticks with that member never sent home.
   `HardKnobsMatchTests.ASaveMidWave_WithAFocusAndAPulledBackMember_FollowsTheRunFor1000Ticks`: a save with a focus held by
   wave members (one flagged `Focused`; the Raiders 8 cells further east than the focus scene's, so that fight is outside
   the base and falls mid-wave under the fix's rule) and a pulled-back member home is format 6, re-saves byte for byte,
@@ -7799,7 +7811,15 @@ bonus of 0 multiplies the rate by exactly 1.
   to 0.35 ms (the pass walks the view's unit cursor a second time, and with blocking zones that cursor tests every unit
   against every zone). With the focus pass switched off the first row is 0.44-0.46 ms against the base's 0.45: the
   pull-back's tests cost nothing measurable. Run together in one process the rows read up to 0.93 ms under that load (a
-  single row run alone: 0.50); rerun once per the shared-machine rule.
+  single row run alone: 0.50); rerun once per the shared-machine rule. **BUG-1124** (the plain row red at 1.2-1.3 ms
+  after the Hard row in one process, 0.52 ms alone): not state the Hard row leaves. The same plain workload run four times
+  in one test reads 0.53, then 1.28, 1.22, 1.30 ms (the ticks between thinks slow down 2x too); a 4 s spin of
+  `Math.Sqrt` with no sim code before the first run makes that one 1.20 ms; a forced compacting GC (large object heap
+  included) or `DOTNET_gcConcurrent=0` before the scene changes nothing, and neither does dropping the Hard row's
+  allocation probe or its wave seam. So this machine runs slower after a few seconds of sustained load (its clock, as in
+  QA's slow Perf runs that fail on 6f6414b too), and whichever row runs second pays: the Hard row added such a few
+  seconds before the plain row. Not fixed in the tests (the order would only move which row pays); open for the owner's
+  machine settings or a Perf-run rule.
 - **Memory.** Per AI seat, new: per unit slot an int, a Vector2, a float and an int (the focus's fighters, their reach
   and the bucket chain): **20 B x unit slots**, 50 KB for 2,500; the bucket grid, one int a bucket (32 x 32 on a 512 m map, 4 KB; at most 128 x
   128, 64 KB). The world: two floats a player.
@@ -7831,7 +7851,14 @@ bonus of 0 multiplies the rate by exactly 1.
   `0x070CC85BB2A3B390` to `0xA796F8D89925CDD1`, `ai_seed3_3seats_Hard` `0xFB6DD578FA7A165E` to `0xFCD8F85C768FCED4`,
   `ai_seed4_4seats_Normal` `0xE204EB9DE6D0FBF9` to `0xFB6A7E60CAB35D32`, `ai_seed5_2seats_Hard` `0xAD97F301BBCD12EE` to
   `0x81B9C98852D87A97`; `ReserveTwinTests` (2, 2) and (4, 4) re-printed (from their 2,500 / 3,500 tick hashes). The
-  cramped Easy row, `SharedVisionFfaPinTests` and the (3, 3) twin row did not move.
+  cramped Easy row, `SharedVisionFfaPinTests` and the (3, 3) twin row did not move. Fix round 2 (BUG-1123, the
+  pulled-back rejoin) re-pinned the Hard-seat rows that moved again: `StandardPresetPinQaTests` `ai_seed2_2seats_Normal`
+  `0xA796F8D89925CDD1` to `0x08DAC14990BB29C5` and `ai_seed5_2seats_Hard` `0x81B9C98852D87A97` to `0x12C3558D5A1F3C6C`;
+  `ReserveTwinTests` (2, 2) and (4, 4) at ticks 5,500 and 6,000 (a Hard seat's next wave takes its wounded along). The
+  other Hard rows (`ai_seed3_3seats_Hard`, `ai_seed4_4seats_Normal`, the cramped Easy row), `SharedVisionFfaPinTests`,
+  the (3, 3) twin row, `HardKnobsPinTests` and QA's `NonHardMatchPinQaTests` (8 Easy / Normal matches, every tick and
+  command, pinned to 6f6414b) did not move: Easy and Normal never set `FightsOn` (it needs `Wounded`, behind
+  `pullBackWounded`), and `Owed` of a flag without it is the flag.
 - **Hard against Normal** (the brief's measurement: Pale Hills and Raraku, seed 1, Malazan in seat 0 and Whirlwind in
   seat 1, Hard in either seat, to 72,000 ticks; `MapFileTests.MapMatch` / `RarakuMatch` on the shipped data, before the
   slice on an export of 6f6414b and with it):
@@ -7868,6 +7895,40 @@ bonus of 0 multiplies the rate by exactly 1.
   bonus alone (6 / 3 against 7 / 2, inside these matches' sensitivity); the first rule's focus was the large loss. What
   still costs Hard its matches is the **pull-back** (6 / 3 to 3 / 6 when it is added): with no healing a wounded unit
   never rejoins a wave, so a Hard army shrinks over a long match (reported to the Producer; not changed in fix round 1).
+
+  **Fix round 2 (BUG-1123), QA's 18 matches**: Raraku, Pale Hills and Vathar Crossing, seeds 1-3, Hard in either seat,
+  to 72,000 ticks (QA's harness: `MapFileTests.RarakuMatch` / `MapMatch` on the shipped data, the winner by
+  `World.IsDefeated`). Hard wins / Normal wins / no result. The knob rows switch Hard's knobs off in the code of the
+  round-1 tree (a test switch, not shipped); "all knobs off" plays as 6f6414b, match for match (the same 12 / 2 / 4, the
+  harness's check on itself). A **second set of 24 matches** (seeds 5-8, the same maps and seats) was run for the rows
+  that decide, because one match flips on any change: these rows move by 2-3 wins between rules that differ in nothing
+  that matters to the fight.
+
+  | Tree / rule | QA's 18 (R, P, V) | Seeds 5-8 (24) | All 42 |
+  | --- | --- | --- | --- |
+  | Before the slice (all knobs off; on QA's 18 it is 6f6414b's result match for match) | **12 / 2 / 4** (3/1, 3/1, 6/0) | 15 / 8 / 1 | 27 / 10 / 5 |
+  | Fix round 1 (9f7423b) | 5 / 10 / 3 (1/4, 2/2, 2/4) | 10 / 8 / 6 | 15 / 18 / 9 |
+  | Round 1, `pullBackWounded` off (bonus + focus) | 9 / 6 / 3 | 16 / 4 / 4 | 25 / 10 / 7 |
+  | Round 1, `focusFire` off (bonus + pull-back) | 3 / 9 / 6 | | |
+  | Round 1, the gather bonus alone | 11 / 4 / 3 | | |
+  | Round 2 rules tried, all knobs on: | | | |
+  | the wounded follow the next wave's first AttackMove as non-members (a "rear") | 6 / 7 / 5 | | |
+  | rejoin, not counted toward the start | 7 / 7 / 4 | | |
+  | rejoin + a kept focus (the fighters' held Attack first) | 7 / 7 / 4 | | |
+  | rejoin + no focus order to a fighter already Attacking | 10 / 6 / 2 | | |
+  | rejoin + `ai.focusReach` 18 (the Crossbowman's 15 m in reach) | 6 / 9 / 3 | 17 / 7 / 0 | 23 / 16 / 3 |
+  | **rejoin, counted (`FightsOn`): this tree** | **11 / 4 / 3** (3/1, 4/1, 4/2) | **17 / 5 / 2** | **28 / 9 / 5** |
+
+  The rule built is the best of those tried on QA's 18 and on all 42. On QA's 18 it is one win short of the pre-slice
+  tree and two losses over it (11 / 4 / 3 against 12 / 2 / 4); on all 42 it is level or a little ahead (28 / 9 / 5
+  against 27 / 10 / 5). On a sample this size and this sensitive, Hard is about as strong as before the slice; it is not
+  measurably stronger. What the knobs cost or gain is below this measurement's noise: the gather bonus alone, the one
+  knob that can only help, measures 11 / 4 against 12 / 2. Making Hard measurably harder than Normal is a tuning task
+  for a larger sample (more seeds and maps, or a match-strength measure other than the winner), not a rule change here.
+  Per match on QA's 18 (Hard's seat; Hard's result now, before the slice): Raraku seed 1 p0 win (win), p1 win (none);
+  seed 2 p0 win (loss), p1 loss (win); seed 3 p0 none (none), p1 none (win); Pale Hills seed 1 p0 win (none), p1 win
+  (win); seed 2 p0 win (win), p1 none (none); seed 3 p0 loss (loss), p1 win (win); Vathar seed 1 p0 loss (win), p1 win
+  (win); seed 2 p0 win (win), p1 loss (win); seed 3 p0 win (win), p1 win (win).
 - **Tests.** `Ai/HardKnobsTests` (criteria 3 and 4 on the flat scene, by the command log: a Hard wave meeting Raiders at
   100, 40 and 70 hp: every focus is the lowest-hp Raider in some fighter's own reach, the first sent `Attack` from
   exactly the fighters with it in reach, every unit `Attack` is on its think's focus, the 40-hp one is focused and a
@@ -7877,6 +7938,12 @@ bonus of 0 multiplies the rate by exactly 1.
   the base not focused), `Ai/HardKnobsPinTests`, `Economy/GatherBonusTests` (criterion 2: a Hard AI worker's first gold
   load in 189 ticks of work, a Normal one's in 236, both equal to the economy's float steps written out again; the
   per-seat rates, bit for bit at a bonus of 0; the played-back Hard seat), `Ai/HardKnobsMatchTests` (criteria 5 and 7),
+  fix round 2's rows (BUG-1123): `HardKnobsTests.APulledBackMember_GoesOutWithTheNextWave_AndFightsItOut` (the
+  regression row: before the fix the member was in no wave again), `AnArmyOfOnlyWounded_Waves_AndFightsItOut_AndProductionGoesOn`
+  (Hard and Normal), `HardKnobsMatchTests.ASaveMidWave_WithAMemberThatFightsOn_FollowsTheRunFor1000Ticks`, and QA's
+  `PullBack_TheWholeWaveWounded_EndsTheWave_ThenTheNextWaveTakesThemAndKeepsThem` and
+  `WaveGate_ThreeWoundedAndTwoHealthy_StartsAWaveOfAllFive_TheWoundedFightingItOut` (rewritten from the rows that
+  asserted the first form: "nobody goes out again", "no wave of 3 wounded + 2 healthy"),
   `Ai/AiPerfTests.EightHardSeats_MidWave_WithFocusTargets_AThinkUnder1Ms_AllocationFree` (criterion 8),
   `DataValidationTests` / `DataContentHashTests` / `AiLoaderTests` (the knobs), `PlayerViewOracle` (the three answers),
   `Stress/CommandDoorFuzzStressTests` (its AI-command oracle admits an `Attack` on a live enemy unit only from a seat
@@ -7884,8 +7951,9 @@ bonus of 0 multiplies the rate by exactly 1.
   boundary (BUG-1122 a): `Wounded` compares in decimal (`hp < (decimal)hpFraction x maxHp`; the float 0.3f reads back as
   0.3), so a 50-hp unit at exactly 15 hp is not wounded
   (`HardKnobsQaTests.Wounded_AtExactlyTheThreshold_IsNotWounded_ForEveryUnitType`).
-- **Not yet:** healing, and so a wounded unit's return to the waves; a focus kept across thinks, or split over two
-  targets for a big army; a wounded defender's own retreat (only wave members are pulled back).
+- **Not yet:** healing (a pulled-back unit goes out again as it is, `FightsOn`); a focus kept across thinks, or split
+  over two targets for a big army; a wounded defender's own retreat (only wave members are pulled back); a Hard v Normal
+  measurement large enough to tune the knobs by (fix round 2's table is within its own noise).
 
 ### Implementation (M5-4d)
 

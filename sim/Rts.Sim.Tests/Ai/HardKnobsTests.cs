@@ -175,9 +175,14 @@ public class HardKnobsTests
         Assert.DoesNotContain(log, c => c.Unit == members[2] && c.Kind == CommandKind.Move);
     }
 
-    /// <summary>Criterion 4: the pulled-back member is not a member of the next wave while it is still below the fraction; the fresh units are.</summary>
+    /// <summary>
+    /// Criterion 4, BUG-1123 regression: the pulled-back member goes out again with the next wave (counted, a member, sent its
+    /// AttackMove), flagged <see cref="MilitaryManager.FightsOn"/>, and fights it out: cut further, it is not sent home again.
+    /// The fresh members are not flagged: one of them falling below the fraction is pulled back as before. Before the fix a
+    /// wounded unit was in no wave again (nothing heals), so a Hard army shrank over a long match.
+    /// </summary>
     [Fact]
-    public void APulledBackMember_IsNotInTheNextWave_WhileStillBelow()
+    public void APulledBackMember_GoesOutWithTheNextWave_AndFightsItOut()
     {
         Simulation sim = Scene(AiDifficulty.Hard, combat: false);
         AiPlayer ai = sim.AiOf(0)!;
@@ -192,10 +197,26 @@ public class HardKnobsTests
         List<Command> log = AiScenes.Log(sim, 0);
         for (int k = 0; k < 30 && ai.Board.WavesStarted < 2; k++) NextThink(sim);
         Assert.Equal(2, ai.Board.WavesStarted);
-        Assert.NotEqual(members[1].Generation, ai.Board.WaveGeneration[members[1].Index]);
-        foreach (EntityHandle h in fresh) Assert.Equal(h.Generation, ai.Board.WaveGeneration[h.Index]);
-        Assert.DoesNotContain(log, c => c.Unit == members[1] && c.Kind == CommandKind.AttackMove);
+        EntityHandle wounded = members[1];
+        Assert.Equal(wounded.Generation, ai.Board.WaveGeneration[wounded.Index]);
+        Assert.NotEqual(0, ai.Board.WaveFlag[wounded.Index] & MilitaryManager.FightsOn);
+        Assert.Equal(5 * TestSim.Data.Units[Heavy].HalfPop, ai.Board.WaveStartHalfPop); // it counts toward the start
+        foreach (EntityHandle h in fresh)
+        {
+            Assert.Equal(h.Generation, ai.Board.WaveGeneration[h.Index]);
+            Assert.Equal(0, ai.Board.WaveFlag[h.Index] & MilitaryManager.FightsOn);
+        }
+        Assert.Contains(log, c => c.Unit == wounded && c.Kind == CommandKind.AttackMove);
         Assert.Contains(log, c => c.Unit == fresh[0] && c.Kind == CommandKind.AttackMove);
+        log.Clear();
+        sim.World.Units.Hp[wounded.Index] = 10;
+        sim.World.Units.Hp[fresh[0].Index] = 30;
+        for (int k = 0; k < 6; k++) NextThink(sim);
+        Assert.True(ai.Board.WaveActive);
+        Assert.DoesNotContain(log, c => c.Unit == wounded && c.Kind == CommandKind.Move);
+        Assert.Equal(wounded.Generation, ai.Board.WaveGeneration[wounded.Index]);
+        Assert.Equal(CommandKind.Move, Assert.Single(log, c => c.Unit == fresh[0]).Kind);
+        Assert.NotEqual(fresh[0].Generation, ai.Board.WaveGeneration[fresh[0].Index]);
     }
 
     /// <summary>Criterion 4: on Normal a member at the same hp stays in the wave, sent nothing home.</summary>
@@ -214,13 +235,14 @@ public class HardKnobsTests
     }
 
     /// <summary>
-    /// Criterion 4: an army of only wounded units (each below the fraction, together over the threshold) never starts a wave
-    /// on Hard, and production goes on (a barracks trains); on Normal the same army waves.
+    /// Criterion 4 (BUG-1123's rule): an army of only wounded units (each below the fraction, together over the threshold)
+    /// waves on Hard as on Normal, and production goes on (a barracks trains). On Hard every member is flagged
+    /// <see cref="MilitaryManager.FightsOn"/> (wounded when the wave started) and none is sent home while the wave goes on.
     /// </summary>
     [Theory]
-    [InlineData(AiDifficulty.Hard, 0)]
-    [InlineData(AiDifficulty.Normal, 1)]
-    public void AWaveOfOnlyWounded_DoesNotStart_AndProductionGoesOn(AiDifficulty difficulty, int waves)
+    [InlineData(AiDifficulty.Hard)]
+    [InlineData(AiDifficulty.Normal)]
+    public void AnArmyOfOnlyWounded_Waves_AndFightsItOut_AndProductionGoesOn(AiDifficulty difficulty)
     {
         Simulation sim = Scene(difficulty, combat: false);
         AiPlayer ai = sim.AiOf(0)!;
@@ -231,13 +253,15 @@ public class HardKnobsTests
         foreach (EntityHandle h in army) w.Units.Hp[h.Index] = 30;
         List<Command> log = AiScenes.Log(sim, 0);
         for (int k = 0; k < 20; k++) NextThink(sim);
-        if (waves == 0)
+        Assert.Equal(1, ai.Board.WavesStarted);
+        Assert.True(ai.Board.WaveActive, $"{difficulty}: the wave of the wounded ended");
+        foreach (EntityHandle h in army)
         {
-            // Fresh units trained meanwhile may start a wave of their own; none of the wounded is ever in one.
-            Assert.DoesNotContain(log, c => c.Kind == CommandKind.AttackMove && army.Contains(c.Unit));
-            foreach (EntityHandle h in army) Assert.NotEqual(h.Generation, ai.Board.WaveGeneration[h.Index]);
+            Assert.Equal(h.Generation, ai.Board.WaveGeneration[h.Index]);
+            Assert.Contains(log, c => c.Unit == h && c.Kind == CommandKind.AttackMove);
+            Assert.DoesNotContain(log, c => c.Unit == h && c.Kind == CommandKind.Move);
+            Assert.Equal(difficulty == AiDifficulty.Hard ? MilitaryManager.FightsOn : 0, ai.Board.WaveFlag[h.Index] & MilitaryManager.FightsOn);
         }
-        else Assert.True(ai.Board.WavesStarted >= 1, "Normal's wounded army did not wave");
         Assert.Contains(log, c => c.Kind == CommandKind.Train);
         _out.WriteLine($"{difficulty}: waves {ai.Board.WavesStarted}, trains {log.Count(c => c.Kind == CommandKind.Train)}");
     }

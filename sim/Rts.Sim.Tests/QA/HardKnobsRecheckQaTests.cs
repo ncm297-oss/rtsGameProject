@@ -57,7 +57,7 @@ public class HardKnobsRecheckQaTests
         {
             log.Add(c);
             int i = c.Unit.Index;
-            if (c.Kind == CommandKind.AttackMove && ai.Board.WaveGeneration[i] == c.Unit.Generation && ai.Board.WaveFlag[i] == MilitaryManager.Focused) free++;
+            if (c.Kind == CommandKind.AttackMove && ai.Board.WaveGeneration[i] == c.Unit.Generation && MilitaryManager.Owed(ai.Board, i) == MilitaryManager.Focused) free++;
         };
         int zone = -1, flips = 0, sightings = 0, focusedThinks = 0;
         bool seen = false;
