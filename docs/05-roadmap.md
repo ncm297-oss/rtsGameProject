@@ -698,12 +698,24 @@ open S1 / S2. Retro below; open S3 / S4 listed there.)_
       setup"). Ticked at the 2026-11-07-0926 ACCEPT. Open behind it: BUG-1120 S3 (a Normal hunt's sighting point on an ally's building
       edge; **fixed by M5-H5 2026-11-08**, `MilitaryManager.SightingPoint`; BUG-1149 S3 is the defense's twin), BUG-1124 S3 (Perf rows and this PC's clock), BUG-1147 S4 (the tips' think intervals typed, not from data); Hard is not
       measurably stronger than before the knobs on this sample (tuning later).)
-- [ ] AI-vs-AI headless test: a 20-minute match completes without errors and one side wins. (M5-4b, 2026-10-13: the defeat
+- [x] AI-vs-AI headless test: a 20-minute match completes without errors and one side wins. (M5-4b, 2026-10-13: the defeat
       rule and `Simulation.MatchOver` are in, a razed hall ends the match and the loser's AI goes silent on seeds 1-3. M5-4e,
       2026-10-14: the rule is the owner's (out = no unit and no finished unit-producing building; `World.LiveUnits` /
       `ProductionBuildings`); M5-4d (2026-11-06-0926) hunts the last units, so a hidden worker no longer stalls an AI
-      match (Pale Hills seeds 3-6 and the generated seed 6 end; seed 2 is a stalemate, BUG-1068); the 20-minute winner
-      test is M5-5.)
+      match (Pale Hills seeds 3-6 and the generated seed 6 end; seed 2 is a stalemate, BUG-1068). **M5-5, 2026-11-08-0726:
+      the committed proof.** The Producer's reading: the literal row is two Normal AI seats (Malazan v Whirlwind) on Vathar
+      Crossing seed 1, ending with exactly one side defeated **within 24,000 ticks (20:00)**: it ends at 22,794 (18:59), runs
+      in the default test loop (`Ai/MatchCriterionTests.VatharCrossing_Seed1_*`, 26 s) and its half-way save (tick 11,397)
+      follows to the same end hash. "Without errors" is asserted on every tick and think: no exception, the fog oracle clean,
+      the census invariant, every entity finite / on the map / live, and every refused AI command counted by kind through the
+      test-only seam `Simulation.RefusedForTests`, only documented kinds allowed, none refused more than 8 thinks running. The
+      same row on Raraku seed 1 (28,083, bound 36,000), Pale Hills seed 1 (34,219, bound 36,000) and the generated map seed 1
+      (21,789, bound 24,000), a four-seat FFA (Vathar seed 2, 52,305) and a 2v2 (Vathar seed 1, 34,510; bound 72,000), each
+      hash-equal in two processes; `Rts.Cli match --map <id> --seed <n>` plays the same match from a prompt (exit 0 on a
+      result, 3 on none). Per-map table and the refusal kinds' causes in docs/03 "Implementation (M5-5)". Known: on the map
+      files seeds 3 / 4 / 6 are one match (the seed only picks the openings); Pale Hills seed 2 never ends (BUG-1068); the
+      losing seat can go silent for minutes with one worker on gold (BUG-1152 S3); the rebalance re-sends a Gather to a gone
+      mine (BUG-1151 S3, generated seed 4). No AI rule changed; no pin moved.)
 - [ ] Playable: the owner can win on Easy and lose to a Whirlwind AI on Hard.
 - [x] Owner request 2026-10-14 (D14 a): **proportional defense**: a raid pulls home only what it is worth (home army first, then part of the
       wave, the whole wave only for a real threat or a dying hall); a lone raider never recalls a wave. (M5-4f, 2026-10-16: `Ai/DefenseManager`
