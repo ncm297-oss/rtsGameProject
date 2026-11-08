@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S2 |
-| Status | open |
+| Status | fixed (verified by QA, 2026-11-07-0926 round 2) |
 | Found | 2026-11-07-0926, task M5-4c-2 (QA re-verify round 1; the developer proposed it in the fix report) |
 | System | AI difficulty (MilitaryManager pull-back / focus, gather bonus), game balance |
-| Fixed by | |
+| Fixed by | f823ec4 (M5-4c-2 fix round 2: "pulled back once, then it fights", `MilitaryManager.FightsOn`) |
 
 ## Repro
 A scratch harness, not committed. It plays a whole match from the map helpers to 72,000 ticks or to the end, Hard in
@@ -50,3 +50,22 @@ case: Hard won all 6 before the slice and wins 2 now.
 - Whether this blocks the slice or becomes a tuning follow-up (pull-back only with healing or a regroup, gating it on
   the army's size, ...) is the Producer's call. QA files it S2 because the slice inverts the difficulty order it was
   meant to sharpen.
+
+## Re-verify (2026-11-07-0926, round 2, HEAD f823ec4)
+- QA reran its own harness (the one above, split into 18 classes so the matches run in parallel; Release builds of fresh
+  `git archive` exports of f823ec4 and 6f6414b; the winner by `World.IsDefeated`). Hard wins / Normal wins / no result:
+
+  | Tree | QA's 18 (seeds 1-3) | Raraku / Pale Hills / Vathar (H/N/none) | Seeds 5-8 (24) | All 42 |
+  | --- | --- | --- | --- | --- |
+  | 6f6414b (before the slice) | 12 / 2 / 4 (round 1 run) | 3/1/2, 3/1/2, 6/0/0 | 15 / 8 / 1 | 27 / 10 / 5 |
+  | 9f7423b (fix round 1) | 5 / 10 / 3 | | | |
+  | **f823ec4 (fix round 2)** | **11 / 4 / 3** | 3/1/2, 4/1/1, 4/2/0 | **17 / 5 / 2** | **28 / 9 / 5** |
+
+  The developer's numbers reproduce exactly (11/4/3; 17/5/2; base 15/8/1 on seeds 5-8).
+- Match by match, 13 of 42 results differ between 6f6414b and f823ec4: 7 go Hard's way (5 Normal wins become Hard wins,
+  2 draws become Hard wins) and 6 go Normal's way (4 Hard wins become Normal wins, 2 become draws). A difference of 7
+  against 6 is not a signal: Hard is as strong as before the slice within this sample's noise. It is not measurably
+  stronger than before, and nobody claims it is.
+- The rule is enforced as described: `QA/HardKnobsFightsOnQaTests` (the defense pull drops the bit, the next wave sets it
+  again; the bit Hard-only on mixed-difficulty matches; a flagged member never pulled back). Easy and Normal are unchanged:
+  `NonHardMatchPinQaTests` (8 matches pinned to 6f6414b) is green on f823ec4.

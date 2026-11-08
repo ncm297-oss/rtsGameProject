@@ -44,3 +44,8 @@ Seat 3 is Normal (the row's difficulties turn per seat: `(p + seed) % 3`); seats
 - Why S3 now: the suite is no longer red, and an AttackMove to a point beside an ally's building targets no ally (it walks
   to where an enemy unit was seen). What is left is the open question for the hardening session: should a hunt snap such a
   point off allied footprints? That would change Normal play.
+
+## Re-verify (2026-11-07-0926, round 2, HEAD f823ec4)
+- Unchanged and still open as S3. All 8 `TeamAiSoakStressTests` rows pass in QA's full non-Perf run. The exemption
+  excuses 14 AttackMoves on seed 1 adjacent, the same count as round 1, and 0 on the other 7 rows. The round-2 fix doesn't
+  change the hunt-point rule.
