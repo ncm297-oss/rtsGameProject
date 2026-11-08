@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S2 |
-| Status | open |
+| Status | fixed |
 | Found | 2026-11-07-2306, task M5-H5 (QA full) |
 | System | AI (`BuildOrderExecutor.HallFirst`, the hall rebuild's judge) |
-| Fixed by | |
+| Fixed by | 6c3639a "M5-H5: fix QA findings (round 1)": `HallFirst` excuses a refused hall Build at `LostHallCell` once (retry flagged `PendingOrder.Slot = 1`), the retry's refusal is marked. Proof: `Ai/RebuildTests.AUnitParkedOnTheLostHallsAnchor_CostsOneRetryThere_ThenTheHallGoesUpOffIt`, QA rows below |
 
 ## Repro
 1. `dotnet test sim/Rts.Sim.Tests --filter "FullyQualifiedName~SimHardeningM5H5QaTests.AnEnemyUnitParkedOnTheLostHallsAnchor_TheHallIsRebuiltOffIt"`
@@ -43,3 +43,13 @@ hidden True: 20 Keep Builds after the raze, 20 at the old anchor; site none; anc
   site was razed before the judge"; a unit in the way is a refusal the ground check cannot tell apart.
 - The developer's regression row `RebuildTests.AHallSite_RazedBeforeItsBuildIsJudged_IsRebuiltAtTheSameAnchor` stays valid;
   the fix must keep both it and the two QA rows green.
+
+## Re-check round 1 (2026-11-08, fix 6c3639a)
+- Both repro rows pass: 11 Keep Builds after the raze, 2 at the occupied anchor, anchor marked, site at cell 1798 (seen and hidden).
+- Mutation check in a fresh clone: `BuildOrderExecutor.cs` from cd211f2 turns the repro rows, the developer's new row and
+  QA's new `QA/HallRetryM5H5QaTests` rows red; restored, all green.
+- `QA/HallRetryM5H5QaTests`: 16-seed fuzz (1-3 parked units at random footprint points, seen or hidden, leaving after
+  1/2/3/6 thinks or never): hall up in every run, at most 2 Builds at the anchor, two runs per seed hash-equal. Site razed
+  before the judge twice running: third Keep goes up one cell off (by design: the second razing looks like a refusal).
+  Parked unit leaves while the flagged retry is in flight: hall stands at the old anchor, no mark, save/load at that point
+  hash-equal for 10 thinks.
