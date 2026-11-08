@@ -89,8 +89,13 @@ public static class ConstructionSystem
     /// allows (paying, pushing own units out of the footprint). False, with nothing changed, if neither.
     /// <paramref name="replaceQueue"/> clears the worker's queue once the order is taken.
     /// </summary>
-    internal static bool StartBuild(World world, int i, int typeId, Vector2 target, bool replaceQueue)
+    internal static bool StartBuild(World world, int i, int typeId, Vector2 target, bool replaceQueue) =>
+        StartBuild(world, i, typeId, target, replaceQueue, out _);
+
+    /// <summary>As <see cref="StartBuild(World, int, int, Vector2, bool)"/>; <paramref name="why"/> says why not (M5-5's seam): the placement error, <see cref="PlacementError.Blocked"/> for a building there that is not this site.</summary>
+    internal static bool StartBuild(World world, int i, int typeId, Vector2 target, bool replaceQueue, out PlacementError why)
     {
+        why = PlacementError.OffMap;
         NavGrid g = world.NavGrid;
         if (!g.WorldToCell(target, out int x, out int y)) return false;
         int anchor = y * g.Width + x, player = world.Units.Owner[i];
@@ -99,11 +104,13 @@ public static class ConstructionSystem
         if (site >= 0)
         {
             // Only a site of this type anchored exactly here is joined; anything else there is no place to build.
+            why = PlacementError.Blocked;
             if (b.Owner[site] != player || b.TypeId[site] != typeId || b.Cell[site] != anchor || !b.UnderConstruction[site]) return false;
         }
         else
         {
-            if (Check(world, player, typeId, anchor, i, sealLast: true) != PlacementError.None) return false;
+            why = Check(world, player, typeId, anchor, i, sealLast: true);
+            if (why != PlacementError.None) return false;
             BuildingDef def = world.Data.Buildings[typeId];
             world.TrySpend(player, def.CostGold, def.CostWood);
             b.Spawn(player, typeId, anchor, out EntityHandle h, site: true);
@@ -112,6 +119,7 @@ public static class ConstructionSystem
         }
         if (replaceQueue) world.Units.ClearQueue(i);
         Assign(world, i, b.HandleOf(site));
+        why = PlacementError.None;
         return true;
     }
 
@@ -268,13 +276,13 @@ public static class ConstructionSystem
     /// change), <c>floor(cost x (needed - work) / needed)</c> of each resource comes back, and its builders go Idle.
     /// Dropped for anything that isn't an own site under construction.
     /// </summary>
-    internal static void ApplyCancel(World world, in Command command)
+    internal static CommandRefusal ApplyCancel(World world, in Command command)
     {
         NavGrid g = world.NavGrid;
-        if (!g.WorldToCell(command.Position, out int x, out int y)) return;
+        if (!g.WorldToCell(command.Position, out int x, out int y)) return CommandRefusal.NoSiteToCancel;
         BuildingStore b = world.Buildings;
         int k = b.SlotAt(x, y);
-        if (k < 0 || b.Owner[k] != command.Player || !b.UnderConstruction[k]) return;
+        if (k < 0 || b.Owner[k] != command.Player || !b.UnderConstruction[k]) return CommandRefusal.NoSiteToCancel;
         BuildingDef def = world.Data.Buildings[b.TypeId[k]];
         long needed = b.WorkNeeded(b.TypeId[k]), left = needed - b.Work[k];
         world.AddToTotal(command.Player, ResourceKind.Gold, (int)(def.CostGold * left / needed));
@@ -284,6 +292,7 @@ public static class ConstructionSystem
         for (int i = 0; i < u.Capacity; i++)
             if (u.Alive[i] && u.BuildTarget[i] == h) End(u, i);
         b.Free(h);
+        return CommandRefusal.None;
     }
 
     /// <summary>Phase 4, after gathering: every builder and repairer steps (slot order), then every building with workers in reach gains work or hit points (slot order).</summary>

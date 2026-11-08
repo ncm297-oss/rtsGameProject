@@ -28,6 +28,9 @@ public static class CliRunner
     /// <summary>Exit code for a replay that is malformed, refused, or fails a checkpoint.</summary>
     public const int ExitReplayFailed = 2;
 
+    /// <summary>Exit code for a <c>match</c> that has no result (no side won) by <c>--ticks</c> (M5-5).</summary>
+    public const int ExitNoResult = 3;
+
     /// <summary>Largest <c>--units</c>: a sanity limit of this tool, far above what a start block holds on the design map.</summary>
     public const int MaxUnits = 100_000;
 
@@ -35,7 +38,11 @@ public static class CliRunner
     public const string Usage =
         "usage: Rts.Cli run --seed <n> --units <n> [--ticks <n>] [--players 1|2] [--checkpoint <ticks>] [--forests <n>] [--mines <n>] [--workers <n>] [--record <path>] [--data <dir>]"
         + " | Rts.Cli play <path> [--data <dir>]"
-        + " | Rts.Cli mirror-map <in.json> <out.json> --symmetry point|quad [--data <dir>]";
+        + " | Rts.Cli mirror-map <in.json> <out.json> --symmetry point|quad [--data <dir>]"
+        + " | Rts.Cli match --map <id>|generated --seed <n> [--players 2..4] [--teams <t,t,...>] [--ai easy|normal|hard[,...]] [--ticks <n>] [--record <path>] [--data <dir>]";
+
+    /// <summary>The <c>match</c> verb's default <c>--ticks</c>: one hour at 20 Hz.</summary>
+    public const int DefaultMatchTicks = 72_000;
 
     private const int DefaultTicks = 1500;
 
@@ -56,6 +63,7 @@ public static class CliRunner
             "run" => RunVerb(args, stdout, stderr),
             "play" => PlayVerb(args, stdout, stderr),
             "mirror-map" => MirrorMapVerb(args, stdout, stderr),
+            "match" => MatchVerb(args, stdout, stderr),
             _ => UsageError(stderr, $"unknown verb '{args[0]}'"),
         };
     }
@@ -293,6 +301,95 @@ public static class CliRunner
         return false;
     }
 
+    /// <summary>
+    /// M5-5: <c>match</c> (<see cref="AiMatch"/>): AI seats only (factions alternate Malazan / Whirlwind from player 0, starts
+    /// in player order) play on a map to their result or <c>--ticks</c>. Exit 0 on a result (a winner or a draw),
+    /// <see cref="ExitNoResult"/> when no side won by then, 1 on bad usage or data.
+    /// </summary>
+    private static int MatchVerb(string[] args, TextWriter stdout, TextWriter stderr)
+    {
+        string? error = ParseOptions(args, 1, new[] { "--map", "--seed", "--players", "--teams", "--ai", "--ticks", "--record", "--data" },
+            out Dictionary<string, string> o, out _);
+        if (error != null) return UsageError(stderr, error);
+        if (!o.TryGetValue("--map", out string? map)) return UsageError(stderr, "--map is required");
+        if (!o.TryGetValue("--seed", out string? seedText)) return UsageError(stderr, "--seed is required");
+        if (!ulong.TryParse(seedText, NumberStyles.None, Inv, out ulong seed)) return UsageError(stderr, "--seed must be a whole number from 0 to 18446744073709551615");
+        if ((error = IntOption(o, "--players", 2, 2, 4, out int players)) != null) return UsageError(stderr, error);
+        if ((error = IntOption(o, "--ticks", DefaultMatchTicks, 1, Replay.MaxTickCount, out int ticks)) != null) return UsageError(stderr, error);
+        var teams = new int[players];
+        if (o.TryGetValue("--teams", out string? teamText))
+        {
+            string[] parts = teamText.Split(',');
+            if (parts.Length != players) return UsageError(stderr, $"--teams needs {players.ToString(Inv)} comma-separated teams, one per player");
+            for (int p = 0; p < players; p++)
+                if (!int.TryParse(parts[p], NumberStyles.None, Inv, out teams[p]) || teams[p] > PlayerSeat.MaxTeam)
+                    return UsageError(stderr, $"--teams: each team must be a whole number from 0 (none) to {PlayerSeat.MaxTeam.ToString(Inv)}");
+            bool twoSides = false;
+            for (int p = 1; p < players; p++) twoSides |= teams[p] == 0 || teams[p] != teams[0];
+            if (!twoSides) return UsageError(stderr, "--teams puts every player on one team: a match needs two sides");
+        }
+        var difficulty = new AiDifficulty[players];
+        string[] ai = (o.TryGetValue("--ai", out string? aiText) ? aiText : "normal").Split(',');
+        if (ai.Length != 1 && ai.Length != players) return UsageError(stderr, $"--ai takes one difficulty or {players.ToString(Inv)}, one per player");
+        for (int p = 0; p < players; p++)
+        {
+            switch (ai[ai.Length == 1 ? 0 : p])
+            {
+                case "easy": difficulty[p] = AiDifficulty.Easy; break;
+                case "normal": difficulty[p] = AiDifficulty.Normal; break;
+                case "hard": difficulty[p] = AiDifficulty.Hard; break;
+                default: return UsageError(stderr, "--ai must be easy, normal or hard (or a comma-separated list of them)");
+            }
+        }
+        o.TryGetValue("--record", out string? recordPath);
+        if (recordPath != null && (error = RecordPathError(recordPath)) != null)
+        {
+            stderr.WriteLine($"error: cannot write replay '{recordPath}': {error}");
+            return ExitError;
+        }
+        GameData? data = LoadData(o, stderr);
+        if (data == null) return ExitError;
+        if (map != AiMatch.Generated)
+        {
+            int index = data.FindMap(map);
+            if (index < 0) return UsageError(stderr, $"--map '{map}' is no map in the data (nor generated)");
+            if (players > data.Maps[index].Players)
+                return UsageError(stderr, $"--map '{map}' has {data.Maps[index].Players.ToString(Inv)} starts, fewer than --players {players.ToString(Inv)}");
+        }
+        if (data.Factions.Length < 2) return UsageError(stderr, "the data needs two factions for a match");
+        using FileStream? recordFile = recordPath == null ? null : OpenRecordFile(recordPath, stderr);
+        if (recordPath != null && recordFile == null) return ExitError;
+
+        var seats = new PlayerSeat[players];
+        for (int p = 0; p < players; p++) seats[p] = new PlayerSeat(p % 2, SeatController.Ai, difficulty[p], teams[p]);
+        Simulation? sim = AiMatch.Build(data, map, seed, seats, recordPath != null, out ReplayRecorder? recorder, out string why);
+        if (sim == null)
+        {
+            stderr.WriteLine($"error: {why}");
+            return ExitError;
+        }
+        var header = new List<string>();
+        for (int p = 0; p < players; p++)
+            header.Add($"p{p.ToString(Inv)} {data.Factions[seats[p].Faction].Key} {ai[ai.Length == 1 ? 0 : p]} team {teams[p].ToString(Inv)}");
+        stdout.WriteLine($"match {map} seed {seed.ToString(Inv)} players {players.ToString(Inv)} ticks {ticks.ToString(Inv)}: {string.Join(", ", header)}");
+        bool result = AiMatch.Play(sim, ticks, stdout);
+        if (recorder != null && recordFile != null)
+        {
+            try
+            {
+                recordFile.Write(ReplayFormat.Write(recorder.ToReplay()));
+                recordFile.Flush();
+            }
+            catch (Exception e) when (e is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
+            {
+                stderr.WriteLine($"error: cannot write replay '{recordPath}': {e.Message}");
+                return ExitError;
+            }
+            stdout.WriteLine($"recorded {recordPath}");
+        }
+        return result ? ExitOk : ExitNoResult;
+    }
+
     /// <summary>A checkpoint line: <c>tick &lt;n&gt; hash &lt;16 hex&gt;</c>, the same for <c>run</c> and <c>play</c>.</summary>
     private static string HashLine(int tick, ulong hash) => $"tick {tick.ToString(Inv)} hash {Hex(hash)}";
 
@@ -322,7 +419,7 @@ public static class CliRunner
             if (i + 1 >= args.Length || args[i + 1].StartsWith("--", StringComparison.Ordinal)) return $"{a} needs a value";
             options.Add(a, args[++i]);
         }
-        if (args[0] == "run" && positional.Count > 0) return $"unexpected argument '{positional[0]}'";
+        if (args[0] is "run" or "match" && positional.Count > 0) return $"unexpected argument '{positional[0]}'";
         return null;
     }
 

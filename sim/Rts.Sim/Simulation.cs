@@ -616,20 +616,33 @@ public sealed partial class Simulation : ICommandSink
         }
     }
 
+    /// <summary>
+    /// M5-5 test seam: told of every command phase 1 drops when it applies, with why and a detail (the
+    /// <see cref="Economy.PlacementError"/>, <see cref="Economy.TrainError"/> or <see cref="Economy.ResearchError"/> code of a
+    /// refused Build, Train or Research; else 0). Null in a match, where the refusal costs one enum compare. The sim never
+    /// reads it: not state, not saved, never hashed (docs/03 "Implementation (M5-5)").
+    /// </summary>
+    internal Action<Command, CommandRefusal, int>? RefusedForTests { get; set; }
+
     private void Apply(in Command command)
     {
+        CommandRefusal why = ApplyOrRefuse(in command, out int detail);
+        if (why != CommandRefusal.None) RefusedForTests?.Invoke(command, why, detail);
+    }
+
+    /// <summary>Applies one command; why it was dropped (<see cref="CommandRefusal.None"/> when it applied).</summary>
+    private CommandRefusal ApplyOrRefuse(in Command command, out int detail)
+    {
+        detail = 0;
         // Malformed input (e.g. a NaN ray cast) is dropped, like a spawn into a full store (BUG-0006).
-        if (!command.IsValid()) return;
+        if (!command.IsValid()) return CommandRefusal.Invalid;
         // M5-4b: a defeated player's commands, every kind, are dropped here, where they apply, not at Enqueue: the recorder
         // logs them like any other, and playback drops the same ones, so the hashes match.
-        if (World.IsDefeated(command.Player)) return;
+        if (World.IsDefeated(command.Player)) return CommandRefusal.PlayerDefeated;
         switch (command.Kind)
         {
-            case CommandKind.Noop:
-                break;
             case CommandKind.SpawnUnit:
-                ApplySpawn(in command);
-                break;
+                return ApplySpawn(in command);
             case CommandKind.Move:
             case CommandKind.Stop:
             case CommandKind.HoldPosition:
@@ -639,38 +652,32 @@ public sealed partial class Simulation : ICommandSink
             case CommandKind.Repair:
             case CommandKind.Attack:
             case CommandKind.UseAbility:
-                OrderSystem.Apply(World, in command);
-                break;
+                return OrderSystem.Apply(World, in command, out detail);
             case CommandKind.Cancel:
-                ConstructionSystem.ApplyCancel(World, in command);
-                break;
+                return ConstructionSystem.ApplyCancel(World, in command);
             case CommandKind.SpawnBuilding:
-                EconomySystem.ApplySpawnBuilding(World, in command);
-                break;
+                return EconomySystem.ApplySpawnBuilding(World, in command);
             case CommandKind.Train:
-                ProductionSystem.ApplyTrain(World, in command);
-                break;
+                return ProductionSystem.ApplyTrain(World, in command, out detail);
             case CommandKind.CancelTrain:
-                ProductionSystem.ApplyCancelTrain(World, in command);
-                break;
+                return ProductionSystem.ApplyCancelTrain(World, in command);
             case CommandKind.SetRally:
-                ProductionSystem.ApplySetRally(World, in command);
-                break;
+                return ProductionSystem.ApplySetRally(World, in command);
             case CommandKind.ClearRally:
-                ProductionSystem.ApplyClearRally(World, in command);
-                break;
+                return ProductionSystem.ApplyClearRally(World, in command);
             case CommandKind.Research:
-                ProductionSystem.ApplyResearch(World, in command);
-                break;
+                return ProductionSystem.ApplyResearch(World, in command, out detail);
+            default: // Noop
+                return CommandRefusal.None;
         }
     }
 
-    private void ApplySpawn(in Command command)
+    private CommandRefusal ApplySpawn(in Command command)
     {
         // An unknown type or a full store drops the spawn: a command must never crash the sim. A dev spawn ignores the
         // population cap but counts toward the population (M3-4).
         GameData data = World.Data;
-        if ((uint)command.TypeId >= (uint)data.Units.Length) return;
-        World.Units.TrySpawn(command.Player, command.TypeId, data.Units[command.TypeId], command.Position, out _);
+        if ((uint)command.TypeId >= (uint)data.Units.Length) return CommandRefusal.SpawnRefused;
+        return World.Units.TrySpawn(command.Player, command.TypeId, data.Units[command.TypeId], command.Position, out _) ? CommandRefusal.None : CommandRefusal.SpawnRefused;
     }
 }

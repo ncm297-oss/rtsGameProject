@@ -601,7 +601,7 @@ public class CrowdRoutingTests
         u.StuckTicks[0] = 3; // test seam: a count in progress
         int orderTick = u.OrderTick[0];
         // Test seam: apply the order directly (what phase 1 does), between ticks.
-        void apply(Command order) => OrderSystem.Apply(sim.World, in order);
+        void apply(Command order) => OrderSystem.Apply(sim.World, in order, out _);
         // Far from the goal cell: the best estimate is untouched.
         float bestFar = u.BestRemaining[0];
         apply(Command.Move(0, MoveScenario.Handle(sim, 0), b));

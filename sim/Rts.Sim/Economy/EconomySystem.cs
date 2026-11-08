@@ -521,15 +521,15 @@ public static class EconomySystem
     /// footprint that would seal ground off (the M3-3 never-seal rule, BUG-0078), or a live unit whose center
     /// lies in the footprint. No faction or cost check: a dev command.
     /// </summary>
-    internal static void ApplySpawnBuilding(World world, in Command command)
+    internal static CommandRefusal ApplySpawnBuilding(World world, in Command command)
     {
         NavGrid g = world.NavGrid;
-        if ((uint)command.TypeId >= (uint)world.Data.Buildings.Length) return;
-        if (!g.WorldToCell(command.Position, out int x, out int y)) return;
+        if ((uint)command.TypeId >= (uint)world.Data.Buildings.Length) return CommandRefusal.SpawnRefused;
+        if (!g.WorldToCell(command.Position, out int x, out int y)) return CommandRefusal.SpawnRefused;
         int anchor = y * g.Width + x;
-        if (!world.Buildings.Fits(command.TypeId, anchor)) return;
+        if (!world.Buildings.Fits(command.TypeId, anchor)) return CommandRefusal.SpawnRefused;
         BuildingDef def = world.Data.Buildings[command.TypeId];
-        if (!world.Seal.KeepsConnected(x, y, def.FootprintWidth, def.FootprintHeight)) return;
+        if (!world.Seal.KeepsConnected(x, y, def.FootprintWidth, def.FootprintHeight)) return CommandRefusal.SpawnRefused;
         const float cs = MapConstants.CellSize;
         float x0 = x * cs, y0 = y * cs, x1 = (x + def.FootprintWidth) * cs, y1 = (y + def.FootprintHeight) * cs;
         UnitStore u = world.Units;
@@ -537,8 +537,8 @@ public static class EconomySystem
         {
             if (!u.Alive[i]) continue;
             Vector2 p = u.Position[i];
-            if (p.X >= x0 && p.X < x1 && p.Y >= y0 && p.Y < y1) return;
+            if (p.X >= x0 && p.X < x1 && p.Y >= y0 && p.Y < y1) return CommandRefusal.SpawnRefused;
         }
-        world.Buildings.Spawn(command.Player, command.TypeId, anchor, out _);
+        return world.Buildings.Spawn(command.Player, command.TypeId, anchor, out _) ? CommandRefusal.None : CommandRefusal.SpawnRefused;
     }
 }

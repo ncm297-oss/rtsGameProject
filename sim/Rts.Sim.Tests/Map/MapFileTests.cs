@@ -208,14 +208,16 @@ public class MapFileTests
     /// <summary>
     /// As <see cref="RunChild(string, string, string)"/>, for row <paramref name="row"/> of <paramref name="testClass"/> (M6-S8:
     /// <c>AiDeterminismTests</c> uses it too); the child is killed after <paramref name="seconds"/> (M5-4d: a whole match needs longer).
+    /// M5-5: <paramref name="value"/> is what the variable is set to (a theory's child names its row there: the filter selects
+    /// every row of the method).
     /// </summary>
-    internal static string RunChild(Type testClass, string row, string variable, string marker, int seconds = 180)
+    internal static string RunChild(Type testClass, string row, string variable, string marker, int seconds = 180, string value = "1")
     {
         string dll = typeof(MapFileTests).Assembly.Location;
         var info = new ProcessStartInfo("dotnet") { RedirectStandardOutput = true, RedirectStandardError = true, UseShellExecute = false };
         foreach (string a in new[] { "test", dll, "--filter", $"FullyQualifiedName={testClass.FullName}.{row}", "--logger", "console;verbosity=detailed" })
             info.ArgumentList.Add(a);
-        info.Environment[variable] = "1";
+        info.Environment[variable] = value;
         using Process p = Process.Start(info)!;
         System.Threading.Tasks.Task<string> err = p.StandardError.ReadToEndAsync();
         System.Threading.Tasks.Task<string> output = p.StandardOutput.ReadToEndAsync();

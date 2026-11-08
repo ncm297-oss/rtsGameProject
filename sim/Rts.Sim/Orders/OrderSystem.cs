@@ -40,28 +40,35 @@ public static class OrderSystem
         }
     }
 
-    /// <summary>Phase 1: applies a valid unit-order command; dropped for a dead or recycled unit or another player's.</summary>
-    internal static void Apply(World world, in Command command)
+    /// <summary>
+    /// Phase 1: applies a valid unit-order command; dropped for a dead or recycled unit or another player's. Returns why it
+    /// was dropped (M5-5: for the test seam only; <see cref="CommandRefusal.None"/> when applied), with
+    /// <paramref name="detail"/> the <see cref="PlacementError"/> of a refused Build (else 0).
+    /// </summary>
+    internal static CommandRefusal Apply(World world, in Command command, out int detail)
     {
+        detail = 0;
         UnitStore u = world.Units;
-        if (!u.IsAlive(command.Unit) || u.Owner[command.Unit.Index] != command.Player) return;
+        if (!u.IsAlive(command.Unit)) return CommandRefusal.UnitGone;
+        if (u.Owner[command.Unit.Index] != command.Player) return CommandRefusal.NotOwner;
         int i = command.Unit.Index;
         bool positional = command.Kind is CommandKind.Move or CommandKind.AttackMove or CommandKind.Gather or CommandKind.Build or CommandKind.Repair
             or CommandKind.UseAbility;
         // A target off the map is dropped whether queued or not, so it never takes a queue entry.
-        if (positional && !world.NavGrid.WorldToCell(command.Position, out _, out _)) return;
+        if (positional && !world.NavGrid.WorldToCell(command.Position, out _, out _)) return CommandRefusal.OffMap;
         // Only workers gather, build and repair (M3-2, M3-3); such an order to anyone else is dropped, queued or not.
         bool workerOrder = command.Kind is CommandKind.Gather or CommandKind.Build or CommandKind.Repair;
-        if (workerOrder && !EconomySystem.IsWorker(world, i)) return;
+        if (workerOrder && !EconomySystem.IsWorker(world, i)) return CommandRefusal.NotAWorker;
         // An Attack on nothing it may fight is dropped, queued or not (M4-2a); a queued one is checked again when it starts.
-        if (command.Kind == CommandKind.Attack && !CombatSystem.MayAttack(world, i, command.Target, command.TargetIsBuilding)) return;
+        if (command.Kind == CommandKind.Attack && !CombatSystem.MayAttack(world, i, command.Target, command.TargetIsBuilding)) return CommandRefusal.AttackTargetInvalid;
         // M4-4a: an ability the unit's type lacks, or one on cooldown, is dropped, queued or not (checked again when a queued one starts).
-        if (command.Kind == CommandKind.UseAbility && !AbilitySystem.CanUse(world, i, command.TypeId, command.Position)) return;
+        if (command.Kind == CommandKind.UseAbility && !AbilitySystem.CanUse(world, i, command.TypeId, command.Position)) return CommandRefusal.AbilityUnavailable;
         if (command.IsQueued)
         {
             int at = Append(u, i, command.Kind, positional ? command.Position : Vector2.Zero, command.Kind is CommandKind.Build or CommandKind.UseAbility ? command.TypeId : 0);
-            if (at >= 0 && command.Kind == CommandKind.Attack) u.SetQueuedTarget(at, command.Target, command.TargetIsBuilding);
-            return;
+            if (at < 0) return CommandRefusal.UnitQueueFull;
+            if (command.Kind == CommandKind.Attack) u.SetQueuedTarget(at, command.Target, command.TargetIsBuilding);
+            return CommandRefusal.None;
         }
         if (command.Kind == CommandKind.Attack)
         {
@@ -72,42 +79,48 @@ public static class OrderSystem
             {
                 u.Hold[i] = false;
                 CombatSystem.ReaffirmAttack(world, i);
-                return;
+                return CommandRefusal.None;
             }
             StartAttack(world, i, command.Target, command.TargetIsBuilding);
-            return;
+            return CommandRefusal.None;
         }
         if (command.Kind == CommandKind.UseAbility)
         {
             u.ClearQueue(i);
             StartAbility(world, i, command.TypeId, command.Position);
-            return;
+            return CommandRefusal.None;
         }
         // A Build or Repair with nothing to build or repair drops the whole command: queue and Hold stay.
         if (command.Kind == CommandKind.Build)
         {
-            if (ConstructionSystem.StartBuild(world, i, command.TypeId, command.Position, replaceQueue: true)) CombatSystem.ClearForOrder(u, i);
-            return;
+            if (!ConstructionSystem.StartBuild(world, i, command.TypeId, command.Position, replaceQueue: true, out PlacementError why))
+            {
+                detail = (int)why;
+                return CommandRefusal.BuildRefused;
+            }
+            CombatSystem.ClearForOrder(u, i);
+            return CommandRefusal.None;
         }
         if (command.Kind == CommandKind.Repair)
         {
-            if (ConstructionSystem.StartRepair(world, i, command.Position, replaceQueue: true)) CombatSystem.ClearForOrder(u, i);
-            return;
+            if (!ConstructionSystem.StartRepair(world, i, command.Position, replaceQueue: true)) return CommandRefusal.NothingToRepair;
+            CombatSystem.ClearForOrder(u, i);
+            return CommandRefusal.None;
         }
         if (command.Kind == CommandKind.Gather)
         {
             // No node to work drops the whole command, like a Move with no passable target.
             int node = EconomySystem.ResolveNode(world, command.Position);
-            if (node < 0) return;
+            if (node < 0) return CommandRefusal.NoResourceNode;
             u.ClearQueue(i);
             CombatSystem.ClearForOrder(u, i);
             EconomySystem.StartGather(world, i, node);
-            return;
+            return CommandRefusal.None;
         }
         if (positional)
         {
             // A target that resolves to no passable cell drops the whole command: queue and Hold stay.
-            if (!ResolveTarget(world.NavGrid, command.Position, out int cell, out Vector2 goal)) return;
+            if (!ResolveTarget(world.NavGrid, command.Position, out int cell, out Vector2 goal)) return CommandRefusal.NoPassableCell;
             u.ClearQueue(i);
             if (command.Kind == CommandKind.AttackMove && world.CombatEnabled)
             {
@@ -129,14 +142,14 @@ public static class OrderSystem
                     bool samePoint = sameLeg && Vector2.DistanceSquared(goal, u.AnchorPosition[i]) <= same2;
                     u.Hold[i] = false;
                     CombatSystem.KeepFightForAttackMove(u, i, goal, newOrder: !sameLeg, repick: !samePoint);
-                    return;
+                    return CommandRefusal.None;
                 }
                 if (sameLeg)
                 {
                     // Unengaged on that leg: the Move rule's same-target case (no restart), its give-up memory kept.
                     Move(world, i, cell, goal);
                     CombatSystem.StartAttackMove(u, i, u.Goal[i]);
-                    return;
+                    return CommandRefusal.None;
                 }
             }
             u.Hold[i] = false;
@@ -144,9 +157,10 @@ public static class OrderSystem
             CombatSystem.ClearForOrder(u, i);
             Move(world, i, cell, goal);
             if (command.Kind == CommandKind.AttackMove && world.CombatEnabled) CombatSystem.StartAttackMove(u, i, u.Goal[i]);
-            return;
+            return CommandRefusal.None;
         }
         Execute(world, i, command.Kind, Vector2.Zero, 0, default);
+        return CommandRefusal.None;
     }
 
     /// <summary>Starts an order now: the unqueued semantics, minus clearing the queue for Move, AttackMove, Gather, Build, Repair and Attack.</summary>

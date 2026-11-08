@@ -367,6 +367,114 @@ public sealed class CliTests : IDisposable
             Assert.False((r.Name ?? "").StartsWith("Godot", StringComparison.OrdinalIgnoreCase), $"Rts.Cli references {r.FullName}");
     }
 
+    // ---------- M5-5: the match verb ----------
+
+    private static readonly Regex MatchEndLine = new(@"^end tick (\d+) hash ([0-9A-F]{16}) fold ([0-9A-F]{16})$");
+
+    /// <summary>M5-5: bad <c>match</c> usage exits 1 with one usage line and prints nothing on stdout.</summary>
+    [Theory]
+    [InlineData("match --seed 1")]
+    [InlineData("match --map raraku")]
+    [InlineData("match --map raraku --seed x")]
+    [InlineData("match --map raraku --seed -1")]
+    [InlineData("match --map raraku --seed 1 --players 1")]
+    [InlineData("match --map raraku --seed 1 --players 5")]
+    [InlineData("match --map raraku --seed 1 --players 3")]
+    [InlineData("match --map nowhere --seed 1")]
+    [InlineData("match --map raraku --seed 1 --teams 1,1")]
+    [InlineData("match --map pale_hills --seed 1 --players 4 --teams 2,2,2,2")]
+    [InlineData("match --map raraku --seed 1 --teams 1")]
+    [InlineData("match --map raraku --seed 1 --teams 1,9")]
+    [InlineData("match --map raraku --seed 1 --teams a,b")]
+    [InlineData("match --map raraku --seed 1 --teams -1,2")]
+    [InlineData("match --map raraku --seed 1 --ai brutal")]
+    [InlineData("match --map raraku --seed 1 --ai normal,hard,easy")]
+    [InlineData("match --map raraku --seed 1 --ticks 0")]
+    [InlineData("match --map raraku --seed 1 --ticks 1728001")]
+    [InlineData("match --map raraku --seed 1 --units 10")]
+    [InlineData("match --map raraku --seed 1 extra")]
+    [InlineData("match --map raraku --seed 1 --map raraku")]
+    [InlineData("match --map")]
+    public void Match_BadUsage_Exits1_WithOneUsageLine(string argLine)
+    {
+        CliResult r = Cli(argLine.Split(' '));
+        Assert.Equal(CliRunner.ExitError, r.Exit);
+        Assert.Equal("", r.Out);
+        string err = OneLine(r.Err);
+        Assert.StartsWith("error: ", err);
+        Assert.Contains(CliRunner.Usage, err);
+    }
+
+    /// <summary>
+    /// M5-5 criterion 4: <c>match --ticks 600</c> on each map (two seats; Pale Hills also as a 2v2 of four) is the criterion
+    /// test's match: its end hash and per-tick fold equal <c>CriterionMatch</c>'s at tick 600; no result by then is exit 3,
+    /// and the refusals are printed.
+    /// </summary>
+    [Theory]
+    [InlineData("raraku", 1, 2, null)]
+    [InlineData("pale_hills", 1, 2, null)]
+    [InlineData("vathar_crossing", 1, 2, null)]
+    [InlineData("generated", 1, 2, null)]
+    [InlineData("pale_hills", 4, 4, "1,2,1,2")]
+    public void Match_600Ticks_OnEachMap_HasTheCriterionTestsHashes(string map, int seed, int players, string? teams)
+    {
+        var args = new List<string> { "match", "--map", map, "--seed", seed.ToString(), "--players", players.ToString(), "--ticks", "600", "--data", TestDataDir.Shipped };
+        if (teams != null) args.AddRange(new[] { "--teams", teams });
+        CliResult r = Cli(args.ToArray());
+        Assert.True(r.Exit == CliRunner.ExitNoResult, r.Err);
+        Assert.Equal("", r.Err);
+        int[]? t = teams?.Split(',').Select(int.Parse).ToArray();
+        Simulation sim = CriterionMatch.Build(map, (ulong)seed, players, t);
+        CriterionMatch.Result direct = CriterionMatch.Play(sim, 600, checks: false);
+        string[] lines = Lines(r.Out);
+        Assert.StartsWith($"match {map} seed {seed} players {players} ticks 600: p0 malazan normal team {t?[0] ?? 0}, p1 whirlwind normal", lines[0]);
+        Assert.Equal("result none by tick 600 (0:30)", lines[1]);
+        Match end = MatchEndLine.Match(lines[2]);
+        Assert.True(end.Success, lines[2]);
+        Assert.Equal(("600", direct.EndHash.ToString("X16"), direct.Fold.ToString("X16")), (end.Groups[1].Value, end.Groups[2].Value, end.Groups[3].Value));
+        Assert.Equal($"waves 0 hunts 0", lines[3]);
+        Assert.StartsWith("refused ", lines[4]);
+    }
+
+    /// <summary>
+    /// M5-5: the literal row from a prompt: <c>match --map vathar_crossing --seed 1</c> prints a line every 6,000 ticks, ends
+    /// with seat 1 the winner (exit 0) at the criterion test's end tick, end hash and fold.
+    /// </summary>
+    [Fact]
+    public void Match_TheLiteralRow_EndsWithAWinner_Exit0_WithTheTestsHashes()
+    {
+        CliResult r = Cli("match", "--map", "vathar_crossing", "--seed", "1", "--data", TestDataDir.Shipped);
+        Assert.True(r.Exit == CliRunner.ExitOk, r.Err);
+        CriterionMatch.Result direct = CriterionMatch.Play(CriterionMatch.Build("vathar_crossing", 1), 72_000, checks: false);
+        string[] lines = Lines(r.Out);
+        Assert.Equal(new[] { "tick 6000 (5:00)", "tick 12000 (10:00)", "tick 18000 (15:00)" }, lines.Where(l => l.StartsWith("tick ")).Select(l => l[..(l.IndexOf(')') + 1)]));
+        Assert.Contains($"result winner p1 at tick {direct.EndTick} ({CriterionMatch.Clock(direct.EndTick)})", lines);
+        Assert.Contains($"end tick {direct.EndTick} hash {direct.EndHash:X16} fold {direct.Fold:X16}", lines);
+        Assert.Contains($"waves {direct.Waves} hunts {direct.Hunts}", lines);
+        Assert.Equal("p1", direct.Winner);
+    }
+
+    /// <summary>M5-5: no result by <c>--ticks</c> is its own exit code (3), the result line says so, and <c>--record</c> writes a replay that plays back to every checkpoint.</summary>
+    [Fact]
+    public void Match_NoResultByTicks_Exits3_AndItsRecordingPlaysBack()
+    {
+        string path = TempPath();
+        CliResult r = Cli("match", "--map", "raraku", "--seed", "2", "--ticks", "60", "--record", path, "--data", TestDataDir.Shipped);
+        Assert.Equal(3, r.Exit);
+        Assert.Equal(CliRunner.ExitNoResult, r.Exit);
+        Assert.Contains("result none by tick 60 (0:03)", Lines(r.Out));
+        Assert.Contains($"recorded {path}", Lines(r.Out));
+        CliResult played = Cli("play", path, "--data", TestDataDir.Shipped);
+        Assert.Equal(0, played.Exit);
+        Assert.Contains("ok: 0 checkpoints (nothing compared) over 60 ticks", played.Out);
+        // A longer one compares: 600 ticks, 6 checkpoints.
+        string longer = TempPath();
+        Assert.Equal(CliRunner.ExitNoResult, Cli("match", "--map", "generated", "--seed", "1", "--ticks", "600", "--record", longer, "--data", TestDataDir.Shipped).Exit);
+        CliResult back = Cli("play", longer, "--data", TestDataDir.Shipped);
+        Assert.True(back.Exit == 0, back.Err);
+        Assert.Contains("ok: 6 checkpoints matched over 600 ticks", back.Out);
+    }
+
     private readonly record struct CliResult(int Exit, string Out, string Err);
 
     private static CliResult Cli(params string[] args)

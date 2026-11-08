@@ -54,7 +54,7 @@ Why the split matters:
 | `sim/Rts.Sim.Tests` | xUnit test project | Rts.Sim | Unit, scenario, determinism, replay, data-validation, perf tests |
 | `game/RtsGame.csproj` | Godot.NET.Sdk 4.7.x | Rts.Sim | Presentation, input, UI, audio |
 | `tools/*` | console apps / scripts | Rts.Sim (map gen) | Asset import, map generator CLI, export script |
-| `tools/Rts.Cli` | `net8.0` console app (M1-8) | Rts.Sim | Headless sim runs: checkpoint hashes, tick timings, replay record/play; (M6-S8) `mirror-map` for hand-made maps |
+| `tools/Rts.Cli` | `net8.0` console app (M1-8) | Rts.Sim | Headless sim runs: checkpoint hashes, tick timings, replay record/play; (M6-S8) `mirror-map` for hand-made maps; (M5-5) `match`, an AI-only match to its result |
 
 `RtsGame.sln` sits at the repo root. Godot's `dotnet/project/solution_directory` setting points
 to `..` so the editor uses it.
@@ -9138,6 +9138,93 @@ M5 criterion 8, the sim half: named AI openings (D14 b). Code: `Data/AiOpening.c
   the count, file edits of id / displayName / description), `Data/AiLoaderTests` (paths under `openings[0]`),
   `QA/SimHardeningM5H3QaTests.ABuildStepWaitingOnARequirement_*` (BUG-0910, un-skipped), `ReplayGoldenTests`.
 
+### Implementation (M5-5)
+
+M5 criterion 5, "AI-vs-AI headless test: a 20-minute match completes without errors and one side wins": committed, repeatable
+rows plus a CLI verb. No AI rule changed. Code: `Commands/CommandRefusal.cs`, `Simulation.RefusedForTests` (the seam), the
+phase-1 apply methods returning their refusal (`OrderSystem.Apply`, `ProductionSystem.ApplyTrain` / `ApplyResearch` /
+`ApplyCancelTrain` / `ApplySetRally` / `ApplyClearRally`, `ConstructionSystem.ApplyCancel` and the `StartBuild` overload
+with its `PlacementError`, `EconomySystem.ApplySpawnBuilding`), `tools/Rts.Cli/AiMatch.cs` and `CliRunner`'s `match` verb;
+tests `Ai/CriterionMatch.cs` (the harness), `Ai/MatchCriterionTests`, `CommandRefusalSeamTests`, `Cli/CliTests.Match_*`.
+
+- **The reading (the Producer's, 2026-11-08).** The literal row is two Normal AI seats (Malazan v Whirlwind, starts 0 and 1)
+  ending with exactly one side defeated **within 24,000 ticks (20:00)**, error-free: Vathar Crossing seed 1, which ends at
+  22,794 (18:59). It runs in the default test loop (26 s with every check). The other maps have the same row shape with a
+  documented bound, a constant in the test with the measured end in its comment: Pale Hills seed 1, 36,000 (the Producer's);
+  Raraku seed 1, the next 6,000 above its end with at least 10 % slack, 36,000; the generated map, the lowest seed of 1-6
+  that ends under 24,000 (seed 1), bound 24,000. Plus a four-seat free-for-all and a 2v2 (teams 1 / 2 / 1 / 2) on seeds
+  QA's M5-H5 sweep measured as ending, bound 72,000.
+- **"Without errors"** is checked inside the row (`CriterionMatch.Play` with `checks`), on every tick and every think:
+  (a) **no exception** from `Tick()` (caught with the tick in the message); (b) **`PlayerViewOracle.Check`** clean on every
+  think of every seat (through `AiPlayer.ThoughtForTests`), and its node memory (`NodeOracle.Observe`) every tick for every
+  player; (c) **the census** (M5-H5's QA invariant): `KnownEnemyBuildings` equals the enemy buildings the seat's view shows
+  plus its ghosts of enemies the world says are not defeated, and no wave (not a hunt) walks to a defeated seat's ghost;
+  (d) **every live unit and building** has a finite position (and velocity and facing) on the map, a live generation
+  (`IsAlive` of its own handle), hit points in 1..max, an owner of the match, and a unit's target handle in its store's
+  range; (e) **refused commands**: every command phase 1 drops is counted by kind (`kind:refusal[:detail]`), only the
+  documented kinds below may occur (`CriterionMatch.Documented`; any other ends the row with the command), and no seat's
+  command on one target is refused more than `CriterionMatch.MaxStreak` (8) thinks in a row. The target is the command's
+  kind, unit, attack target, type and point, a Build's or Gather's worker left out (the AI re-sends those with another
+  worker); several refusals of it at one tick count once; an acceptance of it ends the run. The checks only read: a row
+  with them on folds the same per-tick hashes as one with them off (the two-process rows run with them off).
+- **The seam.** `Simulation.RefusedForTests` (`internal Action<Command, CommandRefusal, int>?`): told of every command
+  phase 1 drops, with why (`CommandRefusal`: `Invalid`, `PlayerDefeated`, `UnitGone`, `NotOwner`, `OffMap`, `NotAWorker`,
+  `AttackTargetInvalid`, `AbilityUnavailable`, `UnitQueueFull`, `BuildRefused`, `NothingToRepair`, `NoResourceNode`,
+  `NoPassableCell`, `TrainRefused`, `ResearchRefused`, `NoSiteToCancel`, `NoItemToCancel`, `NoRallyBuilding`,
+  `SpawnRefused`) and a detail (the `PlacementError`, `TrainError` or `ResearchError` code of a refused Build, Train or
+  Research; else 0). The apply methods return the refusal instead of `void`; `Simulation.Apply` invokes the hook only when
+  it is not `None`. Null in a match (one enum compare a command); never read by the sim, not saved, not hashed.
+  `CommandRefusalSeamTests`: one bad command of every kind, each reported once at the tick it applies with its kind and
+  detail, the applied ones never, the hash equal to a sim without the hook on every tick; a tick that drops a batch of
+  every kind allocates nothing with the hook unset. The CLI reads it too (`InternalsVisibleTo Rts.Cli`).
+- **The rows** (Normal seats, factions alternating Malazan / Whirlwind from seat 0, each base a Town Hall and five workers
+  placed by commands from `StartBase.Plan` as `AiScenes.Generated` does; unit capacity 400 for two seats, 1,024 for four):
+
+  | Row | Map, seed | Ends (bound) | Winner | Waves | Hunts | Refused (kind count) |
+  | --- | --- | --- | --- | --- | --- | --- |
+  | literal | Vathar Crossing 1 | 22,794 = 18:59 (24,000) | seat 1 (Whirlwind) | 5 | 0 | none |
+  | | Raraku 1 | 28,083 = 23:24 (36,000) | seat 0 (Malazan) | 7 | 1 | none |
+  | | Pale Hills 1 | 34,219 = 28:30 (36,000) | seat 1 | 15 | 1 | Build UnitInTheWay 6 |
+  | | generated 1 | 21,789 = 18:09 (24,000) | seat 0 | 5 | 0 | AttackMove UnitGone 1 |
+  | FFA | Vathar Crossing 2, 4 seats | 52,305 = 43:35 (72,000) | seat 3 | 18 | 7 | Build SealsGround 2, UnitInTheWay 9; Gather NoResourceNode 1 |
+  | 2v2 | Vathar Crossing 1, 4 seats | 34,510 = 28:45 (72,000) | team 1 | 15 | 7 | Build Blocked 1, SealsGround 2, UnitInTheWay 4; Gather UnitGone 1 |
+
+  Waves and hunts are the match's totals over its seats. The longest refusal run on any row is 1 think (no command refused twice on one target).
+  The generated map, seeds 1-6, Normal v Normal: 21,789 / 15,691 / 29,533 / 20,677 / 14,490 / 26,034: all end, four under
+  24,000. Vathar FFA seed 3 ends at 55,321; Pale Hills 2v2 seed 4 at 34,772; Vathar 2v2 seed 2 at 29,019.
+- **The refusal kinds seen, and why.** Every order is judged from the seat's view a tick before it applies.
+  - `Build:BuildRefused:UnitInTheWay` and `Build:BuildRefused:SealsGround`: the AI's site check (`PlayerView.CanPlace`,
+    "Implementation (M5-2)") leaves out units in the way and the never-seal rule by design; the Build applies them, a
+    refused Build costs nothing, and the executor's retry mark moves the next try on (a Malazan armory tried one cell
+    further each think, four thinks, in the 2v2).
+  - `Build:BuildRefused:Blocked`: a cell that became blocked: in the 2v2 the two allies (seats 0 and 2, sharing vision)
+    picked the same depot anchor for tick 921; seat 0's site applied first.
+  - `Gather:NoResourceNode`: a Gather to a node the seat remembers that is gone (BUG-0570's case: dropped at apply, the
+    node marked once the worker stands idle).
+  - `AttackMove:UnitGone`, `Gather:UnitGone`: an order to a unit that died in the tick it was sent.
+  - Also allowed, not seen: a Train over the queue or without the cost (`TrainRefused:QueueFull` / `CannotAfford`), the
+    other unit orders' `UnitGone`, and `Attack:AttackTargetInvalid` (the target died that tick).
+- **What does not end, and why.** Pale Hills seed 2 Normal v Normal (BUG-1068: the gold runs out, the `expand` step looks
+  40 m only, the empty starts' 18,000 gold is never touched); the lone-unit gap (BUG-1116: one seat keeps a few units and no
+  building against a hunt that sweeps the perimeter leg first) and two live seats still fighting at the hour: QA's M5-H5
+  sweep of 24 four-seat matches to 72,000 ended 6 / 12 FFA and 8 / 12 2v2. The criterion's rows avoid those seeds on
+  purpose. **BUG-1151 (found here):** the economy's rebalance (one gatherer a think moved to the other kind) can send a
+  working gatherer to a remembered mine that is gone; the Gather is dropped, the worker keeps gathering, and BUG-0570's mark
+  is only set for an idle worker, so the rebalance re-sends it every think (generated seed 4, from tick 18,221: the streak
+  check fires at the 9th think). Not a row; an AI change, so not fixed here.
+- **Determinism.** `EveryRow_InTwoProcesses_TheSameFoldEndTickWinnerAndHunts` (six rows, `Stress`): this process and a
+  child `dotnet test` (`MapFileTests.RunChild`, which since M5-5 takes the variable's value: a theory's child names its row)
+  print the per-tick hash fold, the end hash and tick, the winner and the hunts started; equal. The literal row's save at
+  tick 11,397 (half its end) loads, saves byte-identical, follows the run hash for hash for 11,397 ticks and ends on the
+  same tick with the same end hash and winner (`VatharCrossing_Seed1_SavedHalfWay_FollowsToTheSameEndHash`, default loop,
+  14 s).
+- **Not in the checks** (for QA): a unit stuck for good on a reachable goal, a live seat that sends nothing for minutes, a
+  resource total that never moves, a wave that never leaves home. A Gather or Build refused at the AI's own door
+  (`ICommandSink.TryEnqueue` false: a full command queue) is not a phase-1 refusal and is not seen by the seam (no row
+  fills its 1,024 commands), and nor is a queued (shift) order dropped when phase 7 pops it later (the AI queues none).
+- **No pin moved.** The apply methods' return values change no behaviour: the golden header, the replay and save formats,
+  the data hash and every pinned match are unchanged.
+
 ## Save/load and replays
 
 - **Replay file** (M1-6, `Rts.Sim.Replays`): a `Replay` holds a header, the command log, and
@@ -10262,12 +10349,28 @@ quarter points: two neighbouring starts must stand half the side apart).
     hand-made map file from its source half or quarter and checks it as the loader would. It prints `wrote <out> (<symmetry>
     symmetry): it loads`, or every loader error (`error: <file>: <path>: <message>`, the one exception to the one-line rule
     below) and a closing `error: '<out>' was written but does not load (N errors)`, exit 1.
+  - `match --map <id>|generated --seed <n> [--players 2..4] [--teams <t,t,...>] [--ai easy|normal|hard[,...]] [--ticks <n>]
+    [--record <path>] [--data <dir>]` (M5-5, "Implementation (M5-5)") plays an AI-only match headless, built exactly as the
+    criterion tests build theirs (`AiMatch.Build`: factions alternate Malazan / Whirlwind from player 0, starts in player
+    order, each base a Town Hall and five workers from `StartBase.Plan`; the generated map with 8 forests and 6 mines, or the
+    map file sized to its side; unit capacity 400 for two players, 1,024 for more). `--map` is a map file's id or `generated`;
+    `--players` default 2, at most the map's starts; `--teams` one team per player, 0 (none) to 8, refused when every player
+    is on one team; `--ai` one difficulty for all or one per player (default `normal`); `--ticks` default 72,000 (one hour).
+    Output: a header line (`match <map> seed S players N ticks T: p0 malazan normal team 0, ...`), a line every 6,000 ticks
+    (`tick 6000 (5:00) hash <16 hex>: p0 in gold G wood W army A prod P; ...`, gathered totals), then
+    `result winner p1 at tick 22794 (18:59)` (`team N` for a team; `result draw at ...` when no side is left; `result none by
+    tick N (m:ss)` when no side won by `--ticks`), `end tick N hash <16 hex> fold <16 hex>` (the state hash and the FNV-1a fold
+    of every tick's hash: the tests' `CriterionMatch` numbers), `waves W hunts H`, and one `refused <kind>:<refusal>[:<detail>]
+    <count>` line per refusal kind (from `Simulation.RefusedForTests`) or `refused none`; `recorded <path>` last with
+    `--record` (a format-9 replay that `play` checks to every checkpoint). Exit 0 on a result, **3** when no side won by
+    `--ticks`. Vathar Crossing seed 1 takes about 8 s.
   - Data that doesn't load prints `error: data in '<dir>' did not load (N error[s]), first: <error>`,
     where an error reads `file: path: message` with an empty file or path left out (M1-9).
   - Exit codes: **0** success; **1** bad usage (one `error: ... usage: ...` line), data that
     doesn't load, a replay file that can't be read, or a replay that can't be written; **2** a replay
     that is malformed, truncated, refused (`DataMismatch`, ...) or fails playback, printed as
     `replay failed: <ReplayError> ...` (a `CheckpointMismatch` names the tick and both hashes).
+    **3** (M5-5) a `match` with no result by `--ticks`.
     Expected failures print exactly one stderr line, never a stack trace.
   - Tests: `CliTests` call `CliRunner.Run(args, stdout, stderr)` in-process (the test project
     references `tools/Rts.Cli`).

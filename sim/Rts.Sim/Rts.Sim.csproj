@@ -12,6 +12,8 @@
   <ItemGroup>
     <!-- Test seams (e.g. NavGrid.BumpVersionForTests) stay internal instead of public setters. -->
     <InternalsVisibleTo Include="Rts.Sim.Tests" />
+    <!-- M5-5: the headless CLI's match verb reads the AI seats (waves, hunts) and the refusal seam, as the tests do. -->
+    <InternalsVisibleTo Include="Rts.Cli" />
   </ItemGroup>
 
 </Project>

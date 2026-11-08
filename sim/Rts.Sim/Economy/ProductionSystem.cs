@@ -73,47 +73,58 @@ public static class ProductionSystem
         world.NavGrid.WorldToCell(position, out int x, out int y) ? OwnFinishedAt(world, player, x, y) : -1;
 
     /// <summary>Applies <see cref="CommandKind.Train"/>: queues the unit and takes its cost; dropped for anything <see cref="Check"/> refuses.</summary>
-    internal static void ApplyTrain(World world, in Command command)
+    internal static CommandRefusal ApplyTrain(World world, in Command command, out int detail)
     {
         int k = OwnFinishedAt(world, command.Player, command.Position);
-        if (k < 0 || Check(world, command.Player, k, command.TypeId) != TrainError.None) return;
+        TrainError error = k < 0 ? TrainError.NoBuilding : Check(world, command.Player, k, command.TypeId);
+        detail = (int)error;
+        if (error != TrainError.None) return CommandRefusal.TrainRefused;
         UnitDef def = world.Data.Units[command.TypeId];
         world.TrySpend(command.Player, def.CostGold, def.CostWood);
         world.Buildings.Enqueue(k, command.TypeId);
+        return CommandRefusal.None;
     }
 
     /// <summary>Applies <see cref="CommandKind.Research"/> (M3-5): queues the tech and takes its cost; dropped for anything <see cref="CheckResearch"/> refuses.</summary>
-    internal static void ApplyResearch(World world, in Command command)
+    internal static CommandRefusal ApplyResearch(World world, in Command command, out int detail)
     {
         int k = OwnFinishedAt(world, command.Player, command.Position);
-        if (k < 0 || CheckResearch(world, command.Player, k, command.TypeId) != ResearchError.None) return;
+        ResearchError error = k < 0 ? ResearchError.NoBuilding : CheckResearch(world, command.Player, k, command.TypeId);
+        detail = (int)error;
+        if (error != ResearchError.None) return CommandRefusal.ResearchRefused;
         TechDef def = world.Data.Techs[command.TypeId];
         world.TrySpend(command.Player, def.CostGold, def.CostWood);
         world.Buildings.EnqueueTech(k, command.TypeId);
+        return CommandRefusal.None;
     }
 
     /// <summary>Applies <see cref="CommandKind.CancelTrain"/>: item <see cref="Command.TypeId"/>, a unit or a tech (M3-5), leaves the queue with a full refund (a started head also loses its progress and a unit's reservation); dropped for a bad index or no own finished building.</summary>
-    internal static void ApplyCancelTrain(World world, in Command command)
+    internal static CommandRefusal ApplyCancelTrain(World world, in Command command)
     {
         int k = OwnFinishedAt(world, command.Player, command.Position);
-        if (k < 0 || (uint)command.TypeId >= (uint)world.Buildings.QueueCount[k]) return;
+        if (k < 0 || (uint)command.TypeId >= (uint)world.Buildings.QueueCount[k]) return CommandRefusal.NoItemToCancel;
         world.Buildings.RemoveQueued(k, command.TypeId);
+        return CommandRefusal.None;
     }
 
     /// <summary>Applies <see cref="CommandKind.SetRally"/>: the own finished building covering cell <see cref="Command.TypeId"/> rallies to <see cref="Command.Position"/>; dropped for a target off the map or no such building.</summary>
-    internal static void ApplySetRally(World world, in Command command)
+    internal static CommandRefusal ApplySetRally(World world, in Command command)
     {
         NavGrid g = world.NavGrid;
-        if ((uint)command.TypeId >= (uint)(g.Width * g.Height) || !g.WorldToCell(command.Position, out _, out _)) return;
+        if ((uint)command.TypeId >= (uint)(g.Width * g.Height) || !g.WorldToCell(command.Position, out _, out _)) return CommandRefusal.NoRallyBuilding;
         int k = OwnFinishedAt(world, command.Player, command.TypeId % g.Width, command.TypeId / g.Width);
-        if (k >= 0) world.Buildings.SetRally(k, true, command.Position);
+        if (k < 0) return CommandRefusal.NoRallyBuilding;
+        world.Buildings.SetRally(k, true, command.Position);
+        return CommandRefusal.None;
     }
 
     /// <summary>Applies <see cref="CommandKind.ClearRally"/>: the own finished building covering <see cref="Command.Position"/> loses its rally point.</summary>
-    internal static void ApplyClearRally(World world, in Command command)
+    internal static CommandRefusal ApplyClearRally(World world, in Command command)
     {
         int k = OwnFinishedAt(world, command.Player, command.Position);
-        if (k >= 0) world.Buildings.SetRally(k, false, Vector2.Zero);
+        if (k < 0) return CommandRefusal.NoRallyBuilding;
+        world.Buildings.SetRally(k, false, Vector2.Zero);
+        return CommandRefusal.None;
     }
 
     /// <summary>Phase 3: every finished building with a queue, in slot order, starts, advances or spawns its head item.</summary>
