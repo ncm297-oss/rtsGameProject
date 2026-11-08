@@ -46,6 +46,13 @@ namespace Rts.Sim.Ai;
 /// <c>ai.rallyReach</c> from the target) re-targets at once. Members are sent <c>AttackMove</c> only. It ends as a wave does
 /// (the retreat, the idle cooldown, the defense); an enemy building coming into view makes it a wave on that building.
 /// </para>
+/// <para>
+/// M5-4c slice 2, the Hard knobs (docs/03 "Implementation (M5-4c slice 2)"): with <c>pullBackWounded</c> a member that falls
+/// below its faction's <c>retreat.hpFraction</c> of its max hp goes home out of the wave, and goes out again with the next
+/// one, which it fights out (<see cref="Wounded"/>, <see cref="PullBack"/>, <see cref="FightsOn"/>); with <c>focusFire</c> the wave's members and the defenders about in
+/// attack range of the lowest-hp enemy unit seen are sent <c>Attack</c> on it (<see cref="Focus"/>). Both are off on Easy
+/// and Normal, which play exactly as before.
+/// </para>
 /// </summary>
 internal static class MilitaryManager
 {
@@ -56,11 +63,33 @@ internal static class MilitaryManager
     internal const byte ToRally = 2;
 
     /// <summary>
+    /// BUG-1121: <see cref="Blackboard.WaveFlag"/> of a member <see cref="Focus"/> sent <c>Attack</c>: it is a fighter still,
+    /// and once Idle with its focus dead it is re-sent on toward the wave's point without spending one of its
+    /// <see cref="MaxTries"/> (a focus that it gave up, out of reach, spends one as before, so the churn stays bounded).
+    /// Only ever set on a <c>focusFire</c> seat.
+    /// </summary>
+    internal const byte Focused = 3;
+
+    /// <summary>
+    /// BUG-1123: a bit of <see cref="Blackboard.WaveFlag"/> beside the order owed (<see cref="Owed"/>): the member was wounded
+    /// (<see cref="Wounded"/>) when its wave or hunt started, so it fights that one out: <see cref="PullBack"/> leaves it in.
+    /// Set only at a start (<see cref="TryStart"/>, <see cref="TryHunt"/>) and so only on a <c>pullBackWounded</c> seat; an order
+    /// owed is set keeping it (<see cref="Owe"/>), and the member's leaving (a <see cref="ToRally"/>, the defense's pull) drops it.
+    /// </summary>
+    internal const byte FightsOn = 0x80;
+
+    /// <summary>
     /// Orders (<c>AttackMove</c> or <c>Attack</c>) a member gets toward one target without getting a cell nearer it before the
     /// AI stops ordering it (BUG-0595/0596). Its nearest distance only falls, by a cell each reset, so a member's orders per
     /// target are bounded. Not a balance number: a guard against re-sending an order that does nothing.
     /// </summary>
     internal const int MaxTries = 3;
+
+    /// <summary>
+    /// M5-4c slice 2: the smallest bucket side (m) of the focus pass's fighter grid (<see cref="AiPlayer.FocusHeads"/>): 128 x
+    /// 128 buckets on the largest map whatever <c>ai.focusReach</c>. A memory bound, not a balance number.
+    /// </summary>
+    internal const float MinFocusBucket = 16f;
 
     /// <summary>Rally, wave and retreat (see the type's summary).</summary>
     internal static void Run(AiPlayer ai)
@@ -68,6 +97,7 @@ internal static class MilitaryManager
         if (ai.TryHallPoint(out Vector2 hall)) RallyPoint(ai, hall);
         if (ai.Board.WaveActive) Wave(ai);
         else if (!ai.Board.Defending && !TryStart(ai)) TryHunt(ai); // M5-4b: no wave while the base is defended
+        Focus(ai); // M5-4c slice 2: before the orders, so a fighter it orders gets nothing else this think
         Orders(ai);
     }
 
@@ -107,7 +137,7 @@ internal static class MilitaryManager
             int slot = ai.ArmySlots[k];
             if (!Free(ai, slot, out SeenUnit u)) continue;
             board.WaveGeneration[slot] = u.Handle.Generation;
-            board.WaveFlag[slot] = ToAttack;
+            board.WaveFlag[slot] = Wounded(ai, u) ? (byte)(ToAttack | FightsOn) : ToAttack; // BUG-1123: a wounded unit goes, to stay
         }
         SetTarget(ai, target, type, cell);
         board.WaveActive = true;
@@ -147,7 +177,7 @@ internal static class MilitaryManager
             int slot = ai.ArmySlots[k];
             if (!Free(ai, slot, out SeenUnit u)) continue;
             board.WaveGeneration[slot] = u.Handle.Generation;
-            board.WaveFlag[slot] = ToAttack;
+            board.WaveFlag[slot] = Wounded(ai, u) ? (byte)(ToAttack | FightsOn) : ToAttack; // BUG-1123: a wounded unit goes, to stay
         }
         board.WaveActive = true;
         board.WaveStartHalfPop = half;
@@ -212,7 +242,7 @@ internal static class MilitaryManager
         board.HuntSweep = sweep;
         board.WaveTargetPoint = sweep >= 0 ? HuntPoint(ai, Cols(ai), Rows(ai), sweep) : ai.ClampToMap(point);
         for (int k = 0; k < ai.ArmyCount; k++)
-            if (Member(ai, ai.ArmySlots[k], out _)) board.WaveFlag[ai.ArmySlots[k]] = ToAttack;
+            if (Member(ai, ai.ArmySlots[k], out _)) Owe(board, ai.ArmySlots[k], ToAttack);
     }
 
     /// <summary>
@@ -352,7 +382,7 @@ internal static class MilitaryManager
             board.HuntRingLeft = 0;
             SetTarget(ai, target, type, cell);
             for (int k = 0; k < ai.ArmyCount; k++)
-                if (Member(ai, ai.ArmySlots[k], out _)) board.WaveFlag[ai.ArmySlots[k]] = ToAttack;
+                if (Member(ai, ai.ArmySlots[k], out _)) Owe(board, ai.ArmySlots[k], ToAttack);
             return;
         }
         float reach = ai.Rules.RallyReach * ai.Rules.RallyReach;
@@ -363,7 +393,7 @@ internal static class MilitaryManager
             if (!Member(ai, slot, out SeenUnit u)) continue;
             if (Vector2.DistanceSquared(u.Position, board.WaveTargetPoint) <= reach) reached = true;
             // Not stuck: walking or fighting, an order pending or owed, or orders toward the point left to give.
-            if (u.State != UnitState.Idle || ai.OrderedNotApplied(slot, u.Handle.Generation) || board.WaveFlag[slot] == ToAttack
+            if (u.State != UnitState.Idle || ai.OrderedNotApplied(slot, u.Handle.Generation) || Owed(board, slot) == ToAttack
                 || board.WaveTries[slot] < MaxTries) stuck = false;
         }
         if (board.HuntSweep >= 0) SeenPoints(ai);
@@ -471,6 +501,7 @@ internal static class MilitaryManager
     private static void Wave(AiPlayer ai)
     {
         Blackboard board = ai.Board;
+        if (ai.Knobs.PullBackWounded) PullBack(ai); // M5-4c slice 2: before the count, so a pulled member is no loss
         int live = 0, half = 0;
         Vector2 sum = Vector2.Zero;
         for (int k = 0; k < ai.ArmyCount; k++)
@@ -516,7 +547,7 @@ internal static class MilitaryManager
         }
         SetTarget(ai, target, type, cell);
         for (int k = 0; k < ai.ArmyCount; k++)
-            if (Member(ai, ai.ArmySlots[k], out _)) board.WaveFlag[ai.ArmySlots[k]] = ToAttack;
+            if (Member(ai, ai.ArmySlots[k], out _)) Owe(board, ai.ArmySlots[k], ToAttack);
     }
 
     /// <summary>Ends the wave (M5-4d: or the hunt): every live member owes a Move to the rally point (also the defense's, M5-4b).</summary>
@@ -659,13 +690,13 @@ internal static class MilitaryManager
             int slot = ai.ArmySlots[k];
             if (!Member(ai, slot, out SeenUnit u)) continue;
             if (Vector2.DistanceSquared(u.Position, board.WaveTargetPoint) <= reach) done = true;
-            if (u.State != UnitState.Idle || ai.OrderedNotApplied(slot, u.Handle.Generation) || board.WaveFlag[slot] == ToAttack
+            if (u.State != UnitState.Idle || ai.OrderedNotApplied(slot, u.Handle.Generation) || Owed(board, slot) == ToAttack
                 || board.WaveTries[slot] < MaxTries) stuck = false;
         }
         if (!done && !stuck) return;
         board.WaveTargetPoint = ai.BuildingCentre(board.WaveTargetType, board.WaveTargetCell);
         for (int k = 0; k < ai.ArmyCount; k++)
-            if (Member(ai, ai.ArmySlots[k], out _)) board.WaveFlag[ai.ArmySlots[k]] = ToAttack;
+            if (Member(ai, ai.ArmySlots[k], out _)) Owe(board, ai.ArmySlots[k], ToAttack);
     }
 
     /// <summary>Every army unit's command this think, in slot order (one each at most).</summary>
@@ -688,14 +719,14 @@ internal static class MilitaryManager
             int slot = ai.ArmySlots[k];
             if (!Free(ai, slot, out SeenUnit u)) continue;
             int generation = u.Handle.Generation;
-            bool tagged = board.WaveGeneration[slot] == generation;
+            bool tagged = board.WaveGeneration[slot] == generation, resume = false;
             Command c;
             if (tagged && board.WaveFlag[slot] == ToRally)
                 c = Command.Move(ai.Player, u.Handle, board.Rally);
             else if (tagged && board.WaveActive)
             {
                 float d = Vector2.Distance(u.Position, board.WaveTargetPoint);
-                if (board.WaveFlag[slot] == ToAttack)
+                if (Owed(board, slot) == ToAttack)
                 {
                     // A new target (wave start or re-target): progress is measured from here.
                     board.WaveBest[slot] = d;
@@ -710,12 +741,14 @@ internal static class MilitaryManager
                         board.WaveBest[slot] = d; // a cell nearer since the last order: it is getting somewhere
                         board.WaveTries[slot] = 0;
                     }
+                    // BUG-1121: its focus killed (not given up): back on toward the point, no try spent.
+                    resume = Owed(board, slot) == Focused && !ai.View.TryGetGivenUp(slot, out _);
                     // M5-4d: a hunt's member is only ever sent on toward the point; out of orders it waits there, a member,
                     // until the hunt moves the point (every member as close as it gets counts as reached).
-                    if (hunting && board.WaveTries[slot] >= MaxTries) continue;
+                    if (hunting && !resume && board.WaveTries[slot] >= MaxTries) continue;
                     bool atTarget = targetSeen && d <= near;
                     UnitDef def = ai.Data.Units[u.TypeId];
-                    if (hunting) c = Command.AttackMove(ai.Player, u.Handle, board.WaveTargetPoint);
+                    if (hunting || resume) c = Command.AttackMove(ai.Player, u.Handle, board.WaveTargetPoint);
                     else if (atTarget && def.Attack.Targets == AttackTargets.Units) c = Leave(ai, slot, u.Handle, def); // can't harm a building
                     else if (board.WaveTries[slot] >= MaxTries)
                     {
@@ -738,9 +771,9 @@ internal static class MilitaryManager
             ai.MarkOrdered(slot, generation, 0);
             bool home = c.Kind == CommandKind.Move;
             board.RalliedVersion[slot] = home ? board.RallyVersion : 0;
-            if (tagged) board.WaveFlag[slot] = 0;
+            if (tagged) Owe(board, slot, 0);
             if (tagged && !home) board.WaveBusyTick = ai.Now;
-            if (tagged && !home && board.WaveTries[slot] < byte.MaxValue) board.WaveTries[slot]++;
+            if (tagged && !home && !resume && board.WaveTries[slot] < byte.MaxValue) board.WaveTries[slot]++;
             if (tagged && home) board.WaveGeneration[slot] = 0; // home: no longer a member
         }
     }
@@ -757,9 +790,176 @@ internal static class MilitaryManager
         return Command.Move(ai.Player, unit, board.Rally);
     }
 
+    /// <summary>
+    /// M5-4c slice 2 (<c>pullBackWounded</c>, docs/02 "AI opponent": Hard pulls back wounded units): whether own unit
+    /// <paramref name="u"/> is wounded: the difficulty pulls back the wounded and its hp is below its faction's
+    /// <c>retreat.hpFraction</c> (ai.json: "a unit below it is wounded") of its max hp (its type's plus the player's hp techs).
+    /// Always false on a difficulty that doesn't, so Easy and Normal play as before. BUG-1122: compared in decimal, the
+    /// stored float fraction read back to its shortest decimal (0.3f is 0.3), so a unit at exactly the fraction of its max hp
+    /// is not wounded for any max hp (in float 0.3f x 50 rounds up past 15).
+    /// </summary>
+    internal static bool Wounded(AiPlayer ai, in SeenUnit u) =>
+        ai.Knobs.PullBackWounded && u.Hp < (decimal)ai.Def.RetreatHpFraction * ai.View.MaxHpOf(u.TypeId);
+
+    /// <summary>
+    /// M5-4c slice 2: every wounded member (<see cref="Wounded"/>) leaves the wave alive, unless it was wounded when the wave
+    /// started (<see cref="FightsOn"/>): it is owed a Move to the rally point (sent by <see cref="Orders"/>, kept if the queue
+    /// is full) and its half-pop leaves the start's, so it counts neither as live nor as a loss toward the retreat (M5-3's "a
+    /// member that leaves alive is not a loss", as <see cref="Leave"/>). At home it answers the defense. BUG-1123: nothing
+    /// heals yet, so the next wave or hunt takes it along like any unit (counted toward its start), flagged
+    /// <see cref="FightsOn"/>, and it fights that one out: each unit is pulled back once, and a pulled-back unit fights again
+    /// (before the fix it was in no wave again, so a Hard army shrank over a long match and lost to Normal).
+    /// </summary>
+    private static void PullBack(AiPlayer ai)
+    {
+        Blackboard board = ai.Board;
+        for (int k = 0; k < ai.ArmyCount; k++)
+        {
+            int slot = ai.ArmySlots[k];
+            if (!Member(ai, slot, out SeenUnit u) || (board.WaveFlag[slot] & FightsOn) != 0 || !Wounded(ai, u)) continue;
+            board.WaveFlag[slot] = ToRally; // drops FightsOn: it leaves
+            board.WaveStartHalfPop -= ai.Data.Units[u.TypeId].HalfPop;
+        }
+    }
+
+    /// <summary>
+    /// M5-4c slice 2 (<c>focusFire</c>, docs/02 "AI opponent": Hard focuses fire): with a wave (or hunt) in progress or the
+    /// base defended, the <b>fighters</b> are the wave's members owed nothing and the defenders inside the base (<see cref="Fighter"/>). Of
+    /// BUG-1121: a fighter's <b>reach</b> is about its attack range: its type's <c>attack.range</c> + its radius + one map
+    /// cell, at most <c>ai.focusReach</c>. Of the enemy units the seat sees now within a fighter's reach, the <b>focus</b> is
+    /// the one with the fewest hp, an army unit before a worker, slot order on ties (<see cref="AiPlayer.FocusTarget"/>;
+    /// picked afresh at every think, so a focus that dies or leaves sight is replaced at the next). Every fighter with it in
+    /// its reach gets <c>Attack</c> on it, unless it already holds that order or gave that unit up (out of reach: the give-up
+    /// memory, which its next order clears), so no fighter is re-ordered onto a target it can't get to (BUG-0595/0596's
+    /// churn); the others keep their own fights (a melee army no longer crowds one enemy while the rest hit it, BUG-1121). A
+    /// wave member so ordered is <see cref="Focused"/>: when its focus dies it goes on without spending a try. No enemy
+    /// unit in reach: nothing, and the wave's and the defense's rules go on as before. Reads only the seat's view; one pass
+    /// over the army (the fighters into a bucket grid, <see cref="AiPlayer.FocusHeads"/>) and one over the enemy seen (each
+    /// tested against the fighters of the 3 x 3 buckets round it only when it lies in their box and would be the new best);
+    /// no allocation.
+    /// </summary>
+    private static void Focus(AiPlayer ai)
+    {
+        if (!ai.Knobs.FocusFire) return;
+        Blackboard board = ai.Board;
+        if (!board.WaveActive && !board.Defending) return;
+        float reach = ai.Rules.FocusReach;
+        int n = 0;
+        Vector2 lo = new(float.MaxValue), hi = new(float.MinValue);
+        for (int k = 0; k < ai.ArmyCount; k++)
+        {
+            int slot = ai.ArmySlots[k];
+            if (!Fighter(ai, slot, out SeenUnit u)) continue;
+            int bucket = Bucket(ai, u.Position);
+            UnitDef def = ai.Data.Units[u.TypeId];
+            float own = Math.Min(reach, def.Attack.Range + def.Radius + MapConstants.CellSize);
+            ai.FocusSlots[n] = slot;
+            ai.FocusPoints[n] = u.Position;
+            ai.FocusReach2[n] = own * own;
+            ai.FocusNext[n] = ai.FocusHeads[bucket];
+            ai.FocusHeads[bucket] = ++n;
+            lo = Vector2.Min(lo, u.Position);
+            hi = Vector2.Max(hi, u.Position);
+        }
+        if (n == 0) return;
+        lo -= new Vector2(reach);
+        hi += new Vector2(reach);
+        EntityHandle best = default;
+        Vector2 at = default;
+        int bestHp = int.MaxValue;
+        bool bestArmy = false;
+        int s = -1;
+        while (ai.View.NextUnit(ref s, out SeenUnit e))
+        {
+            if (e.Owner == ai.Player || !ai.View.IsEnemy(e.Owner)) continue;
+            Vector2 p = e.Position;
+            if (p.X < lo.X || p.Y < lo.Y || p.X > hi.X || p.Y > hi.Y) continue;
+            bool army = !ai.IsWorkerType[e.TypeId];
+            if (bestArmy && !army || army == bestArmy && e.Hp >= bestHp) continue; // slot order: a tie keeps the first
+            if (!NearAFighter(ai, p)) continue;
+            (best, at, bestHp, bestArmy) = (e.Handle, p, e.Hp, army);
+        }
+        if (best.Generation != 0)
+        {
+            ai.FocusTarget = best;
+            for (int i = 0; i < n; i++)
+            {
+                int slot = ai.FocusSlots[i];
+                if (Vector2.DistanceSquared(ai.FocusPoints[i], at) > ai.FocusReach2[i]) continue;
+                if (ai.View.TryGetAttackOrder(slot, out EntityHandle held) && held == best) continue; // on it already
+                if (ai.View.TryGetGivenUp(slot, out EntityHandle given) && given == best) continue; // it couldn't get there
+                ai.View.TryGetUnit(slot, out SeenUnit u);
+                if (!ai.Send(Command.Attack(ai.Player, u.Handle, best, isBuilding: false))) break; // queue full
+                ai.MarkOrdered(slot, u.Handle.Generation, 0);
+                if (board.WaveActive && board.WaveGeneration[slot] == u.Handle.Generation) Owe(board, slot, Focused);
+            }
+        }
+        // Scratch: empty between thinks, so a loaded seat equals the saved one.
+        for (int i = 0; i < n; i++) ai.FocusHeads[Bucket(ai, ai.FocusPoints[i])] = 0;
+        Array.Clear(ai.FocusSlots, 0, n);
+        Array.Clear(ai.FocusPoints, 0, n);
+        Array.Clear(ai.FocusReach2, 0, n);
+        Array.Clear(ai.FocusNext, 0, n);
+    }
+
+    /// <summary>
+    /// Whether <paramref name="p"/> lies within the reach of one of the focus pass's fighters (<see cref="AiPlayer.FocusReach2"/>):
+    /// the 3 x 3 buckets round it (a bucket is at least <c>ai.focusReach</c>, the largest reach, across), each walked to its
+    /// first hit.
+    /// </summary>
+    private static bool NearAFighter(AiPlayer ai, Vector2 p)
+    {
+        int columns = ai.FocusColumns, rows = ai.FocusHeads.Length / columns;
+        int bx = Math.Clamp((int)(p.X / ai.FocusBucket), 0, columns - 1), by = Math.Clamp((int)(p.Y / ai.FocusBucket), 0, rows - 1);
+        for (int y = Math.Max(0, by - 1); y <= Math.Min(rows - 1, by + 1); y++)
+            for (int x = Math.Max(0, bx - 1); x <= Math.Min(columns - 1, bx + 1); x++)
+                for (int j = ai.FocusHeads[y * columns + x]; j != 0; j = ai.FocusNext[j - 1])
+                    if (Vector2.DistanceSquared(ai.FocusPoints[j - 1], p) <= ai.FocusReach2[j - 1]) return true;
+        return false;
+    }
+
+    /// <summary>The focus grid's bucket under <paramref name="p"/> (m), clamped onto the grid.</summary>
+    private static int Bucket(AiPlayer ai, Vector2 p)
+    {
+        int columns = ai.FocusColumns, rows = ai.FocusHeads.Length / columns;
+        int x = Math.Clamp((int)(p.X / ai.FocusBucket), 0, columns - 1), y = Math.Clamp((int)(p.Y / ai.FocusBucket), 0, rows - 1);
+        return y * columns + x;
+    }
+
+    /// <summary>
+    /// M5-4c slice 2: whether own army unit <paramref name="slot"/> is a fighter for the focus pass: free (alive, not casting,
+    /// no AI command pending), not the scout, its attack able to hit units, and either a member of the wave in progress owed
+    /// nothing but its re-send after a focus (<see cref="Focused"/>; its AttackMove to a new target or its Move home goes first, from <see cref="Orders"/>), or a defender while
+    /// the base is defended (picked, or every unit once the whole wave was called: <see cref="DefenseManager"/>) that stands
+    /// inside the base (within <c>ai.defendRadius</c> of the hall's centre, as the defense's own AttackMove rule).
+    /// </summary>
+    private static bool Fighter(AiPlayer ai, int slot, out SeenUnit u)
+    {
+        if (!Free(ai, slot, out u)) return false;
+        int generation = u.Handle.Generation;
+        if (ai.IsScout(slot, generation)) return false;
+        UnitDef def = ai.Data.Units[u.TypeId];
+        if (def.Attack.Value <= 0 || def.Attack.Targets == AttackTargets.Buildings) return false;
+        Blackboard board = ai.Board;
+        bool tagged = board.WaveGeneration[slot] == generation;
+        if (tagged && Owed(board, slot) != 0 && Owed(board, slot) != Focused) return false;
+        if (tagged && board.WaveActive) return true;
+        if (!board.Defending || !board.DefendAll && board.DefenderGeneration[slot] != generation) return false;
+        // A defender out of the base walks home on the defense's Move first (BUG-0670): an Attack there would keep it in
+        // the enemy's fight, so it focuses only once inside (within ai.defendRadius of the hall's centre).
+        float radius = ai.Rules.DefendRadius;
+        return !ai.HasHall || Vector2.DistanceSquared(u.Position, ai.HallPoint) <= radius * radius;
+    }
+
     /// <summary>Own army unit <paramref name="slot"/> as seen, if it is free for an order: alive, not casting, no AI command pending.</summary>
     private static bool Free(AiPlayer ai, int slot, out SeenUnit u) =>
         ai.View.TryGetUnit(slot, out u) && u.State != UnitState.Casting && !ai.OrderedNotApplied(slot, u.Handle.Generation);
+
+    /// <summary>The order owed to the member in unit slot <paramref name="slot"/>: its <see cref="Blackboard.WaveFlag"/> without the <see cref="FightsOn"/> bit.</summary>
+    internal static byte Owed(Blackboard board, int slot) => (byte)(board.WaveFlag[slot] & ~FightsOn);
+
+    /// <summary>Sets the order owed to the member in unit slot <paramref name="slot"/> (0 none, <see cref="ToAttack"/>, <see cref="Focused"/>), keeping its <see cref="FightsOn"/> bit.</summary>
+    private static void Owe(Blackboard board, int slot, byte order) => board.WaveFlag[slot] = (byte)(board.WaveFlag[slot] & FightsOn | order);
 
     /// <summary>Whether own unit slot <paramref name="slot"/> holds a live member of the wave in progress (or just ended, not yet sent home).</summary>
     internal static bool Member(AiPlayer ai, int slot, out SeenUnit u) =>

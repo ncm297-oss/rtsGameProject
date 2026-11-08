@@ -1,4 +1,5 @@
 using System;
+using Rts.Sim.Combat;
 using Rts.Sim.Data;
 using Rts.Sim.Economy;
 using Rts.Sim.Entities;
@@ -228,6 +229,35 @@ public sealed class PlayerView
         abilityIndex = IsOwnUnit(slot) ? _units.CastAbility[slot] : -1;
         return abilityIndex >= 0;
     }
+
+    /// <summary>
+    /// M5-4c slice 2: the enemy unit the player's own live unit in slot <paramref name="slot"/> holds under an explicit
+    /// <c>Attack</c> order (its own selection shows the order); false (default) for none, for an Attack on a building, and
+    /// for any other player's unit.
+    /// </summary>
+    public bool TryGetAttackOrder(int slot, out EntityHandle target)
+    {
+        target = default;
+        if (!IsOwnUnit(slot) || _units.Mode[slot] != CombatMode.Ordered || _units.TargetIsBuilding[slot]) return false;
+        target = _units.Target[slot];
+        return target.Generation != 0;
+    }
+
+    /// <summary>
+    /// M5-4c slice 2: the enemy unit the player's own live unit in slot <paramref name="slot"/> last gave up chasing (out of
+    /// reach: BUG-0137's give-up memory, cleared by its next order); false (default) for none, for a building, and for any
+    /// other player's unit.
+    /// </summary>
+    public bool TryGetGivenUp(int slot, out EntityHandle target)
+    {
+        target = default;
+        if (!IsOwnUnit(slot) || _units.IgnoredIsBuilding[slot]) return false;
+        target = _units.Ignored[slot];
+        return target.Generation != 0;
+    }
+
+    /// <summary>M5-4c slice 2: the maximum hp of the player's own units of <paramref name="unitType"/> (its type's plus its own hp techs, as its panel shows); 0 for an unknown type.</summary>
+    public int MaxHpOf(int unitType) => _world.MaxHpOf(_player, unitType);
 
     private bool IsOwnUnit(int slot) => (uint)slot < (uint)_units.Capacity && _units.Alive[slot] && _units.Owner[slot] == _player;
 

@@ -31,3 +31,7 @@ them, so nothing shows today.
   and never break at a space that would leave the new line blank. Or the data checker rejects double / edge spaces in
   `description`.
 - The dev's report named the first shape ("a data space before a mid-text \n").
+
+## Producer ruling (2026-11-07-0926 ACCEPT, for the view's next hardening)
+M5-V2's developer found the fix conflicts with `QaVh5Test`'s wrap fuzz (`e60 + "  " + w61`: every output breaks one rule or the other). Ruling: **at a line break the wrap consumes every adjacent space** (the wrap never makes a blank line; a data `
+` keeps its own line), and **a line may exceed the width only when it is a single word longer than the width**. Amend `QaVh5Test`'s fuzz to that rule (a line over the width must contain no space), keep `QaVh6Test`'s blank-line count at 0, and leave the data checker alone (double spaces in text are the author's).

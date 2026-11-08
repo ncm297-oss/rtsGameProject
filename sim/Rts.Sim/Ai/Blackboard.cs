@@ -325,7 +325,11 @@ internal sealed partial class Blackboard
     /// <summary>Per unit slot, the generation of the wave member there (0: none).</summary>
     internal int[] WaveGeneration { get; }
 
-    /// <summary>Per unit slot, the member's next order: 0 none, <c>MilitaryManager.ToAttack</c> an attack-move owed, <c>ToRally</c> a Move home owed (it may outlive the wave).</summary>
+    /// <summary>
+    /// Per unit slot, the member's next order: 0 none, <c>MilitaryManager.ToAttack</c> an attack-move owed, <c>ToRally</c> a Move
+    /// home owed (it may outlive the wave), <c>Focused</c> (M5-4c slice 2); plus the <c>MilitaryManager.FightsOn</c> bit
+    /// (BUG-1123: Hard, the member was wounded when its wave started), read past by <c>MilitaryManager.Owed</c>.
+    /// </summary>
     internal byte[] WaveFlag { get; }
 
     /// <summary>Per unit slot, the member's orders toward this target since it last got a cell nearer it (BUG-0595/0596; bounded by <c>MilitaryManager.MaxTries</c>).</summary>

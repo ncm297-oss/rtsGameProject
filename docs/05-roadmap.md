@@ -12,7 +12,7 @@ Status legend: **Next** = start here, **Planned** = not started, **Done** = acce
 | M2 | Presentation | **Done** (2026-10-07, Producer sign-off after the M2-H2 hardening) | Move an army around a 3D map |
 | M3 | Economy & buildings | **Done** (2026-10-08, Producer sign-off in session 2026-10-08-0313 after every track's end-of-M3 hardening (M3-H1 / H2, M3-V3b, D4) and the BUG-0146 fix; retro below) | Build a Malazan base |
 | M4 | Combat, fog, abilities | **Done** (2026-10-11, Producer sign-off in session 2026-10-10-2334 after every track's end-of-M4 hardening (M4-H3, M4-VH3, D-H3); the data track's D12 is accepted and held on its branch, landing at the next session's data merge; 10 / 10 criteria, in progress since 2026-10-07-2315; retro below) | Malazan vs. Whirlwind armies fight with abilities and fog |
-| M5 | AI opponent | **In progress** (since 2026-10-11; 4 / 9 criteria (1, 2, 7, 8), three owner-requested criteria added 2026-10-14) | Lose to a Whirlwind AI |
+| M5 | AI opponent | **In progress** (since 2026-10-11; 6 / 9 criteria (1, 2, 3, 4, 7, 8), three owner-requested criteria added 2026-10-14) | Lose to a Whirlwind AI |
 | M6 | Game shell & real art | **Started ahead** (view track since 2026-10-11; 5 / 10 criteria (1, 2, 3, 4, 7); criterion 7 ticked 2026-11-06-0326 when M6-S8's two maps landed) | A friend can play it |
 | M7 | Teblor | Planned | Third faction: scale and population systems proven |
 | M8 | Shadow | Planned | Fourth faction: stealth polish, summons |
@@ -684,9 +684,17 @@ open S1 / S2. Retro below; open S3 / S4 listed there.)_
       4-seat seed-2 free-for-all is a skipped known stall with BUG-1068's gold starvation underneath); BUG-1119 S3 (a
       defeated seat's remembered buildings keep a survivor from hunting); BUG-1118 S4; the look fires rarely in real
       matches (0 times on Pale Hills seed 1, 2 on Vathar seed 1).)
-- [ ] Easy / Normal / Hard per [02 AI](02-game-design.md#ai-opponent). (D16, 2026-10-13: the three blocks pinned to docs/02 and
-      the faction pages. M5-4c slice 1, 2026-10-13: `useAbilities` applied (Easy never cast then; D19, 2026-10-15, turned it on for Easy too). Left for M5-4c slice 2:
-      `gatherBonus`, `focusFire`, `pullBackWounded`.)
+- [x] Easy / Normal / Hard per [02 AI](02-game-design.md#ai-opponent). (D16, 2026-10-13: the three blocks pinned to docs/02 and
+      the faction pages. M5-4c slice 1, 2026-10-13: `useAbilities` applied (Easy never cast then; D19, 2026-10-15, turned it on for Easy too).
+      M5-4c slice 2, 2026-11-07-0926: **the three Hard knobs are read**: `gatherBonus` (per-player gather rates derived at
+      construction, `World.GoldPerTickOf` / `WoodPerTickOf`), `focusFire` (`MilitaryManager.Focus`: the lowest-hp enemy unit within a
+      fighter's own reach, capped at `rules.json` `ai.focusReach` 14 m; `Focused` flag), `pullBackWounded` (a member below `ai.json`
+      `retreat.hpFraction` sent home once, then it fights the next wave out: `FightsOn` bit; no format change); Easy / Normal / human
+      bit-identical to the pre-slice code (8 pinned matches); Hard v Normal 28 / 9 / 5 over 42 matches (27 / 10 / 5 before). M5-V2 the
+      same session: each difficulty's rules as a tooltip in the skirmish setup, Hard's bonus from `ai.json` ("shown in the skirmish
+      setup"). Ticked at the 2026-11-07-0926 ACCEPT. Open behind it: BUG-1120 S3 (a Normal hunt's sighting point on an ally's building
+      edge), BUG-1124 S3 (Perf rows and this PC's clock), BUG-1147 S4 (the tips' think intervals typed, not from data); Hard is not
+      measurably stronger than before the knobs on this sample (tuning later).)
 - [ ] AI-vs-AI headless test: a 20-minute match completes without errors and one side wins. (M5-4b, 2026-10-13: the defeat
       rule and `Simulation.MatchOver` are in, a razed hall ends the match and the loser's AI goes silent on seeds 1-3. M5-4e,
       2026-10-14: the rule is the owner's (out = no unit and no finished unit-producing building; `World.LiveUnits` /

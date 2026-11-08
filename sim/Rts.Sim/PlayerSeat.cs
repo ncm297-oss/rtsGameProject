@@ -9,7 +9,11 @@ namespace Rts.Sim;
 /// </summary>
 /// <param name="Faction">The faction id (<see cref="GameData.Factions"/>); -1 only with data that has no factions.</param>
 /// <param name="Controller">Human or AI.</param>
-/// <param name="Difficulty">The AI's difficulty (<see cref="AiDef.Difficulty"/>); kept but unused on a human seat.</param>
+/// <param name="Difficulty">
+/// The AI's difficulty (<see cref="AiDef.Difficulty"/>). M5-4c slice 2: its <c>gatherBonus</c> applies to any seat
+/// (<see cref="World.GatherBonusOf"/>), since playback runs a recorded AI seat as a human one with its difficulty; a seat a
+/// person plays is Normal wherever the game builds one.
+/// </param>
 /// <param name="Team">
 /// M6-S4: 0 (the default) for no team, the seat is a side of its own (free-for-all); 1 to <see cref="MaxTeam"/> a named
 /// team, whose seats are allies (<see cref="World.AreAllied"/>).

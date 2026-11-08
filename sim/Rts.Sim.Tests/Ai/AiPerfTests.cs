@@ -196,6 +196,74 @@ public class AiPerfTests
         Assert.True(avg < BudgetMs, $"avg {avg:F3} ms over the {BudgetMs} ms budget");
     }
 
+    /// <summary>
+    /// M5-4c slice 2 criterion 8: the same eight Hard seats, each kept mid-wave (a test seam tags its whole army as the
+    /// members of a wave on the known enemy building nearest its hall whenever it has none) and under attack, every unit at
+    /// full hp: the focus pass runs at every think with fighters among the next seat's units, so a focus is picked and its
+    /// Attacks sent (combat is off, so they never land and are sent again at every think: the heaviest case). Gated: a
+    /// think's average under 1 ms in the Debug build; and such a think allocates nothing.
+    /// </summary>
+    [Fact]
+    [Trait("Category", "Perf")]
+    public void EightHardSeats_MidWave_WithFocusTargets_AThinkUnder1Ms_AllocationFree()
+    {
+        (Simulation sim, AiPlayer[] ais) = Scene();
+        int focused = 0;
+        foreach (AiPlayer ai in ais) ai.ThoughtForTests = a => { if (a.FocusTarget.Generation != 0) focused++; };
+        var sw = new Stopwatch();
+        var times = new List<double>();
+        int think = ais[0].ThinkTicks;
+        for (int t = 0; t < 60 * think; t++)
+        {
+            if (sim.TickNumber % think == 0)
+            {
+                UnderAttack(sim);
+                foreach (AiPlayer ai in ais)
+                {
+                    MidWave(sim, ai);
+                    sw.Restart();
+                    Assert.True(ai.Think());
+                    sw.Stop();
+                    if (t >= 10 * think) times.Add(sw.Elapsed.TotalMilliseconds);
+                }
+            }
+            sim.Tick();
+        }
+        double avg = times.Average(), worst = times.Max(), p95 = times.OrderBy(x => x).ElementAt((int)(times.Count * 0.95));
+        _out.WriteLine($"{Players} Hard seats mid-wave, {sim.World.Units.Count} units: {times.Count} thinks, avg {avg:F3} ms, p95 {p95:F3} ms, worst {worst:F3} ms; "
+            + $"{focused} thinks with a focus of {60 * Players}; {ais.Sum(a => a.CommandsSent)} commands sent");
+        Assert.True(focused >= 50 * Players, $"only {focused} thinks picked a focus");
+        Assert.True(avg < BudgetMs, $"avg {avg:F3} ms over the {BudgetMs} ms budget");
+        while (sim.TickNumber % think != 0) sim.Tick();
+        UnderAttack(sim);
+        foreach (AiPlayer ai in ais) MidWave(sim, ai);
+        Action thinkAll = () => { foreach (AiPlayer ai in ais) ai.Think(); };
+        AllocationProbe.AssertZero(thinkAll, _out);
+    }
+
+    /// <summary>Test seam (criterion 8): a seat with no wave in progress gets one of its whole army on the known enemy building nearest its hall.</summary>
+    private static void MidWave(Simulation sim, AiPlayer ai)
+    {
+        Blackboard b = ai.Board;
+        if (b.WaveActive || !ai.NearestEnemyBuilding(ai.HallPoint, out EntityHandle target, out int type, out int cell)) return;
+        Rts.Sim.Entities.UnitStore u = sim.World.Units;
+        int half = 0;
+        for (int i = 0; i < u.Capacity; i++)
+        {
+            if (!u.Alive[i] || u.Owner[i] != ai.Player || sim.World.Data.Units[u.TypeId[i]].IsWorker) continue;
+            b.WaveGeneration[i] = u.Generation[i];
+            b.WaveFlag[i] = 0;
+            half += sim.World.Data.Units[u.TypeId[i]].HalfPop;
+        }
+        b.WaveActive = true;
+        b.WaveTarget = target;
+        b.WaveTargetType = type;
+        b.WaveTargetCell = cell;
+        b.WaveTargetPoint = ai.BuildingCentre(type, cell);
+        b.WaveStartHalfPop = half;
+        b.WaveStartTick = b.WaveBusyTick = sim.TickNumber;
+    }
+
     /// <summary>A steady-state think (the house search included) allocates nothing; nor does a tick that runs the sim's own AI seats.</summary>
     [Fact]
     public void ASteadyStateThink_AllocatesNothing()

@@ -24,7 +24,7 @@ public class SharedVisionFfaPinTests
         new object[] { "menu_human_vs_ai_seed1", 0x37CF8428520DC8E5UL },
         new object[] { "menu_human_vs_ai_seed3", 0xD4CA1E11BBB6585AUL },
         new object[] { "four_seats_256", 0x2FAB4CEE371B9051UL },
-        new object[] { "ai_seed4_4seats_Normal", 0x35907C9787F39EEAUL },
+        new object[] { "ai_seed4_4seats_Normal", 0x47DF11AA7761612FUL }, // M5-4c slice 2: was 0x35907C9787F39EEA; seat 1 of the four is Hard
         new object[] { "surround_brawl", 0xEAC1911851154EACUL },
     };
 

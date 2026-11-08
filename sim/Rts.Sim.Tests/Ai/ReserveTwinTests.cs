@@ -46,26 +46,34 @@ public class ReserveTwinTests
         { 3, 3, AiDifficulty.Easy, false },
     };
 
-    /// <summary>The base build's state hashes at ticks 500, 1,000 ... 6,000 for each row of <see cref="Rows"/>, in order.</summary>
+    /// <summary>
+    /// The base build's state hashes at ticks 500, 1,000 ... 6,000 for each row of <see cref="Rows"/>, in order. M5-4c slice 2:
+    /// re-printed on that slice's tree (the line each row writes), since every row has a Hard seat (the difficulties turn per
+    /// seat) and Hard now gathers faster, focuses fire and pulls back the wounded; the rows still prove a shift of 0 with no
+    /// reservable step sends no reserve (<c>reserved</c> 0). M5-4c-2 fix round 1 (BUG-1121's focus rule: a fighter focuses
+    /// only about its attack range): the (2, 2) and (4, 4) rows re-printed again on that tree (from tick 2,500 and 3,500).
+    /// M5-4c-2 fix round 2 (BUG-1123: a pulled-back unit goes out with the next wave, <c>MilitaryManager.FightsOn</c>): the same
+    /// two rows' hashes at 5,500 and 6,000 re-printed (a Hard seat's second wave takes its wounded along).
+    /// </summary>
     private static readonly Dictionary<(int, int, bool), ulong[]> s_base = new()
     {
         [(2, 2, true)] = new ulong[]
         {
-            0xDB9FE45AA23D1B1C, 0x345A18C0C70ADE1D, 0xD531FF8881401A07, 0xE13FF0FA6C188E22,
-            0x4FA31AF5D1450E45, 0x00C76B8D7E78AFEE, 0x08E3905883E1EABD, 0x5C8699EBA8C67CE5,
-            0xB4D155B4E0D61BAE, 0xAF441C986F9CC223, 0x064106DFB44627D7, 0xC1EC306446263CE7,
+            0xBE3B530A28191C48, 0x10585E07BC597613, 0x2949F935A2594956, 0x99DB931F2548B72C,
+            0x7DC40E5AAC61ACEA, 0xCCB9E07E292835F2, 0x8AAD56D9E1ECA2F6, 0xBC71FD3D6A280DE8,
+            0x669D77D61898240E, 0x9302F3DA6809A2B9, 0xCE9E0ED1E83D2104, 0x4A59B309B2CDE613,
         },
         [(4, 4, true)] = new ulong[]
         {
-            0xA9695A151B504CFF, 0xDFBAF2893E94337C, 0x930F127943870B5C, 0x2FFB87E6C189E083,
-            0x11C745D6C5719B33, 0xE30CB99709F51D72, 0xF6ACD0B704E66725, 0xAF9F8F8D975DDE76,
-            0x3187FE90ABAB5B61, 0xABD6FFC208A20560, 0x1542C3FFDF57DB93, 0x42E8FF6BE27539FD,
+            0xF670CF2993E9036E, 0x524B13E5CDF7BA75, 0x689C17F492F0D752, 0x532A94678967835D,
+            0x7C8C60851A3F3B2C, 0xEC78522DA1EA4236, 0x32FC1AD96B32D299, 0x8D0F3AD2E3744008,
+            0x6DB5753F06E39B62, 0x873706930D3B0028, 0x1EC56C878FA3FC71, 0xF2F4F3C068C2B868,
         },
         [(3, 3, false)] = new ulong[]
         {
-            0x49F09C36EC8E153B, 0x14EAE0C0CB3E25B4, 0x46C0F7D20E102E4F, 0xED970FF19BB6F12E,
-            0x258FA3B720BF3687, 0xDB634ABBE24863B7, 0x4EAE080632A05FE9, 0x2B79FA25E3E53C98,
-            0x8D04BA611A891596, 0x6735FC988446A2DE, 0x968540B4C7A973E4, 0x85C36B08F1A3E2B2,
+            0x55586CA407525F44, 0xCD6A2C9C6B223EC8, 0x63D5A1F15EA3EDAB, 0xF77AADAE0E8ED54E,
+            0x62AD7BDD5751634C, 0x59124CF270A054DA, 0x1C2D49EBEA235757, 0xC12695EC095397FF,
+            0x411F5C494FB67035, 0x5A040E4BA74DB9F0, 0x968955449FE785D6, 0x19DA0DEB6DA27111,
         },
     };
 
