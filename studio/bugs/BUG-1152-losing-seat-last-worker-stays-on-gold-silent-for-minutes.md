@@ -40,3 +40,9 @@ for workers; below the 4,800-tick limit once the oracle counts only time with a 
   the scouts die; another path to the same wood starvation), BUG-1022 (the shift's churn).
 - Candidate fix (AI behaviour, own task): when every affordable-by-gold option is blocked on wood, put a gatherer on wood
   whatever the share says.
+- **M5-9a (2026-11-08-1316, the developer's re-measure):** Normal's counter shift changes the Raraku matches. Seed 2 no
+  longer shows it (ends at 29,190, every sweep oracle clean): its `Known` entry is removed. Seed 1 still does (seat 1
+  silent 21,141-27,120, unchanged). **Raraku seed 5 newly shows it, worse:** no result at 72,000, seat 1 silent from 35,081
+  to the end (36,919 ticks) with 1,970 gold and 5 wood, seat 0 still from 26,534 with 4,454 gold and 35 wood (both sides
+  wood-starved). Left failing on the M5-9a branch in QA's sweep (not added to `Known`) and in
+  `MapSlice2StressTests.NormalVersusNormal_OnANewMap_OtherSeeds_EndWithin72000(raraku, 5)`, the Producer's call with BUG-1153.
