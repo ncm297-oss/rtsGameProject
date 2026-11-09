@@ -486,3 +486,4 @@ bugs outrank new features.
 | [BUG-1157](BUG-1157-far-expansion-lengthens-decided-pale-hills-matches.md) | S3 | open | With the far expansion, decided Pale Hills matches finish late: seeds 2 / 5 end at 79,504 / 96,321 (past 72,000), 5 Hard-seat-0 tally matches no result at 72,000 |
 | [BUG-1158](BUG-1158-far-leg-replaces-killed-worker-without-limit.md) | S3 | open | The far expansion's leg replaces a killed worker without limit: a broke seat feeds every worker to a guarded free start |
 | [BUG-1159](BUG-1159-m5-9b-far-expansion-nits.md) | S4 | open | M5-9b nits: the leg ignores `ai.farExpandReach`; a start cut short is walked again; a save-refusal doc claim |
+| [BUG-1160](BUG-1160-far-expand-qa-tests-measure-allocation-outside-the-serial-collection.md) | S2 | open | `QA/FarExpandQaTests.cs` measures allocation without `[Collection(SerialCollection.Name)]`: `SerialCollectionTests` red, the default loop red on the M5-9b branch (one line; the branch REJECTED on it) |
