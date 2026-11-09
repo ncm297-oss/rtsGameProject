@@ -20,6 +20,7 @@ namespace Rts.Sim.Tests.QA;
 /// the site destroyed; the armed think's allocation; the far state outside the state hash; and a byte fuzz of the far
 /// fields in <c>CTRM</c>.
 /// </summary>
+[Collection(SerialCollection.Name)]
 public class FarExpandQaTests
 {
     private readonly ITestOutputHelper _out;
