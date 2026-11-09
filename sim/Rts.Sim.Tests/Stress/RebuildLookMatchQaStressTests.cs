@@ -114,8 +114,9 @@ public class RebuildLookMatchQaStressTests
     private const string TwinLine = "QA-REBUILD-MATCH-TWIN ";
 
     /// <summary>
-    /// Criterion 6 on a real match: four Normal AI seats on Pale Hills seed 2 (free-for-all) to tick 40,000, a match whose
-    /// losing seats reopen dozens of build steps and where a seat loses its hall (tick 38,240 at 8155ee4). This process
+    /// Criterion 6 on a real match: four Normal AI seats on Pale Hills seed 2 (free-for-all) to tick 41,000, a match whose
+    /// losing seats reopen dozens of build steps and where a seat loses its hall (tick 38,240 at 8155ee4; 40,460 since M5-9a
+    /// round 2 fix round 1, BUG-1154's starved check, so the window moved from 40,000 to 41,000 to keep it). This process
     /// and a fresh child <c>dotnet test</c> of this row fold the same per-tick hashes.
     /// </summary>
     [Fact]
@@ -138,7 +139,7 @@ public class RebuildLookMatchQaStressTests
             };
         }
         var h = new Rts.Sim.Determinism.StateHasher();
-        while (sim.TickNumber < 40_000)
+        while (sim.TickNumber < 41_000)
         {
             sim.Tick();
             h.Add(sim.StateHash());

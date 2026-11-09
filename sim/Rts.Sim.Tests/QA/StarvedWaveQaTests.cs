@@ -278,7 +278,7 @@ public class StarvedWaveQaTests
     /// is never stamped. Seen first in the developer's scene shape at Hard with 12 Heavy Infantry: 100 wood spent to 40 at
     /// tick 480 cleared the stamp (a Crossbowman's 45 wood short, and wood gathered) and restamped it at 610, moving the wave.
     /// </summary>
-    [Fact(Skip = "BUG-1154 (open): a gold-starved seat with wood income is not starved while its wood is under a unit's wood cost")]
+    [Fact]
     public void AGoldStarvedSeat_WithWoodUnderACost_ButNoGoldEver_IsStarved()
     {
         (Simulation sim, _) = Scene(AiDifficulty.Normal, Shipped.Value, ResourceKind.Gold, 0, 0);
@@ -315,7 +315,7 @@ public class StarvedWaveQaTests
         Assert.Equal(before, sim.StateHash());
     }
 
-    [Fact(Skip = "BUG-1155 item 1 (open): ai.starvedWaveAfter 0.01 s rounds to 0 ticks and loads as off, without an error")]
+    [Fact]
     public void StarvedWaveAfter_APositiveValueThatRoundsToZeroTicks_IsRefused()
     {
         using TestDataDir dir = TestDataDir.CopyOfShipped();

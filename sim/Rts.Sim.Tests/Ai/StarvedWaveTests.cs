@@ -283,6 +283,57 @@ public class StarvedWaveTests
         }
     }
 
+    /// <summary>
+    /// BUG-1154 (the developer's finding: "can pay for a unit" ignored whether production would train it): production waits
+    /// for its most under-weighted unit rather than buy a cheaper one, so the check reads that unit. The starved scene plus a
+    /// finished Barracks and Crossbow Range, three Crossbowmen beside the three Heavy Infantry (so Heavy Infantry is the pick)
+    /// and the bank held at 40 gold: a Crossbowman (36 g) is payable but never trained, a Heavy Infantry (54 g) never payable
+    /// (no gold ever again). Starved on the first think, waves at the window. The twin without the Barracks (the pick is then
+    /// the payable Crossbowman, which production trains) is never stamped.
+    /// </summary>
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void ASeat_WhosePickIsNeverPayable_IsStarved_ThoughACheaperUnitIsPayable(bool barracks)
+    {
+        GameData data = Shipped.Value;
+        Simulation sim = Scene(AiDifficulty.Normal, data);
+        World w = sim.World;
+        if (barracks) Assert.True(w.Buildings.Spawn(0, data.FindBuilding("malazan_barracks"), 44 * AiScenes.FlatSize + 8, out _));
+        Assert.True(w.Buildings.Spawn(0, data.FindBuilding("malazan_crossbow_range"), 44 * AiScenes.FlatSize + 18, out _));
+        int bow = data.FindUnit("malazan_crossbowman"), heavy = data.FindUnit("malazan_heavy_infantry");
+        for (int k = 0; k < 3; k++) CombatScenes.Place(sim, 0, bow, w.NavGrid.CellCenter(15 + k, 29));
+        AiPlayer ai = sim.AiOf(0)!;
+        int window = ai.Rules.StarvedWaveAfterTicks;
+        var watch = new Watch();
+        watch.Attach(ai);
+        // The pick at the first think's end (the queues are still empty in the starved case: nothing was bought).
+        int pick = -2, trained = 0;
+        Action<AiPlayer> inner = ai.ThoughtForTests!;
+        ai.ThoughtForTests = a => { inner(a); if (pick == -2) pick = ProductionManager.Pick(a); };
+        while (sim.TickNumber < window + 2 * ai.ThinkTicks)
+        {
+            w.Ledger.Gold[0] = 40;
+            sim.Tick();
+            if (w.Ledger.Gold[0] < 40) trained++;
+        }
+        _out.WriteLine($"barracks {barracks}: first pick {pick}, stamp {watch.Stamp}, cleared {watch.ClearedAt}, wave at {watch.WaveAt}, ticks the bank dropped {trained}");
+        if (barracks)
+        {
+            Assert.Equal(heavy, pick);
+            Assert.Equal(0, watch.Stamp);
+            Assert.Equal(-1, watch.ClearedAt);
+            Assert.Equal(FirstThinkFrom(window, ai.ThinkTicks), watch.WaveAt);
+            Assert.Equal(0, trained); // it never bought the payable Crossbowman: why it is starved
+        }
+        else
+        {
+            Assert.Equal(-1, watch.Stamp);
+            Assert.Equal(-1, watch.WaveAt);
+            Assert.True(trained > 0, "the payable pick (a Crossbowman) was never trained");
+        }
+    }
+
     /// <summary>Vathar Crossing seed 1, Normal v Normal, to its end or 36,000: both seats' accepted commands, the end tick, and whether any seat had a stamp at least the window old (with the knob at 0: any stamp at all).</summary>
     private static (List<Command>[] Logs, int End, bool Flag) Whole(GameData data)
     {

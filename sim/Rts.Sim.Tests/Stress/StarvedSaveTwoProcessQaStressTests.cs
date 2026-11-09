@@ -19,7 +19,11 @@ public class StarvedSaveTwoProcessQaStressTests
 
     public StarvedSaveTwoProcessQaStressTests(ITestOutputHelper output) => _out = output;
 
-    /// <summary>Watches every seat's thinks for the first wave or hunt started while its stamp was due; returns a "seat@tick" holder.</summary>
+    /// <summary>
+    /// Watches every seat's thinks for its first wave or hunt started while its stamp was due; returns the tick per seat (-1
+    /// none). Per seat since the developer's fix round 1 (BUG-1154): Pale Hills seed 1's seat 0 is now starved too and waves
+    /// first (30,420), so "the first starved wave of either seat" no longer shows the saved seat's.
+    /// </summary>
     private static int[] WatchFirstStarvedWave(Simulation sim)
     {
         var first = new[] { -1, -1 };
@@ -29,7 +33,7 @@ public class StarvedSaveTwoProcessQaStressTests
             sim.AiOf(p)!.ThoughtForTests = a =>
             {
                 int now = a.Board.WavesStarted + a.Board.HuntsStarted;
-                if (first[0] < 0 && now > waves && a.StarvedWaveDue) { first[0] = seat; first[1] = a.Now; }
+                if (first[seat] < 0 && now > waves && a.StarvedWaveDue) first[seat] = a.Now;
                 waves = now;
             };
         }
@@ -40,7 +44,7 @@ public class StarvedSaveTwoProcessQaStressTests
     {
         int[] first = WatchFirstStarvedWave(sim);
         while (sim.TickNumber < 72_000 && !sim.MatchOver) sim.Tick();
-        return $"first starved wave seat {first[0]} at {first[1]}; over {sim.MatchOver} at {sim.TickNumber}; end hash {sim.StateHash():X16}";
+        return $"first starved wave seat 0 at {first[0]}, seat 1 at {first[1]}; over {sim.MatchOver} at {sim.TickNumber}; end hash {sim.StateHash():X16}";
     }
 
     [Fact]
@@ -79,7 +83,7 @@ public class StarvedSaveTwoProcessQaStressTests
                 Variable, Marker, seconds: 900, value: file);
             _out.WriteLine($"the child: {child}");
             Assert.Equal(mine, child);
-            Assert.Contains($"seat {seat} at", mine);
+            Assert.DoesNotContain($"seat {seat} at -1", mine); // the saved seat waves starved after the load
         }
         finally
         {

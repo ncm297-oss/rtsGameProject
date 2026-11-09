@@ -56,6 +56,8 @@ public class MatchCriterionSweepQaStressTests
         // oracle clean), so its entry is out; BUG-1152 stays open (seed 1 still shows it).
         // M5-9a round 2 (the starved wave does not reach it): no result at 72,000, seat 1 silent 35,621..72,000 (36,379 ticks)
         // with 1,970 gold / 5 wood and no army; seat 0 holds 4,454 gold / 35 wood, 5 army, no worker, and trains nothing.
+        // Fix round 1 (BUG-1154, the starved check reads production's pick): the match ends at 52,360 (seat 0), but still
+        // fails the silent-seat check: p1 silent 27,461..33,900 (6,439 ticks), p0 46,861..52,360.
         [("raraku", 5)] = "BUG-1152",
     };
 

@@ -618,12 +618,15 @@ internal sealed partial class AiPlayer
 
     /// <summary>
     /// M5-9a round 2 (docs/03 "Implementation (M5-9a)"): whether the seat is starved this think, from the census: the base
-    /// not defended (last think's defense: this think's runs after the census) and the match not over; (i) it can pay for
-    /// no unit of its current composition with the gold and wood it holds (each entry short of gold or wood); (iii) it has
-    /// at least <c>ai.starvedMinArmy</c> free army units (<see cref="MilitaryManager.Free"/>, the wave's filter); and (ii) for
-    /// each kind some entry is short of, it knows no node of that kind it may gather and no own worker is at that kind.
-    /// The node walk is <see cref="WalkForNode"/> uncached: <see cref="KnowsNode"/>'s per-think answer must stay the one
-    /// the executor reads after this think's defense. Allocates nothing.
+    /// not defended (last think's defense: this think's runs after the census) and the match not over; (i) it cannot pay now
+    /// for the unit production would train next (<see cref="ProductionManager.Pick"/>, which it waits for rather than buy a
+    /// cheaper one), or, with no producer free for any entry, for any unit of its current composition (gold or wood short);
+    /// (iii) it has at least <c>ai.starvedMinArmy</c> free army units (<see cref="MilitaryManager.Free"/>, the wave's filter);
+    /// and (ii) income can never close the gap (BUG-1154): that unit (or, with no pick, every entry) is short of some kind
+    /// the seat cannot get, knowing no node of it it may gather and having no own worker at it. A short kind it can still
+    /// gather does not save an entry that is also short of one it cannot. The node walk is <see cref="WalkForNode"/>
+    /// uncached: <see cref="KnowsNode"/>'s per-think answer must stay the one the executor reads after this think's defense.
+    /// Each kind's availability is walked at most once. Allocates nothing.
     /// </summary>
     internal bool Starved()
     {
@@ -632,22 +635,50 @@ internal sealed partial class AiPlayer
         if (compositions.Length == 0) return false;
         AiComposition mix = compositions[Math.Clamp(View.Age, 1, compositions.Length) - 1];
         if (mix.Units.Length == 0) return false;
-        bool shortGold = false, shortWood = false;
-        for (int k = 0; k < mix.Units.Length; k++)
+        int pick = ProductionManager.Pick(this);
+        // (i): the cheap test first, so a seat that can pay walks nothing.
+        if (pick >= 0)
         {
-            UnitDef def = Data.Units[mix.Units[k]];
-            bool gold = Gold < def.CostGold, wood = Wood < def.CostWood;
-            if (!gold && !wood) return false; // (i): this one it can pay for
-            shortGold |= gold;
-            shortWood |= wood;
+            if (CanPayNow(pick)) return false;
         }
+        else
+            for (int k = 0; k < mix.Units.Length; k++)
+                if (CanPayNow(mix.Units[k])) return false;
         int free = 0;
         for (int k = 0; k < ArmyCount && free < Rules.StarvedMinArmy; k++)
             if (MilitaryManager.Free(this, ArmySlots[k], out _)) free++;
         if (free < Rules.StarvedMinArmy) return false; // (iii)
-        if (shortGold && (Gathering(EconomyManager.Gold) || WalkForNode(ResourceKind.Gold))) return false; // (ii)
-        if (shortWood && (Gathering(EconomyManager.Wood) || WalkForNode(ResourceKind.Wood))) return false;
+        // (ii): 0 not walked yet, 1 obtainable, 2 not.
+        byte gold = 0, wood = 0;
+        if (pick >= 0) return !CanEverPay(pick, ref gold, ref wood);
+        for (int k = 0; k < mix.Units.Length; k++)
+            if (CanEverPay(mix.Units[k], ref gold, ref wood)) return false;
         return true;
+    }
+
+    /// <summary>M5-9a round 2: whether the gold and wood held pay for unit type <paramref name="type"/>.</summary>
+    private bool CanPayNow(int type)
+    {
+        UnitDef def = Data.Units[type];
+        return Gold >= def.CostGold && Wood >= def.CostWood;
+    }
+
+    /// <summary>
+    /// M5-9a round 2 (BUG-1154): whether income can close the gap for unit type <paramref name="type"/>: each kind it is short
+    /// of is obtainable (an own worker at it, or a node of it known that the seat may gather). <paramref name="gold"/> /
+    /// <paramref name="wood"/> cache each kind's answer for the think's check (0 not asked, 1 obtainable, 2 not).
+    /// </summary>
+    private bool CanEverPay(int type, ref byte gold, ref byte wood)
+    {
+        UnitDef def = Data.Units[type];
+        if (Gold < def.CostGold && !Obtainable(EconomyManager.Gold, ResourceKind.Gold, ref gold)) return false;
+        return Wood >= def.CostWood || Obtainable(EconomyManager.Wood, ResourceKind.Wood, ref wood);
+    }
+
+    private bool Obtainable(byte kind, ResourceKind resource, ref byte known)
+    {
+        if (known == 0) known = Gathering(kind) || WalkForNode(resource) ? (byte)1 : (byte)2;
+        return known == 1;
     }
 
     /// <summary>

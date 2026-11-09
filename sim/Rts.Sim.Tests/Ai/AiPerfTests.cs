@@ -241,6 +241,76 @@ public class AiPerfTests
         AllocationProbe.AssertZero(thinkAll, _out);
     }
 
+    /// <summary>
+    /// M5-9a round 2 (BUG-1155 item 2): the starved check's worst path timed. The same eight Hard seats with every gold mine
+    /// emptied before the run and each bank set to 0 / 0 before each think, and not defending (a test seam clears last think's
+    /// defense, which the check reads; the rows above are all defending, so their checks return at the first test): every
+    /// timed think runs the whole check (production's pick, the army's <c>Free</c>, the gold workers' loop and an uncached
+    /// gold-node walk past every known tree) with the stamps aged past the window first (untimed), so every timed think is
+    /// due. The wave itself does not start here: the scene's neighbouring seats are intruders, so each think's own defense
+    /// (which runs after the census) defends, and a defending seat sends no wave, as in a match; the wave's start is the
+    /// mid-wave row's cost. Gated as the rows above: a think's average
+    /// under 1 ms in the Debug build; and such a think allocates nothing.
+    /// </summary>
+    [Fact]
+    [Trait("Category", "Perf")]
+    public void EightHardSeats_Starved_Undefended_AThinkUnder1Ms_AllocationFree()
+    {
+        (Simulation sim, AiPlayer[] ais) = Scene();
+        World w = sim.World;
+        for (int i = 0; i < w.Resources.Capacity; i++)
+            if (w.Resources.Alive[i] && w.Data.Resources[w.Resources.TypeId[i]].Resource == ResourceKind.Gold)
+                w.Resources.Take(w.Resources.HandleOf(i), int.MaxValue);
+        int think = ais[0].ThinkTicks;
+        // Untimed: the stamps age past ai.starvedWaveAfter, so the timed thinks are due (StarvedWaveDue) as well as stamped.
+        int warm = ais[0].Rules.StarvedWaveAfterTicks + 2 * think;
+        for (int t = 0; t < warm; t++)
+        {
+            if (sim.TickNumber % think == 0)
+                foreach (AiPlayer ai in ais)
+                {
+                    Starving(sim, ai);
+                    ai.Think();
+                }
+            sim.Tick();
+        }
+        Assert.All(ais, a => Assert.True(a.StarvedWaveDue, $"player {a.Player}: the stamp is not due after the window"));
+        int stamped = 0;
+        foreach (AiPlayer ai in ais) ai.ThoughtForTests = a => { if (a.Board.StarvedSince >= 0) stamped++; };
+        var sw = new Stopwatch();
+        var times = new List<double>();
+        for (int t = 0; t < 60 * think; t++)
+        {
+            if (sim.TickNumber % think == 0)
+                foreach (AiPlayer ai in ais)
+                {
+                    Starving(sim, ai);
+                    sw.Restart();
+                    Assert.True(ai.Think());
+                    sw.Stop();
+                    if (t >= 10 * think) times.Add(sw.Elapsed.TotalMilliseconds);
+                }
+            sim.Tick();
+        }
+        double avg = times.Average(), worst = times.Max(), p95 = times.OrderBy(x => x).ElementAt((int)(times.Count * 0.95));
+        _out.WriteLine($"{Players} Hard seats starved, undefended, {w.Units.Count} units: {times.Count} thinks, avg {avg:F3} ms, p95 {p95:F3} ms, worst {worst:F3} ms; "
+            + $"{stamped} thinks ended stamped of {60 * Players}; waves {string.Join(", ", ais.Select(a => a.Board.WavesStarted))}");
+        // Precondition: the check's whole path ran (a think that ends stamped walked it to the end).
+        Assert.True(stamped >= 40 * Players, $"only {stamped} thinks ended stamped");
+        Assert.True(avg < BudgetMs, $"avg {avg:F3} ms over the {BudgetMs} ms budget");
+        while (sim.TickNumber % think != 0) sim.Tick();
+        foreach (AiPlayer ai in ais) Starving(sim, ai);
+        Action thinkAll = () => { foreach (AiPlayer ai in ais) ai.Think(); };
+        AllocationProbe.AssertZero(thinkAll, _out);
+    }
+
+    /// <summary>Test seam (BUG-1155 item 2): the seat's bank to 0 / 0 and last think's defense cleared, so its starved check runs whole.</summary>
+    private static void Starving(Simulation sim, AiPlayer ai)
+    {
+        BuildMaps.SetTotals(sim, ai.Player, 0, 0);
+        ai.Board.Defending = false;
+    }
+
     /// <summary>Test seam (criterion 8): a seat with no wave in progress gets one of its whole army on the known enemy building nearest its hall.</summary>
     private static void MidWave(Simulation sim, AiPlayer ai)
     {

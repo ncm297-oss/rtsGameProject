@@ -9351,17 +9351,25 @@ has seen, from a fog-limited memory that fades over a few minutes, by a strength
   `SaveRefusalTests.AFormat8Save_WithoutItsCounterSection_OrAForgedMemory_IsMalformed` (the stamp's rows),
   `CounterCompositionTests.TheNonHardPins_WithNormalStrengthZero_*` (now with the knob at 0 too).
   - **The knobs.** `rules.json` `ai.starvedWaveAfter`: seconds, required, 0-600 (`DataLimits.MaxAiStarvedWaveSeconds`), to
-    ticks; **0 turns the rule off**; shipped **60**. `ai.starvedMinArmy`: a whole number 1-50, shipped **1**. Both hashed
-    after `counterMemory`.
+    ticks; **0 turns the rule off**; shipped **60**; a positive value that rounds to 0 ticks (0.01) is refused ("rounds to
+    0 ticks"), so "almost at once" never turns the rule off silently (BUG-1155 item 1). `ai.starvedMinArmy`: a whole
+    number 1-50, shipped **1**. Both hashed after `counterMemory`.
   - **The rule** (`AiPlayer.Starved`, run at the end of the census, after the counter memory, from the census's own
     lists: no new pass over the units). A seat is *starved* on a think when the base is not defended (`Board.Defending`
-    as the last think left it: this think's defense runs after the census) and the match is not over, and (i) it can pay
-    for no unit of its current composition (the opening's mix for its age) with the gold and wood it holds: every entry is
-    short of gold or of wood; (iii) at least `starvedMinArmy` of its army units are free (`MilitaryManager.Free`, the wave's
-    filter: alive, not casting, no AI command pending); and (ii) for each kind some entry is short of, it knows no node of
-    that kind it may gather (`WalkForNode`, the walk `KnowsNode` caches: known, not marked dropped, in `ai.gatherReach` of a
-    drop-off until the reach lifts) and no own worker is at that kind (last sent to it, `Blackboard.GatherKind`, and its
-    order pending or the worker not Idle and not Building). The node walk is uncached on purpose: `KnowsNode`'s per-think
+    as the last think left it: this think's defense runs after the census) and the match is not over, and (i) it cannot
+    pay now, with the gold and wood it holds, for the unit production would train next (`ProductionManager.Pick`: the
+    most under-weighted entry some producer may take; production waits for that one rather than buy a cheaper one), or,
+    when no producer is free for any entry (pick -1), for any unit of its current composition; (iii) at least
+    `starvedMinArmy` of its army units are free (`MilitaryManager.Free`, the wave's filter: alive, not casting, no AI
+    command pending); and (ii) income can never close the gap: that unit (with no pick, every entry) is short of some kind
+    the seat cannot get. A kind is obtainable when an own worker is at it (last sent to it, `Blackboard.GatherKind`, and
+    its order pending or the worker not Idle and not Building) or it knows a node of it it may gather (`WalkForNode`, the
+    walk `KnowsNode` caches: known, not marked dropped, in `ai.gatherReach` of a drop-off until the reach lifts). A short
+    kind it can still gather does not save a unit also short of one it cannot (BUG-1154: round 2 first cleared the seat
+    whenever **any** short kind was gatherable, so a seat at 0 gold with no mine left and wood workers under a
+    Crossbowman's 45 wood was never starved; and it judged "can pay for some unit" though production would never buy that
+    one: Pale Hills seed 2's Malazan seat held 48 gold, a Crossbowman's 36, and trained nothing for 40 minutes). Each
+    kind's availability is asked at most once a check. The node walk is uncached on purpose: `KnowsNode`'s per-think
     answer must stay the one the executor reads after this think's defense has set the flee ring. The cheap tests run
     first, so a seat that can pay walks nothing.
   - **The stamp.** The first starved think sets `Blackboard.StarvedSince = Now`; any think that is not starved (the defended
@@ -9407,11 +9415,41 @@ has seen, from a fog-limited memory that fades over a few minutes, by a strength
     result); with the knob at 0 (round 1's play) 24 / 14 / 4; M5-4c slice 2's was 28 / 9 / 5. Hard still wins more than it
     loses; the four stalls end (three to Hard). Pale Hills seed 2 (BUG-1068): still no result at 72,000 (the Malazan seat
     holds 48 gold, enough for a Crossbowman, so (i) never holds though it trains nothing; the Whirlwind seat has no army);
-    its rows stay skipped. `AiPerfTests`: 5 / 5, each row alone in its own process after 30 s idle (8 seats avg 0.512 ms,
+    its rows stay skipped (fix round 1 ends it: below). `AiPerfTests`: 5 / 5, each row alone in its own process after 30 s idle (8 seats avg 0.512 ms,
     p95 0.834 ms; 8 Hard mid-wave avg 0.698 ms; 0 B a think); the whole class in one process on the same machine at the
     same hour failed the 8-seat row at 1.2-1.4 ms with the knob at 60 **and at 0**, and c11f5f0's (`main`'s) build failed
     two rows there too (1.14 / 1.43 ms): machine load, rule 42. Every seat of the perf scene is defending, so the starved
     check returns at its first test there.
+  - **Fix round 1 (QA's FAIL: BUG-1153 S2, BUG-1154 S3, BUG-1155 S4).** The rule (i) / (ii) above is the corrected one:
+    round 2 shipped "can pay for no unit of the composition" and "for each short kind, none obtainable", which missed a
+    seat that could pay for a unit production never buys and a seat whose gatherable short kind cannot make any unit
+    buyable. `ProductionManager.Pick` is the pick `TrainOne` always made, split out so the check reads the same one.
+    `ai.starvedWaveAfter` refuses a positive value that rounds to 0 ticks. Tests: `StarvedWaveTests.ASeat_WhosePickIsNeverPayable_IsStarved_ThoughACheaperUnitIsPayable`
+    (40 gold, a payable Crossbowman never bought, Heavy Infantry the pick: starved; without the Barracks the pick is the
+    Crossbowman and it is trained: never stamped), QA's `AGoldStarvedSeat_WithWoodUnderACost_ButNoGoldEver_IsStarved` and
+    `StarvedWaveAfter_APositiveValueThatRoundsToZeroTicks_IsRefused` un-skipped, and a sixth perf row,
+    `AiPerfTests.EightHardSeats_Starved_Undefended_AThinkUnder1Ms_AllocationFree` (every gold mine emptied, banks 0 / 0 and
+    last think's defense cleared before each think: the whole check and the starved wave in every timed think).
+    Re-measured, round 2 -> fix round 1 (every other pin of the table above unchanged, green):
+
+    | Pin | Round 2 | Fix round 1 |
+    | --- | --- | --- |
+    | **Pale Hills 1** (bound 36,000) | 71,660, seat 1 | **68,664 (57:13), seat 1: still outside 36,000** (BUG-1153); at 30 s no result by 72,000, at 120 s 71,660. At 36,000 at every window seat 0 has 0 army, 29 workers and 13-17 buildings, seat 1 10 Desert Archers + 2-3 priests; both rows and `MapFileTests` still fail (no re-bound, no skip) |
+    | QA's sweep Pale Hills 1 | ends 71,660, silent-seat oracle fails | **green**: ends 68,664, silent max 759 / 1,159 |
+    | `HuntStressTests` Pale Hills 1 FFA | no result by 144,000 | no result by 144,000 (left failing, BUG-1153's family) |
+    | `NonHardMatchPinQaTests` Pale Hills 1 Normal | `D714943B782A74E0 36000 2599` | `70635F3A0D539227 36000 2598` (seat 0 is now starved too: first starved wave 30,420); the other 7 unchanged |
+    | Pale Hills 2 (BUG-1068, skipped) | no result at 72,000 | **53,797 (44:49), seat 0**: `MapSlice2 ..._PaleHillsSeed2_Stalemate_*` un-skipped; QA's sweep row green |
+    | Pale Hills 2 FFA (`HuntStressTests ..._Seed2_KnownStall`, skipped) | no result by 144,000 | **80,278 (66:53), seat 3**: un-skipped |
+    | Raraku 5 (BUG-1152, skipped) | no result at 72,000 | **52,360 (43:38), seat 0**: `MapSlice2 ..._RarakuSeed5_*` un-skipped; stays in the sweep's `Known` (silent 6,439 ticks, over 4,800) |
+    | QA's `RebuildLookMatch` Pale Hills 2 two-process | to 40,000 | first hall loss moved 38,240 -> 40,460: the window is 41,000 |
+    | QA's `StarvedSaveTwoProcess` Pale Hills 1 | seat 1's wave 32,480, end 71,660 | records each seat's first starved wave (seat 0 30,420, seat 1 32,480), end 68,664, equal in the child |
+    | Hard v Normal, 42 matches | 27 / 15 / 0 | 27 / 15 / 0 (Raraku 10 / 4, Pale Hills 10 / 4, Vathar 7 / 7) |
+    | the knob-0 / strength-0 digests, the golden header | reproduced, `30C51BB619A7E650` | unchanged |
+
+    No starved wave before tick 12,000 on any of the 11 probed matches (earliest stamp 22,620, Raraku 1 Easy v Normal).
+    Pale Hills seed 3 Easy v Normal (BUG-1155 item 3, named per rule 43): it ended at 33,524 before M5-9a and has had no
+    result by 36,000 since round 1's counter shift; fix round 1 does not move it (`8FBFA3820C590F5A 36000 2606`). An Easy
+    pin with no bound of its own.
 
 ## Save/load and replays
 

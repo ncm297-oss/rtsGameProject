@@ -27,10 +27,23 @@ internal static class ProductionManager
     /// <summary>Sends the current composition's most under-weighted unit at a producer that may take it; true when one was sent.</summary>
     private static bool TrainOne(AiPlayer ai)
     {
-        int age = ai.View.Age;
+        int pick = Pick(ai);
+        if (pick < 0) return false;
+        // Not judged: the next think simply looks at the queues again. M5-4g: only above the build order's reserve.
+        return ai.TryTrain(pick, emptyQueueOnly: !ai.SpendingDown, ref ai.Board.ProductionPending, aboveReserve: true);
+    }
+
+    /// <summary>
+    /// The unit type production trains next (-1: none): the current age's most under-weighted composition entry that some
+    /// producer may take now, cost aside (<see cref="CanTrainSomewhere"/>). Production waits for this one rather than buy a
+    /// cheaper one, so M5-9a round 2's starved check (<see cref="AiPlayer.Starved"/>, BUG-1154) judges the seat on it too.
+    /// Allocates nothing.
+    /// </summary>
+    internal static int Pick(AiPlayer ai)
+    {
         var compositions = ai.Opening.Compositions; // M5-8a: the picked opening's
-        if (compositions.Length == 0) return false;
-        AiComposition mix = compositions[System.Math.Clamp(age, 1, compositions.Length) - 1];
+        if (compositions.Length == 0) return -1;
+        AiComposition mix = compositions[System.Math.Clamp(ai.View.Age, 1, compositions.Length) - 1];
         int pick = -1;
         float pickShare = float.MaxValue;
         for (int k = 0; k < mix.Units.Length; k++)
@@ -46,9 +59,7 @@ internal static class ProductionManager
             pick = type;
             pickShare = share;
         }
-        if (pick < 0) return false;
-        // Not judged: the next think simply looks at the queues again. M5-4g: only above the build order's reserve.
-        return ai.TryTrain(pick, emptyQueueOnly: !ai.SpendingDown, ref ai.Board.ProductionPending, aboveReserve: true);
+        return pick;
     }
 
     /// <summary>Whether a finished own building with an empty queue (spending down: fewer than <see cref="AiRulesDef.SpendDownQueue"/> (<c>ai.spendDownQueue</c>)) and no AI command waiting on it may train <paramref name="type"/> now (its cost aside).</summary>

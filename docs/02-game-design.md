@@ -435,8 +435,10 @@ own cues (select, order, refused, building placed or finished, unit or tech read
   a raid at home), and becomes a wave again on the first enemy building it finds. So a beaten side's last unit hiding in
   the woods is found, and AI-against-AI matches end (built in M5-4d, BUG-1068; hardened in M5-H5, BUG-1119 / BUG-1120;
   [03 Implementation (M5-4d)](03-technical-design.md#implementation-m5-4d)).
-- A side that can no longer grow attacks with what it has: when it can pay for no unit of its army mix, knows no gold
-  mine (or forest) it could send a worker to for the resource it lacks, has no worker on it, and has at least
+- A side that can no longer grow attacks with what it has: when it cannot pay for the unit it would train next (it waits
+  for that one rather than buy a cheaper one; with no building free to train, for any unit of its army mix) and no income
+  can close the gap (for a resource that unit lacks it knows no gold mine or forest it could send a worker to and has no
+  worker on it; a resource it can still gather does not help a unit that also lacks one it cannot), and it has at least
   `rules.json` `ai.starvedMinArmy` (1) combat units free, then after `ai.starvedWaveAfter` (60 s) in that state it sends
   every free combat unit in a wave whatever the wave threshold (or hunts, if it knows no enemy building), again after each
   wave's cooldown, at every difficulty; a raid on its base resets the clock, and 0 turns the rule off (built in M5-9a

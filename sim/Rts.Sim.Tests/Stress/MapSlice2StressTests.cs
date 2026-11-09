@@ -221,9 +221,11 @@ public class MapSlice2StressTests
 
     /// <summary>
     /// Pale Hills seed 2 (BUG-1068's remaining case): both sides still hold two halls at 60:00 (37 v 27 units, 20,000+ wood
-    /// each at e3fd8fb), a true stalemate the hunt doesn't touch (enemy buildings stay known). Kept as a named known case.
+    /// each at e3fd8fb), a true stalemate the hunt doesn't touch (enemy buildings stay known). M5-9a round 2 fix round 1
+    /// (BUG-1154): the Malazan seat (48 gold, its pick a Heavy Infantry it can never pay) is starved from 26,780 and waves;
+    /// the match ends at 53,797 (44:49), seat 0 the winner. Un-skipped.
     /// </summary>
-    [Theory(Skip = "BUG-1068 (open, S3, narrowed to seed 2): Normal v Normal on Pale Hills seed 2 is a stalemate, both sides keep two halls past 60:00")]
+    [Theory]
     [Trait("Category", "Stress")]
     [InlineData(PaleHills, 2UL)]
     public void NormalVersusNormal_PaleHillsSeed2_Stalemate_EndsWithin72000(string id, ulong seed) => SweepRow(id, seed);
@@ -231,9 +233,11 @@ public class MapSlice2StressTests
     /// <summary>
     /// Raraku seed 5 (BUG-1152's wood starvation, newly shown by M5-9a's counter shift): no result at 72,000. M5-9a round 2's
     /// starved wave does not reach it: seat 0 holds 4,454 gold / 35 wood, 5 army and no worker from 30,000 (it can pay for a
-    /// Heavy Infantry, so it is never starved, and trains nothing), seat 1 1,970 gold / 5 wood and no army. A named known case.
+    /// Heavy Infantry, so it is never starved, and trains nothing), seat 1 1,970 gold / 5 wood and no army. Fix round 1
+    /// (BUG-1154: the check judges the unit production would train, and a gatherable kind no longer saves a unit short of
+    /// one that is not) ends it at 52,360 (43:38), seat 0 the winner. Un-skipped.
     /// </summary>
-    [Theory(Skip = "BUG-1152 (open): Normal v Normal on Raraku seed 5 has no result at 72,000 since M5-9a, both sides wood-starved and idle")]
+    [Theory]
     [Trait("Category", "Stress")]
     [InlineData("raraku", 5UL)]
     public void NormalVersusNormal_RarakuSeed5_WoodStarved_EndsWithin72000(string id, ulong seed) => SweepRow(id, seed);

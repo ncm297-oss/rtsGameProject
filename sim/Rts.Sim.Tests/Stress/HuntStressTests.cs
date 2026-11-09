@@ -119,9 +119,10 @@ public class HuntStressTests
     /// Pale Hills free-for-all seed 2 (BUG-1116 / BUG-1068's remaining case, the Producer's ruling at the 2026-11-07-0236 ACCEPT):
     /// green at 052c39e, no result by 144,000 since M5-4d slice 2 (the losing seats rebuild until every seat is out of gold by
     /// 72,000). M5-H5 fixed the two hunt causes once named here (BUG-1119, a defeated seat's buildings kept as known, and the
-    /// lone-idle-worker hunt gap); the stall left is BUG-1068's gold starvation alone. Kept as a named known case.
+    /// lone-idle-worker hunt gap); the stall left was BUG-1068's gold starvation alone. M5-9a round 2 fix round 1 (BUG-1154:
+    /// the starved check judges the unit production would train) ends it: 80,278 (66:53), seat 3 the winner; un-skipped.
     /// </summary>
-    [Theory(Skip = "BUG-1116 / BUG-1068 (open, S3): Pale Hills 4-seat free-for-all seed 2 stalls on gold starvation since M5-4d slice 2 (rebuilding); no result by 144,000")]
+    [Theory]
     [Trait("Category", "Stress")]
     [InlineData(2UL, false)]
     public void FourAiSeats_OnPaleHills_Seed2_KnownStall(ulong seed, bool teams) => FourSeatsRow(seed, teams);

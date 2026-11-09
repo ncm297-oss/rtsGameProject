@@ -396,7 +396,7 @@ public static partial class DataLoader
             HuntMemoryTicks = c.Ticks(j.HuntMemory, "ai.huntMemory", 0), // M5-4d
             FocusReach = Meters(c, j.FocusReach, "ai.focusReach", DataLimits.MaxAiSearchRadius), // M5-4c slice 2
             CounterMemoryTicks = c.Ticks(j.CounterMemory, "ai.counterMemory", 1), // M5-9a
-            StarvedWaveAfterTicks = TicksUpTo(c, j.StarvedWaveAfter, "ai.starvedWaveAfter", DataLimits.MaxAiStarvedWaveSeconds), // M5-9a round 2
+            StarvedWaveAfterTicks = OffOrTicksUpTo(c, j.StarvedWaveAfter, "ai.starvedWaveAfter", DataLimits.MaxAiStarvedWaveSeconds), // M5-9a round 2
             StarvedMinArmy = WholeNumber(c, j.StarvedMinArmy, "ai.starvedMinArmy", 1, DataLimits.MaxAiStarvedMinArmy), // M5-9a round 2
             CounterMasks = CounterMasks(c, j.Counters), // M5-9a
         };
@@ -458,6 +458,19 @@ public static partial class DataLoader
         else if (!(value >= min && value <= max) || value != Math.Floor(value.Value)) c.Error(path, $"{value} is not a whole number in {min}-{max}");
         else return (int)value.Value;
         return 0;
+    }
+
+    /// <summary>
+    /// M5-9a round 2 (BUG-1155): <see cref="TicksUpTo"/> for a knob whose 0 means off: a positive value that rounds to 0 ticks
+    /// is refused, so "almost at once" never turns the rule off silently (0 itself stays valid).
+    /// </summary>
+    private static int OffOrTicksUpTo(Checker c, double? seconds, string path, double maxSeconds)
+    {
+        int errors = c.Errors.Count;
+        int ticks = TicksUpTo(c, seconds, path, maxSeconds);
+        if (c.Errors.Count == errors && ticks == 0 && seconds > 0)
+            c.Error(path, $"{seconds} s rounds to 0 ticks (0 turns the rule off; use 0 for off or at least one tick)");
+        return ticks;
     }
 
     /// <summary>M5-4b: a required time in seconds, 0 to <paramref name="maxSeconds"/>, to ticks; 0 when refused.</summary>

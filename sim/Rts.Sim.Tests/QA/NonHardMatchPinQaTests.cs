@@ -28,7 +28,7 @@ public class NonHardMatchPinQaTests
     [Theory]
     [InlineData("raraku", 1UL, AiDifficulty.Normal, "E0612240C3E713D2 28083 1476")]
     [InlineData("raraku", 1UL, AiDifficulty.Easy, "CFE55368B0CBD15D 24498 1445")] // M5-9a: was 0D877B9258F20265 24498 1448
-    [InlineData("pale_hills", 1UL, AiDifficulty.Normal, "D714943B782A74E0 36000 2599")] // M5-9a: was 69C4358E67DF7FC3 34219 3144
+    [InlineData("pale_hills", 1UL, AiDifficulty.Normal, "70635F3A0D539227 36000 2598")] // M5-9a: was 69C4358E67DF7FC3 34219 3144; round 1 D714943B782A74E0 36000 2599 (fix round 1, BUG-1154: seat 0 now starved too)
     [InlineData("pale_hills", 1UL, AiDifficulty.Easy, "9B5F2C36AE77DD3A 36000 2689")] // M5-9a: was 62F16C733AF6D9C8 36000 2601
     [InlineData("pale_hills", 3UL, AiDifficulty.Normal, "49143BF840792D0F 31891 2447")] // M5-9a: was C9CB142CF3C97C88 29562 3103
     [InlineData("pale_hills", 3UL, AiDifficulty.Easy, "8FBFA3820C590F5A 36000 2606")] // M5-9a: was 4FF13AE84024D0BB 33524 3075; round 1 63DE1922B755D390 36000 2708
