@@ -169,6 +169,36 @@ against the raider rush" at the end of this page). The long waits the pairings r
   threat (the Garrison Keep or a Quartermaster's Depot, whichever is nearest among those more than 16 m from the threat;
   else the nearest one).
 
+#### How the AI adapts
+
+Three rules sit on top of every opening above (docs/02 "AI opponent"; docs/03 "Implementation (M5-9a)" and "(M5-9b)").
+`Content/AiAdaptsContentTests` pins every number and name in them to `ai.json`, `rules.json` and `buildings.json`, both
+ways.
+
+- **Counter shift:** the AI remembers how many enemy soldiers of each slot it has seen at once (workers never count, and
+  it sees only what its own fog of war shows), and that memory fades to nothing over `rules.json` `ai.counterMemory`
+  180 s unless a sighting at least as big renews it. When it picks its next unit, each unit of the opening's army mix
+  weighs more by the share of that memory its slot answers, times the difficulty's `counterStrength` in `ai.json`: Easy
+  0 (an Easy AI never adapts), Normal 0.5, Hard 1.0. A Malazan AI that has seen only cavalry weighs its Heavy Infantry
+  ×1.5 on Normal and ×2 on Hard. The shift tilts the army, it doesn't replace it: no unit is weighted below the
+  opening's mix, and a unit the mix doesn't list is never added.
+- **What answers what** (`rules.json` `ai.counters`, the "Countered by" column of docs/02 "Faction template", in this
+  faction's units): enemy Line → Cadre Mage, Catapult; enemy Ranged → Wickan Lancer; enemy Shock → Heavy Infantry;
+  enemy Caster → Wickan Lancer, Crossbowman; enemy Siege → Heavy Infantry, Wickan Lancer; enemy Unique → none.
+- **Starved charge:** when the AI cannot pay for the unit it would train next and no income can close the gap, and it
+  has at least `ai.starvedMinArmy` 1 combat unit free, then after `ai.starvedWaveAfter` 60 s in that state it sends
+  every free combat unit at you whatever its wave threshold (or hunts, if it knows none of your buildings), again after
+  each wave's cooldown, at every difficulty. A raid on its base resets the clock.
+- **Far expansion:** when its own gold is spent (short of gold for its next unit, no Laborer on gold and no gold mine it
+  knows), it sends a Laborer to look at the start locations nobody took. Once it has seen a free mine there, or anywhere
+  within `ai.farExpandReach` 384 m of its Garrison Keep, with no enemy drop-off by it, it builds a Quartermaster's Depot
+  (`malazan_depot`, 0 gold / 75 wood) beside it and moves gatherers there; a Garrison Keep only if it can pay for one.
+  One at a time.
+- **Where the shift doesn't show (BUG-1156):** a Legion Barracks that already takes a Heavy Infantry every time its
+  queue empties (the `standard` opening's one barracks in Age I, short of wood) cannot train more of them for the
+  heavier weight, so against cavalry the shift shows only when the bank, not the barracks, is the limit. An enemy Line
+  army seen in Age I shifts nothing, since no opening's Age I mix lists a Cadre Mage or a Catapult.
+
 ### Opening 1: `standard` (Combined arms)
 
 The order the AI has played since D14, step for step; Easy plays only this one. D21 (2026-10-18) gave it its name and

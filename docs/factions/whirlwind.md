@@ -167,6 +167,36 @@ against the raider rush").
 - **Later idea (not in M5):** counter-attack the enemy base with Horse Raiders when its army is away. Not built: no
   AI manager raids today.
 
+#### How the AI adapts
+
+Three rules sit on top of every opening above, read as in malazan.md "How the AI adapts" (docs/02 "AI opponent"; docs/03
+"Implementation (M5-9a)" and "(M5-9b)"). `Content/AiAdaptsContentTests` pins every number and name in them to `ai.json`,
+`rules.json` and `buildings.json`, both ways.
+
+- **Counter shift:** the AI remembers how many enemy soldiers of each slot it has seen at once (workers never count, and
+  it sees only what its own fog of war shows), and that memory fades to nothing over `rules.json` `ai.counterMemory`
+  180 s unless a sighting at least as big renews it. When it picks its next unit, each unit of the opening's army mix
+  weighs more by the share of that memory its slot answers, times the difficulty's `counterStrength` in `ai.json`: Easy
+  0 (an Easy AI never adapts), Normal 0.5, Hard 1.0. A Whirlwind AI that has seen only cavalry weighs its Raiders ×1.5
+  on Normal and ×2 on Hard. The shift tilts the army, it doesn't replace it: no unit is weighted below the opening's
+  mix, and a unit the mix doesn't list is never added.
+- **What answers what** (`rules.json` `ai.counters`, the "Countered by" column of docs/02 "Faction template", in this
+  faction's units): enemy Line → Priest of the Whirlwind, Battering Ram; enemy Ranged → Horse Raider; enemy Shock →
+  Raider; enemy Caster → Horse Raider, Desert Archer; enemy Siege → Raider, Horse Raider; enemy Unique → none.
+- **Starved charge:** when the AI cannot pay for the unit it would train next and no income can close the gap, and it
+  has at least `ai.starvedMinArmy` 1 combat unit free, then after `ai.starvedWaveAfter` 60 s in that state it sends
+  every free combat unit at you whatever its wave threshold (or hunts, if it knows none of your buildings), again after
+  each wave's cooldown, at every difficulty. A raid on its base resets the clock.
+- **Far expansion:** when its own gold is spent (short of gold for its next unit, no Camp Follower on gold and no gold
+  mine it knows), it sends a Camp Follower to look at the start locations nobody took. Once it has seen a free mine
+  there, or anywhere within `ai.farExpandReach` 384 m of its Holy Camp, with no enemy drop-off by it, it builds a Supply
+  Cache (`whirlwind_supply_cache`, 0 gold / 75 wood) beside it and moves gatherers there; a Holy Camp only if it can pay
+  for one. One at a time.
+- **Where the shift doesn't show (BUG-1156):** a Raider Camp that already takes a Raider every time its queue empties
+  cannot train more of them for the heavier weight (measured on a Hard Malazan seat's Legion Barracks), so against
+  cavalry the shift shows only when the bank, not the camp, is the limit. An enemy Line army seen in Age I shifts
+  nothing, since no opening's Age I mix lists a Priest of the Whirlwind or a Battering Ram.
+
 ### Opening 1: `standard` (Swarm)
 
 The order the AI has played since D14, step for step, and its wave; Easy plays only this one. D21 (2026-10-18) gave it
