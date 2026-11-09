@@ -62,3 +62,9 @@ for workers; below the 4,800-tick limit once the oracle counts only time with a 
   `MapSlice2StressTests.NormalVersusNormal_RarakuSeed5_WoodStarved_EndsWithin72000` is un-skipped and green. QA's sweep row
   `raraku` 5 stays in `Known` under this id: it still fails the silent-seat check (p1 silent 27,461..33,900, 6,439 ticks;
   p0 46,861..52,360). Raraku seed 1 unchanged (in `Known`). The gather pattern itself is not fixed.
+
+## Developer notes, M5-9b (2026-11-09-0426)
+
+- No change measured: Raraku is a 2-player map with two starts, so the far expansion has no free start to look at there
+  (a seat may arm, but builds only by a free mine it has already seen); `MapSlice2 ..._RarakuSeed5_*` stays green and the
+  sweep's `Known` entries (Raraku 1 and 5) still fail as recorded. Generated seed 4 (BUG-1151) likewise still fails.

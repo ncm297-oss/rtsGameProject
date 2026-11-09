@@ -102,3 +102,20 @@ the other in an hour.
   not from the fog). Behind a data knob with 0 = off so the no-change twins still hold. Measured on every pinned row.
 - This bug closes when seed 2 and the Pale Hills seed 1 FFA end on `main` without a skip; it narrows to "the map's gold
   runs out by 24:00 for a seat that never expands" if (a) lands and some row still runs past the hour.
+
+## Developer notes, M5-9b (2026-11-09-0426): candidate (a) built on the branch
+
+- `FarExpansion` (docs/03 "Implementation (M5-9b)"; `rules.json` `ai.farExpandReach` 384 m, 0 = off): a seat short of
+  gold for its pick, with no gold worker and no gold node it knows, walks a worker to the nearest free start location (no
+  player starts there, or its player is defeated) and round it, and builds its cheapest gold-free drop-off (depot / supply
+  cache, 0 gold / 75 wood) by a free mine it has seen within the reach (no enemy drop-off by it); the existing rebalance moves
+  gatherers there. The `expand` step and its Town Hall are unchanged. The start list is map data every seat is given.
+- Measured on the branch (Normal v Normal, to 72,000 unless said): seed 1 **48,858** (seat 1; BUG-1153 outcome (b)); seeds
+  3 / 4 / 6 **29,514** (was 31,891); seed 2 **79,504** (seat 1, decided by 40:00; was 53,797); seed 5 **96,321** (seat 0;
+  was 45,358). Seeds 2 and 5 now end past 72,000 (BUG-1157: the decided match's finish; their `MapSlice2` rows skipped with
+  the measurement, seed 2 under this id). FFA seed 2 **97,140** (seat 3; was 80,278), green inside 144,000; FFA seed 1 no
+  result by 144,000 (no free gold left with four seats: every start's mines are in someone's reach and spent by ~26,000),
+  skipped under this id and BUG-1116.
+- So (a) does what the Producer asked of it on the 1v1 maps (the unused starts' 18,000 gold is taken: gathered gold
+  14,000-17,800 a seat on seeds 2 / 5 against 9,000 before), and the stalls left are the end game's finish (BUG-1116 /
+  BUG-1157), not gold starvation. The four-seat FFA has no gold left to find.

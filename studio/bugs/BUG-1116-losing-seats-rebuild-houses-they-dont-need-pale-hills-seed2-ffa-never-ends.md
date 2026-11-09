@@ -114,3 +114,15 @@ local points spliced into the leg) and be judged on that row plus QA's hide and 
 - **M5-9a round 2, fix round 1 (2026-11-08-1556, the developer):** the Pale Hills seed 2 FFA (`HuntStressTests.FourAiSeats_OnPaleHills_Seed2_KnownStall`)
   now ends at 80,278 (66:53, seat 3) with the oracle clean on 1,079 hunting thinks: un-skipped. The seed 1 FFA still has
   no result by 144,000 (BUG-1153's family). `EndGameHardeningTests`' lone-idle-worker row stays skipped (not this change).
+
+## Developer notes, M5-9b (2026-11-09-0426)
+
+- With M5-9b's far expansion two more Pale Hills Normal v Normal rows end past 72,000 because a decided match takes long to
+  finish: seed 2 at 79,504 (decided by 40:00; five hunts to find the loser's far depot and workers) and seed 5 at 96,321 (the
+  loser has no army and no gold from 70:00 and rebuilds with 14,000-17,000 wood; four hunts). Filed as **BUG-1157**; both
+  `MapSlice2` rows are skipped with the measurement under this id (`NormalVersusNormal_PaleHillsSeed5_SlowRaze_*`,
+  `NormalVersusNormal_PaleHillsSeed2_Stalemate_*`). Your sweep-order item would help both: the hunt could look at the start
+  locations first (the far expansion's leg reads the same list).
+- The Pale Hills seed-1 FFA has no result by 144,000 with the far expansion too (no free gold left with four seats): skipped
+  under BUG-1068 / this id (`HuntStressTests.FourAiSeats_OnPaleHills_Seed1_KnownStall`). The seed-2 FFA ends at 97,140
+  (was 80,278) and stays green.

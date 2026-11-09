@@ -2,8 +2,8 @@
 
 | Field | Value |
 | --- | --- |
-| Severity | S2 (a pinned criterion row stops ending; QA focus 6 of M5-9a). **Since round 2 the row ends (68,664) but outside its 36,000 bound: S2 while it is red on the branch; the Producer's rule below says when it becomes S3** |
-| Status | open (M5-9a round 2 ESCALATED 2026-11-08-1556: the branch `studio/2026-11-08-1556-sim` is pushed, nothing on `main`; the next sim session's rule is below) |
+| Severity | **S3** since M5-9b (the terminal rule's outcome (b): the row ends at 48,858, inside the 72,000 the rule sets). Was S2 (a pinned criterion row stops ending; QA focus 6 of M5-9a; since round 2 it ended at 68,664, outside 36,000) |
+| Status | open, S3 (M5-9b 2026-11-09-0426, outcome (b): the three 1v1 Pale Hills rows bound at 72,000, Producer decision 2026-11-08-1556; a hardening item: a slow end game on one map) |
 | Found | 2026-11-08-1316, task M5-9a (developer, rule 43 re-measure) |
 | System | AI economy and waves (BUG-1068's gold exhaustion), surfaced by the counter shift |
 | Fixed by | |
@@ -136,3 +136,25 @@ green (ends inside 72,000, silent-seat oracle passes). The developer's fix round
   **S3** ("a slow end game on one map", a hardening item: a raze lever or map gold); (c) no result at 72,000: a finding, the
   branch stays held and the owner is asked again. The four-seat Pale Hills seed 1 FFA (`HuntStressTests`, no result by
   144,000) is not a criterion row: if (a) does not end it, it goes to `Known` under BUG-1068 / BUG-1116 with the measurement.
+
+## Developer notes, M5-9b (2026-11-09-0426; the terminal rule's outcome)
+
+- **M5-9b built BUG-1068's (a)**, the far expansion (`rules.json` `ai.farExpandReach` 384 m, 0 = off; docs/03
+  "Implementation (M5-9b)"): a seat short of gold for its pick, with no gold worker and no gold mine it knows, sends a worker
+  to look at the free start locations and builds its gold-free depot by a free mine it has seen there.
+- **Pale Hills seed 1 Normal v Normal ends at 48,858 (40:42), seat 1 (Whirlwind)**, every (a)-(e) check of
+  `CriterionMatch` clean (the `EachOtherMap_*` row run with its checks to the new bound, and its two-process twin equal).
+  Seat 0 arms at 26,340, its depot by start 2's mines is ordered at 27,640 and stands at 28,200; seat 1 arms at 26,960 and
+  expands to start 3 (28,120 / 28,660). Both gather on (at 36,000 seat 0 has 32 army, seat 1 53), both are broke again
+  from about 40:00, and the war ends at 48,858.
+- **Outcome (b)** (36,000-72,000): `MatchCriterionTests.PaleHillsBound` (both rows) and `MapFileTests`' Pale Hills row
+  (renamed `NormalVersusNormal_OnANewMap_EndsWithinItsBound`) are bound at **72,000** with this id and "Producer decision
+  2026-11-08-1556" in the constant's comment; docs/03's M5-5 table re-printed; this bug to **S3** (above).
+- Found on the way: on Pale Hills 1v1 both free starts are 129 cells from both halls, and the lowest-index tie sent both
+  seats to start 2 (45,003: both expansions razed in the fight over it); ties now go to the seat's own turn of the starts.
+- The seed-1 FFA (`HuntStressTests`): **still no result by 144,000** with the far expansion: with four seats every start is
+  taken and all the map's gold is in someone's reach, spent by ~26,000; the three survivors walk to the defeated seat's
+  start at 57,620 and find it spent. Skipped under BUG-1068 / BUG-1116 with the measurement
+  (`FourAiSeats_OnPaleHills_Seed1_KnownStall`).
+- Two other pinned rows stop ending inside 72,000 (rule 43, a finding: **BUG-1157**): Pale Hills seed 2 (79,504, decided by
+  40:00) and seed 5 (96,321), both skipped with the measurement.
