@@ -12,6 +12,14 @@ smoke PASS, golden `30C51BB619A7E650`, formats 6 / 7 / replay 9. **M5 7 / 9**, M
 only; `main` has no S1 / S2).** Counters after: **sim 1 / 4 (an escalated session does not advance it), view 1 / 4, data 2 / 4.**
 Bug ids next: **all tracks from 1157.**
 
+**PLAN 2026-11-09-0426 (Producer):** inbox New empty, so the default stands: **sim GO, M5-9b on the held branch
+`studio/2026-11-08-1556-sim`** (brief below, refreshed with one design point found at PLAN: the executor's `expand` places a
+**Town Hall (275 gold)**, which a broke seat can never pay, so the far expansion must place the gold-free depot / supply cache
+(0 / 75 wood) instead); **view STOP (cheap), data STOP (cheap)**. `main` 5a736ec = dd3befa + `studio/**` only (verified by
+`git diff --stat`): the Producer's scratch archive of 5a736ec (rule 38) builds **0 / 0**; `Category!=Perf&Category!=Stress`
+**8,203 / 0 / 16 in 52 m** (every skip with an id); `Rts.Cli match --map vathar_crossing --seed 1` ends at **22,794**, hash
+`851529AC383EE168` (the M5-5 claim verified). Sessions today 0 / 8 before this one.
+
 ## Standing rules (1-46)
 
 Unchanged 1-45 (38: the Producer runs every suite on a scratch `git archive` / clone, never in a worktree; 39: generated map content
@@ -74,11 +82,22 @@ raze: at 36,000 the loser has 0 army, 29 workers and 13-17 buildings it keeps re
 archers need 32,000 more ticks. Underneath, both sides are broke from 24:00 because the AI never reaches the far mines
 (BUG-1068 (a)). Counter 1 / 4.
 
-### Current session plan (next sim session): M5-9b, the far expansion (BUG-1068 (a)), on the held branch — feature, QA full
+### Current session plan (session 2026-11-09-0426): M5-9b, the far expansion (BUG-1068 (a)), on the held branch — feature, QA full
 
-**Apply only if the inbox is silent on this** (the owner's choices are in STATE "Waiting on you": "ship with the hour bound" = a
-short session that re-bounds the three Pale Hills 1v1 rows to 72,000, puts the seed-1 FFA in `Known` under BUG-1068 and lands
-M5-9a as is; "more gold on Pale Hills" = the data track's map change first; "drop the counter shift" = the branch is closed).
+**The inbox was silent at the 2026-11-09-0426 PLAN, so this default applies** (the owner's other choices stay in STATE "Waiting
+on you" and may still arrive: "ship with the hour bound", "more gold on Pale Hills", "drop the counter shift"; an inbox note
+during the session is for the ACCEPT step, not the developer).
+
+**Two facts found at PLAN that the design must honour:** (1) `BuildOrderExecutor`'s `expand` step places the **Town Hall
+(275 gold / 275 wood)** by `ExpansionMine` (within `ExpandReachCells`); at 24:00 on Pale Hills both seats hold 16-46 gold and
+thousands of wood, so a far expansion that needs a Town Hall never happens. docs/02 "Buildings" already says the Camp exists
+"because workers need a drop-off near forests and expansions, and making them build a full Town Hall for that is wrong": the
+far expansion places the faction's **cheapest `DropOff` building that costs no gold** (`malazan_depot` / `whirlwind_supply_cache`,
+0 / 75, 25 s), found from data (the cheapest `DropOff` type with `CostGold` 0; with none such, the Town Hall and the seat waits
+for the gold). (2) `AiPlayer.InGatherReach` returns true for **any** node once the reach has lifted (the head ring seen or the
+sweep ended), so a far mine the seat has **seen** is already a gather target today; the far mines go untouched only because
+nothing ever looks at the unused starts (the sweep ends on the first forest + mine + enemy building). So the scout leg is the
+first half of the fix and the depot the second (without it workers walk 260 m round trips).
 
 **Branch:** the conductor starts the sim worktree from `origin/studio/2026-11-08-1556-sim` (f32501b + the Producer's studio
 commit), merges `origin/main` (only `studio/**` moved), and builds on it. **Diff base for ACCEPT: c11f5f0** (M5-9a rounds 1-2 +
@@ -99,9 +118,13 @@ ranged remnant. Then every pin the branch carries is re-measured once more and M
    scout alive, one worker) to the nearest unused start location** it has not yet looked at: start locations are map data every
    seat is given (`SimConfig` / the map's start list), not a fog read, so this is no cheat (say so in docs/03); and (b) once it
    **knows** a free gold node within `farExpandReach` of its hall that is not inside `gatherReach` of a known enemy drop-off, it
-   re-opens the `expand` step toward it (a hall or depot in gather reach of that node, the existing placement rules) and shifts
-   gatherers as M5-4g's gather shift does once the drop-off stands. One far expansion at a time; the arm clears when gold is
-   gathered again. Knob 0: nothing runs, and with Normal `counterStrength` 0 and `starvedWaveAfter` 0 today's play bit for bit.
+   orders the **gold-free depot** (see the PLAN facts above; the Town Hall only when the seat can pay for one now) in gather
+   reach of that node by the existing site search (`placementSearchRadius` round the node, `buildingSpacing`, `HallNear`'s
+   exclusion of mines by an own or seen hall), with one worker sent as the builder (`PickBuilder`'s rule), and shifts gatherers
+   as M5-4g's gather shift does once the drop-off stands. The `expand` step itself is **not** reopened (its Town Hall rule is
+   unchanged; the far expansion is its own executor-level rule or a `MilitaryManager`-style manager, the developer's call, said
+   in docs/03). One far expansion at a time; the arm clears when a gold worker is at work again. Knob 0: nothing runs, and with
+   Normal `counterStrength` 0, `starvedWaveAfter` 0 and `farExpandReach` 0 today's play bit for bit.
 3. Save / load: any new blackboard state (the armed flag, the start index looked at) goes in `CTRM` after `StarvedSince`
    (formats stay **8 / 9**: no third bump, neither is on `main`); the reader bounds it (`Malformed` otherwise);
    `SaveRefusalTests` + `PreMapFixtures` updated.
@@ -150,10 +173,12 @@ the same commit; the size: uncertain work, ~800 lines, QA full.
 **QA focus (full):** the fog oracle on every think (a far node counted only after `CanSeeResource`-equivalent sight); the knob-0
 / strength-0 twins on all 8 pins and the golden; the arm's edges (gold exactly at the pick's cost; a mine emptied the same think;
 an enemy drop-off appearing by the far mine mid-expansion; the scout dying on the leg; no unused start, as on the generated 2-player
-map); save / load fuzz of the new `CTRM` fields; perf 6 / 6 alone (the starved row's 12 % headroom); every pin independently; the 11
-probed matches to 72,000 with (a)-(e) and the silent-seat / stuck-unit / still-resources oracles; both Pale Hills FFAs to 144,000;
-the tally once; the sanity row: Pale Hills seed 1 Normal v Normal: both seats' gold at 30,000 is above 0 and a far hall or depot
-stands by 36,000.
+map; a seat with under 75 wood when armed: it must wait, not spam; the depot site taken by an enemy building; the far mine
+emptied while the depot is a site); save / load fuzz of the new `CTRM` fields; perf 6 / 6 alone (the starved row's 12 % headroom:
+rule 42); every pin independently; the 11 probed matches to 72,000 with (a)-(e) and the silent-seat / stuck-unit /
+still-resources oracles; both Pale Hills FFAs to 144,000; **the full non-Perf run once (at the re-check, on the fixed commit)
+and the 42-match tally once** (last session's 12.5 h came from running both twice); the sanity row: Pale Hills seed 1 Normal v
+Normal: both seats' gold at 30,000 is above 0 and a far depot (or hall) stands by 36,000.
 
 ### After it
 The end-of-M5 sim hardening at 4 / 4 (BUG-1149 / 1150 / 1151 / 1152 / 1058 / 1044 / 1067 / 1156, BUG-1116's sweep order, the
@@ -164,10 +189,10 @@ held at 8 / 9 for criterion 6).
 
 ## View track
 
-### Current session plan (next session): STOP (cheap)
-Inbox New empty: no owner item (the art call, ".NET 10 installed", templates, sound notes); every remaining M6 criterion needs the
-owner; the view's debt (BUG-1126 / 1147 / 1115 item 4 / 0860 / 0830 / 0890 / 0861) is not a session's worth and the counter is 1 / 4.
-The sim's full QA pass runs hours of pins alone, so the CPU is better left to it.
+### Current session plan (session 2026-11-09-0426): STOP (cheap)
+Inbox New empty at PLAN: no owner item (the art call, ".NET 10 installed", templates, sound notes); every remaining M6 criterion
+needs the owner; the view's debt (BUG-1126 / 1147 / 1115 item 4 / 0860 / 0830 / 0890 / 0861) is not a session's worth and the
+counter is 1 / 4 (a hardening at 4 / 4). The sim's full QA pass runs hours of pins alone, so the CPU is better left to it.
 
 ### Where we are
 STOP (cheap). Counter 1 / 4. M6 5 / 10; every remaining M6 criterion needs the owner (the art call, music / fonts / export
@@ -183,9 +208,11 @@ templates, ".NET 10 installed", a friend's playtest).
 
 ## Data track
 
-### Current session plan (next session): STOP (cheap)
-M5-9a's schema is still on its branch (held), no review tweak is waiting (inbox New empty), nothing on `main` moved a pin or
-re-printed a cell (rules 40 / 41). D26 starts the session after M5-9a lands. **If the owner picks "more gold on Pale Hills"**, the
+### Current session plan (session 2026-11-09-0426): STOP (cheap)
+M5-9a's schema is still on its branch (held; `git grep starvedWaveAfter` on `main` 5a736ec finds nothing), no review tweak is
+waiting (inbox New empty), nothing on `main` moved a pin or re-printed a cell (rules 40 / 41), and the map change ("more gold on
+Pale Hills") was not picked, so no data task may touch `game/data/maps/pale_hills.json` while the sim re-measures its pins (rule
+41). D26 starts the session after M5-9a + M5-9b land. **If the owner picks "more gold on Pale Hills"**, the
 data track's task is the map change instead (`game/data/maps/pale_hills.json`: neutral gold nearer the two 2-player starts, or
 more at the unused starts; the sim's `MapFileTests` start rules must still hold; QA standard with the Normal v Normal numbers).
 
