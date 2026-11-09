@@ -80,7 +80,8 @@ internal sealed partial class AiPlayer
     /// M5-9a: reads what <see cref="WriteCountersTo"/> wrote, after <see cref="ReadFrom"/> (so <see cref="Now"/>, the last
     /// think's tick, is the saved one): a count from 0 to the match's unit slots, a tick from 0 to <see cref="Now"/>.
     /// </summary>
-    internal void ReadCountersFrom(SaveReader r) => Board.ReadCountersFrom(r, View.UnitSlots, Now);
+    internal void ReadCountersFrom(SaveReader r) =>
+        Board.ReadCountersFrom(r, View.UnitSlots, Now, View.StartCount, Data.Buildings.Length, View.MapWidth * View.MapHeight); // M5-9b: the far expansion's bounds
 
     /// <summary>Reads what <see cref="WriteTo"/> wrote over this seat, freshly built for the same match (its pick already drawn).</summary>
     internal void ReadFrom(SaveReader r)

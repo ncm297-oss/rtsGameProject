@@ -13,7 +13,9 @@ namespace Rts.Sim.Tests.QA;
 /// M5-9a (2026-11-08): every row has a Normal seat, whose counter shift moves its digest (Raraku seed 1 Normal v Normal is
 /// the one row the shift leaves unchanged); re-pinned with the old digest in each row's comment. With Normal's
 /// <c>counterStrength</c> at 0 every row still gives its old digest (<c>CounterCompositionTests.TheNonHardPins_WithNormalStrengthZero_PlayAsBeforeThisTask</c>):
-/// Easy itself plays as before.
+/// Easy itself plays as before. M5-9b (2026-11-09): the far expansion runs at every difficulty, so the four Pale Hills rows
+/// move (both seats run out of gold there); the 8 pre-M5-9a digests are reproduced with Normal's strength, the starved wave
+/// and the far expansion all at 0 (the same <c>CounterCompositionTests</c> row).
 /// With <c>RTS_QA_DUMP</c> set to a folder the row writes its per-tick hashes and command lines there, to diff two trees.
 /// </summary>
 [Trait("Category", "Stress")]
@@ -28,10 +30,10 @@ public class NonHardMatchPinQaTests
     [Theory]
     [InlineData("raraku", 1UL, AiDifficulty.Normal, "E0612240C3E713D2 28083 1476")]
     [InlineData("raraku", 1UL, AiDifficulty.Easy, "CFE55368B0CBD15D 24498 1445")] // M5-9a: was 0D877B9258F20265 24498 1448
-    [InlineData("pale_hills", 1UL, AiDifficulty.Normal, "70635F3A0D539227 36000 2598")] // M5-9a: was 69C4358E67DF7FC3 34219 3144; round 1 D714943B782A74E0 36000 2599 (fix round 1, BUG-1154: seat 0 now starved too)
-    [InlineData("pale_hills", 1UL, AiDifficulty.Easy, "9B5F2C36AE77DD3A 36000 2689")] // M5-9a: was 62F16C733AF6D9C8 36000 2601
-    [InlineData("pale_hills", 3UL, AiDifficulty.Normal, "49143BF840792D0F 31891 2447")] // M5-9a: was C9CB142CF3C97C88 29562 3103
-    [InlineData("pale_hills", 3UL, AiDifficulty.Easy, "8FBFA3820C590F5A 36000 2606")] // M5-9a: was 4FF13AE84024D0BB 33524 3075; round 1 63DE1922B755D390 36000 2708
+    [InlineData("pale_hills", 1UL, AiDifficulty.Normal, "7A4B426913372A53 36000 3109")] // M5-9a: was 69C4358E67DF7FC3 34219 3144; round 1 D714943B782A74E0 36000 2599 (fix round 1, BUG-1154: seat 0 now starved too) 70635F3A0D539227 36000 2598; M5-9b: both seats expand to a free start (ends 48,858)
+    [InlineData("pale_hills", 1UL, AiDifficulty.Easy, "7BEB9DD74B7C779F 36000 2850")] // M5-9a: was 62F16C733AF6D9C8 36000 2601, then 9B5F2C36AE77DD3A 36000 2689; M5-9b: the far expansion (every difficulty)
+    [InlineData("pale_hills", 3UL, AiDifficulty.Normal, "1D84903554D236D3 29514 2366")] // M5-9a: was C9CB142CF3C97C88 29562 3103, then 49143BF840792D0F 31891 2447; M5-9b: the far expansion
+    [InlineData("pale_hills", 3UL, AiDifficulty.Easy, "08CE3315062BC646 36000 2811")] // M5-9a: was 4FF13AE84024D0BB 33524 3075; round 1 63DE1922B755D390 36000 2708, then 8FBFA3820C590F5A 36000 2606; M5-9b: the far expansion
     [InlineData("vathar_crossing", 1UL, AiDifficulty.Normal, "66A1290256133869 23043 1386")] // M5-9a: was 4FA98DA390936D9B 22794 1395
     [InlineData("vathar_crossing", 1UL, AiDifficulty.Easy, "5DD4CB05A846BBF1 27344 1790")] // M5-9a: was 325B1E0137F84D8D 36000 1798
     public void AMatchWithoutHard_PlaysAsBeforeTheHardKnobs(string map, ulong seed, AiDifficulty first, string expected)

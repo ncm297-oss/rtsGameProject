@@ -25,12 +25,13 @@ public class MatchCriterionTests
 
     /// <summary>
     /// Pale Hills seed 1 ended at 34,219 (28:30; <c>MapFileTests</c>' pin), seat 1 the winner: the Producer's 36,000. M5-9a:
-    /// with Normal's counter shift it no longer ends (both sides out of gold by 24:00, a stalemate past 60:00): BUG-1153, a
-    /// finding for the Producer, not a re-bound. Round 2's starved wave ends the stalemate but not inside the bound: 71,660
-    /// (59:43), seat 1, at <c>ai.starvedWaveAfter</c> 30, 60 and 120 alike (a slow raze by 11-15 archers of a base that
-    /// rebuilds). Left failing as measured: no re-bound, no skip (the brief).
+    /// with Normal's counter shift it no longer ended (both sides out of gold by 24:00), round 2's starved wave ended it only
+    /// at 68,664 (BUG-1153). M5-9b (the far expansion, BUG-1068 (a)): both seats take an unused start's mines with a depot at
+    /// about 28,000 and the match ends at <b>48,858 (40:42), seat 1</b>, every check clean: outcome (b) of the terminal rule,
+    /// so the bound is <b>72,000</b> (the four-seat rows' hour), BUG-1153, <b>Producer decision 2026-11-08-1556</b> (docs/03
+    /// "Implementation (M5-5)" and STATE; the owner may revisit it). Used by <c>MapFileTests</c>' Pale Hills row too.
     /// </summary>
-    internal const int PaleHillsBound = 36_000;
+    internal const int PaleHillsBound = 72_000;
 
     /// <summary>Raraku seed 1 ends at 28,083 (23:24), seat 0 the winner: the next 6,000 above it with at least 10 % slack (30,891). Unchanged by M5-9a.</summary>
     internal const int RarakuBound = 36_000;

@@ -378,7 +378,7 @@ internal static class BuildOrderExecutor
     }
 
     /// <summary>Whether an own Town Hall, or an enemy one the player sees or remembers, stands within <paramref name="reach"/> cells (Chebyshev, anchor to anchor) of <paramref name="cell"/>.</summary>
-    private static bool HallNear(AiPlayer ai, int cell, int reach)
+    internal static bool HallNear(AiPlayer ai, int cell, int reach)
     {
         int w = ai.View.MapWidth, x = cell % w, y = cell / w;
         for (int k = 0; k < ai.OwnBuildingCount; k++)

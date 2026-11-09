@@ -597,14 +597,16 @@ public class MapFileTests
 
     /// <summary>
     /// M6-S8: two Normal AI seats (seed 1, Malazan v Whirlwind, starts 0 and 1) play a match on Pale Hills or Vathar Crossing to
-    /// the end within 36,000 ticks (30 minutes); the result, the length and each side's gathering are printed (docs/03
-    /// "Implementation (M6-S8)" quotes them), and both sides gather wood.
+    /// the end within its bound; the result, the length and each side's gathering are printed (docs/03 "Implementation (M6-S8)"
+    /// quotes them), and both sides gather wood. Vathar Crossing: 36,000 ticks (30 minutes; it ends at 23,043). Pale Hills:
+    /// <see cref="MatchCriterionTests.PaleHillsBound"/>, 72,000 since M5-9b (BUG-1153, Producer decision 2026-11-08-1556: it
+    /// ends at 48,858 with the far expansion; 34,219 before M5-9a).
     /// </summary>
     [Theory]
     [Trait("Category", "Stress")]
-    [InlineData(PaleHills)]
-    [InlineData(VatharCrossing)]
-    public void NormalVersusNormal_OnANewMap_EndsWithin36000Ticks(string id) => PlayToTheEnd(MapMatch(id, 1, false, out _), 36_000);
+    [InlineData(PaleHills, MatchCriterionTests.PaleHillsBound)]
+    [InlineData(VatharCrossing, 36_000)]
+    public void NormalVersusNormal_OnANewMap_EndsWithinItsBound(string id, int bound) => PlayToTheEnd(MapMatch(id, 1, false, out _), bound);
 
     /// <summary>Plays <paramref name="sim"/> (two AI seats) until the match is over or <paramref name="limit"/> ticks; prints and checks the result.</summary>
     private void PlayToTheEnd(Simulation sim, int limit)

@@ -57,6 +57,7 @@ internal sealed partial class AiPlayer
         TownHallType = OfSlot(BuildingSlot.TownHall);
         HouseType = OfSlot(BuildingSlot.House);
         CampType = OfSlot(BuildingSlot.Camp);
+        DepotType = FarExpansion.GoldFreeDropOff(data, Faction);
         IsWorkerType = new bool[data.Units.Length];
         for (int t = 0; t < data.Units.Length; t++) IsWorkerType[t] = data.Units[t].IsWorker;
         DoneOfType = new int[data.Buildings.Length];
@@ -278,6 +279,9 @@ internal sealed partial class AiPlayer
 
     /// <summary>See <see cref="TownHallType"/>.</summary>
     internal int CampType { get; }
+
+    /// <summary>M5-9b: the faction's cheapest drop-off building that costs no gold (<see cref="FarExpansion.GoldFreeDropOff"/>), -1 for none.</summary>
+    internal int DepotType { get; }
 
     /// <summary>Gold and wood left this think after the commands sent so far (the view's amounts at its start).</summary>
     internal int Gold { get; private set; }
@@ -508,6 +512,7 @@ internal sealed partial class AiPlayer
         Census();
         DefenseManager.Run(this); // M5-4b: first, docs/02's priority
         BuildOrderExecutor.Run(this);
+        FarExpansion.Run(this); // M5-9b: after the build order (its hall rebuild and reserve first), before the scout
         ScoutManager.Run(this);
         EconomyManager.Run(this);
         ProductionManager.Run(this);
@@ -590,7 +595,37 @@ internal sealed partial class AiPlayer
         }
         IntruderCentroid = IntruderCount > 0 ? intruders / IntruderCount : default;
         UpdateCounterMemory();
+        _censusGoldWalk = 0;
         UpdateStarved(); // M5-9a round 2: after the memory, from this census (no new pass over the units)
+        UpdateFarArm(); // M5-9b: after the starved check, sharing its gold walk
+        _censusGoldWalk = 0; // the census's only: a Starved() asked between thinks walks afresh
+    }
+
+    // ---------- M5-9b (BUG-1068 (a)): the far expansion's arm ----------
+
+    // The census's answer to "a gold node it may gather is known" (0 not walked, 1 yes, 2 no): the starved check and the far
+    // expansion's arm ask it in the same census, before this think's defense, so one walk serves both.
+    private byte _censusGoldWalk;
+
+    private bool CensusKnowsGold()
+    {
+        if (_censusGoldWalk == 0) _censusGoldWalk = WalkForNode(ResourceKind.Gold) ? (byte)1 : (byte)2;
+        return _censusGoldWalk == 1;
+    }
+
+    /// <summary>
+    /// M5-9b (docs/03 "Implementation (M5-9b)"): arms the far expansion (<see cref="Blackboard.FarPhase"/> to
+    /// <see cref="FarExpansion.Armed"/>) on a think whose census finds the seat with a building and a worker, the match not
+    /// over, no own worker at gold (<see cref="Gathering"/>), its gold short for production's pick (<see cref="ShortForPick"/>,
+    /// the starved check's (i)) and no gold node it may gather known (the walk <see cref="KnowsNode"/> caches). The cheap
+    /// tests first. With <c>ai.farExpandReach</c> 0 nothing runs and the phase stays 0. The arm is cleared by
+    /// <see cref="FarExpansion"/>, never here.
+    /// </summary>
+    private void UpdateFarArm()
+    {
+        if (Rules.FarExpandReach <= 0f || Board.FarPhase != 0 || View.MatchOver || !HasHall || WorkerCount == 0) return;
+        if (Gathering(EconomyManager.Gold) || !ShortForPick(out _) || CensusKnowsGold()) return;
+        Board.FarPhase = FarExpansion.Armed;
     }
 
     // ---------- M5-9a round 2 (BUG-1153, BUG-1068 candidate (b)): the starved seat ----------
@@ -631,19 +666,9 @@ internal sealed partial class AiPlayer
     internal bool Starved()
     {
         if (Board.Defending || View.MatchOver) return false;
-        var compositions = Opening.Compositions;
-        if (compositions.Length == 0) return false;
-        AiComposition mix = compositions[Math.Clamp(View.Age, 1, compositions.Length) - 1];
-        if (mix.Units.Length == 0) return false;
-        int pick = ProductionManager.Pick(this);
         // (i): the cheap test first, so a seat that can pay walks nothing.
-        if (pick >= 0)
-        {
-            if (CanPayNow(pick)) return false;
-        }
-        else
-            for (int k = 0; k < mix.Units.Length; k++)
-                if (CanPayNow(mix.Units[k])) return false;
+        if (!ShortForPick(out int pick)) return false;
+        AiComposition mix = CurrentMix();
         int free = 0;
         for (int k = 0; k < ArmyCount && free < Rules.StarvedMinArmy; k++)
             if (MilitaryManager.Free(this, ArmySlots[k], out _)) free++;
@@ -654,6 +679,31 @@ internal sealed partial class AiPlayer
         for (int k = 0; k < mix.Units.Length; k++)
             if (CanEverPay(mix.Units[k], ref gold, ref wood)) return false;
         return true;
+    }
+
+    /// <summary>
+    /// M5-9a round 2's (i), split out for M5-9b: whether the seat cannot pay now for the unit production would train next
+    /// (<paramref name="pick"/>, <see cref="ProductionManager.Pick"/>), or, with no producer free for any entry (pick -1),
+    /// for any unit of its current composition. False with no composition (nothing to be short for).
+    /// </summary>
+    internal bool ShortForPick(out int pick)
+    {
+        pick = -1;
+        if (Opening.Compositions.Length == 0) return false;
+        AiComposition mix = CurrentMix();
+        if (mix.Units.Length == 0) return false;
+        pick = ProductionManager.Pick(this);
+        if (pick >= 0) return !CanPayNow(pick);
+        for (int k = 0; k < mix.Units.Length; k++)
+            if (CanPayNow(mix.Units[k])) return false;
+        return true;
+    }
+
+    /// <summary>The current age's composition of the picked opening (it has at least one).</summary>
+    private AiComposition CurrentMix()
+    {
+        var compositions = Opening.Compositions;
+        return compositions[Math.Clamp(View.Age, 1, compositions.Length) - 1];
     }
 
     /// <summary>M5-9a round 2: whether the gold and wood held pay for unit type <paramref name="type"/>.</summary>
@@ -677,7 +727,8 @@ internal sealed partial class AiPlayer
 
     private bool Obtainable(byte kind, ResourceKind resource, ref byte known)
     {
-        if (known == 0) known = Gathering(kind) || WalkForNode(resource) ? (byte)1 : (byte)2;
+        // M5-9b: the gold walk is the census's shared one (CensusKnowsGold): the same walk, run once.
+        if (known == 0) known = Gathering(kind) || (resource == ResourceKind.Gold ? CensusKnowsGold() : WalkForNode(resource)) ? (byte)1 : (byte)2;
         return known == 1;
     }
 
@@ -686,7 +737,7 @@ internal sealed partial class AiPlayer
     /// <see cref="EconomyManager.Wood"/>): last sent to that kind (<see cref="Blackboard.GatherKind"/>, its generation) and
     /// the order pending or the worker on its way, at the node or carrying home (not Idle, not Building).
     /// </summary>
-    private bool Gathering(byte kind)
+    internal bool Gathering(byte kind)
     {
         for (int k = 0; k < WorkerCount; k++)
         {
@@ -790,7 +841,8 @@ internal sealed partial class AiPlayer
 
     /// <summary>Whether own unit slot <paramref name="slot"/> (generation <paramref name="generation"/>) is the scout on its sweep: no other manager orders it.</summary>
     internal bool IsScout(int slot, int generation) =>
-        Board.ScoutPhase == 1 && Board.ScoutSlot == slot && Board.ScoutGeneration == generation;
+        Board.ScoutPhase == 1 && Board.ScoutSlot == slot && Board.ScoutGeneration == generation
+        || Board.FarScoutSlot == slot && Board.FarScoutGeneration == generation; // M5-9b: the far expansion's leg too
 
     /// <summary>
     /// The known enemy building nearest <paramref name="from"/> (its footprint centre; slot order on ties, seen ones before
@@ -933,7 +985,15 @@ internal sealed partial class AiPlayer
     /// anchor first when <see cref="PlayerView.CanPlace"/> allows it and it carries no retry mark (no spacing rule: the old
     /// hall's own spot), else the ring search round <paramref name="centreCell"/>.
     /// </summary>
-    internal bool TryBuild(int type, int centreCell, int exactAnchor, ref PendingOrder pending)
+    internal bool TryBuild(int type, int centreCell, int exactAnchor, ref PendingOrder pending) =>
+        TryBuild(type, centreCell, exactAnchor, ref pending, -1, 0);
+
+    /// <summary>
+    /// See <see cref="TryBuild(int, int, int, ref PendingOrder)"/>; M5-9b: with <paramref name="builder"/> &gt;= 0, that own
+    /// worker (generation <paramref name="builderGeneration"/>, alive and with no AI command pending, whatever it is doing)
+    /// is sent rather than <see cref="PickBuilder"/>'s: the far expansion's scout standing by the mine.
+    /// </summary>
+    internal bool TryBuild(int type, int centreCell, int exactAnchor, ref PendingOrder pending, int builder, int builderGeneration)
     {
         if ((uint)type >= (uint)Data.Buildings.Length || centreCell < 0) return false;
         BuildingDef def = Data.Buildings[type];
@@ -943,7 +1003,8 @@ internal sealed partial class AiPlayer
         // BUG-0941: a rule no cell can pass (a full building store, requires unmet) fails here as in FindSite, before
         // AnyBuilder walks the workers: a blocked step costs one check a think. Same answer, no wait set either way.
         if (!View.CanPlaceAnywhere(type, out _)) return false;
-        if (_queueFull || !AnyBuilder()) return false;
+        bool own = builder >= 0 && OwnFreeWorker(builder, builderGeneration);
+        if (_queueFull || !own && !AnyBuilder()) return false;
         int searchesBefore = SiteSearches;
         int anchor = exactAnchor >= 0 && !Board.IsBad(type, exactAnchor) && View.CanPlace(type, exactAnchor, out _) ? exactAnchor : FindSite(type, centreCell);
         if (anchor < 0)
@@ -954,7 +1015,7 @@ internal sealed partial class AiPlayer
             return false;
         }
         Vector2 at = CellCentre(anchor);
-        int worker = PickBuilder(at, out int generation);
+        int generation = builderGeneration, worker = own ? builder : PickBuilder(at, out generation);
         if (worker < 0) return false;
         if (!Send(Command.Build(Player, new EntityHandle(worker, generation), type, at))) return false;
         Spend(def.CostGold, def.CostWood);
@@ -1198,6 +1259,17 @@ internal sealed partial class AiPlayer
         }
         return best;
     }
+
+    /// <summary>M5-9b: whether unit slot <paramref name="slot"/> holds the player's live worker of <paramref name="generation"/> with no AI command pending.</summary>
+    private bool OwnFreeWorker(int slot, int generation) =>
+        OwnUnit(slot, generation, out SeenUnit u) && IsWorkerType[u.TypeId] && !OrderedNotApplied(slot, generation);
+
+    /// <summary>
+    /// M5-9b: own unit slot <paramref name="slot"/>'s unit, if it is the player's own of <paramref name="generation"/> (the far
+    /// expansion's leg worker): a same-player test, as the scout's (with shared vision the view answers an ally's units too).
+    /// </summary>
+    internal bool OwnUnit(int slot, int generation, out SeenUnit u) =>
+        View.TryGetUnit(slot, out u) && u.Owner == Player && u.Handle.Generation == generation;
 
     /// <summary>Whether <see cref="PickBuilder"/> would find a worker anywhere (BUG-0791: checked before a site search).</summary>
     internal bool AnyBuilder()

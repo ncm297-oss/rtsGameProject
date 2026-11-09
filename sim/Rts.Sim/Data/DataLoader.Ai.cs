@@ -356,7 +356,7 @@ public static partial class DataLoader
     /// to whole cells, rounded up. M5-3: <c>scoutAfter</c> and <c>waveCooldown</c> s (0-3,600, to ticks); <c>scoutRadius</c> and
     /// <c>rallyDistance</c> m (1-64), <c>scoutReach</c> and <c>rallyReach</c> m (1-16), <c>scoutGrid</c> m (16-256, BUG-0593), kept in meters. M5-4b: <c>defendRadius</c> m (8-256), <c>defendFor</c> s (0-600, to
     /// ticks), <c>workerFleeRadius</c> m (1-64). M5-4c: <c>castMinTargets</c> a whole number 1-50. M5-4f: <c>defendRatio</c> 0.5-10,
-    /// <c>defendMinValue</c> gold + wood 0-5,000, <c>recallHallHp</c> a fraction 0-1. M5-4g: <c>reserveShift</c> and <c>reserveArmyShare</c> fractions 0-1. M6-S5: <c>gatherReach</c> m (1-<see cref="DataLimits.MaxAiGatherReach"/>, BUG-1045). M6-SH1: <c>scoutReplacements</c> a whole number 0-8 (BUG-1052), <c>spendDownQueue</c> a whole number 1-5 (BUG-1051). M5-4d: <c>huntMemory</c> s (0-3,600, to ticks). M5-4c slice 2: <c>focusReach</c> m (1-64). M5-9a: <c>counterMemory</c> s (above 0, to ticks), <c>counters</c> (see <see cref="CounterMasks"/>); round 2 (BUG-1153): <c>starvedWaveAfter</c> s (0-600, to ticks; 0 turns the starved wave off), <c>starvedMinArmy</c> a whole number 1-50. A refused <c>popCap</c> is reported once: the cap rule is skipped then.
+    /// <c>defendMinValue</c> gold + wood 0-5,000, <c>recallHallHp</c> a fraction 0-1. M5-4g: <c>reserveShift</c> and <c>reserveArmyShare</c> fractions 0-1. M6-S5: <c>gatherReach</c> m (1-<see cref="DataLimits.MaxAiGatherReach"/>, BUG-1045). M6-SH1: <c>scoutReplacements</c> a whole number 0-8 (BUG-1052), <c>spendDownQueue</c> a whole number 1-5 (BUG-1051). M5-4d: <c>huntMemory</c> s (0-3,600, to ticks). M5-4c slice 2: <c>focusReach</c> m (1-64). M5-9a: <c>counterMemory</c> s (above 0, to ticks), <c>counters</c> (see <see cref="CounterMasks"/>); round 2 (BUG-1153): <c>starvedWaveAfter</c> s (0-600, to ticks; 0 turns the starved wave off), <c>starvedMinArmy</c> a whole number 1-50. M5-9b (BUG-1068 (a)): <c>farExpandReach</c> m (0-512, kept in meters; 0 turns the far expansion off). A refused <c>popCap</c> is reported once: the cap rule is skipped then.
     /// </summary>
     private static AiRulesDef BuildAiRules(Checker c, AiRulesJson? j, RulesDef? rules)
     {
@@ -398,6 +398,7 @@ public static partial class DataLoader
             CounterMemoryTicks = c.Ticks(j.CounterMemory, "ai.counterMemory", 1), // M5-9a
             StarvedWaveAfterTicks = OffOrTicksUpTo(c, j.StarvedWaveAfter, "ai.starvedWaveAfter", DataLimits.MaxAiStarvedWaveSeconds), // M5-9a round 2
             StarvedMinArmy = WholeNumber(c, j.StarvedMinArmy, "ai.starvedMinArmy", 1, DataLimits.MaxAiStarvedMinArmy), // M5-9a round 2
+            FarExpandReach = Meters(c, j.FarExpandReach, "ai.farExpandReach", DataLimits.MaxAiFarExpandReach, min: 0), // M5-9b
             CounterMasks = CounterMasks(c, j.Counters), // M5-9a
         };
     }

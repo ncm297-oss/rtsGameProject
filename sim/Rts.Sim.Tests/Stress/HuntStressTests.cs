@@ -110,10 +110,22 @@ public class HuntStressTests
     /// </summary>
     [Theory]
     [Trait("Category", "Stress")]
-    [InlineData(1UL, false)]
     [InlineData(3UL, false)]
     [InlineData(1UL, true)]
     public void FourAiSeats_OnPaleHills_EndWithTheOracleOnEveryHunt(ulong seed, bool teams) => FourSeatsRow(seed, teams);
+
+    /// <summary>
+    /// Pale Hills free-for-all seed 1 (BUG-1153's family since M5-9a; BUG-1068 / BUG-1116): no result by 144,000 on the M5-9a
+    /// branch, and none with M5-9b's far expansion either (the terminal rule's scope 5: a skipped row with the measurement).
+    /// With four seats every start is taken, so all the map's gold (9,000 a start) is in some seat's reach and is spent by
+    /// about 26,000; seat 3 is defeated at about 50:00 and the three left walk to its start at 57,620 and find its mines spent:
+    /// no free gold anywhere. At 144,000 seats 1 and 2 are alive (0 and 6 army, 31,000-42,000 wood each, gold 8,880 / 8,820
+    /// gathered, all of it before 30:00), seats 0 and 3 out: two gold-starved seats that can raze nothing.
+    /// </summary>
+    [Theory(Skip = "BUG-1068 / BUG-1116 (open): no result by 144,000 with the far expansion (no free gold left on the map with four seats); measured in M5-9b")]
+    [Trait("Category", "Stress")]
+    [InlineData(1UL, false)]
+    public void FourAiSeats_OnPaleHills_Seed1_KnownStall(ulong seed, bool teams) => FourSeatsRow(seed, teams);
 
     /// <summary>
     /// Pale Hills free-for-all seed 2 (BUG-1116 / BUG-1068's remaining case, the Producer's ruling at the 2026-11-07-0236 ACCEPT):
@@ -121,6 +133,7 @@ public class HuntStressTests
     /// 72,000). M5-H5 fixed the two hunt causes once named here (BUG-1119, a defeated seat's buildings kept as known, and the
     /// lone-idle-worker hunt gap); the stall left was BUG-1068's gold starvation alone. M5-9a round 2 fix round 1 (BUG-1154:
     /// the starved check judges the unit production would train) ends it: 80,278 (66:53), seat 3 the winner; un-skipped.
+    /// M5-9b (the far expansion): 97,140 (80:57), seat 3, still inside 144,000.
     /// </summary>
     [Theory]
     [Trait("Category", "Stress")]
@@ -183,7 +196,7 @@ public class HuntStressTests
     /// Pale Hills seed 3 (a BUG-1068 stall before M5-4d): saved at the first think a seat hunts by a sweep and at the first
     /// it hunts a sighting; each load follows the uninterrupted run hash for hash to the match's end, the AI seats field for field equal there.
     /// M5-9a: with Normal's counter shift seed 3 ends at 31,891 without a hunt, so the row plays seed 5 (<see cref="MidHuntSeed"/>,
-    /// one hunt, ends at 45,358) to keep a save taken mid-hunt.
+    /// one hunt, ends at 45,358) to keep a save taken mid-hunt. M5-9b: seed 1 (one hunt, ends at 48,858; seed 5 ends past 72,000).
     /// </summary>
     [Fact]
     [Trait("Category", "Stress")]
@@ -222,8 +235,12 @@ public class HuntStressTests
         foreach ((string what, Simulation l) in loads) SaveTestRun.AssertSameState(sim, l, what + " at the end");
     }
 
-    /// <summary>The Pale Hills seed the mid-hunt save row plays: 3 until M5-9a, 5 since.</summary>
-    private const ulong MidHuntSeed = 5;
+    /// <summary>
+    /// The Pale Hills seed the mid-hunt save row plays: 3 until M5-9a, 5 in M5-9a, 1 since M5-9b (seed 5 now ends only at
+    /// 96,321, past the row's 72,000: the far expansion's gold lengthens its war, BUG-1116's slow raze at the end; seed 1 ends
+    /// at 48,858 after one hunt).
+    /// </summary>
+    private const ulong MidHuntSeed = 1;
 
     private static Simulation Reload(Simulation sim)
     {

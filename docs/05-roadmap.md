@@ -752,7 +752,11 @@ open S1 / S2. Retro below; open S3 / S4 listed there.)_
       (15,691, bound 24,000; seed 1 ends at 25,968); **Pale Hills seed 1 Normal v Normal ends only at 68,664 (fix round 1;
       71,660 before it), outside 36,000 (BUG-1153, open: the stalemate is gone, a slow raze is left). Round 2 ESCALATED
       2026-11-08-1556: the branch is held; the next sim session adds BUG-1068's (a), the expansion reach, under the
-      acceptance rule in BUG-1153's triage, unless the owner picks another route in the inbox.**)
+      acceptance rule in BUG-1153's triage, unless the owner picks another route in the inbox.** M5-9b (2026-11-09-0426)
+      adds it: a seat whose gold is spent sends a worker to look at the free start locations and builds its gold-free depot
+      by a free mine it has seen there (`rules.json` `ai.farExpandReach` 384 m, 0 = off; docs/03 "Implementation (M5-9b)").
+      Pale Hills seed 1 Normal v Normal now ends at **48,858 (40:42)**, seat 1, every check clean: the terminal rule's
+      outcome (b), the three 1v1 Pale Hills rows bound at 72,000 (Producer decision 2026-11-08-1556), BUG-1153 to S3.)
 
 ## M6 — Game shell & real art
 

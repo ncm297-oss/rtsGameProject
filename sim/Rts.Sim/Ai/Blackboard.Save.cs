@@ -265,6 +265,19 @@ internal sealed partial class Blackboard
         w.WriteArray(SeenSlotCount);
         w.WriteArray(SeenSlotTick);
         w.Write(StarvedSince); // M5-9a round 2: the starved stamp, after the memory (same formats 8 / 9)
+        // M5-9b: the far expansion, after the stamp (same formats 8 / 9: neither is on main yet).
+        w.Write(FarPhase);
+        w.Write(FarLooked);
+        w.Write(FarStart);
+        w.Write(FarLook);
+        w.Write(FarMoved);
+        w.Write(FarScoutSlot);
+        w.Write(FarScoutGeneration);
+        Write(w, FarPending);
+        w.Write(FarSiteType);
+        w.Write(FarSiteCell);
+        w.Write(FarNoSiteUntil);
+        w.Write(FarExpansions);
     }
 
     /// <summary>
@@ -272,7 +285,7 @@ internal sealed partial class Blackboard
     /// units than the match holds), each tick 0 to <paramref name="now"/> (no sighting after the seat's last think); round 2:
     /// the starved stamp -1 (none) or 0 to <paramref name="now"/> (no stamp after the seat's last think).
     /// </summary>
-    internal void ReadCountersFrom(SaveReader r, int unitSlots, int now)
+    internal void ReadCountersFrom(SaveReader r, int unitSlots, int now, int starts, int buildingTypes, int cells)
     {
         r.ReadArray(SeenSlotCount);
         r.ReadArray(SeenSlotTick);
@@ -280,6 +293,45 @@ internal sealed partial class Blackboard
             r.Check(SeenSlotCount[s] >= 0 && SeenSlotCount[s] <= unitSlots && SeenSlotTick[s] >= 0 && SeenSlotTick[s] <= now);
         StarvedSince = r.ReadInt32();
         r.Check(StarvedSince == -1 || StarvedSince >= 0 && StarvedSince <= now);
+        ReadFarFrom(r, unitSlots, starts, buildingTypes, cells);
+    }
+
+    /// <summary>
+    /// M5-9b: the far expansion's fields, each bounded (<c>Malformed</c> otherwise): the phase 0-2; the looked-at bits only for
+    /// start locations the map has (at most <see cref="FarExpansion.MaxStarts"/>); the start walked to -1 or a start, its look
+    /// point in range; the leg's worker -1 or a unit slot (with a generation above 0); the pending order none or a Build; the
+    /// site -1 / -1 or a building type and a cell; and the state consistent (no leg, Build or site while off, no site while
+    /// a Build waits).
+    /// </summary>
+    private void ReadFarFrom(SaveReader r, int unitSlots, int starts, int buildingTypes, int cells)
+    {
+        FarPhase = r.ReadByte();
+        r.Check(FarPhase <= FarExpansion.Building);
+        FarLooked = r.ReadInt32();
+        int usable = System.Math.Min(starts, FarExpansion.MaxStarts);
+        r.Check(FarLooked >= 0 && (usable >= 31 || FarLooked >> usable == 0));
+        FarStart = r.ReadInt32In(-1, usable - 1);
+        FarLook = r.ReadInt32In(0, FarExpansion.LookPoints - 1);
+        FarMoved = r.ReadBool();
+        FarScoutSlot = r.ReadInt32In(-1, unitSlots - 1);
+        FarScoutGeneration = r.ReadInt32();
+        r.Check(FarScoutSlot < 0 ? FarScoutGeneration == 0 : FarScoutGeneration > 0);
+        FarPending = ReadPending(r);
+        r.Check(FarPending.Kind is PendingKind.None or PendingKind.Build);
+        FarSiteType = r.ReadInt32In(-1, buildingTypes - 1);
+        FarSiteCell = r.ReadInt32In(-1, cells - 1);
+        r.Check((FarSiteType < 0) == (FarSiteCell < 0));
+        FarNoSiteUntil = r.ReadInt32();
+        FarExpansions = r.ReadInt32In(0, int.MaxValue);
+        // Off: no leg, no Build, no site. Armed: a leg perhaps, no Build, no site. Building: no leg, and exactly one of a
+        // Build waiting and a site standing.
+        bool leg = FarStart >= 0 || FarScoutSlot >= 0, build = FarPending.Kind != PendingKind.None, site = FarSiteType >= 0;
+        r.Check(FarPhase switch
+        {
+            0 => !leg && !build && !site,
+            FarExpansion.Armed => !build && !site,
+            _ => !leg && build != site,
+        });
     }
 
     /// <summary>A pending order field by field (its byte kind leaves padding, so it isn't written as raw bytes).</summary>

@@ -136,6 +136,14 @@ public sealed class AiRulesDef
     public int StarvedMinArmy { get; init; }
 
     /// <summary>
+    /// M5-9b (BUG-1068 (a); docs/03 "Implementation (M5-9b)"): a seat whose gold is short for production's pick, with no own
+    /// worker at gold and no gold node it may gather known, looks at the map's unused start locations and expands with a
+    /// gold-free drop-off to a free gold node it has seen within this distance of its hall (<c>farExpandReach</c> m, 0-512;
+    /// <b>0 turns the rule off</b>: the seat never arms).
+    /// </summary>
+    public float FarExpandReach { get; init; }
+
+    /// <summary>
     /// M5-9a: <c>ai.counters</c> as bit masks, indexed by the enemy's <see cref="UnitSlot"/>: bit <c>s</c> is set when own slot
     /// <c>s</c> counters it (docs/02 "Faction template", the "Countered by" column). Default (no <c>ai</c>) or all 0: no shift.
     /// </summary>

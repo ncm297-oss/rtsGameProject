@@ -187,6 +187,9 @@ public static class DataLimits
     /// <summary>M5-9a round 2: the most <c>rules.json</c> <c>ai.starvedMinArmy</c> may be (the brief's range).</summary>
     public const int MaxAiStarvedMinArmy = 50;
 
+    /// <summary>M5-9b (BUG-1068 (a)): the most <c>rules.json</c> <c>ai.farExpandReach</c> may be, in meters (the brief's range; 0 turns the rule off).</summary>
+    public const double MaxAiFarExpandReach = 512;
+
     /// <summary>M5-8a: the most named openings one <c>ai.json</c> <c>openings</c> may hold (the brief's 8).</summary>
     public const int MaxAiOpenings = 8;
 

@@ -413,6 +413,10 @@ public class DataValidationTests
     [InlineData("starvedMinArmy", null, "ai.starvedMinArmy", "missing required field")]
     [InlineData("starvedMinArmy", "-1", "ai.starvedMinArmy", "not a whole number in 1-50")]
     [InlineData("starvedMinArmy", "0", "ai.starvedMinArmy", "not a whole number in 1-50")]
+    [InlineData("farExpandReach", null, "ai.farExpandReach", "missing required field")] // M5-9b
+    [InlineData("farExpandReach", "-1", "ai.farExpandReach", "outside 0-512 m")]
+    [InlineData("farExpandReach", "512.5", "ai.farExpandReach", "outside 0-512 m")]
+    [InlineData("farExpandReach", "\"384\"", "$.ai.farExpandReach", "")]
     [InlineData("starvedMinArmy", "51", "ai.starvedMinArmy", "not a whole number in 1-50")]
     [InlineData("starvedMinArmy", "1.5", "ai.starvedMinArmy", "not a whole number in 1-50")]
     [InlineData("counters", "[]", "$.ai.counters", "")]
@@ -673,6 +677,8 @@ public class DataValidationTests
     [InlineData("starvedWaveAfter", 600, 12000)]
     [InlineData("starvedMinArmy", 1, 1)]
     [InlineData("starvedMinArmy", 50, 50)]
+    [InlineData("farExpandReach", 0, 0)] // M5-9b: 0 turns the far expansion off
+    [InlineData("farExpandReach", 512, 512)]
     public void AiDefenseKnobs_AtTheirEdges_Load(string knob, double value, double loaded)
     {
         using TestDataDir dir = TestDataDir.CopyOfShipped();
@@ -685,7 +691,7 @@ public class DataValidationTests
             "defendFor" => a.DefendForTicks, "defendRadius" => a.DefendRadius, "castMinTargets" => a.CastMinTargets,
             "defendRatio" => a.DefendRatio, "defendMinValue" => a.DefendMinValue, "recallHallHp" => a.RecallHallHp, "reserveShift" => a.ReserveShift, "reserveArmyShare" => a.ReserveArmyShare, "gatherReach" => a.GatherReach,
             "scoutReplacements" => a.ScoutReplacements, "spendDownQueue" => a.SpendDownQueue, "huntMemory" => a.HuntMemoryTicks, "focusReach" => a.FocusReach,
-            "starvedWaveAfter" => a.StarvedWaveAfterTicks, "starvedMinArmy" => a.StarvedMinArmy, _ => a.WorkerFleeRadius,
+            "starvedWaveAfter" => a.StarvedWaveAfterTicks, "starvedMinArmy" => a.StarvedMinArmy, "farExpandReach" => a.FarExpandReach, _ => a.WorkerFleeRadius,
         }, 5);
     }
 

@@ -9150,7 +9150,8 @@ tests `Ai/CriterionMatch.cs` (the harness), `Ai/MatchCriterionTests`, `CommandRe
 - **The reading (the Producer's, 2026-11-08).** The literal row is two Normal AI seats (Malazan v Whirlwind, starts 0 and 1)
   ending with exactly one side defeated **within 24,000 ticks (20:00)**, error-free: Vathar Crossing seed 1, which ends at
   22,794 (18:59; 23,043 = 19:12 since M5-9a). It runs in the default test loop (26 s with every check). The other maps have the same row shape with a
-  documented bound, a constant in the test with the measured end in its comment: Pale Hills seed 1, 36,000 (the Producer's);
+  documented bound, a constant in the test with the measured end in its comment: Pale Hills seed 1, 36,000 (the Producer's;
+  **72,000 since M5-9b**, BUG-1153, Producer decision 2026-11-08-1556: the terminal rule's outcome (b), "Implementation (M5-9b)");
   Raraku seed 1, the next 6,000 above its end with at least 10 % slack, 36,000; the generated map, the lowest seed of 1-6
   that ends under 24,000 (seed 1), bound 24,000 (M5-9a round 1 lengthened seed 1 to 26,853 and the bound went to 30,000;
   round 2 ends seed 1 at 25,968, still over 24,000, so the row is now seed 2, 15,691, bound 24,000 again). Plus a four-seat free-for-all and a 2v2 (teams 1 / 2 / 1 / 2) on seeds
@@ -9185,12 +9186,18 @@ tests `Ai/CriterionMatch.cs` (the harness), `Ai/MatchCriterionTests`, `CommandRe
   | --- | --- | --- | --- | --- | --- | --- |
   | literal | Vathar Crossing 1 | 23,043 = 19:12 (24,000) | seat 1 (Whirlwind) | 5 | 0 | none |
   | | Raraku 1 | 28,083 = 23:24 (36,000) | seat 0 (Malazan) | 7 | 1 | none |
-  | | Pale Hills 1 | no result by 36,000: BUG-1153 (ends at 71,660 = 59:43, seat 1, with the starved wave) | none | 17 | 0 | none (to 36,000) |
+  | | Pale Hills 1 | 48,858 = 40:42 (72,000; BUG-1153, Producer decision 2026-11-08-1556) | seat 1 (Whirlwind) | 24 | 1 | Build UnitInTheWay 9, UnitGone 1; UseAbility UnitGone 1 |
   | | generated 2 | 15,691 = 13:05 (24,000) | seat 1 | 2 | 0 | Build UnitInTheWay 4 |
   | FFA | Vathar Crossing 2, 4 seats | 58,155 = 48:27 (72,000) | seat 3 | 18 | 9 | AttackMove UnitGone 4; Build SealsGround 2, UnitInTheWay 6 |
   | 2v2 | Vathar Crossing 1, 4 seats | 35,648 = 29:42 (72,000) | team 1 | 18 | 8 | AttackMove UnitGone 1; Build Blocked 1, SealsGround 2, UnitInTheWay 8; Gather UnitGone 1 |
 
   Waves and hunts are the match's totals over its seats. The longest refusal run on any row is 1 think (no command refused twice on one target).
+  **Re-measured for M5-9b** (the far expansion, `ai.farExpandReach` 384 m): Vathar, Raraku, the generated row, the FFA and the
+  2v2 end on the same ticks with the same winners and fold hashes (no seat there builds a far depot); **Pale Hills seed 1 ends
+  at 48,858 (40:42), seat 1**, every check clean (both seats expand to a free start at about 28,000; gathered gold 14,090 /
+  13,780 against about 9,000 before): the terminal rule's outcome (b), so the three 1v1 Pale Hills rows (both
+  `MatchCriterionTests` rows and `MapFileTests`' Pale Hills row, renamed `NormalVersusNormal_OnANewMap_EndsWithinItsBound`)
+  are bound at 72,000 with BUG-1153 and the Producer decision in the constant's comment.
   **Re-measured for M5-9a round 2** (the starved wave, `ai.starvedWaveAfter` 60 s): Vathar, Raraku, the FFA and the 2v2
   end on the same ticks with the same winners (Raraku's and Vathar's digests unchanged: no stamp comes due before their
   ends changes a command there); Pale Hills seed 1 ends but only at 71,660 (BUG-1153); the generated map seed 1 ends at
@@ -9216,7 +9223,8 @@ tests `Ai/CriterionMatch.cs` (the harness), `Ai/MatchCriterionTests`, `CommandRe
   - Also allowed, not seen: a Train over the queue or without the cost (`TrainRefused:QueueFull` / `CannotAfford`), the
     other unit orders' `UnitGone`, and `Attack:AttackTargetInvalid` (the target died that tick).
 - **What does not end, and why.** Pale Hills seed 2 Normal v Normal (BUG-1068: the gold runs out, the `expand` step looks
-  40 m only, the empty starts' 18,000 gold is never touched); the lone-unit gap (BUG-1116: one seat keeps a few units and no
+  40 m only, the empty starts' 18,000 gold is never touched; since M5-9b the empty starts are taken and the match ends at
+  79,504, decided by 40:00 but finished late, BUG-1157); the lone-unit gap (BUG-1116: one seat keeps a few units and no
   building against a hunt that sweeps the perimeter leg first) and two live seats still fighting at the hour: QA's M5-H5
   sweep of 24 four-seat matches to 72,000 ended 6 / 12 FFA and 8 / 12 2v2. The criterion's rows avoid those seeds on
   purpose. **BUG-1151 (found here):** the economy's rebalance (one gatherer a think moved to the other kind) can send a
@@ -9450,6 +9458,127 @@ has seen, from a fog-limited memory that fades over a few minutes, by a strength
     Pale Hills seed 3 Easy v Normal (BUG-1155 item 3, named per rule 43): it ended at 33,524 before M5-9a and has had no
     result by 36,000 since round 1's counter shift; fix round 1 does not move it (`8FBFA3820C590F5A 36000 2606`). An Easy
     pin with no bound of its own.
+
+### Implementation (M5-9b)
+
+BUG-1068's candidate (a), the second half of BUG-1153 (the Producer's default at the 2026-11-09-0426 PLAN): a seat whose
+own gold is spent goes and takes the map's unclaimed mines. On Pale Hills both seats held 16-46 gold from 24:00 with 9,000
+gold untouched at each of the two unused starts ~260 m off: the `expand` step looks only 40 m from the hall and places a
+Town Hall (275 gold) a broke seat can never pay, and nothing ever looked at the unused starts (the scout's sweep ends at the
+first forest + mine + enemy building). Code: `Ai/FarExpansion.cs` (new), `AiPlayer.UpdateFarArm` / `ShortForPick` /
+`CensusKnowsGold` / `DepotType` / `IsScout` / the `TryBuild` builder overload, `Blackboard.Far*` (+ `CTRM`),
+`PlayerView.StartCount` / `StartCell` / `PlayerCount`, `BuildOrderExecutor.HallNear` (now internal), `AiRulesDef.FarExpandReach`,
+`DataLoader.Ai.cs`, `GameData.AddAi`. Tests: `Ai/FarExpandTests`, `DataValidationTests` / `DataContentHashTests` (the knob's
+rows), `SaveRefusalTests.AFormat8Save_WithAForgedFarExpansion_IsMalformed`, `CounterCompositionTests.TheNonHardPins_*` (now
+with the knob at 0 too).
+
+- **The knob.** `rules.json` `ai.farExpandReach`: meters, required, 0-512 (`DataLimits.MaxAiFarExpandReach`), kept in
+  meters; **0 turns the rule off**; shipped **384**. Hashed after `starvedMinArmy`. `ai.farExpandGold` (the brief's optional
+  second knob) was not needed: the arm reuses the starved check's (i), the pick's cost.
+- **Its own rule, not the `expand` step.** `FarExpansion.Run` runs every think after `BuildOrderExecutor.Run` (so the hall
+  rebuild and the build order's reserve come first) and before the scout; the executor's `expand` step and its Town Hall rule
+  are unchanged. Its state is `Blackboard.FarPhase`: 0 off, 1 armed, 2 building.
+- **Arm** (`AiPlayer.UpdateFarArm`, at the end of the census, after the starved check): the knob above 0, the phase 0, the
+  match not over, a building and a worker, **no own worker at gold** (`Gathering`, the starved check's: last sent to gold and
+  its order pending or the worker not Idle and not Building), **gold short for production's pick** (`ShortForPick`: the
+  starved check's (i), split out of `Starved` unchanged: it cannot pay for `ProductionManager.Pick`, or with no producer free
+  for any composition unit) and **no gold node it may gather known** (`WalkForNode(Gold)`, `KnowsNode`'s walk). The census's
+  gold walk is shared with the starved check's (`CensusKnowsGold`, cleared at the census's end), so a starved seat walks its
+  nodes once. Armed, the seat stays armed until the rule clears it.
+- **Armed** (`FarExpansion.Run`). First the candidate (`FarExpansion.Candidate`): of the gold nodes the view answers (its
+  node memory: **seen**, nothing else), one not marked dropped, not seen empty, within `farExpandReach` of the hall's centre,
+  with no own drop-off (finished or a site) within `ai.gatherReach` of it (it needs none), no known enemy drop-off (seen, or a
+  ghost of a seat still in the match) within `ai.gatherReach` of it, and no own or seen hall within `ai.expandHallReach`
+  (`HallNear`, the `expand` step's exclusion); the nearest the hall. With one: the leg ends and the drop-off is ordered by the
+  usual site search round the node's centre cell (`TryBuild`: `placementSearchRadius`, `buildingSpacing`, the mines'
+  spacing, retry marks; a search that finds nothing waits `NoSiteRetryThinks` thinks, `FarNoSiteUntil`), the leg's worker
+  (standing by the mine) the builder when it is alive with no order pending, else `PickBuilder`'s. The Build sent, phase 2.
+  Short of its wood it simply waits (`TryBuild` refuses on the cost before any search: no command). With no candidate and an
+  own worker at gold, the arm clears (phase 0; a leg worker walking is stopped so the economy finds it idle): gold comes in
+  without a far drop-off. Otherwise the leg.
+- **The drop-off** (`FarExpansion.ExpansionType`, `GoldFreeDropOff`): the faction's cheapest drop-off building with no gold
+  cost (least wood, then the lowest id) from data: `malazan_depot` / `whirlwind_supply_cache` (0 gold / 75 wood, 25 s;
+  docs/02 "Buildings": the Camp is the drop-off for expansions). The Town Hall only when the seat can pay for one now, or
+  when the faction has no such drop-off (then it waits for the gold). No faction id in C#.
+- **The leg** (`FarExpansion.Leg` / `NextStart` / `LookPoint`). One worker (`Blackboard.FarScoutSlot`; `PickBuilder`'s
+  nearest the point: an idle one first, else a gatherer) walks to the nearest **free start location** it has not looked at
+  (no player starts there: index at or past the player count, player p starts on location p; or its player is defeated),
+  then round it: its centre, then the four compass points `FarExpansion.LookRadius` (9 m: half the map contract's
+  `StartMineDistance`, 18 m, within which every start's mines lie, so a worker of 13 m sight or more sees every footprint the
+  contract allows) off it. One Move a think at most, only once the last applied; a point is looked at when the worker is
+  within `ai.scoutReach` of it or stands still after the Move to it applied. The start's last point marks it
+  (`FarLooked`, a bit per start) and the leg goes on to the next; with none left it ends and the seat waits armed. A leg
+  worker that dies is replaced at the next think from the point it was walking to. While on the leg the worker is the
+  seat's scout to every other manager (`AiPlayer.IsScout`: no gather, build, flee or ability order). Distances are compared
+  in whole cells; on a tie the seat's own turn of the tied starts (a ring from index `PlayerCount + Player`): on Pale Hills
+  1v1 both free starts are 129 cells from both halls, and the lowest index sent both seats to one start, where they fought
+  over it and both lost their workers while the other start's gold stayed untouched (measured: 45,003, both expansions
+  razed).
+- **Why the start list is no cheat.** It is map data every seat is given before the match (the setup screen shows the
+  starts; `World.StartLocations`, the same list `StartBase.Plan` places the bases from), like the terrain the view already
+  answers: it says where a base may have been placed, not what stands there or whether a mine is left. Who is defeated is
+  public under the win rule (`PlayerView.IsDefeated`, M5-H5). The mine the seat builds by must have been **seen**: the
+  candidate walk reads only `View.NextResource` (the fog's node memory), which QA's `PlayerViewOracle` checks.
+- **Building** (`FarExpansion.Follow`). The Build is judged at the first think after it applied: refused, its anchor gets a
+  retry mark and the seat is armed again (retried at once); accepted, the site is followed (`FarSiteType` / `FarSiteCell`;
+  the economy's stalled-site rule keeps a builder on it) until it stands (phase 0: done) or is gone (phase 0: a lost far
+  depot is not rebuilt, and as the seat now knows the mine it does not arm again for it). Once the drop-off stands, the
+  gatherers move to the mine by the existing economy: the reach has lifted, so the mine is a gather target, and the
+  rebalance (M5-3 / M5-4g, `WantedGoldShare`) moves one gatherer a think to gold until the share is met; each carries to the
+  nearest drop-off, now the depot. One far expansion at a time.
+- **Knob 0.** `UpdateFarArm` and `Run` return at once, the phase stays 0 and `FarScoutSlot` -1 (so `IsScout`'s added compare
+  is always false), `TryBuild`'s old overload is the new one with no builder, and `Starved`'s refactor is the same test in
+  the same order: with Normal `counterStrength` 0, `starvedWaveAfter` 0 and `farExpandReach` 0 the 8 pre-M5-9a digests are
+  reproduced (`CounterCompositionTests.TheNonHardPins_*`), and with the knob alone at 0 a whole Vathar Crossing seed 1 match
+  sends the same commands as shipped, no seat armed there (`FarExpandTests.AWholeMatch_*`).
+- **Save / load** (formats stay 8 / 9: neither is on `main`). The far state is written in `CTRM` after `StarvedSince`, per
+  AI seat: the phase (byte), `FarLooked`, `FarStart`, `FarLook`, `FarMoved` (bool), `FarScoutSlot`, `FarScoutGeneration`,
+  the pending Build (as every pending order), `FarSiteType`, `FarSiteCell`, `FarNoSiteUntil`, `FarExpansions` (67 bytes).
+  The reader requires the phase 0-2, looked-at bits only for starts the map has, the start -1 or a start, the look point
+  0-4, the leg worker -1 or a unit slot (generation 0 with none, above 0 with one), the pending order none or a Build, the
+  site -1 / -1 or a building type and a cell, a non-negative count, and the phases' shapes (off: no leg, Build or site;
+  armed: no Build or site; building: no leg and exactly one of a Build and a site); else `Malformed`
+  (`SaveRefusalTests.AFormat8Save_WithAForgedFarExpansion_IsMalformed`). `PreMapFixtures.CountersAt` counts the 67 bytes
+  (`FarBytes`). The AI's state stays out of `StateHash`. A seat saved mid-arm follows the run hash for hash through its
+  depot (`FarExpandTests.ASeatSavedMidArm_LoadsAndFollows`).
+- **Allocation, cost.** Nothing is allocated (fixed fields, view cursors). Off the arm, a think costs the arm's cheap
+  tests (the knob, the phase, the worker loop of `Gathering`, which ends at the first gold worker); armed, one pass over the
+  known nodes (gold only past the type check) with the drop-off checks per gold node, plus the leg's few compares.
+- **Tests** (`Ai/FarExpandTests`; the flat scene with four start locations, every gold mine emptied, banks 0 gold / 200
+  wood, the scout's sweep marked over, unexplored): the broke seat arms at tick 0, walks to start 2, sees the far mine and
+  orders the **depot** (never the hall) in gather reach of it at 280 with the mine in its view, the depot stands at 800 and a
+  gold worker is at work; a mine it never sees is never built by (both starts looked at, the seat waits armed); a mine with an
+  enemy supply cache beside it is not built by; under 75 wood it waits with no command, then builds once; the depot and hall
+  choice; the arm clears when a mine by the hall comes into sight and a gold worker is at work, and does not re-arm; two broke
+  seats as far from both free starts walk to different ones; no free start, no leg; knob 0 never arms; a save mid-arm.
+- **Not gated on the defense** (unlike the starved check): a raid that idles every gold worker and hides every known gold
+  node behind the flee ring can arm the rule for a seat short of its pick; the arm then clears at the first think a gold
+  worker is at work again with no far mine known. Left as is: the leg costs one worker's walk.
+- **Every difficulty.** The rule has no per-difficulty knob (the brief's), so Easy seats expand too; Easy-v-Normal pins move
+  where a seat goes broke (the four Pale Hills `NonHardMatchPinQaTests` rows).
+- **Pins re-measured (rule 43), M5-9a fix round 1 -> M5-9b:**
+
+  | Pin | M5-9a (branch) | M5-9b |
+  | --- | --- | --- |
+  | `MatchCriterionTests` Vathar 1 / Raraku 1 / generated 2 / FFA / 2v2 | 23,043 / 28,083 / 15,691 / 58,155 / 35,648 | the same, fold hashes unchanged |
+  | **Pale Hills 1** (both rows, `MapFileTests`) | 68,664, seat 1, outside 36,000 (BUG-1153) | **48,858 (40:42), seat 1, every check clean: outcome (b), bound 72,000** (BUG-1153 to S3) |
+  | `NonHardMatchPinQaTests` | 8 digests | 4 Pale Hills rows move: seed 1 Normal `7A4B426913372A53 36000 3109`, seed 1 Easy `7BEB9DD74B7C779F 36000 2850`, seed 3 Normal `1D84903554D236D3 29514 2366`, seed 3 Easy `08CE3315062BC646 36000 2811` (old digests in the comments); Raraku and Vathar unchanged |
+  | the 8 pre-M5-9a digests (strength 0, starved wave 0, far expansion 0) | reproduced | reproduced |
+  | `MapSlice2 KnownStalls` Pale Hills 3 / 4 / 6, generated 6 | 31,891 / 25,941 | 29,514 / green |
+  | `MapSlice2` Pale Hills 5 | 45,358 | **96,321** (seat 0; decided by 70:00, a slow finish): out of `KnownStalls`, skipped with the measurement under BUG-1116 (BUG-1157, a finding) |
+  | `MapSlice2` Pale Hills 2 | 53,797 | **79,504** (seat 1; decided by 40:00, five hunts to find the far remnant): skipped again with the measurement under BUG-1068 / BUG-1116 (BUG-1157) |
+  | `MapSlice2` Raraku 5, other seeds | green | green |
+  | `AiDeterminismTests` hunt row / `HuntStressTests` mid-hunt save | seed 5 (45,358) | seed 5 ends past 72,000: both rows move to **seed 1** (48,858, one hunt; the save is taken at the sighting hunt, 48,821), green |
+  | `HuntStressTests` Pale Hills FFA seed 1 | no result by 144,000 | no result by 144,000 (no free gold with four seats: every start's mines are in someone's reach, spent by ~26,000): skipped under BUG-1068 / BUG-1116 (`FourAiSeats_OnPaleHills_Seed1_KnownStall`) |
+  | `HuntStressTests` Pale Hills FFA seed 2 / seed 3 / 2v2 seed 1 | 80,278 / green / green | **97,140** (seat 3) / green / green |
+  | `StandardPresetPinQaTests`, `HardKnobsPinTests`, `D21OpeningsQaTests` / `DH6ThresholdQaTests` (`KnownBeatenAlive`), the page cells | green | unchanged (green) |
+  | QA's sweep, `RebuildLookMatch` (both), `StarvedSaveTwoProcess`, the probes | green / `Known` as recorded | unchanged: green, `Known` (BUG-1151 generated 4, BUG-1152 Raraku 1 / 5) still failing as recorded |
+  | the golden header, formats | `30C51BB619A7E650`, 8 / 9, replay 9 | unchanged |
+  | Hard v Normal, the 42 matches (Hard wins / Normal wins / no result, to 72,000) | 27 / 15 / 0 (Raraku 10 / 4, Pale Hills 10 / 4, Vathar 7 / 7) | **26 / 11 / 5**: Raraku 10 / 4 / 0, Vathar 7 / 7 / 0, Pale Hills 9 / 0 / 5. Not inverted. The five are Pale Hills with Hard in seat 0 (seeds 2, 3, 6, 7, 8): decided matches finished late (BUG-1157: seed 2 is decided by 40:00, Normal with no army and no producer, and ends at 92,963 after ten hunts while Normal rebuilds) |
+  | `AiPerfTests` (alone, rule 42) | 6 / 6 | 6 / 6: 8 seats avg 0.527 ms, p95 0.864 ms; 8 Hard mid-wave avg 0.626 ms, p95 0.993 ms; 8 Hard starved avg 0.385 ms, p95 0.564 ms; storms avg 0.365 ms; 0 B a think |
+
+  Found on the way: the start tie (both seats to start 2 on Pale Hills seed 1: 45,003, both expansions razed in the fight
+  over it), fixed by the seat's turn above.
 
 ## Save/load and replays
 
@@ -9813,6 +9942,7 @@ site means the very same player: ownership, queues, groupmates).
 | `Ai/AbilityManager.cs` | `SeeEnemies`, `NearestEnemyBuilding`, friendly-fire avoidance | enemies / friends | allied-as-own |
 | `Ai/BuildOrderExecutor.cs` | `HallNear` (an expansion keeps clear of every other hall) | occupied ground | allied-as-other |
 | `Ai/ScoutManager.cs`, `Ai/PlayerView.cs` (`IsOwnUnit`, `IsOwnBuilding`, cargo, casts) | the scout, own-only answers | ownership | untouched |
+| `Ai/AiPlayer.cs` | `OwnUnit` (M5-9b: the far expansion's leg worker, `FarExpansion` and the `TryBuild` builder overload) | ownership | untouched |
 | `Ai/ScoutManager.cs` | `IsAlly` (M6-S5: head waypoints at an ally's base, the grid farthest from the ally) | an ally | ally (`!View.IsEnemy` and not the player) |
 | `World.cs` | `RecordDeath` (M6-S5: the kill's credit) | friendly fire | allied-as-own: an own or an ally's friendly-fire death is nobody's kill |
 | `ViewApi/UnitPicker.cs` | `ResolveEnemy` (`unitOwner[unit] == localPlayer`, `buildings.Owner[building] == localPlayer`: the right-click attack pick) | enemy | allied-as-own since M6-V16 (the overload taking `ViewApi/EnemyTable`, `World.IsEnemy`): a right-click on an ally is a Move; see "Implementation (M6-V16)" |
@@ -10321,7 +10451,8 @@ with 32 band rows between; the band can't see the banks. Starts (60, 62) and (19
 17.7 m west and a woodlot 22 m north; two expansion pairs a quarter (2,000 each) stand on the bank by its fords, 74-104 m out,
 with five more stands of trees: 8 ramps, 24 mines, 1,540 trees in 28 forests.
 
-**The matches** (`MapFileTests.NormalVersusNormal_OnANewMap_EndsWithin36000Ticks`, seed 1, Malazan v Whirlwind, starts 0 and 1):
+**The matches** (`MapFileTests.NormalVersusNormal_OnANewMap_EndsWithin36000Ticks`, seed 1, Malazan v Whirlwind, starts 0 and 1;
+since M5-9b `NormalVersusNormal_OnANewMap_EndsWithinItsBound`, Pale Hills bound 72,000: "Implementation (M5-9b)"):
 
 | Map | Result | Waves (Malazan / Whirlwind) | Gathered gold / wood (Malazan v Whirlwind) |
 | --- | --- | --- | --- |

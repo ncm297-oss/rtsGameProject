@@ -150,10 +150,17 @@ internal static class PreMapFixtures
     /// <summary>
     /// M5-9a: the offset of the <c>CTRM</c> tag of a format-8 / 9 save: the section is the last before <c>END!</c> and its size
     /// follows from the AI seat count (tag, count, per seat its index, two 7-int arrays with their lengths and, round 2, the
-    /// starved stamp).
+    /// starved stamp; M5-9b, the far expansion's <see cref="FarBytes"/>).
     /// </summary>
     internal static int CountersAt(byte[] save, int aiSeats) =>
-        save.Length - Rts.Sim.Save.SaveFormat.ChecksumLength - 4 - (8 + aiSeats * (4 + 2 * (4 + 4 * Rts.Sim.Ai.Blackboard.SlotCount) + 4));
+        save.Length - Rts.Sim.Save.SaveFormat.ChecksumLength - 4 - (8 + aiSeats * (4 + 2 * (4 + 4 * Rts.Sim.Ai.Blackboard.SlotCount) + 4 + FarBytes));
+
+    /// <summary>
+    /// M5-9b: a seat's far-expansion bytes in <c>CTRM</c>, after its starved stamp: the phase (1), the looked-at bits, the start
+    /// and its look point (4 each), the Move sent (1), the leg's worker and generation (4 each), the pending Build (29), the
+    /// site's type and cell, the no-site wait and the expansions (4 each).
+    /// </summary>
+    internal const int FarBytes = 1 + 4 + 4 + 4 + 1 + 4 + 4 + 29 + 4 + 4 + 4 + 4;
 
     /// <summary>The save with its last section before <c>END!</c> (tagged <paramref name="tag"/>, after a <paramref name="after"/> section) cut out, relabelled <paramref name="version"/>.</summary>
     private static byte[] WithoutLastSection(byte[] save, ReadOnlySpan<byte> tag, ReadOnlySpan<byte> after, int version)

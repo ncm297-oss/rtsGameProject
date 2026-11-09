@@ -372,6 +372,7 @@ public sealed class GameData
         h.Add(r.CounterMemoryTicks); // M5-9a
         h.Add(r.StarvedWaveAfterTicks); // M5-9a round 2
         h.Add(r.StarvedMinArmy);
+        h.Add(r.FarExpandReach); // M5-9b
         h.Add(r.CounterMasks.IsDefault ? -1 : r.CounterMasks.Length);
         if (!r.CounterMasks.IsDefault)
             foreach (byte mask in r.CounterMasks) h.Add((int)mask);

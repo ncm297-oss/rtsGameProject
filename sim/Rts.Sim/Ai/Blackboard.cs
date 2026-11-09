@@ -13,7 +13,7 @@ namespace Rts.Sim.Ai;
 /// <c>Blackboard.Save.cs</c>). Since M5-4b the defense's kept
 /// building hp, point and per-unit marks; since M5-4c the casters' last casts; since M5-4f the defenders picked and the
 /// wave's start threshold; since M5-4d the last enemy unit seen and the hunt's sweep (saved in their own section, <c>HUNT</c>); since M5-9a the counter memory of
-/// enemy unit slots seen and (round 2) the starved stamp (<c>CTRM</c>).
+/// enemy unit slots seen and (round 2) the starved stamp (<c>CTRM</c>); since M5-9b the far expansion's state (<c>CTRM</c> too).
 /// </summary>
 internal sealed partial class Blackboard
 {
@@ -309,6 +309,39 @@ internal sealed partial class Blackboard
 
     /// <summary>The seven template unit slots (<see cref="Data.UnitSlot"/>, <see cref="Data.DataLimits.SlotIds"/>).</summary>
     internal const int SlotCount = 7;
+
+    // ---------- M5-9b: the far expansion (FarExpansion; saved in CTRM after StarvedSince) ----------
+
+    /// <summary>
+    /// M5-9b: the far expansion's state: 0 off, <see cref="FarExpansion.Armed"/> (gold short, none gathered, none known: it
+    /// looks at the unused starts and expands once it knows a free mine), <see cref="FarExpansion.Building"/> (its drop-off
+    /// Build sent or its site standing). Stays 0 with <c>ai.farExpandReach</c> 0.
+    /// </summary>
+    internal byte FarPhase;
+
+    /// <summary>M5-9b: bit k set once the leg has looked at start location k (walked its look points).</summary>
+    internal int FarLooked;
+
+    /// <summary>M5-9b: the start location the leg walks to (-1: none), and its look point (0 the centre, 1-4 round it, <see cref="FarExpansion.LookPoints"/>).</summary>
+    internal int FarStart = -1, FarLook;
+
+    /// <summary>M5-9b: whether the Move to the current look point was sent (then the scout standing still there has looked).</summary>
+    internal bool FarMoved;
+
+    /// <summary>M5-9b: the leg's worker (unit slot, -1 none, and generation): no other manager orders it (<see cref="AiPlayer.IsScout"/>).</summary>
+    internal int FarScoutSlot = -1, FarScoutGeneration;
+
+    /// <summary>M5-9b: the drop-off Build waiting to be judged (a Build pending order, or none).</summary>
+    internal PendingOrder FarPending;
+
+    /// <summary>M5-9b: the accepted drop-off site's type and anchor while it is built (-1 / -1: none).</summary>
+    internal int FarSiteType = -1, FarSiteCell = -1;
+
+    /// <summary>M5-9b: the tick before which a drop-off site search that found nothing doesn't run again (BUG-0791's wait); 0 none.</summary>
+    internal int FarNoSiteUntil;
+
+    /// <summary>M5-9b: far drop-off sites accepted (tests and tooling).</summary>
+    internal int FarExpansions;
 
     // ---------- M5-3: the military (MilitaryManager) ----------
 

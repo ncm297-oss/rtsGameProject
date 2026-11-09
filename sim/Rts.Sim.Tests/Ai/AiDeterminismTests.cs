@@ -152,7 +152,8 @@ public class AiDeterminismTests
     /// processes: this process and a fresh child <c>dotnet test</c> of this row fold the same per-tick hashes, end on the same
     /// tick and count the same hunts. Asserted here too: the match ends and a hunt was started. M5-9a: with Normal's counter
     /// shift seed 3 ends at 31,891 with no hunt (the winner razes the rest), so the row plays seed 5 (<see cref="HuntSeed"/>:
-    /// ends at 45,358 after one hunt, QA's sweep) to keep a hunt in the two-process proof.
+    /// ends at 45,358 after one hunt, QA's sweep) to keep a hunt in the two-process proof. M5-9b: the far expansion lengthens
+    /// seed 5 past 72,000 (96,321), so the row plays seed 1 (48,858, one hunt).
     /// </summary>
     [Fact]
     [Trait("Category", "Stress")]
@@ -178,8 +179,11 @@ public class AiDeterminismTests
         Assert.Equal(mine, MapFileTests.RunChild(typeof(AiDeterminismTests), nameof(PaleHills_ToTheEndWithAHunt_TwoProcesses_SamePerTickHashes), HuntChildVariable, HuntLine, seconds: 1200));
     }
 
-    /// <summary>The Pale Hills seed the hunt row plays: 3 until M5-9a, 5 since (see the row).</summary>
-    private const ulong HuntSeed = 5;
+    /// <summary>
+    /// The Pale Hills seed the hunt row plays: 3 until M5-9a, 5 in M5-9a, 1 since M5-9b (see the row: seed 5 now ends only at
+    /// 96,321, past 72,000; seed 1 ends at 48,858 after one hunt).
+    /// </summary>
+    private const ulong HuntSeed = 1;
 
     /// <summary>M6-S4 criterion 5: two runs of the 2v2 AI match (teams 1, 2, 1, 2; <see cref="AiTeamTests.Match"/>) hash equal after every tick, with the same commands and thinks per seat.</summary>
     [Theory]

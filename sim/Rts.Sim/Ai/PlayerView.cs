@@ -122,6 +122,25 @@ public sealed class PlayerView
     /// <summary>The terrain plateau of <paramref name="cell"/> (M3-H2: labelled at load, before any building or node), -1 for none.</summary>
     public int PlateauAt(int cell) => _world.Plateaus.At(cell);
 
+    // ---------- the start list (M5-9b): map data every seat is given, so no fog ----------
+
+    /// <summary>
+    /// M5-9b: the map's start locations (<see cref="World.StartLocations"/>, in player order: player p starts on location p);
+    /// 0 on a hand-built map. The list is part of the map every seat is given before the match (the setup screen shows it),
+    /// like the terrain: it says where a base may have been placed, not what stands there now.
+    /// </summary>
+    public int StartCount => _world.StartLocations.Length;
+
+    /// <summary>M5-9b: the centre cell of start location <paramref name="k"/> (<see cref="StartCount"/>); -1 out of range.</summary>
+    public int StartCell(int k)
+    {
+        ReadOnlySpan<StartLocation> starts = _world.StartLocations;
+        return (uint)k < (uint)starts.Length ? starts[k].Cell : -1;
+    }
+
+    /// <summary>M5-9b: the match's player count (the setup every seat is shown): start locations from this index on are unused.</summary>
+    public int PlayerCount => _world.Config.PlayerCount;
+
     // ---------- own economy ----------
 
     /// <summary>The player's gold.</summary>

@@ -443,6 +443,12 @@ own cues (select, order, refused, building placed or finished, unit or tech read
   every free combat unit in a wave whatever the wave threshold (or hunts, if it knows no enemy building), again after each
   wave's cooldown, at every difficulty; a raid on its base resets the clock, and 0 turns the rule off (built in M5-9a
   round 2, BUG-1153; [03 Implementation (M5-9a)](03-technical-design.md#implementation-m5-9a)).
+- When its own gold is spent the AI expands to the far mines with a depot: short of gold for the unit it would train next,
+  with no worker on gold and no gold mine it knows, it sends a worker to look at the start locations no player took, and
+  once it has seen a free mine there (or anywhere within `rules.json` `ai.farExpandReach`, 384 m) with no enemy drop-off by
+  it, it builds its cheapest drop-off that costs no gold beside it (a Town Hall only if it can pay for one) and moves
+  gatherers to it; one at a time, and 0 turns the rule off (built in M5-9b, BUG-1068;
+  [03 Implementation (M5-9b)](03-technical-design.md#implementation-m5-9b)).
 - The AI rebuilds what it loses: a building its build order put up that is razed (or a site cancelled) is ordered again
   within a think or two, as a build order step due again, with the same reserve and site search as before; a House is
   not rebuilt once the population cap is at the hard cap. With no Town Hall left and a worker alive, the Town Hall comes

@@ -20,7 +20,7 @@
           "castMinTargets": 2, "reserveShift": 0.25, "reserveArmyShare": 1,
           "gatherReach": 64, "scoutReplacements": 2, "spendDownQueue": 2,
           "huntMemory": 120, "focusReach": 14,
-          "counterMemory": 180, "starvedWaveAfter": 60, "starvedMinArmy": 1,
+          "counterMemory": 180, "starvedWaveAfter": 60, "starvedMinArmy": 1, "farExpandReach": 384,
           "counters": { "worker": ["shock"], "line": ["caster", "siege"], "ranged": ["shock"], "shock": ["line"],
                         "caster": ["shock", "ranged"], "siege": ["line", "shock"], "unique": [] } }
 }

@@ -592,7 +592,75 @@ public class SaveRefusalTests
         Assert.Equal(SaveError.Malformed, Forged(stamp, -2));
         Assert.Equal(SaveError.Malformed, Forged(stamp, int.MinValue));
         Assert.Equal(SaveError.Malformed, Forged(stamp, int.MaxValue));
-        Assert.Equal(stamp + 4 + 4, good.Length - SaveFormat.ChecksumLength); // then END!
+        Assert.Equal(stamp + 4 + PreMapFixtures.FarBytes + 4, good.Length - SaveFormat.ChecksumLength); // M5-9b's fields, then END!
+    }
+
+    /// <summary>
+    /// M5-9b: the far expansion's fields in <c>CTRM</c> (after the starved stamp) are bounded: a phase past 2, looked-at bits for
+    /// a start the map lacks, a start or look point out of range, a leg worker past the unit slots or with a generation that
+    /// doesn't match its slot, a pending order other than a Build, a site type or cell out of range or half set, a negative
+    /// count, and any state the phases can't hold (a leg or a Build while off, a Build and a site at once) are
+    /// <see cref="SaveError.Malformed"/>; consistent forgeries load.
+    /// </summary>
+    [Fact]
+    public void AFormat8Save_WithAForgedFarExpansion_IsMalformed()
+    {
+        byte[] good = SaveBytes.SmallAi();
+        Assert.Equal(SaveError.None, SaveTestRun.TryLoad(Data, good));
+        Rts.Sim.Ai.AiPlayer ai = SaveTestRun.Load(Data, good).AiOf(0)!;
+        int far = good.Length - SaveFormat.ChecksumLength - 4 - PreMapFixtures.FarBytes;
+        int phase = far, looked = far + 1, start = far + 5, look = far + 9, moved = far + 13, scout = far + 14, generation = far + 18,
+            pending = far + 22, siteType = far + 51, siteCell = far + 55, expansions = far + 63;
+        Assert.Equal(0, good[phase]);
+        Assert.Equal(-1, BinaryPrimitives.ReadInt32LittleEndian(good.AsSpan(start)));
+        Assert.Equal(-1, BinaryPrimitives.ReadInt32LittleEndian(good.AsSpan(scout)));
+        Assert.Equal(-1, BinaryPrimitives.ReadInt32LittleEndian(good.AsSpan(siteType)));
+        int starts = ai.View.StartCount, cells = ai.View.MapWidth * ai.View.MapHeight;
+        SaveError Forged(params (int Offset, int Value, bool Byte)[] edits)
+        {
+            byte[] bad = (byte[])good.Clone();
+            foreach ((int offset, int value, bool oneByte) in edits)
+                if (oneByte) bad[offset] = (byte)value;
+                else BinaryPrimitives.WriteInt32LittleEndian(bad.AsSpan(offset), value);
+            return SaveTestRun.TryLoad(Data, SaveBytes.Rechecksum(bad));
+        }
+        (int, int, bool) I(int offset, int value) => (offset, value, false);
+        (int, int, bool) B(int offset, int value) => (offset, value, true);
+        // The phase.
+        Assert.Equal(SaveError.None, Forged(B(phase, 1))); // armed, nothing walked yet
+        Assert.Equal(SaveError.Malformed, Forged(B(phase, 3)));
+        Assert.Equal(SaveError.Malformed, Forged(B(phase, 2))); // building with neither a Build nor a site
+        // The looked-at bits: only starts the map has.
+        Assert.Equal(SaveError.None, Forged(I(looked, (1 << starts) - 1)));
+        Assert.Equal(SaveError.Malformed, Forged(I(looked, 1 << starts)));
+        Assert.Equal(SaveError.Malformed, Forged(I(looked, -1)));
+        // The leg: a start and look point in range, only while armed; its worker a unit slot with a live generation.
+        // (The fixture: a 16-cell hand-built map with no start list, unit capacity 2.)
+        Assert.Equal(0, starts);
+        int last = ai.View.UnitSlots - 1;
+        Assert.Equal(SaveError.None, Forged(B(phase, 1), I(look, 4), B(moved, 1), I(scout, last), I(generation, 1)));
+        Assert.Equal(SaveError.Malformed, Forged(B(phase, 1), I(start, starts)));
+        Assert.Equal(SaveError.Malformed, Forged(B(phase, 1), I(start, -2)));
+        Assert.Equal(SaveError.Malformed, Forged(B(phase, 1), I(look, 5)));
+        Assert.Equal(SaveError.Malformed, Forged(B(phase, 1), I(scout, ai.View.UnitSlots), I(generation, 1)));
+        Assert.Equal(SaveError.Malformed, Forged(B(phase, 1), I(scout, last), I(generation, 0)));
+        Assert.Equal(SaveError.Malformed, Forged(B(phase, 1), I(generation, 1))); // a generation with no worker
+        Assert.Equal(SaveError.Malformed, Forged(I(start, 0))); // a leg while off
+        Assert.Equal(SaveError.Malformed, Forged(I(scout, last), I(generation, 1)));
+        // The Build and the site: only while building, exactly one of them.
+        Assert.Equal(SaveError.None, Forged(B(phase, 2), B(pending, (int)Rts.Sim.Ai.PendingKind.Build)));
+        Assert.Equal(SaveError.Malformed, Forged(B(phase, 2), B(pending, (int)Rts.Sim.Ai.PendingKind.Train)));
+        Assert.Equal(SaveError.Malformed, Forged(B(phase, 1), B(pending, (int)Rts.Sim.Ai.PendingKind.Build)));
+        Assert.Equal(SaveError.None, Forged(B(phase, 2), I(siteType, 0), I(siteCell, cells - 1)));
+        Assert.Equal(SaveError.Malformed, Forged(B(phase, 2), I(siteType, ai.Data.Buildings.Length), I(siteCell, 0)));
+        Assert.Equal(SaveError.Malformed, Forged(B(phase, 2), I(siteType, 0), I(siteCell, cells)));
+        Assert.Equal(SaveError.Malformed, Forged(B(phase, 2), I(siteType, 0))); // half a site
+        Assert.Equal(SaveError.Malformed, Forged(B(phase, 2), B(pending, (int)Rts.Sim.Ai.PendingKind.Build), I(siteType, 0), I(siteCell, 0)));
+        Assert.Equal(SaveError.Malformed, Forged(B(phase, 2), I(siteType, 0), I(siteCell, 0), I(start, 0))); // a leg while building
+        Assert.Equal(SaveError.Malformed, Forged(I(siteType, 0), I(siteCell, 0))); // a site while off
+        // The count.
+        Assert.Equal(SaveError.Malformed, Forged(I(expansions, -1)));
+        Assert.Equal(SaveError.None, Forged(I(expansions, 3)));
     }
 
     /// <summary>

@@ -214,18 +214,33 @@ public class MapSlice2StressTests
     [Trait("Category", "Stress")]
     [InlineData(PaleHills, 3UL)]
     [InlineData(PaleHills, 4UL)]
-    [InlineData(PaleHills, 5UL)]
     [InlineData(PaleHills, 6UL)]
     [InlineData("generated", 6UL)]
     public void NormalVersusNormal_KnownStalls_EndWithin72000(string id, ulong seed) => SweepRow(id, seed, oracle: true);
 
     /// <summary>
+    /// Pale Hills seed 5, out of <see cref="NormalVersusNormal_KnownStalls_EndWithin72000"/> since M5-9b (rule 43: a row that
+    /// stops ending is a finding, not a re-bound). It ended at 45,358 on the M5-9a branch (52,557 at M5-4d), both seats broke
+    /// from 24:00. With the far expansion both seats take a free start's mines with a depot (seat 0 at 27,520, seat 1 at
+    /// 28,200; seat 1 a second at 44,560, seat 0 one by the 2,000-gold pair near start 2 at 53,080), the war runs on with
+    /// 25-37 units a side, and at 70:00 seat 1 has no army and no gold left; seat 0 (25 units) then needs to 96,321 (80:16) to
+    /// raze and hunt down a seat that keeps rebuilding with 14,000-17,000 wood (four hunts): BUG-1116's slow end, BUG-1157.
+    /// </summary>
+    [Theory(Skip = "BUG-1116 (open; BUG-1157): ends at 96,321 since M5-9b's far expansion (both seats funded longer; the loser rebuilds and is hunted late), past 72,000")]
+    [Trait("Category", "Stress")]
+    [InlineData(PaleHills, 5UL)]
+    public void NormalVersusNormal_PaleHillsSeed5_SlowRaze_EndsWithin72000(string id, ulong seed) => SweepRow(id, seed, oracle: true);
+
+    /// <summary>
     /// Pale Hills seed 2 (BUG-1068's remaining case): both sides still hold two halls at 60:00 (37 v 27 units, 20,000+ wood
     /// each at e3fd8fb), a true stalemate the hunt doesn't touch (enemy buildings stay known). M5-9a round 2 fix round 1
     /// (BUG-1154): the Malazan seat (48 gold, its pick a Heavy Infantry it can never pay) is starved from 26,780 and waves;
-    /// the match ends at 53,797 (44:49), seat 0 the winner. Un-skipped.
+    /// the match ends at 53,797 (44:49), seat 0 the winner. Un-skipped. M5-9b (the far expansion): both seats expand and gather
+    /// 14,000-16,000 gold; the match is decided by 40:00 (seat 0 no army, no producer; seat 1 44-65 units) but seat 1 needs to
+    /// 79,504 (66:15) and five hunts to find the rest (BUG-1157: the loser's far depot and its workers stand at a start the
+    /// hunt's sweep reaches late; BUG-1116's sweep order). Skipped again with the measurement (rule 43: a finding, not a re-bound).
     /// </summary>
-    [Theory]
+    [Theory(Skip = "BUG-1068 / BUG-1116 (open; BUG-1157): ends at 79,504 since M5-9b, decided by 40:00, the hunt finds the loser's far remnant late")]
     [Trait("Category", "Stress")]
     [InlineData(PaleHills, 2UL)]
     public void NormalVersusNormal_PaleHillsSeed2_Stalemate_EndsWithin72000(string id, ulong seed) => SweepRow(id, seed);

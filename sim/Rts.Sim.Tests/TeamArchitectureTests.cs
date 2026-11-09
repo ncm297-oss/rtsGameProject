@@ -41,6 +41,7 @@ public class TeamArchitectureTests
         ("PlayerView.cs", "(uint)slot < (uint)_buildings.Capacity && _buildings.Alive[slot] && _buildings.Owner[slot] == _player;"),
         ("PlayerView.cs", "_buildings.Owner[k] == _player || _fog.CanSeeBuilding(_player, k) || _fog.Ghosts(_player)[k].Generation == _buildings.Generation[k];"),
         ("ScoutManager.cs", "if (!ai.View.TryGetUnit(slot, out SeenUnit u) || u.Owner != ai.Player || u.Handle.Generation != board.ScoutGeneration)"),
+        ("AiPlayer.cs", "View.TryGetUnit(slot, out u) && u.Owner == Player && u.Handle.Generation == generation;"), // M5-9b: OwnUnit, the far leg's worker
         // World.Defeat: a collapse destroys the player's own buildings.
         ("World.Defeat.cs", "if (!b.Alive[k] || b.Owner[k] != player) continue;"),
     };

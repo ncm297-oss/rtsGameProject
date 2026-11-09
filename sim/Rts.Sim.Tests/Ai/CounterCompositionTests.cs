@@ -330,9 +330,10 @@ public class CounterCompositionTests
 
     /// <summary>
     /// Criterion 4 / QA focus 2: QA's <c>NonHardMatchPinQaTests</c> rows are Easy v Normal or Normal v Normal, so their digests
-    /// move with Normal's shift. With Normal's <c>counterStrength</c> at 0 (Easy's already is) and (round 2) <c>ai.starvedWaveAfter</c>
-    /// at 0 every row reproduces the digest it pinned before this task (c11f5f0) exactly: the memory, the stamp, the hash's new
-    /// fields and the format change move no play, and the only changes in those matches are the two levers.
+    /// move with Normal's shift. With Normal's <c>counterStrength</c> at 0 (Easy's already is), (round 2) <c>ai.starvedWaveAfter</c>
+    /// at 0 and (M5-9b) <c>ai.farExpandReach</c> at 0 every row reproduces the digest it pinned before M5-9a (c11f5f0) exactly:
+    /// the memory, the stamp, the far expansion's state, the hash's new fields and the format change move no play, and the
+    /// only changes in those matches are the three levers.
     /// </summary>
     [Theory]
     [Trait("Category", "Stress")]
@@ -372,7 +373,7 @@ public class CounterCompositionTests
             }
         }
         string got = $"{digest:X16} {sim.TickNumber} {log.Count}";
-        _out.WriteLine($"{map} seed {seed} {first} v Normal, Normal strength 0, starved wave off: {got}");
+        _out.WriteLine($"{map} seed {seed} {first} v Normal, Normal strength 0, starved wave and far expansion off: {got}");
         Assert.Equal(before, got);
     }
 
@@ -387,12 +388,16 @@ public class CounterCompositionTests
         return digest;
     }
 
-    /// <summary>Normal's <c>counterStrength</c> 0 in both factions and (round 2) <c>ai.starvedWaveAfter</c> 0: both of M5-9a's levers off.</summary>
+    /// <summary>Normal's <c>counterStrength</c> 0 in both factions, (round 2) <c>ai.starvedWaveAfter</c> 0 and (M5-9b) <c>ai.farExpandReach</c> 0: every lever of M5-9a / M5-9b off.</summary>
     private static readonly Lazy<GameData> NormalStrengthZero = new(() => AiScenes.DataWith(dir =>
     {
         foreach (string f in new[] { "malazan", "whirlwind" })
             dir.EditJson($"factions/{f}/ai.json", r => r["difficulties"]!["normal"]!["counterStrength"] = 0);
-        dir.EditJson("common/rules.json", r => r["ai"]!["starvedWaveAfter"] = 0); // M5-9a round 2: the starved wave off
+        dir.EditJson("common/rules.json", r =>
+        {
+            r["ai"]!["starvedWaveAfter"] = 0; // M5-9a round 2: the starved wave off
+            r["ai"]!["farExpandReach"] = 0; // M5-9b: the far expansion off
+        });
     }));
 
     private static void EarlyWavesEdit(TestDataDir dir)
