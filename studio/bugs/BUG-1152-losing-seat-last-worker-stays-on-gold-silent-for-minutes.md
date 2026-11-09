@@ -3,7 +3,7 @@
 | Field | Value |
 | --- | --- |
 | Severity | S3 |
-| Status | open |
+| Status | open (the gather pattern is not fixed; on the held M5-9a branch Raraku seed 5 ends at 52,360 thanks to the starved wave and its `MapSlice2` row is un-skipped there, but it stays in the sweep's `Known` under this id: a seat silent 6,439 ticks) |
 | Found | 2026-11-08-0726, task M5-5 (QA, the extra "silent seat" oracle on the criterion rows) |
 | System | AI economy (gather split / rebalance, rebuilding after losses) |
 | Fixed by | |
@@ -46,3 +46,19 @@ for workers; below the 4,800-tick limit once the oracle counts only time with a 
   to the end (36,919 ticks) with 1,970 gold and 5 wood, seat 0 still from 26,534 with 4,454 gold and 35 wood (both sides
   wood-starved). Left failing on the M5-9a branch in QA's sweep (not added to `Known`) and in
   `MapSlice2StressTests.NormalVersusNormal_OnANewMap_OtherSeeds_EndWithin72000(raraku, 5)`, the Producer's call with BUG-1153.
+
+## Developer notes, M5-9a round 2 (2026-11-08-1556; applied by the Producer at ACCEPT)
+- **M5-9a round 2 (2026-11-08-1556, the developer's re-measure with the starved wave, `ai.starvedWaveAfter` 60 s):** Raraku
+  seed 5 still has **no result at 72,000** (`MapSlice2StressTests.NormalVersusNormal_OnANewMap_OtherSeeds_EndWithin72000(raraku, 5)`
+  and QA's sweep row; the lever does not reach it). Probed every 6,000 ticks: from 30,000 to the end seat 0 (Malazan) holds
+  gold 4,454 / wood 35, **5 army, no worker**, 17 buildings, never stamped: 35 wood pays for a Heavy Infantry (54 gold,
+  20 wood), so the starved rule's (i) fails, though it trains nothing for 42,000 ticks; seat 1 (Whirlwind) holds gold 1,970
+  / wood 5, **no army**, 13 workers (one stamp at 27,460, cleared: (iii) needs a free army unit). Both sides wood-starved
+  in effect, neither attacks. The lever's rule (i) ("can pay for no unit") misses a seat that can pay for one entry but
+  does not train it (here likely the hall-rebuild reserve holding the wood, or no producer for the pick): the same gap as
+  BUG-1068's seed 2. Raraku seed 1 (in `Known` under this id): see the report for the sweep's verdict.
+- **M5-9a round 2, fix round 1 (2026-11-08-1556, the developer):** Raraku seed 5 now **ends at 52,360 (43:38), seat 0**
+  (BUG-1154's fix: seat 0's pick is a unit its 35 wood can never pay, so it is starved and waves).
+  `MapSlice2StressTests.NormalVersusNormal_RarakuSeed5_WoodStarved_EndsWithin72000` is un-skipped and green. QA's sweep row
+  `raraku` 5 stays in `Known` under this id: it still fails the silent-seat check (p1 silent 27,461..33,900, 6,439 ticks;
+  p0 46,861..52,360). Raraku seed 1 unchanged (in `Known`). The gather pattern itself is not fixed.

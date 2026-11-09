@@ -3,7 +3,7 @@
 | Field | Value |
 | --- | --- |
 | Severity | S3 (was S1; re-triaged by the Producer at the 2026-11-07-0236 ACCEPT: the row no longer ending is BUG-1068's gold starvation on Pale Hills seed 2 with a new face, the house churn is a design nit, and the row is marked a known stall with this id) |
-| Status | open (the 4-seat seed-2 row is a skipped known case since the ACCEPT fix round; the house rule and the hunt's lone-idle-worker gap are the sim's hardening work, see the ruling below) |
+| Status | open (the 4-seat seed-2 row is a skipped known case on `main`; on the held M5-9a branch it ends at 80,278 and is un-skipped, while the seed-1 FFA there has no result by 144,000: BUG-1153's family. The house rule and the hunt's lone-idle-worker gap are the sim's hardening work, see the ruling below) |
 | Found | 2026-11-07-0236, task M5-4d-2 |
 | System | AI (BuildOrderExecutor.ReopenLost), match end |
 | Fixed by | |
@@ -102,3 +102,15 @@ cell. Not shipped. The row is kept as a skipped known case: `Ai/EndGameHardening
 the first pass's length (e.g. the leg deferred only while a local point is nearer than the reached ring point, or the
 local points spliced into the leg) and be judged on that row plus QA's hide and leg rows.
 
+
+## Developer notes, M5-9a round 2 (2026-11-08-1556; applied by the Producer at ACCEPT)
+- **M5-9a round 2 (2026-11-08-1556, the developer; a note, not a fix):** with the starved wave on, Pale Hills seed 1
+  Normal v Normal (BUG-1153) ends only at 71,660 and the four-seat Pale Hills seed 1 FFA
+  (`HuntStressTests.FourAiSeats_OnPaleHills_*`, seed 1, no teams) still has no result by 144,000, both for this bug's
+  pattern: a small army (11-15 Desert Archers; in the FFA 8 units of seat 2, in one wave from 72,000 to 144,000) razes a
+  losing base that keeps rebuilding with its wood (Pale Hills seed 1: seat 0 holds 10-17 buildings between 36,000 and
+  64,800 with no army). Pale Hills seed 2 still does not end (BUG-1068), so its rows stay skipped and nothing here is
+  closed.
+- **M5-9a round 2, fix round 1 (2026-11-08-1556, the developer):** the Pale Hills seed 2 FFA (`HuntStressTests.FourAiSeats_OnPaleHills_Seed2_KnownStall`)
+  now ends at 80,278 (66:53, seat 3) with the oracle clean on 1,079 hunting thinks: un-skipped. The seed 1 FFA still has
+  no result by 144,000 (BUG-1153's family). `EndGameHardeningTests`' lone-idle-worker row stays skipped (not this change).

@@ -66,3 +66,19 @@ Fixed, verified:
 - Note (not a bug): QA's round-2 metric "nothing buyable but not starved" (`StarvedWaveProbeQaStressTests`) still counts some
   thinks (Pale Hills 1 seat 1: 33, longest run 3, was 38 / 20). That metric tests `ArmyCount`, but the rule's (iii) tests
   `Free` units, so these are mid-command thinks, not the rule's gap.
+
+## Developer notes, fix round 1 (2026-11-08-1556; applied by the Producer at ACCEPT)
+
+## Fixed (M5-9a round 2, fix round 1, 2026-11-08-1556, the developer)
+- `AiPlayer.Starved` now judges (i) on the unit production would train next (`ProductionManager.Pick`, split out of
+  `TrainOne` unchanged: production waits for that one rather than buy a cheaper one), or, with no producer free for any
+  entry, on every entry; and (ii) per unit: starved when that unit (with no pick, every entry) is short of some kind the
+  seat cannot get (no own worker at it, no node of it known that it may gather). A gatherable short kind no longer saves
+  a unit also short of an unobtainable one. Each kind's availability is asked at most once a check; allocation-free.
+- Fail-first: QA's `QA/StarvedWaveQaTests.AGoldStarvedSeat_WithWoodUnderACost_ButNoGoldEver_IsStarved` un-skipped (failed
+  on the old rule, green now); QA's `AMixedShortage_WithOneKindStillGatherable_IsNotStarved_BothEmptiedIs` still green.
+  The developer's finding (pick ignored): `Ai/StarvedWaveTests.ASeat_WhosePickIsNeverPayable_IsStarved_ThoughACheaperUnitIsPayable`
+  (fails on the old rule in the Barracks case, green now).
+- Effect on whole matches: Pale Hills seed 2 (BUG-1068) ends at 53,797, the Pale Hills seed 2 FFA at 80,278, Raraku seed 5
+  (BUG-1152) at 52,360; Pale Hills seed 1 (BUG-1153) moves from 71,660 to 68,664 and still misses 36,000.
+- Docs: docs/02 "AI opponent" (the starved sentence), docs/03 "Implementation (M5-9a)" round 2 (the rule; "Fix round 1").

@@ -6,7 +6,7 @@
 | Status | open, narrowed to seed 2 (M5-4d 2026-11-06-0926: Pale Hills seeds 3 / 4 / 5 / 6 and generated seed 6 end (`MapSlice2StressTests.NormalVersusNormal_KnownStalls_EndWithin72000`, un-skipped: 29,421 / 29,421 / 52,557 / 29,421 / 26,875 ticks); seed 2 is a stalemate, both sides holding two halls at 60:00: `NormalVersusNormal_PaleHillsSeed2_Stalemate_EndsWithin72000`, skipped under this id) |
 | Found | 2026-11-06-0326, task M6-S8 (QA) |
 | System | Map data (`game/data/maps/pale_hills.json`) x AI waves (`MilitaryManager`: waves target buildings only) |
-| Fixed by | seeds 3-6 and generated 6: M5-4d (b7a3f83 + 6a3c83c + 1eccd06, the hunt); seed 2: not a hunt case, the sim's next hardening or M5-4d slice 2 |
+| Fixed by | seeds 3-6 and generated 6: M5-4d (b7a3f83 + 6a3c83c + 1eccd06, the hunt); seed 2: not a hunt case, the sim's next hardening or M5-4d slice 2. **Candidate (b) is built on the M5-9a branch (2026-11-08-1556, `ai.starvedWaveAfter`): seed 2 ends there at 53,797 and its FFA at 80,278, both rows un-skipped; not on `main` yet. Candidate (a), the expansion reach, is the next sim task (M5-9b, same branch): see the Producer triage below** |
 
 ## Repro
 1. Remove the `Skip` from `Stress/MapSlice2StressTests.NormalVersusNormal_KnownStalls_EndWithin72000`.
@@ -64,3 +64,41 @@ the other in an hour.
   cheapest unit's, no gold node left in reach) waves with what it has; (c) map data (more or nearer neutral gold; the data
   track's). Both seed-2 rows stay skipped under this id.
 
+
+## Developer notes, M5-9a round 2 (2026-11-08-1556; applied by the Producer at ACCEPT)
+
+## M5-9a round 2 (2026-11-08-1556): candidate (b) built (`ai.starvedWaveAfter`), seed 2 still no result
+
+- Candidate (b) is built behind `rules.json` `ai.starvedWaveAfter` (60 s shipped, 0 = off) and `ai.starvedMinArmy` (1)
+  (docs/03 "Implementation (M5-9a)", round 2; BUG-1153's fix attempt). Rule (i) is the brief's: the seat can pay for **no**
+  unit of its composition with what it holds.
+- **Pale Hills seed 2, Normal v Normal, to 72,000: still no result** (both rows stay skipped under this id). Probed every
+  6,000 ticks: from 36,000 seat 1 (Whirlwind) has **no army** (gold 14, 19-24 workers, 17-18 buildings), so it is never
+  starved ((iii) needs a free army unit); seat 0 (Malazan) keeps **7 army** under its threshold with **gold 48** and wood
+  piling to 14,535, 30 workers, 20 buildings, and is **never stamped**: 48 gold pays for a Crossbowman (36 gold, 45 wood),
+  so (i) fails, yet the production pick waits for the mix's most under-weighted unit it cannot pay (M5-2's "it waits, it
+  doesn't spend on a cheaper unit") and the gold never moves. Seat 0 knows 12 enemy buildings and never waves or hunts.
+- So on seed 2 the lever's rule (i) is too narrow: the seat is starved in effect (it trains nothing for 36,000 ticks) but
+  can still pay for one cheap entry. A reading that would catch it (not built, out of round 2's brief): (i) judged on the
+  unit the production pick would train (or "no Train sent and none affordable above the reserve for N thinks"). With it,
+  seat 0's 7 army against a seat with none would likely end the match. The Producer's call.
+- Seed 1 (BUG-1153's row): the lever ends the stalemate at 71,660, outside 36,000 (see BUG-1153).
+- **M5-9a round 2, fix round 1 (2026-11-08-1556, the developer): seed 2 ends.** With BUG-1154's fix (the starved check
+  reads the unit production would train), Pale Hills seed 2's Malazan seat (48 gold, its pick a Heavy Infantry at 54 gold
+  with no gold left) is stamped at 26,780 and waves; the match ends at **53,797 (44:49), seat 0 the winner**.
+  `MapSlice2StressTests.NormalVersusNormal_PaleHillsSeed2_Stalemate_EndsWithin72000` and
+  `HuntStressTests.FourAiSeats_OnPaleHills_Seed2_KnownStall` (the FFA, ends at 80,278, seat 3) are **un-skipped and green**;
+  QA's sweep row Pale Hills 2 green. Candidate (a) (the expansion reach) is not built; seed 1 (BUG-1153) still ends late.
+  The Producer may close or narrow this bug.
+
+## Producer triage, 2026-11-08-1556 ACCEPT: candidate (b) built on the branch; candidate (a) is the next sim task (M5-9b)
+
+- On the M5-9a branch (`studio/2026-11-08-1556-sim`, held: BUG-1153) candidate (b) ends seed 2 (53,797) and its FFA (80,278):
+  the two skipped rows are un-skipped there. Nothing of it is on `main`, where both rows stay skipped under this id.
+- **Candidate (a) is planned as M5-9b on the same branch** (the default in BUG-1153's triage, unless the owner picks another
+  route in the inbox): a seat whose known gold nodes in `ai.gatherReach` of its drop-offs are spent (or all taken) re-opens
+  `expand` toward the nearest known unclaimed mine at any distance, and the scout's sweep must give it the sighting (seed 2's
+  far starts lie outside the head ring: the scout learns the unused start positions from the map, which every seat knows,
+  not from the fog). Behind a data knob with 0 = off so the no-change twins still hold. Measured on every pinned row.
+- This bug closes when seed 2 and the Pale Hills seed 1 FFA end on `main` without a skip; it narrows to "the map's gold
+  runs out by 24:00 for a seat that never expands" if (a) lands and some row still runs past the hour.

@@ -44,3 +44,22 @@ Grouped per the QA rule for tiny related findings.
 - Item 3 recorded: docs/03's fix round 1 notes name Pale Hills 3 Easy v Normal (`8FBFA3820C590F5A 36000 2606`, no result
   by 36,000 since round 1; ended at 33,524 before M5-9a). It is an Easy pin with no bound of its own; the Producer decides
   whether it needs its own id.
+
+## Developer notes, fix round 1 (2026-11-08-1556; applied by the Producer at ACCEPT)
+
+## M5-9a round 2, fix round 1 (2026-11-08-1556, the developer)
+- **Item 1 fixed:** `DataLoader.Ai.cs` `OffOrTicksUpTo` (used for `ai.starvedWaveAfter` only): a positive value that rounds
+  to 0 ticks is refused ("0.01 s rounds to 0 ticks (0 turns the rule off; ...)"); 0 itself stays valid (off). QA's
+  `QA/StarvedWaveQaTests.StarvedWaveAfter_APositiveValueThatRoundsToZeroTicks_IsRefused` unskipped: failed before the fix
+  (`ok True, ticks 0`), green after.
+- **Item 2 fixed:** `Ai/AiPerfTests.EightHardSeats_Starved_Undefended_AThinkUnder1Ms_AllocationFree` (Perf): the 8 Hard
+  seats with every gold mine emptied, each bank set to 0 / 0 and last think's defense cleared before each think (a seam),
+  so every timed think runs the whole starved check (production's pick, the army's `Free`, the gold workers' loop, the
+  uncached gold-node walk past every known tree), with the stamps aged past the window untimed so every timed think is
+  due. Gated under 1 ms avg and 0 B. Alone after 30 s idle: avg 0.836 / 0.877 ms (p95 1.69 / 1.80), 480 / 480 thinks
+  stamped, 0 B. The wave itself does not start there (the scene's neighbours are intruders, so each think defends; a
+  defending seat sends no wave); its start stays the mid-wave row's cost. The row is tight under the gate.
+- **Item 3 named (rule 43), not fixed:** `NonHardMatchPinQaTests` Pale Hills seed 3 Easy v Normal ended at 33,524 before
+  M5-9a (`4FF13AE84024D0BB 33524 3075`) and has had no result by 36,000 since round 1 (the counter shift). Re-measured
+  with this round's rule: unchanged (`8FBFA3820C590F5A 36000 2606`, no result by 36,000); named in docs/03's fix-round-1 notes. An Easy pin with no bound of its own: a note for the
+  Producer, not a criterion miss.
