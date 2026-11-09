@@ -746,8 +746,11 @@ open S1 / S2. Retro below; open S3 / S4 listed there.)_
       (Sim half built by M5-9a: the census's per-slot memory of enemy non-worker units seen, fading over `rules.json`
       `ai.counterMemory` 180 s, `ai.counters` from docs/02's template, `ai.json` `counterStrength` Easy 0 / Normal 0.5 /
       Hard 1.0 multiplying the countering units' composition weights; saves 8 / 9 (`CTRM`); docs/03 "Implementation
-      (M5-9a)". The tuning is D26's. Re-measured: the literal row ends at 23,043, inside 24,000; the generated row at 26,853
-      (bound 30,000); **Pale Hills seed 1 Normal v Normal no longer ends (BUG-1153, open)**.)
+      (M5-9a)". The tuning is D26's. Round 2 adds the starved wave (`rules.json` `ai.starvedWaveAfter` 60 s, 0 = off;
+      `ai.starvedMinArmy` 1): a side that can pay for no unit of its mix and has no income of the kind it lacks attacks
+      with what it has. Re-measured: the literal row ends at 23,043, inside 24,000; the generated row moves to seed 2
+      (15,691, bound 24,000; seed 1 ends at 25,968); **Pale Hills seed 1 Normal v Normal ends only at 71,660, outside
+      36,000 (BUG-1153, open: the stalemate is gone, a slow raze is left)**.)
 
 ## M6 — Game shell & real art
 

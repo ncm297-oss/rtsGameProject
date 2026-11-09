@@ -24,7 +24,8 @@ namespace Rts.Sim.Ai;
 /// </summary>
 internal static class EconomyManager
 {
-    private const byte Gold = 1, Wood = 2;
+    /// <summary><see cref="Blackboard.GatherKind"/>'s kinds (low bits): what the worker was last sent to gather.</summary>
+    internal const byte Gold = 1, Wood = 2;
 
     /// <summary>Set on <see cref="Blackboard.GatherKind"/> for this think when the worker's last Gather was dropped (BUG-0570).</summary>
     private const byte Dropped = 0x80;

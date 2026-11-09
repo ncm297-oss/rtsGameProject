@@ -149,10 +149,11 @@ internal static class PreMapFixtures
 
     /// <summary>
     /// M5-9a: the offset of the <c>CTRM</c> tag of a format-8 / 9 save: the section is the last before <c>END!</c> and its size
-    /// follows from the AI seat count (tag, count, per seat its index and two 7-int arrays with their lengths).
+    /// follows from the AI seat count (tag, count, per seat its index, two 7-int arrays with their lengths and, round 2, the
+    /// starved stamp).
     /// </summary>
     internal static int CountersAt(byte[] save, int aiSeats) =>
-        save.Length - Rts.Sim.Save.SaveFormat.ChecksumLength - 4 - (8 + aiSeats * (4 + 2 * (4 + 4 * Rts.Sim.Ai.Blackboard.SlotCount)));
+        save.Length - Rts.Sim.Save.SaveFormat.ChecksumLength - 4 - (8 + aiSeats * (4 + 2 * (4 + 4 * Rts.Sim.Ai.Blackboard.SlotCount) + 4));
 
     /// <summary>The save with its last section before <c>END!</c> (tagged <paramref name="tag"/>, after a <paramref name="after"/> section) cut out, relabelled <paramref name="version"/>.</summary>
     private static byte[] WithoutLastSection(byte[] save, ReadOnlySpan<byte> tag, ReadOnlySpan<byte> after, int version)

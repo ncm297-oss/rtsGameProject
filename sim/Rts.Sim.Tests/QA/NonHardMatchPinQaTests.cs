@@ -31,7 +31,7 @@ public class NonHardMatchPinQaTests
     [InlineData("pale_hills", 1UL, AiDifficulty.Normal, "D714943B782A74E0 36000 2599")] // M5-9a: was 69C4358E67DF7FC3 34219 3144
     [InlineData("pale_hills", 1UL, AiDifficulty.Easy, "9B5F2C36AE77DD3A 36000 2689")] // M5-9a: was 62F16C733AF6D9C8 36000 2601
     [InlineData("pale_hills", 3UL, AiDifficulty.Normal, "49143BF840792D0F 31891 2447")] // M5-9a: was C9CB142CF3C97C88 29562 3103
-    [InlineData("pale_hills", 3UL, AiDifficulty.Easy, "63DE1922B755D390 36000 2708")] // M5-9a: was 4FF13AE84024D0BB 33524 3075
+    [InlineData("pale_hills", 3UL, AiDifficulty.Easy, "8FBFA3820C590F5A 36000 2606")] // M5-9a: was 4FF13AE84024D0BB 33524 3075; round 1 63DE1922B755D390 36000 2708
     [InlineData("vathar_crossing", 1UL, AiDifficulty.Normal, "66A1290256133869 23043 1386")] // M5-9a: was 4FA98DA390936D9B 22794 1395
     [InlineData("vathar_crossing", 1UL, AiDifficulty.Easy, "5DD4CB05A846BBF1 27344 1790")] // M5-9a: was 325B1E0137F84D8D 36000 1798
     public void AMatchWithoutHard_PlaysAsBeforeTheHardKnobs(string map, ulong seed, AiDifficulty first, string expected)

@@ -437,7 +437,8 @@ public class DataContentHashTests
         foreach (string f in new[] { "GoldShare", "HouseHalfPopMargin", "PlacementSearchCells", "SpacingCells", "ExpandReachCells", "ScoutAfterTicks",
             "ScoutRadius", "ScoutReach", "ScoutGrid", "RallyDistance", "RallyReach", "WaveCooldownTicks", "DefendRadius", "DefendForTicks", "WorkerFleeRadius", "CastMinTargets",
             "DefendRatio", "DefendMinValue", "RecallHallHp", "ReserveShift", "ReserveArmyShare", "GatherReach",
-            "ScoutReplacements", "SpendDownQueue", "HuntMemoryTicks", "FocusReach", "CounterMemoryTicks", "CounterMasks" })
+            "ScoutReplacements", "SpendDownQueue", "HuntMemoryTicks", "FocusReach", "CounterMemoryTicks", "CounterMasks",
+            "StarvedWaveAfterTicks", "StarvedMinArmy" }) // M5-9a round 2: the starved wave's knobs
             Assert.Contains($"AiRulesDef.{f}", checkedFields);
         for (int slot = 0; slot < d.Ai.Length; slot++)
             Check(d.Ai[slot], x => With(d, ai: x, aiSlot: slot));
@@ -804,6 +805,9 @@ public class DataContentHashTests
     [InlineData("huntMemory", 90)] // M5-4d
     [InlineData("focusReach", 12)] // M5-4c slice 2
     [InlineData("counterMemory", 120)] // M5-9a
+    [InlineData("starvedWaveAfter", 90)] // M5-9a round 2
+    [InlineData("starvedWaveAfter", 0)]
+    [InlineData("starvedMinArmy", 3)]
     public void AnAiRulesFieldEdit_ChangesTheHash(string field, double value)
     {
         using TestDataDir dir = TestDataDir.CopyOfShipped();

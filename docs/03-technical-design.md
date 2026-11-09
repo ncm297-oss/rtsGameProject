@@ -9152,7 +9152,8 @@ tests `Ai/CriterionMatch.cs` (the harness), `Ai/MatchCriterionTests`, `CommandRe
   22,794 (18:59; 23,043 = 19:12 since M5-9a). It runs in the default test loop (26 s with every check). The other maps have the same row shape with a
   documented bound, a constant in the test with the measured end in its comment: Pale Hills seed 1, 36,000 (the Producer's);
   Raraku seed 1, the next 6,000 above its end with at least 10 % slack, 36,000; the generated map, the lowest seed of 1-6
-  that ends under 24,000 (seed 1), bound 24,000 (30,000 since M5-9a, which lengthens it to 26,853). Plus a four-seat free-for-all and a 2v2 (teams 1 / 2 / 1 / 2) on seeds
+  that ends under 24,000 (seed 1), bound 24,000 (M5-9a round 1 lengthened seed 1 to 26,853 and the bound went to 30,000;
+  round 2 ends seed 1 at 25,968, still over 24,000, so the row is now seed 2, 15,691, bound 24,000 again). Plus a four-seat free-for-all and a 2v2 (teams 1 / 2 / 1 / 2) on seeds
   QA's M5-H5 sweep measured as ending, bound 72,000.
 - **"Without errors"** is checked inside the row (`CriterionMatch.Play` with `checks`), on every tick and every think:
   (a) **no exception** from `Tick()` (caught with the tick in the message); (b) **`PlayerViewOracle.Check`** clean on every
@@ -9184,12 +9185,17 @@ tests `Ai/CriterionMatch.cs` (the harness), `Ai/MatchCriterionTests`, `CommandRe
   | --- | --- | --- | --- | --- | --- | --- |
   | literal | Vathar Crossing 1 | 23,043 = 19:12 (24,000) | seat 1 (Whirlwind) | 5 | 0 | none |
   | | Raraku 1 | 28,083 = 23:24 (36,000) | seat 0 (Malazan) | 7 | 1 | none |
-  | | Pale Hills 1 | no result by 36,000 (nor 72,000): BUG-1153 | none | 17 | 0 | Build UnitInTheWay 1 (to 72,000) |
-  | | generated 1 | 26,853 = 22:22 (30,000) | seat 0 | 6 | 0 | AttackMove UnitGone 1; Build UnitInTheWay 1; Gather NoResourceNode 5 |
+  | | Pale Hills 1 | no result by 36,000: BUG-1153 (ends at 71,660 = 59:43, seat 1, with the starved wave) | none | 17 | 0 | none (to 36,000) |
+  | | generated 2 | 15,691 = 13:05 (24,000) | seat 1 | 2 | 0 | Build UnitInTheWay 4 |
   | FFA | Vathar Crossing 2, 4 seats | 58,155 = 48:27 (72,000) | seat 3 | 18 | 9 | AttackMove UnitGone 4; Build SealsGround 2, UnitInTheWay 6 |
   | 2v2 | Vathar Crossing 1, 4 seats | 35,648 = 29:42 (72,000) | team 1 | 18 | 8 | AttackMove UnitGone 1; Build Blocked 1, SealsGround 2, UnitInTheWay 8; Gather UnitGone 1 |
 
   Waves and hunts are the match's totals over its seats. The longest refusal run on any row is 1 think (no command refused twice on one target).
+  **Re-measured for M5-9a round 2** (the starved wave, `ai.starvedWaveAfter` 60 s): Vathar, Raraku, the FFA and the 2v2
+  end on the same ticks with the same winners (Raraku's and Vathar's digests unchanged: no stamp comes due before their
+  ends changes a command there); Pale Hills seed 1 ends but only at 71,660 (BUG-1153); the generated map seed 1 ends at
+  25,968 (seat 0, 7 waves; was 26,853), so the row moves to seed 2 by the brief's rule. The generated map, seeds 1-6:
+  25,968 / 15,691 / 29,548 / seed 4 stopped by the checks at 18,382 (BUG-1151) / 14,490 / 25,941.
   **Re-measured for M5-9a** (Normal's counter shift; "Implementation (M5-9a)"): before it the rows read Vathar 22,794,
   Pale Hills 34,219 (seat 1, 15 waves, 1 hunt, Build UnitInTheWay 6), generated 21,789 (bound 24,000; 5 waves, AttackMove
   UnitGone 1), FFA 52,305 (7 hunts; Build SealsGround 2, UnitInTheWay 9; Gather NoResourceNode 1), 2v2 34,510 (15 waves, 7
@@ -9337,6 +9343,75 @@ has seen, from a fog-limited memory that fades over a few minutes, by a strength
     (45,358, one hunt), renamed `PaleHills_ToTheEndWithAHunt_TwoProcesses_SamePerTickHashes`, so the two-process proof still
     covers a hunt.
   - `AiPerfTests`: 5 / 5 alone (8 seats: avg 0.52 ms, p95 0.86 ms; 8 Hard mid-wave: avg 0.61 ms, p95 0.96 ms; 0 B a think).
+- **Round 2: the starved wave** (BUG-1153; BUG-1068's candidate (b), the Producer's rule 45 lever). Round 1's Pale Hills
+  seed 1 stall was a side that could no longer grow sitting under its wave threshold with an enemy building known, so it
+  neither waved nor hunted. Code: `AiPlayer.UpdateStarved` / `Starved` / `Gathering` / `StarvedWaveDue` (the census),
+  `Blackboard.StarvedSince` (+ `CTRM`), `MilitaryManager.TryStart` / `TryHunt`, `AiRulesDef.StarvedWaveAfterTicks` /
+  `StarvedMinArmy`. Tests: `Ai/StarvedWaveTests`, `DataValidationTests` (the two knobs' rows), `DataContentHashTests`,
+  `SaveRefusalTests.AFormat8Save_WithoutItsCounterSection_OrAForgedMemory_IsMalformed` (the stamp's rows),
+  `CounterCompositionTests.TheNonHardPins_WithNormalStrengthZero_*` (now with the knob at 0 too).
+  - **The knobs.** `rules.json` `ai.starvedWaveAfter`: seconds, required, 0-600 (`DataLimits.MaxAiStarvedWaveSeconds`), to
+    ticks; **0 turns the rule off**; shipped **60**. `ai.starvedMinArmy`: a whole number 1-50, shipped **1**. Both hashed
+    after `counterMemory`.
+  - **The rule** (`AiPlayer.Starved`, run at the end of the census, after the counter memory, from the census's own
+    lists: no new pass over the units). A seat is *starved* on a think when the base is not defended (`Board.Defending`
+    as the last think left it: this think's defense runs after the census) and the match is not over, and (i) it can pay
+    for no unit of its current composition (the opening's mix for its age) with the gold and wood it holds: every entry is
+    short of gold or of wood; (iii) at least `starvedMinArmy` of its army units are free (`MilitaryManager.Free`, the wave's
+    filter: alive, not casting, no AI command pending); and (ii) for each kind some entry is short of, it knows no node of
+    that kind it may gather (`WalkForNode`, the walk `KnowsNode` caches: known, not marked dropped, in `ai.gatherReach` of a
+    drop-off until the reach lifts) and no own worker is at that kind (last sent to it, `Blackboard.GatherKind`, and its
+    order pending or the worker not Idle and not Building). The node walk is uncached on purpose: `KnowsNode`'s per-think
+    answer must stay the one the executor reads after this think's defense has set the flee ring. The cheap tests run
+    first, so a seat that can pay walks nothing.
+  - **The stamp.** The first starved think sets `Blackboard.StarvedSince = Now`; any think that is not starved (the defended
+    ones included: while a raid is on `KnowsNode` hides the nodes by the defense point, which is no starvation) sets it
+    back to -1. With the knob at 0 `UpdateStarved` returns at once and the stamp stays -1 (so -1, not the brief's 0, is
+    "none": a stamp at tick 0 is a real one in a scripted scene).
+  - **The wave.** Once `Now - StarvedSince >= starvedWaveAfter` (`StarvedWaveDue`), `TryStart` starts a wave with every
+    free army unit whatever the opening's `attack.minArmyPop` / `minArmyCost` (the cooldown still applies, the target rule
+    is unchanged) and keeps no threshold (`WaveMinHalfPop` / `WaveMinCost` 0, as a hunt sets them, so the defense may pull
+    any member); with no enemy building known, `TryHunt` hunts even with no wave sent before. The stamp is not cleared by
+    the wave, so a starved side that retreats goes again after each cooldown. Every difficulty.
+  - **Save.** `StarvedSince` is written in `CTRM` after the two memory arrays (formats stay 8 / 9: neither is on `main`);
+    the reader requires -1 or 0 to the seat's saved `Now`, else `Malformed`.
+  - **Tests.** The scripted starved seat (`StarvedWaveTests`: the flat scene with every gold mine emptied, 0 gold, 100
+    wood, three Heavy Infantry, a Heavy Infantry / Crossbowman mix and an enemy tent in sight) is stamped at tick 0 and
+    waves on exactly the first think at or after the window at every difficulty (1,200; a 60.5 s window: 1,240 Easy,
+    1,220 Normal, 1,210 Hard), never with the knob at 0; a gold mine appearing by the hall clears the stamp on the next
+    think and no wave follows; a refilled bank clears it and a fresh stamp waves a window after itself; a raid clears it
+    on the first think whose census sees the defense and no defended think is stamped; a save half-way through the
+    window loads, re-saves byte for byte and waves on the same tick hash for hash. The knob-0 twin: Vathar Crossing seed 1
+    Normal v Normal sends the same commands with the knob at 0 as shipped (no stamp comes due there).
+  - **Pins re-measured (rule 43), round 1 -> round 2:**
+
+    | Pin | Round 1 (strength 0.5) | Round 2 (+ starved wave 60 s) |
+    | --- | --- | --- |
+    | `MatchCriterionTests` Vathar 1 | 23,043, seat 1 | 23,043, seat 1 (digest unchanged) |
+    | Raraku 1 | 28,083, seat 0 | 28,083, seat 0 (digest unchanged) |
+    | **Pale Hills 1** (bound 36,000) | no result (BUG-1153) | **71,660 (59:43), seat 1: outside 36,000**, the same at 30 / 60 / 120 s; both rows and `MapFileTests` fail as measured (no re-bound, no skip) |
+    | generated (bound) | seed 1, 26,853 (30,000) | seed 1 25,968 (over 24,000): the row is **seed 2, 15,691 (24,000)** |
+    | FFA (Vathar 2) / 2v2 (Vathar 1) | 58,155 / 35,648 | 58,155 / 35,648 |
+    | `NonHardMatchPinQaTests` | 7 of 8 moved | 1 more moves: Pale Hills 3 Easy v Normal `63DE1922B755D390 36000 2708` -> `8FBFA3820C590F5A 36000 2606`; the other 7 unchanged |
+    | the 8 pre-task digests (strength 0 **and** knob 0) | reproduced (strength 0) | reproduced |
+    | `MapSlice2 OtherSeeds` Raraku 5 | no result (BUG-1152) | no result: moved to a skipped row under BUG-1152 (`NormalVersusNormal_RarakuSeed5_WoodStarved_*`) |
+    | `KnownStalls`, the mid-hunt rows (Pale Hills 5), `StandardPresetPinQaTests`, `HardKnobsPinTests`, both `KnownBeatenAlive`, the page cells | as round 1 | unchanged (green) |
+    | QA's sweep | Pale Hills 1 / Raraku 5 fail | Pale Hills 1 now ends (71,660) but fails the silent-seat oracle (seat 0, its base being razed with no army, silent 56,441-61,588: 5,147 ticks, over 4,800), left failing (BUG-1153); Raraku 5 in `Known` under BUG-1152 (seat 1 silent 35,621-72,000) |
+    | `RebuildLookMatchQaStressTests` Pale Hills 1 (4 seats) | fails (nothing to check) | **green** |
+    | `HuntStressTests.FourAiSeats_OnPaleHills_*` seed 1 FFA | no result by 144,000 | no result by 144,000 (BUG-1153's family; left failing) |
+    | the golden header, formats | `30C51BB619A7E650`, 8 / 9 | unchanged |
+
+    No starved wave comes due before tick 12,000 on any of the 8 pinned matches (the earliest due: Raraku 1 Easy v Normal,
+    seat 1, at 24,160; the earliest stamp 22,960). **Hard v Normal, the 42 matches** of M5-4c slice 2 (Raraku, Pale Hills,
+    Vathar Crossing; seeds 1-3 and 5-8; Hard in either seat; to 72,000): **27 / 15 / 0** (Hard wins / Normal wins / no
+    result); with the knob at 0 (round 1's play) 24 / 14 / 4; M5-4c slice 2's was 28 / 9 / 5. Hard still wins more than it
+    loses; the four stalls end (three to Hard). Pale Hills seed 2 (BUG-1068): still no result at 72,000 (the Malazan seat
+    holds 48 gold, enough for a Crossbowman, so (i) never holds though it trains nothing; the Whirlwind seat has no army);
+    its rows stay skipped. `AiPerfTests`: 5 / 5, each row alone in its own process after 30 s idle (8 seats avg 0.512 ms,
+    p95 0.834 ms; 8 Hard mid-wave avg 0.698 ms; 0 B a think); the whole class in one process on the same machine at the
+    same hour failed the 8-seat row at 1.2-1.4 ms with the knob at 60 **and at 0**, and c11f5f0's (`main`'s) build failed
+    two rows there too (1.14 / 1.43 ms): machine load, rule 42. Every seat of the perf scene is defending, so the starved
+    check returns at its first test there.
 
 ## Save/load and replays
 
@@ -9538,7 +9613,7 @@ version 2) stores the AI seats too, so every match saves. Code in `sim/Rts.Sim/S
   | `CMDS` | each player's next sequence number, then the pending queue: count, every command, every field, in queue order |
   | `AIST` | (format 2) the AI seat count, then per AI seat in player order its player index and its state (below) |
   | `HUNT` | (formats 6 to 9, M5-4d, only with an AI seat) the AI seat count, then per AI seat in player order its player index and its hunt memory: `EnemyUnitPoint`, `EnemyUnitTick`, `Hunting`, `HuntSweep` (-1 to the last sweep point's index), `HuntOrigin`, `HuntVisited`, `HuntsStarted` |
-  | `CTRM` | (formats 8 and 9, M5-9a, only with an AI seat) the AI seat count, then per AI seat in player order its player index and its counter memory: `SeenSlotCount` (7 int32, each 0 to the match's unit capacity), `SeenSlotTick` (7 int32, each 0 to the seat's last think) |
+  | `CTRM` | (formats 8 and 9, M5-9a, only with an AI seat) the AI seat count, then per AI seat in player order its player index and its counter memory: `SeenSlotCount` (7 int32, each 0 to the match's unit capacity), `SeenSlotTick` (7 int32, each 0 to the seat's last think), then (round 2) `StarvedSince` (int32, -1 or 0 to the seat's last think) |
   | `END!` | nothing: the body's end |
 
   Last, the checksum: FNV-1a 64 over every byte before it (the replay file's). A flow field's slot holds its keys

@@ -26,7 +26,9 @@ public class MatchCriterionTests
     /// <summary>
     /// Pale Hills seed 1 ended at 34,219 (28:30; <c>MapFileTests</c>' pin), seat 1 the winner: the Producer's 36,000. M5-9a:
     /// with Normal's counter shift it no longer ends (both sides out of gold by 24:00, a stalemate past 60:00): BUG-1153, a
-    /// finding for the Producer, not a re-bound.
+    /// finding for the Producer, not a re-bound. Round 2's starved wave ends the stalemate but not inside the bound: 71,660
+    /// (59:43), seat 1, at <c>ai.starvedWaveAfter</c> 30, 60 and 120 alike (a slow raze by 11-15 archers of a base that
+    /// rebuilds). Left failing as measured: no re-bound, no skip (the brief).
     /// </summary>
     internal const int PaleHillsBound = 36_000;
 
@@ -34,12 +36,12 @@ public class MatchCriterionTests
     internal const int RarakuBound = 36_000;
 
     /// <summary>
-    /// The generated map: seed 1 was the lowest of 1-6 ending under 24,000 (21,789 = 18:09, seat 0 the winner). M5-9a: Normal's
-    /// counter shift lengthens it to 26,853 (22:22), the same winner; the bound moves by Raraku's rule (the next 6,000 above
-    /// the end with at least 10 % slack: 29,538, so 30,000) and the row keeps its seed (seed 2, 15,691, is now the lowest
-    /// under 24,000; the Producer may prefer it).
+    /// The generated map: seed 1 was the lowest of 1-6 ending under 24,000 (21,789 = 18:09, seat 0 the winner). M5-9a round 1:
+    /// Normal's counter shift lengthened it to 26,853 (the bound went to 30,000 by Raraku's rule); round 2 (the starved wave)
+    /// ends it at 25,968 (21:38), still over 24,000, so by the brief's rule the row moves to seed 2, the lowest of 1-6 under
+    /// 24,000 (15,691 = 13:05, seat 1 the winner, unchanged by M5-9a), and keeps the original 24,000.
     /// </summary>
-    internal const int GeneratedBound = 30_000;
+    internal const int GeneratedBound = 24_000;
 
     /// <summary>The four-seat rows' bound (60 minutes, QA's M5-H5 sweep): the FFA (Vathar seed 2) ends at 58,155 (48:27; was 52,305 before M5-9a), the 2v2 (Vathar seed 1) at 35,648 (29:42; was 34,510).</summary>
     internal const int FourSeatBound = 72_000;
@@ -52,7 +54,7 @@ public class MatchCriterionTests
         new("vathar_crossing", "vathar_crossing", 1, 2, null, VatharBound),
         new("raraku", "raraku", 1, 2, null, RarakuBound),
         new("pale_hills", "pale_hills", 1, 2, null, PaleHillsBound),
-        new("generated", "generated", 1, 2, null, GeneratedBound),
+        new("generated", "generated", 2, 2, null, GeneratedBound), // M5-9a round 2: seed 2 (seed 1 ends at 25,968)
         new("ffa", "vathar_crossing", 2, 4, null, FourSeatBound),
         new("2v2", "vathar_crossing", 1, 4, new[] { 1, 2, 1, 2 }, FourSeatBound),
     };

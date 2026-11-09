@@ -181,6 +181,12 @@ public static class DataLimits
     /// <summary>M5-4f: the most <c>rules.json</c> <c>ai.defendMinValue</c> may be, gold + wood (the brief's range).</summary>
     public const double MaxAiDefendMinValue = 5000;
 
+    /// <summary>M5-9a round 2 (BUG-1153): the most <c>rules.json</c> <c>ai.starvedWaveAfter</c> may be, in seconds (the brief's range).</summary>
+    public const double MaxAiStarvedWaveSeconds = 600;
+
+    /// <summary>M5-9a round 2: the most <c>rules.json</c> <c>ai.starvedMinArmy</c> may be (the brief's range).</summary>
+    public const int MaxAiStarvedMinArmy = 50;
+
     /// <summary>M5-8a: the most named openings one <c>ai.json</c> <c>openings</c> may hold (the brief's 8).</summary>
     public const int MaxAiOpenings = 8;
 

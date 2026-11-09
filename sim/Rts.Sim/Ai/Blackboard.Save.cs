@@ -264,11 +264,13 @@ internal sealed partial class Blackboard
     {
         w.WriteArray(SeenSlotCount);
         w.WriteArray(SeenSlotTick);
+        w.Write(StarvedSince); // M5-9a round 2: the starved stamp, after the memory (same formats 8 / 9)
     }
 
     /// <summary>
     /// Reads what <see cref="WriteCountersTo"/> wrote over this board: each count 0 to <paramref name="unitSlots"/> (no more
-    /// units than the match holds), each tick 0 to <paramref name="now"/> (no sighting after the seat's last think).
+    /// units than the match holds), each tick 0 to <paramref name="now"/> (no sighting after the seat's last think); round 2:
+    /// the starved stamp -1 (none) or 0 to <paramref name="now"/> (no stamp after the seat's last think).
     /// </summary>
     internal void ReadCountersFrom(SaveReader r, int unitSlots, int now)
     {
@@ -276,6 +278,8 @@ internal sealed partial class Blackboard
         r.ReadArray(SeenSlotTick);
         for (int s = 0; s < SlotCount && !r.Failed; s++)
             r.Check(SeenSlotCount[s] >= 0 && SeenSlotCount[s] <= unitSlots && SeenSlotTick[s] >= 0 && SeenSlotTick[s] <= now);
+        StarvedSince = r.ReadInt32();
+        r.Check(StarvedSince == -1 || StarvedSince >= 0 && StarvedSince <= now);
     }
 
     /// <summary>A pending order field by field (its byte kind leaves padding, so it isn't written as raw bytes).</summary>

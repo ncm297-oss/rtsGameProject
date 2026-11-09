@@ -552,7 +552,8 @@ public class SaveRefusalTests
     /// <summary>
     /// M5-9a: the <c>CTRM</c> section is required in format 8: taken out (the version left at 8), or its seat count or a seat's
     /// player index forged, <see cref="SaveError.Malformed"/>; so is a forged memory: a count below 0 or above the match's unit
-    /// slots, a tick below 0 or after the seat's last think. The unforged bytes load.
+    /// slots, a tick below 0 or after the seat's last think; round 2, a starved stamp other than -1 or 0 to the last think. The
+    /// unforged bytes load.
     /// </summary>
     [Fact]
     public void AFormat8Save_WithoutItsCounterSection_OrAForgedMemory_IsMalformed()
@@ -582,6 +583,16 @@ public class SaveRefusalTests
         Assert.Equal(SaveError.Malformed, Forged(ticks + 4 * 3, -1));
         Assert.Equal(SaveError.Malformed, Forged(ticks + 4 * 3, ai.Now + 1)); // a sighting after the last think
         Assert.Equal(SaveError.None, Forged(ticks + 4 * 3, ai.Now));
+        // M5-9a round 2: the starved stamp, after the ticks: -1 (none) or 0 to the seat's last think.
+        int stamp = ticks + 4 * Rts.Sim.Ai.Blackboard.SlotCount;
+        Assert.Equal(-1, BinaryPrimitives.ReadInt32LittleEndian(good.AsSpan(stamp)));
+        Assert.Equal(SaveError.None, Forged(stamp, 0));
+        Assert.Equal(SaveError.None, Forged(stamp, ai.Now));
+        Assert.Equal(SaveError.Malformed, Forged(stamp, ai.Now + 1)); // a stamp after the last think
+        Assert.Equal(SaveError.Malformed, Forged(stamp, -2));
+        Assert.Equal(SaveError.Malformed, Forged(stamp, int.MinValue));
+        Assert.Equal(SaveError.Malformed, Forged(stamp, int.MaxValue));
+        Assert.Equal(stamp + 4 + 4, good.Length - SaveFormat.ChecksumLength); // then END!
     }
 
     /// <summary>

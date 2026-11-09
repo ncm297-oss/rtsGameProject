@@ -13,7 +13,7 @@ namespace Rts.Sim.Ai;
 /// <c>Blackboard.Save.cs</c>). Since M5-4b the defense's kept
 /// building hp, point and per-unit marks; since M5-4c the casters' last casts; since M5-4f the defenders picked and the
 /// wave's start threshold; since M5-4d the last enemy unit seen and the hunt's sweep (saved in their own section, <c>HUNT</c>); since M5-9a the counter memory of
-/// enemy unit slots seen (<c>CTRM</c>).
+/// enemy unit slots seen and (round 2) the starved stamp (<c>CTRM</c>).
 /// </summary>
 internal sealed partial class Blackboard
 {
@@ -298,6 +298,14 @@ internal sealed partial class Blackboard
 
     /// <summary>See <see cref="SeenSlotCount"/>.</summary>
     internal readonly int[] SeenSlotTick = new int[SlotCount];
+
+    /// <summary>
+    /// M5-9a round 2 (BUG-1153): the tick of the first think of the seat's current run of starved thinks
+    /// (<see cref="AiPlayer.Starved"/>), -1 while it is not starved. Set and cleared by the census only while
+    /// <c>ai.starvedWaveAfter</c> is above 0 (with 0 it stays -1); once it is <c>starvedWaveAfter</c> old the army waves
+    /// (or hunts) with what it has (<see cref="AiPlayer.StarvedWaveDue"/>). Saved in <c>CTRM</c> after the memory.
+    /// </summary>
+    internal int StarvedSince = -1;
 
     /// <summary>The seven template unit slots (<see cref="Data.UnitSlot"/>, <see cref="Data.DataLimits.SlotIds"/>).</summary>
     internal const int SlotCount = 7;

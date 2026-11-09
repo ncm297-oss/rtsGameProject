@@ -85,6 +85,8 @@ internal sealed class AiRulesJson
     public double? HuntMemory { get; set; } // M5-4d
     public double? FocusReach { get; set; } // M5-4c slice 2
     public double? CounterMemory { get; set; } // M5-9a
+    public double? StarvedWaveAfter { get; set; } // M5-9a round 2 (BUG-1153)
+    public double? StarvedMinArmy { get; set; } // M5-9a round 2
     public Dictionary<string, List<string?>?>? Counters { get; set; } // M5-9a: enemy slot -> own slots that counter it
 }
 

@@ -16,7 +16,9 @@ namespace Rts.Sim.Ai;
 /// <item><b>Wave start.</b> No wave in progress, the cooldown over, and the army free to go (not casting, no command pending)
 /// at least <c>attack.minArmyPop</c> half-pop and <c>attack.minArmyCost</c> gold + wood, each times the difficulty's
 /// <c>waveSizeMultiplier</c>, with an enemy building known: every such unit becomes a member and is sent
-/// <c>AttackMove</c> to the known enemy building nearest the rally point. The cooldown (<c>ai.waveCooldown</c>) starts.</item>
+/// <c>AttackMove</c> to the known enemy building nearest the rally point. The cooldown (<c>ai.waveCooldown</c>) starts.
+/// M5-9a round 2: a seat starved for <c>ai.starvedWaveAfter</c> (<see cref="AiPlayer.StarvedWaveDue"/>) starts one whatever
+/// the threshold, keeping none, and hunts with no wave sent before.</item>
 /// <item><b>In a wave.</b> Dead members drop out. A member Idle near the target while it is seen gets <c>Attack</c> on it
 /// (one whose attack hits units only can't fight it: it goes home out of the wave, BUG-0591); Idle elsewhere, <c>AttackMove</c>
 /// again. Orders are bounded (BUG-0595/0596): after <see cref="MaxTries"/> orders toward this target without getting a cell
@@ -128,7 +130,9 @@ internal static class MilitaryManager
             count++;
         }
         float scale = ai.Knobs.WaveSizeMultiplier;
-        if (count == 0 || half < ai.Opening.AttackMinHalfPop * scale || cost < ai.Opening.AttackMinCost * scale) return false;
+        // M5-9a round 2 (BUG-1153): a seat starved for ai.starvedWaveAfter goes with what it has, whatever the threshold.
+        bool starved = ai.StarvedWaveDue;
+        if (count == 0 || !starved && (half < ai.Opening.AttackMinHalfPop * scale || cost < ai.Opening.AttackMinCost * scale)) return false;
         if (!ai.NearestEnemyBuilding(board.Rally, out EntityHandle target, out int type, out int cell)) return false;
         Array.Clear(board.WaveGeneration);
         Array.Clear(board.WaveFlag);
@@ -142,8 +146,9 @@ internal static class MilitaryManager
         SetTarget(ai, target, type, cell);
         board.WaveActive = true;
         board.WaveStartHalfPop = half;
-        board.WaveMinHalfPop = ai.Opening.AttackMinHalfPop * scale;
-        board.WaveMinCost = ai.Opening.AttackMinCost * scale;
+        // A starved wave keeps no threshold (as a hunt: the defense may pull any member).
+        board.WaveMinHalfPop = starved ? 0f : ai.Opening.AttackMinHalfPop * scale;
+        board.WaveMinCost = starved ? 0f : ai.Opening.AttackMinCost * scale;
         board.WaveStartTick = ai.Now;
         board.WaveBusyTick = ai.Now;
         board.WaveCooldownUntil = ai.Now + ai.Rules.WaveCooldownTicks;
@@ -159,7 +164,8 @@ internal static class MilitaryManager
     private static void TryHunt(AiPlayer ai)
     {
         Blackboard board = ai.Board;
-        if (board.KnownEnemyBuildings > 0 || board.WavesStarted == 0 || ai.View.MatchOver || ai.Now < board.WaveCooldownUntil) return;
+        // M5-9a round 2: a starved seat hunts even with no wave sent before.
+        if (board.KnownEnemyBuildings > 0 || board.WavesStarted == 0 && !ai.StarvedWaveDue || ai.View.MatchOver || ai.Now < board.WaveCooldownUntil) return;
         int half = 0, count = 0;
         Vector2 sum = Vector2.Zero;
         for (int k = 0; k < ai.ArmyCount; k++)
@@ -1002,7 +1008,7 @@ internal static class MilitaryManager
     }
 
     /// <summary>Own army unit <paramref name="slot"/> as seen, if it is free for an order: alive, not casting, no AI command pending.</summary>
-    private static bool Free(AiPlayer ai, int slot, out SeenUnit u) =>
+    internal static bool Free(AiPlayer ai, int slot, out SeenUnit u) =>
         ai.View.TryGetUnit(slot, out u) && u.State != UnitState.Casting && !ai.OrderedNotApplied(slot, u.Handle.Generation);
 
     /// <summary>The order owed to the member in unit slot <paramref name="slot"/>: its <see cref="Blackboard.WaveFlag"/> without the <see cref="FightsOn"/> bit.</summary>

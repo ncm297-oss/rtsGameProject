@@ -125,6 +125,17 @@ public sealed class AiRulesDef
     public int CounterMemoryTicks { get; init; }
 
     /// <summary>
+    /// M5-9a round 2 (BUG-1153, BUG-1068 candidate (b)): a seat starved this long running (it can pay for no unit of its
+    /// composition, knows no node of a short kind it may gather and has no worker on one, and has at least
+    /// <see cref="StarvedMinArmy"/> free army units) waves with what it has, whatever the opening's threshold
+    /// (<c>starvedWaveAfter</c> s, 0-600, to ticks; <b>0 turns the rule off</b>: the seat is never stamped starved).
+    /// </summary>
+    public int StarvedWaveAfterTicks { get; init; }
+
+    /// <summary>M5-9a round 2: the fewest free army units a starved seat needs to count as starved (<c>starvedMinArmy</c>, a whole number 1-50).</summary>
+    public int StarvedMinArmy { get; init; }
+
+    /// <summary>
     /// M5-9a: <c>ai.counters</c> as bit masks, indexed by the enemy's <see cref="UnitSlot"/>: bit <c>s</c> is set when own slot
     /// <c>s</c> counters it (docs/02 "Faction template", the "Countered by" column). Default (no <c>ai</c>) or all 0: no shift.
     /// </summary>

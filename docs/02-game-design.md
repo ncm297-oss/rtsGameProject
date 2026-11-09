@@ -435,6 +435,12 @@ own cues (select, order, refused, building placed or finished, unit or tech read
   a raid at home), and becomes a wave again on the first enemy building it finds. So a beaten side's last unit hiding in
   the woods is found, and AI-against-AI matches end (built in M5-4d, BUG-1068; hardened in M5-H5, BUG-1119 / BUG-1120;
   [03 Implementation (M5-4d)](03-technical-design.md#implementation-m5-4d)).
+- A side that can no longer grow attacks with what it has: when it can pay for no unit of its army mix, knows no gold
+  mine (or forest) it could send a worker to for the resource it lacks, has no worker on it, and has at least
+  `rules.json` `ai.starvedMinArmy` (1) combat units free, then after `ai.starvedWaveAfter` (60 s) in that state it sends
+  every free combat unit in a wave whatever the wave threshold (or hunts, if it knows no enemy building), again after each
+  wave's cooldown, at every difficulty; a raid on its base resets the clock, and 0 turns the rule off (built in M5-9a
+  round 2, BUG-1153; [03 Implementation (M5-9a)](03-technical-design.md#implementation-m5-9a)).
 - The AI rebuilds what it loses: a building its build order put up that is razed (or a site cancelled) is ordered again
   within a think or two, as a build order step due again, with the same reserve and site search as before; a House is
   not rebuilt once the population cap is at the hard cap. With no Town Hall left and a worker alive, the Town Hall comes

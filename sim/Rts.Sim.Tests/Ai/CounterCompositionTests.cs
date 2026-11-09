@@ -330,9 +330,9 @@ public class CounterCompositionTests
 
     /// <summary>
     /// Criterion 4 / QA focus 2: QA's <c>NonHardMatchPinQaTests</c> rows are Easy v Normal or Normal v Normal, so their digests
-    /// move with Normal's shift. With Normal's <c>counterStrength</c> at 0 (Easy's already is) every row reproduces the digest
-    /// it pinned before this task (c11f5f0) exactly: the memory, the hash's new fields and the format change move no play, and
-    /// the only change in those matches is the Normal seats' shift.
+    /// move with Normal's shift. With Normal's <c>counterStrength</c> at 0 (Easy's already is) and (round 2) <c>ai.starvedWaveAfter</c>
+    /// at 0 every row reproduces the digest it pinned before this task (c11f5f0) exactly: the memory, the stamp, the hash's new
+    /// fields and the format change move no play, and the only changes in those matches are the two levers.
     /// </summary>
     [Theory]
     [Trait("Category", "Stress")]
@@ -372,7 +372,7 @@ public class CounterCompositionTests
             }
         }
         string got = $"{digest:X16} {sim.TickNumber} {log.Count}";
-        _out.WriteLine($"{map} seed {seed} {first} v Normal, Normal strength 0: {got}");
+        _out.WriteLine($"{map} seed {seed} {first} v Normal, Normal strength 0, starved wave off: {got}");
         Assert.Equal(before, got);
     }
 
@@ -387,10 +387,12 @@ public class CounterCompositionTests
         return digest;
     }
 
+    /// <summary>Normal's <c>counterStrength</c> 0 in both factions and (round 2) <c>ai.starvedWaveAfter</c> 0: both of M5-9a's levers off.</summary>
     private static readonly Lazy<GameData> NormalStrengthZero = new(() => AiScenes.DataWith(dir =>
     {
         foreach (string f in new[] { "malazan", "whirlwind" })
             dir.EditJson($"factions/{f}/ai.json", r => r["difficulties"]!["normal"]!["counterStrength"] = 0);
+        dir.EditJson("common/rules.json", r => r["ai"]!["starvedWaveAfter"] = 0); // M5-9a round 2: the starved wave off
     }));
 
     private static void EarlyWavesEdit(TestDataDir dir)

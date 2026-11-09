@@ -406,6 +406,15 @@ public class DataValidationTests
     [InlineData("counterMemory", "0.01", "ai.counterMemory", "rounds to 0 ticks")]
     [InlineData("counterMemory", "3600.5", "ai.counterMemory", "above the maximum 3600 s")]
     [InlineData("counters", null, "ai.counters", "missing required field")]
+    [InlineData("starvedWaveAfter", null, "ai.starvedWaveAfter", "missing required field")] // M5-9a round 2
+    [InlineData("starvedWaveAfter", "-1", "ai.starvedWaveAfter", "must not be negative")]
+    [InlineData("starvedWaveAfter", "600.5", "ai.starvedWaveAfter", "above the maximum 600 s")]
+    [InlineData("starvedWaveAfter", "\"60\"", "$.ai.starvedWaveAfter", "")]
+    [InlineData("starvedMinArmy", null, "ai.starvedMinArmy", "missing required field")]
+    [InlineData("starvedMinArmy", "-1", "ai.starvedMinArmy", "not a whole number in 1-50")]
+    [InlineData("starvedMinArmy", "0", "ai.starvedMinArmy", "not a whole number in 1-50")]
+    [InlineData("starvedMinArmy", "51", "ai.starvedMinArmy", "not a whole number in 1-50")]
+    [InlineData("starvedMinArmy", "1.5", "ai.starvedMinArmy", "not a whole number in 1-50")]
     [InlineData("counters", "[]", "$.ai.counters", "")]
     public void AiRulesBlock_MissingOrOutOfRange_IsOneError(string? field, string? value, string path, string message)
     {
@@ -660,6 +669,10 @@ public class DataValidationTests
     [InlineData("huntMemory", 3600, 72000)]
     [InlineData("focusReach", 1, 1)] // M5-4c slice 2
     [InlineData("focusReach", 64, 64)]
+    [InlineData("starvedWaveAfter", 0, 0)] // M5-9a round 2: 0 turns the starved wave off
+    [InlineData("starvedWaveAfter", 600, 12000)]
+    [InlineData("starvedMinArmy", 1, 1)]
+    [InlineData("starvedMinArmy", 50, 50)]
     public void AiDefenseKnobs_AtTheirEdges_Load(string knob, double value, double loaded)
     {
         using TestDataDir dir = TestDataDir.CopyOfShipped();
@@ -671,7 +684,8 @@ public class DataValidationTests
         {
             "defendFor" => a.DefendForTicks, "defendRadius" => a.DefendRadius, "castMinTargets" => a.CastMinTargets,
             "defendRatio" => a.DefendRatio, "defendMinValue" => a.DefendMinValue, "recallHallHp" => a.RecallHallHp, "reserveShift" => a.ReserveShift, "reserveArmyShare" => a.ReserveArmyShare, "gatherReach" => a.GatherReach,
-            "scoutReplacements" => a.ScoutReplacements, "spendDownQueue" => a.SpendDownQueue, "huntMemory" => a.HuntMemoryTicks, "focusReach" => a.FocusReach, _ => a.WorkerFleeRadius,
+            "scoutReplacements" => a.ScoutReplacements, "spendDownQueue" => a.SpendDownQueue, "huntMemory" => a.HuntMemoryTicks, "focusReach" => a.FocusReach,
+            "starvedWaveAfter" => a.StarvedWaveAfterTicks, "starvedMinArmy" => a.StarvedMinArmy, _ => a.WorkerFleeRadius,
         }, 5);
     }
 

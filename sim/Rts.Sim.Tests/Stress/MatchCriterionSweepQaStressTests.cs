@@ -54,6 +54,9 @@ public class MatchCriterionSweepQaStressTests
         [("raraku", 1)] = "BUG-1152",
         // M5-9a: Raraku seed 2 no longer fails (the Normal counter shift changed the match: it ends at 29,190 with every
         // oracle clean), so its entry is out; BUG-1152 stays open (seed 1 still shows it).
+        // M5-9a round 2 (the starved wave does not reach it): no result at 72,000, seat 1 silent 35,621..72,000 (36,379 ticks)
+        // with 1,970 gold / 5 wood and no army; seat 0 holds 4,454 gold / 35 wood, 5 army, no worker, and trains nothing.
+        [("raraku", 5)] = "BUG-1152",
     };
 
     /// <summary>The extra oracles' state over one match.</summary>

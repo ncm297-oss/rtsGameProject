@@ -67,6 +67,10 @@ studio commit, whose `studio/**` content is identical to `origin/main` 99d11bb),
 `studio/**` moved on `main`), and builds on it. **Diff base for ACCEPT: c11f5f0** (the whole M5-9a, rounds 1 + 2: nothing of it is on
 `main`). Rule 45 applies: no BLOCKED; partial results per row.
 
+**`main` verified at this PLAN (rule 38, scratch clone of 99d11bb):** build 0 / 0; `Category!=Perf&Category!=Stress` **8,203 / 0 / 16
+in 25 m 25 s** (that filter still runs the Stress-by-name rows, so it is not the ~2 min loop; not a hang). Smoke not re-run: `game/`
+unchanged since the 1316 PASS.
+
 **Goal.** Make the M5-9a branch green without a skip or a re-bound: a gold- (or wood-) starved AI that can no longer grow attacks
 with what it has (BUG-1068 candidate (b), the fix for BUG-1153 S2), behind a data knob with 0 = off, then re-measure every pin
 the round moved and run the QA full pass round 1 never got.

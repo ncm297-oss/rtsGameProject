@@ -590,6 +590,81 @@ internal sealed partial class AiPlayer
         }
         IntruderCentroid = IntruderCount > 0 ? intruders / IntruderCount : default;
         UpdateCounterMemory();
+        UpdateStarved(); // M5-9a round 2: after the memory, from this census (no new pass over the units)
+    }
+
+    // ---------- M5-9a round 2 (BUG-1153, BUG-1068 candidate (b)): the starved seat ----------
+
+    /// <summary>
+    /// M5-9a round 2: stamps <see cref="Blackboard.StarvedSince"/> on the first starved think (<see cref="Starved"/>) and
+    /// clears it on any think that is not, the defended ones included (while the base is defended <see cref="KnowsNode"/>
+    /// hides the nodes by the defense point, which must not read as starvation). With <c>ai.starvedWaveAfter</c> 0 nothing
+    /// runs and the stamp stays -1, so the seat plays exactly as before the rule.
+    /// </summary>
+    private void UpdateStarved()
+    {
+        if (Rules.StarvedWaveAfterTicks <= 0) return;
+        if (!Starved()) Board.StarvedSince = -1;
+        else if (Board.StarvedSince < 0) Board.StarvedSince = Now;
+    }
+
+    /// <summary>
+    /// M5-9a round 2: whether the seat's starved stamp is at least <c>ai.starvedWaveAfter</c> old this think: the army then
+    /// waves with every free unit whatever the opening's threshold, and hunts with no wave sent before
+    /// (<see cref="MilitaryManager"/>). Always false with the knob at 0.
+    /// </summary>
+    internal bool StarvedWaveDue =>
+        Rules.StarvedWaveAfterTicks > 0 && Board.StarvedSince >= 0 && Now - Board.StarvedSince >= Rules.StarvedWaveAfterTicks;
+
+    /// <summary>
+    /// M5-9a round 2 (docs/03 "Implementation (M5-9a)"): whether the seat is starved this think, from the census: the base
+    /// not defended (last think's defense: this think's runs after the census) and the match not over; (i) it can pay for
+    /// no unit of its current composition with the gold and wood it holds (each entry short of gold or wood); (iii) it has
+    /// at least <c>ai.starvedMinArmy</c> free army units (<see cref="MilitaryManager.Free"/>, the wave's filter); and (ii) for
+    /// each kind some entry is short of, it knows no node of that kind it may gather and no own worker is at that kind.
+    /// The node walk is <see cref="WalkForNode"/> uncached: <see cref="KnowsNode"/>'s per-think answer must stay the one
+    /// the executor reads after this think's defense. Allocates nothing.
+    /// </summary>
+    internal bool Starved()
+    {
+        if (Board.Defending || View.MatchOver) return false;
+        var compositions = Opening.Compositions;
+        if (compositions.Length == 0) return false;
+        AiComposition mix = compositions[Math.Clamp(View.Age, 1, compositions.Length) - 1];
+        if (mix.Units.Length == 0) return false;
+        bool shortGold = false, shortWood = false;
+        for (int k = 0; k < mix.Units.Length; k++)
+        {
+            UnitDef def = Data.Units[mix.Units[k]];
+            bool gold = Gold < def.CostGold, wood = Wood < def.CostWood;
+            if (!gold && !wood) return false; // (i): this one it can pay for
+            shortGold |= gold;
+            shortWood |= wood;
+        }
+        int free = 0;
+        for (int k = 0; k < ArmyCount && free < Rules.StarvedMinArmy; k++)
+            if (MilitaryManager.Free(this, ArmySlots[k], out _)) free++;
+        if (free < Rules.StarvedMinArmy) return false; // (iii)
+        if (shortGold && (Gathering(EconomyManager.Gold) || WalkForNode(ResourceKind.Gold))) return false; // (ii)
+        if (shortWood && (Gathering(EconomyManager.Wood) || WalkForNode(ResourceKind.Wood))) return false;
+        return true;
+    }
+
+    /// <summary>
+    /// M5-9a round 2: whether an own worker is at gathering <paramref name="kind"/> (<see cref="EconomyManager.Gold"/> or
+    /// <see cref="EconomyManager.Wood"/>): last sent to that kind (<see cref="Blackboard.GatherKind"/>, its generation) and
+    /// the order pending or the worker on its way, at the node or carrying home (not Idle, not Building).
+    /// </summary>
+    private bool Gathering(byte kind)
+    {
+        for (int k = 0; k < WorkerCount; k++)
+        {
+            int slot = WorkerSlots[k];
+            if (!View.TryGetUnit(slot, out SeenUnit u) || Board.UnitGeneration[slot] != u.Handle.Generation
+                || (Board.GatherKind[slot] & (EconomyManager.Gold | EconomyManager.Wood)) != kind) continue;
+            if (OrderedNotApplied(slot, u.Handle.Generation) || u.State is not (UnitState.Idle or UnitState.Building)) return true;
+        }
+        return false;
     }
 
     // ---------- M5-9a: the counter memory and the share each own slot counters ----------
