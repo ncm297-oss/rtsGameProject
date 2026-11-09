@@ -741,10 +741,10 @@ open S1 / S2. Retro below; open S3 / S4 listed there.)_
       `WantedGoldShare`, `BuildOrderExecutor.Reservable` / `Fillable`, `rules.json` `ai.reserveShift` 0.25 / `ai.reserveArmyShare` 1; sides
       alive at 20:00 without Age II 23 / 41 → 4 / 49 on the 27 pairing runs, waves and defeats not worse; docs/03 "Implementation (M5-4g)").
       Left: BUG-1010 (S3, the Malazan openings that fall to `raider_rush` without a wave: a defend-then-counter rule, M5-4g's unbuilt slice 2).)
-- [ ] Owner request 2026-10-14 (D14 c): **counter-composition**: the AI shifts its army mix toward what counters the enemy units it has
+- [x] Owner request 2026-10-14 (D14 c): **counter-composition**: the AI shifts its army mix toward what counters the enemy units it has
       seen (fog-limited, decayed memory; strength per difficulty, 0 on Easy); think cost stays inside the 1 ms gate.
-      (**Verified 2026-11-09-0426 (Producer), the tick waits for the merge:** M5-9a rounds 1-2 + M5-9b were REJECTED on one
-      test-hygiene line (BUG-1160: QA's suite file outside the serial collection), the task's own criteria all met; the shift, its
+      (**Ticked 2026-11-09-0426 (Producer): M5-9a rounds 1-2 + M5-9b accepted together after one fix round** (BUG-1160, one
+      test-hygiene line: QA's suite file outside the serial collection) **and on `main`;** the shift, its
       fog-fed fading memory, `counterStrength` Easy 0 / Normal 0.5 / Hard 1.0 and `AiPerfTests` 6 / 6 under 1 ms alone; the content
       tuning is the data track's D26, and BUG-1156 (S3) names where the shift is masked by a saturated producer. Sim half built by M5-9a: the census's per-slot memory of enemy non-worker units seen, fading over `rules.json`
       `ai.counterMemory` 180 s, `ai.counters` from docs/02's template, `ai.json` `counterStrength` Easy 0 / Normal 0.5 /

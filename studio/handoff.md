@@ -1,18 +1,18 @@
 # Handoff: brief for the next session
 
 Written by the Producer at the ACCEPT step of session **2026-11-09-0426** (session 1 / 8 of 2026-11-09; sim only: view and data
-STOP at PLAN). Sim **M5-9b REJECTED on one line, with M5-9a rounds 1-2 still held on the branch:** every criterion of the task
-itself is met and verified (QA full PASS_WITH_ISSUES; the Producer's own CLI run reproduces the headline number), but the
-**default test loop is red on the branch: BUG-1160 (S2)**, QA's new `QA/FarExpandQaTests.cs` reads the allocation counter without
-`[Collection(SerialCollection.Name)]`, so BUG-0024's guard `SerialCollectionTests.EveryFileThatMeasuresAllocation_*` fails
-(8,244 / 1 / 18, twice). `main` must stay green and the Producer does not edit tests, so: REJECT, one attribute to add. The terminal
-rule's outcome was **(b)**: Pale Hills seed 1 Normal v Normal ends at **48,858 (40:42)**, seat 1, every check clean, so the three
-1v1 Pale Hills rows are bound at **72,000** (a Producer decision, docs/01) and BUG-1153 is S3. **M5 stays 7 / 9 until the merge
-(criterion 9 verified, ticked then; criterion 6 owner-only).** New S3 BUG-1157 (decided Pale Hills matches finish late: seeds 2 / 5
-past 72,000, five Hard-seat-0 tally no-results), S3 BUG-1158 (the leg replaces killed workers without limit), S4 BUG-1159 (nits).
-`main` = 491dae0 (dd3befa + `studio/**`): unchanged, build 0 / 0, non-Perf green, golden `30C51BB619A7E650`, formats 6 / 7, replay 9.
-**The branch `studio/2026-11-09-0426-sim` (f6af427 + the Producer's studio commit) is pushed.** Counters after: **sim 1 / 4 (a
-rejected session does not advance it), view 1 / 4, data 2 / 4.** Bug ids next: **all tracks from 1161.**
+STOP at PLAN). Sim **M5-9b ACCEPTED after one fix round, and with it M5-9a rounds 1-2: all of it is on `main` now.** The first
+ACCEPT step found the default loop red on the branch (**BUG-1160**, S2: QA's new `QA/FarExpandQaTests.cs` read the allocation
+counter without `[Collection(SerialCollection.Name)]`, so BUG-0024's guard failed, 8,244 / 1 / 18 twice) and REJECTED on that line;
+fix round 1 added the attribute (4ace852, one line, no other change), QA re-checked (5a74b06), the Producer re-ran the default loop
+on a fresh archive (**8,245 / 0 / 18**) and accepted. The terminal rule's outcome was **(b)**: Pale Hills seed 1 Normal v Normal
+ends at **48,858 (40:42)**, seat 1, every check clean, so the three 1v1 Pale Hills rows are bound at **72,000** (a Producer
+decision, docs/01) and BUG-1153 is S3. **M5 criterion 9 ticked: M5 8 / 9**, only criterion 6 (the owner's play) left; M6 5 / 10.
+New S3 BUG-1157 (decided Pale Hills matches finish late: seeds 2 / 5 past 72,000, five Hard-seat-0 tally no-results), S3 BUG-1158
+(the leg replaces killed workers without limit), S4 BUG-1159 (nits). `main` after the merge: build 0 / 0, the default loop
+8,245 / 0 / 18, QA's Stress / Soak 510 / 0 / 5, `AiPerfTests` 6 / 6 alone, smoke PASS, golden `30C51BB619A7E650`, formats **8 / 9**,
+replay 9 (an AI save from before refuses to load; human saves and recordings play). Counters after: **sim 2 / 4, view 1 / 4,
+data 2 / 4.** Bug ids next: **all tracks from 1161.**
 
 ## Standing rules (1-47)
 
@@ -40,7 +40,7 @@ includes QA's own suites** (not only the Stress / Soak complement), and a QA fil
 - **The developer cannot write `studio/**`** (a hook): bug-file updates come as a patch in the scratchpad; the Producer applies it
   (this session QA applied the developer's patches, which worked; either is fine).
 - **A brief that relaxes a judge must name what the relaxed query cannot see** (M5-H5's lesson).
-- **Pinned matches on the branch (M5-9a + M5-9b; `main`'s are unchanged until the merge):** `MatchCriterionTests` (Vathar 23,043
+- **Pinned matches on `main` now (M5-9a + M5-9b):** `MatchCriterionTests` (Vathar 23,043
   seat 1 / Raraku 28,083 / **Pale Hills 48,858, bound 72,000** / generated **seed 2** 15,691, bound 24,000 / FFA 58,155 / 2v2 35,648),
   `MapFileTests.NormalVersusNormal_OnANewMap_EndsWithinItsBound` (Pale Hills 48,858 / Vathar 23,043), `MapSlice2StressTests.KnownStalls`
   (Pale Hills 3 / 4 / 6 = 29,514, generated 6, Raraku 5 52,360), **skipped with the measurement: Pale Hills 2 (79,504) and 5
@@ -50,9 +50,8 @@ includes QA's own suites** (not only the Stress / Soak complement), and a QA fil
   the hunt rows on **seed 1** (`AiDeterminismTests`, `HuntStressTests` mid-hunt save), `HuntStressTests` FFA seed 2 (97,140) / seed 3 /
   2v2 seed 1; `HuntStressTests.FourAiSeats_OnPaleHills_Seed1_KnownStall` skipped (no result by 144,000: no free gold with four
   seats). The 8 pre-M5-9a digests reproduce at Normal strength 0 + `starvedWaveAfter` 0 + `farExpandReach` 0
-  (`CounterCompositionTests.TheNonHardPins_*`). The Hard v Normal tally: 26 / 11 / 5. **On `main` (unchanged):** the M5-5 list in
-  the 2026-11-08-1556 handoff (Vathar 22,794 / Raraku 28,083 / Pale Hills 34,219 / generated 21,789 / FFA 52,305 / 2v2 34,510).
-- **Known stalls (skipped with ids on the branch):** Pale Hills 2 / 5 (BUG-1068 / 1116 / 1157), Pale Hills FFA seed 1 (BUG-1068 /
+  (`CounterCompositionTests.TheNonHardPins_*`). The Hard v Normal tally: 26 / 11 / 5.
+- **Known stalls (skipped with ids on `main`):** Pale Hills 2 / 5 (BUG-1068 / 1116 / 1157), Pale Hills FFA seed 1 (BUG-1068 /
   1116), `EndGameHardeningTests.ALoneIdleWorker_*` (BUG-1116), QA's `M5H5HuntAfterDefeatQaTests.A2v2_TheDefenseToo_*` (BUG-1149),
   `SimHardeningM5H5QaTests` rows 5 / 6 (BUG-1150), `CounterMemoryQaTests.AHardSeat_ThatWatched20HorseRaiders_*` (BUG-1156),
   `FarExpandQaTests.ALegWorker_KilledAtAGuardedStart_*` (BUG-1158), `FarExpandQaTests.TheLeg_DoesNotWalkToAStartOutsideTheReach` (BUG-1159).
@@ -68,33 +67,11 @@ includes QA's own suites** (not only the Stress / Soak complement), and a QA fil
 ## Sim track
 
 ### Where we are
-M5-9b REJECTED on BUG-1160 alone (one attribute in QA's test file); M5-9a + M5-9b verified and held on
-`studio/2026-11-09-0426-sim` (f6af427). **M5 7 / 9 (criterion 9 verified, ticked at the merge; 6 owner-only).** Counter **1 / 4**.
+M5-9b ACCEPTED (1 fix round, BUG-1160); M5-9a + M5-9b on `main`. **M5 8 / 9 (criterion 6 owner-only).** Counter **2 / 4**. The sim's
+M5 work is complete; the end-of-M5 sim hardening has not run yet (the sign-off waits on criterion 6 anyway). Open: BUG-1157 / 1158
+(S3), BUG-1159 (S4), and the carried list. A fresh branch next (rule 44 / 46: nothing is held).
 
-### Current session plan: M5-9b fix, the one line + the landing (feature, QA light; a fix round in the 0426 session if the conductor can run one, else the next sim session)
-
-**Branch:** resume `origin/studio/2026-11-09-0426-sim` (f6af427 + the Producer's studio commit); merge `origin/main` (only
-`studio/**` will have moved). **Diff base for ACCEPT: c11f5f0** (M5-9a + M5-9b + this line; nothing of it is on `main`).
-
-**Scope (in), nothing else:** add `[Collection(SerialCollection.Name)]` above `public class FarExpandQaTests` in
-`sim/Rts.Sim.Tests/QA/FarExpandQaTests.cs` (line 23; `StarvedWaveQaTests` is the model). Run the default loop
-(`Category!=Perf&Category!=Stress&Category!=Soak`): expected **8,245 / 0 / 18**. Apply the BUG-1160 patch (status `fixed`, the
-commit) via the scratchpad.
-
-**Out of scope:** any other file. No sim code, no docs, no pin, no bug fix (BUG-1157 / 1158 / 1159 wait for the hardening). If the
-developer finds anything else red, it is reported, not fixed, and the Producer decides.
-
-**Acceptance criteria:** (1) `SerialCollectionTests` green and the default loop green (8,245 / 0 / 18 or the same with the row
-counts explained); (2) the diff against f6af427 is that one line plus the bug patch; (3) build 0 / 0.
-
-**Terminal rule (rule 46; this is the branch's fourth session, so the rule is the whole brief):** (1)-(3) green → the Producer
-ACCEPTs M5-9a + M5-9b as verified at 0426 (criteria 2-8 there; the 0426 session log holds the evidence), ticks criterion 9, and
-the conductor merges. Anything else red → the Producer files it and decides on the spot; no fifth session on this branch.
-
-**QA (light):** `SerialCollectionTests` + the default loop on the fixed commit, `FarExpandQaTests` 11 / 13 as before; no probes,
-no tally, no Perf beyond `AiPerfTests` 6 / 6 alone if the host is idle (rule 42; optional: it did not change).
-
-### After it (the next PLAN picks; the inbox first)
+### Next task candidates (the next PLAN picks; the inbox first)
 1. **Recommended: the end-of-M5 sim hardening, pulled forward** (hardening, QA full; the counter will be 2 / 4 but every sim-side
    M5 criterion is met, the milestone's hardening is owed before its sign-off, and the debt is heavy: 26 S3). In this order,
    batched to the size budget: **(a) the end game (BUG-1157 / 1116 / 1068):** a decided match should finish: the hunt's sweep order
@@ -136,11 +113,10 @@ STOP (cheap). Counter 1 / 4. M6 5 / 10.
 
 ## Data track
 
-### Current session plan: STOP (cheap) until M5-9a / M5-9b are on `main`; then D26, D14 c's content (feature, QA light; standard if it moves Normal or Hard)
-**Blocked by one line:** the schemas (`ai.json` `difficulties.<d>.counterStrength`; `rules.json` `ai.counterMemory`, `ai.counters`,
-`ai.starvedWaveAfter`, `ai.starvedMinArmy`, `ai.farExpandReach`) are on the held branch, not on `main` (`git grep counterStrength`
-on `main` finds nothing until the fix lands). The moment it lands, D26 is the data track's task, in the same session as the sim's
-next task if the conductor runs them side by side (rule 41: the sim's hardening keeps off `ai.json`).
+### Current session plan: D26, D14 c's content (feature, QA light; standard if it moves Normal or Hard)
+**Unblocked now:** the schemas (`ai.json` `difficulties.<d>.counterStrength`; `rules.json` `ai.counterMemory`, `ai.counters`,
+`ai.starvedWaveAfter`, `ai.starvedMinArmy`, `ai.farExpandReach`) are on `main`. D26 may run in the same session as the sim's next
+task (rule 41: the sim's hardening keeps off `ai.json`; the sim brief says so).
 
 **D26 brief.** **Files:** `game/data/factions/malazan/ai.json`, `game/data/factions/whirlwind/ai.json`, `docs/factions/malazan.md`,
 `docs/factions/whirlwind.md`, `sim/Rts.Sim.Tests/Content/**`, `QA/Content/**`. **Not** `game/data/common/rules.json` (sim-owned; a
@@ -158,7 +134,7 @@ why; every new player-facing string quoted). **Design references:** docs/02 "AI 
 "(M5-9b)".
 
 ### Where we are
-STOP (cheap) this session. Counter 2 / 4. D26 next once the schemas land.
+STOP (cheap) this session. Counter 2 / 4. D26 next (unblocked).
 
 ### Next task candidates
 - D26 (above). Then the owner's answers if any land (the D21 / D22 / D23 / D24 / D-H7 tables; the Shock pass; `goldShare`;
