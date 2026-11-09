@@ -51,3 +51,13 @@ Probed every 2:00 (both seats `standard`):
   candidate (b) behind `rules.json` `ai.starvedWaveAfter` (0 = off): a seat with no gold income, under its cheapest unit's
   cost, with at least one combat unit, waves with what it has after the window (details in `studio/handoff.md`). Fixed when
   the three criterion rows and QA's sweep row end inside their bounds without a skip or a re-bound.
+
+## Re-check fix round 1 (2026-11-08-1556, QA, fix 65524da)
+Still open. Full non-Perf on a fresh clone of 65524da: 8,721 passed / 4 failed / 18 skipped of 8,743 (2 h 51 m); the 4 red
+rows are this bug's family: `MatchCriterionTests.EachOtherMap_*(pale_hills)` ("no result in 36000 ticks"),
+`MatchCriterionTests.EveryRow_InTwoProcesses_*(pale_hills)`, `MapFileTests.NormalVersusNormal_OnANewMap_EndsWithin36000Ticks(pale_hills)`
+("no result in 30:00") and `Stress/HuntStressTests.FourAiSeats_OnPaleHills_*(seed 1, FFA)` ("no result by 144,000 ticks").
+QA's probe (`Stress/StarvedWaveProbeQaStressTests`): shipped, over at **68,664**, seat 1 (was 71,660); with
+`starvedWaveAfter` 0, no result at 72,000. At 36,000 seat 0 has 0 army, 29 workers, gold 46; seat 1 14 army, gold 16, wood
+3,992. Seat 0 first stamped 26,560 (first starved wave 30,420), seat 1 26,960 (32,480). QA's sweep row Pale Hills 1 is now
+green (ends inside 72,000, silent-seat oracle passes). The developer's fix round 1 measurements match mine.

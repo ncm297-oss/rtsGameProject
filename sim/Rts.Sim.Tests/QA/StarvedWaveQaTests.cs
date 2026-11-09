@@ -361,4 +361,53 @@ public class StarvedWaveQaTests
         _out.WriteLine($"CTRM bytes {at}..{end}: {loads} forged saves loaded in range, {refusals} refused");
         Assert.True(refusals > 0 && loads > 0, $"{loads} loads, {refusals} refusals");
     }
+    /// <summary>
+    /// QA, fix round 1 (BUG-1154's corrected (i): the seat is judged on <see cref="ProductionManager.Pick"/>): the cost boundary.
+    /// No gold mine left, a finished Barracks only (so the pick is Heavy Infantry, 54 g: the Crossbowman has no producer), wood
+    /// held at 100 and gold held at the pick's exact cost every tick: payable, so never stamped and it trains; one gold under:
+    /// stamped on the first think, never trains, waves on the first think at the window.
+    /// </summary>
+    [Theory]
+    [InlineData(0)]
+    [InlineData(-1)]
+    public void APickHeldAtItsExactGoldCost_IsNotStarved_OneUnderIs(int offset)
+    {
+        GameData data = Shipped.Value;
+        (Simulation sim, _) = Scene(AiDifficulty.Normal, data, ResourceKind.Gold, 0, 100);
+        World w = sim.World;
+        Assert.True(w.Buildings.Spawn(0, data.FindBuilding("malazan_barracks"), 44 * AiScenes.FlatSize + 8, out _));
+        int heavy = data.FindUnit("malazan_heavy_infantry");
+        int cost = data.Units[heavy].CostGold + offset;
+        AiPlayer ai = sim.AiOf(0)!;
+        int window = ai.Rules.StarvedWaveAfterTicks, think = ai.ThinkTicks;
+        // The pick at the first think's end (only meaningful when nothing was queued: a busy Barracks makes it -1).
+        int pick = -2, waveAt = -1, firstStamp = -1, trained = 0;
+        ai.ThoughtForTests = a =>
+        {
+            if (pick == -2) pick = ProductionManager.Pick(a);
+            if (firstStamp < 0 && a.Board.StarvedSince >= 0) firstStamp = a.Board.StarvedSince;
+            if (waveAt < 0 && a.Board.WavesStarted > 0) waveAt = a.Now;
+        };
+        while (sim.TickNumber < window + 2 * think)
+        {
+            w.Ledger.Gold[0] = cost;
+            w.Ledger.Wood[0] = 100;
+            sim.Tick();
+            if (w.Ledger.Gold[0] < cost) trained++;
+        }
+        _out.WriteLine($"gold {cost} (offset {offset}): first think's pick {pick}, first stamp {firstStamp}, stamp {ai.Board.StarvedSince}, wave at {waveAt}, ticks the bank dropped {trained}");
+        if (offset == 0)
+        {
+            // The Barracks trains only Heavy Infantry, so every drop of the bank is one bought.
+            Assert.Equal(-1, firstStamp);
+            Assert.True(trained > 0, "a payable pick was never trained");
+        }
+        else
+        {
+            Assert.Equal(heavy, pick);
+            Assert.Equal(0, firstStamp);
+            Assert.Equal(0, trained);
+            Assert.Equal(FirstThinkFrom(window, think), waveAt);
+        }
+    }
 }

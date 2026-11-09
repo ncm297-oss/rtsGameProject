@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S3 |
-| Status | open |
+| Status | fixed (M5-9a fix round 1, 65524da; QA re-check 2026-11-08-1556) |
 | Found | 2026-11-08-1556, task M5-9a (round 2, QA full) |
 | System | AI (the starved wave: `AiPlayer.Starved`, clause (ii)) |
-| Fixed by | |
+| Fixed by | 65524da "M5-9a: fix QA findings (round 1)": `Starved()` judges (i) on `ProductionManager.Pick` (split from `TrainOne`, same logic; with no producer free, every entry) and (ii) per unit (`CanEverPay`: a unit is saved only if every kind it lacks is obtainable). Proof: QA's fail-first `QA/StarvedWaveQaTests.AGoldStarvedSeat_WithWoodUnderACost_ButNoGoldEver_IsStarved` un-skipped and green; `StarvedWaveTests.ASeat_WhosePickIsNeverPayable_*`; QA rows below |
 
 ## Repro
 1. `dotnet test sim/Rts.Sim.Tests --filter "FullyQualifiedName~StarvedWaveQaTests.AGoldStarvedSeat_WithWoodUnderACost_ButNoGoldEver_IsStarved"`
@@ -52,3 +52,17 @@ over 36,000 (BUG-1153's slow raze is), but any gold-starved seat whose wood bank
   (40 g / 30 w, mines emptied, forest standing: a Crossbowman's gold is there, its wood is gatherable, so not starved).
 - Related: BUG-1153 (the row this lever is for), the developer's finding that (i) ignores whether a unit can be trained at
   all (Pale Hills seed 2: 48 gold, enough for a Crossbowman, trains nothing; Raraku seed 5).
+
+## Re-check fix round 1 (2026-11-08-1556, QA, fix 65524da)
+Fixed, verified:
+- The fail-first row, un-skipped, is green in the fresh-clone full run and alone (stamp 0, wave at 1,200).
+- QA adds `QA/StarvedWaveQaTests.APickHeldAtItsExactGoldCost_IsNotStarved_OneUnderIs` (no mine, Barracks only, so the pick is
+  Heavy Infantry at 54 g): gold held at 54 is never stamped and trains (5 buys); gold held at 53 is stamped at 0, trains
+  nothing, and waves at 1,200.
+- QA adds `Stress/StarvedPickOracleQaStressTests.AStampedThink_SendsNoTrain`, which checks every think of every seat on 6
+  whole matches (Pale Hills 1 / 2, Raraku 5 Normal v Normal to 72,000; Raraku 1 and Pale Hills 3 Easy v Normal to 36,000;
+  Pale Hills 2 four-seat FFA to 144,000): **0** Train commands on a think that ends stamped (the check and production agree
+  on the pick). Raraku 5 seat 0 is stamped 1,669 of 2,618 thinks from 17,940; the match ends at 52,360.
+- Note (not a bug): QA's round-2 metric "nothing buyable but not starved" (`StarvedWaveProbeQaStressTests`) still counts some
+  thinks (Pale Hills 1 seat 1: 33, longest run 3, was 38 / 20). That metric tests `ArmyCount`, but the rule's (iii) tests
+  `Free` units, so these are mid-command thinks, not the rule's gap.
