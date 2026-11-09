@@ -1,5 +1,11 @@
 # Handoff: brief for the next session
 
+**PLAN 2026-11-09-1336 (session 2 / 8 of 2026-11-09): sim M5-H6 (the end-of-M5 sim hardening, pulled forward), view STOP
+(cheap), data D26a (D14 c's content, the part that moves no pin).** Checks: inbox New empty; `main` e27eefd builds 0 / 0,
+smoke PASS, the default loop **8,245 / 0 / 18 in 19 m 28 s** (scratch archive, rule 38); verified `rules.json` `ai.farExpandReach` 384, `PaleHillsBound`
+72,000, criterion 9 ticked, BUG-1160's attribute on `main`; open S1 / S2: none; sessions today 1 / 8 before this one. The
+briefs are under each track's "Current session plan" below; the rest of this file is the 0426 ACCEPT's handoff, still current.
+
 Written by the Producer at the ACCEPT step of session **2026-11-09-0426** (session 1 / 8 of 2026-11-09; sim only: view and data
 STOP at PLAN). Sim **M5-9b ACCEPTED after one fix round, and with it M5-9a rounds 1-2: all of it is on `main` now.** The first
 ACCEPT step found the default loop red on the branch (**BUG-1160**, S2: QA's new `QA/FarExpandQaTests.cs` read the allocation
@@ -66,6 +72,86 @@ includes QA's own suites** (not only the Stress / Soak complement), and a QA fil
 
 ## Sim track
 
+### Current session plan: M5-H6, the end-of-M5 sim hardening (hardening, QA full)
+
+**Goal.** Every sim-side M5 criterion is met and the milestone's hardening is owed before its sign-off (which waits on the
+owner's criterion 6), so it runs now rather than at 4 / 4. The first item is the one regression `main` carries: a decided
+AI-against-AI match on Pale Hills finishes late since the far expansion (BUG-1157; seed 5 was green at 52,557 and is skipped
+at 96,321). Then the far expansion's own two bugs and the carried AI debt, batched to the size budget.
+
+**Scope, in this order (stop where the budget ends; nothing below (c) is required).**
+- **(a) The end game, BUG-1157 / BUG-1116 / BUG-1068 (uncertain: measure first, ~800 lines).** Measure each lever alone on
+  Pale Hills seeds 2 and 5 Normal v Normal, the five Hard-seat-0 tally no-results (`--ai hard,normal`, seeds 2 / 3 / 6 / 7 / 8)
+  and Pale Hills seed 1, then ship the combination that ends the most rows without moving seed 1 past 72,000 or the literal
+  row past 24,000: (i) **the hunt looks at the start locations** (the start list every seat already reads for the leg,
+  `PlayerView.StartCell`; the loser's remnant is now a depot and workers at a far start: sweep the free / defeated starts
+  before the perimeter leg, or insert them into the ring order by distance); (ii) **the sweep order** (BUG-1116's note: the
+  perimeter leg deferred while a local point is nearer than the reached ring point; judged on
+  `EndGameHardeningTests.ALoneIdleWorker_*` + QA's hide / leg rows); (iii) **the house rule** (BUG-1116: reopen a House step
+  only when `HalfPopCap - HalfPop <= AiRulesDef.HouseHalfPopMargin`, the economy's own test, `rules.json`
+  `ai.houseWhenPopWithin` 2; re-measured now that a loser has far gold); (iv) BUG-1157's
+  "a decided wave keeps its target on the loser's drop-offs". Print a table (lever × row: end tick / winner) in the report
+  and in docs/03 "Implementation (M5-H6)". Goal: Pale Hills 2 / 5 un-skipped inside 72,000, the five tally no-results ended,
+  seed 1 inside 72,000, the tally not inverted (Hard ahead on every map).
+- **(b) BUG-1158 (small):** a leg-death cap: a leg worker killed is replaced at most `ai.scoutReplacements` (2) times in all
+  (reuse the knob: the Producer's default; a new `ai.farLegReplacements` only if the scout's count and the leg's must differ,
+  say why); past the cap the start is marked looked and the leg goes on (or ends). Un-skip QA's
+  `FarExpandQaTests.ALegWorker_KilledAtAGuardedStart_*`.
+- **(c) BUG-1159 (small):** `NextStart` filters by `farExpandReach`; a leg ended on a candidate (`EndLeg(stop: false)`) marks
+  its start looked only if the start's last point was reached (else re-walked from the point, not the start); fix the
+  `SaveRefusalTests.AFormat8Save_WithAForgedFarExpansion_*` summary (or add the generation check it claims). Un-skip
+  `TheLeg_DoesNotWalkToAStartOutsideTheReach`.
+- **(d) If budget remains, in this order:** BUG-1151 (mark the node when a Gather sent to a non-idle worker is dropped with
+  its node unchanged) and BUG-1152 (every gold-affordable option blocked on wood → one gatherer to wood whatever the share),
+  their `MatchCriterionSweepQaStressTests.Known` entries out; BUG-1149 (the defense's point through `SightingPoint`) and
+  BUG-1150's push rule; the eight-legs perf row (`AiPerfTests`: 8 seats on their legs on a map with free starts, 1 ms / 0 B);
+  the `ReopenLost` masking note (measure: a lost Camp hidden by a standing far depot of the same type); `HasMapId`'s note,
+  `HUNT`'s vectors and tick range-checked as `AIST`'s; BUG-1058.
+- **Out of scope:** `game/data/factions/**` (the data track's D26a runs beside this: rule 41; a page cell re-printed under
+  rule 40 is the only allowed edit there, and only table cells, never the "AI build order (Normal)" prose the data track
+  appends to), `ai.json` values, BUG-1156 (D26's), BUG-1010, the movement S3s (BUG-0911 / 0889 / 0144: each needs a failing
+  row first, their own session), any save-format bump (if a lever needs a saved field, say so and pick another), any new
+  knob beyond (b)'s, the view and `game/`.
+
+**Acceptance criteria.**
+1. Build 0 / 0; the default loop green on the final commit **with QA's suites in** (rule 47); `AiPerfTests` green alone
+   (rule 42); smoke PASS; every skip carries a bug id; no fixed bug's row stays skipped.
+2. Pale Hills seeds 2 and 5 Normal v Normal end inside 72,000 and are un-skipped in `MapSlice2StressTests` with the new
+   ticks in the comments; Pale Hills seed 1 Normal v Normal ends inside 72,000; the literal row (Vathar seed 1) inside
+   24,000; the generated row inside 24,000. If a lever cannot get a row there, the report says which and why, the row stays
+   skipped with the new measurement, and criterion 2 is "met with a finding" only if at least seed 5 is back.
+3. The 42-match Hard v Normal tally re-run once: no-results fewer than 5, Hard ahead on every map; the figure in docs/03's
+   M5-5 reading and BUG-1157.
+4. Every pin in the watch-out list re-measured in the same commit (rule 43: `MatchCriterionTests`, `MapFileTests`,
+   `KnownStalls`, `StandardPresetPinQaTests`, `NonHardMatchPinQaTests`, `HardKnobsPinTests`, the faction page tables (rule 40),
+   `D21OpeningsQaTests` / `DH6ThresholdQaTests` + `KnownBeatenAlive`, the hunt rows, `HuntStressTests`, QA's `Known`); a row
+   that stops ending is a finding (rule 45: skip with the measurement, file it, say so in the report), never a re-bound.
+   Golden `30C51BB619A7E650` unchanged unless a lever changes human-visible play (it should not: the levers are AI-only;
+   if it moves, stop and say why). The 8 pre-M5-9a digests still reproduce at strength 0 + knobs 0.
+5. BUG-1158: the guarded-start scene loses at most `ai.scoutReplacements` + 1 workers to the leg and keeps its economy;
+   QA's row un-skipped; a dev row in `FarExpandTests`.
+6. BUG-1159's three items done, QA's row un-skipped; `FarExpandTests` rows for the reach filter and the looked mark.
+7. Each bug fixed has a regression test that failed first (named in the report); each lever that moves Normal play is
+   described in docs/02 "AI opponent" (one sentence each) and docs/03 "Implementation (M5-H6)" (the measurement table);
+   bug files' status updates as a patch in the scratchpad; no Godot / wall clock / `System.Random` / dictionary iteration /
+   per-think allocation in the diff; no player-facing text; AI state out of `StateHash` unless it must be saved (then no:
+   see out of scope).
+8. Size: hand-written sim + tests ≤ 1,500 lines (generated comments and QA's suites don't count, rule 39).
+
+**Design references.** docs/02 "AI opponent" (the hunt bullet, the far-expansion bullet, the rebuild bullet: "a House is
+not rebuilt once the population cap is at the hard cap" is the current rule; (a)(iii) tightens it and the sentence moves with
+it), docs/03 "Implementation (M5-4d)" (the sweep), "(M5-H5)" (the house rule's two failed tries and the sweep-order note),
+"(M5-9b)" (the leg, `FarLooked`, `NextStart`, the start list's provenance), "(M5-5)" (the criterion rows and the refusal
+table), BUG-1157 / 1116 / 1068 / 1158 / 1159 / 1151 / 1152 files.
+
+**Tests required.** `EndGameHardeningTests` (new rows per lever shipped), `FarExpandTests` (the cap, the reach filter, the
+looked mark), the un-skipped `MapSlice2StressTests` rows, the un-skipped QA rows, every pin re-measured, the tally once,
+`AiPerfTests` alone (+ the eight-legs row if (d) reaches it).
+
+**Constraints.** Rule 38 (QA and the Producer verify on a scratch clone); rule 42 (Perf alone); rule 43 / 45 (pins; a row that
+stops ending is a finding); rule 41 (no `ai.json`); rule 40 (page cells only); never kill another track's process; the
+developer cannot write `studio/**` (patches in the scratchpad). The default loop is ~20 min now: run it on the final commit.
+
 ### Where we are
 M5-9b ACCEPTED (1 fix round, BUG-1160); M5-9a + M5-9b on `main`. **M5 8 / 9 (criterion 6 owner-only).** Counter **2 / 4**. The sim's
 M5 work is complete; the end-of-M5 sim hardening has not run yet (the sign-off waits on criterion 6 anyway). Open: BUG-1157 / 1158
@@ -96,7 +182,10 @@ ends the most rows without moving Pale Hills seed 1 past 72,000.
 
 ## View track
 
-### Current session plan: STOP (cheap) unless the inbox has an owner item
+### Current session plan (2026-11-09-1336): STOP (cheap)
+Inbox New is empty again; nothing changed for the view since the last PLAN. The reasoning below stands.
+
+### Previous plan: STOP (cheap) unless the inbox has an owner item
 Inbox New was empty at this session's PLAN; every remaining M6 criterion needs the owner (the art call, music / fonts / export
 templates, ".NET 10 installed", a friend's playtest); the view's debt (BUG-1126 / 1147 / 1115 item 4 / 0860 / 0830 / 0890 / 0861)
 is not a session's worth and the counter is 1 / 4.
@@ -113,7 +202,60 @@ STOP (cheap). Counter 1 / 4. M6 5 / 10.
 
 ## Data track
 
-### Current session plan: D26, D14 c's content (feature, QA light; standard if it moves Normal or Hard)
+### Current session plan (2026-11-09-1336): D26a, D14 c's content, the part that moves no pin (feature, QA light)
+
+**Why split.** The sim's M5-H6 runs beside this and re-measures every Pale Hills digest, the Hard tally and the page tables
+(rule 43); any `ai.json` change to Normal or Hard play would re-measure the same pins on another branch and the merge would
+carry two wrong answers (rule 41). So this session D26 ships only what moves no pin: **no `game/data/**` edit at all.** The
+tuning half (D26b: `counterStrength` values if they should differ from the shipped Easy 0 / Normal 0.5 / Hard 1.0, BUG-1156's
+`ai.json` angle) is the data track's next task, after M5-H6 is on `main`, as a `standard` task that re-measures the pins.
+
+**Files.** `docs/factions/malazan.md`, `docs/factions/whirlwind.md` (**only a new sub-section appended at the end of "AI
+build order (Normal)", after the "High starting resources" bullet and before the next `##` heading; no existing table cell:
+the sim may re-print cells under rule 40 in the same session**), `sim/Rts.Sim.Tests/Content/**`, `sim/Rts.Sim.Tests/QA/Content/**`.
+**Not** `game/data/**`, not `rules.json`, not docs/02 / 03 (a request if a sentence there is wrong).
+
+**Scope.**
+1. **The pages' AI paragraph ("How the AI adapts", one per faction):** in the page's words, what docs/02 "AI opponent" says
+   about (i) the counter shift (the memory fading over `ai.counterMemory` 180 s, the shift by `counterStrength`: Easy 0 /
+   Normal 0.5 / Hard 1.0, this faction's "Countered by" column from its roster table as the `ai.counters` it reads, the
+   "tilts, doesn't replace" rule), (ii) the starved charge (`ai.starvedWaveAfter` 60 s / `ai.starvedMinArmy` 1, at every
+   difficulty), (iii) the far expansion (`ai.farExpandReach` 384 m, this faction's gold-free drop-off: `malazan_depot` /
+   `whirlwind_supply_cache` 0 gold / 75 wood, named as the player reads it). **Quote only data values (knobs, costs, names);
+   no match tick, digest or tally** (those move this session). Say where the shift is masked (BUG-1156: a saturated single
+   producer; the Line producer in the Malazan Age I mix) in one sentence each.
+2. **`Content/` pins:** a test that reads both `ai.json` files and pins `counterStrength` per difficulty to the page's
+   paragraph both ways (as `AiContentTests` pins the openings), and the three `rules.json` knobs the paragraph quotes
+   (`counterMemory`, `starvedWaveAfter`, `starvedMinArmy`, `farExpandReach`) and the drop-off's cost / name against
+   `buildings.json`; the pin fails if a value or a quoted name moves without the page.
+3. **BUG-1156's measurement, not its fix:** run `CounterMemoryQaTests.AHardSeat_ThatWatched20HorseRaiders_*` (skipped) with
+   each candidate **locally, uncommitted**: (A) a second Barracks step in the Malazan `standard` opening at the time the
+   first wave is due, (B) a Line counter unit in the Age I `standard` mix (if the roster has one beyond Heavy Infantry; say
+   if not), (C) no data change (the docs say the shift shows when the bank limits). Report: trained Line / Ranged seen v
+   unseen for each, and the opening's own 20-minute pairing outcome (`AiOpeningPairsReportTests`) for (A) / (B); recommend
+   one for D26b. Nothing of this is committed except the report's numbers in the session's review table.
+4. **The owner's review table:** no unit / field changed this session (say so); the two new page paragraphs quoted in full
+   (they are player-facing in the sense the owner reads them, not in-game text); the BUG-1156 measurement table and the
+   recommendation; the question for the owner: "keep Normal 0.5 / Hard 1.0, or stronger?".
+
+**Acceptance criteria.**
+1. Build 0 / 0; `Content/` + `QA/Content/` green; `DataValidationTests` / `DataContentHashTests` green and **the data hash
+   unmoved** (no `game/data` edit); the default loop on the final commit (rule 47).
+2. Both pages carry the new sub-section, every number in it equal to the data file it names (the pin proves it), no match
+   tick / digest / tally quoted, no existing cell touched (`git diff` on the pages shows one added hunk each).
+3. The pin test fails when a `counterStrength`, a quoted knob, or the drop-off's name / cost is changed (the developer shows
+   the failing run in the report).
+4. BUG-1156's three candidates measured and tabled, nothing of them committed; one recommended with the reason.
+5. The review table as in 4 above, in the report for the Producer's For your review entry.
+
+**Design references.** docs/02 "AI opponent" (the three bullets quoted above, the Easy / Normal / Hard blocks), docs/02
+"Faction template" ("Countered by"), docs/03 "Implementation (M5-9a)" (the worked example, `CounterMasks`), "(M5-9b)"
+(`GoldFreeDropOff`), `docs/factions/<id>.md` roster tables (the "Countered by" column), BUG-1156.
+
+**Constraints.** No C# outside the two test folders; no `game/data/**` this session; rule 38 for QA; never kill another
+track's process; the developer cannot write `studio/**`.
+
+### Previous plan: D26, D14 c's content (feature, QA light; standard if it moves Normal or Hard)
 **Unblocked now:** the schemas (`ai.json` `difficulties.<d>.counterStrength`; `rules.json` `ai.counterMemory`, `ai.counters`,
 `ai.starvedWaveAfter`, `ai.starvedMinArmy`, `ai.farExpandReach`) are on `main`. D26 may run in the same session as the sim's next
 task (rule 41: the sim's hardening keeps off `ai.json`; the sim brief says so).
