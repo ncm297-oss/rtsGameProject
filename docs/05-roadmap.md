@@ -892,14 +892,23 @@ open S1 / S2. Retro below; open S3 / S4 listed there.)_
 - [ ] Scale and per-unit population systems proven (1.5× visuals, 2-3 pop, half-step pop support). (M7-1, 2026-11-09-2226:
       **the sim half is done**: `units.json` `scale` (0.5-3.0, `UnitDef.Scale`, in the data hash; the sim never reads it) and
       half-step population proven end to end on a test copy (`Economy/PopulationTests`: the producer's cap check one half short /
-      exact, `PopText` "9.5", the AI's `pop` trigger and `minArmyPop`, a 2,000-tick `HalfPop` invariant). Left: the view's 1.5×
-      rendering from `UnitDef.Scale` (M7-V1) and a Teblor unit at 2-3 pop in shipped data.)
+      exact, `PopText` "9.5", the AI's `pop` trigger and `minArmyPop`, a 2,000-tick `HalfPop` invariant). **M7-V1, 2026-11-10-0146:
+      the view half is done**: each unit type's capsule, selection / target ring, hp bar and corpse disc are drawn at
+      `radius × scale` / `BodyHeight × scale` (`UnitViews.DrawnRadius` / `DrawnHeight`), the hit test keeps the sim's radius, the
+      minimap dot is unscaled; shipped data renders pixel-identical. Left: a Teblor unit at `scale` 1.5 / 2-3 pop in shipped data.)
 - [ ] Giant armor class in play; regeneration. (M7-1, 2026-11-09-2226: **regeneration is built**: `faction.json`
       `regen {hpPerSecond, delay}` (fixed-point, 400 units = 1 HP, the faction rate after `delay` seconds without damage), the
       `regenerating` status (heals through the delay, stacks), `RegenSystem` in phase 5 with an O(1) skip, save format 10 (`REGN`;
       every older save refused), QA's fuzz / 50 mid-match saves / cross-process digest; the shipped `giant` row proven by
       `DamageCalcTests.TheGiantRow_*` (×1.25 pierce / magic, ×0.75 siege). Left: a shipped faction using either (the Teblor roster, data).)
-- [ ] War-dog packs (multi-spawn queue item, Hamstring), Blood-oil Frenzy with aftermath slow.
+- [ ] War-dog packs (multi-spawn queue item, Hamstring), Blood-oil Frenzy with aftermath slow. (M7-2: **the pack's sim
+      half is built**: `units.json` `spawnCount` (1-8; one queue item, the item's cost and train time, every unit's pop
+      reserved at the start, all N spawned on the N free cells nearest the rally or none that tick; no save-format change)
+      and the `onHit` passive (`{onHit, status, magnitude, duration}` on a surviving victim of a melee hit or an aimed
+      projectile landing; not splash, pulses, towers or a killing blow), both on test copies only, the data hash unchanged
+      for shipped data. **Deferred to M7-3:** Blood-oil Frenzy's aftermath slow (it needs a decision on the status store's
+      one-entry-per-id merge, docs/03 M4-4b-3a "Known limits" (1)). Left: the Teblor war-dog row (data), the view's queue
+      strip "×3".)
 - [ ] Teblor AI build order; models and animations; balance pass vs. Malazan and Whirlwind.
 
 ## M8 — Shadow

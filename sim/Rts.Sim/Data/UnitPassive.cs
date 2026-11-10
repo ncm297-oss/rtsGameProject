@@ -31,7 +31,7 @@ public readonly record struct UnitPassive
     public int Status { get; init; }
     /// <summary>The status's magnitude, by the status kind's rules (as <see cref="AbilityEffect.Magnitude"/>; 0 for a blind).</summary>
     public float Magnitude { get; init; }
-    /// <summary>OnDeath: how long the status lasts, in ticks (at least 1); 0 otherwise.</summary>
+    /// <summary>OnDeath and (M7-2) OnHit: how long the status lasts, in ticks (at least 1); 0 otherwise.</summary>
     public int DurationTicks { get; init; }
     /// <summary>OnDeath: the units whose center is within this many meters of the dying unit take it (the edge counts); 0 otherwise.</summary>
     public float Radius { get; init; }

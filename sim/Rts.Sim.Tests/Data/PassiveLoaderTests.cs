@@ -61,8 +61,9 @@ public class PassiveLoaderTests
         Assert.Equal(new[] { zealot.Id }, death.Units.ToArray());
         foreach (UnitDef u in d.Units)
             if (u.Id != zealot.Id) Assert.True(u.Passives.IsEmpty && u.BelowHpPassive < 0 && u.DeathPassive < 0, $"{u.Key} has passives");
-        Assert.Equal(2, DataLimits.MaxUnitPassives);
-        Assert.Equal(new[] { "whenBelowHp", "onDeath" }, DataLimits.PassiveTriggerIds.ToArray());
+        Assert.True(d.Units.All(u => u.HitPassive < 0), "a shipped unit has an onHit passive"); // M7-2: none ships yet
+        Assert.Equal(3, DataLimits.MaxUnitPassives); // M7-2: one per trigger, now three
+        Assert.Equal(new[] { "whenBelowHp", "onDeath", "onHit" }, DataLimits.PassiveTriggerIds.ToArray());
     }
 
     [Fact]
@@ -81,9 +82,9 @@ public class PassiveLoaderTests
     [Fact]
     public void Trigger_UnknownMissing_ATriggerTwice_AndTooMany_AreErrors()
     {
-        AssertErrorAt(LoadWith(p => Below(p)["trigger"] = "onHit"), At(0, "trigger"), "unknown value 'onHit'");
+        AssertErrorAt(LoadWith(p => Below(p)["trigger"] = "onStrike"), At(0, "trigger"), "unknown value 'onStrike'"); // M7-2: onHit is a trigger now
         AssertErrorAt(LoadWith(p => Below(p).Remove("trigger")), At(0, "trigger"), "missing");
-        AssertErrorAt(LoadWith(p => p.Add(Below(p).DeepClone())), $"units[{ZealotIndex}].passives", "above the maximum 2");
+        AssertErrorAt(LoadWith(p => { p.Add(Below(p).DeepClone()); p.Add(Below(p).DeepClone()); }), $"units[{ZealotIndex}].passives", "above the maximum 3");
         AssertErrorAt(LoadWith(p => p[1] = Below(p).DeepClone()), At(1, "trigger"), "at most one per trigger");
         AssertErrorAt(LoadWith(p => p[0] = null), At(0, ""), "missing");
     }
@@ -142,5 +143,47 @@ public class PassiveLoaderTests
         }
         // Damage over time on a death: whole seconds, as an applyStatus.
         AssertErrorAt(LoadWith(p => { Death(p)["status"] = "burning"; Death(p)["magnitude"] = 5; Death(p)["duration"] = 2.5; }), At(1, "duration"), "whole number of seconds");
+    }
+
+    /// <summary>M7-2: Hamstring's shape, <c>{trigger: onHit, status, magnitude, duration}</c>.</summary>
+    private static JsonObject Bite() => new() { ["trigger"] = "onHit", ["status"] = "slowed", ["magnitude"] = 0.2, ["duration"] = 2 };
+
+    /// <summary>M7-2 criterion 4: an <c>onHit</c> passive loads beside the other two (the third trigger, file order, its index).</summary>
+    [Fact]
+    public void OnHit_Loads_AsTheThirdTrigger_WithStatusMagnitudeAndDurationInTicks()
+    {
+        DataLoadResult r = LoadWith(p => p.Add(Bite()));
+        Assert.True(r.Ok, string.Join("\n", r.Errors));
+        GameData d = r.Data!;
+        UnitDef z = d.Units[d.FindUnit("whirlwind_zealot")];
+        Assert.Equal((0, 1, 2), (z.BelowHpPassive, z.DeathPassive, z.HitPassive));
+        UnitPassive bite = z.Passives[2];
+        Assert.Equal((PassiveTrigger.OnHit, d.FindStatus("slowed"), 0.2f, 40), (bite.Trigger, bite.Status, bite.Magnitude, bite.DurationTicks));
+        Assert.Equal((0f, 0f), (bite.HpFraction, bite.Radius));
+        Assert.True(bite.Units.IsEmpty);
+        r = LoadWith(p => { p.Clear(); p.Add(Bite()); });
+        Assert.True(r.Ok, string.Join("\n", r.Errors));
+        z = r.Data!.Units[r.Data.FindUnit("whirlwind_zealot")];
+        Assert.Equal((-1, -1, 0), (z.BelowHpPassive, z.DeathPassive, z.HitPassive));
+    }
+
+    /// <summary>M7-2 criterion 4's validation rows: each one error at its path.</summary>
+    [Fact]
+    public void OnHit_RefusesAnUnknownStatus_ADurationOf0_ASecondOnHit_AndTheAuraFields()
+    {
+        static DataLoadResult With(Action<JsonObject> edit) => LoadWith(p => { JsonObject b = Bite(); edit(b); p.Add(b); });
+        void One(DataLoadResult r, string path, string text)
+        {
+            AssertErrorAt(r, path, text);
+            Assert.Single(r.Errors);
+        }
+        One(With(b => b["status"] = "hamstrung"), At(2, "status"), "unknown status 'hamstrung'");
+        One(With(b => b["duration"] = 0), At(2, "duration"), "must be positive");
+        One(With(b => b.Remove("duration")), At(2, "duration"), "missing");
+        One(With(b => b["radius"] = 6), At(2, "radius"), "trigger 'onHit' has no such field");
+        One(With(b => b["units"] = new JsonArray("whirlwind_zealot")), At(2, "units"), "trigger 'onHit' has no such field");
+        One(With(b => b["hpFraction"] = 0.5), At(2, "hpFraction"), "trigger 'onHit' has no such field");
+        One(With(b => b["magnitude"] = 1), At(2, "magnitude"), "below 1"); // a slow's rule
+        One(LoadWith(p => { p.Clear(); p.Add(Bite()); p.Add(Bite()); }), At(1, "trigger"), "already has a 'onHit' passive (passives[0])");
     }
 }

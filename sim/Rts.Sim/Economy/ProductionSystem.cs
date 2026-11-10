@@ -168,7 +168,8 @@ public static class ProductionSystem
         else if (Spawn(world, k, world.Data.Units[b.QueueTypeAt(k, 0)]))
         {
             spawned = true;
-            world.Ledger.Stats.CountTrained(b.Owner[k]); // M6-S1: only a finished queue item counts as trained
+            // M6-S1: only a finished queue item counts as trained; M7-2: each unit of a pack is one unit trained.
+            for (int n = world.Data.Units[b.QueueTypeAt(k, 0)].SpawnCount; n > 0; n--) world.Ledger.Stats.CountTrained(b.Owner[k]);
         }
         else
             return false;
@@ -214,7 +215,8 @@ public static class ProductionSystem
 
     /// <summary>
     /// Starts slot <paramref name="k"/>'s head item and counts this tick: a tech at once (research takes no population,
-    /// M3-5), a unit only if its population fits under the owner's cap, taking it as a reservation.
+    /// M3-5), a unit only if its population fits under the owner's cap, taking it as a reservation (M7-2: a pack's whole
+    /// <see cref="UnitDef.ItemHalfPop"/>).
     /// </summary>
     private static bool TryStart(World world, int k)
     {
@@ -223,8 +225,9 @@ public static class ProductionSystem
         {
             UnitDef def = world.Data.Units[b.QueueTypeAt(k, 0)];
             int owner = b.Owner[k];
-            if (world.HalfPop[owner] + def.HalfPop > world.HalfPopCap[owner]) return false;
-            world.Ledger.AddHalfPop(owner, def.HalfPop);
+            // M7-2: a pack reserves every unit's population at once (def.ItemHalfPop), so it starts only with room for all.
+            if (world.HalfPop[owner] + def.ItemHalfPop > world.HalfPopCap[owner]) return false;
+            world.Ledger.AddHalfPop(owner, def.ItemHalfPop);
         }
         b.ProgressOf(k) = 1;
         return true;
@@ -235,10 +238,18 @@ public static class ProductionSystem
     /// center without one) in the nearest ring round the footprint, then sends it on; false, nothing changed, when no cell
     /// on the building's plateau is free or the unit store is full.
     /// </summary>
+    /// <remarks>
+    /// M7-2: an item of <see cref="UnitDef.SpawnCount"/> N spawns all N or none (docs/03 "Implementation (M7-2)"): N cells
+    /// are picked one after another by the same search, each marked taken before the next, so the units stand on the N
+    /// cells nearest the rally point, the first unit on the nearest; with fewer than N free (or fewer than N free unit
+    /// slots) the marks are taken back and nothing spawns, and the head waits for the next tick. The picks sit in a stack
+    /// buffer of <see cref="DataLimits.MaxSpawnCount"/>; a plateau is marked full only when not even one cell is free.
+    /// </remarks>
     private static bool Spawn(World world, int k, UnitDef def)
     {
         UnitStore u = world.Units;
-        if (u.FreeCount == 0) return false;
+        int count = def.SpawnCount;
+        if (u.FreeCount < count) return false;
         BuildingStore b = world.Buildings;
         NavGrid g = world.NavGrid;
         BuildingDef bd = world.Data.Buildings[b.TypeId[k]];
@@ -248,15 +259,29 @@ public static class ProductionSystem
         if ((uint)plateau >= (uint)world.SpawnPlateauFull.Length || world.SpawnPlateauFull[plateau]) return false;
         FillPlateauBox(world, taken, plateau);
         Vector2 from = b.HasRally[k] ? b.RallyPosition[k] : EconomySystem.Center(g, anchor, bd.FootprintWidth, bd.FootprintHeight);
-        int cell = FreeCellSearch.Nearest(world, x0, y0, bd.FootprintWidth, bd.FootprintHeight, from, taken);
-        if (cell < 0)
+        Span<int> cells = stackalloc int[DataLimits.MaxSpawnCount];
+        int found = 0;
+        for (; found < count; found++)
         {
-            world.SpawnPlateauFull[plateau] = true;
+            int cell = FreeCellSearch.Nearest(world, x0, y0, bd.FootprintWidth, bd.FootprintHeight, from, taken);
+            if (cell < 0) break;
+            cells[found] = cell;
+            taken[cell] = 2;
+        }
+        if (found < count)
+        {
+            // Not room for the whole item: give the cells back (they were free: 1) and wait.
+            for (int n = 0; n < found; n++) taken[cells[n]] = 1;
+            if (found == 0) world.SpawnPlateauFull[plateau] = true;
             return false;
         }
-        u.TrySpawn(b.Owner[k], b.QueueTypeAt(k, 0), def, g.CellCenter(cell % g.Width, cell / g.Width), out EntityHandle h);
-        taken[cell] = 2;
-        if (b.HasRally[k]) Rally(world, h.Index, b.RallyPosition[k]);
+        int type = b.QueueTypeAt(k, 0);
+        for (int n = 0; n < count; n++)
+        {
+            int cell = cells[n];
+            u.TrySpawn(b.Owner[k], type, def, g.CellCenter(cell % g.Width, cell / g.Width), out EntityHandle h);
+            if (b.HasRally[k]) Rally(world, h.Index, b.RallyPosition[k]);
+        }
         return true;
     }
 

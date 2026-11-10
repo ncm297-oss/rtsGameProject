@@ -44,6 +44,25 @@ public class DataContentHashTests
         else Assert.NotEqual(TestSim.Data.ContentHash(), load.Data!.ContentHash());
     }
 
+    /// <summary>
+    /// M7-2 criterion 1 and the hash rule: a <c>spawnCount</c> of 3 moves the hash; an explicit 1 hashes as absent (so the golden's
+    /// header data hash holds on shipped data); an <c>onHit</c> passive moves it.
+    /// </summary>
+    [Theory]
+    [InlineData("spawnCount", "3", true)]
+    [InlineData("spawnCount", "2", true)]
+    [InlineData("spawnCount", "1", false)]
+    [InlineData("passives", "[{\"trigger\": \"onHit\", \"status\": \"slowed\", \"magnitude\": 0.2, \"duration\": 2}]", true)]
+    public void ASpawnCountOrAnOnHit_InTheFiles_ChangesTheHash_ButAnExplicitOneDoesNot(string field, string json, bool moves)
+    {
+        using TestDataDir dir = TestDataDir.CopyOfShipped();
+        dir.SetUnitField("malazan", "malazan_heavy_infantry", field, json);
+        DataLoadResult load = DataLoader.LoadAll(dir.Path);
+        Assert.True(load.Ok, string.Join("\n", load.Errors));
+        if (moves) Assert.NotEqual(TestSim.Data.ContentHash(), load.Data!.ContentHash());
+        else Assert.Equal(TestSim.Data.ContentHash(), load.Data!.ContentHash());
+    }
+
     private static string FirstKey(string faction) =>
         TestSim.Data.Units.First(u => TestSim.Data.Factions[u.Faction].Key == faction).Key;
 
@@ -447,7 +466,7 @@ public class DataContentHashTests
             "DurationTicks", "Affects", "Effects", "HitsBuildings" })
             Assert.Contains($"AbilityDef.{f}", checkedFields);
         Assert.Contains("UnitDef.Abilities", checkedFields);
-        foreach (string f in new[] { "Passives", "BelowHpPassive", "DeathPassive" }) // M4-4b-3a
+        foreach (string f in new[] { "Passives", "BelowHpPassive", "DeathPassive", "HitPassive", "SpawnCount" }) // M4-4b-3a; M7-2
             Assert.Contains($"UnitDef.{f}", checkedFields);
         // M7-1: the unit's visual scale, the faction's regeneration, the status's state-hash number.
         Assert.Contains("UnitDef.Scale", checkedFields);
