@@ -7,6 +7,19 @@ BUG-1169 patch at the merge). Last session: sim **M7-2**, view **M7-V1**, data *
 data 1 / 4**. Bug ids next session: **sim 1171+, view 1179+, data 1186+**. Open S1 / S2: none. The PLAN step re-checks the inbox
 first (New was empty at 0146).
 
+**PLAN 2026-11-10-1236 (session 2 / 8, base 0416dcc = `origin/main`): all three drafts below confirmed as the current session plan**
+(sim **M7-3** feature / QA full; view **M7-V2** feature / QA standard; data **D-R36** hardening / QA light). Inbox New empty. Premises
+re-checked on the base: `DataLoader.cs:57` sorts the faction folders ordinally (the renumbering is real); `PackQaTests` lines 377 / 730
+carry the BUG-1167 / 1168 skips; `game/data/common/` has no `factions.json`; `ProjectileViews.LaunchHeight` is a 1.2 constant;
+`QaM6V18Test.cs:103` pins `HMAP` right after the preset; docs/03:2978 holds the correction paragraph M7-3 replaces; `teblor.md` has
+building ids and no unit / tech ids. **Refinements:** (sim) the literal pair `"malazan", "whirlwind"` is in **42 test files, about 28
+sim-owned** (also `Stress/`, `ViewApi/`, `QA/DefenseQaTests` / `EndGameH6QaTests` / `FarExpandQaTests` / `ReserveQaTests` /
+`SurroundQaTests` / `TeamAiQaTests` / `M6V13QaTests` / `ReplayQaTests`), not the ten the draft lists: criterion 6 applies to every
+sim-owned file; a file whose scenes are about those two factions keeps the pair with one line of reason in the report; the sweep is
+mechanical and inside the budget. (sim ↔ data) M7-3 may add `TestSim.ShippedFactions`; D-R36 must **not** edit `TestSim.cs` /
+`TestDataDir.cs` (sim-owned) and reads `TestSim.Data.Factions` (on `main` already), so the two merge without a conflict. (view) nothing
+new. Merge order sim → view → data; docs/03 will conflict at the "Implementation" anchor (keep both, the sim's M7-3 first).
+
 ## Standing rules (1-51)
 
 Unchanged 1-48 (38: the Producer runs every suite on a scratch `git archive` / clone, never in a worktree; 39: generated map content
