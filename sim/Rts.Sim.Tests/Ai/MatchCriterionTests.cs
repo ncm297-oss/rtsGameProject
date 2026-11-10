@@ -20,7 +20,7 @@ public class MatchCriterionTests
     /// <summary>One criterion row: the map, seed, seats, teams (null: none) and the tick bound it must end within.</summary>
     internal sealed record Row(string Id, string Map, ulong Seed, int Players, int[]? Teams, int Bound);
 
-    /// <summary>The literal row's bound: 20 minutes. Vathar Crossing seed 1 ends at 23,043 (19:12; M5-9a's counter shift, was 22,794), seat 1 (Whirlwind) the winner.</summary>
+    /// <summary>The literal row's bound: 20 minutes. Vathar Crossing seed 1 ends at 23,322 (19:26; M5-H6's house rule, was 23,043 since M5-9a's counter shift, 22,794 before), seat 1 (Whirlwind) the winner.</summary>
     internal const int VatharBound = 24_000;
 
     /// <summary>
@@ -29,22 +29,24 @@ public class MatchCriterionTests
     /// at 68,664 (BUG-1153). M5-9b (the far expansion, BUG-1068 (a)): both seats take an unused start's mines with a depot at
     /// about 28,000 and the match ends at <b>48,858 (40:42), seat 1</b>, every check clean: outcome (b) of the terminal rule,
     /// so the bound is <b>72,000</b> (the four-seat rows' hour), BUG-1153, <b>Producer decision 2026-11-08-1556</b> (docs/03
-    /// "Implementation (M5-5)" and STATE; the owner may revisit it). Used by <c>MapFileTests</c>' Pale Hills row too.
+    /// "Implementation (M5-5)" and STATE; the owner may revisit it). Used by <c>MapFileTests</c>' Pale Hills row too. M5-H6
+    /// (the house rule, the hunt's free starts from its second hunt, the leg's fixes): 50,140 (41:47), seat 1, one hunt.
     /// </summary>
     internal const int PaleHillsBound = 72_000;
 
-    /// <summary>Raraku seed 1 ends at 28,083 (23:24), seat 0 the winner: the next 6,000 above it with at least 10 % slack (30,891). Unchanged by M5-9a.</summary>
+    /// <summary>Raraku seed 1 ends at 28,083 (23:24), seat 0 the winner: the next 6,000 above it with at least 10 % slack (30,891). Unchanged by M5-9a; M5-H6: 28,231 (23:31), seat 0.</summary>
     internal const int RarakuBound = 36_000;
 
     /// <summary>
     /// The generated map: seed 1 was the lowest of 1-6 ending under 24,000 (21,789 = 18:09, seat 0 the winner). M5-9a round 1:
     /// Normal's counter shift lengthened it to 26,853 (the bound went to 30,000 by Raraku's rule); round 2 (the starved wave)
     /// ends it at 25,968 (21:38), still over 24,000, so by the brief's rule the row moves to seed 2, the lowest of 1-6 under
-    /// 24,000 (15,691 = 13:05, seat 1 the winner, unchanged by M5-9a), and keeps the original 24,000.
+    /// 24,000 (15,691 = 13:05, seat 1 the winner, unchanged by M5-9a), and keeps the original 24,000. M5-H6 (the house
+    /// rule): 17,053 (14:12), seat 1.
     /// </summary>
     internal const int GeneratedBound = 24_000;
 
-    /// <summary>The four-seat rows' bound (60 minutes, QA's M5-H5 sweep): the FFA (Vathar seed 2) ends at 58,155 (48:27; was 52,305 before M5-9a), the 2v2 (Vathar seed 1) at 35,648 (29:42; was 34,510).</summary>
+    /// <summary>The four-seat rows' bound (60 minutes, QA's M5-H5 sweep): the FFA (Vathar seed 2) ends at 58,155 (48:27; was 52,305 before M5-9a), the 2v2 (Vathar seed 1) at 35,648 (29:42; was 34,510). M5-H6: the FFA 56,896 (47:24, seat 3), the 2v2 26,070 (21:43, team 1).</summary>
     internal const int FourSeatBound = 72_000;
 
     /// <summary>The tick the literal row is saved at: half its end before M5-9a (22,794 / 2; any mid-match tick serves).</summary>

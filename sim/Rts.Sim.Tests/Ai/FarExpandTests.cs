@@ -1,6 +1,7 @@
 using System.Numerics;
 using System.Text.Json.Nodes;
 using Rts.Sim.Ai;
+using Rts.Sim.Combat;
 using Rts.Sim.Commands;
 using Rts.Sim.Data;
 using Rts.Sim.Entities;
@@ -403,6 +404,102 @@ public class FarExpandTests
         _out.WriteLine($"expansions {ai.Board.FarExpansions} / {loaded.Board.FarExpansions}, phase {ai.Board.FarPhase}");
         Assert.Equal(1, ai.Board.FarExpansions);
         SaveTestRun.AssertSameState(sim, load, "after the depot");
+    }
+
+    /// <summary>
+    /// M5-H6 (BUG-1158; failed first: the leg sent a fresh worker after every death, and all five died): each leg worker is
+    /// killed as soon as it holds the leg. It is replaced while the seat's own unit losses are at most
+    /// <c>ai.scoutReplacements</c> (the scout's cap, BUG-1052); the death past that ends the leg, every start counted looked.
+    /// So <c>scoutReplacements</c> + 1 workers are lost to it and the rest stay at home; the seat waits armed.
+    /// </summary>
+    [Fact]
+    public void ALegWorker_Killed_IsReplacedOnlyWithinTheScoutCap_ThenTheLegEnds()
+    {
+        GameData data = Shipped.Value;
+        Simulation sim = Scene(data, farMine: false);
+        AiPlayer ai = sim.AiOf(0)!;
+        World w = sim.World;
+        int workers = Workers(sim, 0), killed = 0;
+        while (sim.TickNumber < 6000)
+        {
+            sim.Tick();
+            var leg = new EntityHandle(ai.Board.FarScoutSlot, ai.Board.FarScoutGeneration);
+            if (ai.Board.FarScoutSlot < 0 || !w.Units.IsAlive(leg) || killed > 10) continue;
+            CombatSystem.HitUnit(w, new PendingHit(default, 1, leg, false, w.Units.Hp[leg.Index]));
+            killed++;
+        }
+        _out.WriteLine($"leg workers killed {killed}, workers {Workers(sim, 0)} of {workers}, losses {ai.View.OwnUnitLosses}, looked {ai.Board.FarLooked}, phase {ai.Board.FarPhase}");
+        Assert.Equal(ai.Rules.ScoutReplacements + 1, killed);
+        Assert.Equal(workers - killed, Workers(sim, 0));
+        Assert.Equal((1 << ai.View.StartCount) - 1, ai.Board.FarLooked);
+        Assert.Equal(-1, ai.Board.FarStart);
+        Assert.Equal(-1, ai.Board.FarScoutSlot);
+        Assert.Equal(FarExpansion.Armed, ai.Board.FarPhase);
+    }
+
+    /// <summary>
+    /// M5-H6 (BUG-1159 item 1; failed first: <see cref="FarExpansion.NextStart"/> read no reach): a free start whose centre is
+    /// farther from the hall than <c>ai.farExpandReach</c> is not walked to (no mine there could be a candidate). Player 0's
+    /// hall lies 65.1 m from start 3's centre and 66.5 m from start 2's: at 64 m neither is next, at 66 m only start 3, at
+    /// 67 m both, and the whole-cell tie goes to the seat's turn (start 2), as before.
+    /// </summary>
+    [Theory]
+    [InlineData(64.0, -1)]
+    [InlineData(66.0, 3)]
+    [InlineData(67.0, 2)]
+    public void TheLeg_WalksOnlyToAStartWithinTheReach(double reach, int next)
+    {
+        Simulation sim = Scene(FarData(reach), farMine: false);
+        AiPlayer ai = sim.AiOf(0)!;
+        sim.Tick();
+        float d2 = Vector2.Distance(ai.CellCentre(ai.View.StartCell(2)), ai.HallPoint), d3 = Vector2.Distance(ai.CellCentre(ai.View.StartCell(3)), ai.HallPoint);
+        _out.WriteLine($"start 2 at {d2:F1} m, start 3 at {d3:F1} m; reach {reach}: next {FarExpansion.NextStart(ai)}, walking {ai.Board.FarStart}");
+        Assert.InRange(d3, 64.5f, 65.5f);
+        Assert.InRange(d2, 66.1f, 66.9f);
+        Assert.Equal(next, FarExpansion.NextStart(ai));
+        Assert.Equal(next, ai.Board.FarStart);
+    }
+
+    /// <summary>
+    /// M5-H6 (BUG-1159 item 2; failed first: the start was dropped unmarked, so the next arm walked start 2 from its centre
+    /// again): the leg that sees the far mine part way round start 2 keeps that start and its look point while the depot goes
+    /// up and after; once the mine is spent and the seat arms again, the first leg Move goes to that look point, not the
+    /// start's centre (unless the mine was seen on the way to the centre, where the two are one).
+    /// </summary>
+    [Fact]
+    public void ALegEnded_OnACandidate_KeepsItsStart_AndTheNextArmWalksOnFromItsPoint()
+    {
+        GameData data = Shipped.Value;
+        Simulation sim = Scene(data);
+        AiPlayer ai = sim.AiOf(0)!;
+        while (sim.TickNumber < 6000) sim.Tick();
+        Assert.Equal(1, ai.Board.FarExpansions);
+        Assert.Equal(0, ai.Board.FarPhase);
+        Assert.Equal(2, ai.Board.FarStart);
+        Assert.Equal(0, ai.Board.FarLooked);
+        Assert.Equal(-1, ai.Board.FarScoutSlot);
+        int look = ai.Board.FarLook;
+        Vector2 expected = FarExpansion.LookPoint(ai, 2, look), first = new(-1, -1);
+        int armedAt = -1;
+        ai.SentForTests = c =>
+        {
+            if (c.Kind == CommandKind.Move && c.Unit.Index == ai.Board.FarScoutSlot && first.X < 0) first = c.Position;
+        };
+        ai.ThoughtForTests = a => { if (armedAt < 0 && a.Board.FarPhase != 0) armedAt = a.Now; };
+        sim.World.Resources.Take(MineAt(sim, FarMineX, FarMineY), int.MaxValue); // the far mine spent
+        sim.World.Ledger.Gold[0] = 0; // and its gold with it: broke again
+        while (sim.TickNumber < 12_000 && first.X < 0) sim.Tick();
+        _out.WriteLine($"kept look {look}, armed again {armedAt}, first leg Move {first} (look point {expected}), looked {ai.Board.FarLooked}");
+        Assert.True(armedAt > 0, "the seat did not arm again");
+        Assert.Equal(expected, first);
+    }
+
+    private static int Workers(Simulation sim, int p)
+    {
+        int n = 0;
+        for (int i = 0; i < sim.World.Units.Capacity; i++)
+            if (sim.World.Units.Alive[i] && sim.World.Units.Owner[i] == p && sim.World.Data.Units[sim.World.Units.TypeId[i]].IsWorker) n++;
+        return n;
     }
 
     /// <summary>

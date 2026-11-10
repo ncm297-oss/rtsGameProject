@@ -32,7 +32,9 @@ public class RebuildLookMatchQaStressTests
 
     [Theory]
     [Trait("Category", "Stress")]
-    [InlineData("pale_hills", 1UL)]
+    // M5-H6: Pale Hills seed 1 reopens nothing by 36,000 any more (its first reopen is at 36,100: the house rule leaves the
+    // lost houses alone), so the row checked nothing; seed 3 reopens 30 steps and loses a hall (34,980) inside the window.
+    [InlineData("pale_hills", 3UL)]
     [InlineData("vathar_crossing", 1UL)]
     public void FourAiSeats_EveryThinkOracleClean_EveryLookAndHallRebuildFromTheSeatsOwnKnowledge(string map, ulong seed)
     {
@@ -116,7 +118,8 @@ public class RebuildLookMatchQaStressTests
     /// <summary>
     /// Criterion 6 on a real match: four Normal AI seats on Pale Hills seed 2 (free-for-all) to tick 41,000, a match whose
     /// losing seats reopen dozens of build steps and where a seat loses its hall (tick 38,240 at 8155ee4; 40,460 since M5-9a
-    /// round 2 fix round 1, BUG-1154's starved check, so the window moved from 40,000 to 41,000 to keep it). This process
+    /// round 2 fix round 1, BUG-1154's starved check, so the window moved from 40,000 to 41,000 to keep it; 41,160 since M5-H6's
+    /// house rule and hunt starts, so it moved to 42,000). This process
     /// and a fresh child <c>dotnet test</c> of this row fold the same per-tick hashes.
     /// </summary>
     [Fact]
@@ -139,7 +142,7 @@ public class RebuildLookMatchQaStressTests
             };
         }
         var h = new Rts.Sim.Determinism.StateHasher();
-        while (sim.TickNumber < 41_000)
+        while (sim.TickNumber < 42_000)
         {
             sim.Tick();
             h.Add(sim.StateHash());

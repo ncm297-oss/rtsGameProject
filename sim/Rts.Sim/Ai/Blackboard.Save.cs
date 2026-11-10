@@ -238,11 +238,11 @@ internal sealed partial class Blackboard
         w.Write(HuntsStarted);
     }
 
-    /// <summary>Reads what <see cref="WriteHuntTo"/> wrote over this board (the sweep index range-checked, a hunt only while a wave is in progress).</summary>
+    /// <summary>Reads what <see cref="WriteHuntTo"/> wrote over this board (the sweep index range-checked, a hunt only while a wave is in progress; M5-H6: the sighting's tick -1 or a tick, the hunt count not negative).</summary>
     internal void ReadHuntFrom(SaveReader r)
     {
         EnemyUnitPoint = r.ReadVector2();
-        EnemyUnitTick = r.ReadInt32();
+        EnemyUnitTick = r.ReadInt32In(-1, int.MaxValue); // M5-H6: -1 (none) or a tick
         Hunting = r.ReadBool();
         HuntSweep = r.ReadInt32In(-1, HuntVisited.Length - 1);
         HuntOrigin = r.ReadVector2();
@@ -251,7 +251,7 @@ internal sealed partial class Blackboard
         HuntRingLeft = r.ReadInt32In(0, HuntVisited.Length);
         r.Check((HuntRing < 0) == (HuntRingLeft == 0));
         HuntPass = r.ReadInt32In(0, int.MaxValue);
-        HuntsStarted = r.ReadInt32();
+        HuntsStarted = r.ReadInt32In(0, int.MaxValue); // M5-H6: the sweep reads it (the free starts from the second hunt)
         r.Check(!Hunting || WaveActive);
     }
 
@@ -323,9 +323,10 @@ internal sealed partial class Blackboard
         r.Check((FarSiteType < 0) == (FarSiteCell < 0));
         FarNoSiteUntil = r.ReadInt32();
         FarExpansions = r.ReadInt32In(0, int.MaxValue);
-        // Off: no leg, no Build, no site. Armed: a leg perhaps, no Build, no site. Building: no leg, and exactly one of a
-        // Build waiting and a site standing.
-        bool leg = FarStart >= 0 || FarScoutSlot >= 0, build = FarPending.Kind != PendingKind.None, site = FarSiteType >= 0;
+        // Off: no leg worker, no Build, no site. Armed: a leg perhaps, no Build, no site. Building: no leg worker, and exactly
+        // one of a Build waiting and a site standing. BUG-1159: the start walked to and its look point may stand in any phase
+        // (a leg ended on a candidate keeps them for the next arm).
+        bool leg = FarScoutSlot >= 0, build = FarPending.Kind != PendingKind.None, site = FarSiteType >= 0;
         r.Check(FarPhase switch
         {
             0 => !leg && !build && !site,

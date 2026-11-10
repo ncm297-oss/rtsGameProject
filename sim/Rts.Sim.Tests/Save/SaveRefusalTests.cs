@@ -597,10 +597,11 @@ public class SaveRefusalTests
 
     /// <summary>
     /// M5-9b: the far expansion's fields in <c>CTRM</c> (after the starved stamp) are bounded: a phase past 2, looked-at bits for
-    /// a start the map lacks, a start or look point out of range, a leg worker past the unit slots or with a generation that
-    /// doesn't match its slot, a pending order other than a Build, a site type or cell out of range or half set, a negative
-    /// count, and any state the phases can't hold (a leg or a Build while off, a Build and a site at once) are
-    /// <see cref="SaveError.Malformed"/>; consistent forgeries load.
+    /// a start the map lacks, a start or look point out of range, a leg worker past the unit slots, or a slot with generation 0
+    /// or a generation with no slot (BUG-1159: the reader checks only that a worker's generation is above 0; whether it
+    /// matches the slot is checked at use, <c>AiPlayer.OwnUnit</c>), a pending order other than a Build, a site type or cell
+    /// out of range or half set, a negative count, and any state the phases can't hold (a leg worker or a Build while off, a
+    /// Build and a site at once) are <see cref="SaveError.Malformed"/>; consistent forgeries load.
     /// </summary>
     [Fact]
     public void AFormat8Save_WithAForgedFarExpansion_IsMalformed()
@@ -645,8 +646,8 @@ public class SaveRefusalTests
         Assert.Equal(SaveError.Malformed, Forged(B(phase, 1), I(scout, ai.View.UnitSlots), I(generation, 1)));
         Assert.Equal(SaveError.Malformed, Forged(B(phase, 1), I(scout, last), I(generation, 0)));
         Assert.Equal(SaveError.Malformed, Forged(B(phase, 1), I(generation, 1))); // a generation with no worker
-        Assert.Equal(SaveError.Malformed, Forged(I(start, 0))); // a leg while off
-        Assert.Equal(SaveError.Malformed, Forged(I(scout, last), I(generation, 1)));
+        Assert.Equal(SaveError.Malformed, Forged(I(start, 0))); // a start the map lacks (BUG-1159: a kept start is valid in any phase)
+        Assert.Equal(SaveError.Malformed, Forged(I(scout, last), I(generation, 1))); // a leg worker while off
         // The Build and the site: only while building, exactly one of them.
         Assert.Equal(SaveError.None, Forged(B(phase, 2), B(pending, (int)Rts.Sim.Ai.PendingKind.Build)));
         Assert.Equal(SaveError.Malformed, Forged(B(phase, 2), B(pending, (int)Rts.Sim.Ai.PendingKind.Train)));
@@ -656,7 +657,7 @@ public class SaveRefusalTests
         Assert.Equal(SaveError.Malformed, Forged(B(phase, 2), I(siteType, 0), I(siteCell, cells)));
         Assert.Equal(SaveError.Malformed, Forged(B(phase, 2), I(siteType, 0))); // half a site
         Assert.Equal(SaveError.Malformed, Forged(B(phase, 2), B(pending, (int)Rts.Sim.Ai.PendingKind.Build), I(siteType, 0), I(siteCell, 0)));
-        Assert.Equal(SaveError.Malformed, Forged(B(phase, 2), I(siteType, 0), I(siteCell, 0), I(start, 0))); // a leg while building
+        Assert.Equal(SaveError.Malformed, Forged(B(phase, 2), I(siteType, 0), I(siteCell, 0), I(scout, last), I(generation, 1))); // a leg worker while building
         Assert.Equal(SaveError.Malformed, Forged(I(siteType, 0), I(siteCell, 0))); // a site while off
         // The count.
         Assert.Equal(SaveError.Malformed, Forged(I(expansions, -1)));
@@ -688,5 +689,35 @@ public class SaveRefusalTests
         Assert.Equal(SaveError.Malformed, Forged(0));
         Assert.Equal(SaveError.Malformed, Forged(ring - 1));
         Assert.Equal(SaveError.None, Forged(ring));
+    }
+
+    /// <summary>
+    /// M5-H6 (the M5-4d note "HUNT's tick range-checked"; failed first: both loaded): the hunt count (the last four bytes of
+    /// <c>HUNT</c>, read by the sweep since M5-H6: the free starts come first from the second hunt) is not negative, and the
+    /// last sighting's tick (after its point, at the section's start) is -1 (none) or a tick; a forged -1 count or a -2 tick
+    /// is <see cref="SaveError.Malformed"/>, 0 and -1 load.
+    /// </summary>
+    [Fact]
+    public void AForgedHuntCountOrSightingTick_OutOfRange_IsMalformed()
+    {
+        byte[] good = SaveBytes.SmallAi();
+        int end = PreMapFixtures.CountersAt(good, 1);
+        Rts.Sim.Ai.AiPlayer ai = SaveTestRun.Load(TestSim.Data, good).AiOf(0)!;
+        int points = ai.Board.HuntVisited.Length;
+        // The seat's HUNT fields backwards from the end: the count, pass, ring left, ring (16), the marks and their length,
+        // the sweep (4), the origin (8), the hunting flag (1), the sighting's tick (4), its point (8).
+        Assert.Equal(points, BinaryPrimitives.ReadInt32LittleEndian(good.AsSpan(end - 16 - points - 4)));
+        int hunt = end - 16 - points - 4 - 8 - 4 - 1 - 4 - 8;
+        Assert.Equal(ai.Board.EnemyUnitTick, BinaryPrimitives.ReadInt32LittleEndian(good.AsSpan(hunt + 8)));
+        SaveError Forged(int offset, int value)
+        {
+            byte[] bad = (byte[])good.Clone();
+            BinaryPrimitives.WriteInt32LittleEndian(bad.AsSpan(offset), value);
+            return SaveTestRun.TryLoad(TestSim.Data, SaveBytes.Rechecksum(bad));
+        }
+        Assert.Equal(SaveError.Malformed, Forged(end - 4, -1));
+        Assert.Equal(SaveError.None, Forged(end - 4, 0));
+        Assert.Equal(SaveError.Malformed, Forged(hunt + 8, -2));
+        Assert.Equal(SaveError.None, Forged(hunt + 8, -1));
     }
 }

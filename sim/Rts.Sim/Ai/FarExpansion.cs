@@ -93,7 +93,8 @@ internal static class FarExpansion
             Leg(ai);
             return;
         }
-        // A free mine is known: the leg is over; its worker, standing by the mine, is the builder if it can be.
+        // A free mine is known: the leg is over; its worker, standing by the mine, is the builder if it can be. The start
+        // and look point stay (BUG-1159): a later arm walks the rest of that start, not the whole of it again.
         int builder = board.FarScoutSlot, generation = board.FarScoutGeneration;
         EndLeg(ai, stop: false);
         if (ai.Now < board.FarNoSiteUntil) return;
@@ -206,7 +207,12 @@ internal static class FarExpansion
         ai.Board.FarPhase = 0;
     }
 
-    /// <summary>Ends the leg: no start walked to, no leg worker (with <paramref name="stop"/>, a worker walking to a look point is stopped, so the economy finds it idle).</summary>
+    /// <summary>
+    /// Ends the leg: no leg worker. With <paramref name="stop"/> (the arm cleared, or no start left) a worker walking to a look
+    /// point is stopped, so the economy finds it idle, and no start is walked to. Without it (a candidate found mid-leg) the
+    /// start and its look point are kept (BUG-1159): the leg's worker is the builder now, and a later arm (the mine spent)
+    /// walks that start's remaining look points before the next start rather than its centre again.
+    /// </summary>
     private static void EndLeg(AiPlayer ai, bool stop)
     {
         Blackboard board = ai.Board;
@@ -215,9 +221,10 @@ internal static class FarExpansion
             ai.MarkOrdered(slot, u.Handle.Generation, 0);
         board.FarScoutSlot = -1;
         board.FarScoutGeneration = 0;
+        board.FarMoved = false;
+        if (!stop) return;
         board.FarStart = -1;
         board.FarLook = 0;
-        board.FarMoved = false;
     }
 
     /// <summary>
@@ -225,7 +232,10 @@ internal static class FarExpansion
     /// it (the one walking, else <see cref="AiPlayer.PickBuilder"/>'s nearest the point), and one Move a think at most to the
     /// look point it is at; a point is looked at once the worker is within <c>ai.scoutReach</c> of it or stands still after the
     /// Move to it applied (as close as it could get). The start's last point looked at marks the start, and the leg goes on to
-    /// the next; with none left it ends and the seat waits armed.
+    /// the next; with none left it ends and the seat waits armed. M5-H6 (BUG-1158): a leg worker that died is replaced only
+    /// while the player's own unit losses are at most <c>ai.scoutReplacements</c> (the scout's cap, BUG-1052); past that the
+    /// leg is over for the match (every start marked looked). Why the losses and not a count of leg deaths: a count would be
+    /// a new saved field (a save-format bump), and a broke seat, the only one that arms, can't train its workers back.
     /// </summary>
     private static void Leg(AiPlayer ai)
     {
@@ -235,7 +245,16 @@ internal static class FarExpansion
         int slot = board.FarScoutSlot;
         if (slot < 0 || !ai.OwnUnit(slot, board.FarScoutGeneration, out SeenUnit u))
         {
-            // None yet, or it died on the way: another worker takes the leg from the point it was walking to.
+            // None yet, or it died on the way: another worker takes the leg from the point it was walking to. BUG-1158: as the
+            // scout's (BUG-1052), only while the player's own unit losses are at most ai.scoutReplacements; past that the leg
+            // is over (every start counts looked), so a broke seat, which can't train its workers back, stops feeding them to
+            // whatever guards a start.
+            if (slot >= 0 && ai.View.OwnUnitLosses > ai.Rules.ScoutReplacements)
+            {
+                board.FarLooked |= AllStarts(ai);
+                EndLeg(ai, stop: true);
+                return;
+            }
             board.FarScoutSlot = -1;
             board.FarScoutGeneration = 0;
             int picked = ai.PickBuilder(point, out int generation);
@@ -288,8 +307,9 @@ internal static class FarExpansion
     /// whole cells (squared); on a tie the seat's own turn of the tied ones: the starts taken in a ring from index
     /// <c>PlayerCount + Player</c> (mod their count). Why: on a symmetric map two seats are often exactly as far from two free
     /// starts (Pale Hills 1v1: both free starts 129 cells from both halls); the lowest index sent both to one start, where
-    /// they fought over it and lost their workers, while the other start's 9,000 gold stayed untouched. -1 for none (a
-    /// 2-player map with two starts has none while both play).
+    /// they fought over it and lost their workers, while the other start's 9,000 gold stayed untouched. M5-H6 (BUG-1159): a
+    /// start whose centre is farther than <c>ai.farExpandReach</c> from the hall's is skipped (no mine there could be a
+    /// <see cref="Candidate"/>). -1 for none (a 2-player map with two starts has none while both play).
     /// </summary>
     internal static int NextStart(AiPlayer ai)
     {
@@ -297,12 +317,15 @@ internal static class FarExpansion
         if (count == 0) return -1;
         int w = ai.View.MapWidth;
         int hx = (int)(ai.HallPoint.X / MapConstants.CellSize), hy = (int)(ai.HallPoint.Y / MapConstants.CellSize);
+        float reach = ai.Rules.FarExpandReach * ai.Rules.FarExpandReach;
         long bestDistance = long.MaxValue;
         int bestTurn = int.MaxValue;
         for (int k = 0; k < count; k++)
         {
             if ((ai.Board.FarLooked & (1 << k)) != 0 || k < players && (k == ai.Player || !ai.View.IsDefeated(k))) continue;
             int cell = ai.View.StartCell(k);
+            // BUG-1159: a start farther from the hall than ai.farExpandReach has no mine Candidate would take; not walked to.
+            if (Vector2.DistanceSquared(ai.CellCentre(cell), ai.HallPoint) > reach) continue;
             long dx = cell % w - hx, dy = cell / w - hy, d = dx * dx + dy * dy;
             int turn = ((k - players - ai.Player) % count + count) % count;
             if (d > bestDistance || d == bestDistance && turn >= bestTurn) continue;
@@ -311,6 +334,13 @@ internal static class FarExpansion
             best = k;
         }
         return best;
+    }
+
+    /// <summary>BUG-1158: <see cref="Blackboard.FarLooked"/> with every start location the map has (up to <see cref="MaxStarts"/>) marked.</summary>
+    private static int AllStarts(AiPlayer ai)
+    {
+        int count = Math.Min(ai.View.StartCount, MaxStarts);
+        return count >= MaxStarts ? int.MaxValue : (1 << count) - 1;
     }
 
     /// <summary>Look point <paramref name="look"/> of start <paramref name="start"/>: its centre cell's centre, then east, south, west, north <see cref="LookRadius"/> off it, clamped inside the map.</summary>

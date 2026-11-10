@@ -291,10 +291,16 @@ public class RebuildTests
     }
 
     /// <summary>
-    /// Criterion 2 (c)'s control: below the cap the same razed Billet is built again (the rule is the cap, not the type).
+    /// Criterion 2 (c)'s control: below the cap the same razed Billet is built again when the population is within
+    /// <c>ai.houseWhenPopWithin</c> of the cap the raze left (M5-H6, BUG-1116: the economy's own house test): its step is
+    /// due again at the next think and a Billet Build follows. With <paramref name="nearTheCap"/> false the population is far
+    /// below that cap (5 workers in a Keep's 10): the lost house adds nothing, so its step stays done and no Billet is sent
+    /// (failed first: the step was reopened whatever the population, BUG-1116's churn of houses a beaten seat never needed).
     /// </summary>
-    [Fact]
-    public void ARazedHouse_BelowTheCap_IsRebuilt()
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void ARazedHouse_BelowTheCap_IsRebuiltOnlyWhenThePopulationNeedsIt(bool nearTheCap)
     {
         Simulation sim = Scene(s_cap.Value);
         AiPlayer ai = sim.AiOf(0)!;
@@ -311,8 +317,15 @@ public class RebuildTests
         Assert.True(ai.Board.StepDone[0]);
         int razed = sim.TickNumber;
         Assert.True(w.Buildings.Free(billet));
+        int laborer = TestSim.Data.FindUnit("malazan_laborer"), margin = ai.Rules.HouseHalfPopMargin, placed = 0;
+        while (nearTheCap && w.HalfPopCap[0] - ai.View.HalfPop > margin)
+            CombatScenes.Place(sim, 0, laborer, w.NavGrid.CellCenter(4 + placed++, 20));
+        _out.WriteLine($"near {nearTheCap}: half-pop {ai.View.HalfPop} of {w.HalfPopCap[0]} (margin {margin}), {placed} workers placed");
+        Assert.True(w.HalfPopCap[0] < s_cap.Value.Rules.HalfPopCap);
+        NextThink(sim);
+        Assert.Equal(nearTheCap, !(ai.Board.StepDone[0] && ai.Board.StepDone[1]));
         for (int k = 0; k < 4; k++) NextThink(sim);
-        Assert.Contains(log, c => c.Tick > razed && c.Kind == CommandKind.Build && c.TypeId == Billet);
+        Assert.Equal(nearTheCap, log.Any(c => c.Tick > razed && c.Kind == CommandKind.Build && c.TypeId == Billet));
     }
 
     /// <summary>

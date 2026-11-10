@@ -333,17 +333,21 @@ public class CounterCompositionTests
     /// move with Normal's shift. With Normal's <c>counterStrength</c> at 0 (Easy's already is), (round 2) <c>ai.starvedWaveAfter</c>
     /// at 0 and (M5-9b) <c>ai.farExpandReach</c> at 0 every row reproduces the digest it pinned before M5-9a (c11f5f0) exactly:
     /// the memory, the stamp, the far expansion's state, the hash's new fields and the format change move no play, and the
-    /// only changes in those matches are the three levers.
+    /// only changes in those matches are the three levers. <b>M5-H6</b>: its two rule changes (a lost House step reopened
+    /// only when the population needs the house, BUG-1116; the hunt's free starts from its second hunt, BUG-1157) have no
+    /// knob (the brief allowed none), so six of the eight rows now pin the M5-H6 play at the three knobs 0, the pre-M5-9a
+    /// digest kept in each comment; Raraku and Vathar Easy lose no house that matters and are unchanged. The row still proves
+    /// that the three knobs at 0 turn M5-9a / M5-9b off: the new digests are the M5-H6 rules alone.
     /// </summary>
     [Theory]
     [Trait("Category", "Stress")]
-    [InlineData("raraku", 1UL, AiDifficulty.Normal, "E0612240C3E713D2 28083 1476")]
+    [InlineData("raraku", 1UL, AiDifficulty.Normal, "4765275972CD8BD8 28193 1531")] // pre-M5-9a: E0612240C3E713D2 28083 1476
     [InlineData("raraku", 1UL, AiDifficulty.Easy, "0D877B9258F20265 24498 1448")]
-    [InlineData("pale_hills", 1UL, AiDifficulty.Normal, "69C4358E67DF7FC3 34219 3144")]
-    [InlineData("pale_hills", 1UL, AiDifficulty.Easy, "62F16C733AF6D9C8 36000 2601")]
-    [InlineData("pale_hills", 3UL, AiDifficulty.Normal, "C9CB142CF3C97C88 29562 3103")]
-    [InlineData("pale_hills", 3UL, AiDifficulty.Easy, "4FF13AE84024D0BB 33524 3075")]
-    [InlineData("vathar_crossing", 1UL, AiDifficulty.Normal, "4FA98DA390936D9B 22794 1395")]
+    [InlineData("pale_hills", 1UL, AiDifficulty.Normal, "A0884E7E95EEA8AB 36000 3483")] // pre-M5-9a: 69C4358E67DF7FC3 34219 3144
+    [InlineData("pale_hills", 1UL, AiDifficulty.Easy, "07EC9909C8DDF1C3 36000 2486")] // pre-M5-9a: 62F16C733AF6D9C8 36000 2601
+    [InlineData("pale_hills", 3UL, AiDifficulty.Normal, "9753F06856D81476 28517 2459")] // pre-M5-9a: C9CB142CF3C97C88 29562 3103
+    [InlineData("pale_hills", 3UL, AiDifficulty.Easy, "BC6868F49655A4DE 33508 3033")] // pre-M5-9a: 4FF13AE84024D0BB 33524 3075
+    [InlineData("vathar_crossing", 1UL, AiDifficulty.Normal, "72BC8BD819A35B0F 23219 1495")] // pre-M5-9a: 4FA98DA390936D9B 22794 1395
     [InlineData("vathar_crossing", 1UL, AiDifficulty.Easy, "325B1E0137F84D8D 36000 1798")]
     public void TheNonHardPins_WithNormalStrengthZero_PlayAsBeforeThisTask(string map, ulong seed, AiDifficulty first, string before)
     {

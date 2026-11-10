@@ -518,14 +518,14 @@ waves), Age II, the defeat, and the largest army it had (read once a second).
 | minArmyPop / minArmyCost | seed | waved at (waves) | Age II at | defeated at | peak army pop |
 | --- | --- | --- | --- | --- | --- |
 | 18 / 1,332 | 7 | 10:16 (3) | 8:26 | never | 42 |
-| 18 / 1,332 | 8 | never (0) | 8:41 | 13:50 | 11 |
-| 18 / 1,332 | 14 | never (0) | never | 15:03 | 7 |
+| 18 / 1,332 | 8 | never (0) | 8:41 | 13:47 | 11 |
+| 18 / 1,332 | 14 | never (0) | never | 14:16 | 7 |
 | 16 / 1,184 | 7 | 8:29 (4) | 8:26 | never | 52 |
-| 16 / 1,184 | 8 | never (0) | 8:41 | 13:50 | 11 |
-| 16 / 1,184 | 14 | never (0) | never | 15:03 | 7 |
+| 16 / 1,184 | 8 | never (0) | 8:41 | 13:47 | 11 |
+| 16 / 1,184 | 14 | never (0) | never | 14:16 | 7 |
 | 14 / 1,036 | 7 | 7:59 (4) | 8:26 | never | 44 |
-| 14 / 1,036 | 8 | never (0) | 8:41 | 13:50 | 11 |
-| 14 / 1,036 | 14 | never (0) | never | 15:03 | 7 |
+| 14 / 1,036 | 8 | never (0) | 8:41 | 13:47 | 11 |
+| 14 / 1,036 | 14 | never (0) | never | 14:16 | 7 |
 
 Re-printed 2026-10-26 for the sim's M5-4g (the reserve). Before it the 18-pop rows read seed 7: waved at 8:42 (3), Age
 II at 8:24, peak 25; seed 8: Age II at 8:44, defeated at 13:14; seed 14: defeated at 11:19, peak 8. Seed 7 now waves
@@ -588,8 +588,8 @@ and lives to 20:00 again (docs/03 "Implementation (M5-4d slice 2)", BUG-1116).
 | `standard` | `raider_rush` | seed 2: never (defeated 16:33) | seed 10: 12:00 | seed 21: 8:19 |
 | `standard` | `holy_war` | seed 3: 13:51 | seed 4: 15:19 (defeated 19:53) | seed 6: 8:29 (defeated 15:37) |
 | `crossbow_push` | `standard` | seed 9: 12:19 | seed 32: never (defeated 17:12) | seed 37: 12:50 |
-| `crossbow_push` | `raider_rush` | seed 5: 11:44 | seed 11: 8:47 | seed 19: never |
-| `crossbow_push` | `holy_war` | seed 12: 12:13 | seed 45: 9:28 | seed 71: 9:43 |
+| `crossbow_push` | `raider_rush` | seed 5: 11:44 | seed 11: 8:47 | seed 19: never (defeated 19:17) |
+| `crossbow_push` | `holy_war` | seed 12: 12:13 | seed 45: 9:28 (defeated 19:02) | seed 71: 9:43 |
 | `cadre_rush` | `standard` | seed 13: 6:05 | seed 16: 8:24 | seed 17: 8:44 |
-| `cadre_rush` | `raider_rush` | seed 7: 8:26 | seed 8: 8:41 (defeated 13:50) | seed 14: never (defeated 15:03) |
+| `cadre_rush` | `raider_rush` | seed 7: 8:26 | seed 8: 8:41 (defeated 13:47) | seed 14: never (defeated 14:16) |
 | `cadre_rush` | `holy_war` | seed 20: 8:24 | seed 24: 8:44 | seed 27: 8:33 |
