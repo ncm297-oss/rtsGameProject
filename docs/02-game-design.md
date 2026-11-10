@@ -414,7 +414,7 @@ own cues (select, order, refused, building placed or finished, unit or tech read
   - **Normal:** fair play at a relaxed pace, follows the build order on time, uses abilities,
     doesn't focus fire or pull back wounded units.
   - **Hard:** fair play with tighter decisions (thinks every 0.5 s, focus fire, pulls back wounded
-    units, good ability use) plus a **25% gather bonus**, shown in the skirmish setup.
+    units, good ability use) plus a **40% gather bonus**, shown in the skirmish setup.
 - Behaviors in priority order: defend the base when attacked → follow the build order → keep
   producing workers and army → expand when safe → scout → send attack waves → rebuild losses.
 - The defense is sized by the threat: the AI answers raiders with defenders worth 1.5× their gold + wood cost (at least

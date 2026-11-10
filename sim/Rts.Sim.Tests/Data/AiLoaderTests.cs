@@ -22,10 +22,10 @@ public class AiLoaderTests
             AiDef ai = d.Ai[f];
             Assert.Equal(f, ai.Faction);
             Assert.Equal(3, ai.Difficulties.Length);
-            // docs/02 "AI opponent": Easy thinks every 2 s, Hard every 0.5 s with a 25 % gather bonus, focus fire, pull-back.
+            // docs/02 "AI opponent": Easy thinks every 2 s, Hard every 0.5 s with a 40 % gather bonus, focus fire, pull-back.
             Assert.Equal(40, ai.Difficulty(AiDifficulty.Easy).ThinkTicks);
             Assert.Equal(10, ai.Difficulty(AiDifficulty.Hard).ThinkTicks);
-            Assert.Equal(0.25f, ai.Difficulty(AiDifficulty.Hard).GatherBonus);
+            Assert.Equal(0.4f, ai.Difficulty(AiDifficulty.Hard).GatherBonus); // D27 (BUG-1163): was 0.25f (docs/02 "25% gather bonus" -> 40%)
             Assert.Equal(0f, ai.Difficulty(AiDifficulty.Easy).GatherBonus);
             Assert.Equal(0f, ai.Difficulty(AiDifficulty.Normal).GatherBonus);
             Assert.True(ai.Difficulty(AiDifficulty.Hard).FocusFire && ai.Difficulty(AiDifficulty.Hard).PullBackWounded);

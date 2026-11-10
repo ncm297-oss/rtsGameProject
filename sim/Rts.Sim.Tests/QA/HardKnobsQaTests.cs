@@ -265,16 +265,17 @@ public class HardKnobsQaTests
     }
 
     /// <summary>
-    /// The derived gather rate across a save: a Hard AI seat's rates are 1.25 x the data's (a human seat's the data's, bit for
-    /// bit), equal after a load, and the loaded match follows the run hash for hash for 1,000 ticks.
+    /// The derived gather rate across a save: a Hard AI seat's rates are 1.4 x the data's (1.25 before D27; a human seat's the
+    /// data's, bit for bit), equal after a load, and the loaded match follows the run hash for hash for 1,000 ticks.
     /// </summary>
     [Fact]
     public void AHardSeat_SavedAndLoaded_KeepsItsGatherRate_AndFollowsTheRun()
     {
         Simulation sim = AiScenes.Flat(new[] { new PlayerSeat(0, SeatController.Ai, AiDifficulty.Hard), new PlayerSeat(1, SeatController.Human, AiDifficulty.Normal) });
         RulesDef r = sim.World.Data.Rules;
-        Assert.Equal(r.GoldPerTick * 1.25f, sim.World.GoldPerTickOf[0]);
-        Assert.Equal(r.WoodPerTick * 1.25f, sim.World.WoodPerTickOf[0]);
+        // D27 (BUG-1163): Hard's gatherBonus 0.25 -> 0.4, so x1.25f -> x1.4f.
+        Assert.Equal(r.GoldPerTick * 1.4f, sim.World.GoldPerTickOf[0]);
+        Assert.Equal(r.WoodPerTick * 1.4f, sim.World.WoodPerTickOf[0]);
         Assert.Equal(BitConverter.SingleToInt32Bits(r.GoldPerTick), BitConverter.SingleToInt32Bits(sim.World.GoldPerTickOf[1]));
         for (int t = 0; t < 1537; t++) sim.Tick(); // mid-load: workers carrying part loads
         UnitStore u = sim.World.Units;

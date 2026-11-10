@@ -422,7 +422,8 @@ measurement is under "Fast Age II against the raider rush" at the end of this pa
 The `difficulties` block of the same `game/data/factions/malazan/ai.json` (docs/02 "AI opponent", docs/03 "For the data
 track (M5-1)"): one row per difficulty, one column per field. Times are in seconds as the file writes them (the loader
 turns them into ticks). **Build-order slack** is how long a step waits after it is due; **wave size ×** scales the
-attack wave's thresholds above; **gather bonus** is extra gather rate (docs/02: Hard's 25%, shown in the skirmish setup);
+attack wave's thresholds above; **gather bonus** is extra gather rate (docs/02: Hard's 40%, shown in the skirmish setup;
+25% before D27, 2026-11-10, raised so Hard beats Normal on Vathar Crossing too, BUG-1163);
 **expands after** is the earliest match time the AI expands (the order's `expand` step, due at Normal's 480 s, also
 waits for it). The rows are the same for every faction today. `Content/AiContentTests` pins this table to the file,
 both ways (J), and docs/02's stated numbers to the file (K).
@@ -431,7 +432,7 @@ both ways (J), and docs/02's stated numbers to the file (K).
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | Easy | 2 | 30 | 0.6 | 0% | no | no | yes | 900 |
 | Normal | 1 | 5 | 1 | 0% | no | no | yes | 480 |
-| Hard | 0.5 | 0 | 1.25 | 25% | yes | yes | yes | 300 |
+| Hard | 0.5 | 0 | 1.25 | 40% | yes | yes | yes | 300 |
 
 ## Art notes
 

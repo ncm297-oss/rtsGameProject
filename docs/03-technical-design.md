@@ -7795,8 +7795,13 @@ bonus of 0 multiplies the rate by exactly 1.
 - **Gather bonus.** A worker in reach adds its owner's rate to its progress each tick: `gatherRate.gold` (or `.wood`) /
   20 x (1 + the seat's `gatherBonus`), worked out once per player when the `World` is built (for a match, and for a
   save's load: derived from the seats and the data, both in every save and replay header; not saved, not hashed). Hard's
-  0.25 fills a 10-load in 189 ticks of work for gold (Normal 236: 10 / (0.85 / 20) = 235.3) and 214 for wood (267);
-  everything after the fill (the walk, the deposit) is as before. **Builder's call, the seat test:** the bonus follows
+  0.4 fills a 10-load in 169 ticks of work for gold (Normal 236: 10 / (0.85 / 20) = 235.3) and 191 for wood (267);
+  everything after the fill (the walk, the deposit) is as before. **D27 (2026-11-10, BUG-1163):** Hard's `gatherBonus`
+  0.25 → 0.4 (it filled in 189 / 214 ticks), so Hard is ahead of Normal on Vathar Crossing too. QA's 42-match tally
+  (`Stress/HardVersusNormalTallyQaStressTests`, Hard / Normal / no result): **29 / 11 / 2 → 32 / 8 / 2**; Raraku 10 / 4 / 0
+  (unchanged), Pale Hills 12 / 0 / 2 → 11 / 1 / 2 (seed 2, Hard in seat 1: Normal wins at 69,129), Vathar 7 / 7 / 0 → 11 / 3 / 0.
+  The other Hard keys tried on Vathar's 14 (data copies): `expandAfter` 480 changes no Vathar match (the order's `expand`
+  step is due at 480 s anyway), `waveSizeMultiplier` 1 measures 4 / 10 / 0. docs/02's "25% gather bonus" reads 40%. **Builder's call, the seat test:** the bonus follows
   the seat's *difficulty* (`World.GatherBonusOf`: its faction's `ai.json` difficulty block; 0 for a faction with none),
   not its controller, because playback builds every seat human with the recorded difficulty (`ReplayPlayer`, and the
   view's own playback in `SimRunner`): keyed on the controller, a Hard AI's recording would gather at the plain rate on

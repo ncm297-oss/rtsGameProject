@@ -47,6 +47,9 @@ public class GatherWedgeQaTests
     // history is in git (this file before M6-SH1). M7-1 (BUG-0750's rule): the golden cross_map_seed1.replay's header was
     // regenerated once, to 64DF327980743173 (UnitDef.Scale, FactionDef.RegenPerTick / RegenDelayTicks, StatusDef.StateHashId
     // and the new regenerating status entered GameData.ContentHash); its k lines are byte for byte as before.
+    // D27 (BUG-1163, BUG-0750's rule): regenerated once more, 64DF327980743173 -> 3E33BCE5D418EC9B, because Hard's ai.json
+    // gatherBonus moved 0.25 -> 0.4 in both factions (difficulty values are in GameData.ContentHash); the golden's one seat is
+    // a human Normal seat, so its k lines are byte for byte as before (header data-hash and checksum only).
 
     /// <summary>
     /// Ticks the replay must still match its recorded checkpoints: all of them (M4-H1, BUG-0211; before the re-recording

@@ -6,8 +6,8 @@ using Xunit.Abstractions;
 namespace Rts.Sim.Tests;
 
 /// <summary>
-/// M5-4c slice 2 criterion 2 (docs/02 "AI opponent": Hard's 25% gather bonus): a seat's workers fill at
-/// <c>gatherRate</c> x (1 + its difficulty's <c>gatherBonus</c>). Hard's 0.25 fills a load in 1 / 1.25 of the ticks; a
+/// M5-4c slice 2 criterion 2 (docs/02 "AI opponent": Hard's 40% gather bonus, 25% before D27): a seat's workers fill at
+/// <c>gatherRate</c> x (1 + its difficulty's <c>gatherBonus</c>). Hard's 0.4 fills a load in 1 / 1.4 of the ticks; a
 /// human seat and a Normal one fill at the rate itself, bit for bit (their per-tick hashes: <see cref="HardKnobsPinTests"/>).
 /// </summary>
 public class GatherBonusTests
@@ -62,21 +62,21 @@ public class GatherBonusTests
     }
 
     [Fact]
-    public void AHardWorker_FillsItsCarry_In1Over1Point25OfANormalWorkersTicks()
+    public void AHardWorker_FillsItsCarry_In1Over1Point4OfANormalWorkersTicks()
     {
         RulesDef rules = TestSim.Data.Rules;
         int normal = FirstGoldLoad(AiDifficulty.Normal), hard = FirstGoldLoad(AiDifficulty.Hard);
-        _out.WriteLine($"a gold load: Normal {normal} ticks, Hard {hard} ticks (x{(double)hard / normal:F4}); model {ModelTicks(rules.GoldPerTick, rules.WorkerCarry)} / {ModelTicks(rules.GoldPerTick * 1.25f, rules.WorkerCarry)}");
+        _out.WriteLine($"a gold load: Normal {normal} ticks, Hard {hard} ticks (x{(double)hard / normal:F4}); model {ModelTicks(rules.GoldPerTick, rules.WorkerCarry)} / {ModelTicks(rules.GoldPerTick * 1.4f, rules.WorkerCarry)}");
         Assert.Equal(236, normal); // 10 / (0.85 / 20) = 235.3: the 236th tick of work fills it
-        Assert.Equal(189, hard); // 10 / (0.85 x 1.25 / 20) = 188.2
+        Assert.Equal(169, hard); // 10 / (0.85 x 1.4 / 20) = 168.1 (D27, BUG-1163: was 189 at gatherBonus 0.25, 10 / (0.85 x 1.25 / 20) = 188.2)
         Assert.Equal(ModelTicks(rules.GoldPerTick, rules.WorkerCarry), normal);
-        Assert.Equal(ModelTicks(rules.GoldPerTick * 1.25f, rules.WorkerCarry), hard);
-        Assert.Equal((int)Math.Ceiling(normal / 1.25), hard); // 1 / 1.25 of Normal's ticks, to the whole tick
-        // Wood alike, from the model: 10 / (0.75 / 20) = 266.7 and 213.3.
-        Assert.Equal((267, 214), (ModelTicks(rules.WoodPerTick, rules.WorkerCarry), ModelTicks(rules.WoodPerTick * 1.25f, rules.WorkerCarry)));
+        Assert.Equal(ModelTicks(rules.GoldPerTick * 1.4f, rules.WorkerCarry), hard);
+        Assert.Equal((int)Math.Ceiling(normal / 1.4), hard); // 1 / 1.4 of Normal's ticks, to the whole tick
+        // Wood alike, from the model: 10 / (0.75 / 20) = 266.7 and 190.5 (D27: was 213.3, 214, at x1.25).
+        Assert.Equal((267, 191), (ModelTicks(rules.WoodPerTick, rules.WorkerCarry), ModelTicks(rules.WoodPerTick * 1.4f, rules.WorkerCarry)));
     }
 
-    /// <summary>The per-player rates: Hard x1.25 (its <c>gatherBonus</c> 0.25), Normal, Easy and a default (human, Normal) seat the rate itself, bit for bit.</summary>
+    /// <summary>The per-player rates: Hard x1.4 (its <c>gatherBonus</c> 0.4; x1.25 / 0.25 before D27), Normal, Easy and a default (human, Normal) seat the rate itself, bit for bit.</summary>
     [Fact]
     public void TheRates_PerSeat()
     {
@@ -88,9 +88,9 @@ public class GatherBonusTests
         };
         Simulation sim = AiScenes.Flat(seats);
         World w = sim.World;
-        Assert.Equal(0.25f, TestSim.Data.Ai[0].Difficulty(AiDifficulty.Hard).GatherBonus);
-        Assert.Equal(rules.GoldPerTick * 1.25f, w.GoldPerTickOf[0]);
-        Assert.Equal(rules.WoodPerTick * 1.25f, w.WoodPerTickOf[0]);
+        Assert.Equal(0.4f, TestSim.Data.Ai[0].Difficulty(AiDifficulty.Hard).GatherBonus); // D27 (BUG-1163): was 0.25f
+        Assert.Equal(rules.GoldPerTick * 1.4f, w.GoldPerTickOf[0]);
+        Assert.Equal(rules.WoodPerTick * 1.4f, w.WoodPerTickOf[0]);
         for (int p = 1; p < 4; p++)
         {
             Assert.Equal(BitConverter.SingleToInt32Bits(rules.GoldPerTick), BitConverter.SingleToInt32Bits(w.GoldPerTickOf[p]));
@@ -111,7 +111,7 @@ public class GatherBonusTests
     {
         PlayerSeat[] seats = { new(0, SeatController.Human, AiDifficulty.Hard), new(1, SeatController.Human, AiDifficulty.Normal) };
         Simulation sim = AiScenes.Flat(seats);
-        Assert.Equal(TestSim.Data.Rules.GoldPerTick * 1.25f, sim.World.GoldPerTickOf[0]);
+        Assert.Equal(TestSim.Data.Rules.GoldPerTick * 1.4f, sim.World.GoldPerTickOf[0]); // D27: was x1.25f
         Assert.Equal(TestSim.Data.Rules.GoldPerTick, sim.World.GoldPerTickOf[1]);
     }
 }

@@ -683,7 +683,7 @@ public class AiContentTests
     {
         ("thinks every 2 s", AiDifficulty.Easy, "thinkInterval", "2"),
         ("thinks every 0.5 s", AiDifficulty.Hard, "thinkInterval", "0.5"),
-        ("25% gather bonus", AiDifficulty.Hard, "gatherBonus", "0.25"),
+        ("40% gather bonus", AiDifficulty.Hard, "gatherBonus", "0.4"), // D27 (BUG-1163): was ("25% gather bonus", ..., "0.25")
         ("doesn't micro", AiDifficulty.Easy, "focusFire", "false"),
         ("doesn't micro", AiDifficulty.Easy, "pullBackWounded", "false"),
         ("doesn't focus fire or pull back wounded", AiDifficulty.Normal, "focusFire", "false"),

@@ -43,7 +43,10 @@ public class ScoutManagerTests
 
         List<Command> moves = Moves(log);
         Assert.NotEmpty(moves);
-        Assert.Equal((after + think - 1) / think * think + 1, moves[0].Tick);
+        // D27 (BUG-1163): Hard's gatherBonus 0.25 -> 0.4 shifts the workers' gather cycle, so at the first think from
+        // scoutAfter (tick 301) no worker is free to pick (ScoutManager: "no free worker yet: the next think tries again")
+        // and the scout leaves at the next think, 311. Was the first think: (after + think - 1) / think * think + 1.
+        Assert.Equal((after + think - 1) / think * think + 1 + think, moves[0].Tick);
         EntityHandle scout = moves[0].Unit;
         Assert.All(moves, m => Assert.Equal(scout, m.Unit));
         Assert.All(moves.GroupBy(m => m.Tick), g => Assert.Single(g));

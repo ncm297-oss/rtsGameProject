@@ -26,7 +26,7 @@
       "thinkInterval": 0.5,
       "buildOrderSlack": 0,
       "waveSizeMultiplier": 1.25,
-      "gatherBonus": 0.25,
+      "gatherBonus": 0.4,
       "focusFire": true,
       "pullBackWounded": true,
       "useAbilities": true,
