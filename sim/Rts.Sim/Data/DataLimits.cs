@@ -19,6 +19,12 @@ public static class DataLimits
     public const double MinUnitScale = 0.5, MaxUnitScale = 3.0;
 
     /// <summary>
+    /// M7-2: the most units one queue item may spawn (<c>units.json</c> <c>spawnCount</c>, 1-8; the Teblor war-dog pack: 3).
+    /// A rule of the format: a spawn finds this many free cells at once, so it bounds that search and its scratch.
+    /// </summary>
+    public const int MaxSpawnCount = 8;
+
+    /// <summary>
     /// M7-1: the most HP per second a regeneration may add: <c>faction.json</c> <c>regen.hpPerSecond</c> and a
     /// <c>regenerating</c> status's magnitude. Far above any designed rate (docs/factions: 1-1.5 HP/s); bounds the
     /// fixed-point rate (<see cref="Combat.CombatConstants.RegenFixedOne"/>) well inside an int.
@@ -126,11 +132,11 @@ public static class DataLimits
     /// <summary>JSON spelling of each <see cref="AbilityAffects"/>, indexed by the enum value (M4-4a).</summary>
     public static readonly ImmutableArray<string> AbilityAffectsIds = ImmutableArray.Create("enemy_units", "own_units", "all_units");
 
-    /// <summary>Most passives one unit type may list (M4-4b-3a): one per trigger of <see cref="PassiveTriggerIds"/>.</summary>
-    public const int MaxUnitPassives = 2;
+    /// <summary>Most passives one unit type may list (M4-4b-3a): one per trigger of <see cref="PassiveTriggerIds"/> (3 since M7-2's <c>onHit</c>).</summary>
+    public const int MaxUnitPassives = 3;
 
-    /// <summary>JSON spelling of each <see cref="PassiveTrigger"/>, indexed by the enum value (a unit's <c>passives[].trigger</c>, M4-4b-3a).</summary>
-    public static readonly ImmutableArray<string> PassiveTriggerIds = ImmutableArray.Create("whenBelowHp", "onDeath");
+    /// <summary>JSON spelling of each <see cref="PassiveTrigger"/>, indexed by the enum value (a unit's <c>passives[].trigger</c>, M4-4b-3a; <c>onHit</c> M7-2).</summary>
+    public static readonly ImmutableArray<string> PassiveTriggerIds = ImmutableArray.Create("whenBelowHp", "onDeath", "onHit");
 
     /// <summary>
     /// Largest <c>onDeath</c> passive <c>radius</c> in meters (M4-4b-3a): a death queries the spatial hash over the circle, so a

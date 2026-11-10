@@ -73,12 +73,14 @@ public sealed class UnitDef
     /// The unit's <c>passives</c> in file order (M4-4b-3a): at most <see cref="DataLimits.MaxUnitPassives"/>, one per trigger.
     /// Data, so never hashed as state; <see cref="GameData.ContentHash"/> covers it.
     /// </summary>
-    /// <remarks>Set once by the loader, with <see cref="BelowHpPassive"/> and <see cref="DeathPassive"/>; never written afterwards. Empty in hand-built data.</remarks>
+    /// <remarks>Set once by the loader, with <see cref="BelowHpPassive"/>, <see cref="DeathPassive"/> and <see cref="HitPassive"/>; never written afterwards. Empty in hand-built data.</remarks>
     public ImmutableArray<UnitPassive> Passives { get; internal set; } = ImmutableArray<UnitPassive>.Empty;
     /// <summary>The index in <see cref="Passives"/> of its <see cref="PassiveTrigger.WhenBelowHp"/> passive, or -1 (the per-type flag phase 5 reads, M4-4b-3a).</summary>
     public int BelowHpPassive { get; internal set; } = -1;
     /// <summary>The index in <see cref="Passives"/> of its <see cref="PassiveTrigger.OnDeath"/> passive, or -1 (the per-type flag the death path reads, M4-4b-3a).</summary>
     public int DeathPassive { get; internal set; } = -1;
+    /// <summary>The index in <see cref="Passives"/> of its <see cref="PassiveTrigger.OnHit"/> passive, or -1 (the per-type flag a landed hit reads, M7-2).</summary>
+    public int HitPassive { get; internal set; } = -1;
     /// <summary>
     /// Detection radius in meters (M4-5: <c>detector</c>, optional, docs/02 "Stealth and detection": casters 10 m); above 0
     /// and at most <see cref="DataLimits.MaxSight"/>; 0 for none.
@@ -90,4 +92,13 @@ public sealed class UnitDef
     /// in <see cref="GameData.ContentHash"/>.
     /// </summary>
     public float Scale { get; init; } = 1f;
+    /// <summary>
+    /// How many units one queue item of this type spawns (M7-2: <c>spawnCount</c>, optional, default 1, 1 to
+    /// <see cref="DataLimits.MaxSpawnCount"/>; the Teblor war-dog pack: 3). <see cref="CostGold"/> / <see cref="CostWood"/>
+    /// and <see cref="TrainTicks"/> are the item's; <see cref="HalfPop"/> is each unit's (<see cref="ItemHalfPop"/> the item's).
+    /// In <see cref="GameData.ContentHash"/> only when above 1.
+    /// </summary>
+    public int SpawnCount { get; init; } = 1;
+    /// <summary>The half-pop one queue item of this type reserves when it starts: <see cref="HalfPop"/> x <see cref="SpawnCount"/> (M7-2).</summary>
+    public int ItemHalfPop => HalfPop * SpawnCount;
 }

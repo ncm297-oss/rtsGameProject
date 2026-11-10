@@ -8,4 +8,7 @@ public enum PassiveTrigger
 
     /// <summary>When the unit dies, its owner's live units of listed types near it take a status (Martyrdom).</summary>
     OnDeath = 1,
+
+    /// <summary>M7-2: each hit the unit lands on a unit that survives it (a melee hit or its projectile's direct landing) gives the victim a status (the war-dog's Hamstring).</summary>
+    OnHit = 2,
 }

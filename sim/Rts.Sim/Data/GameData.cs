@@ -191,6 +191,10 @@ public sealed class GameData
             h.Add(u.DeathPassive);
             h.Add(u.Detector); // M4-5
             h.Add(u.Scale); // M7-1
+            // M7-2: only away from the default, so data without packs or onHit passives hashes as before (the golden's
+            // header data hash holds). The onHit entry itself is hashed with the passives above.
+            if (u.SpawnCount != 1) h.Add(u.SpawnCount);
+            if (u.HitPassive >= 0) h.Add(u.HitPassive);
         }
 
         h.Add(Resources.Length);

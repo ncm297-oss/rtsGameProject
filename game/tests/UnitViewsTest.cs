@@ -11,7 +11,7 @@ using NVector2 = System.Numerics.Vector2;
 
 namespace Rts.Game.Tests;
 
-/// <summary>M2-2: unit views interpolate without extrapolating, stand on the terrain, face the sim facing, reuse their nodes, and update 2,000 units without allocating; M2-7: facing blends PrevFacing to Facing the short way.</summary>
+/// <summary>M2-2: unit views interpolate without extrapolating, stand on the terrain, face the sim facing, reuse their nodes, and update 2,000 units without allocating; M2-7: facing blends PrevFacing to Facing the short way; M7-V1: every type's capsule is its radius and body height times its data scale (today's capsule at scale 1).</summary>
 /// <remarks>
 /// Headless. Run: <c>&amp; $env:GODOT --headless --path game res://tests/UnitViewsTest.tscn</c>; prints
 /// "UNITVIEWS TEST PASS" and exits 0, or prints each failure and exits 1. It drives its own
@@ -50,6 +50,7 @@ public partial class UnitViewsTest : Node
         AddChild(views);
         views.Bind(data, capacity);
         int meshes = views.MeshCount, materials = views.MaterialCount;
+        MeshRows(views, data);
 
         NVector2[] west = StartLayout.Block(world.NavGrid, 1000, true, 1f);
         NVector2[] east = StartLayout.Block(world.NavGrid, 1000, false, 1f);
@@ -137,7 +138,7 @@ public partial class UnitViewsTest : Node
         for (int i = 0; i < capacity; i++)
         {
             NVector2 p = NVector2.Lerp(u.PrevPosition[i], u.Position[i], 0.25f);
-            float feet = views.ViewOf(i)!.Position.Y - UnitViews.BodyHeight(data.Units[u.TypeId[i]].Radius) / 2f;
+            float feet = views.ViewOf(i)!.Position.Y - UnitViews.DrawnHeight(data.Units[u.TypeId[i]]) / 2f;
             worst = Mathf.Max(worst, Mathf.Abs(feet - TerrainHeight.At(world.Heightmap, p.X, p.Y)));
         }
         Check(worst <= 1e-3f, $"worst height error {worst} m");
@@ -198,11 +199,28 @@ public partial class UnitViewsTest : Node
         }
     }
 
+    // M7-V1: one capsule per type, radius x scale by BodyHeight(radius) x scale; a scale-1 type is exactly today's capsule.
+    private void MeshRows(UnitViews views, GameData data)
+    {
+        for (int t = 0; t < data.Units.Length; t++)
+        {
+            UnitDef def = data.Units[t];
+            CapsuleMesh? mesh = views.MeshOf(t);
+            Check(mesh != null && mesh.Radius == UnitViews.DrawnRadius(def) && mesh.Height == UnitViews.DrawnHeight(def)
+                && UnitViews.DrawnRadius(def) == def.Radius * def.Scale && UnitViews.DrawnHeight(def) == UnitViews.BodyHeight(def.Radius) * def.Scale,
+                $"{def.Key} (scale {def.Scale}): capsule {mesh?.Radius} x {mesh?.Height}, want {def.Radius * def.Scale} x {UnitViews.BodyHeight(def.Radius) * def.Scale}");
+            if (def.Scale == 1f)
+                Check(mesh != null && mesh.Radius == def.Radius && mesh.Height == UnitViews.BodyHeight(def.Radius),
+                    $"{def.Key} at scale 1: capsule {mesh?.Radius} x {mesh?.Height}, today's is {def.Radius} x {UnitViews.BodyHeight(def.Radius)}");
+        }
+        Check(views.MeshOf(-1) == null && views.MeshOf(data.Units.Length) == null, "MeshOf out of range should be null");
+    }
+
     private void CheckPlaced(UnitViews views, World world, int slot, float alpha, NVector2 expected, string what)
     {
         views.Sync(world, alpha);
         Vector3 p = views.ViewOf(slot)!.Position;
-        float feet = p.Y - UnitViews.BodyHeight(world.Units.Radius[slot]) / 2f;
+        float feet = p.Y - UnitViews.DrawnHeight(world.Data.Units[world.Units.TypeId[slot]]) / 2f;
         float ground = TerrainHeight.At(world.Heightmap, expected.X, expected.Y);
         bool ok = Mathf.Abs(p.X - expected.X) < 1e-4f && Mathf.Abs(p.Z - expected.Y) < 1e-4f && Mathf.Abs(feet - ground) <= 1e-3f;
         GD.Print($"placement {what}: view {p}, expected ({expected.X}, {ground}, {expected.Y}) feet");

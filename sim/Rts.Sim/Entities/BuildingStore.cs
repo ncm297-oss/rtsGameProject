@@ -187,13 +187,13 @@ public sealed partial class BuildingStore
     /// <summary>Writable tower state of a slot (M4-3b): ticks left of the shot it is winding up (0: none); it fires at 0.</summary>
     internal int[] TowerWindup => _towerWindup;
 
-    /// <summary>The half-pop slot <paramref name="slot"/>'s started head item reserves (0 when nothing has started).</summary>
+    /// <summary>The half-pop slot <paramref name="slot"/>'s started head item reserves (0 when nothing has started): its type's <see cref="UnitDef.ItemHalfPop"/> (M7-2: every unit of a pack).</summary>
     public int ReservedHalfPop(int slot)
     {
         if ((uint)slot >= (uint)Capacity || _progress[slot] == 0 || _queueCount[slot] == 0) return 0;
         if (_queueIsTech[slot * EconomyConstants.ProductionQueueCapacity]) return 0; // research takes no population
         int type = _queueTypeId[slot * EconomyConstants.ProductionQueueCapacity];
-        return (uint)type < (uint)_units.Length ? _units[type].HalfPop : 0;
+        return (uint)type < (uint)_units.Length ? _units[type].ItemHalfPop : 0;
     }
 
     /// <summary>Raw queue entry <paramref name="item"/> of slot <paramref name="slot"/> (production system, hash tests).</summary>

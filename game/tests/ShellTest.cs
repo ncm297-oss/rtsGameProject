@@ -42,6 +42,8 @@ namespace Rts.Game.Tests;
 /// formats refused); the menu path by clicks: Load Game on an empty folder (the note, Watch / Delete greyed, Back), a recorded
 /// menu match listed with its seed, seats and length, Watch into playback (orders off, card greyed), Quit to menu, Esc back.
 /// Playback itself is <c>ReplayPlaybackTest</c>'s.
+/// M7-V1: in the menu's match every shown unit body is its type's capsule at its data scale (shipped: today's capsule);
+/// scaled types are <c>ScaleViewTest</c>'s.
 /// </summary>
 /// <remarks>
 /// Headless: <c>&amp; $env:GODOT --headless --path game res://tests/ShellTest.tscn</c>; prints "SHELL TEST PASS" and exits 0,
@@ -1370,13 +1372,16 @@ public partial class ShellTest : Node
         // The dots are drawn from positions as of the last refresh: compare at those, so refresh once now.
         mini.Refresh(sim);
         UnitStore u = sim.World.Units;
-        int wrongBody = 0, wrongDot = 0, seen = 0;
+        int wrongBody = 0, wrongDot = 0, seen = 0, wrongSize = 0;
         for (int i = 0; i < u.Capacity; i++)
         {
             if (!u.Alive[i] || (uint)u.Owner[i] >= (uint)want.Length || !units.IsShown(i)) continue;
             seen++;
             Color c = UnitViews.ColorFromRgb(want[u.Owner[i]]);
             if (units.ViewOf(i)?.MaterialOverride is not StandardMaterial3D m || !m.AlbedoColor.IsEqualApprox(c)) wrongBody++;
+            // M7-V1: each body is its type's capsule at its data scale (shipped: every type 1.0, today's capsule).
+            UnitDef def = _data.Units[u.TypeId[i]];
+            if (units.ViewOf(i)?.Mesh is not CapsuleMesh cap || cap.Radius != def.Radius * def.Scale || cap.Height != UnitViews.BodyHeight(def.Radius) * def.Scale) wrongSize++;
             if (u.Owner[i] == SelectionController.LocalPlayer && mini.Raster!.TryPixelOf(u.Position[i], out int x, out int y))
             {
                 Color got = mini.DotsImage.GetPixel(x, y);
@@ -1385,6 +1390,7 @@ public partial class ShellTest : Node
         }
         Check(seen > 0 && wrongBody == 0 && wrongDot == 0 && mini.Refreshes > refreshes,
             $"colours: {seen} units shown, {wrongBody} bodies and {wrongDot} own dots not their player's pick");
+        Check(wrongSize == 0, $"{wrongSize} of {seen} unit bodies not radius x scale by BodyHeight(radius) x scale (M7-V1)");
         for (int p = 0; p < want.Length; p++)
             Check(buildings.PlayerMaterial(p).AlbedoColor.IsEqualApprox(UnitViews.ColorFromRgb(want[p])), $"player {p} building colour {buildings.PlayerMaterial(p).AlbedoColor}");
     }

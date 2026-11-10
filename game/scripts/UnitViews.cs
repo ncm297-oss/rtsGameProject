@@ -10,7 +10,8 @@ namespace Rts.Game;
 /// <summary>Placeholder unit views: one capsule <see cref="MeshInstance3D"/> per unit slot, placed from the sim every frame.</summary>
 /// <remarks>
 /// A slot's node is created the first time the slot holds a live unit and hidden while it is dead,
-/// so a unit respawned into the slot reuses it. Meshes (one per unit type, radius from data) and
+/// so a unit respawned into the slot reuses it. Meshes (one per unit type, radius from data, M7-V1: radius and height times the
+/// type's data <c>scale</c>, <see cref="DrawnRadius(UnitDef)"/> / <see cref="DrawnHeight"/>) and
 /// materials (one per faction, its <c>PrimaryColor</c>; M6-V3: with the match's per-player colours, one per player, set
 /// on a slot's node as its material override when the slot's owner changes) are all made in <see cref="Bind"/>. Views
 /// hold no gameplay state; they only read the unit store.
@@ -133,9 +134,10 @@ public partial class UnitViews : Node3D
         for (int t = 0; t < _meshes.Length; t++)
         {
             UnitDef def = data.Units[t];
-            float height = BodyHeight(def.Radius);
+            // M7-V1: the data scale is applied here, once per type, so the per-frame path is unchanged.
+            float height = DrawnHeight(def);
             // Low-poly on purpose: 2,000 of these are on screen at once (M2-7 perf budget).
-            _meshes[t] = new CapsuleMesh { Radius = def.Radius, Height = height, RadialSegments = 12, Rings = 3, Material = materials[def.Faction] };
+            _meshes[t] = new CapsuleMesh { Radius = DrawnRadius(def), Height = height, RadialSegments = 12, Rings = 3, Material = materials[def.Faction] };
             _halfHeight[t] = height / 2;
         }
 
@@ -346,8 +348,25 @@ public partial class UnitViews : Node3D
     /// </remarks>
     public static float Yaw(float facing) => -facing - Mathf.Pi / 2f;
 
-    /// <summary>Placeholder capsule height for a unit radius.</summary>
+    /// <summary>Placeholder capsule height for a unit radius (at scale 1; the hit test's body, M7-V1).</summary>
     public static float BodyHeight(float radius) => 2f * radius + ExtraBodyHeight;
+
+    /// <summary>A unit type's drawn capsule radius (M7-V1): its collision radius times its data <c>scale</c>.</summary>
+    public static float DrawnRadius(UnitDef def) => def.Radius * def.Scale;
+
+    /// <summary>A unit type's drawn capsule height (M7-V1): <see cref="BodyHeight"/> of its radius times its data <c>scale</c>.</summary>
+    public static float DrawnHeight(UnitDef def) => BodyHeight(def.Radius) * def.Scale;
+
+    /// <summary>
+    /// Live unit slot <paramref name="slot"/>'s drawn radius (M7-V1): its collision radius times its type's data <c>scale</c>,
+    /// what the rings, corpse and cue discs size from. Two array reads, allocation-free. Click and box select keep the sim's
+    /// radius (docs/03 "Implementation (M7-V1)").
+    /// </summary>
+    public static float DrawnRadius(World world, int slot) =>
+        world.Units.Radius[slot] * world.Data.Units[world.Units.TypeId[slot]].Scale;
+
+    /// <summary>The capsule mesh of unit type <paramref name="type"/> (shared by every unit of it), or null before <see cref="Bind"/>.</summary>
+    public CapsuleMesh? MeshOf(int type) => (uint)type < (uint)_meshes.Length ? _meshes[type] : null;
 
     /// <summary>Converts a data colour 0xRRGGBB (sRGB) to a Godot colour.</summary>
     public static Color ColorFromRgb(uint rgb) =>
