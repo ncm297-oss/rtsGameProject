@@ -2922,6 +2922,76 @@ rendering of `scale` come next).
   trip), `DataValidationTests` / `DataConversionTests` / `StatusLoaderTests` / `DataContentHashTests` rows,
   `DamageCalcTests.TheGiantRow_*` (the shipped `giant` armor class: x1.25 pierce and magic, x0.75 siege, x1.0 melee).
 
+### Implementation (M7-2)
+
+M7's third bullet (docs/05), the sim half of the war-dog pack (docs/factions/teblor.md "Unit notes": "one queue item spawns
+3 normal-sized dogs (1 pop each)"; Hamstring: "each bite Slows the target 20% for 2 s"): two generic hooks in the schema
+before any faction uses them. No shipped unit sets either (the Teblor roster is data, later). Blood-oil Frenzy's aftermath
+slow is **not** here: a "when it ends, apply" hook needs a decision on the status store's one-entry-per-status-id merge
+(M4-4b-3a "Known limits" (1): a Zealot's passive Frenzied must not slow when it ends, only the Shaman's), so it is M7-3's.
+
+- **`units.json` `spawnCount`** (optional, default 1, a whole number 1-8, `DataLimits.MaxSpawnCount`; 0, 9, 1.5 are one
+  error each at `units[i].spawnCount` naming the range): `UnitDef.SpawnCount`, and `UnitDef.ItemHalfPop` = `HalfPop` x
+  `SpawnCount` (derived). The item's `cost` and `trainTime` are the pack's (paid once at the Train, refunded in full on a
+  cancel, trained once); `pop` is each unit's.
+- **Production** (`ProductionSystem`, `BuildingStore`). One Train is one queue item. The head starts only when
+  `HalfPop + ItemHalfPop <= HalfPopCap` and then reserves `ItemHalfPop` (a pack of three at pop 1 reserves 6 halves, all
+  at once); `BuildingStore.ReservedHalfPop` reports the same, so a cancel of the started head, the building's destruction
+  and the owner's defeat release the whole reservation through the paths M3-4 already has. A pack that doesn't fit waits
+  at the head, paid and unstarted, as any item does (there is no refusal at the Train for the cap: that is today's rule;
+  the item simply never starts while the room lacks). At completion the N units count their own pop as the reservation
+  is released in the same step, so `HalfPop` doesn't move at the spawn. `MatchStats.UnitsTrained` counts each unit (a
+  pack is three units trained).
+- **The spawn rule: all or nothing per tick.** At completion the spawn picks N cells one after another with the
+  existing search (`FreeCellSearch.Nearest` from the rally point, or the footprint's center, over the push-out's per-cell
+  cache), marking each taken before the next pick, so the units stand on the N free cells nearest the rally point, the
+  first unit (lowest slot) on the nearest, the same cells in the same order every run. With fewer than N free cells on
+  the building's plateau, or fewer than N free unit slots, the picks are given back (their cache cells reset to free),
+  nothing spawns, and the complete item waits at the head and tries again next tick (M3-4's rule for a full plateau,
+  generalised). The picks sit in a `stackalloc` buffer of `MaxSpawnCount` ints: no allocation, no cache change, no new
+  per-slot state and **no save-format change** (an item's count is derived from its type). A plateau is remembered as
+  full for the rest of the tick only when not even one cell was free (a pack of three that found two leaves room for a
+  single unit trained next door). A rallied pack's units each get the rally order (a worker rallied on a resource
+  gathers, as before).
+- **`onHit` passive** (`DataLimits.PassiveTriggerIds` gains `onHit`, `PassiveTrigger.OnHit` = 2, appended;
+  `MaxUnitPassives` 2 → 3, still one per trigger): `{trigger: onHit, status, magnitude, duration}`, the `applyStatus`
+  entry's rules (an unknown status, a duration that rounds below a tick, a slow's magnitude 1 or above: one error each);
+  `hpFraction`, `radius` and `units` are "no such field" errors; a second `onHit` on one unit is the one-per-trigger
+  error. `UnitPassive` reuses `Status` / `Magnitude` / `DurationTicks`; `UnitDef.HitPassive` is its index or -1.
+- **The hit rule** (`CombatSystem.HitUnit`'s optional `onHitType`): a hit carries its attacking unit type's `onHit` only
+  when it is a **direct** hit: a melee hit from phase 11's queue, and a unit's projectile landing on its aimed target
+  (`ProjectileSystem.Strike`). It applies to a victim that **survives** the hit (after the death check: a killing blow
+  applies nothing), its attacker's owner the source, through `StatusSystem.Apply` and so the store's stacking rule
+  (`StatusStore.Apply`: the same status again keeps the longer of the two durations and the stronger magnitude, so a
+  second bite inside the 2 s refreshes to 40 ticks left, and a stronger slow already there stays and is only lengthened).
+  The victim's speed follows at once (`StatusSystem.RecomputeSpeed`: `speed x (1 - 0.2)`), and the countdown in phase 5
+  ends it after 40 ticks. **Not** applied by: a splash neighbour (`ProjectileSystem.Splash`, melee or projectile), a
+  damage-over-time pulse, ability damage, a tower's shot (a building has no passives; its shot's type is a building type
+  id, so it passes none), a lob's explosion (a lob has no aimed target). The shooter's type rides on the projectile
+  (`ProjectileStore.AttackerType`), so a bolt whose shooter died in flight still bites. Cost: one field read per direct
+  hit on a type without the passive. `PassiveSystem` is unchanged.
+- **The hash rule.** `GameData.ContentHash` adds `SpawnCount` only when it isn't 1 and `HitPassive` only when it is 0 or
+  more (the `onHit` entry itself is hashed with the passives, every field, since M4-4b-3a). So data without packs or
+  `onHit` passives hashes exactly as before: the golden replay's header data hash did not move, nor did any `k` line. No
+  new hashed state: a pack is ordinary units, a bite an ordinary status entry.
+- **The AI.** `PlayerView.HalfPop` is `World.HalfPop` (live units + started items), so the `pop` step trigger and
+  `attack.minArmyPop` count a pack from its start, before a dog stands (proven, no code). `ProductionManager`'s
+  composition share counts queued items (one pack = one unit's share); no shipped unit is a pack, so no AI behaviour
+  changed; revisit with the Teblor AI.
+- **Tests:** `Economy/PackProductionTests` (one item, 3 units, the reservation, cancels at 2 / 150 / 279 of 280, the cap
+  with room for two, the spawn rule with 2 then 3 free cells and with 2 free unit slots, the rally order twice, the AI's
+  pop trigger), `Combat/OnHitPassiveTests` (melee, projectile, splash neighbour, pulse, tower, killing blow, the refresh,
+  speed during and after, a stronger slow kept), `Economy/PackMatchTests` (two runs of a 3,000-tick match with packs and
+  bites on both sides hash-equal every tick; a mid-match save with a pack started and a slow on round trip; 200 ticks with
+  20 packs completing and 100+ bites allocate nothing), `DataValidationTests` / `DataConversionTests` /
+  `Data/PassiveLoaderTests` / `DataContentHashTests` rows.
+
+**For the data track (M7-2).** A unit takes `"spawnCount": <whole, 1-8>` (one queue item spawns that many; `cost` and
+`trainTime` per item, `pop` per unit) and a third passive shape,
+`{ "trigger": "onHit", "status": <statuses.json id>, "magnitude": <as applyStatus>, "duration": <s, at least a tick> }`
+(Hamstring: `slowed`, 0.2, 2). The war-dog row is then `spawnCount` 3, `pop` 1, `cost` 120 / 0, `trainTime` 24, with the
+`onHit` passive.
+
 ## Vision, detection, fog
 
 Fog of war and the high-ground rule are in since M4-3a (`sim/Rts.Sim/Vision/`); the last-known building ghosts, buildings
@@ -3242,7 +3312,7 @@ consumes it.
 | `buildings.json` | `{ "buildings": [ ... ] }`, each `{id, displayName, description, slot, footprint {width, height}, hp, armor, cost {gold, wood}, buildTime, popProvided, dropOff}`: `slot` is one of the ten template slots (`DataLimits.BuildingSlotIds`), footprint sides 1-4 cells, `buildTime` in seconds (to ticks), `popProvided` a multiple of 0.5 (to half-pop), `dropOff` a required bool, `requires` an optional list of tech / building ids (M3-5; resolved and gating placement since M3-6), `sight` optional meters (M4-3a: above 0 and at most 64, default `rules.json` `buildingSight`; shipped 24 on both watch towers, docs/02), `attack` optional (M4-3b: the unit `attack` object; value at least 1, range above 0, an aimed `projectile` required, `targets` not `buildings`; shipped on both watch towers), `detector` optional meters (M4-3b: above 0 and at most 64; shipped 16 on both watch towers; unused until M4-5). Ids unique across factions (M3-2, see "Economy implementation"); exactly one building per slot per faction (M3-6, BUG-0010) |
 | `techs.json` | `{ "techs": [ ... ] }` in `common/` (shared by every faction) and in each faction folder (its own), each `{id, displayName, description, researchedAt, cost {gold, wood}, researchTime, requires?, requiresAnyOf?, effects: [{stat, amount, appliesTo {attackType?, tags?, units?, siege?}}]}`: `researchedAt` is a building slot id (a common tech resolves to each faction's building of it; a faction without one is an error), `researchTime` in seconds (to ticks), `requires` tech / building ids (resolved and gating research since M3-6), `requiresAnyOf` `{count, of: [slot ids, or in a faction file its own building ids]}`: met when `count` of the distinct listed slots hold an own finished building (M3-6; shipped on `age_ii` only), `effects` may be empty. `stat` is one of `attack`, `armor`, `range`, `hp`, `abilityCooldown` (`DataLimits.TechStatIds`); `amount` is non-zero, whole for attack / armor / hp, meters for range, seconds for ability cooldown (to ticks, negative shortens it). `appliesTo` is required (`{}` = every unit); each filter it sets must match: `attackType` a damage type, `tags` any one of the unit's tags (each must be a tag some unit has), `units` unit ids (a faction tech's must be its own), `siege` true / false for the `siege` slot; a `tags` or `units` list set to `[]` is an error (M3-6, BUG-0098). Tech ids are unique across all techs files and may not equal a building id (M3-6); `DataLimits.AgeTechIds` (`age_ii`) must be a common tech (M3-5, see "Implementation (M3-5)") |
 | `projectiles.json` | `{ "projectiles": [ ... ] }`, each `{id, kind, speed, hitTolerance?, leadSpeed?}`: `kind` `aimed` or `lob`, `speed` m/s (at least 1), `hitTolerance` m (aimed only, 0-2, default 0.3; an error on a lob), `leadSpeed` m/s (aimed only, not negative, default 0 = never leads; an error on a lob). Ids unique; every unit's `attack.projectile` must name one (M4-2b, see "Implementation (M4-2b)") |
-| `units.json` | `{ "units": [ ... ] }`, entries as in the example. `attack` also takes optional `minRange`, `splash` (m), and `friendlyFire` (docs/02 "Combat / Stats"); they default to 0 / false. Melee range is written as `0.5` (edge to edge). `abilities` (M4-4a, optional): ability ids of the unit's own faction, at most 4 (`DataLimits.MaxUnitAbilities`), no repeats; resolved to `UnitDef.Abilities`; shipped on the Cadre Mage (`telas_fire`), the Sapper (`cusser`) and the Priest of the Whirlwind (`sandstorm`). `passives` (M4-4b-3a, optional): at most 2 (`DataLimits.MaxUnitPassives`), one per `trigger` (`DataLimits.PassiveTriggerIds`): `{trigger: whenBelowHp, hpFraction, status, magnitude}` or `{trigger: onDeath, status, magnitude, duration, radius, units}` (see "Implementation (M4-4b-3a)"); resolved to `UnitDef.Passives`; shipped on the Zealot only. `detector` (M4-5, optional): meters, above 0, at most 64 (`UnitDef.Detector`; see "Implementation (M4-5)"). `scale` (M7-1, optional, default 1): the view's model size, 0.5-3.0 (`DataLimits.MinUnitScale` / `MaxUnitScale`), to `UnitDef.Scale`; presentation only, collision stays `radius` (docs/02 "Combat / Stats"); no shipped unit sets it yet |
+| `units.json` | `{ "units": [ ... ] }`, entries as in the example. `attack` also takes optional `minRange`, `splash` (m), and `friendlyFire` (docs/02 "Combat / Stats"); they default to 0 / false. Melee range is written as `0.5` (edge to edge). `abilities` (M4-4a, optional): ability ids of the unit's own faction, at most 4 (`DataLimits.MaxUnitAbilities`), no repeats; resolved to `UnitDef.Abilities`; shipped on the Cadre Mage (`telas_fire`), the Sapper (`cusser`) and the Priest of the Whirlwind (`sandstorm`). `passives` (M4-4b-3a, optional): at most 2 (`DataLimits.MaxUnitPassives`), one per `trigger` (`DataLimits.PassiveTriggerIds`): `{trigger: whenBelowHp, hpFraction, status, magnitude}` or `{trigger: onDeath, status, magnitude, duration, radius, units}` (see "Implementation (M4-4b-3a)"); resolved to `UnitDef.Passives`; shipped on the Zealot only. `detector` (M4-5, optional): meters, above 0, at most 64 (`UnitDef.Detector`; see "Implementation (M4-5)"). `scale` (M7-1, optional, default 1): the view's model size, 0.5-3.0 (`DataLimits.MinUnitScale` / `MaxUnitScale`), to `UnitDef.Scale`; presentation only, collision stays `radius` (docs/02 "Combat / Stats"); no shipped unit sets it yet. `spawnCount` (M7-2, optional, default 1): units one queue item spawns, a whole number 1-8 (`DataLimits.MaxSpawnCount`), to `UnitDef.SpawnCount`; `cost` and `trainTime` are the item's, `pop` each unit's (see "Implementation (M7-2)"); no shipped unit sets it yet. `passives` also takes (M7-2) `{trigger: onHit, status, magnitude, duration}`, so at most 3, still one per trigger |
 | `statuses.json` | `{ "statuses": [ ... ] }` (M4-4a), each `{id, displayName, description, kind, damageType?, sight?, reach?}`: `kind` `damageOverTime`, `slow`, (M4-4b-2) `blind`, (M4-4b-3a) `frenzied`, (M4-5) `stealthed` / `revealed` (at most one `revealed`), or (M7-1) `regenerating` (`DataLimits.StatusKindIds`; its magnitude is HP per second, above 0, at most 100 and at least 0.05); `damageType` (a damage table type) required on `damageOverTime`, an error on any other kind; `sight` and `reach` (m, above 0, at most 64) required on `blind`, errors on any other kind. The magnitude and duration come from the effect applying it (a blind, stealthed or revealed status takes no magnitude). Ids unique; shipped `burning` (magic damage over time), `slowed`, `blinded` (2 / 3, M4-4b-2) and `frenzied` (M4-4b-3a; its magnitude, the attack-speed increase, any fraction above 0, is the applying effect's or passive's), `stealthed` and `revealed` (M4-5, "Implementation (M4-5)"), `regenerating` (M7-1: nothing applies it in shipped data yet; the hook M9's Darkness zone and later abilities use) |
 | `abilities.json` | `{ "abilities": [ ... ] }` (M4-4a, per faction, optional), each `{id, displayName, description, kind, range, radius, castTime, cooldown, duration?, affects, autocast?, effects}`: `kind` `targetGround` or (M4-4b-3a) `selfAura` (`targetUnit`, `summon`: "not supported yet"); `range` m above 0 and at most `DataLimits.MaxSight` (64), required on `targetGround` and an error on `selfAura` (0 included); `radius` m above 0 and at most `DataLimits.MaxAbilityRadius` (16); `castTime` s, 0 or more, to ticks; `cooldown` s above 0, to ticks (at least 1); `duration` s, optional (0), to ticks (required with a `createZone` effect, M4-4b-2); `affects` `enemy_units`, `own_units` or `all_units`; `autocast` only `false` ("not supported yet"); `effects` at least one, each `{kind: damage, type, amount, buildings?, friendlyFire?}` (a whole amount, at least 1; M4-4b-1: `buildings` true also hits other players' buildings as structure, not with `own_units`; `friendlyFire` 0-1, the fraction own units take, above 0 only with `enemy_units`) or `{kind: applyStatus, status, magnitude, duration}` (a `statuses.json` id; magnitude whole and at least 1 for damage over time, above 0 and below 1 for a slow; duration s, at least a tick, and for damage over time a whole number of seconds, at least 1, M4-4b-1); M4-4b-2: `{kind: createZone, blocksVision?, statuses: [{status, magnitude, duration}]}` (at least one status, each by the `applyStatus` rules, a blind status without a magnitude; the ability's `duration`, at least a tick, is then required: the zone's lifetime; at most one per ability); `teleport`, `spawn`: "not supported yet"; a field the effect kind doesn't use is an error. Ids unique across factions. Shipped: Malazan `telas_fire`, `cusser` (M4-4b-1); Whirlwind `sandstorm` (M4-4b-2) |
 | `maps/<file>.json` | (M6-S7, optional folder, one file a hand-made map, loaded in the files' names' ordinal order into `GameData.Maps`) `{id, displayName, description, players, size, terrain, ramps?, starts, mines, forests}`: see "Implementation (M6-S7)" for every field and check |

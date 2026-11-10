@@ -72,7 +72,7 @@ resources for flavor in their display text (e.g. Teblor "Bloodwood" for wood).
 | Tree | 100 Wood each; the cell becomes passable when a tree is depleted |
 | Drop-off | Town Hall (Gold + Wood) and Camp (Gold + Wood) |
 | Population | Town Hall +10, House +8, hard cap 100 |
-| Pop costs | Integers or half-steps (Andii use 1.5); stored internally as half-pop integers |
+| Pop costs | Integers or half-steps (Andii use 1.5); stored internally as half-pop integers. A queue item that spawns several units (the Teblor war-dog pack: 3) costs each unit's pop, all reserved when the item starts, so it starts only with room for the whole pack |
 | Mine crowding | No hard cap; workers queue at a mine's edge. Revisit if 20 workers on one mine feels wrong |
 
 Workers return cargo to the nearest drop-off automatically and resume gathering. A worker

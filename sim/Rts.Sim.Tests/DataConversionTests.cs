@@ -85,6 +85,35 @@ public class DataConversionTests
         Assert.Equal(TestSim.Data.Units[data.FindUnit("malazan_heavy_infantry")].Radius, data.Units[data.FindUnit("malazan_heavy_infantry")].Radius); // collision unchanged
     }
 
+    /// <summary>M7-2 criterion 1: <c>spawnCount</c> is optional: absent it is 1 (every shipped unit), 3 loads as 3, 8 (the maximum) as 8; cost, train time and pop stay the type's.</summary>
+    [Fact]
+    public void SpawnCount_AbsentIsOne_ThreeLoadsAsThree()
+    {
+        Assert.All(TestSim.Data.Units, u => Assert.Equal((1, u.HalfPop), (u.SpawnCount, u.ItemHalfPop)));
+        using TestDataDir dir = TestDataDir.CopyOfShipped();
+        dir.SetUnitField("malazan", "malazan_heavy_infantry", "spawnCount", "3");
+        dir.SetUnitField("malazan", "malazan_laborer", "spawnCount", "8");
+        dir.SetUnitField("malazan", "malazan_crossbowman", "spawnCount", "1");
+        GameData data = Load(dir.Path);
+        UnitDef heavy = data.Units[data.FindUnit("malazan_heavy_infantry")], shipped = TestSim.Data.Units[heavy.Id];
+        Assert.Equal((3, 3 * shipped.HalfPop), (heavy.SpawnCount, heavy.ItemHalfPop));
+        Assert.Equal((shipped.CostGold, shipped.CostWood, shipped.TrainTicks, shipped.HalfPop), (heavy.CostGold, heavy.CostWood, heavy.TrainTicks, heavy.HalfPop));
+        Assert.Equal(8, data.Units[data.FindUnit("malazan_laborer")].SpawnCount);
+        Assert.Equal(1, data.Units[data.FindUnit("malazan_crossbowman")].SpawnCount);
+    }
+
+    /// <summary>M7-2 criterion 4: an <c>onHit</c> passive's <c>duration</c> converts to ticks (2 s = 40) on any unit.</summary>
+    [Fact]
+    public void OnHit_DurationConvertsToTicks()
+    {
+        using TestDataDir dir = TestDataDir.CopyOfShipped();
+        dir.SetUnitField("malazan", "malazan_heavy_infantry", "passives", "[{\"trigger\": \"onHit\", \"status\": \"slowed\", \"magnitude\": 0.2, \"duration\": 2}]");
+        GameData data = Load(dir.Path);
+        UnitDef heavy = data.Units[data.FindUnit("malazan_heavy_infantry")];
+        Assert.Equal(0, heavy.HitPassive);
+        Assert.Equal((PassiveTrigger.OnHit, data.FindStatus("slowed"), 0.2f, 40), (heavy.Passives[0].Trigger, heavy.Passives[0].Status, heavy.Passives[0].Magnitude, heavy.Passives[0].DurationTicks));
+    }
+
     /// <summary>
     /// M7-1 criterion 3: <c>regen</c> absent is no regeneration (rate 0, delay 0); <c>{1, 6}</c> is 20 units a tick (at
     /// <c>CombatConstants.RegenFixedOne</c> = 400 a hit point) after 120 ticks; <c>{1.5, 5}</c> 30 after 100; a delay of 0 is allowed.

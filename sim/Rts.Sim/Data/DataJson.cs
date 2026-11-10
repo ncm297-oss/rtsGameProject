@@ -181,6 +181,7 @@ internal sealed class UnitJson
     public List<PassiveJson?>? Passives { get; set; }
     public double? Detector { get; set; }
     public double? Scale { get; set; } // M7-1, optional
+    public double? SpawnCount { get; set; } // M7-2, optional; read as a number so 1.5 is refused by name, not as a parse error
 }
 
 internal sealed class PassiveJson

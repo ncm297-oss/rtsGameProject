@@ -270,7 +270,7 @@ public static class CombatSystem
             bool splash = world.Data.Units[attackerType].Attack.Splash > 0f;
             Vector2 at = !splash ? default : hit.IsBuilding ? NearestFootprintPoint(world, hit.Victim.Index, u.Position[hit.Attacker.Index]) : u.Position[hit.Victim.Index];
             if (hit.IsBuilding) HitBuilding(world, in hit);
-            else HitUnit(world, in hit);
+            else HitUnit(world, in hit, attackerType); // M7-2: the direct melee hit carries its attacker's onHit passive
             if (splash)
                 ProjectileSystem.Splash(world, at, world.Data.Units[attackerType].Attack, AttackBonus(world, hit.AttackerOwner, attackerType, false),
                     hit.AttackerOwner, hit.Attacker, false, hit.Victim, hit.IsBuilding, hit.AttackerLevel);
@@ -1208,7 +1208,14 @@ public static class CombatSystem
         DamageCalc.Points(isBuilding ? world.Techs.BuildingAttackBonus(owner, type) : world.Techs.Bonus(owner, type, TechStat.Attack));
 
     /// <summary>Applies one hit to a unit (phase 11): its damage, death (freed, event, kill and loss counted), else the attacker remembered and retaliated on.</summary>
-    internal static void HitUnit(World world, in PendingHit hit)
+    /// <param name="world">The world.</param>
+    /// <param name="hit">The hit.</param>
+    /// <param name="onHitType">
+    /// M7-2: the attacking unit type whose <c>onHit</c> passive this hit carries, or -1. Only a direct hit passes one: a melee
+    /// hit (phase 11's queue) and a unit's projectile landing on its aimed target. Splash neighbours, damage-over-time pulses,
+    /// ability damage and a tower's shot pass -1. The type, not the attacker's slot, so a shot whose shooter died still bites.
+    /// </param>
+    internal static void HitUnit(World world, in PendingHit hit, int onHitType = -1)
     {
         UnitStore u = world.Units;
         if (!u.IsAlive(hit.Victim)) return; // killed earlier this phase
@@ -1231,6 +1238,17 @@ public static class CombatSystem
             if (world.Data.Units[u.TypeId[v]].DeathPassive >= 0) PassiveSystem.OnDeath(world, v);
             u.Free(hit.Victim);
             return;
+        }
+        // M7-2: the attacker's onHit passive (Hamstring) on a victim that survived, through the status store's stacking rule
+        // (StatusSystem.Apply: the same status again keeps the longer duration and the stronger magnitude), its owner the source.
+        if (onHitType >= 0 && !hit.AttackerIsBuilding)
+        {
+            UnitDef attackerDef = world.Data.Units[onHitType];
+            if (attackerDef.HitPassive >= 0)
+            {
+                UnitPassive bite = attackerDef.Passives[attackerDef.HitPassive];
+                StatusSystem.Apply(world, v, bite.Status, bite.Magnitude, bite.DurationTicks, hit.AttackerOwner);
+            }
         }
         // A tower's hit (M4-3b) is no unit's attack: a tower is never a LastAttacker (a unit handle) and is not retaliated
         // on; the victim's scans take it like any enemy building (after units, within sight).

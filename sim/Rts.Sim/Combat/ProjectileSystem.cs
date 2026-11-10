@@ -161,7 +161,9 @@ public static class ProjectileSystem
             if (!u.IsAlive(v)) return false;
             float reach = u.Radius[v.Index] + pd.HitTolerance;
             if (!(Vector2.DistanceSquared(u.Position[v.Index], at) <= reach * reach)) return false;
-            CombatSystem.HitUnit(world, new PendingHit(p.Attacker[k], owner, v, false, CombatSystem.DamageToUnit(world, attack, attackBonus, v.Index), level, fromBuilding));
+            // M7-2: the aimed target of a unit's shot takes its onHit passive (a tower's carries none; nor does the splash below).
+            CombatSystem.HitUnit(world, new PendingHit(p.Attacker[k], owner, v, false, CombatSystem.DamageToUnit(world, attack, attackBonus, v.Index), level, fromBuilding),
+                fromBuilding ? -1 : attackerType);
         }
         Splash(world, at, attack, attackBonus, owner, p.Attacker[k], fromBuilding, v, building, level);
         return true;

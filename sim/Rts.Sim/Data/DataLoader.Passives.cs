@@ -13,7 +13,8 @@ public static partial class DataLoader
     /// <c>hpFraction</c> above 0 and below 1. <c>onDeath {status, magnitude, duration, radius, units}</c>: <c>duration</c>
     /// seconds (at least a tick; whole seconds for damage over time), <c>radius</c> above 0 and at most
     /// <see cref="DataLimits.MaxPassiveRadius"/>, <c>units</c> at least one own-faction unit id, no repeats. <c>status</c> and
-    /// <c>magnitude</c> as an <c>applyStatus</c> effect's. A field the trigger doesn't use is an error. When
+    /// <c>magnitude</c> as an <c>applyStatus</c> effect's. M7-2: <c>onHit {status, magnitude, duration}</c>, an
+    /// <c>applyStatus</c> entry's rules. A field the trigger doesn't use is an error. When
     /// <paramref name="statuses"/> is null (its file failed) status ids aren't checked: that file's error says why.
     /// </summary>
     private static void ResolveUnitPassives(Checker c, string[] folders, UnitFileJson?[] unitFiles, List<(int Faction, int Index)> accepted,
@@ -36,7 +37,7 @@ public static partial class DataLoader
             if (json.Passives.Count > DataLimits.MaxUnitPassives)
                 c.Error(p, $"{u.Key}: {json.Passives.Count} passives, above the maximum {DataLimits.MaxUnitPassives}");
             var list = ImmutableArray.CreateBuilder<UnitPassive>(json.Passives.Count);
-            int belowHp = -1, death = -1;
+            int belowHp = -1, death = -1, hit = -1;
             for (int j = 0; j < json.Passives.Count; j++)
             {
                 string q = $"{p}[{j}]";
@@ -59,6 +60,15 @@ public static partial class DataLoader
                     StatusAndMagnitude(c, x.Status, x.Magnitude, q, statuses, statusKeys, out int status, out float magnitude);
                     passive = new UnitPassive { Trigger = PassiveTrigger.WhenBelowHp, HpFraction = (float)fraction, Status = status, Magnitude = magnitude, Units = ImmutableArray<int>.Empty };
                 }
+                else if (trigger == (int)PassiveTrigger.OnHit)
+                {
+                    // M7-2: the whenBelowHp shape plus a duration (an applyStatus entry's rules); no aura fields.
+                    if (x.HpFraction != null) UnusedPassive(c, q + ".hpFraction", name);
+                    if (x.Radius != null) UnusedPassive(c, q + ".radius", name);
+                    if (x.Units != null) UnusedPassive(c, q + ".units", name);
+                    StatusEntry(c, x.Status, x.Magnitude, x.Duration, q, statuses, statusKeys, out int status, out float magnitude, out int duration);
+                    passive = new UnitPassive { Trigger = PassiveTrigger.OnHit, Status = status, Magnitude = magnitude, DurationTicks = duration, Units = ImmutableArray<int>.Empty };
+                }
                 else
                 {
                     if (x.HpFraction != null) UnusedPassive(c, q + ".hpFraction", name);
@@ -79,7 +89,7 @@ public static partial class DataLoader
                         Units = PassiveUnits(c, x.Units, q + ".units", folders, f, unitKeys, units),
                     };
                 }
-                ref int seen = ref trigger == (int)PassiveTrigger.WhenBelowHp ? ref belowHp : ref death;
+                ref int seen = ref trigger == (int)PassiveTrigger.WhenBelowHp ? ref belowHp : ref trigger == (int)PassiveTrigger.OnDeath ? ref death : ref hit;
                 if (seen >= 0)
                 {
                     c.Error(q + ".trigger", $"{u.Key} already has a '{name}' passive (passives[{seen}]); a unit has at most one per trigger");
@@ -91,6 +101,7 @@ public static partial class DataLoader
             u.Passives = list.ToImmutable();
             u.BelowHpPassive = belowHp;
             u.DeathPassive = death;
+            u.HitPassive = hit;
         }
     }
 

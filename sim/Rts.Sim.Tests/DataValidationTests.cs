@@ -124,6 +124,14 @@ public class DataValidationTests
     [InlineData("scale", "0.4", "units[2].scale", "scale 0.4 is outside 0.5-3")] // M7-1
     [InlineData("scale", "3.5", "units[2].scale", "scale 3.5 is outside 0.5-3")]
     [InlineData("scale", "-1", "units[2].scale", "outside 0.5-3")]
+    [InlineData("spawnCount", "0", "units[2].spawnCount", "spawnCount 0 is not a whole number 1-8")] // M7-2
+    [InlineData("spawnCount", "9", "units[2].spawnCount", "spawnCount 9 is not a whole number 1-8")]
+    [InlineData("spawnCount", "1.5", "units[2].spawnCount", "spawnCount 1.5 is not a whole number 1-8")]
+    [InlineData("spawnCount", "-3", "units[2].spawnCount", "not a whole number 1-8")]
+    [InlineData("passives", "[{\"trigger\": \"onHit\", \"status\": \"hamstrung\", \"magnitude\": 0.2, \"duration\": 2}]", "units[2].passives[0].status", "unknown status 'hamstrung'")]
+    [InlineData("passives", "[{\"trigger\": \"onHit\", \"status\": \"slowed\", \"magnitude\": 0.2, \"duration\": 0}]", "units[2].passives[0].duration", "must be positive")]
+    [InlineData("passives", "[{\"trigger\": \"onHit\", \"status\": \"slowed\", \"magnitude\": 0.2, \"duration\": 2, \"radius\": 3}]", "units[2].passives[0].radius", "trigger 'onHit' has no such field")]
+    [InlineData("passives", "[{\"trigger\": \"onHit\", \"status\": \"slowed\", \"magnitude\": 0.2, \"duration\": 2}, {\"trigger\": \"onHit\", \"status\": \"slowed\", \"magnitude\": 0.3, \"duration\": 1}]", "units[2].passives[1].trigger", "at most one per trigger")]
     [InlineData("displayName", null, "units[2].displayName", "missing")]
     [InlineData("attack.windup", null, "units[2].attack.windup", "missing")]
     // BUG-0007: bounds are checked before narrowing, so messages show the input, not an overflowed int.

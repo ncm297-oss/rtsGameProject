@@ -667,6 +667,13 @@ public static partial class DataLoader
             c.Error(p + ".scale", $"{u.Id}: scale {scale} is outside {DataLimits.MinUnitScale}-{DataLimits.MaxUnitScale}");
             scale = 1.0;
         }
+        // M7-2: how many units one queue item spawns, optional (1 when absent), a whole number 1-8.
+        int spawnCount = 1;
+        if (u.SpawnCount is double n)
+        {
+            if (n >= 1 && n <= DataLimits.MaxSpawnCount && n == Math.Floor(n)) spawnCount = (int)n;
+            else c.Error(p + ".spawnCount", $"{u.Id}: spawnCount {n} is not a whole number 1-{DataLimits.MaxSpawnCount}");
+        }
         return new UnitDef
         {
             Id = id,
@@ -693,6 +700,7 @@ public static partial class DataLoader
             // M4-5: optional; a unit without one detects only by proximity.
             Detector = u.Detector == null ? 0f : (float)c.Sight(u.Detector, p + ".detector", u.Id!, "detector"),
             Scale = (float)scale,
+            SpawnCount = spawnCount,
         };
     }
 
