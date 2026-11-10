@@ -58,6 +58,25 @@ public class DamageCalcTests
         Assert.Equal(expectedArmored, DamageCalc.Compute(Table, t, c, attack: 10, bonusVs: 1f, armor: 1000));
     }
 
+    /// <summary>
+    /// M7-1 criterion 9 (M7's second bullet, docs/factions/teblor.md "Giant class"): the shipped table's <c>giant</c> row takes
+    /// x1.25 pierce and magic, x0.75 siege and x1.0 melee; through the formula, a 20 attack at armor 0 deals 25, 25, 15 and 20.
+    /// </summary>
+    [Fact]
+    public void TheGiantRow_Takes125PierceAndMagic_075Siege_AndFullMelee()
+    {
+        int giant = Class("giant");
+        Assert.True(giant >= 0);
+        Assert.Equal(1.25f, Table.Multiplier(Type("pierce"), giant));
+        Assert.Equal(1.25f, Table.Multiplier(Type("magic"), giant));
+        Assert.Equal(0.75f, Table.Multiplier(Type("siege"), giant));
+        Assert.Equal(1.0f, Table.Multiplier(Type("melee"), giant));
+        Assert.Equal(25, DamageCalc.Compute(Table, Type("pierce"), giant, attack: 20, bonusVs: 1f, armor: 0));
+        Assert.Equal(25, DamageCalc.Compute(Table, Type("magic"), giant, attack: 20, bonusVs: 1f, armor: 4)); // magic ignores armor
+        Assert.Equal(15, DamageCalc.Compute(Table, Type("siege"), giant, attack: 20, bonusVs: 1f, armor: 0));
+        Assert.Equal(20, DamageCalc.Compute(Table, Type("melee"), giant, attack: 20, bonusVs: 1f, armor: 0));
+    }
+
     [Fact]
     public void MagicIgnoresArmor_OnlyMagic()
     {

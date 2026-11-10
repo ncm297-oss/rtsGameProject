@@ -112,7 +112,7 @@ public class StealthLoaderTests
         {
             ["id"] = "unmasked", ["displayName"] = "Unmasked", ["description"] = "Test.", ["kind"] = "revealed",
         })));
-        AssertErrorAt(r, Statuses, "statuses[6].kind", "already the revealed status");
+        AssertErrorAt(r, Statuses, "statuses[7].kind", "already the revealed status"); // M7-1: appended after regenerating (statuses[6])
     }
 
     /// <summary>

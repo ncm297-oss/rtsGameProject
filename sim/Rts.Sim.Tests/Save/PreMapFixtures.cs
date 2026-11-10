@@ -9,7 +9,8 @@ namespace Rts.Sim.Tests.Save;
 
 /// <summary>
 /// M6-S7: the oldest-format rule's proof. A generated-map match must write the save (format 4) and the recording (formats
-/// 6 / 7 / 8) byte for byte as the build before the map file did. These scenes were saved and recorded once on the diff base
+/// 6 / 7 / 8) byte for byte as the build before the map file did. M7-1: every save is format 10 now; with its new parts
+/// taken out (<see cref="WithoutRegen"/>) it is still those bytes. These scenes were saved and recorded once on the diff base
 /// (ab54ddb, before the map id existed) with <see cref="WriteFlag"/> set; the replays are kept as text under
 /// <c>Replays/premap/</c>, the saves as their FNV-1a 64 digest and length (<see cref="SaveDigests"/>), since a save is binary.
 /// Never rewrite them: a fixture that needs regenerating means a generated match no longer writes the old bytes.
@@ -114,37 +115,125 @@ internal static class PreMapFixtures
         return copy;
     }
 
+    // The formats before M7-1, by number: SaveFormat's constants all name format 10 since then.
+    internal const int Format4 = 4, Format5 = 5, Format6 = 6, Format7 = 7, Format8 = 8, Format9 = 9;
+
+    /// <summary>
+    /// M7-1: a format-10 save as the build before M7-1 wrote the same match: the unit store's regeneration part
+    /// (<c>REGN</c>, its tag, the last damage ticks, the accumulators, the regenerating counts and their total, right before
+    /// <c>LEDR</c>) taken out, a generated map's empty map id taken out of the header, and the version the old build chose
+    /// (4 / 5 without an AI seat, 8 / 9 with one, on a generated / hand-made map) with the total length fixed; the checksum
+    /// left stale (<see cref="Normalize(byte[])"/> zeroes it, <c>SaveBytes.Rechecksum</c> recomputes it).
+    /// </summary>
+    internal static byte[] WithoutRegen(byte[] save)
+    {
+        Assert.Equal(Rts.Sim.Save.SaveFormat.CurrentVersion, Int32At(save, Rts.Sim.Save.SaveFormat.MagicLength));
+        Header h = ReadHeader(save);
+        int regenBytes = 4 + 2 * (4 + 4 * h.UnitCapacity) + (4 + h.UnitCapacity) + 4;
+        int regen = -1;
+        for (int at = save.AsSpan().IndexOf("REGN"u8); at >= 0;)
+        {
+            if (save.AsSpan(at + regenBytes, 4).SequenceEqual("LEDR"u8))
+            {
+                regen = at;
+                break;
+            }
+            int next = save.AsSpan(at + 1).IndexOf("REGN"u8);
+            at = next < 0 ? -1 : at + 1 + next;
+        }
+        Assert.True(regen > 0, "no REGN part before LEDR");
+        bool mapFile = h.MapId.Length > 0;
+        int idBytes = mapFile ? 0 : 4; // a generated map's "" is its length alone
+        byte[] old = new byte[save.Length - regenBytes - idBytes];
+        save.AsSpan(0, h.MapIdAt).CopyTo(old);
+        save.AsSpan(h.MapIdAt + idBytes, regen - h.MapIdAt - idBytes).CopyTo(old.AsSpan(h.MapIdAt));
+        save.AsSpan(regen + regenBytes).CopyTo(old.AsSpan(regen - idBytes));
+        int version = h.AiSeat ? (mapFile ? Format9 : Format8) : (mapFile ? Format5 : Format4);
+        BinaryPrimitives.WriteInt32LittleEndian(old.AsSpan(Rts.Sim.Save.SaveFormat.MagicLength), version);
+        BinaryPrimitives.WriteInt64LittleEndian(old.AsSpan(Rts.Sim.Save.SaveFormat.LengthOffset), old.Length);
+        return old;
+    }
+
+    /// <summary>
+    /// M7-1: a format-10 save with an AI seat without its AI seats' memories (<c>CTRM</c> and <c>HUNT</c> cut, the version left
+    /// at 10, the checksum stale): what a load must refuse as <see cref="Rts.Sim.Save.SaveError.Malformed"/>.
+    /// </summary>
+    internal static byte[] WithoutAiMemories(byte[] save)
+    {
+        int v = Rts.Sim.Save.SaveFormat.CurrentVersion;
+        return WithoutLastSection(WithoutLastSection(save, "CTRM"u8, "HUNT"u8, v), "HUNT"u8, "AIST"u8, v);
+    }
+
+    /// <summary>M7-1: a format-10 save with an AI seat without its <c>CTRM</c> section, the version left at 10, the checksum stale.</summary>
+    internal static byte[] WithoutCountersAt10(byte[] save) =>
+        WithoutLastSection(save, "CTRM"u8, "HUNT"u8, Rts.Sim.Save.SaveFormat.CurrentVersion);
+
+    /// <summary>The header fields <see cref="WithoutRegen"/> needs: the unit capacity, whether a seat is an AI, the map id and its offset.</summary>
+    private readonly record struct Header(int UnitCapacity, bool AiSeat, string MapId, int MapIdAt);
+
+    /// <summary>A format-10 header read in the format table's order (docs/03 "Save format").</summary>
+    private static Header ReadHeader(byte[] save)
+    {
+        int at = Rts.Sim.Save.SaveFormat.FixedPrefix;
+        at += 4 + Int32At(save, at); // sim version
+        at += 8 + 8; // data hash, seed
+        int players = Int32At(save, at);
+        at += 4;
+        bool ai = false;
+        for (int p = 0; p < players; p++)
+        {
+            at += 4 + Int32At(save, at); // faction id
+            ai |= save[at] == (byte)SeatController.Ai;
+            at += 2; // controller, difficulty
+        }
+        int units = Int32At(save, at);
+        at += 4 * 6 + 4 * 26 + 1 + 4 * 4 + 4 + players; // capacities, map, combat, cast floats, stats ints, tick, teams
+        at += 4 + Int32At(save, at); // preset
+        string mapId = Encoding.ASCII.GetString(save, at + 4, Int32At(save, at));
+        return new Header(units, ai, mapId, at);
+    }
+
     /// <summary>
     /// M5-4d: a format-6 save (a generated map with an AI seat) as format 4 wrote it, or a format-7 one (a hand-made map) as
     /// format 5: the <c>HUNT</c> section (its tag, the seat count and each seat's hunt memory, the last section before
     /// <c>END!</c>) taken out, the version and the total length fixed. M5-9a: a format-8 / 9 save first loses its <c>CTRM</c>
-    /// section (<see cref="WithoutCounters"/>), so this is still "as format 4 / 5 wrote it". The checksum is left stale:
+    /// section (<see cref="WithoutCounters"/>), so this is still "as format 4 / 5 wrote it"; M7-1: a format-10 save first
+    /// becomes the format 8 / 9 one (<see cref="WithoutRegen"/>). The checksum is left stale:
     /// <see cref="Normalize(byte[])"/> zeroes it, <c>SaveBytes.Rechecksum</c> recomputes it.
     /// </summary>
     internal static byte[] WithoutHunt(byte[] save)
     {
         int version = Int32At(save, Rts.Sim.Save.SaveFormat.MagicLength);
-        if (version is Rts.Sim.Save.SaveFormat.HuntMaplessVersion or Rts.Sim.Save.SaveFormat.CurrentVersion)
+        if (version == Rts.Sim.Save.SaveFormat.CurrentVersion)
+        {
+            save = WithoutRegen(save);
+            version = Int32At(save, Rts.Sim.Save.SaveFormat.MagicLength);
+        }
+        if (version is Format8 or Format9)
         {
             save = WithoutCounters(save);
             version = Int32At(save, Rts.Sim.Save.SaveFormat.MagicLength);
         }
-        Assert.True(version is Rts.Sim.Save.SaveFormat.HuntOnlyMaplessVersion or Rts.Sim.Save.SaveFormat.HuntOnlyMapVersion, $"format {version} has no HUNT section");
-        return WithoutLastSection(save, "HUNT"u8, "AIST"u8,
-            version == Rts.Sim.Save.SaveFormat.HuntOnlyMapVersion ? Rts.Sim.Save.SaveFormat.MapVersion : Rts.Sim.Save.SaveFormat.MaplessVersion);
+        Assert.True(version is Format6 or Format7, $"format {version} has no HUNT section");
+        return WithoutLastSection(save, "HUNT"u8, "AIST"u8, version == Format7 ? Format5 : Format4);
     }
 
     /// <summary>
     /// M5-9a: a format-8 save (a generated map with an AI seat) as format 6 wrote it, or a format-9 one (a hand-made map) as
     /// format 7: the <c>CTRM</c> section (its tag, the seat count and each seat's counter memory, the last section before
-    /// <c>END!</c>) taken out, the version and the total length fixed; the checksum left stale.
+    /// <c>END!</c>) taken out, the version and the total length fixed; the checksum left stale. M7-1: a format-10 save first
+    /// becomes the format 8 / 9 one (<see cref="WithoutRegen"/>).
     /// </summary>
     internal static byte[] WithoutCounters(byte[] save)
     {
         int version = Int32At(save, Rts.Sim.Save.SaveFormat.MagicLength);
-        Assert.True(version is Rts.Sim.Save.SaveFormat.HuntMaplessVersion or Rts.Sim.Save.SaveFormat.CurrentVersion, $"format {version} has no CTRM section");
-        return WithoutLastSection(save, "CTRM"u8, "HUNT"u8,
-            version == Rts.Sim.Save.SaveFormat.CurrentVersion ? Rts.Sim.Save.SaveFormat.HuntOnlyMapVersion : Rts.Sim.Save.SaveFormat.HuntOnlyMaplessVersion);
+        if (version == Rts.Sim.Save.SaveFormat.CurrentVersion)
+        {
+            save = WithoutRegen(save);
+            version = Int32At(save, Rts.Sim.Save.SaveFormat.MagicLength);
+        }
+        Assert.True(version is Format8 or Format9, $"format {version} has no CTRM section");
+        return WithoutLastSection(save, "CTRM"u8, "HUNT"u8, version == Format9 ? Format7 : Format6);
     }
 
     /// <summary>

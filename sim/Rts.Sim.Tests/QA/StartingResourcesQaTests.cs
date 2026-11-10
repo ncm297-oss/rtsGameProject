@@ -21,11 +21,15 @@ public class StartingResourcesQaTests
 
     private static GameData Data => TestSim.Data;
 
-    /// <summary>The preset field's offset in any save: it is the header's last field, right before the heightmap's tag.</summary>
+    /// <summary>
+    /// The preset field's offset in a save of a generated map: right before the header's last field, the map id (M7-1, format
+    /// 10: always written, here "", its 4-byte length alone), which is right before the heightmap's tag.
+    /// </summary>
     private static int PresetAt(byte[] bytes, string preset)
     {
         int hmap = bytes.AsSpan().IndexOf("HMAP"u8);
-        int at = hmap - 4 - preset.Length;
+        Assert.Equal(0, BinaryPrimitives.ReadInt32LittleEndian(bytes.AsSpan(hmap - 4))); // the empty map id
+        int at = hmap - 4 - 4 - preset.Length;
         Assert.Equal(preset, SaveBytes.StringAt(bytes, at));
         return at;
     }
@@ -214,11 +218,12 @@ public class StartingResourcesQaTests
     [Fact]
     public void AFormat3Save_TruncatedAnywhereAroundTheMissingField_IsRefused()
     {
-        // M5-4d: an AI save in format 3 is refused whole (no hunt memory), so the sweep runs on the human save, which loads.
+        // M5-4d: an AI save in format 3 is refused whole (no hunt memory), so the sweep runs on the human save. M7-1: every
+        // format before 10 is refused too (the format-3 file is the human save as the build before M7-1 wrote it, less its preset).
         byte[] current = SaveBytes.Small(ai: false);
         int at = PresetAt(current, "standard");
-        byte[] old = SaveBytes.AsFormat3(current, at);
-        Assert.Equal(SaveError.None, SaveTestRun.TryLoad(Data, old));
+        byte[] old = SaveBytes.AsFormat3(PreMapFixtures.WithoutRegen(current), at);
+        Assert.Equal(SaveError.FormatVersionMismatch, SaveTestRun.TryLoad(Data, old));
         for (int cut = at - 4; cut < at + 8; cut++)
         {
             byte[] shortened = new byte[cut + SaveFormat.ChecksumLength];

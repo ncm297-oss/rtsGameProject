@@ -44,7 +44,9 @@ public class GatherWedgeQaTests
 
     // M6-SH1: the data-hash pin (a recorded hash plus a list of shipped hashes known to play this match, the last
     // 30C51BB619A7E650) is gone: CheckpointPrefixTicks below is the proof the shipped data plays the recorded game. Its
-    // history is in git (this file before M6-SH1).
+    // history is in git (this file before M6-SH1). M7-1 (BUG-0750's rule): the golden cross_map_seed1.replay's header was
+    // regenerated once, to 64DF327980743173 (UnitDef.Scale, FactionDef.RegenPerTick / RegenDelayTicks, StatusDef.StateHashId
+    // and the new regenerating status entered GameData.ContentHash); its k lines are byte for byte as before.
 
     /// <summary>
     /// Ticks the replay must still match its recorded checkpoints: all of them (M4-H1, BUG-0211; before the re-recording

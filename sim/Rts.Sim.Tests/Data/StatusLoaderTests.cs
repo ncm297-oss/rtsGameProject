@@ -29,7 +29,7 @@ public class StatusLoaderTests
     public void Shipped_BurningIsMagicDamageOverTime_SlowedIsASlow()
     {
         GameData d = TestSim.Data;
-        Assert.Equal(6, d.Statuses.Length); // + blinded (M4-4b-2), frenzied (M4-4b-3a), stealthed and revealed (M4-5)
+        Assert.Equal(7, d.Statuses.Length); // + blinded (M4-4b-2), frenzied (M4-4b-3a), stealthed and revealed (M4-5), regenerating (M7-1)
         StatusDef burning = d.Statuses[d.FindStatus("burning")];
         Assert.Equal(StatusKind.DamageOverTime, burning.Kind);
         Assert.Equal(d.DamageTable.DamageTypeKeys.IndexOf("magic"), burning.DamageType);
@@ -105,7 +105,7 @@ public class StatusLoaderTests
         Assert.DoesNotContain(frenzied.Description, char.IsDigit);
         Assert.Equal((-1, 0f, 0f), (frenzied.DamageType, frenzied.Sight, frenzied.Reach));
         Assert.Equal((0, 1, 2, 3), ((int)StatusKind.DamageOverTime, (int)StatusKind.Slow, (int)StatusKind.Blind, (int)StatusKind.Frenzied));
-        Assert.Equal(new[] { "damageOverTime", "slow", "blind", "frenzied", "stealthed", "revealed" }, DataLimits.StatusKindIds.ToArray()); // M4-5 appended two
+        Assert.Equal(new[] { "damageOverTime", "slow", "blind", "frenzied", "stealthed", "revealed", "regenerating" }, DataLimits.StatusKindIds.ToArray()); // M4-5 appended two, M7-1 one
         // The entry follows blinded (appended after it; M4-5's stealthed and revealed come after it).
         JsonArray list = JsonNode.Parse(File.ReadAllText(Path.Combine(TestDataDir.Shipped, "common", "statuses.json")))!["statuses"]!.AsArray();
         Assert.Equal("frenzied", (string)list[3]!["id"]!);
@@ -127,5 +127,71 @@ public class StatusLoaderTests
         using TestDataDir dir = TestDataDir.CopyOfShipped();
         File.Delete(dir.FullPath(StatusFile));
         AssertErrorAt(DataLoader.LoadAll(dir.Path), StatusFile, "", "required file is missing");
+    }
+    // ---------- M7-1: the regenerating kind ----------
+
+    /// <summary>M7-1: the shipped Regenerating is a regenerating status (no damage type, sight or reach), its name and text in data; the kind is appended (value 6).</summary>
+    [Fact]
+    public void Shipped_Regenerating_IsARegeneratingStatus_ItsTextInData()
+    {
+        GameData d = TestSim.Data;
+        StatusDef regen = d.Statuses[d.FindStatus("regenerating")];
+        Assert.Equal(StatusKind.Regenerating, regen.Kind);
+        Assert.Equal(6, (int)StatusKind.Regenerating);
+        Assert.Equal("regenerating", DataLimits.StatusKindIds[(int)StatusKind.Regenerating]);
+        Assert.Equal("Regenerating", regen.DisplayName);
+        Assert.False(string.IsNullOrWhiteSpace(regen.Description));
+        Assert.Equal((-1, 0f, 0f), (regen.DamageType, regen.Sight, regen.Reach));
+        // The state hash's numbers: the M4 kinds keep their old ids' order (0-5), the new kind comes after (StatusDef.StateHashId).
+        Assert.Equal(new[] { "blinded", "burning", "frenzied", "regenerating", "revealed", "slowed", "stealthed" }, d.Statuses.Select(x => x.Key));
+        Assert.Equal(new[] { 0, 1, 2, 6, 3, 4, 5 }, d.Statuses.Select(x => x.StateHashId));
+    }
+
+    /// <summary>M7-1 criterion 5: a regenerating status refuses a damage type (the kind rule), a sight and a reach, each at its path.</summary>
+    [Fact]
+    public void ARegenerating_RefusesDamageTypeSightAndReach()
+    {
+        AssertErrorAt(LoadWith(r => Entry(r, "regenerating")["damageType"] = "magic"), StatusFile, "statuses[6].damageType", "only a damageOverTime");
+        AssertErrorAt(LoadWith(r => Entry(r, "regenerating")["sight"] = 2), StatusFile, "statuses[6].sight", "only a blind");
+        AssertErrorAt(LoadWith(r => Entry(r, "regenerating")["reach"] = 3), StatusFile, "statuses[6].reach", "only a blind");
+        DataLoadResult one = LoadWith(r => Entry(r, "regenerating")["damageType"] = "magic");
+        Assert.Single(one.Errors);
+    }
+
+    private static DataLoadResult WithTelasFireStatus(string status, JsonNode? magnitude)
+    {
+        using TestDataDir dir = TestDataDir.CopyOfShipped();
+        dir.EditJson("factions/malazan/abilities.json", root =>
+        {
+            JsonObject e = root["abilities"]![0]!["effects"]![0]!.AsObject();
+            e["status"] = status;
+            if (magnitude == null) e.Remove("magnitude");
+            else e["magnitude"] = magnitude;
+        });
+        return DataLoader.LoadAll(dir.Path);
+    }
+
+    /// <summary>
+    /// M7-1 criterion 5: a regenerating application's magnitude is HP per second: above 0 (0 and negative one error each, as a
+    /// slow's), at most <see cref="DataLimits.MaxRegenPerSecond"/>, and at least the fixed-point step (0.05 HP/s) once converted.
+    /// </summary>
+    [Fact]
+    public void ARegeneratingApplication_NeedsAMagnitudeAbove0()
+    {
+        const string File = "factions/malazan/abilities.json", Path = "abilities[0].effects[0].magnitude";
+        foreach (double m in new[] { 2.0, 0.5, 1.5, 100 })
+        {
+            DataLoadResult ok = WithTelasFireStatus("regenerating", m);
+            Assert.True(ok.Ok, string.Join("\n", ok.Errors));
+            Assert.Equal((float)m, ok.Data!.Abilities[ok.Data.FindAbility("telas_fire")].Effects[0].Magnitude);
+        }
+        foreach ((JsonNode? m, string text) in new (JsonNode?, string)[] { (0, "must be positive"), (-1, "must be positive"), (null, "missing"),
+            (100.5, "above the maximum 100"), (0.02, "rounds to 0") })
+        {
+            DataLoadResult bad = WithTelasFireStatus("regenerating", m);
+            DataError e = Assert.Single(bad.Errors);
+            Assert.Equal((File, Path), (e.File, e.Path));
+            Assert.Contains(text, e.Message);
+        }
     }
 }

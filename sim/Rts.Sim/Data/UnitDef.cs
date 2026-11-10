@@ -84,4 +84,10 @@ public sealed class UnitDef
     /// and at most <see cref="DataLimits.MaxSight"/>; 0 for none.
     /// </summary>
     public float Detector { get; init; }
+    /// <summary>
+    /// The view's model scale (M7-1: <c>scale</c>, optional, default 1; <see cref="DataLimits.MinUnitScale"/> to
+    /// <see cref="DataLimits.MaxUnitScale"/>). Presentation only: the sim never reads it (collision is <see cref="Radius"/>);
+    /// in <see cref="GameData.ContentHash"/>.
+    /// </summary>
+    public float Scale { get; init; } = 1f;
 }

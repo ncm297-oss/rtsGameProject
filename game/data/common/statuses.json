@@ -38,6 +38,12 @@
       "displayName": "Revealed",
       "description": "Can't be stealthed while it lasts. Attacking or casting from stealth reveals a unit for a short while.",
       "kind": "revealed"
+    },
+    {
+      "id": "regenerating",
+      "displayName": "Regenerating",
+      "description": "Heals a little every second while it lasts, even in the thick of a fight.",
+      "kind": "regenerating"
     }
   ]
 }

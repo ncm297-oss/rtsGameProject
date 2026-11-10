@@ -45,6 +45,7 @@ public sealed partial class World
         // M5-4c slice 2: derived from the seats and the data (both in every save and replay header), never saved or hashed.
         GoldPerTickOf = GatherRates(config, config.Data.Rules.GoldPerTick);
         WoodPerTickOf = GatherRates(config, config.Data.Rules.WoodPerTick);
+        InitRegen(config); // M7-1: World.Regen.cs
         Units = new UnitStore(config.UnitCapacity, _ledger, Techs);
         _rngs = new SimRng[RngStream.Count(config.PlayerCount)];
         for (int i = 0; i < _rngs.Length; i++)

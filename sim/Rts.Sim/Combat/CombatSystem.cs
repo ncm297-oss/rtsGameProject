@@ -1219,6 +1219,10 @@ public static class CombatSystem
         // a tower too since BUG-0270.
         if (hit.AttackerLevel > 0) VisionSystem.OnHit(world, hit.Attacker, hit.AttackerIsBuilding, hit.AttackerLevel, u.Owner[v], world.Fog.LevelAt(u.Position[v]));
         u.Hp[v] -= hit.Damage;
+        // M7-1: the faction regeneration's delay starts again; recorded only under a faction that regenerates (no other rule
+        // reads it), so a match without regeneration keeps every unit at -1 and hashes as before.
+        int victimOwner = u.Owner[v];
+        if ((uint)victimOwner < (uint)world.RegenPerTickOf.Length && world.RegenPerTickOf[victimOwner] > 0) u.LastDamagedTick[v] = world.TickNumber;
         if (u.Hp[v] <= 0)
         {
             u.Hp[v] = 0;

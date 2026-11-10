@@ -141,6 +141,8 @@ public sealed class GameData
             h.Add((ulong)f.AccentColor);
             h.Add(f.Units.Length);
             foreach (int id in f.Units) h.Add(id);
+            h.Add(f.RegenPerTick); // M7-1
+            h.Add(f.RegenDelayTicks);
         }
 
         h.Add(Units.Length);
@@ -188,6 +190,7 @@ public sealed class GameData
             h.Add(u.BelowHpPassive);
             h.Add(u.DeathPassive);
             h.Add(u.Detector); // M4-5
+            h.Add(u.Scale); // M7-1
         }
 
         h.Add(Resources.Length);
@@ -283,6 +286,7 @@ public sealed class GameData
             h.Add(st.DamageType);
             h.Add(st.Sight); // M4-4b-2
             h.Add(st.Reach);
+            h.Add(st.StateHashId); // M7-1
         }
         h.Add(Abilities.Length);
         foreach (AbilityDef a in Abilities)

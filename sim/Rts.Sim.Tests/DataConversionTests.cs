@@ -68,6 +68,44 @@ public class DataConversionTests
         Assert.Equal(3, data.Units[data.FindUnit("malazan_cadre_mage")].HalfPop);
     }
 
+    /// <summary>M7-1 criterion 1: <c>scale</c> is optional: absent it is 1 (every shipped unit), and 1.5 loads as 1.5.</summary>
+    [Fact]
+    public void Scale_AbsentIsOne_AndOneAndAHalfLoads()
+    {
+        Assert.All(TestSim.Data.Units, u => Assert.Equal(1f, u.Scale));
+        using TestDataDir dir = TestDataDir.CopyOfShipped();
+        dir.SetUnitField("malazan", "malazan_heavy_infantry", "scale", "1.5");
+        dir.SetUnitField("malazan", "malazan_laborer", "scale", "0.5");
+        dir.SetUnitField("malazan", "malazan_catapult", "scale", "3");
+        GameData data = Load(dir.Path);
+        Assert.Equal(1.5f, data.Units[data.FindUnit("malazan_heavy_infantry")].Scale);
+        Assert.Equal(0.5f, data.Units[data.FindUnit("malazan_laborer")].Scale);
+        Assert.Equal(3f, data.Units[data.FindUnit("malazan_catapult")].Scale);
+        Assert.Equal(1f, data.Units[data.FindUnit("malazan_crossbowman")].Scale);
+        Assert.Equal(TestSim.Data.Units[data.FindUnit("malazan_heavy_infantry")].Radius, data.Units[data.FindUnit("malazan_heavy_infantry")].Radius); // collision unchanged
+    }
+
+    /// <summary>
+    /// M7-1 criterion 3: <c>regen</c> absent is no regeneration (rate 0, delay 0); <c>{1, 6}</c> is 20 units a tick (at
+    /// <c>CombatConstants.RegenFixedOne</c> = 400 a hit point) after 120 ticks; <c>{1.5, 5}</c> 30 after 100; a delay of 0 is allowed.
+    /// </summary>
+    [Theory]
+    [InlineData(1, 6, 20, 120)]
+    [InlineData(1.5, 5, 30, 100)]
+    [InlineData(0.05, 0, 1, 0)]
+    [InlineData(100, 3600, 2000, 72000)]
+    public void Regen_ConvertsToFixedPointPerTick_AndDelayTicks(double hpPerSecond, double delay, int perTick, int delayTicks)
+    {
+        Assert.Equal(400, Rts.Sim.Combat.CombatConstants.RegenFixedOne);
+        Assert.All(TestSim.Data.Factions, f => Assert.Equal((0, 0), (f.RegenPerTick, f.RegenDelayTicks)));
+        using TestDataDir dir = TestDataDir.CopyOfShipped();
+        dir.EditJson("factions/malazan/faction.json", r => r["regen"] = new System.Text.Json.Nodes.JsonObject { ["hpPerSecond"] = hpPerSecond, ["delay"] = delay });
+        GameData data = Load(dir.Path);
+        FactionDef m = data.Factions[data.FindFaction("malazan")], w = data.Factions[data.FindFaction("whirlwind")];
+        Assert.Equal((perTick, delayTicks), (m.RegenPerTick, m.RegenDelayTicks));
+        Assert.Equal((0, 0), (w.RegenPerTick, w.RegenDelayTicks));
+    }
+
     [Fact]
     public void Ids_AreDenseAndOrdinalSorted()
     {

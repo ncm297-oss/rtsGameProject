@@ -494,7 +494,13 @@ public class FieldBuildFairnessQaTests
             // - World.FlankQueue and FlankHeads (MaxPlugCluster ints each): 2 x (128 + 24) = 304.
             // 232,430,952-232,431,384 measured (+197.8 KB: these 196,984 bytes and about 800 of rounding); the bound moves by
             // the same 196,984 bytes, the same 72 KB margin over it.
-            Assert.True(bytes < 232_502_984, $"{bytes / 1e6:F1} MB");
+            // M7-1 re-baselines (regeneration's per-slot state, docs/03 "Implementation (M7-1)"), itemised:
+            // - UnitStore.LastDamagedTick and RegenAccum (an int a unit slot each): 2 x (4,096 x 4 + 24) = 32,816 bytes.
+            // - StatusStore._regen (a byte a unit slot, the regenerating count): 4,096 + 24 = 4,120 bytes.
+            // - World.RegenPerTickOf / RegenDelayOf (an int a player): 2 x (2 x 4 + 24) = 64 bytes.
+            // 232,474,768 measured alone on the diff base d164a5f, 232,510,464-232,517,576 on M7-1's tree (+35.7 to +42.8 KB:
+            // these 37,000 bytes and the probe's rounding); the bound moves by the same 37,000 bytes.
+            Assert.True(bytes < 232_539_984, $"{bytes / 1e6:F1} MB");
         }
     }
 }

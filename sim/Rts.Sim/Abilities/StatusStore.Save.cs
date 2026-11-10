@@ -22,6 +22,23 @@ public sealed partial class StatusStore
         w.Write(StealthedUnits);
     }
 
+    /// <summary>M7-1 (format 10): the derived regenerating counts, in the unit store's <c>REGN</c> part (<see cref="Entities.UnitStore"/>).</summary>
+    internal void WriteRegenTo(SaveWriter w)
+    {
+        w.WriteArray(_regen);
+        w.Write(RegeneratingUnits);
+    }
+
+    /// <summary>Reads what <see cref="WriteRegenTo"/> wrote; each slot's count must be at most its status count.</summary>
+    internal void ReadRegenFrom(SaveReader r)
+    {
+        r.ReadArray(_regen);
+        RegeneratingUnits = r.ReadInt32In(0, Count.Length);
+        if (r.Failed) return;
+        for (int u = 0; u < Count.Length; u++)
+            if (!r.Check(_regen[u] <= Count[u])) return;
+    }
+
     /// <summary>Reads what <see cref="WriteTo"/> wrote into a store of the same capacity; each slot's count must be at most <see cref="PerUnit"/> and each entry's status below <paramref name="statuses"/>.</summary>
     internal void ReadFrom(SaveReader r, int statuses)
     {
