@@ -14,6 +14,9 @@ namespace Rts.Sim.Tests.Save;
 /// (ab54ddb, before the map id existed) with <see cref="WriteFlag"/> set; the replays are kept as text under
 /// <c>Replays/premap/</c>, the saves as their FNV-1a 64 digest and length (<see cref="SaveDigests"/>), since a save is binary.
 /// Never rewrite them: a fixture that needs regenerating means a generated match no longer writes the old bytes.
+/// Exception: <c>replay_ai_ffa_standard.replay</c> (seat 1 a Hard AI) was re-recorded when Hard's play changed on purpose,
+/// in M5-4c slice 2 (947a273, the Hard knobs) and in D27 (Hard's <c>gatherBonus</c> 0.25 -> 0.4); its header lines are the
+/// ab54ddb ones byte for byte (the format is the point), only its commands and checkpoints moved.
 /// <para>
 /// The data hash (and so every checksum over it) is normalized away before comparing: it follows from the data, which the
 /// data track edits in parallel (text only) and which this task extends with <c>maps/</c>; every other byte is compared.
@@ -30,7 +33,7 @@ internal static class PreMapFixtures
     /// <summary>The folder of the replay fixtures.</summary>
     internal static string Folder => Path.Combine(TestDataDir.RepoRoot(), "sim", "Rts.Sim.Tests", "Replays", "premap");
 
-    /// <summary>The save fixtures: scene name, the normalized save's length and FNV-1a 64 digest (recorded on ab54ddb).</summary>
+    /// <summary>The save fixtures: scene name, the normalized save's length and FNV-1a 64 digest (recorded on ab54ddb; the saves were never re-recorded).</summary>
     internal static readonly (string Name, int Length, ulong Digest)[] SaveDigests =
     {
         ("save_menu_seed1", 2017388, 0x31C655C77B98CAF1UL),

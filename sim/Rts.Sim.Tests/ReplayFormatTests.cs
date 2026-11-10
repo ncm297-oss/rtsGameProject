@@ -928,7 +928,7 @@ public class ReplayFormatTests
     /// <summary>
     /// M6-S7, criterion 4: a match on a generated map is recorded in the oldest format that holds it (6 free-for-all, 7 with
     /// teams, 8 at another preset), byte for byte as the build before map files: each <see cref="Save.PreMapFixtures"/> replay
-    /// scene (recorded on the diff base ab54ddb, kept under <c>Replays/premap/</c>) writes the same text, the data hash and the
+    /// scene (recorded on the diff base ab54ddb, kept under <c>Replays/premap/</c>; the AI one re-recorded in M5-4c slice 2 and D27, header unchanged) writes the same text, the data hash and the
     /// checksum aside (they follow the data, which this task and the data track change). The AI scene's checkpoints pin its play too.
     /// </summary>
     [Theory]

@@ -630,7 +630,7 @@ public class HuntTests
 
     /// <summary>
     /// Criterion 5 (replays): a recording made before M5-4d of an AI match with no hunt (M6-S7's pre-map fixture, recorded on
-    /// ab54ddb: two AI seats, 1,600 ticks) still plays back to every checkpoint: playback runs no AI and the format is unchanged.
+    /// ab54ddb, re-recorded in M5-4c slice 2 and D27 for Hard's changed play: two AI seats, 1,600 ticks) still plays back to every checkpoint: playback runs no AI and the format is unchanged.
     /// </summary>
     [Fact]
     public void APreChangeAiRecording_WithNoHunt_PlaysBackAsBefore()

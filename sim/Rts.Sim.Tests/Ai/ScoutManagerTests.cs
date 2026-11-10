@@ -30,7 +30,7 @@ public class ScoutManagerTests
     /// map centre), the hall's mirror, then the map grid (BUG-0593: the 128 m map in 3 x 3 cells of at most 56 m).
     /// </summary>
     [Fact]
-    public void TheScout_LeavesAtScoutAfter_MovesOnlyToItsWaypoints_ThenGathers()
+    public void TheScout_LeavesOnTheSecondThinkFromScoutAfter_MovesOnlyToItsWaypoints_ThenGathers()
     {
         Simulation sim = AiScenes.Flat(AiScenes.Seats(AiDifficulty.Hard, SeatController.Ai, SeatController.Human), s_quiet.Value);
         AiPlayer ai = sim.AiOf(0)!;

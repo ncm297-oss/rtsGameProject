@@ -7058,7 +7058,7 @@ game/tests/TooltipWrapTest.cs   a leading / trailing space row each
 ### Implementation (M5-V2)
 
 Each difficulty's rules in the skirmish setup, with Hard's gather bonus from the data (docs/02 "AI opponent": "a 25% gather
-bonus, shown in the skirmish setup"). No sim or `game/data/factions` change; `ui.json` is outside
+bonus, shown in the skirmish setup"; 25% before D27, 40% now). No sim or `game/data/factions` change; `ui.json` is outside
 `GameData.ContentHash`.
 
 ```
@@ -7209,7 +7209,7 @@ fields are refused: see "Implementation (M5-8a)". Shape as of M5-1:
                 "focusFire": false, "pullBackWounded": false, "useAbilities": true,  "expandAfter": 900 },
     "normal": { "thinkInterval": 1,   "buildOrderSlack": 5,  "waveSizeMultiplier": 1,    "gatherBonus": 0,
                 "focusFire": false, "pullBackWounded": false, "useAbilities": true,  "expandAfter": 480 },
-    "hard":   { "thinkInterval": 0.5, "buildOrderSlack": 0,  "waveSizeMultiplier": 1.25, "gatherBonus": 0.25,
+    "hard":   { "thinkInterval": 0.5, "buildOrderSlack": 0,  "waveSizeMultiplier": 1.25, "gatherBonus": 0.4,
                 "focusFire": true,  "pullBackWounded": true,  "useAbilities": true,  "expandAfter": 300 }
   },
   "buildOrder": [
@@ -7230,7 +7230,7 @@ fields are refused: see "Implementation (M5-8a)". Shape as of M5-1:
 - `difficulties`: `easy`, `normal` and `hard` (`DataLimits.AiDifficultyIds`), each required, each with every field:
   `thinkInterval` s, above 0, to ticks, at least 1 tick (docs/02: Easy 2 s, Hard 0.5 s); `buildOrderSlack` s, 0 or more;
   `waveSizeMultiplier` above 0, at most 10 (`DataLimits.MaxAiWaveSizeMultiplier`); `gatherBonus` a fraction 0-1 (docs/02: Hard
-  0.25, shown in the skirmish setup); `focusFire`, `pullBackWounded`, `useAbilities` true / false; `expandAfter` s, 0 or more.
+  0.4 since D27, 0.25 before it; shown in the skirmish setup); `focusFire`, `pullBackWounded`, `useAbilities` true / false; `expandAfter` s, 0 or more.
   Durations at most 3,600 s, as every duration. Another key (`"insane"`) is an unknown field.
 - `buildOrder`: 1 to 256 steps (`DataLimits.MaxAiBuildOrderSteps`; more is one error at `buildOrder`), in order. `at` sets
   exactly one of `time` (s, 0 or more), `workers` (a count, 0 or more) or `pop` (0 or more, a multiple of 0.5). `do` is
@@ -7784,7 +7784,7 @@ and docs), built in "Implementation (M5-4c slice 2)" below.
 ### Implementation (M5-4c slice 2)
 
 The Hard knobs (roadmap M5 criterion 4; docs/02 "AI opponent": Hard "focus fire, pulls back wounded units ... plus a 25%
-gather bonus"). `ai.json`'s difficulty blocks have carried `gatherBonus`, `focusFire` and `pullBackWounded` since M5-2
+gather bonus"; 25% before D27, 40% now). `ai.json`'s difficulty blocks have carried `gatherBonus`, `focusFire` and `pullBackWounded` since M5-2
 (loaded, validated, hashed); the sim now reads them. Code: `World` (`GoldPerTickOf` / `WoodPerTickOf`, `GatherBonusOf`),
 `Economy/EconomySystem.cs` (`Work`), `Ai/MilitaryManager.cs` (`Wounded`, `PullBack`, `FightsOn`, `Focus`, `Fighter`), `Ai/AiPlayer.cs`
 (the focus scratch), three own-unit `PlayerView` answers, one `rules.json` `ai` knob. No `Command` kind, no new saved
@@ -7801,7 +7801,9 @@ bonus of 0 multiplies the rate by exactly 1.
   (`Stress/HardVersusNormalTallyQaStressTests`, Hard / Normal / no result): **29 / 11 / 2 → 32 / 8 / 2**; Raraku 10 / 4 / 0
   (unchanged), Pale Hills 12 / 0 / 2 → 11 / 1 / 2 (seed 2, Hard in seat 1: Normal wins at 69,129), Vathar 7 / 7 / 0 → 11 / 3 / 0.
   The other Hard keys tried on Vathar's 14 (data copies): `expandAfter` 480 changes no Vathar match (the order's `expand`
-  step is due at 480 s anyway), `waveSizeMultiplier` 1 measures 4 / 10 / 0. docs/02's "25% gather bonus" reads 40%. **Builder's call, the seat test:** the bonus follows
+  step is due at 480 s anyway), `waveSizeMultiplier` 1 measures 4 / 10 / 0. docs/02's "25% gather bonus" reads 40%. Re-pinned (Hard seats only, old values in comments): the pre-map replay fixture
+  `Replays/premap/replay_ai_ffa_standard.replay` (seat 1 Hard) re-recorded again (commands 84 to 81; header lines unchanged), and
+  `QA/StandardPresetPinQaTests`' five Hard-seat rows (fix round 1, BUG-1185). **Builder's call, the seat test:** the bonus follows
   the seat's *difficulty* (`World.GatherBonusOf`: its faction's `ai.json` difficulty block; 0 for a faction with none),
   not its controller, because playback builds every seat human with the recorded difficulty (`ReplayPlayer`, and the
   view's own playback in `SimRunner`): keyed on the controller, a Hard AI's recording would gather at the plain rate on
@@ -7938,7 +7940,7 @@ bonus of 0 multiplies the rate by exactly 1.
   byte for byte the old ones (format 6, the test's point), seat 1's commands differ from tick 341 (82 commands to 84; one of
   seat 0's at tick 1,581 follows the changed game) and so do the checkpoints. Its playback row
   (`HuntTests.APreChangeAiRecording_WithNoHunt_PlaysBackAsBefore`) plays the new file. The faction pages' tables are
-  Normal pairings and the difficulty table (still true: Hard 25%, focus fire yes, pulls back wounded yes): no cell moved.
+  Normal pairings and the difficulty table (still true then: Hard 25% (40% since D27), focus fire yes, pulls back wounded yes): no cell moved.
   `Stress/TeamAiSoakStressTests` 2v2 seed 1 adjacent failed its "no AttackMove onto an ally's building" check (tick
   10,600; with fix round 1's focus rule, tick 10,320): a **Normal** seat's hunt (M5-4d) AttackMoves to its last
   sighting, an enemy unit attacking the ally's building within the check's 0.5 m of it; the match reaches that because
