@@ -14,8 +14,9 @@ namespace Rts.Sim.Tests.Content;
 /// <c>ai.counters</c> as this faction's unit names per enemy slot, and the far expansion's drop-off as the sim picks it
 /// (<c>FarExpansion.GoldFreeDropOff</c>: name, id, gold / wood cost from <c>buildings.json</c>) with the faction's Town Hall
 /// and worker names. Page to data: every number in the sub-section is one of those values (so no match tick, digest or
-/// tally can be quoted there unpinned), the "What answers what" list names exactly the six non-worker enemy slots, and the
-/// BUG-1156 sentence's claim (no opening's Age I mix lists a unit that answers an enemy Line) holds in the file.
+/// tally can be quoted there unpinned; since D-R35 a number counts only where its own sentence's pattern reads it, so a
+/// stray number that happens to equal a pinned value is caught too), the "What answers what" list names exactly the six
+/// non-worker enemy slots, and the BUG-1156 sentence's claim (no opening's Age I mix lists a unit that answers an enemy Line) holds in the file.
 /// <see cref="Problems"/> returns every mismatch as text naming the faction, so a one-sided edit says which side moved.
 /// </summary>
 public class AiAdaptsContentTests
@@ -98,6 +99,9 @@ public class AiAdaptsContentTests
         if (dropOff < 0) { problems.Add($"{faction}: the data has no gold-free drop-off, the page names one"); return problems; }
         BuildingDef depot = d.Buildings[dropOff];
         string hall = TownHall(d, f).DisplayName, worker = Worker(d, f).DisplayName;
+        // Where in the text the pin read each number (start, length): the page-to-data guard accepts a number only there.
+        var read = new List<(int At, int Length)>();
+        void Read(Group g) { if (g.Success) read.Add((g.Index, g.Length)); }
 
         void Expect(string label, string pattern, params string[] want)
         {
@@ -106,6 +110,7 @@ public class AiAdaptsContentTests
             for (int g = 0; g < want.Length; g++)
             {
                 string page = m.Groups[g + 1].Value;
+                Read(m.Groups[g + 1]);
                 bool same = double.TryParse(page, NumberStyles.Float, CultureInfo.InvariantCulture, out double p)
                     && double.TryParse(want[g], NumberStyles.Float, CultureInfo.InvariantCulture, out double v)
                     ? Math.Abs(p - v) < 1e-6 : page == want[g];
@@ -123,6 +128,8 @@ public class AiAdaptsContentTests
         if (!only.Success) problems.Add($"{faction}: no 'seen only cavalry weighs its <unit> ×N on Normal and ×N on Hard' sentence");
         else
         {
+            Read(only.Groups[2]);
+            Read(only.Groups[3]);
             if (shockAnswers.Count != 1 || !NamesUnit(only.Groups[1].Value, shockAnswers.Min!))
                 problems.Add($"{faction} the cavalry answer: page '{only.Groups[1].Value}' vs data '{string.Join(", ", shockAnswers)}'");
             if (Math.Abs(Parse(only.Groups[2].Value) - (1.0 + normal)) > 1e-6) problems.Add($"{faction} Normal's multiplier: page ×{only.Groups[2].Value} vs data ×{Text(1.0 + normal)}");
@@ -140,7 +147,7 @@ public class AiAdaptsContentTests
             string cell = r.Groups[2].Value.Trim();
             var page = new SortedSet<string>(cell == "none" ? Array.Empty<string>() : cell.Split(',').Select(s => s.Trim()), StringComparer.Ordinal);
             SortedSet<string> data = Answers(d, f, enemy);
-            if (!page.SetEquals(data)) problems.Add($"{faction} enemy {enemy}: page '{string.Join(", ", page)}' vs data (ai.counters) '{(data.Count == 0 ? "none" : string.Join(", ", data))}'");
+            if (!page.SetEquals(data)) problems.Add($"{faction} enemy {enemy}: page '{Names(page)}' vs data (ai.counters) '{Names(data)}'");
         }
 
         // The starved charge.
@@ -171,17 +178,16 @@ public class AiAdaptsContentTests
                         if (d.AiRules.Counters(d.Units[u].Slot, UnitSlot.Line))
                             problems.Add($"{faction} {o.Id}: the Age I mix lists {d.Units[u].DisplayName}, which answers an enemy Line; the page says none does");
 
-        // Page to data: every number in the sub-section is one of the pinned values.
-        var allowed = new[]
-        {
-            memory, easy, normal, hard, 1.0 + normal, 1.0 + hard, rules.StarvedMinArmy, waveAfter, rules.FarExpandReach,
-            depot.CostGold, depot.CostWood,
-        };
+        // Page to data: every number in the sub-section is one the pin read above, where it read it (D-R35, BUG-1181 nit 2:
+        // a value check alone let "within 2 minutes" pass because ×2 is pinned on Hard).
         foreach (Match m in Number.Matches(text))
-            if (!allowed.Any(a => Math.Abs(a - Parse(m.Value)) < 1e-6))
-                problems.Add($"{faction}: the number {m.Value} (\"…{Around(text, m.Index)}…\") is not a value this pin reads from the data");
+            if (!read.Any(r => r.At == m.Index && r.Length == m.Length))
+                problems.Add($"{faction}: the number {m.Value} (\"…{Around(text, m.Index)}…\") is not one this pin reads from the data in its own sentence");
         return problems;
     }
+
+    /// <summary>A "What answers what" row's names as the page writes them: comma-separated, or "none" for no unit.</summary>
+    private static string Names(SortedSet<string> names) => names.Count == 0 ? "none" : string.Join(", ", names);
 
     private static string Around(string text, int at)
     {
@@ -210,10 +216,16 @@ public class AiAdaptsContentTests
     [InlineData("whirlwind", "`ai.starvedMinArmy` 1 combat", "`ai.starvedMinArmy` 2 combat", "whirlwind ai.starvedMinArmy: page '2' vs data '1'")]
     [InlineData("malazan", "`ai.farExpandReach` 384 m", "`ai.farExpandReach` 400 m", "malazan ai.farExpandReach: page '400' vs data '384'")]
     [InlineData("malazan", "0 gold / 75 wood", "0 gold / 50 wood", "malazan the far drop-off: page '50' vs data '75'")]
-    [InlineData("whirlwind", "a Supply\n  Cache", "a Supply\n  Tent", "whirlwind the far drop-off: page 'Supply Tent' vs data 'Supply Cache'")]
+    [InlineData("whirlwind", "a Supply Cache (", "a Supply Tent (", "whirlwind the far drop-off: page 'Supply Tent' vs data 'Supply Cache'")]
     [InlineData("malazan", "enemy Shock → Heavy Infantry;", "enemy Shock → Heavy Infantry, Crossbowman;", "malazan enemy Shock: page 'Crossbowman, Heavy Infantry' vs data (ai.counters) 'Heavy Infantry'")]
     [InlineData("whirlwind", "enemy Unique → none.", "enemy Unique → Zealot.", "whirlwind enemy Unique: page 'Zealot' vs data (ai.counters) 'none'")]
     [InlineData("malazan", "One at a time.", "One at a time; the first comes at 12:30.", "malazan: the number 12 ")]
+    // BUG-1181 nit 2: a number equal to a pinned value (×2 on Hard, Normal 0.5, the 384 m reach) but outside its sentence.
+    [InlineData("malazan", "One at a time.", "One at a time, within 2 minutes.", "malazan: the number 2 ")]
+    [InlineData("whirlwind", "A raid on its base resets the clock.", "A raid at 0.5 of the match resets the clock.", "whirlwind: the number 0.5 ")]
+    [InlineData("whirlwind", "One at a time.", "One at a time, 384 m apart.", "whirlwind: the number 384 ")]
+    // BUG-1181 nit 4: a page row of "none" against data that lists a unit prints the page's 'none', not ''.
+    [InlineData("malazan", "enemy Shock → Heavy Infantry;", "enemy Shock → none;", "malazan enemy Shock: page 'none' vs data (ai.counters) 'Heavy Infantry'")]
     public void APageEdit_IsCaught(string faction, string from, string to, string expected)
     {
         string page = string.Join("\n", Page(faction));
@@ -249,6 +261,7 @@ public class AiAdaptsContentTests
     [InlineData("common/rules.json", "ai.starvedMinArmy", "2", "whirlwind", "whirlwind ai.starvedMinArmy: page '1' vs data '2'")]
     [InlineData("common/rules.json", "ai.farExpandReach", "300", "malazan", "malazan ai.farExpandReach: page '384' vs data '300'")]
     [InlineData("common/rules.json", "ai.counters.shock", """["line", "ranged"]""", "malazan", "malazan enemy Shock: page 'Heavy Infantry' vs data (ai.counters) 'Crossbowman, Heavy Infantry'")]
+    [InlineData("common/rules.json", "ai.counters.unique", """["line"]""", "malazan", "malazan enemy Unique: page 'none' vs data (ai.counters) 'Heavy Infantry'")]
     public void ADataEdit_FailsTheShippedPage(string file, string dotted, string json, string faction, string expected)
     {
         using TestDataDir dir = TestDataDir.CopyOfShipped();

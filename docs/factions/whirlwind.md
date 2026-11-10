@@ -169,9 +169,10 @@ against the raider rush").
 
 #### How the AI adapts
 
-Three rules sit on top of every opening above, read as in malazan.md "How the AI adapts" (docs/02 "AI opponent"; docs/03
-"Implementation (M5-9a)" and "(M5-9b)"). `Content/AiAdaptsContentTests` pins every number and name in them to `ai.json`,
-`rules.json` and `buildings.json`, both ways.
+Three rules sit on top of every opening above, the counter shift, the starved charge and the far expansion, and two
+notes go with the first: what answers what, and where the shift doesn't show. Read them as in malazan.md "How the AI
+adapts" (docs/02 "AI opponent"; docs/03 "Implementation (M5-9a)" and "(M5-9b)"). `Content/AiAdaptsContentTests` pins
+every number and name in the five bullets to `ai.json`, `rules.json` and `buildings.json`, both ways.
 
 - **Counter shift:** the AI remembers how many enemy soldiers of each slot it has seen at once (workers never count, and
   it sees only what its own fog of war shows), and that memory fades to nothing over `rules.json` `ai.counterMemory`
@@ -188,10 +189,11 @@ Three rules sit on top of every opening above, read as in malazan.md "How the AI
   every free combat unit at you whatever its wave threshold (or hunts, if it knows none of your buildings), again after
   each wave's cooldown, at every difficulty. A raid on its base resets the clock.
 - **Far expansion:** when its own gold is spent (short of gold for its next unit, no Camp Follower on gold and no gold
-  mine it knows), it sends a Camp Follower to look at the start locations nobody took. Once it has seen a free mine
-  there, or anywhere within `ai.farExpandReach` 384 m of its Holy Camp, with no enemy drop-off by it, it builds a Supply
-  Cache (`whirlwind_supply_cache`, 0 gold / 75 wood) beside it and moves gatherers there; a Holy Camp only if it can pay
-  for one. One at a time.
+  mine it knows), it sends a Camp Follower to look at the start locations nobody took. Once it has seen a free mine (at
+  one of those starts or anywhere else) within `ai.farExpandReach` 384 m of its Holy Camp, with no enemy drop-off by it,
+  it builds a Supply Cache (`whirlwind_supply_cache`, 0 gold / 75 wood) beside it and moves gatherers there; a Holy Camp
+  only if it can pay for one. One at a time. The reach holds for every mine, a start location's included: a free start
+  farther than that from the camp is not walked to, and a mine beyond it is never taken.
 - **Where the shift doesn't show (BUG-1156):** a Raider Camp that already takes a Raider every time its queue empties
   cannot train more of them for the heavier weight (measured on a Hard Malazan seat's Legion Barracks), so against
   cavalry the shift shows only when the bank, not the camp, is the limit. An enemy Line army seen in Age I shifts
@@ -478,10 +480,12 @@ movement change), 10 Raiders in 13.8 / 33.0 / 62.6 s.
 
 When each Whirlwind side's Age II was in, Normal against Normal on the menu's map (12 forests, 8 mines), 20 minutes, for
 every Whirlwind opening against every Malazan opening on the pairing's three smallest seeds in 1-500, "never" if not in
-20 minutes (no Whirlwind side fell in these runs). The 1st seed is `Content/AiOpeningPairsReportTests`' run, the 2nd
+20 minutes, and the defeat if the side fell. The 1st seed is `Content/AiOpeningPairsReportTests`' run, the 2nd
 and 3rd `QA/Content/D21OpeningsQaTests`'; each run pins its cell here and on malazan.md's twin table ("Age II against
-the Whirlwind"). The two sides without Age II (`standard` against `crossbow_push` seed 9 and against `cadre_rush` seed
-13) are standing at 20:00 knowing no gold node, so their Age II can't be reserved (docs/03 "Implementation (M5-4g)").
+the Whirlwind"). Under M5-4g no Whirlwind side fell, and the two sides without Age II (`standard` against
+`crossbow_push` seed 9 and against `cadre_rush` seed 13) stood at 20:00 knowing no gold node, so their Age II can't be
+reserved (docs/03 "Implementation (M5-4g)"). Since the sim's M5-9a (2026-11-08) seed 9's side is defeated at 19:36,
+still without Age II; seed 13's still stands at 20:00 without it.
 
 | Whirlwind opening | Malazan opening | 1st seed | 2nd seed | 3rd seed |
 | --- | --- | --- | --- | --- |
@@ -494,3 +498,6 @@ the Whirlwind"). The two sides without Age II (`standard` against `crossbow_push
 | `holy_war` | `standard` | seed 3: 9:14 | seed 4: 10:39 | seed 6: 10:22 |
 | `holy_war` | `crossbow_push` | seed 12: 9:20 | seed 45: 7:35 | seed 71: 10:04 |
 | `holy_war` | `cadre_rush` | seed 20: 9:16 | seed 24: 9:10 | seed 27: 8:46 |
+
+Re-printed 2026-11-09 for the sim's M5-H6 (docs/03 "Implementation (M5-H6)"): `raider_rush` against `crossbow_push` seed
+19 now reaches Age II at 10:34 (was 10:21).

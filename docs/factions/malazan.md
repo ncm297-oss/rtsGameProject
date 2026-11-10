@@ -171,9 +171,10 @@ against the raider rush" at the end of this page). The long waits the pairings r
 
 #### How the AI adapts
 
-Three rules sit on top of every opening above (docs/02 "AI opponent"; docs/03 "Implementation (M5-9a)" and "(M5-9b)").
-`Content/AiAdaptsContentTests` pins every number and name in them to `ai.json`, `rules.json` and `buildings.json`, both
-ways.
+Three rules sit on top of every opening above, the counter shift, the starved charge and the far expansion, and two
+notes go with the first: what answers what, and where the shift doesn't show (docs/02 "AI opponent"; docs/03
+"Implementation (M5-9a)" and "(M5-9b)"). `Content/AiAdaptsContentTests` pins every number and name in the five bullets
+to `ai.json`, `rules.json` and `buildings.json`, both ways.
 
 - **Counter shift:** the AI remembers how many enemy soldiers of each slot it has seen at once (workers never count, and
   it sees only what its own fog of war shows), and that memory fades to nothing over `rules.json` `ai.counterMemory`
@@ -190,10 +191,11 @@ ways.
   every free combat unit at you whatever its wave threshold (or hunts, if it knows none of your buildings), again after
   each wave's cooldown, at every difficulty. A raid on its base resets the clock.
 - **Far expansion:** when its own gold is spent (short of gold for its next unit, no Laborer on gold and no gold mine it
-  knows), it sends a Laborer to look at the start locations nobody took. Once it has seen a free mine there, or anywhere
-  within `ai.farExpandReach` 384 m of its Garrison Keep, with no enemy drop-off by it, it builds a Quartermaster's Depot
-  (`malazan_depot`, 0 gold / 75 wood) beside it and moves gatherers there; a Garrison Keep only if it can pay for one.
-  One at a time.
+  knows), it sends a Laborer to look at the start locations nobody took. Once it has seen a free mine (at one of those
+  starts or anywhere else) within `ai.farExpandReach` 384 m of its Garrison Keep, with no enemy drop-off by it, it
+  builds a Quartermaster's Depot (`malazan_depot`, 0 gold / 75 wood) beside it and moves gatherers there;
+  a Garrison Keep only if it can pay for one. One at a time. The reach holds for every mine, a start location's
+  included: a free start farther than that from the keep is not walked to, and a mine beyond it is never taken.
 - **Where the shift doesn't show (BUG-1156):** a Legion Barracks that already takes a Heavy Infantry every time its
   queue empties (the `standard` opening's one barracks in Age I, short of wood) cannot train more of them for the
   heavier weight, so against cavalry the shift shows only when the bank, not the barracks, is the limit. An enemy Line
@@ -407,9 +409,10 @@ train), so its weights sum to 30.
 **This opening can fall to a rush without ever attacking (BUG-0982, D-H6, 2026-10-18).** It is the greedy opening: one
 Barracks in Age I and the gold saved for Age II. Against the Whirlwind's raider rush, the Malazan army stays small while
 the base is defended. On the pairing's five smallest seeds (7, 8, 14, 18, 23) it sends no wave on three, and all three
-are destroyed (seed 8 at 13:50, 14 at 15:03, 18 at 10:44); seed 23 sends one wave (13:53) and still falls, at 18:27
-(measured 2026-11-07 after the sim's M5-4d slice 2; before it seed 23 sent none, peaked at 10 pop and fell at 15:36, and
-seed 18 stood at 20:00, BUG-1010). A lower wave threshold doesn't help: at 16 or 14 army pop the same three seeds still
+are destroyed (seed 8 at 13:47, 14 at 14:16, 18 at 10:44); seed 23 sends one wave (13:53) and still falls, at 18:27
+(seeds 8 and 14 re-printed 2026-11-09 for the sim's M5-H6, was 13:50 and 15:03; seeds 18 and 23 measured 2026-11-07
+after the sim's M5-4d slice 2; before it seed 23 sent none, peaked at 10 pop and fell at 15:36, and seed 18 stood at
+20:00, BUG-1010). A lower wave threshold doesn't help: at 16 or 14 army pop the same three seeds still
 send no wave, because the army never grows past 11 pop (seed 8), 7 (seed 14) or 6 (seed 18). So the wave stays at 18
 (the Producer's default, measured; re-read after M5-4g on 2026-10-26, the same pick; the owner may revisit). The
 measurement is under "Fast Age II against the raider rush" at the end of this page.
@@ -560,9 +563,12 @@ waves), Age II, the defeat, and the largest army it had (read once a second).
 Re-printed 2026-10-26 for the sim's M5-4g (the reserve). Before it the 18-pop rows read seed 7: waved at 8:42 (3), Age
 II at 8:24, peak 25; seed 8: Age II at 8:44, defeated at 13:14; seed 14: defeated at 11:19, peak 8. Seed 7 now waves
 later at 18 pop (10:16) with a larger army. Re-printed again 2026-11-07 for the sim's M5-4d slice 2 (the AI rebuilds
-what it loses; docs/03 "Implementation (M5-4d slice 2)"): at every threshold seed 8 now falls at 13:50 (was 13:25) and
-seed 14 at 15:03 (was 12:33), both still without a wave and with the same peaks; seed 7's peak at 16 and 14 pop is 47
-and 41 (was 46 and 40).
+what it loses; docs/03 "Implementation (M5-4d slice 2)"): at every threshold seed 8 fell at 13:50 (was 13:25) and seed
+14 at 15:03 (was 12:33), both still without a wave and with the same peaks; seed 7's peak at 16 and 14 pop was 47 and 41
+(was 46 and 40). Re-printed 2026-11-08 for the sim's M5-9a (the counter shift; docs/03 "Implementation (M5-9a)"): seed
+7's peak at 18, 16 and 14 pop is 42, 52 and 44 (was 40, 47 and 41). Re-printed 2026-11-09 for the sim's M5-H6 (docs/03
+"Implementation (M5-H6)"): at every threshold seed 8 now falls at 13:47 (was 13:50) and seed 14 at 14:16 (was 15:03),
+both still without a wave and with the same peaks.
 
 **The rule (the Producer's default for D-H6, the owner may revisit):** take the lowest threshold of 16 or less at which
 seed 8 waves and Age II comes on every measured seed no more than 60 s later than at 18; else keep 18. Age II is not
@@ -607,10 +613,10 @@ every Malazan opening against every Whirlwind opening on the pairing's three sma
 `QA/Content/D21OpeningsQaTests`'; each run pins its cell here and on the Whirlwind page's twin table. Since M5-4g's
 reserve the Malazans reach Age II on 23 of the 27 sides: of the four that don't, `standard` seed 2 and `cadre_rush` seed
 14 are defeated first, `crossbow_push` seed 19 is BUG-1010's beaten side, still standing at 20:00, and `crossbow_push`
-seed 32 is defeated at 16:54. Under M5-4g alone seed 32 stood at 20:00 (3 pop, no pop building left; 794 gold and 5 wood
-in hand; docs/03 "Implementation (M5-4g)") until M5-4d's hunt (the AI hunts the last units once it knows no enemy
-building) finished it, and seed 19 with it; since M5-4d slice 2 (the AI rebuilds what it loses) seed 19's side rebuilds
-and lives to 20:00 again (docs/03 "Implementation (M5-4d slice 2)", BUG-1116).
+seed 32 is defeated at 17:12 (16:54 before the sim's M5-9a). Under M5-4g alone seed 32 stood at 20:00 (3 pop, no pop
+building left; 794 gold and 5 wood in hand; docs/03 "Implementation (M5-4g)") until M5-4d's hunt (the AI hunts the last
+units once it knows no enemy building) finished it, and seed 19 with it; since M5-4d slice 2 (the AI rebuilds what it
+loses) seed 19's side rebuilds and lives to 20:00 again (docs/03 "Implementation (M5-4d slice 2)", BUG-1116).
 
 | Malazan opening | Whirlwind opening | 1st seed | 2nd seed | 3rd seed |
 | --- | --- | --- | --- | --- |
@@ -623,3 +629,7 @@ and lives to 20:00 again (docs/03 "Implementation (M5-4d slice 2)", BUG-1116).
 | `cadre_rush` | `standard` | seed 13: 6:05 | seed 16: 8:24 | seed 17: 8:44 |
 | `cadre_rush` | `raider_rush` | seed 7: 8:26 | seed 8: 8:41 (defeated 13:47) | seed 14: never (defeated 14:16) |
 | `cadre_rush` | `holy_war` | seed 20: 8:24 | seed 24: 8:44 | seed 27: 8:33 |
+
+Re-printed 2026-11-09 for the sim's M5-H6 (docs/03 "Implementation (M5-H6)"): `crossbow_push` against `holy_war` seed 45
+reaches Age II at 9:28 as before and is now defeated at 19:02 (was standing at 20:00); `cadre_rush` against
+`raider_rush` seed 8 falls at 13:47 (was 13:50) and seed 14 at 14:16 (was 15:03), as in the BUG-0982 table above.

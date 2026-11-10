@@ -52,7 +52,8 @@ public class D26aAdaptsPinQaTests
     {
         using TestDataDir dir = TestDataDir.CopyOfShipped();
         dir.EditJson("common/rules.json", root => root["ai"]!["counters"]!.AsObject()["unique"] = JsonNode.Parse("""["line"]"""));
-        AssertCaught(dir, "whirlwind", "whirlwind enemy Unique: page '' vs data (ai.counters) 'Raider'");
+        // D-R35 (BUG-1181 nit 4): the page's "none" row prints as 'none' (it printed '' before).
+        AssertCaught(dir, "whirlwind", "whirlwind enemy Unique: page 'none' vs data (ai.counters) 'Raider'");
     }
 
     /// <summary>The page's depot given a gold cost: the faction then has no gold-free drop-off at all.</summary>
