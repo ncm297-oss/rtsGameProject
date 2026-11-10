@@ -137,12 +137,13 @@ public class EndGameH6QaTests
     /// from it first), in the corner diagonal from the army, and at a quarter-cell interior hide. Asserts it is seen within
     /// 72,000 ticks (the hide rows' bound) with the lever on, and prints both times (the lever's cost or gain). Measured at
     /// M5-H6 (second / first hunt): free start 3 60,945 / never (BUG-1161 item 2), own start 1 never / 39,797 (BUG-1162), far
-    /// corner 17,921 / 7,441, interior quarter 51,545 / 41,289.
+    /// corner 17,921 / 7,441, interior quarter 51,545 / 41,289. Fix round 1 (BUG-1162 fixed: a live enemy's start after the
+    /// free ones): free start 3 58,257, own start 1 52,061, far corner 17,301, interior quarter 48,421 (second hunt).
     /// </summary>
     [Theory]
     [Trait("Category", "Stress")]
     [InlineData("free start 3", 82f, 402f)]
-    [InlineData("own start 1", 258f, 482f, Skip = "BUG-1162 (open, S3): with the free starts first, a lone worker at its own start is not seen on the second hunt in 72,000 ticks (the first hunt sees it at 39,797)")]
+    [InlineData("own start 1", 258f, 482f)]
     [InlineData("far corner", 500f, 500f)]
     [InlineData("interior quarter", 166.5f, 344.7f)]
     public void ALoneWorker_OnTheSecondHunt_IsFound(string where, float x, float y)

@@ -9620,7 +9620,7 @@ late. Then the far expansion's own two bugs (BUG-1158, BUG-1159). Code: `Militar
   | (b) + (c) + (i) + (iii) | 50,143 p1 | 52,969 p1 | 54,322 p0 | 48,007 p0 | 78,278 p1 | 71,853 p0 | 23,322 | 17,053 | 32,824 | 36,004 p0 |
   | (b) + (c) + (i) + (iii) + (iv) | 49,223 p1 | 51,407 p1 | **86,817 p0** | 48,707 p0 | 69,322 p0 | 46,743 p0 | 23,466 | 16,799 | 29,237 | 37,118 p1 |
   | (b) + (c) + (iii) | 50,140 p1 | 52,430 p1 | **123,289 p0** | 90,811 p0 | 116,335 p1 | 89,953 p0 | 23,322 | 17,053 | 33,484 | 36,004 p0 |
-  | **shipped: (b) + (c) + (i) from the second hunt + (iii)** | **50,140 p1** | **49,565 p1** | **55,485 p0** | **49,301 p0** | 116,335 p1 | **67,593 p0** | **23,322 p1** | **17,053 p1** | 33,484 p1 | 36,004 p0 |
+  | **shipped: (b) + (c) + (i) from the second hunt + (iii)** | **50,140 p1** | **49,565 p1** | **55,485 p0** | **49,301 p0** | 116,335 p1 | **67,593 p0** (fix round 1: 68,277 p0) | **23,322 p1** | **17,053 p1** | 33,484 p1 | 36,004 p0 |
 
   The match is chaotic past the first change (any lever moves every later wave), so the combination was chosen on the rows
   together, not lever by lever. **Why (i) only from the second hunt:** with the starts first on every hunt QA's
@@ -9639,7 +9639,10 @@ late. Then the far expansion's own two bugs (BUG-1158, BUG-1159). Code: `Militar
   centre or interior corner; on an odd pass a cell edge's midpoint; never a ring point, so reaching it starts no perimeter
   leg) nearest the start's centre. On Pale Hills every start's centre is a cell centre of the scout grid (1.4 m off). The
   proxy's visited mark is the start's, so nothing new is stored (no save change) and a start the army's sight sweeps on
-  the way counts as looked at (`SeenPoints`). Each pass and each later hunt look again. Why the second hunt: the first
+  the way counts as looked at (`SeenPoints`). Each pass and each later hunt look again. **Fix round 1 (BUG-1162):** once
+  every free start's proxy is visited, a live enemy's own start comes next the same way (nearest first), then nearest-first
+  as before: with the free starts only, re-planning nearest-first from a far free start never saw a lone worker standing
+  at its own start on QA's 512 m hide scene (72,000 ticks; the first hunt sees it at 39,797). Why the second hunt: the first
   sweeps from where the enemy was beaten, where a remnant usually is (QA's hide rows); a second hunt means the first did
   not finish it (or it rebuilt and was razed again), and since M5-9b the rest is often a far depot.
 - **(iii) The house rule** (`BuildOrderExecutor.ReopenLost`, BUG-1116's own proposal, tried and reverted twice in M5-4d
@@ -9706,8 +9709,22 @@ late. Then the far expansion's own two bugs (BUG-1158, BUG-1159). Code: `Militar
   | QA's `FarExpandProbeQaStressTests.PaleHillsFfa_*` seed 2 | measured | trips the refusal-streak check at 35,301 (BUG-1151's re-send); the row is skipped under BUG-1151 with the measurement (a finding) |
   | Hard v Normal, the 42 matches (to 72,000) | 26 / 11 / 5 | **29 / 11 / 2**: Raraku 10 / 4 / 0, Vathar 7 / 7 / 0 (as before), Pale Hills 12 / 0 / 2. Not inverted; Hard is level on Vathar, as at M5-9a and M5-9b. The two no-results are Pale Hills Hard seat 0 seeds 3 / 6 (one match): a war Normal wins at 116,335 |
 
+  **Fix round 1 (BUG-1162, the live enemy's start after the free ones), re-measured (rule 43):** the default loop's pins
+  are all unchanged (`MatchCriterionTests`, `MapFileTests`, `NonHardMatchPinQaTests`, `StandardPresetPinQaTests`,
+  `HardKnobsPinTests`, the 8 digests above); Pale Hills 1 / 2 / 5 50,140 / 49,565 / 55,485, H v N Pale Hills 2 / 3-6
+  49,301 / 116,335 unchanged, H v N 7 / 8 67,593 -> **68,277 p0**; `HuntStressTests` FFA seed 2 105,690 -> **75,382**
+  (FFA seed 3, 2v2 seed 1 unchanged); the Malazan page's `crossbow_push` v `raider_rush` seed 19 cell is back to "never"
+  (as at M5-9b, `KnownBeatenAlive`: the side beaten at 20:00, pop 1 / cap 0, not defeated; round 1 had "defeated 19:17");
+  the 42-match tally is the same **29 / 11 / 2** (Vathar 7 / 7 / 0). QA's hide rows (second hunt): free start 3 60,945 ->
+  58,257, own start 1 never -> **52,061**, far corner 17,921 -> 17,301, interior quarter 51,545 -> 48,421. Tried first and
+  dropped: the live enemy's start in the same nearest-first list as the free ones (own start 1 41,649, but the interior
+  quarter row never seen in 72,000).
+
   **Finding (criterion 4's "the 8 pre-M5-9a digests reproduce"):** they cannot while the two rules have no knob, and the brief
-  allowed none. The rows still prove the three knobs turn M5-9a / M5-9b off (the new digests are the M5-H6 rules alone); a
+  allowed none. Fix round 1 measured the one in-brief switch there is, gating both rules on `ai.farExpandReach` > 0 (the
+  far expansion's knob, which the digest rows set to 0): all six old digests come back exactly, but
+  `FarExpandTests.AWholeMatch_WithNoSeatArmed_SendsTheSameCommands_AtKnobZero` (M5-9b's "knob 0 changes nothing but the far
+  expansion") fails on Vathar seed 1 (23,322 against 23,043: the house rule), so the gate was not kept. The rows still prove the three knobs turn M5-9a / M5-9b off (the new digests are the M5-H6 rules alone); a
   knob for the house rule (or the hunt's starts) would restore the old digests, the Producer's call.
 
 ## Save/load and replays

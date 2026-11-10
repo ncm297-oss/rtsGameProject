@@ -295,11 +295,12 @@ public class EndGameHardeningTests
 
     /// <summary>
     /// M5-H6: the starts the hunt sweeps first (<see cref="MilitaryManager.NextHuntStart"/>) are the free ones and a defeated
-    /// player's, never the seat's own nor a live player's; each stands for the interior sweep point nearest its centre, and
-    /// one visited is not picked again.
+    /// player's, nearest first, and (fix round 1, BUG-1162; failed first: -1 once the free starts were visited) then a live
+    /// enemy's; never the seat's own; each stands for the interior sweep point nearest its centre, and one visited is not
+    /// picked again.
     /// </summary>
     [Fact]
-    public void TheHuntsStarts_AreTheFreeAndDefeatedOnes_NearestFirst()
+    public void TheHuntsStarts_AreTheFreeAndDefeatedOnes_NearestFirst_ThenALiveEnemys()
     {
         StartLocation[] starts = { new(7 * 256 + 136, 0), new(240 * 256 + 128, 0), new(200 * 256 + 200, 0), new(200 * 256 + 40, 0) };
         Simulation sim = AiScenes.Flat(AiScenes.Seats(AiDifficulty.Normal, SeatController.Ai, SeatController.Human), s_data.Value,
@@ -314,7 +315,9 @@ public class EndGameHardeningTests
         ai.Board.HuntVisited[Point(2)] = true;
         Assert.Equal(Point(3), MilitaryManager.NextHuntStart(ai, from, -1));
         ai.Board.HuntVisited[Point(3)] = true;
-        Assert.Equal(-1, MilitaryManager.NextHuntStart(ai, from, -1)); // 0 its own, 1 a live player's
+        Assert.Equal(Point(1), MilitaryManager.NextHuntStart(ai, from, -1)); // the live enemy's own start, after the free ones
+        ai.Board.HuntVisited[Point(1)] = true;
+        Assert.Equal(-1, MilitaryManager.NextHuntStart(ai, from, -1)); // 0 its own
     }
 
     private const string FourSeatChild = "RTS_M5H5_FOUR_SEAT_CHILD", FourSeatLine = "M5H5-FOUR-SEAT ";

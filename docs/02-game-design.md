@@ -432,7 +432,8 @@ own cues (select, order, refused, building placed or finished, unit or tech read
   plus the map's edges and corners, from the point nearest the army, then always the nearest one not yet walked to or seen;
   once it reaches the map's edge it walks the whole border round once), and turns at once toward any enemy unit it sees.
   From its second hunt of the match on, it first looks at the start locations no player holds (or a defeated player's),
-  nearest first, where a beaten side's last depot and workers often stand (M5-H6, BUG-1157). In a team match a
+  nearest first, where a beaten side's last depot and workers often stand, then an enemy's own start (M5-H6, BUG-1157 /
+  BUG-1162). In a team match a
   sighting on or right beside an ally's building is aimed just off that building, on the army's side. A hunt ends like a wave (heavy losses, nobody busy for a while,
   a raid at home), and becomes a wave again on the first enemy building it finds. So a beaten side's last unit hiding in
   the woods is found, and AI-against-AI matches end (built in M5-4d, BUG-1068; hardened in M5-H5, BUG-1119 / BUG-1120;

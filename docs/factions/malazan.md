@@ -588,7 +588,7 @@ and lives to 20:00 again (docs/03 "Implementation (M5-4d slice 2)", BUG-1116).
 | `standard` | `raider_rush` | seed 2: never (defeated 16:33) | seed 10: 12:00 | seed 21: 8:19 |
 | `standard` | `holy_war` | seed 3: 13:51 | seed 4: 15:19 (defeated 19:53) | seed 6: 8:29 (defeated 15:37) |
 | `crossbow_push` | `standard` | seed 9: 12:19 | seed 32: never (defeated 17:12) | seed 37: 12:50 |
-| `crossbow_push` | `raider_rush` | seed 5: 11:44 | seed 11: 8:47 | seed 19: never (defeated 19:17) |
+| `crossbow_push` | `raider_rush` | seed 5: 11:44 | seed 11: 8:47 | seed 19: never |
 | `crossbow_push` | `holy_war` | seed 12: 12:13 | seed 45: 9:28 (defeated 19:02) | seed 71: 9:43 |
 | `cadre_rush` | `standard` | seed 13: 6:05 | seed 16: 8:24 | seed 17: 8:44 |
 | `cadre_rush` | `raider_rush` | seed 7: 8:26 | seed 8: 8:41 (defeated 13:47) | seed 14: never (defeated 14:16) |

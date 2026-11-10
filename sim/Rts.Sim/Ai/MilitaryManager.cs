@@ -538,8 +538,10 @@ internal static class MilitaryManager
     /// M5-H6 (BUG-1157, the brief's lever (i)): the sweep point the hunt walks to next when it looks at the start locations
     /// first: of the free starts (no player starts there, or its player is defeated: <see cref="FarExpansion.NextStart"/>'s
     /// set, the start list every seat is given), the one whose <see cref="StartProxy"/> is unvisited (and not
-    /// <paramref name="skip"/>) and whose centre is nearest <paramref name="from"/> (start order on ties); -1 with none. Why:
-    /// since the far expansion (M5-9b) a beaten side's last depot and workers often stand at a free start across the map,
+    /// <paramref name="skip"/>) and whose centre is nearest <paramref name="from"/> (start order on ties); once every free
+    /// start's proxy is visited, a live enemy's own start the same way (fix round 1, BUG-1162: a beaten side's last worker
+    /// often stands at home, and re-planning nearest-first from a far free start left it unseen for the hour); -1 with none.
+    /// Why: since the far expansion (M5-9b) a beaten side's last depot and workers often stand at a free start across the map,
     /// which nearest-first from where its base fell reached only after the perimeter leg (Pale Hills seed 2: five hunts and
     /// 79,504 ticks; Hard v Normal seed 2: ten hunts). Only from the match's second hunt on (<see cref="NextSweep"/>): the
     /// first sweeps from where the enemy was beaten, where a remnant usually is (QA's hide rows, whose quarter-cell hide on
@@ -547,11 +549,23 @@ internal static class MilitaryManager
     /// </summary>
     internal static int NextHuntStart(AiPlayer ai, Vector2 from, int skip)
     {
+        int free = NearestHuntStart(ai, from, skip, liveEnemy: false);
+        return free >= 0 ? free : NearestHuntStart(ai, from, skip, liveEnemy: true);
+    }
+
+    /// <summary>
+    /// M5-H6: <see cref="NextHuntStart"/>'s pass over the start list: the free starts, or with <paramref name="liveEnemy"/>
+    /// the starts of enemies still in the match; the unvisited proxy (not <paramref name="skip"/>) of the one nearest
+    /// <paramref name="from"/>, -1 with none.
+    /// </summary>
+    private static int NearestHuntStart(AiPlayer ai, Vector2 from, int skip, bool liveEnemy)
+    {
         int cols = Cols(ai), rows = Rows(ai), players = ai.View.PlayerCount, count = Math.Min(ai.View.StartCount, FarExpansion.MaxStarts), best = -1;
         float least = float.MaxValue;
         for (int k = 0; k < count; k++)
         {
-            if (k < players && (k == ai.Player || !ai.View.IsDefeated(k))) continue;
+            bool taken = k < players && !ai.View.IsDefeated(k); // a player still in the match starts here
+            if (k == ai.Player || (liveEnemy ? !taken || !ai.View.IsEnemy(k) : taken)) continue;
             Vector2 centre = ai.CellCentre(ai.View.StartCell(k));
             int point = StartProxy(ai, cols, rows, centre);
             if (ai.Board.HuntVisited[point] || point == skip) continue;

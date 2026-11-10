@@ -133,7 +133,7 @@ public class HuntStressTests
     /// 72,000). M5-H5 fixed the two hunt causes once named here (BUG-1119, a defeated seat's buildings kept as known, and the
     /// lone-idle-worker hunt gap); the stall left was BUG-1068's gold starvation alone. M5-9a round 2 fix round 1 (BUG-1154:
     /// the starved check judges the unit production would train) ends it: 80,278 (66:53), seat 3 the winner; un-skipped.
-    /// M5-9b (the far expansion): 97,140 (80:57), seat 3, still inside 144,000. M5-H6: 105,690 (88:04), seat 3.
+    /// M5-9b (the far expansion): 97,140 (80:57), seat 3, still inside 144,000. M5-H6: 105,690 (88:04), seat 3; fix round 1 (BUG-1162): 75,382 (62:49), seat 3.
     /// </summary>
     [Theory]
     [Trait("Category", "Stress")]
