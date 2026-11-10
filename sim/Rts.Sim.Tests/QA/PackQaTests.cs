@@ -713,9 +713,11 @@ public class PackQaTests(ITestOutputHelper output)
     [Fact]
     public void TheShippedDataHash_IsTheGoldenHeaders()
     {
+        // Producer patch at the 2026-11-10-0146 merge (BUG-1169): compared dynamically, not to a literal, because the golden's
+        // header is the hash at recording time, not a pin (M6-SH1), and the data track moves it (D27 moved it to 3E33BCE5D418EC9B
+        // in the same session as M7-2, whose own rule was "unchanged by the sim": 64DF327980743173 at its base).
         string golden = File.ReadAllText(Path.Combine(TestDataDir.RepoRoot(), "sim", "Rts.Sim.Tests", "Replays", "cross_map_seed1.replay"));
-        Assert.Contains("data-hash 64DF327980743173", golden);
-        Assert.Equal("64DF327980743173", TestSim.Data.ContentHash().ToString("X16"));
+        Assert.Contains("data-hash " + TestSim.Data.ContentHash().ToString("X16"), golden);
     }
     // ------------------------------------------------------------------ BUG-1168: a pack unit's worth
 
