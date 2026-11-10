@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S4 |
-| Status | open |
+| Status | fixed (items 1-3, D27 fix round 1, 6b72729; item 4 is a brief-template note for the Producer; verified by QA re-check round 1) |
 | Found | 2026-11-10-0146, task D27 (QA standard) |
 | System | Docs (`docs/03-technical-design.md`), test comments (`Save/PreMapFixtures`, `ReplayFormatTests`, `Ai/HuntTests`), the developer's BUG-1163 patch |
-| Fixed by | |
+| Fixed by | 6b72729 (D27: fix QA findings (round 1)) |
 
 ## Repro
 1. `docs/03-technical-design.md` on 3d25e9d, after D27 moved Hard's `gatherBonus` to 0.4:
@@ -40,3 +40,16 @@ As above. Nothing fails.
 ## Notes
 Docs / comments only. Fold into the next data-track hardening (items 1, 3) and the Producer's brief template (item 4);
 item 2 is a sim-track test comment.
+
+## Re-check round 1 (2026-11-10-0146, QA)
+1. docs/03: the schema example reads `"gatherBonus": 0.4`; the field description reads "Hard 0.4 since D27, 0.25 before it";
+   the M5-V2 and M5-4c slice 2 quotes are marked "25% before D27, 40% now"; line ~7943 reads "still true then: Hard 25% (40%
+   since D27)". `grep -n "25%" docs/03-technical-design.md` leaves only those dated mentions. The docs/01 decision row is still
+   the Producer's (allowed by the brief).
+2. `Save/PreMapFixtures.cs` (class summary: the exception for `replay_ai_ffa_standard.replay`, re-recorded in M5-4c slice 2
+   947a273 and D27, header byte for byte ab54ddb; the save digests "never re-recorded"), `ReplayFormatTests.cs` and
+   `Ai/HuntTests.cs` now say so. Checked against `git log` of the fixture (69d5673, 947a273, 3d25e9d) and the D27 diff
+   (`commands 84` -> `81`, header lines unchanged).
+3. The BUG-1163 append patch (scratchpad `d27/BUG-1163-append.md`) is pure ASCII now (`->`; 0 non-ASCII bytes).
+4. Not a code fix: still a note for the Producer's next Hard-tuning brief (list the Hard-pin test folders).
+- Also: the old test name `TheScout_LeavesAtScoutAfter_*` has no remaining reference outside the first QA report.

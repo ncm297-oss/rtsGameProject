@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S2 (acceptance criterion 3, "Hard-seat pins re-measured in the same commit", not met; a permanent pin red) |
-| Status | open |
+| Status | fixed (D27 fix round 1, 6b72729; verified by QA re-check round 1, 2026-11-10-0146) |
 | Found | 2026-11-10-0146, task D27 (QA standard, the pin sweep) |
 | System | Tests: `sim/Rts.Sim.Tests/QA/StandardPresetPinQaTests.cs` `AiRows` (`[Trait("Category","Stress")]`) |
-| Fixed by | |
+| Fixed by | 6b72729 (D27: fix QA findings (round 1)) |
 
 ## Repro
 1. On 3d25e9d: `dotnet test sim/Rts.Sim.Tests --filter "FullyQualifiedName~StandardPresetPinQaTests.EveryAiScene"`.
@@ -39,3 +39,11 @@ All five still have 12,000 distinct hashes (the scenes don't stand still).
   `MatchCriterionTests`, `MapSlice2StressTests`, `HuntStressTests`, `CounterCompositionTests`, `HardKnobsMatchTests`,
   `D21OpeningsQaTests`, `DH6ThresholdQaTests`, `MapFileTests` were green; the full Stress + Soak run is the re-check's).
 - Test file is QA's (`QA/`), outside the data track's folders; the brief's Scope asks for the Hard re-pins wherever they are.
+
+## Re-check round 1 (2026-11-10-0146, QA)
+- The five Hard-seat rows in `AiRows` now hold exactly the "Now" values of the table above, each with the old value in a
+  "D27 (BUG-1163/BUG-1185, Hard gatherBonus 0.4): was ..." comment; the two Normal-only rows are byte-for-byte unchanged.
+- Full suite on 6b72729 (no filter, Stress + Soak + Perf): `StandardPresetPinQaTests.EveryAiScene_AtStandard_12000Ticks_PlaysAs5368cfe`
+  7 / 7 passed; every other Hard-seat pin class green (`SharedVisionFfaPinTests`, `ReserveTwinTests`, `ScoutManagerTests`,
+  `ReplayFormatTests`, `HuntTests`, `HardVersusNormalTallyQaStressTests`, `EndGameH6ProbeQaStressTests`, `TeamAiSoakStressTests`).
+  No other Stress / Soak digest failed, so no Hard-seat pin is left un-re-pinned.
