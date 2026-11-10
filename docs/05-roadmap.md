@@ -889,8 +889,16 @@ open S1 / S2. Retro below; open S3 / S4 listed there.)_
 
 ## M7 — Teblor
 
-- [ ] Scale and per-unit population systems proven (1.5× visuals, 2-3 pop, half-step pop support).
-- [ ] Giant armor class in play; regeneration.
+- [ ] Scale and per-unit population systems proven (1.5× visuals, 2-3 pop, half-step pop support). (M7-1, 2026-11-09-2226:
+      **the sim half is done**: `units.json` `scale` (0.5-3.0, `UnitDef.Scale`, in the data hash; the sim never reads it) and
+      half-step population proven end to end on a test copy (`Economy/PopulationTests`: the producer's cap check one half short /
+      exact, `PopText` "9.5", the AI's `pop` trigger and `minArmyPop`, a 2,000-tick `HalfPop` invariant). Left: the view's 1.5×
+      rendering from `UnitDef.Scale` (M7-V1) and a Teblor unit at 2-3 pop in shipped data.)
+- [ ] Giant armor class in play; regeneration. (M7-1, 2026-11-09-2226: **regeneration is built**: `faction.json`
+      `regen {hpPerSecond, delay}` (fixed-point, 400 units = 1 HP, the faction rate after `delay` seconds without damage), the
+      `regenerating` status (heals through the delay, stacks), `RegenSystem` in phase 5 with an O(1) skip, save format 10 (`REGN`;
+      every older save refused), QA's fuzz / 50 mid-match saves / cross-process digest; the shipped `giant` row proven by
+      `DamageCalcTests.TheGiantRow_*` (×1.25 pierce / magic, ×0.75 siege). Left: a shipped faction using either (the Teblor roster, data).)
 - [ ] War-dog packs (multi-spawn queue item, Hamstring), Blood-oil Frenzy with aftermath slow.
 - [ ] Teblor AI build order; models and animations; balance pass vs. Malazan and Whirlwind.
 

@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S3 |
-| Status | open |
+| Status | fixed (D-R35, 2026-11-09-2226; the Producer's docs/02 half at the 2026-11-09-1336 ACCEPT) |
 | Found | 2026-11-09-1336, task D26a |
 | System | Docs: faction pages' "How the AI adapts" (and docs/02 "AI opponent", which has the same wording) |
-| Fixed by | |
+| Fixed by | D-R35 780d73c: both pages' Far expansion bullet ("The reach holds for every mine, a start location's included: a free start farther than that from the keep is not walked to, and a mine beyond it is never taken"); pinned both ways by `Content/AiAdaptsContentTests` + QA's `DR35ProsePinQaTests.TheFarExpansionBullet_SaysTheReachHoldsForStarts` (Producer: whirlwind page 385 red, `rules.json` 380 red on both pages). Nits: 1 ("Three rules ... and two notes", `TheIntro_CountsTheBullets`), 2 (position-based number guard: "within 2 minutes" / "0.5 of the match" / "384 m apart" red), 4 (`'none'` printed) fixed in the same commit; 3 left as is (the bracket already says the Raider Camp case is a Malazan measurement; Producer ruling); 5 skipped (the wording lives only in a report, not on a page) |
 
 ## Repro
 1. Read `docs/factions/malazan.md` (and `whirlwind.md`) "How the AI adapts", the Far expansion bullet: "Once it has seen a
@@ -19,8 +19,9 @@
 
 ## Expected
 The page states the rule the sim plays: the drop-off goes only by a free mine within 384 m of the hall, wherever it was
-seen (the leg walks to the free start locations whatever their distance, but a mine there farther than 384 m is never
-taken).
+seen. (Corrected at the 2026-11-09-2226 ACCEPT: since M5-H6 / BUG-1159 the leg itself walks only to free starts within
+the reach (`FarExpansion.NextStart` skips a farther one), so a start beyond 384 m is neither walked to nor its mine taken;
+the filed text's "walks ... whatever their distance" was M5-9b's behaviour.)
 
 ## Actual
 "there, or anywhere within 384 m" reads as: a start-location mine always qualifies, and other mines only within 384 m. On
