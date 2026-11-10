@@ -6,6 +6,12 @@ and data **D-R35** both ACCEPTED (0 fix rounds each), view STOP. **M5 8 / 9 (cri
 1-2 half done).** Counters: **sim 1 / 4, view 1 / 4, data 0 / 4**. Bug ids next session: **sim 1167+, view 1177+, data 1184+**.
 Open S1 / S2: none. The PLAN step re-checks the inbox first (New was empty at 2226).
 
+**Confirmed at the PLAN of 2026-11-10-0146** (session 1 / 8 of 2026-11-10, base edaeeac = `origin/main`): inbox New empty; build 0 / 0
+on a scratch archive (rule 38); M7-1's claims verified (`UnitDef.Scale`, `SaveFormat.CurrentVersion` 10, `Combat/RegenSystem.cs`,
+`Economy/PopulationTests`, `DamageCalcTests.TheGiantRow_*`, docs/03 "Implementation (M7-1)"); open S3 26 / S4 20; counters sim 1 / 4,
+view 1 / 4, data 0 / 4 (all three feature sessions). All three tracks GO: **M7-2** (sim), **M7-V1** (view), **D27** (data). The three
+briefs below are the confirmed ones (the drafts of 2226 adjusted where marked **PLAN**). Bug ids: sim 1167+, view 1177+, data 1184+.
+
 ## Standing rules (1-48)
 
 Unchanged 1-48 (38: the Producer runs every suite on a scratch `git archive` / clone, never in a worktree; 39: generated map content
@@ -61,46 +67,96 @@ the `GatherWedgeQaTests.SameGameDataHashes` comment and in the ACCEPT's `COMMIT_
 M7-1 on `main`: `UnitDef.Scale`, `FactionDef.RegenPerTick` / `RegenDelayTicks`, `RegenSystem` (phase 5), `StatusKind.Regenerating`,
 `StatusDef.StateHashId`, save format 10. Counter 1 / 4. Debt: BUG-1165 / 1166 S4 (new), the three `SaveFormat` alias names.
 
-### Current session plan: M7-2, feature, QA full (the Producer confirms at PLAN)
+### Current session plan: M7-2, feature, QA full (confirmed at the 2026-11-10-0146 PLAN)
 
 **TASK_ID:** M7-2 · **TASK_TITLE:** Build the war-dog pack's sim half: a multi-spawn queue item and the on-hit passive, schemas
 first (no Teblor file)
 
 **Goal.** M7's third bullet (docs/05): "War-dog packs (multi-spawn queue item, Hamstring), Blood-oil Frenzy with aftermath slow".
-Two generic hooks the Teblor page needs (docs/factions/teblor.md: war-dogs trained as a pack of N from one queue item, pop per
-dog; Hamstring: a war-dog's bite applies `slowed`): a `units.json` `spawnCount` (one queue item → N units, the item's pop / cost
-as the page says) and an `onHit` passive trigger (`DataLimits.PassiveTriggerIds` gains `onHit`: apply a status with a magnitude
-and duration to the victim of each landed hit). The data rule: schemas, validation and the minimum test entries only; no shipped
-unit gains either; no new faction id in C#.
+Two generic hooks the Teblor page needs (docs/factions/teblor.md "Units" row Unique + "Unit notes": "one queue item spawns 3
+normal-sized dogs (1 pop each)", 120 / 0 per pack, train 24 s; Hamstring: "each bite Slows the target 20% for 2 s"): a `units.json`
+`spawnCount` (one queue item → N units; the item's cost and build time are the pack's, pop is per dog) and an `onHit` passive
+trigger (`DataLimits.PassiveTriggerIds` gains `onHit`: apply a status with a magnitude and duration to the victim of each landed
+hit). The data rule: schemas, validation and the minimum test entries only; no shipped unit gains either; no new faction id in C#.
+**PLAN: Blood-oil Frenzy's aftermath slow is deferred to M7-3** (a "when it ends, apply" hook needs a decision about the status
+store's one-entry-per-status-id merge rule (docs/03 M4-4b-3a "Known limits" (1)): a Zealot's passive Frenzied must not slow when
+it ends, only the Shaman's; that is M7-3's design, not a rider). Say so in docs/05's bullet note.
 
-**Scope (to be confirmed at PLAN against the Teblor page).**
-- `units.json` optional `spawnCount` (whole, 1-8, default 1; `DataLimits.MaxSpawnCount`), `UnitDef.SpawnCount`, in `ContentHash`.
-  Production: one queue item with its own `cost` / `buildTime`; at completion N units spawn at the rally / door in slot order; the
-  item's half-pop is `pop` × N counted when the item starts (the cap check uses the whole pack); a cancel refunds the item; a pack
-  that cannot fully spawn (no room) follows today's single-unit rule per dog. The AI's `pop` trigger and `minArmyPop` count the pack.
-- `passives` trigger `onHit` `{trigger: onHit, status, magnitude, duration}` (as `whenBelowHp`'s shape plus `duration`): applied
-  to the victim in `CombatSystem.HitUnit` (melee and projectile landings; not splash neighbours, not DoT pulses: say so in docs/03),
-  through `StatusSystem.Apply` (stack rules as today's). `UnitPassive` gains the fields; `PassiveSystem` unchanged (the trigger is
-  combat's).
-- Blood-oil Frenzy's "aftermath slow" (a status that applies another when it ends): **design in the brief or defer** to M7-3; if
-  deferred, say so in docs/05's bullet note.
-- Docs: docs/03 "Data schema" rows (`spawnCount`, `onHit`), "Implementation (M7-2)"; docs/02 "Status effects" table's Slowed source
-  "war-dog bite" already lists it. No save-format change expected (a queue item's count is derived from the type); if one is needed,
-  format 11 under M7-1's pattern (every save, no old reader).
-- **OUT:** any Teblor data file; any `ai.json` / `rules.json` value (D27 runs beside this); the view's pack rendering; models.
+**Scope.**
+- `units.json` optional `spawnCount` (whole, 1-8, default 1; `DataLimits.MaxSpawnCount` 8), `UnitDef.SpawnCount`. **PLAN, the
+  hash rule:** `GameData.ContentHash` adds `SpawnCount` **only when above 1** (a default appends nothing), so the golden header's data
+  hash **64DF327980743173 does not move** this session from the sim (D27 regenerates the golden once for Hard's values; two tracks
+  regenerating the same file would conflict at the merge). Passives are hashed per entry already, so an `onHit` entry costs nothing
+  on shipped data.
+- Production (`Economy/ProductionSystem`, `BuildingStore`): one queue item with the type's `cost` / `buildTime`; the item's
+  reservation is `HalfPop` × N at start (`ProductionSystem` line ~226's cap check and `Ledger.AddHalfPop`, `BuildingStore`'s reserved
+  head pop at line ~194 both × N); a cancel refunds the item's cost and releases the whole reservation; at completion N units spawn in
+  slot order at the rally / door. **Spawn rule (Producer default): all-or-nothing per tick**: find N free cells (the push-out cache
+  as today), spawn all N or none and try again next tick (today's single-unit rule for a full plateau), so no new per-slot state and
+  **no save-format change** (a queue item's count is derived from its type). If all-or-nothing cannot be done without allocation or
+  a cache change, the fallback is a per-slot "head units already spawned" count saved under **format 11** (M7-1's pattern: every
+  save, older refused, say why in docs/03 "Save format"); say which in the report. The AI's `pop` trigger and `minArmyPop` already
+  read `HalfPop` (live + started), so they count the pack once started: prove it, don't re-implement.
+- `passives` trigger `onHit` `{trigger: onHit, status, magnitude, duration}` (a `whenBelowHp` shape plus `duration` seconds, at
+  least one tick; `StatusEntry`'s existing validation; `radius` / `units` / `hpFraction` are "no such field" errors as today);
+  `UnitPassive` reuses `Status` / `Magnitude` / `DurationTicks`; `UnitDef.HitPassive` index beside `BelowHpPassive` / `DeathPassive`;
+  one per trigger (the existing rule, now three triggers). Applied in `CombatSystem.HitUnit` to a surviving victim (a killing blow
+  applies nothing) for melee and projectile landings; **not** splash neighbours, **not** DoT pulses, **not** a tower's hit (a
+  building has no passives); through the status store's apply path with today's stack rule (a stronger slow replaces, an equal one
+  refreshes the duration: whatever `StatusSystem` does for `applyStatus` today, cite it). The victim's speed follows (the derived
+  speed is `StatusSystem`'s already). `Abilities/PassiveSystem` is unchanged (the trigger is combat's; one field read per hit on a
+  type without it: `HitPassive < 0`).
+- Docs: docs/03 "Data schema" rows (`spawnCount`, `onHit`), "Implementation (M7-2)" (the spawn rule, the hit rule's exclusions, the
+  hash rule), docs/02 "Combat" one line on packs if the pop sentence needs it (Slowed's "war-dog bite" source is already in the
+  "Status effects" table); docs/05 bullet 3's note (what landed, the aftermath deferred to M7-3).
+- **OUT:** any Teblor data file; any shipped `game/data` byte (no `statuses.json` change is needed: `slowed` exists); any `ai.json`
+  / `rules.json` value (D27 runs beside this, rule 41: M7-2 changes no AI behaviour on shipped data); the aftermath slow; the view's
+  pack rendering (one view per unit works as is); the `QueueStrip` showing "×3" (a later view nicety); models.
 
-**Acceptance criteria (draft).** 1. `spawnCount` loads / validates / hashes (absent → 1; 0 / 9 / 1.5 errors). 2. On a test copy
-(a Malazan unit at `spawnCount` 3, pop 1): one Train → one queue item → 3 units at completion, `HalfPop` +6 when started, refund on
-cancel, refused when the cap lacks room for the whole pack; the AI's `pop` / `minArmyPop` count the pack (a `PlayerView` test).
-3. `onHit` applies the status to the victim on melee and projectile hits, not splash / DoT; a `slowed` victim's speed follows;
-validation rows (unknown status, duration 0, a second passive of the same trigger). 4. Determinism: two runs of a 3,000-tick
-scripted match with both hooks hash-equal; a mid-match save with a pack item in a queue round-trips. 5. Every pin unchanged, the
-golden's `k` lines identical, the header's data hash unchanged (no shipped `game/data` value moves; if `statuses.json` gains an
-entry the hash moves once: reason in the comment). 6. No per-tick allocation; no Godot; text only in data. 7. Docs; build 0 / 0;
-the loop green; smoke PASS.
+**Acceptance criteria.**
+1. `spawnCount` loads / validates: absent → 1; 3 → 3; 0, 9 and 1.5 one error each naming `units[i].spawnCount` and the range 1-8.
+   `DataContentHashTests`: 3 flips the hash, an explicit 1 does not (equals absent).
+2. On a test copy (a Malazan Age I unit at `spawnCount` 3, pop 1, `TestDataDir.CopyOfShipped()`): one Train command → one queue item
+   (`QueueCount` 1) → exactly 3 units alive at completion, all the owner's, all of that type; `HalfPop` +6 the tick the item starts and
+   unchanged by the spawn; a cancel refunds the full cost and releases the 6; Train refused (today's refusal) when the cap lacks room for
+   the whole pack but would fit one dog; the `PlayerView` pop the AI reads counts the pack once started (a `pop` trigger fires on it).
+3. The spawn rule: with room for 2 dogs only, 0 spawn and the item stays at the head; with room for 3 next tick, 3 spawn (or, under the
+   fallback, the count round-trips a save: say which rule shipped). Rally order: the three dogs sit on the three cells nearest the rally
+   in the same order every run.
+4. `onHit`: on a test copy, a melee hit and a projectile landing each apply `slowed` 0.2 for 2 s (40 ticks) to the victim; a splash
+   neighbour, a DoT pulse and a tower's hit do not; a killing blow applies nothing; the victim's speed is ×0.8 while it lasts and back
+   after; a second hit inside the 2 s refreshes to 40 ticks left. Validation rows: unknown status, duration 0, a second `onHit` passive
+   on one unit, `radius` on an `onHit` passive (each one error).
+5. Determinism: two runs of a 3,000-tick scripted match with both hooks (packs training on both sides, dogs biting) hash-equal every
+   tick; a save mid-match with a pack item started and a dog's slow active loads and continues to the same hashes.
+6. Every pin unchanged (the pin sweep), the golden's `k` lines identical and **the header's data hash unchanged** (no golden regen from
+   the sim this session); the default loop green.
+7. No per-tick allocation (an allocation row for a 200-tick match with 20 packs completing and 100 bites); no Godot; no `Dictionary` /
+   `HashSet` / `Random` / `DateTime` / LINQ in the new code; no player-facing text in C#.
+8. Docs as in Scope; build 0 / 0; smoke PASS.
 
-**Riders (a few lines only):** BUG-1166's first half (refuse an off-step `regen.hpPerSecond` / status magnitude at load, as
-`pop` does) if the loader is open anyway.
+**Design references.** docs/factions/teblor.md "Units" (the Unique row), "Unit notes" (War-dog pack), "Abilities" (Frenzy: deferred);
+docs/02 "Status effects" (Slowed: speed × (1 − magnitude)), "Population" (half steps); docs/03 "Implementation (M4-4b-3a)" (passives,
+the one-per-trigger rule, Known limits (1)), "Implementation (M3-4)" (production, the reservation), "Implementation (M7-1)" (the
+hash and save-format patterns), "Save format".
+
+**Tests required.** `DataValidationTests` / `DataConversionTests` rows for `spawnCount` and `onHit`; `DataContentHashTests`;
+`Economy/PackProductionTests` (or in `ProductionTests`): criteria 2-3; `Combat/OnHitPassiveTests`: criterion 4; a determinism and a
+save round-trip row (criterion 5); an allocation row (criterion 7); the pin sweep and the golden test green unchanged.
+
+**Constraints.** CLAUDE.md rules 2, 4, 5, 6, 8; rule 41 (no AI value, no shipped data byte); rule 43 does not apply (no Normal behaviour
+changes); the hash rule above; the developer cannot write `studio/**` (bug patches in the scratchpad). Bug ids from **BUG-1167**.
+
+**Riders (a few lines only):** BUG-1166's first half (refuse an off-step `regen.hpPerSecond` at load, as `pop` is refused) if the
+loader's regen rows are open anyway; otherwise leave it for the hardening.
+
+**QA focus (full).** The pack's pop accounting under every exit (cancel at 0 % / 99 %, the building destroyed mid-item, the owner
+defeated, a cap raised by a house mid-item): `HalfPop` must equal live units + started reservations every tick (M7-1's invariant
+extended to packs); a pack at a door with 0 / 1 / 2 / 3 free cells across consecutive ticks; `spawnCount` 8 at pop 3 (24 half-steps…
+12 pop) against a 10-pop cap; the AI training packs on a test copy for 10,000 ticks (its `pop` triggers must not stall); `onHit` on
+a unit that is also the victim of its own target's `onHit` (mutual slows), under Frenzied, under Blinded, at the hit that kills,
+on a stealthed attacker (the reveal still fires), with the status store's entry limit full; determinism across 3 processes; save
+fuzz at every tick of a 400-tick pack match; allocation under 50 packs; the pin sweep; the golden hash **must not move**.
 
 ### Next task candidates (after M7-2)
 1. M7-3: Blood-oil Frenzy's aftermath (a "when it ends apply" hook) if deferred; the Teblor `ai.json` needs nothing new.
@@ -113,25 +169,45 @@ the loop green; smoke PASS.
 ### Where we are
 STOP last session. Counter 1 / 4. M6 5 / 10 (the rest owner-blocked). **Unblocked now: M7-V1** (`UnitDef.Scale` on `main`).
 
-### Current session plan: M7-V1, feature, QA standard
+### Current session plan: M7-V1, feature, QA standard (confirmed at the 2026-11-10-0146 PLAN)
 
 **TASK_ID:** M7-V1 · **TASK_TITLE:** Draw each unit at its data `scale`
 
 **Goal.** M7's first bullet, the view half: "1.5× visuals". `UnitViews` builds each type's mesh at `UnitDef.Scale` × today's capsule
 (docs/02 "Combat / Stats": the visual scale may be larger than the collision radius; the Teblor page: units 1.5×, war-dogs normal),
-read from the sim's data as `Radius` is read today (`UnitViews` line ~136); no ViewApi change, no sim change.
+read from the sim's data as `Radius` is read today (`game/scripts/UnitViews.cs` lines 131-138: `BodyHeight(def.Radius)`, the
+`CapsuleMesh` per type); no ViewApi change, no sim change.
 
-**Scope.** The capsule mesh / its height and radius at `scale`; the selection ring, the target ring, the health bar's height and
-width follow the scaled size; corpse discs / death fade follow it; the minimap dot does not (stays one size). A `--screenshot` look
-at a 1.5× unit beside a 1.0× one on a test copy (`TestDataDir.CopyOfShipped()` with one Malazan unit at `scale` 1.5; the test scene
-under `game/tests/`). **OUT:** any `game/data` edit; a "Regenerating" HUD cue (not until the owner asks); real models (the art
-call); the Teblor buildings' 1.25× (a models-task matter).
+**Scope.** The capsule mesh's radius and height × `def.Scale`; the selection ring (`SelectionRings.cs`), the target ring
+(`TargetRing.cs`), the health bar's height and width follow the scaled size; corpse discs / death fade follow it; the minimap dot does
+not (stays one size); the click / drag-select hit test keeps the sim's `Radius` (a bigger body must not become easier to click:
+Producer default, say so in docs/03). A `--screenshot` look at a 1.5× unit beside a 1.0× one on a **forged data copy**, the pattern
+`game/tests/QaM5V2Test.cs` `Forge` uses (copy the shipped `game/data` to a temp dir, set one Malazan unit's `scale`, load from it);
+the test scene under `game/tests/` (`ScaleViewTest.tscn`). **OUT:** any `game/data` edit (test copies only); a "Regenerating" HUD
+cue (not until the owner asks); real models (the art call); the Teblor buildings' 1.25× (a models-task matter); the pack's "×3"
+in the queue strip (after M7-2).
 
 **Acceptance criteria.** 1. A unit at `scale` 1.5 is drawn 1.5× the capsule in every dimension; one at 0.5 is half; 1.0 unchanged
-(screenshot compared with today's). 2. Rings and health bar scale with it; the bar stays readable at 0.5 and 3.0. 3. Shipped data
-(every unit 1.0) renders pixel-for-pixel as before (a scene test on the shipped data + the smoke). 4. No sim read beyond
-`UnitDef.Scale`; the per-frame path allocates nothing new. 5. `ShellTest` / `UnitViewsTest` rows; smoke PASS; docs/03
-"Implementation (M7-V1)" + the docs/02 line.
+(screenshots: 1.5 beside 1.0, and 0.5 beside 1.0, looked at). 2. Rings and health bar scale with it; the bar stays readable at 0.5
+and 3.0 (screenshot at 3.0). 3. Shipped data (every unit 1.0) renders as before: a scene test asserting every type's mesh radius /
+height equals today's formula, and the smoke. 4. Clicking / box-selecting uses the sim's `Radius`, not the drawn size (a test row on
+the forged copy: a click just outside the 1.0 radius of a 1.5× unit selects nothing). 5. No sim read beyond `UnitDef.Scale`; the
+per-frame path allocates nothing new (the scale is applied at mesh build, not per frame). 6. `ShellTest` / `UnitViewsTest` rows; smoke
+PASS; docs/03 "Implementation (M7-V1)" (the formula, the hit-test rule) + one docs/02 line under "Combat / Stats".
+
+**Design references.** docs/02 "Combat / Stats" (visual scale vs collision radius); docs/factions/teblor.md "Art notes" (units 1.5×,
+war-dogs normal-scale); docs/03 "Implementation (M7-1)" (`UnitDef.Scale` 0.5-3.0, never read by the sim); docs/03 "Dumb views".
+
+**Tests required.** `game/tests/ScaleViewTest` (criteria 1-4 on the forged copy; the shipped-data formula row); the existing
+`UnitViewsTest` / `ShellTest` green; smoke PASS.
+
+**Constraints.** CLAUDE.md rules 1, 7 (views hold no gameplay state; the scale is read once from `GameData`); no `game/data` file
+under the view's diff; no ViewApi write; the developer must not kill the sim's or data's `testhost` / Godot. Bug ids from **BUG-1177**.
+
+**QA focus (standard).** The hit test at 1.5× and 3.0× (a drawn body outside the sim radius must not select, drag-select must still
+use the sim radius); the health bar and rings at 0.5 (readable, not overlapping the neighbour's); a 3.0× unit beside a building (the
+capsule may overlap the building's mesh: say so, no fix); corpse / death fade at 1.5×; the minimap unchanged; the per-frame allocation
+row with 300 units of mixed scale; the shipped data's screenshot against the previous session's (pixel-identical for the unit meshes).
 
 ### Next task candidates
 - An owner item from the inbox (the art call, ".NET 10 installed", templates, sound notes): a feature session, QA standard.
@@ -146,14 +222,22 @@ call); the Teblor buildings' 1.25× (a models-task matter).
 D-R35 on `main` (the hardening; counter 0 / 4). BUG-1181 fixed; BUG-1182 S3 / BUG-1183 S4 open (docs / comments). M7-1's `scale` /
 `regen` schemas are on `main`; `spawnCount` / `onHit` come with M7-2.
 
-### Current session plan: D27, feature, QA standard
+### Current session plan: D27, feature, QA standard (confirmed at the 2026-11-10-0146 PLAN)
 
 **TASK_ID:** D27 · **TASK_TITLE:** Tune Hard so it beats Normal on Vathar Crossing too (BUG-1163), Hard values only
 
 **Goal.** BUG-1163: the 42-match Hard v Normal tally is 29 / 11 / 2 with Vathar Crossing level at 7 / 7 (Raraku 10 / 4, Pale
-Hills 12 / 0 / 2). Move only Hard's `ai.json` values (`difficulties.hard`: `gatherBonus`, `counterStrength`, `focusFire`,
-`pullBackWounded`, the Hard opening picks / weights if the schema allows per-difficulty openings; docs/02 "AI opponent" Hard row)
-so Hard is ahead on every map with no-results fewer than 5, without touching any Normal / Easy value.
+Hills 12 / 0 / 2). Move only Hard's `ai.json` values so Hard is ahead on every map with no-results fewer than 5, without touching
+any Normal / Easy value. **PLAN facts:** the openings schema has **no per-difficulty keys** (`id`, `displayName`, `description`,
+`buildOrder`, `compositions`, `attack` only), so the levers are `difficulties.hard`'s nine keys: `waveSizeMultiplier` 1.25,
+`gatherBonus` 0.25, `expandAfter` 300, `counterStrength` 1, `buildOrderSlack` 0, `focusFire` / `pullBackWounded` / `useAbilities`
+true, `thinkInterval` 0.5. **Do not lower `thinkInterval`** (it is the AI's CPU cost; `AiPerfTests`' 8-seat bound) and do not turn
+a boolean off (the Hard tooltip in `game/data/common/ui.json` `difficulty_hard_tip`, a sim-track file, promises them). The owner's
+`counterStrength` answer has not landed: measure with today's 1.0. If the best lever needs a value the tooltip's text doesn't
+cover (it prints `gatherBonus` as `{0}%`, so that one is free), write a Request for the sim track rather than editing `ui.json`.
+**Measurement budget:** the base tally is in BUG-1163's file (don't re-run it); on the branch run the **14 Vathar rows first** per
+candidate (at most three candidates), then the full 42 **once** on the chosen one. A candidate that flips Vathar but costs Raraku or
+Pale Hills a win is reported, not shipped, unless the total still beats 29 / 11 / 2.
 
 **Files (the only ones):** `game/data/factions/malazan/ai.json`, `game/data/factions/whirlwind/ai.json` (Hard only),
 `docs/factions/*.md` (the Hard lines and any Hard-seat cell), `sim/Rts.Sim.Tests/Content/**`, `sim/Rts.Sim.Tests/QA/Content/**`.
@@ -176,8 +260,16 @@ green; the pages' Hard lines pinned; the review table. 5. Build 0 / 0; the defau
 M5-5 table; BUG-1163's file; docs/factions pages' difficulty lines.
 
 **Constraints.** Rule 43 (Hard rows only; a Normal row that moves is a finding, stop and report), rule 41 (M7-2 changes no AI
-value, so the two may run in one session), rule 48. QA tier standard (scenario numbers). The owner's `counterStrength` answer, if
-it lands in the inbox, is applied first and the tally measured with it.
+value and does not move the data hash, so the two may run in one session; D27 is the only golden regen this session), rule 48. QA
+tier standard (scenario numbers). The owner's `counterStrength` answer, if it lands in the inbox, is applied first and the tally
+measured with it. Files: only the two `ai.json` (Hard keys), `docs/factions/*.md` Hard lines / Hard-seat cells, the golden header,
+`sim/Rts.Sim.Tests/Content/**`, `sim/Rts.Sim.Tests/QA/Content/**`. Bug ids from **BUG-1184**.
+
+**QA focus (standard).** `git diff` of both `ai.json` files shows Hard keys only; the 8 `NonHardMatchPinQaTests` digests and every
+Normal v Normal / Easy pin byte-identical; the tally's per-seed Vathar table (both Hard seats) against BUG-1163's, and that no map
+got worse by more than the Vathar swing; a Hard v Hard mirror on Vathar still ends (no new stall); `AiPerfTests` 8 seats alone
+(rule 42) if `thinkInterval` or `expandAfter` moved; the golden header regenerated exactly once with the reason in
+`GatherWedgeQaTests.SameGameDataHashes`; the page's Hard cells match the data both ways (the `Content` pins).
 
 ### Next task candidates (after D27)
 1. **The Teblor roster, part 1** (`game/data/factions/teblor/` `faction.json` with `regen` 1 HP/s / 6 s, `units.json` with `scale`
