@@ -502,5 +502,6 @@ bugs outrank new features.
 | [BUG-1183](BUG-1183-d-r35-pin-nits.md) | S4 | open | D-R35 nits: a 145-character summary line in AiAdaptsContentTests; D21OpeningsQaTests' seed-19 comment quotes pre-M5-H6 figures |
 | [BUG-1177](BUG-1177-m7-v1-scale-view-nits.md) | S4 | open | M7-V1 nits: shots and hit flashes at a fixed 1.2 m whatever the drawn height; a scaled unit's drawn head is not clickable / no attack target (the sim-radius rule, for the Producer) |
 | [BUG-1178](BUG-1178-qam6v18-red-since-m7-1-save-format-10.md) | S3 | open | QaM6V18Test red on main since M7-1: format 10 always writes the map id ("" on a generated map), the scene pins HMAP right after the preset |
+| [BUG-1179](BUG-1179-m7-v2-shot-from-shooter-dead-on-firing-tick-drawn-at-1-2-m.md) | S4 | open | M7-V2: a shot whose shooter dies the tick it fires is drawn from 1.2 m, not its shooter's scaled height |
 | [BUG-1184](BUG-1184-d27-stale-25-percent-mentions-and-nits.md) | S4 | fixed (D27 fix round 1; item 4 a brief note for the Producer) | D27 nits: docs/03 stated Hard 25% as current, the pre-map AI replay's "recorded on ab54ddb" comments, mojibake in the BUG-1163 patch, the brief's file list |
 | [BUG-1185](BUG-1185-d27-standard-preset-hard-seat-pins-not-re-pinned.md) | S2 | fixed (D27 fix round 1, re-checked) | D27 left five Hard-seat digests in QA's StandardPresetPinQaTests un-re-pinned |
