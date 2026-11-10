@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S3 (real AI bug outside the criteria; scripted, not seen in the measured matches: 0-1 leg deaths a seat on Pale Hills) |
-| Status | open |
+| Status | fixed (M5-H6, 2026-11-09-1336, ACCEPTED; QA verified: the guarded-start row un-skipped, 3 workers lost, 2 kept. Producer note: the cap reads the match's total losses, as the scout's does; a per-leg count would need a saved field: accepted as a known limit, BUG-1161 lists the nits) |
 | Found | 2026-11-09-0426, task M5-9b (QA inspection, QA focus "the scout dying on the leg") |
 | System | AI: the far expansion's leg (`Ai/FarExpansion.cs`, `Leg`) |
-| Fixed by | |
+| Fixed by | M5-H6 (`FarExpansion.Leg` / `AllStarts`: the scout's cap reused) |
 
 ## Repro
 1. `dotnet test sim/Rts.Sim.Tests --filter "FullyQualifiedName~FarExpandQaTests.ALegWorker_KilledAtAGuardedStart_IsNotReplacedWithoutLimit"`
@@ -36,3 +36,15 @@ taken by the enemy's far expansion (its depot, army, towers), or a defeated seat
   point looked when its worker dies on it, or skipping a start where a known enemy building stands (the view's buildings
   and ghosts, which `Candidate` already reads).
 - The worker is `IsScout` while on the leg, so the defense's flee does not pull it back either.
+
+## Fix (M5-H6, 2026-11-09-1336, the developer)
+
+- A leg worker found dead is replaced only while the player's own unit losses (`PlayerView.OwnUnitLosses`) are at most
+  `ai.scoutReplacements` (2), the scout's own cap (BUG-1052); past it every start is marked looked (`FarLooked`) and the leg
+  ends; the seat waits armed. No new knob.
+- Builder's call (a deviation from the brief's "replaced at most `scoutReplacements` times in all"): the cap reads the
+  match's losses, not a count of leg deaths, because a count is a new saved field (a save-format bump, out of scope). The
+  consequence: late in a match (losses past 2) a leg worker's first death ends the leg for good.
+- The guarded-start scene (QA's `ALegWorker_KilledAtAGuardedStart_IsNotReplacedWithoutLimit`, un-skipped): 3 workers lost
+  (`scoutReplacements` + 1), 2 kept. Dev row `FarExpandTests.ALegWorker_Killed_IsReplacedOnlyWithinTheScoutCap_ThenTheLegEnds`
+  (failed first: 5 killed, 0 left). QA's `TheLegWorker_KilledOnTheWay_*` (one death at 0 losses) still gets its replacement.

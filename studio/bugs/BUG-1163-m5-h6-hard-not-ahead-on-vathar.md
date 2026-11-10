@@ -2,8 +2,8 @@
 
 | Field | Value |
 | --- | --- |
-| Severity | S2 (an acceptance criterion not met as written; the same 7 / 7 as at M5-9a and M5-9b, so not a regression of this task) |
-| Status | open |
+| Severity | S3 (re-triaged by the Producer at the 2026-11-09-1336 ACCEPT: filed S2 as "an acceptance criterion not met as written"; the criterion clause is waived for M5-H6 because the levers in scope act after a Vathar match is decided and the 7 / 7 is the same at M5-9a, M5-9b and M5-H6; what remains is a tuning item) |
+| Status | open (Producer ruling 2026-11-09-1336: criterion 3 read as "not inverted, no-results fewer than 5", as the previous ACCEPT read it; **the Hard-level-on-Vathar case is the data track's Hard tuning item** (`ai.json` Hard knobs / openings, a larger sample, rule 43 on its own branch), not a sim bug) |
 | Found | 2026-11-09-1336, task M5-H6 (developer's finding, QA confirmed) |
 | System | AI difficulty (Hard v Normal), measured by `Stress/HardVersusNormalTallyQaStressTests` |
 | Fixed by | |
@@ -37,3 +37,10 @@ No-results 2 (< 5: met). Hard is level, not ahead, on Vathar Crossing.
 - The Producer's call: waive "Hard ahead on every map" for this task (criterion 3 then reads "not inverted, no-results < 5",
   as at M5-9b), or carry it as Hard's tuning item (STATE "Rough edges" (1): Hard not measurably stronger than Normal on 42
   matches; a data-track `ai.json` task with a larger sample).
+
+## M5-H6 fix round 1
+Re-run once on the fix-round code (the hunt now also looks at a live enemy's start after the free ones): **29 / 11 / 2**
+again, Vathar 3 / 4 / 0 and 4 / 3 / 0, the same winners as round 1 (Normal's Vathar wins at 27,368-29,387 ticks). The
+end-game levers in scope (hunt order, house rule, leg cap) finish decided matches sooner; none of them has changed a
+Vathar winner across M5-9a, M5-9b, M5-H6 and this round, so "Hard ahead on Vathar" looks like Hard's tuning
+(`ai.json`, out of scope by rule 41). Left for the Producer.

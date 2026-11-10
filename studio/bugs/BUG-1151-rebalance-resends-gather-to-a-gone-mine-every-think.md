@@ -31,3 +31,10 @@ gatherer again and sends it to the same nearest remembered mine: one wasted comm
 - Likely fix (an AI change, so out of M5-5): mark the node when a Gather the AI sent to a worker that was not idle applies
   and the worker's gather node is unchanged, or let `Rebalance` skip a node it sent a gatherer to last think when that
   worker still works its old node.
+
+## M5-H6 (2026-11-09-1336, the developer): a second repro
+
+- Since M5-H6 the Pale Hills four-seat FFA seed 2 (QA's `FarExpandProbeQaStressTests.PaleHillsFfa_To144000_FarFogOracle(2)`)
+  trips the refusal-streak check at tick 35,301: player 1's Gather (unit 45) to a gone node at (176, 100) refused 9 thinks
+  in a row. The row is skipped under this id with the measurement (the far fog oracle clean to there). Not fixed here
+  (the brief's (d)). `MatchCriterionSweepQaStressTests.Known` generated 4 still fails as recorded.

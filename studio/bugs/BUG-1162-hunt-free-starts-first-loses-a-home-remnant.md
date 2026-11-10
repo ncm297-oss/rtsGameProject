@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S3 (a hide-and-seek regression on a scene; every measured match row still ends) |
-| Status | open |
+| Status | fixed (M5-H6 fix round 1, 2026-11-09-1336, ACCEPTED; QA re-check verified: own start 1 seen at 52,061, the ally's start never targeted in a team match) |
 | Found | 2026-11-09-1336, task M5-H6 (QA inspection, QA focus "hide-and-seek rows") |
 | System | AI hunt: `MilitaryManager.NextSweep` / `NextHuntStart` (M5-H6 lever (i)) |
-| Fixed by | |
+| Fixed by | M5-H6 fix round 1 |
 
 ## Repro
 1. `dotnet test sim/Rts.Sim.Tests --filter "FullyQualifiedName~EndGameH6QaTests.ALoneWorker_OnTheSecondHunt_IsFound"`
@@ -49,3 +49,15 @@ because the proxy it walks to is 17.6 m from the start's centre (BUG-1161 item 2
   was seen building or gathering away from home, or holds a far depot the seat once saw), or insert the starts into the
   nearest-first order by distance (the brief's own alternative in (i)) instead of walking them all first.
 - Related: BUG-1116 (the sweep order), BUG-1157 (the late finish the lever fixes), BUG-1161 item 2.
+
+## Fix (M5-H6 fix round 1)
+`MilitaryManager.NextHuntStart`: once every free start's proxy is visited, a live enemy's own start comes next (nearest
+first), then nearest-first as before. The skipped row is un-skipped and green. Second-hunt times on QA's scene: own start 1
+never -> 52,061; free start 3 60,945 -> 58,257; far corner 17,921 -> 17,301; interior quarter 51,545 -> 48,421. Dropped
+first try: the enemy start in the same list as the free ones (own start 1 41,649, but the interior quarter row unseen
+in 72,000). Match rows: Pale Hills 1 / 2 / 5 and H v N 2 / 3-6 unchanged, H v N 7 / 8 67,593 -> 68,277, HuntStressTests
+FFA seed 2 105,690 -> 75,382, tally unchanged (29 / 11 / 2); one page cell re-printed (Malazan `crossbow_push` v
+`raider_rush` seed 19 back to "never", as at M5-9b, covered by `KnownBeatenAlive`). Regression rows:
+`EndGameH6QaTests.ALoneWorker_OnTheSecondHunt_IsFound("own start 1")` (failed first: never seen),
+`EndGameHardeningTests.TheHuntsStarts_AreTheFreeAndDefeatedOnes_NearestFirst_ThenALiveEnemys` (failed first: -1 once
+the free starts were visited).

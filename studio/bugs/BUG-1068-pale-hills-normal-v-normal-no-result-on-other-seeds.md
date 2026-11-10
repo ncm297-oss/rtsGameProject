@@ -3,7 +3,7 @@
 | Field | Value |
 | --- | --- |
 | Severity | S3 |
-| Status | open, narrowed to seed 2 (M5-4d 2026-11-06-0926: Pale Hills seeds 3 / 4 / 5 / 6 and generated seed 6 end (`MapSlice2StressTests.NormalVersusNormal_KnownStalls_EndWithin72000`, un-skipped: 29,421 / 29,421 / 52,557 / 29,421 / 26,875 ticks); seed 2 is a stalemate, both sides holding two halls at 60:00: `NormalVersusNormal_PaleHillsSeed2_Stalemate_EndsWithin72000`, skipped under this id) |
+| Status | open, narrowed to the four-seat Pale Hills FFA seed 1 (no free gold with four seats; `HuntStressTests.FourAiSeats_OnPaleHills_Seed1_KnownStall` skipped). **Every 1v1 Pale Hills seed ends since M5-H6 (2026-11-09-1336):** seed 2 at 49,565, seed 5 at 55,485, 3 / 4 / 6 at 33,484, seed 1 at 50,140; the generated seed 6 at 25,941 |
 | Found | 2026-11-06-0326, task M6-S8 (QA) |
 | System | Map data (`game/data/maps/pale_hills.json`) x AI waves (`MilitaryManager`: waves target buildings only) |
 | Fixed by | seeds 3-6 and generated 6: M5-4d (b7a3f83 + 6a3c83c + 1eccd06, the hunt); seed 2: not a hunt case, the sim's next hardening or M5-4d slice 2. **Candidate (b) is built on the M5-9a branch (2026-11-08-1556, `ai.starvedWaveAfter`): seed 2 ends there at 53,797 and its FFA at 80,278, both rows un-skipped; not on `main` yet. Candidate (a), the expansion reach, is the next sim task (M5-9b, same branch): see the Producer triage below** |
@@ -119,3 +119,10 @@ the other in an hour.
 - So (a) does what the Producer asked of it on the 1v1 maps (the unused starts' 18,000 gold is taken: gathered gold
   14,000-17,800 a seat on seeds 2 / 5 against 9,000 before), and the stalls left are the end game's finish (BUG-1116 /
   BUG-1157), not gold starvation. The four-seat FFA has no gold left to find.
+
+## M5-H6 (2026-11-09-1336, the developer)
+
+- Pale Hills seed 2 Normal v Normal ends at **49,565** (41:18, seat 1, three hunts) with M5-H6's house rule and the hunt's
+  free starts (BUG-1157): `MapSlice2StressTests.NormalVersusNormal_PaleHillsSeed2_Stalemate_EndsWithin72000` un-skipped.
+  The four-seat Pale Hills seed-1 FFA (`HuntStressTests.FourAiSeats_OnPaleHills_Seed1_KnownStall`) still has no result by
+  144,000: stays skipped. Status left to the Producer (seed 2's own row is green).

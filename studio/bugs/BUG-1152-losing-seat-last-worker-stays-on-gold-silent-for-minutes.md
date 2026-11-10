@@ -68,3 +68,9 @@ for workers; below the 4,800-tick limit once the oracle counts only time with a 
 - No change measured: Raraku is a 2-player map with two starts, so the far expansion has no free start to look at there
   (a seat may arm, but builds only by a free mine it has already seen); `MapSlice2 ..._RarakuSeed5_*` stays green and the
   sweep's `Known` entries (Raraku 1 and 5) still fail as recorded. Generated seed 4 (BUG-1151) likewise still fails.
+
+## M5-H6 (2026-11-09-1336, the developer): its repro rows no longer show it
+
+- With M5-H6's house rule and the hunt's free starts, Raraku seeds 1 and 5 no longer fail QA's sweep checks (seed 1 ends at
+  28,231, longest silence 739 ticks; seed 5 at 36,004, longest 939), so both `MatchCriterionSweepQaStressTests.Known`
+  entries are out. Not fixed: the losing seat no longer reaches the wood-starved state on those seeds; no row shows it now.

@@ -448,8 +448,9 @@ own cues (select, order, refused, building placed or finished, unit or tech read
   round 2, BUG-1153; [03 Implementation (M5-9a)](03-technical-design.md#implementation-m5-9a)).
 - When its own gold is spent the AI expands to the far mines with a depot: short of gold for the unit it would train next,
   with no worker on gold and no gold mine it knows, it sends a worker to look at the start locations no player took, and
-  once it has seen a free mine there (or anywhere within `rules.json` `ai.farExpandReach`, 384 m) with no enemy drop-off by
-  it, it builds its cheapest drop-off that costs no gold beside it (a Town Hall only if it can pay for one) and moves
+  once it has seen a free mine within `rules.json` `ai.farExpandReach` (384 m) of its Town Hall with no enemy drop-off by
+  it (at one of those starts or anywhere else: the reach applies to every mine, a start location's included; BUG-1181), it
+  builds its cheapest drop-off that costs no gold beside it (a Town Hall only if it can pay for one) and moves
   gatherers to it; one at a time, and 0 turns the rule off (built in M5-9b, BUG-1068;
   [03 Implementation (M5-9b)](03-technical-design.md#implementation-m5-9b)). It walks only to starts within that reach, and
   replaces a worker killed on the way only while it has lost at most `ai.scoutReplacements` (2) units in the match, as
@@ -507,6 +508,9 @@ own cues (select, order, refused, building placed or finished, unit or tech read
   Hard 1.0). A Hard AI that has seen only cavalry gives its Line twice the usual weight, a Normal one 1.5 times. No unit
   is weighted below its opening's mix and a unit the mix doesn't list is not added, so the shift tilts the army, it
   doesn't replace it (built in M5-9a, D14 c; [03 Implementation (M5-9a)](03-technical-design.md#implementation-m5-9a)).
+  The shift shows only when the bank, not a saturated producer, limits what is trained: a single barracks that already
+  trains the countering unit every time its queue empties cannot train more of it for a heavier weight (measured in D26a,
+  BUG-1156; the pages' "How the AI adapts" say where that is the case for each faction).
 - The AI sees only its own fog-of-war view. It never reads hidden enemy state.
 
 ## Game flow

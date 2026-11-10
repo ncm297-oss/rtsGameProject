@@ -3,7 +3,7 @@
 | Field | Value |
 | --- | --- |
 | Severity | S3 (was S1; re-triaged by the Producer at the 2026-11-07-0236 ACCEPT: the row no longer ending is BUG-1068's gold starvation on Pale Hills seed 2 with a new face, the house churn is a design nit, and the row is marked a known stall with this id) |
-| Status | open (the 4-seat seed-2 row is a skipped known case on `main`; on the held M5-9a branch it ends at 80,278 and is un-skipped, while the seed-1 FFA there has no result by 144,000: BUG-1153's family. The house rule and the hunt's lone-idle-worker gap are the sim's hardening work, see the ruling below) |
+| Status | open, narrowed (M5-H6 2026-11-09-1336, ACCEPTED: **the house rule shipped**, `BuildOrderExecutor.ReopenLost` reopens a House step only when the population is within `ai.houseWhenPopWithin` of its cap; what is left under this id is the lone-idle-worker sweep-order row `EndGameHardeningTests.ALoneIdleWorker_*` (skipped; the deferral lever measured and not shipped: it adds nothing once the hunt looks at the starts) and the four-seat Pale Hills FFA seed 1 known stall with BUG-1068) |
 | Found | 2026-11-07-0236, task M5-4d-2 |
 | System | AI (BuildOrderExecutor.ReopenLost), match end |
 | Fixed by | |
@@ -126,3 +126,15 @@ local points spliced into the leg) and be judged on that row plus QA's hide and 
 - The Pale Hills seed-1 FFA has no result by 144,000 with the far expansion too (no free gold left with four seats): skipped
   under BUG-1068 / this id (`HuntStressTests.FourAiSeats_OnPaleHills_Seed1_KnownStall`). The seed-2 FFA ends at 97,140
   (was 80,278) and stays green.
+
+## M5-H6 (2026-11-09-1336, the developer): the house rule shipped; the sweep order not
+
+- **The house rule** (`BuildOrderExecutor.ReopenLost`: a House step reopened only when `HalfPopCap < hard cap` and
+  `HalfPopCap - HalfPop <= ai.houseWhenPopWithin`) ships this time: with the far expansion's gold and the hunt's free starts
+  (BUG-1157) the rows that sank it twice now end: Pale Hills seed 1 50,140 (bound 72,000), seed 5 55,485, seeds 3 / 4 / 6
+  33,484, generated 6 25,941. `RebuildTests.ARazedHouse_BelowTheCap_IsRebuiltOnlyWhenThePopulationNeedsIt` (failed first).
+- **The sweep order** (the leg deferred while an interior point is nearer the origin than the reached ring point) was
+  measured alone (Pale Hills seed 2 77,935, seed 5 81,921, Hard v Normal seed 2 68,492) and with the others; it adds nothing
+  once the free starts and the house rule are in and was not shipped. `EndGameHardeningTests.ALoneIdleWorker_*` stays
+  skipped under this id.
+- The four-seat Pale Hills seed-1 FFA still has no result by 144,000 (40 waves, 1 hunt): stays skipped.
