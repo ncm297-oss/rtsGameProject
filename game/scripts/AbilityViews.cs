@@ -350,7 +350,7 @@ public partial class AbilityViews : Node3D
         if (_runner != null) _runner.Ticked += OnTicked;
         _sel = selection;
         _bodyTop = new float[data.Units.Length];
-        for (int t = 0; t < _bodyTop.Length; t++) _bodyTop[t] = UnitViews.BodyHeight(data.Units[t].Radius);
+        for (int t = 0; t < _bodyTop.Length; t++) _bodyTop[t] = UnitViews.DrawnHeight(data.Units[t]); // M7-V1: the drawn top
         _barSlot = new int[unitCapacity];
         _circleSlot = new int[unitCapacity];
         _barFillShown = new float[unitCapacity];
@@ -678,7 +678,7 @@ public partial class AbilityViews : Node3D
             float fade = 1f - c.Age(i, world.TickNumber, a);
             Vector3 at = UnitViews.GroundPoint(world, h.Index, alpha);
             GroundDisc disc = _cueDiscs.Take(i);
-            disc.Place(world.Heightmap, new System.Numerics.Vector2(at.X, at.Z), u.Radius[h.Index] + CueMargin, 0f, CueLift);
+            disc.Place(world.Heightmap, new System.Numerics.Vector2(at.X, at.Z), UnitViews.DrawnRadius(world, h.Index) + CueMargin, 0f, CueLift);
             disc.SetColors(new Color(CueColor.R, CueColor.G, CueColor.B, CueFillAlpha * fade), new Color(CueColor.R, CueColor.G, CueColor.B, fade), CueRimShare);
             if (!disc.Visible) disc.Visible = true;
             if (_castLostText.Length > 0)

@@ -140,6 +140,8 @@ wind-up (time from start of attack to the damage point, default 0.3 s melee / 0.
 optional splash radius, minimum range, bonus multipliers vs armor classes, and a friendly-fire flag.
 What an attack may target is `attack.targets`: `units`, `buildings` or `all` (the default); the Battering Ram is
 `buildings` (M4-2a).
+A unit's `scale` (0.5-3.0, default 1) only changes how big it is drawn, and what is drawn around it (selection ring, hp bar,
+corpse); its collision radius, and what a click or a drag-box selects, stay the radius (M7-V1).
 
 ### Damage formula
 

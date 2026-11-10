@@ -17,10 +17,13 @@ namespace Rts.Game;
 /// bar over the body at their interpolated position: a dark back and a fill of <c>Hp / max</c>, green through yellow to
 /// red (<see cref="UnitHpBars.Color"/>). Two <see cref="MultiMesh"/>es (back, fill) hold one instance per bar, written
 /// densely, so a dead or healed unit simply isn't listed the next frame. Above <see cref="BarFullZoom"/> the bars grow
-/// with the zoom, as the cargo cube does (M3-V1), so they keep their screen size.</para>
+/// with the zoom, as the cargo cube does (M3-V1), so they keep their screen size. M7-V1: a bar sits over the drawn body (its
+/// type's data <c>scale</c> times the capsule) and its length follows the scale, never below <see cref="BarMinScale"/>
+/// (<see cref="BarScaleFor"/>, per type at <see cref="Bind"/>); its thickness doesn't, so the cast bar and status markers
+/// stacked above it keep their spacing.</para>
 /// <para><b>Markers.</b> Every <see cref="DeathEvent"/> but an expiry (read between ticks: from <see cref="SimRunner.Ticked"/>, so a
 /// frame of several ticks misses none, and from the frame loop for scenes that tick the sim themselves) adds a marker to a
-/// <see cref="DeathMarkers"/> ring: a disc of the unit's radius in its owner's colour (<see cref="CorpseShade"/>) on a wider,
+/// <see cref="DeathMarkers"/> ring: a disc of the unit's drawn radius (M7-V1: <see cref="UnitViews.DrawnRadius(UnitDef)"/>) in its owner's colour (<see cref="CorpseShade"/>) on a wider,
 /// darker rim disc (<see cref="CorpseRimShade"/>, <see cref="CorpseRimScale"/>; M4-V2, BUG-0160: at 35 % both teams read
 /// black) for <see cref="DeathMarkers.UnitLifetimeTicks"/>,
 /// or a low grey box over a building's footprint for <see cref="DeathMarkers.BuildingLifetimeTicks"/>, both in game time
@@ -42,6 +45,9 @@ public partial class CombatViews : Node3D
 {
     /// <summary>Bar length, thickness and gap above the body top at zoom up to <see cref="BarFullZoom"/>, in meters.</summary>
     public const float BarLength = 1.2f, BarThickness = 0.16f, BarGap = 0.35f;
+
+    /// <summary>The smallest share of <see cref="BarLength"/> a bar is drawn at however small its unit's data scale (M7-V1: a 0.5 unit's bar stays readable).</summary>
+    public const float BarMinScale = 0.75f;
 
     /// <summary>Zoom (camera height, m) up to which bars keep their size; above it they grow in proportion (the cargo rule).</summary>
     public const float BarFullZoom = UnitViews.CargoFullZoom;
@@ -87,6 +93,9 @@ public partial class CombatViews : Node3D
     private GameData _data = null!;
     private Color[] _corpseColors = Array.Empty<Color>(), _rimColors = Array.Empty<Color>();
     private float[] _bodyTop = Array.Empty<float>();
+    // Per type, its bar length's share of BarLength (M7-V1).
+    private float[] _barTypeScale = Array.Empty<float>();
+    private float[] _shownLength = Array.Empty<float>();
     private int[] _hurt = Array.Empty<int>();
     private float[] _shownFill = Array.Empty<float>();
     private Color[] _shownColor = Array.Empty<Color>();
@@ -115,7 +124,13 @@ public partial class CombatViews : Node3D
     /// <summary>The colour of bar <paramref name="k"/> as drawn (the value written to its instance).</summary>
     public Color BarColor(int k) => _shownColor[k];
 
-    /// <summary>The bar length drawn at the current zoom, in meters.</summary>
+    /// <summary>The length bar <paramref name="k"/> is drawn at, in meters (zoom and its unit's scale, M7-V1).</summary>
+    public float BarLengthOf(int k) => _shownLength[k];
+
+    /// <summary>A bar's share of <see cref="BarLength"/> for a unit of data scale <paramref name="scale"/>: the scale, at least <see cref="BarMinScale"/>.</summary>
+    public static float BarScaleFor(float scale) => Math.Max(scale, BarMinScale);
+
+    /// <summary>The bar length drawn at the current zoom for a scale-1 unit, in meters.</summary>
     public float BarLengthNow => BarLength * _barScale;
 
     /// <summary>What marker instance <paramref name="slot"/> shows: 0 nothing, 1 a corpse, 2 rubble.</summary>
@@ -154,7 +169,13 @@ public partial class CombatViews : Node3D
     {
         _data = data;
         _bodyTop = new float[data.Units.Length];
-        for (int t = 0; t < _bodyTop.Length; t++) _bodyTop[t] = UnitViews.BodyHeight(data.Units[t].Radius);
+        _barTypeScale = new float[data.Units.Length];
+        for (int t = 0; t < _bodyTop.Length; t++)
+        {
+            // M7-V1: over the drawn body, its length following the data scale.
+            _bodyTop[t] = UnitViews.DrawnHeight(data.Units[t]);
+            _barTypeScale[t] = BarScaleFor(data.Units[t].Scale);
+        }
         _corpseColors = new Color[playerRgb.Length];
         _rimColors = new Color[playerRgb.Length];
         for (int p = 0; p < playerRgb.Length; p++)
@@ -167,6 +188,7 @@ public partial class CombatViews : Node3D
         // A shared array from Match is kept; one too short for this unit store (an earlier Bind's own) is replaced (BUG-0521 item 3).
         if (MaxHp == null || MaxHp.Capacity < unitCapacity) MaxHp = new SlotMaxHp(unitCapacity);
         _shownFill = new float[unitCapacity];
+        _shownLength = new float[unitCapacity];
         _shownColor = new Color[unitCapacity];
         _back = Multi("HpBack", new BoxMesh { Size = Vector3.One, Material = Flat(BarBackColor, vertexColor: false) }, unitCapacity, colors: false);
         _fill = Multi("HpFill", new BoxMesh { Size = Vector3.One, Material = Flat(Colors.White, vertexColor: true) }, unitCapacity, colors: true);
@@ -249,13 +271,15 @@ public partial class CombatViews : Node3D
         // The hurt units the screen shows: through the fog's shown list, so a hidden unit gets no bar.
         int[] maxHp = MaxHp!.Refreshed(world);
         int n = UnitHpBars.Collect(fog != null ? fog.UnitShown : u.Alive, u.Hp, maxHp, _hurt);
-        float len = BarLength * _barScale, thick = BarThickness * _barScale;
+        float thick = BarThickness * _barScale;
         for (int k = 0; k < n; k++)
         {
             int i = _hurt[k];
             int type = u.TypeId[i];
             UnitHpBars.Shows(u.Hp[i], maxHp[i], out float fill);
             _shownFill[k] = fill;
+            float len = BarLength * _barScale * _barTypeScale[type];
+            _shownLength[k] = len;
             Vector3 top = UnitViews.GroundPoint(world, i, alpha) + new Vector3(0f, _bodyTop[type] + BarGap * _barScale, 0f);
             _back.SetInstanceTransform(k, new Transform3D(Basis.FromScale(new Vector3(len, thick * 0.8f, thick * 0.8f)), top));
             float filled = Math.Max(len * fill, 1e-3f);
@@ -323,7 +347,7 @@ public partial class CombatViews : Node3D
         }
         else
         {
-            float r = _data.Units[Math.Clamp(type, 0, _data.Units.Length - 1)].Radius;
+            float r = UnitViews.DrawnRadius(_data.Units[Math.Clamp(type, 0, _data.Units.Length - 1)]); // M7-V1: the drawn body's
             // At the highest ground under the rim, so a disc on a ramp is not half buried (BUG-0190 item 1).
             y = TerrainHeight.MaxUnder(world.Heightmap, p.X, p.Y, r * CorpseRimScale);
             _markerTransform[slot] = new Transform3D(Basis.FromScale(new Vector3(r, CorpseHeight, r)), new Vector3(p.X, y + CorpseHeight / 2f, p.Y));

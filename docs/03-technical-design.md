@@ -2922,6 +2922,37 @@ rendering of `scale` come next).
   trip), `DataValidationTests` / `DataConversionTests` / `StatusLoaderTests` / `DataContentHashTests` rows,
   `DamageCalcTests.TheGiantRow_*` (the shipped `giant` armor class: x1.25 pierce and magic, x0.75 siege, x1.0 melee).
 
+### Implementation (M7-V1)
+
+M7's first bullet, the view half ("1.5× visuals"): each unit type is drawn at its data `scale`. View code only; no sim or
+ViewApi change, no data file changed (shipped units are all at 1.0, so the game draws exactly as before).
+
+- **The formula:** a type's placeholder capsule is `UnitViews.DrawnRadius(def)` = `radius x scale` wide and
+  `UnitViews.DrawnHeight(def)` = `BodyHeight(radius) x scale` = `(2 radius + 1) x scale` tall, so 1.5 is 1.5x in every
+  dimension and 0.5 half. The scale is applied once per type when `UnitViews.Bind` builds the shared `CapsuleMesh`; the
+  per-frame path reads nothing new for the body (it already placed the node at half the mesh's height, so feet stay on the
+  ground). The view reads `UnitDef.Scale` from `GameData` as it reads `UnitDef.Radius`; nothing else from the sim.
+- **What follows the drawn body:** the selection ring (`1.35 x radius x scale`) and the attack-order target ring
+  (`1.7 x radius x scale`), both through `UnitViews.DrawnRadius(world, slot)` (the slot's radius times its type's scale,
+  three array reads a ring, no allocation); the hp bar sits over the drawn top and its length is
+  `1.2 m x max(scale, 0.75)` (`CombatViews.BarScaleFor`, per type at `Bind`: a 0.5 unit's bar stays readable at 0.9 m, a
+  3.0 unit's is 3.6 m); its thickness doesn't scale, so the cast bar and status markers stacked above it keep their
+  spacing (they too sit over the drawn top, `AbilityViews`); the corpse disc and its rim (`radius x scale`, rim x1.2); the
+  refused-cast cue disc round a caster (drawn radius + 0.9 m). Units have no death fade (the body goes the frame the death
+  is shown), so there is nothing else to scale. **Not scaled:** the minimap dot (one size), the cargo cube (it sits over the
+  drawn top, its size is the zoom's).
+- **The hit test keeps the sim's `radius`** (Producer default): a click picks by the screen circle of the collision radius
+  round the scale-1 body centre (`ScreenPicker.PickClick`, floor 12 px) and a box by that centre, exactly as before; a
+  bigger body is not easier to click, and a 3.0 unit's drawn head above its sim body selects nothing. The scale changes
+  only how a unit looks: never what it hits, blocks or is hit by (docs/02 "Combat / Stats").
+- **Known look:** a 3.0 body (3.6 m wide at radius 0.6) overlaps its neighbours and can overlap a building's mesh beside it;
+  collision is still the radius, so that is drawing only.
+- **Tests:** `game/tests/ScaleViewTest` (shipped data: every type today's capsule; a forged data copy with Heavy Infantry
+  1.5, Crossbowman 0.5, Sapper 3.0 and the catapult 1.5 in a real match: mesh sizes against the Laborer beside them, feet on
+  the ground, both rings, the bar lengths, the corpse discs, the click / box rows for the 1.5 catapult and the 3.0 Sapper,
+  0 bytes over 20 frames of the mixed scales; windowed with `-- --shots <dir>` it saves the row), `UnitViewsTest` (every
+  type's mesh is the formula), `ShellTest` (every body of the menu's match is the formula).
+
 ## Vision, detection, fog
 
 Fog of war and the high-ground rule are in since M4-3a (`sim/Rts.Sim/Vision/`); the last-known building ghosts, buildings

@@ -8,7 +8,7 @@ namespace Rts.Game;
 /// <summary>Flat rings under the selected units: one <see cref="MultiMesh"/> instance per selected unit, one draw call.</summary>
 public partial class SelectionRings : MultiMeshInstance3D
 {
-    /// <summary>Ring radius as a multiple of the unit's radius.</summary>
+    /// <summary>Ring radius as a multiple of the unit's drawn radius (M7-V1: <see cref="UnitViews.DrawnRadius(World, int)"/>, its radius times its data scale).</summary>
     public const float RadiusScale = 1.35f;
 
     /// <summary>Height above the ground so the ring doesn't z-fight the terrain, in meters.</summary>
@@ -22,6 +22,10 @@ public partial class SelectionRings : MultiMeshInstance3D
 
     // Kept so the per-frame update doesn't go through the engine property each time.
     private MultiMesh? _mm;
+    private float[] _shownRadius = Array.Empty<float>();
+
+    /// <summary>The radius ring <paramref name="k"/> (k below <see cref="ShownCount"/>) is drawn at, in meters (the dummy renderer of headless runs keeps no instance data to read back).</summary>
+    public float ShownRadius(int k) => (uint)k < (uint)_shownRadius.Length ? _shownRadius[k] : 0f;
 
     /// <summary>Creates the ring mesh and sizes the instance buffer for every unit slot.</summary>
     public void Init(int unitCapacity)
@@ -40,6 +44,7 @@ public partial class SelectionRings : MultiMeshInstance3D
             VisibleInstanceCount = 0,
         };
         CastShadow = ShadowCastingSetting.Off;
+        _shownRadius = new float[unitCapacity];
     }
 
     /// <summary>Puts one ring under each live selected unit at its interpolated position; no allocation.</summary>
@@ -52,7 +57,8 @@ public partial class SelectionRings : MultiMeshInstance3D
         {
             EntityHandle h = selected[i];
             if (!world.Units.IsAlive(h)) continue;
-            float s = world.Units.Radius[h.Index] * RadiusScale;
+            float s = UnitViews.DrawnRadius(world, h.Index) * RadiusScale;
+            if (n < _shownRadius.Length) _shownRadius[n] = s;
             Vector3 p = UnitViews.GroundPoint(world, h.Index, alpha) + new Vector3(0f, Lift, 0f);
             // Flattened in Y so the torus reads as a ring painted on the ground.
             mm.SetInstanceTransform(n++, new Transform3D(Basis.FromScale(new Vector3(s, 0.15f, s)), p));
