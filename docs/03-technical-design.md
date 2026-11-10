@@ -2975,7 +2975,10 @@ slow is **not** here: a "when it ends, apply" hook needs a decision on the statu
   `onHit` passives hashes exactly as before: the golden replay's header data hash did not move, nor did any `k` line. No
   new hashed state: a pack is ordinary units, a bite an ordinary status entry.
 - **The AI.** `PlayerView.HalfPop` is `World.HalfPop` (live units + started items), so the `pop` step trigger and
-  `attack.minArmyPop` count a pack from its start, before a dog stands (proven, no code). `ProductionManager`'s
+  `attack.minArmyPop` count a pack from its start, before a dog stands (proven, no code). **Correction (QA, BUG-1168):** only
+  the `pop` step trigger reads `World.HalfPop`; `attack.minArmyPop` is the live army's half-pop (`MilitaryManager` /
+  `ArmySize`), so it counts a pack once its dogs stand (×3 then), and every per-unit worth (`ArmySize`, `minArmyCost`, the
+  defense, the army-value sample) counts a pack unit at the whole item's cost: the next sim task fixes both. `ProductionManager`'s
   composition share counts queued items (one pack = one unit's share); no shipped unit is a pack, so no AI behaviour
   changed; revisit with the Teblor AI.
 - **Tests:** `Economy/PackProductionTests` (one item, 3 units, the reservation, cancels at 2 / 150 / 279 of 280, the cap
