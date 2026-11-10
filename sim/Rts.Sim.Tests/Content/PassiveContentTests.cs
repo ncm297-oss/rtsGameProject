@@ -11,11 +11,13 @@ namespace Rts.Sim.Tests.Content;
 /// sentence of its unit's bullet in the faction page's "Unit notes", field by field, both ways: a page passive with no data
 /// passive fails unless it is a named allowance (<see cref="PendingPassives"/>), and a data passive with no page sentence
 /// fails. The data has no passive names, so a page sentence is matched to a data passive by its trigger wording:
-/// "below &lt;n&gt;% HP" is <c>whenBelowHp</c>, "when a &lt;Unit&gt; dies" is <c>onDeath</c>.
+/// "below &lt;n&gt;% HP" is <c>whenBelowHp</c>, "when a &lt;Unit&gt; dies" is <c>onDeath</c>, and (D-R36, ahead of the war-dog's
+/// Hamstring) "each bite" / "each hit" is <c>onHit</c>, whose sentence states the status, its magnitude and "for &lt;n&gt; s".
 /// </summary>
 public class PassiveContentTests
 {
-    private static readonly string[] Factions = { "malazan", "whirlwind" };
+    /// <summary>The data's factions, in data order (D-R36): a new faction's passives are pinned the session they land.</summary>
+    private static string[] Factions => ContentFactions.Keys;
 
     /// <summary>
     /// Page passives with no data passive yet (Malazan's Heavy Infantry and Wickan Lancer, whose triggers the sim doesn't
@@ -45,15 +47,15 @@ public class PassiveContentTests
 
     private static readonly Regex BelowHp = new(@"^below " + Num + @" ?% HP\b", Opts);
     private static readonly Regex OnDeath = new(@"^when an? (?<unit>.+?) dies\b", Opts);
-    private static readonly Regex Gains = new(@"\bgains? (?<status>[A-Z][A-Za-z]*)", Opts);
+    private static readonly Regex OnHit = new(@"^each (?:bite|hit)\b", Opts);
+    private static readonly Regex Gains = new(@"\b(?:gains?|leaves (?:it|the target)) (?<status>[A-Z][A-Za-z]*)", Opts);
     private static readonly Regex Within = new(@"\bwithin " + Num + @" ?m\b", Opts);
     private static readonly Regex For = new(@"\bfor " + Num + @" ?s\b", Opts);
     private static readonly Regex Takers = new(@"\bdies, (?<list>.+?) within\b", Opts);
     private static readonly Regex AttackSpeed = new(@"\+" + Num + @" ?% attack speed\b", Opts);
 
     [Theory]
-    [InlineData("malazan")]
-    [InlineData("whirlwind")]
+    [MemberData(nameof(ContentFactions.Theory), MemberType = typeof(ContentFactions))]
     public void EveryDataPassive_MatchesItsPageSentence_AndEveryPageSentenceIsLoadedOrPending(string faction)
     {
         AbilityContentTests.Result r = Compare(Data, faction, PageTables.FactionLines(faction));
@@ -207,6 +209,73 @@ public class PassiveContentTests
         Assert.True(r.Problems.Count == 0, string.Join("\n", r.Problems));
     }
 
+    // ---- D-R36: the onHit shape (the war-dog's Hamstring, teblor.md), pinned before any shipped unit has one ----
+
+    /// <summary>teblor.md's Hamstring sentence, as <see cref="PagePassives"/> reads it from the War-dog's note.</summary>
+    private static PagePassive TeblorHamstring() =>
+        Assert.Single(PagePassives(PageTables.FactionLines("teblor"), "teblor.md"), p => p.Name == "Hamstring");
+
+    /// <summary>
+    /// malazan.md with teblor.md's Hamstring sentence (<paramref name="text"/>, default its own words) added to the Sapper's
+    /// note, and the Sapper given the data's Hamstring in memory (onHit, slowed, <paramref name="magnitude"/>,
+    /// <paramref name="seconds"/>): the war-dog row's shape on a shipped unit, since no Teblor unit is loaded yet.
+    /// </summary>
+    private static AbilityContentTests.Result CompareHamstring(string? text = null, float magnitude = 0.2f, double seconds = 2, bool withPassive = true)
+    {
+        string sentence = text ?? TeblorHamstring().Text;
+        string[] lines = Mutated("malazan", "Fragile; wants an escort.", $"Fragile; wants an escort. Passive **Hamstring**: {sentence}");
+        UnitDef sapper = Data.Units[Data.FindUnit("malazan_sapper")];
+        var hamstring = new UnitPassive
+        {
+            Trigger = PassiveTrigger.OnHit,
+            Status = Data.Statuses.Single(x => x.Key == "slowed").Id,
+            Magnitude = magnitude,
+            DurationTicks = (int)Math.Round(seconds * SimConstants.TicksPerSecond),
+            Units = ImmutableArray<int>.Empty,
+        };
+        ImmutableArray<UnitPassive> passives = withPassive ? sapper.Passives.Add(hamstring) : sapper.Passives;
+        return Compare(Data, "malazan", lines, passivesOf: u => u.Id == sapper.Id ? passives : u.Passives);
+    }
+
+    [Fact]
+    public void TeblorsHamstringSentence_IsTheWarDogsOnHitPassive()
+    {
+        PagePassive p = TeblorHamstring();
+        Assert.Equal("War-dog", p.Unit);
+        AbilityContentTests.Result r = CompareHamstring();
+        Assert.True(r.Problems.Count == 0, string.Join("\n", r.Problems));
+    }
+
+    /// <summary>The onHit pin reads each field: a page word or a data value changed alone fails naming the field.</summary>
+    [Theory]
+    [InlineData("Slowed 20%", "Slowed 30%", 0.2f, 2.0, "'Hamstring' magnitude:")]
+    [InlineData("Slowed 20%", "Slowed", 0.2f, 2.0, "'Hamstring' magnitude:")]
+    [InlineData("for 2 s", "for 3 s", 0.2f, 2.0, "'Hamstring' duration:")]
+    [InlineData("for 2 s", "briefly", 0.2f, 2.0, "'Hamstring' duration:")]
+    [InlineData("leaves it Slowed", "leaves it Burning", 0.2f, 2.0, "'Hamstring' status:")]
+    [InlineData("", "", 0.25f, 2.0, "'Hamstring' magnitude:")]
+    [InlineData("", "", 0.2f, 3.0, "'Hamstring' duration:")]
+    [InlineData("each bite", "a bite", 0.2f, 2.0, "passive onHit: no \"Passive **Name**:\" sentence")]
+    public void AMutatedHamstring_FailsNamingTheField(string text, string mutant, float magnitude, double seconds, string want)
+    {
+        string sentence = TeblorHamstring().Text;
+        if (text.Length > 0)
+        {
+            Assert.Contains(text, sentence, StringComparison.Ordinal);
+            sentence = sentence.Replace(text, mutant, StringComparison.Ordinal);
+        }
+        AbilityContentTests.Result r = CompareHamstring(sentence, magnitude, seconds);
+        Assert.True(r.Problems.Any(p => p.Contains(want, StringComparison.Ordinal)), $"no problem naming {want}\n" + string.Join("\n", r.Problems));
+    }
+
+    /// <summary>The page side alone: a Hamstring sentence with no data passive fails as a promise the data doesn't keep.</summary>
+    [Fact]
+    public void AHamstringSentence_WithoutTheDataPassive_Fails()
+    {
+        AbilityContentTests.Result r = CompareHamstring(withPassive: false);
+        Assert.Contains(r.Problems, p => p.Contains("'Sapper' passive 'Hamstring' trigger: 'Sapper' has no onHit passive", StringComparison.Ordinal));
+    }
+
     /// <summary>The faction page's lines with <paramref name="text"/> (which must be on exactly one line) replaced.</summary>
     private static string[] Mutated(string faction, string text, string mutant)
     {
@@ -244,7 +313,8 @@ public class PassiveContentTests
 
     /// <summary>The trigger a page sentence's wording names, or null when it is neither shape.</summary>
     private static PassiveTrigger? TriggerOf(string text) =>
-        BelowHp.IsMatch(text) ? PassiveTrigger.WhenBelowHp : OnDeath.IsMatch(text) ? PassiveTrigger.OnDeath : null;
+        BelowHp.IsMatch(text) ? PassiveTrigger.WhenBelowHp : OnDeath.IsMatch(text) ? PassiveTrigger.OnDeath
+        : OnHit.IsMatch(text) ? PassiveTrigger.OnHit : null;
 
     private static string TriggerId(PassiveTrigger t) => DataLimits.PassiveTriggerIds[(int)t];
 
@@ -303,7 +373,7 @@ public class PassiveContentTests
             bool loaded = u != null && t is PassiveTrigger trigger && of(u).Any(p => p.Trigger == trigger);
             if (loaded) continue;
             string what = u == null ? $"no {faction} unit is named '{pp.Unit}'"
-                : t == null ? "its wording names no trigger the sim has (\"below <n>% HP\", \"when a <Unit> dies\")"
+                : t == null ? "its wording names no trigger the sim has (\"below <n>% HP\", \"when a <Unit> dies\", \"each bite\" / \"each hit\")"
                 : $"'{pp.Unit}' has no {TriggerId(t.Value)} passive in units.json";
             if (pending.Contains(pp.Name)) r.Reports.Add($"{where} '{pp.Unit}' passive '{pp.Name}' trigger: {what} (pending: reported, not failed)");
             else r.Problems.Add($"{where} '{pp.Unit}' passive '{pp.Name}' trigger: {what}");
@@ -326,12 +396,14 @@ public class PassiveContentTests
         if (p.Trigger == PassiveTrigger.WhenBelowHp && (!below.Success || !Same(Number(below) / 100.0, p.HpFraction)))
             yield return ("hpFraction", below.Success ? $"page '{below.Value}', data {Pct(p.HpFraction)}%" : $"page '{text}' states no 'below <n>% HP', data {Pct(p.HpFraction)}%");
 
-        // Duration and radius: an onDeath passive states both; a whenBelowHp one holds while below the line and states neither.
+        // Duration and radius: an onDeath passive states both, an onHit one the duration only; a whenBelowHp one holds while
+        // below the line and states neither.
         bool death = p.Trigger == PassiveTrigger.OnDeath;
+        bool timed = death || p.Trigger == PassiveTrigger.OnHit;
         Match dur = For.Match(text);
         double seconds = p.DurationTicks / (double)SimConstants.TicksPerSecond;
-        if (death ? !dur.Success || !Same(Number(dur), seconds) : dur.Success)
-            yield return ("duration", dur.Success ? $"page '{dur.Value}', data {(death ? Text(seconds) + " s" : "none (held while below the line)")}" : $"page '{text}' states no 'for <n> s', data {Text(seconds)} s");
+        if (timed ? !dur.Success || !Same(Number(dur), seconds) : dur.Success)
+            yield return ("duration", dur.Success ? $"page '{dur.Value}', data {(timed ? Text(seconds) + " s" : "none (held while below the line)")}" : $"page '{text}' states no 'for <n> s', data {Text(seconds)} s");
         Match within = Within.Match(text);
         if (death ? !within.Success || !Same(Number(within), p.Radius) : within.Success)
             yield return ("radius", within.Success ? $"page '{within.Value}', data {(death ? Text(p.Radius) + " m" : "none")}" : $"page '{text}' states no 'within <n> m', data {Text(p.Radius)} m");
@@ -350,9 +422,19 @@ public class PassiveContentTests
             yield return ("units", $"page '{(takers.Success ? takers.Groups["list"].Value : text)}', data {string.Join(", ", want)}");
     }
 
-    /// <summary>The magnitude claim a status kind's sentence makes; only Frenzied ships on a passive, other kinds fail until pinned.</summary>
+    /// <summary>
+    /// The magnitude claim a status kind's sentence makes: Frenzied "+&lt;n&gt;% attack speed", Slowed (D-R36, the onHit
+    /// Hamstring) "Slowed &lt;n&gt;%" (or "Slowed by &lt;n&gt;%"); other kinds fail until pinned.
+    /// </summary>
     private static IEnumerable<(string Field, string Problem)> MagnitudeProblems(StatusDef status, float magnitude, string text)
     {
+        if (status.Kind == StatusKind.Slow)
+        {
+            Match slow = Regex.Match(text, @"\b" + Regex.Escape(status.DisplayName) + @" (?:by )?" + Num + @" ?%", Opts);
+            if (!slow.Success) yield return ("magnitude", $"page '{text}' states no '{status.DisplayName} <n>%', data {Pct(magnitude)}%");
+            else if (!Same(Number(slow) / 100.0, magnitude)) yield return ("magnitude", $"page '{slow.Value}', data {status.DisplayName} {Pct(magnitude)}%");
+            yield break;
+        }
         if (status.Kind != StatusKind.Frenzied)
         {
             yield return ("magnitude", $"no page wording is pinned for a {DataLimits.StatusKindIds[(int)status.Kind]} passive's magnitude (data {Text(magnitude)}); extend PassiveContentTests");

@@ -302,7 +302,8 @@ public class D21OpeningsQaTests
     /// change leaves the side standing without a wave. <c>DH6ThresholdQaTests</c> keeps the pairing's 4th and 5th seeds the same way.
     /// **Re-listed at the 2026-11-07-0236 merge (the Producer):** since M5-4d slice 2 (the AI rebuilds what it loses) the same
     /// side stands at 20:00 again: its hall razed, its last worker rebuilds and the hunt has not found it (at 20:00 pop 1 / cap 0,
-    /// 522 gold, 210 wood, no wave, 340 thinks defending; the Whirlwind 1 wave, Age II 10:21). BUG-1010's pattern with BUG-1116 /
+    /// 522 gold, 210 wood, no wave, 340 thinks defending; the Whirlwind 1 wave, Age II 10:21; today, since the sim's M5-H6, 502 gold,
+/// 270 wood and the Whirlwind's Age II 10:34, as the Whirlwind table's re-printed cell). BUG-1010's pattern with BUG-1116 /
     /// BUG-1119 underneath; <c>DR33QaTests.KnownBeatenAlive_HoldsOnlyTheNamedCases</c> pins this one entry. Seed 25 stays out.
     /// </summary>
     private static readonly (int Malazan, int Whirlwind, ulong Seed, int Player)[] KnownBeatenAlive = { (1, 1, 19, 0) };

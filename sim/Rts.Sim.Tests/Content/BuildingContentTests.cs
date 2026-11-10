@@ -12,7 +12,12 @@ namespace Rts.Sim.Tests.Content;
 /// </summary>
 public class BuildingContentTests
 {
-    private static readonly string[] Factions = { "malazan", "whirlwind" };
+    /// <summary>The data's factions, in data order (D-R36): a new faction's buildings are pinned the session they land.</summary>
+    private static string[] Factions => ContentFactions.Keys;
+
+    /// <summary>The page "Buildings" table's header, the columns <see cref="G_ThePagesBuildingTables_MatchTheRosterAndTemplate"/> reads by position.</summary>
+    public static readonly string[] BuildingColumns =
+        { "Slot", "Name", "Id", "HP", "Armor", "Cost (G/W)", "Build (s)", "Footprint", "Sight", "Provides", "Requires" };
 
     // docs/factions/<id>.md "Buildings": (slot, id, displayName), in DataLimits.BuildingSlotIds order.
     private static readonly Dictionary<string, (BuildingSlot Slot, string Id, string Name)[]> Roster = new()
@@ -80,6 +85,10 @@ public class BuildingContentTests
 
     private static GameData Data => TestSim.Data;
 
+    /// <summary>The typed roster of <paramref name="faction"/>, failing by name when the data has a faction it lacks.</summary>
+    private static (BuildingSlot Slot, string Id, string Name)[] RosterOf(string faction) =>
+        ContentFactions.Typed(Roster, faction, "BuildingContentTests.Roster");
+
     private static BuildingDef[] FactionBuildings(string faction) =>
         Data.Buildings.Where(b => Data.Factions[b.Faction].Key == faction).ToArray();
 
@@ -89,17 +98,17 @@ public class BuildingContentTests
     [Fact]
     public void A_EachFaction_HasTenBuildings_OnePerSlot_InSlotOrder_TownHallFirst()
     {
-        Assert.Equal(Factions, Data.Factions.Select(f => f.Key));
         foreach (string faction in Factions)
         {
+            Assert.True(File.Exists(Path.Combine(TestDataDir.RepoRoot(), PageTables.FactionPath(faction))), $"faction '{faction}' has no docs/factions/{faction}.md");
             Assert.Equal(10, FactionBuildings(faction).Length);
             Assert.Equal(Enum.GetValues<BuildingSlot>(), FactionBuildings(faction).Select(b => b.Slot).OrderBy(s => s));
             // File order follows DataLimits.BuildingSlotIds, which starts with town_hall.
             Assert.Equal(DataLimits.BuildingSlotIds, FileList(faction).Select(n => (string)n!["slot"]!));
             Assert.Equal("town_hall", (string?)FileList(faction)[0]!["slot"]);
         }
-        Assert.Equal(20, Data.Buildings.Length);
-        Assert.Equal(20, Data.Buildings.Select(b => b.Key).Distinct(StringComparer.Ordinal).Count());
+        Assert.Equal(10 * Factions.Length, Data.Buildings.Length);
+        Assert.Equal(Data.Buildings.Length, Data.Buildings.Select(b => b.Key).Distinct(StringComparer.Ordinal).Count());
     }
 
     [Fact]
@@ -108,7 +117,7 @@ public class BuildingContentTests
         foreach (string faction in Factions)
         {
             JsonArray file = FileList(faction);
-            (BuildingSlot Slot, string Id, string Name)[] expected = Roster[faction];
+            (BuildingSlot Slot, string Id, string Name)[] expected = RosterOf(faction);
             Assert.Equal(expected.Select(e => e.Id), file.Select(n => (string)n!["id"]!));
             foreach ((BuildingSlot slot, string id, string name) in expected)
             {
@@ -152,13 +161,15 @@ public class BuildingContentTests
     [Fact]
     public void E_EveryUnitTrainsAtAnOwnFactionBuilding_OfTheMatchingSlot()
     {
-        Assert.Equal(14, Data.Units.Length);
+        Assert.Equal(7 * Factions.Length, Data.Units.Length);
         foreach (UnitDef u in Data.Units)
         {
             int i = Data.FindBuilding(u.TrainedAt);
             Assert.True(i >= 0, $"{u.Key}.trainedAt '{u.TrainedAt}' is not a building id");
             BuildingDef b = Data.Buildings[i];
             Assert.True(b.Faction == u.Faction, $"{u.Key} trains at another faction's {b.Key}");
+            if (u.Slot == UnitSlot.Unique)
+                Assert.True(UniqueTrainedAt.ContainsKey(u.Key), $"BuildingContentTests.UniqueTrainedAt has no '{u.Key}' row: type it from its page's Units table");
             BuildingSlot expected = u.Slot == UnitSlot.Unique ? UniqueTrainedAt[u.Key] : TrainedAtSlot[u.Slot];
             Assert.True(expected == b.Slot, $"{u.Key} trains at {b.Key} ({b.Slot}), expected {expected}");
         }
@@ -198,14 +209,17 @@ public class BuildingContentTests
     {
         foreach (string faction in Factions)
         {
+            (string[] header, _) = PageTables.NamedTable(PageTables.FactionLines(faction), "Buildings", faction + ".md");
+            Assert.True(header.SequenceEqual(BuildingColumns),
+                $"{faction}.md Buildings header: page '{string.Join(" | ", header)}' vs '{string.Join(" | ", BuildingColumns)}'");
             string[][] rows = FactionPage.Table(faction, "Buildings");
-            Assert.Equal(Roster[faction].Length, rows.Length);
+            Assert.Equal(RosterOf(faction).Length, rows.Length);
             for (int i = 0; i < rows.Length; i++)
             {
                 // Slot | Name | Id | HP | Armor | Cost (G/W) | Build (s) | Footprint | Sight | Provides | Requires (Sight: J)
                 string[] c = rows[i];
-                Assert.Equal(11, c.Length);
-                (BuildingSlot slot, string id, string name) = Roster[faction][i];
+                Assert.Equal(BuildingColumns.Length, c.Length);
+                (BuildingSlot slot, string id, string name) = RosterOf(faction)[i];
                 var t = Template[slot];
                 string where = $"{faction}.md Buildings row {name}";
                 Assert.True((slot, name, id) == (FactionPage.Slot<BuildingSlot>(c[0]), c[1], c[2]), where + " slot/name/id");
@@ -228,7 +242,7 @@ public class BuildingContentTests
                 Assert.True(expectedProvides == provides, where + $" provides '{provides}', expected '{expectedProvides}'");
 
                 string requires = PageRequires.TryGetValue(slot, out string? r)
-                    ? (r == "InfantryHall" ? Roster[faction].Single(e => e.Slot == BuildingSlot.InfantryHall).Name : r)
+                    ? (r == "InfantryHall" ? RosterOf(faction).Single(e => e.Slot == BuildingSlot.InfantryHall).Name : r)
                     : "—";
                 Assert.True(requires == c[10], where + $" requires '{c[10]}'");
                 // ...and the data's requires, written as names, is that same cell.
@@ -273,9 +287,9 @@ public class BuildingContentTests
     public void H_Requires_ShockHallNeedsTheInfantryHall_AgeIIBuildingsNeedAgeII_OthersNothing()
     {
         foreach (string faction in Factions)
-            foreach ((BuildingSlot slot, string id, string _) in Roster[faction])
+            foreach ((BuildingSlot slot, string id, string _) in RosterOf(faction))
             {
-                string infantryHall = Roster[faction].Single(e => e.Slot == BuildingSlot.InfantryHall).Id;
+                string infantryHall = RosterOf(faction).Single(e => e.Slot == BuildingSlot.InfantryHall).Id;
                 string[] expected = slot switch
                 {
                     BuildingSlot.ShockHall => new[] { infantryHall },
@@ -340,7 +354,7 @@ public class BuildingContentTests
     [Fact]
     public void J_PageSight_IsBuildingDefSight_ForAll20Buildings_BothWays()
     {
-        Assert.Equal(20, Factions.Sum(f => PageTable(f).Length));
+        Assert.Equal(10 * Factions.Length, Factions.Sum(f => PageTable(f).Length));
         List<string> failures = SightMismatches(Data, PageTable);
         Assert.True(failures.Count == 0, string.Join("\n", failures));
     }
@@ -475,7 +489,7 @@ public class BuildingContentTests
         // The shipped pair the pin is about: both towers say both, and carry both.
         foreach (string faction in Factions)
         {
-            BuildingDef t = Data.Buildings[Data.FindBuilding(Roster[faction].Single(e => e.Slot == BuildingSlot.WatchTower).Id)];
+            BuildingDef t = Data.Buildings[Data.FindBuilding(RosterOf(faction).Single(e => e.Slot == BuildingSlot.WatchTower).Id)];
             Assert.True(t.Attack != null && t.Detector > 0, $"{t.Key}: attack {(t.Attack != null)}, detector {FactionPage.Text(t.Detector)}");
             Assert.True(SaysShoots.IsMatch(t.Description) && SaysDetects.IsMatch(t.Description), $"{t.Key} description: '{t.Description}'");
         }

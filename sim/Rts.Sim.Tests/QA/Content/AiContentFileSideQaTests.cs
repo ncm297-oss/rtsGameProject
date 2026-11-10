@@ -16,7 +16,7 @@ public class AiContentFileSideQaTests
     public static TheoryData<string, int, int> FileSteps()
     {
         var rows = new TheoryData<string, int, int>();
-        foreach (string faction in new[] { "malazan", "whirlwind" })
+        foreach (string faction in ContentFactions.Keys) // D-R36: the data's factions, not a typed pair
         {
             AiDef ai = TestSim.Data.Ai[TestSim.Data.FindFaction(faction)];
             for (int k = 0; k < ai.Openings.Length; k++)

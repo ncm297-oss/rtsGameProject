@@ -24,7 +24,7 @@ namespace Rts.Sim.Tests.QA.Content;
 /// </summary>
 public class AiContentQaTests
 {
-    private static readonly string[] FactionIds = { "malazan", "whirlwind" };
+    private static string[] FactionIds => ContentFactions.Keys; // D-R36: the data's factions, not a typed pair
 
     private static GameData Data => TestSim.Data;
 
@@ -32,7 +32,7 @@ public class AiContentQaTests
 
     private static string Num(double v) => v.ToString(CultureInfo.InvariantCulture);
 
-    private static string Other(string faction) => faction == "malazan" ? "whirlwind" : "malazan";
+    private static string Other(string faction) => ContentFactions.Other(faction);
 
     private static AiOpening Opening(string faction, int k) => Data.Ai[Data.FindFaction(faction)].Openings[k];
 

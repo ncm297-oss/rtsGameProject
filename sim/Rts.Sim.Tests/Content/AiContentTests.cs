@@ -17,7 +17,26 @@ namespace Rts.Sim.Tests.Content;
 /// </summary>
 public class AiContentTests
 {
-    private static readonly string[] Factions = { "malazan", "whirlwind" };
+    /// <summary>The data's factions, in data order (D-R36): a new faction's <c>ai.json</c> is pinned the session it lands.</summary>
+    private static string[] Factions => ContentFactions.Keys;
+
+    /// <summary>
+    /// D21: how many openings each file holds, typed from its page's openings table (three on the two shipped pages; a page
+    /// written ahead of its data may plan fewer, teblor.md one).
+    /// </summary>
+    private static readonly Dictionary<string, int> OpeningCounts = new() { ["malazan"] = 3, ["whirlwind"] = 3 };
+
+    /// <summary>The shared "Retreat:" bullet's wording: the wave's loss share, then the wounded line.</summary>
+    internal const string RetreatPattern = @"lost (\d+)% falls back; a unit under (\d+)% hp";
+
+    /// <summary>Each opening's "Attack waves:" bullet's wording: the wave's pop, then its gold + wood.</summary>
+    internal const string AttackPattern = @"first at (\d+(?:\.\d+)?) army pop and ([\d,]+) gold \+ wood";
+
+    /// <summary>A step table's header under each opening heading.</summary>
+    public static readonly string[] StepColumns = { "#", "At", "Do", "Id", "Count", "Why" };
+
+    /// <summary>A composition table's header under each opening heading.</summary>
+    public static readonly string[] CompositionColumns = { "Unit", "Age I", "Age II" };
 
     /// <summary>The heading of each page's AI section.</summary>
     public const string Section = "AI build order (Normal)";
@@ -133,7 +152,7 @@ public class AiContentTests
         }
 
         string? retreat = Bullet(Bullets(shared), "Retreat");
-        Match r = retreat == null ? Match.Empty : Regex.Match(retreat, @"lost (\d+)% falls back; a unit under (\d+)% hp");
+        Match r = retreat == null ? Match.Empty : Regex.Match(retreat, RetreatPattern);
         if (!r.Success) problems.Add($"{faction}: no 'Retreat: ... lost N% falls back; a unit under N% hp' line");
         else
         {
@@ -193,7 +212,7 @@ public class AiContentTests
         }
 
         string? attack = Bullet(bullets, "Attack waves");
-        Match a = attack == null ? Match.Empty : Regex.Match(attack, @"first at (\d+(?:\.\d+)?) army pop and ([\d,]+) gold \+ wood");
+        Match a = attack == null ? Match.Empty : Regex.Match(attack, AttackPattern);
         if (!a.Success) problems.Add($"{who}: no 'Attack waves: first at N army pop and N gold + wood' line");
         else
         {
@@ -213,14 +232,14 @@ public class AiContentTests
         }
     }
 
-    /// <summary>D21: both shipped files hold exactly three openings, the first <c>standard</c> (the one Easy plays).</summary>
+    /// <summary>D21: each file holds its page's number of openings (three on both shipped pages), the first <c>standard</c> (the one Easy plays).</summary>
     [Fact]
     public void A_BothFiles_HoldThreeOpenings_StandardFirst()
     {
         foreach (string faction in Factions)
         {
             AiDef ai = Data.Ai[Data.FindFaction(faction)];
-            Assert.Equal(3, ai.Openings.Length);
+            Assert.Equal(ContentFactions.Typed(OpeningCounts, faction, "AiContentTests.OpeningCounts"), ai.Openings.Length);
             Assert.Equal("standard", ai.Openings[0].Id);
         }
     }
@@ -235,14 +254,13 @@ public class AiContentTests
     {
         foreach (string faction in Factions)
         {
-            int player = Data.FindFaction(faction); // AiScenes.Seats: player p plays faction p mod 2
             var normal = new HashSet<int>();
             for (ulong seed = 1; seed <= AiOpeningSeeds.MaxReportSeed; seed++)
             {
-                Assert.True(AiOpeningSeeds.Pick(seed, player, AiDifficulty.Easy) == 0, $"{faction} Easy seed {seed}: not the first opening");
-                normal.Add(AiOpeningSeeds.Pick(seed, player, AiDifficulty.Normal));
+                Assert.True(AiOpeningSeeds.PickFor(seed, faction, AiDifficulty.Easy) == 0, $"{faction} Easy seed {seed}: not the first opening");
+                normal.Add(AiOpeningSeeds.PickFor(seed, faction, AiDifficulty.Normal));
             }
-            Assert.Equal(Enumerable.Range(0, Data.Ai[player].Openings.Length), normal.OrderBy(x => x));
+            Assert.Equal(Enumerable.Range(0, Data.Ai[Data.FindFaction(faction)].Openings.Length), normal.OrderBy(x => x));
         }
     }
 

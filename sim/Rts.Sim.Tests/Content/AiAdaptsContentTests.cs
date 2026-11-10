@@ -16,13 +16,12 @@ namespace Rts.Sim.Tests.Content;
 /// and worker names. Page to data: every number in the sub-section is one of those values (so no match tick, digest or
 /// tally can be quoted there unpinned; since D-R35 a number counts only where its own sentence's pattern reads it, so a
 /// stray number that happens to equal a pinned value is caught too), the "What answers what" list names exactly the six
-/// non-worker enemy slots, and the BUG-1156 sentence's claim (no opening's Age I mix lists a unit that answers an enemy Line) holds in the file.
+/// non-worker enemy slots, and the BUG-1156 sentence's claim (no opening's Age I mix lists a unit that answers an enemy
+/// Line) holds in the file.
 /// <see cref="Problems"/> returns every mismatch as text naming the faction, so a one-sided edit says which side moved.
 /// </summary>
 public class AiAdaptsContentTests
 {
-    private static readonly string[] Factions = { "malazan", "whirlwind" };
-
     /// <summary>The sub-section's heading on each page.</summary>
     public const string Heading = "#### How the AI adapts";
 
@@ -198,8 +197,7 @@ public class AiAdaptsContentTests
     private static string[] Page(string faction) => PageTables.FactionLines(faction);
 
     [Theory]
-    [InlineData("malazan")]
-    [InlineData("whirlwind")]
+    [MemberData(nameof(ContentFactions.Theory), MemberType = typeof(ContentFactions))]
     public void HowTheAiAdapts_MatchesTheData_BothWays(string faction)
     {
         List<string> problems = Problems(TestSim.Data, faction, Page(faction));

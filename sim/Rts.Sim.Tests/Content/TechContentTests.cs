@@ -13,7 +13,11 @@ namespace Rts.Sim.Tests.Content;
 /// </summary>
 public class TechContentTests
 {
-    private static readonly string[] Factions = { "malazan", "whirlwind" };
+    /// <summary>The data's factions, in data order (D-R36): a new faction's upgrade is pinned the session it lands.</summary>
+    private static string[] Factions => ContentFactions.Keys;
+
+    /// <summary>The page "Techs" table's header, read by position in <see cref="C_ThePagesTechsTable_MatchesTheData"/>.</summary>
+    public static readonly string[] TechColumns = { "Id", "Name", "Researched at", "Cost (G/W)", "Time (s)", "Requires", "Effects" };
 
     // docs/factions/<id>.md "Faction upgrade": effects as the file writes them (stat, amount in data units: seconds for
     // abilityCooldown, meters for range, whole points otherwise, the one unit it applies to).
@@ -112,7 +116,7 @@ public class TechContentTests
         // "page" here is the typed table above, copied from the pages.
         foreach (string faction in Factions)
         {
-            var u = Upgrade[faction];
+            var u = ContentFactions.Typed(Upgrade, faction, "TechContentTests.Upgrade");
             string where = $"{faction} {u.Id}";
             Pin(where, "techs file ids", u.Id, string.Join(", ", FileList(faction).Select(n => (string)n!["id"]!)));
             TechDef[] own = FactionTechs(faction);
@@ -145,7 +149,7 @@ public class TechContentTests
     }
 
     /// <summary>The head of a page's faction upgrade line: "Age II, at the Armory, 200 G / 150 W, 45 s. ".</summary>
-    private static readonly Regex UpgradeHead = new(@"^(?<req>.+?), at the (?<at>.+?), (?<g>\d+) G / (?<w>\d+) W, (?<s>[\d.]+) s\. ");
+    internal static readonly Regex UpgradeHead = new(@"^(?<req>.+?), at the (?<at>.+?), (?<g>\d+) G / (?<w>\d+) W, (?<s>[\d.]+) s\. ");
 
     [Fact]
     public void B_ThePagesFactionUpgradeLine_MatchesTheData()
@@ -180,13 +184,16 @@ public class TechContentTests
         foreach (string faction in Factions)
         {
             TechDef[] techs = FactionTechs(faction);
+            (string[] header, _) = PageTables.NamedTable(PageTables.FactionLines(faction), "Techs", faction + ".md");
+            Assert.True(header.SequenceEqual(TechColumns),
+                $"{faction}.md Techs header: page '{string.Join(" | ", header)}' vs '{string.Join(" | ", TechColumns)}'");
             string[][] rows = FactionPage.Table(faction, "Techs");
             Pin($"{faction}.md Techs", "row count", rows.Length, techs.Length);
             int f = Data.FindFaction(faction);
             foreach (string[] c in rows)
             {
                 // Id | Name | Researched at | Cost (G/W) | Time (s) | Requires | Effects
-                Assert.Equal(7, c.Length);
+                Assert.Equal(TechColumns.Length, c.Length);
                 string where = $"{faction}.md Techs row {c[0]}";
                 TechDef? t = techs.SingleOrDefault(x => x.Key == c[0]);
                 Assert.True(t != null, $"{where} id: page {c[0]} vs data [{string.Join(", ", techs.Select(x => x.Key))}]");

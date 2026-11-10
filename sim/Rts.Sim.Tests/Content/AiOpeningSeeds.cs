@@ -23,6 +23,25 @@ internal static class AiOpeningSeeds
         return sim.AiOpening(player);
     }
 
+    /// <summary>
+    /// The opening <paramref name="faction"/>'s AI picks on <paramref name="seed"/> at <paramref name="difficulty"/>, seated as
+    /// player (faction id mod 2) against another faction, both seats AI (D-R36). For the two shipped factions this is the
+    /// seat <see cref="AiScenes.Seats"/> gives them (player p plays faction p mod 2); a third faction gets its own seat
+    /// instead of another faction's.
+    /// </summary>
+    public static int PickFor(ulong seed, string faction, AiDifficulty difficulty)
+    {
+        int f = TestSim.Data.FindFaction(faction);
+        Assert.True(f >= 0, $"'{faction}' is not a faction of the shipped data");
+        int player = f % 2;
+        int other = TestSim.Data.FindFaction(ContentFactions.Other(faction));
+        var seats = new PlayerSeat[2];
+        seats[player] = new PlayerSeat(f, SeatController.Ai, difficulty);
+        seats[1 - player] = new PlayerSeat(other, SeatController.Ai, difficulty);
+        Simulation sim = AiScenes.Flat(seats, seed: seed, workers: 0);
+        return sim.AiOpening(player);
+    }
+
     /// <summary>The smallest seed in 1-<see cref="MaxReportSeed"/> whose <paramref name="difficulty"/> pick for <paramref name="faction"/>'s seat is <paramref name="opening"/>.</summary>
     public static ulong Smallest(string faction, int opening, AiDifficulty difficulty)
     {

@@ -409,11 +409,12 @@ train), so its weights sum to 30.
 **This opening can fall to a rush without ever attacking (BUG-0982, D-H6, 2026-10-18).** It is the greedy opening: one
 Barracks in Age I and the gold saved for Age II. Against the Whirlwind's raider rush, the Malazan army stays small while
 the base is defended. On the pairing's five smallest seeds (7, 8, 14, 18, 23) it sends no wave on three, and all three
-are destroyed (seed 8 at 13:47, 14 at 14:16, 18 at 10:44); seed 23 sends one wave (13:53) and still falls, at 18:27
-(seeds 8 and 14 re-printed 2026-11-09 for the sim's M5-H6, was 13:50 and 15:03; seeds 18 and 23 measured 2026-11-07
-after the sim's M5-4d slice 2; before it seed 23 sent none, peaked at 10 pop and fell at 15:36, and seed 18 stood at
-20:00, BUG-1010). A lower wave threshold doesn't help: at 16 or 14 army pop the same three seeds still
-send no wave, because the army never grows past 11 pop (seed 8), 7 (seed 14) or 6 (seed 18). So the wave stays at 18
+are destroyed (seed 8 at 13:47, 14 at 14:16, 18 at 10:50); seed 23 sends three waves, the first at 12:29, and still
+falls, at 18:49 (seeds 8 and 14 re-printed 2026-11-09 for the sim's M5-H6, was 13:50 and 15:03; seeds 18 and 23
+measured 2026-11-07 after the sim's M5-4d slice 2, seed 18 destroyed at 10:44 and seed 23 one wave at 13:53, destroyed
+at 18:27, and re-measured 2026-11-09 on the sim's M5-H6 by `QA/Content/DH6ThresholdQaTests`; before slice 2 seed 23
+sent none, peaked at 10 pop and fell at 15:36, and seed 18 stood at 20:00, BUG-1010). A lower wave threshold doesn't
+help: at 16 or 14 army pop the same three seeds still send no wave, because the army never grows past 11 pop (seed 8), 7 (seed 14) or 6 (seed 18). So the wave stays at 18
 (the Producer's default, measured; re-read after M5-4g on 2026-10-26, the same pick; the owner may revisit). The
 measurement is under "Fast Age II against the raider rush" at the end of this page.
 
@@ -578,19 +579,23 @@ re-printed table, 2026-10-26: the same pick, no data change). Lowering it only b
 to 7:59). On seeds 8 and 14 the army never reaches 14 pop, so no threshold in this range would send a wave. A fix would
 have to be something other than this number, for example the sim-side "send what you have when the base is being lost"
 that BUG-0982's notes name. That is a new mechanic, so it is not data. QA's `QA/Content/DH6ThresholdQaTests` runs the
-same thresholds on the pairing's 4th and 5th seeds too (18 and 23). Since M5-4d slice 2 (its printout, 2026-11-07) seed
-18 sends no wave at any of the three and is destroyed at 10:44 with a 6-pop peak; seed 23 sends one wave at each (13:53,
-13:34, 13:31), peaks at 20 to 21 pop and reaches Age II at 8:11, and is destroyed at 18:27 at 18 pop and 18:39 at 14,
-but stands at 20:00 at 16. Before slice 2 neither sent a wave, seed 23 was destroyed at 15:36 and seed 18 stood at
-20:00. The rule over all five seeds still picks 18.
+same thresholds on the pairing's 4th and 5th seeds too (18 and 23). Re-measured 2026-11-09 on the sim's M5-H6 (its
+printout; not pinned, the test asserts only the rule): seed 18 sends no wave at any of the three thresholds and is
+destroyed at 10:50 at 18 pop; seed 23 sends 3 / 2 / 2 waves at 18 / 16 / 14 pop, the first at 12:29 / 12:28 / 12:10,
+peaks at 21 / 21 / 17 pop and reaches Age II at 8:11, and is destroyed at 18:49 at 18 pop but stands at 20:00 at 16 and
+at 14. Measured 2026-11-07 after M5-4d slice 2: seed 18 destroyed at 10:44 with a 6-pop peak; seed 23 one wave at each
+(13:53, 13:34, 13:31), peaks of 20 to 21 pop, destroyed at 18:27 at 18 pop and 18:39 at 14, standing at 16. Before
+slice 2 neither sent a wave, seed 23 was destroyed at 15:36 and seed 18 stood at 20:00. The rule over all five seeds
+still picks 18.
 
 The same thing happens to `crossbow_push` (BUG-1010; D-H6's third seed per pairing, `QA/Content/D21OpeningsQaTests`, and
 QA's 4th and 5th, `QA/Content/DH6ThresholdQaTests`). Against `raider_rush` it sends no wave on 2 of the pairing's 5
-smallest seeds (5, 11, 19, 25, 38). Today seed 19's side is beaten down but still standing at 20:00, and seed 25's is
-defeated at 12:33 (tick 15,068); neither ever attacks, so "falls to the rush without a wave" holds on both. Since the
-sim's M5-4d slice 2 (the AI rebuilds what it loses, 2026-11-07) seed 19's hall is razed but its last worker keeps
-rebuilding, and at 20:00 the side has 1 pop, no building and 522 gold (BUG-1116 / BUG-1119; docs/03 "Implementation
-(M5-4d slice 2)"). So seed 19 is a named allowance again (`QA/Content/D21OpeningsQaTests.KnownBeatenAlive`, pinned by
+smallest seeds (5, 11, 19, 25, 38). Re-measured 2026-11-09 on the sim's M5-H6: seed 19's side is beaten down but still
+standing at 20:00, and seed 25's is defeated at 12:22 (tick 14,843; 12:33, tick 15,068, measured 2026-11-07); neither
+ever attacks, so "falls to the rush without a wave" holds on both. Since the sim's M5-4d slice 2 (the AI rebuilds what
+it loses, 2026-11-07) seed 19's hall is razed but its last worker keeps rebuilding, and at 20:00 the side has 1 pop, no
+building and 502 gold (re-measured 2026-11-09 on the sim's M5-H6; 522 measured 2026-11-07; BUG-1116 / BUG-1119; docs/03
+"Implementation (M5-4d slice 2)"). So seed 19 is a named allowance again (`QA/Content/D21OpeningsQaTests.KnownBeatenAlive`, pinned by
 `QA/Content/DR33QaTests`): its row passes while the side stands without a wave, until the sim's hardening re-measures
 it. Seed 25 is not on either list, so its row fails if the side is ever left standing at 20:00 without a wave.
 

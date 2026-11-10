@@ -13,7 +13,8 @@ namespace Rts.Sim.Tests.Content;
 /// </summary>
 public class AbilityContentTests
 {
-    private static readonly string[] Factions = { "malazan", "whirlwind" };
+    /// <summary>The data's factions, in data order (D-R36): a new faction's abilities are pinned the session they land.</summary>
+    private static string[] Factions => ContentFactions.Keys;
 
     /// <summary>The "Abilities" header both pages share (docs/02 "Ability system" fields, Duration "—" when absent).</summary>
     public const string Header = "| Ability | Unit | Kind | Range | Radius | Cast | Cooldown | Duration | Effect |";
@@ -80,8 +81,7 @@ public class AbilityContentTests
     }
 
     [Theory]
-    [InlineData("malazan")]
-    [InlineData("whirlwind")]
+    [MemberData(nameof(ContentFactions.Theory), MemberType = typeof(ContentFactions))]
     public void EveryLoadedAbility_MatchesItsPageRow_AndEveryRowIsLoadedOrPending(string faction)
     {
         Result r = Compare(Data, Data.Abilities, faction, PageTables.FactionLines(faction));
@@ -767,6 +767,75 @@ public class AbilityContentTests
         Assert.Contains(cusser.Effects, e => e.Kind == AbilityEffectKind.Damage && e.Buildings && e.FriendlyFire > 0);
     }
 
+    // ---- D-R36: the self / aura shape (teblor.md's Blood-oil Frenzy), pinned before any shipped ability has it ----
+
+    /// <summary>
+    /// Telas Fire's slot remade in memory as teblor.md's Blood-oil Frenzy (<c>selfAura</c>, no range, 8 m, 0.5 s, 40 s,
+    /// own units, <c>applyStatus frenzied</c> <paramref name="magnitude"/> for <paramref name="seconds"/>), and malazan.md with
+    /// the Telas Fire row replaced by teblor.md's row (its Unit cell the Cadre Mage, who lists the ability): the Frenzy
+    /// row's shape on a shipped faction, since no Teblor ability is loaded yet.
+    /// </summary>
+    private static Result CompareFrenzy(Func<string, string>? editRow = null, float magnitude = 0.4f, double seconds = 10, float range = 0,
+        AbilityAffects affects = AbilityAffects.OwnUnits)
+    {
+        string[] teblor = PageTables.FactionLines("teblor");
+        string frenzyRow = teblor.Single(l => l.StartsWith("| Blood-oil Frenzy |", StringComparison.Ordinal)).Replace("| Shaman |", "| Cadre Mage |", StringComparison.Ordinal);
+        if (editRow != null) frenzyRow = editRow(frenzyRow);
+        string[] lines = PageTables.FactionLines("malazan");
+        int row = Array.FindIndex(lines, l => l.StartsWith("| Telas Fire |", StringComparison.Ordinal));
+        lines[row] = frenzyRow;
+        int t = SimConstants.TicksPerSecond;
+        ImmutableArray<AbilityDef> abilities = With("Telas Fire", a => new AbilityDef
+        {
+            Id = a.Id, Key = "blood_oil_frenzy", Faction = a.Faction, DisplayName = "Blood-oil Frenzy", Description = a.Description,
+            Kind = AbilityKind.SelfAura, Range = range, Radius = 8, CastTicks = t / 2, CooldownTicks = 40 * t, DurationTicks = 0,
+            Affects = affects,
+            Effects = ImmutableArray.Create(new AbilityEffect
+            {
+                Kind = AbilityEffectKind.ApplyStatus, Status = Data.Statuses.Single(x => x.Key == "frenzied").Id,
+                Magnitude = magnitude, DurationTicks = (int)Math.Round(seconds * t),
+            }),
+        });
+        return Compare(Data, abilities, "malazan", lines);
+    }
+
+    [Fact]
+    public void TeblorsFrenzyRow_IsASelfAuraApplyingFrenzied()
+    {
+        Result r = CompareFrenzy();
+        Assert.True(r.Problems.Count == 0, string.Join("\n", r.Problems));
+    }
+
+    /// <summary>The self / aura pin reads each cell: one cell or one data value changed alone fails naming the column.</summary>
+    [Theory]
+    [InlineData("| Self / aura |", "| Target ground |", "'Blood-oil Frenzy' Kind:")]
+    [InlineData("| Self / aura | — |", "| Self / aura | 8 |", "'Blood-oil Frenzy' Range:")]
+    [InlineData("| 8 m |", "| 6 m |", "'Blood-oil Frenzy' Radius:")]
+    [InlineData("| 0.5 s |", "| 1 s |", "'Blood-oil Frenzy' Cast:")]
+    [InlineData("| 40 s | — |", "| 40 s | 10 s |", "'Blood-oil Frenzy' Duration:")]
+    [InlineData("(+40% attack speed)", "(+50% attack speed)", "'Blood-oil Frenzy' Effect:")]
+    [InlineData("for 10 s", "for 14 s", "'Blood-oil Frenzy' Effect:")]
+    [InlineData("Own units", "Allied units", "'Blood-oil Frenzy' Effect affects:")]
+    [InlineData("are Frenzied (+40% attack speed) for 10 s.", "are Frenzied (+40% attack speed) for 10 s, then Slowed 20%.", "'Blood-oil Frenzy' Effect status:")]
+    public void AMutatedFrenzyCell_FailsNamingTheColumn(string cell, string mutant, string want)
+    {
+        Result r = CompareFrenzy(row =>
+        {
+            Assert.Contains(cell, row, StringComparison.Ordinal);
+            return row.Replace(cell, mutant, StringComparison.Ordinal);
+        });
+        Assert.True(r.Problems.Any(p => p.Contains(want, StringComparison.Ordinal)), $"no problem naming {want}\n" + string.Join("\n", r.Problems));
+    }
+
+    [Theory]
+    [InlineData(0.5f, 10.0, "'Blood-oil Frenzy' Effect:")]
+    [InlineData(0.4f, 14.0, "'Blood-oil Frenzy' Effect:")]
+    public void AMutatedFrenzyInTheData_FailsTheTeblorRow(float magnitude, double seconds, string want)
+    {
+        Result r = CompareFrenzy(magnitude: magnitude, seconds: seconds);
+        Assert.True(r.Problems.Any(p => p.Contains(want, StringComparison.Ordinal)), $"no problem naming {want}\n" + string.Join("\n", r.Problems));
+    }
+
     /// <summary>A copy of <paramref name="a"/> with other effects and duration (AbilityDef has no <c>with</c>).</summary>
     private static AbilityDef Copy(AbilityDef a, ImmutableArray<AbilityEffect> effects, int durationTicks) => new()
     {
@@ -1285,17 +1354,26 @@ public class AbilityContentTests
         string kind = cell("Kind");
         int paren = kind.IndexOf(" (", StringComparison.Ordinal);
         if (paren >= 0) kind = kind[..paren];
-        string kindText = a.Kind switch { AbilityKind.TargetGround => "Target ground", _ => a.Kind.ToString() };
+        string kindText = a.Kind switch
+        {
+            AbilityKind.TargetGround => "Target ground",
+            AbilityKind.SelfAura => "Self / aura", // D-R36: docs/02 "Ability system"'s words, as teblor.md writes Blood-oil Frenzy
+            _ => a.Kind.ToString(),
+        };
         if (kind != kindText) yield return ("Kind", $"page '{cell("Kind")}', data '{kindText}'");
 
+        // D-R36: a self / aura or summon ability has no range (the loader refuses one); the page writes "—".
+        bool rangeless = a.Kind != AbilityKind.TargetGround && a.Range == 0;
+        if (rangeless && cell("Range") != "—") yield return ("Range", $"page '{cell("Range")}', data has no range ({kindText}; write '—')");
         foreach ((string column, string suffix, double value) in new[]
         {
-            ("Range", "", a.Range),
+            ("Range", "", rangeless ? double.NaN : a.Range),
             ("Radius", " m", a.Radius),
             ("Cast", " s", Seconds(a.CastTicks)),
             ("Cooldown", " s", Seconds(a.CooldownTicks)),
         })
         {
+            if (double.IsNaN(value)) continue; // checked above
             string? problem = NumberProblem(cell(column), suffix, value);
             if (problem != null) yield return (column, problem);
         }
@@ -1481,6 +1559,9 @@ public class AbilityContentTests
             StatusKind.DamageOverTime =>
                 $"{s.DisplayName}: {FactionPage.Text(e.Magnitude)} {data.DamageTable.DamageTypeKeys[s.DamageType]} damage/s for {FactionPage.Text(Seconds(e.DurationTicks))} s",
             StatusKind.Slow => $"{s.DisplayName} {FactionPage.Text(Math.Round(e.Magnitude * 100.0, 3))}%",
+            // D-R36 (Blood-oil Frenzy, the first ability to apply it): the attack-speed share and how long it lasts.
+            StatusKind.Frenzied =>
+                $"{s.DisplayName} (+{FactionPage.Text(Math.Round(e.Magnitude * 100.0, 3))}% attack speed) for {FactionPage.Text(Seconds(e.DurationTicks))} s",
             _ => s.DisplayName,
         };
     }

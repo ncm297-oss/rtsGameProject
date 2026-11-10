@@ -23,7 +23,7 @@ public class AiDifficultyFileSideQaTests
     public static TheoryData<string, int, int> FileCells()
     {
         var rows = new TheoryData<string, int, int>();
-        foreach (string faction in new[] { "malazan", "whirlwind" })
+        foreach (string faction in ContentFactions.Keys) // D-R36: the data's factions, not a typed pair
             for (int k = 0; k < Difficulties.Length; k++)
                 for (int f = 0; f < Fields.Length; f++)
                     rows.Add(faction, k, f);
@@ -51,7 +51,7 @@ public class AiDifficultyFileSideQaTests
         List<string> problems = AiContentTests.DifficultyProblems(d, faction, PageTables.FactionLines(faction));
         Assert.True(problems.Count == 1 && problems[0].StartsWith($"{faction} {row} {column}: page '", StringComparison.Ordinal),
             $"{faction} {Difficulties[difficulty]}.{fieldName} edited: {string.Join("; ", problems)}");
-        string other = faction == "malazan" ? "whirlwind" : "malazan";
-        Assert.Empty(AiContentTests.DifficultyProblems(d, other, PageTables.FactionLines(other)));
+        foreach (string other in ContentFactions.Keys.Where(k => k != faction))
+            Assert.Empty(AiContentTests.DifficultyProblems(d, other, PageTables.FactionLines(other)));
     }
 }

@@ -12,7 +12,24 @@ namespace Rts.Sim.Tests.Content;
 /// </summary>
 public class UnitContentTests
 {
-    private static readonly string[] Factions = { "malazan", "whirlwind" };
+    /// <summary>The data's factions, in data order (D-R36): a new faction's units are pinned the session they land.</summary>
+    private static string[] Factions => ContentFactions.Keys;
+
+    /// <summary>
+    /// The page "Units" table's columns, found by name (D-R36). <see cref="OptionalUnitColumns"/> may be added (teblor.md
+    /// writes them) and are pinned when present; any other column is an error.
+    /// </summary>
+    public static readonly string[] UnitColumns =
+    {
+        "Slot", "Unit", "HP", "Armor", "Class", "Attack", "Type", "CD", "Range", "Targets", "Speed", "Sight", "Cost (G/W)",
+        "Pop", "Train", "Trained at",
+    };
+
+    /// <summary>
+    /// Columns a page may add (D-R36): <c>Id</c> (pinned to the roster's id), <c>Scale</c> (<c>units.json</c> <c>scale</c>,
+    /// M7-1) and <c>Spawn</c> (<c>spawnCount</c>, units per queue item, M7-2), the last two pinned to the loaded unit.
+    /// </summary>
+    public static readonly string[] OptionalUnitColumns = { "Id", "Scale", "Spawn" };
 
     // Melee range on the pages is the word "melee"; the data writes it as 0.5 m edge to edge (docs/03 "Data format").
     private const double Melee = 0.5;
@@ -103,6 +120,17 @@ public class UnitContentTests
     private static void Pin(string where, string field, string page, string data) =>
         Assert.True(page == data, $"{where} {field}: page {page} vs data {data}");
 
+    /// <summary>The typed roster of <paramref name="faction"/>, failing by name when the data has a faction it lacks.</summary>
+    private static (UnitSlot Slot, string Id, string Name, int Hp, int Armor, string Class, int Atk, string Type, double Cd, double Range, double MinRange, double Speed, int Sight, int Gold, int Wood, int Pop, int Train, string TrainedAt)[] RosterOf(string faction) =>
+        ContentFactions.Typed(Roster, faction, "UnitContentTests.Roster");
+
+    /// <summary>The typed Targets cell of unit <paramref name="id"/>, failing by name when the table lacks it.</summary>
+    private static string TargetOf(string id)
+    {
+        Assert.True(Targets.TryGetValue(id, out string? t), $"UnitContentTests.Targets has no '{id}' row: type it from its page's Units table");
+        return t!;
+    }
+
     private static int Ticks(double seconds) => (int)Math.Round(seconds * SimConstants.TicksPerSecond, MidpointRounding.AwayFromZero);
 
     [Fact]
@@ -115,8 +143,8 @@ public class UnitContentTests
             // The loader sorts units by id, so slot order is checked on the file above; here, one of each slot.
             Assert.Equal(Enum.GetValues<UnitSlot>(), units.Select(u => u.Slot).OrderBy(s => s));
         }
-        Assert.Equal(14, Data.Units.Length);
-        Assert.Equal(14, Data.Units.Select(u => u.Key).Distinct(StringComparer.Ordinal).Count());
+        Assert.Equal(7 * Factions.Length, Data.Units.Length);
+        Assert.Equal(Data.Units.Length, Data.Units.Select(u => u.Key).Distinct(StringComparer.Ordinal).Count());
     }
 
     [Fact]
@@ -124,8 +152,8 @@ public class UnitContentTests
     {
         foreach (string faction in Factions)
         {
-            Assert.Equal(Roster[faction].Select(r => r.Id), FileList(faction).Select(n => (string)n!["id"]!));
-            foreach (var r in Roster[faction])
+            Assert.Equal(RosterOf(faction).Select(r => r.Id), FileList(faction).Select(n => (string)n!["id"]!));
+            foreach (var r in RosterOf(faction))
             {
                 UnitDef u = Unit(r.Id);
                 Assert.Equal((r.Slot, r.Name, faction), (u.Slot, u.DisplayName, Data.Factions[u.Faction].Key));
@@ -138,7 +166,7 @@ public class UnitContentTests
     {
         DamageTable t = Data.DamageTable;
         foreach (string faction in Factions)
-            foreach (var r in Roster[faction])
+            foreach (var r in RosterOf(faction))
             {
                 UnitDef u = Unit(r.Id);
                 AttackDef a = u.Attack;
@@ -150,7 +178,7 @@ public class UnitContentTests
                 Assert.True((r.Gold, r.Wood, r.Pop * 2) == (u.CostGold, u.CostWood, u.HalfPop), $"{r.Id} cost/pop");
                 Assert.True(Ticks(r.Train) == u.TrainTicks, $"{r.Id} trainTime");
                 Assert.True(r.TrainedAt == u.TrainedAt, $"{r.Id} trainedAt");
-                Pin(r.Id, "attack.targets", Targets[r.Id], TargetsOf(u));
+                Pin(r.Id, "attack.targets", TargetOf(r.Id), TargetsOf(u));
 
                 // The file holds seconds and m/s, not ticks.
                 JsonNode f = FileUnit(faction, r.Id);
@@ -158,7 +186,7 @@ public class UnitContentTests
                 // Style rule, not a page value (BUG-0200): "all" is the default, so the file writes the field only when it
                 // narrows the attack. The page's value itself is pinned just above.
                 string? written = (string?)f["attack"]!["targets"];
-                string? expected = Targets[r.Id] == "all" ? null : Targets[r.Id];
+                string? expected = TargetOf(r.Id) == "all" ? null : TargetOf(r.Id);
                 Assert.True(written == expected, written == "all"
                     ? $"{r.Id} file attack.targets: \"all\" written out although it is the default (style rule: write targets only when it is not \"all\")"
                     : $"{r.Id} file attack.targets: file {written ?? "(absent)"}, expected {expected ?? "(absent)"} (style rule: write targets only when it is not \"all\")");
@@ -209,33 +237,92 @@ public class UnitContentTests
     [Fact]
     public void G_ThePagesUnitTables_MatchTheRosterAbove()
     {
-        foreach (string faction in Factions)
+        foreach (string faction in Factions) PinUnitsTable(faction, PageTables.FactionLines(faction));
+    }
+
+    /// <summary>G for one page's lines (tests pass an edited copy): the "Units" table against the roster, columns by name.</summary>
+    private static void PinUnitsTable(string faction, string[] lines)
+    {
+        (string[] header, List<string[]> rows) = PageTables.NamedTable(lines, "Units", faction + ".md");
+        int Col(string name) => Array.IndexOf(header, name);
+        foreach (string column in UnitColumns)
+            Assert.True(Col(column) >= 0, $"{faction}.md Units: no '{column}' column (header '{string.Join(" | ", header)}')");
+        int idColumn = Col("Id"), scaleColumn = Col("Scale"), spawnColumn = Col("Spawn");
+        Assert.True(header.Length == UnitColumns.Length + OptionalUnitColumns.Count(o => Col(o) >= 0),
+            $"{faction}.md Units: header '{string.Join(" | ", header)}' has a column the pin doesn't read");
+        var roster = RosterOf(faction);
+        Assert.Equal(roster.Length, rows.Count);
+        for (int i = 0; i < rows.Count; i++)
         {
-            string[][] rows = FactionPage.Table(faction, "Units");
-            var roster = Roster[faction];
-            Assert.Equal(roster.Length, rows.Length);
-            for (int i = 0; i < rows.Length; i++)
-            {
-                // Slot | Unit | HP | Armor | Class | Attack | Type | CD | Range | Targets | Speed | Sight | Cost (G/W) | Pop | Train | Trained at
-                string[] c = rows[i];
-                var r = roster[i];
-                Assert.Equal(16, c.Length);
-                string where = $"{faction}.md Units row {r.Name}";
-                Assert.True((r.Slot, r.Name) == (FactionPage.Slot<UnitSlot>(c[0]), c[1]), where + " slot/name");
-                Assert.True((r.Hp, r.Armor, r.Class) == (int.Parse(c[2]), int.Parse(c[3]), c[4].ToLowerInvariant()), where + " hp/armor/class");
-                Assert.True((r.Atk, r.Type, r.Cd) == (int.Parse(c[5]), c[6].ToLowerInvariant(), FactionPage.Num(c[7])), where + " attack");
-                // BUG-0111: invariant culture, so a page range like 7.5 is not expected as "7,5" on a de-DE machine.
-                string range = r.Range == Melee ? "melee"
-                    : r.MinRange > 0 ? $"{FactionPage.Text(r.Range)} (min {FactionPage.Text(r.MinRange)})"
-                    : FactionPage.Text(r.Range);
-                Assert.True(range == c[8], where + $" range '{c[8]}'");
-                Pin(where, "targets", c[9], Targets[r.Id]);
-                Assert.True((r.Speed, (double)r.Sight) == (FactionPage.Num(c[10]), FactionPage.Num(c[11])), where + " speed/sight");
-                Assert.True((r.Gold, r.Wood) == FactionPage.Cost(c[12]), where + " cost");
-                Assert.True((r.Pop, r.Train) == (int.Parse(c[13]), int.Parse(c[14])), where + " pop/train");
-                Assert.True(Data.Buildings[Data.FindBuilding(r.TrainedAt)].DisplayName == c[15], where + " trained at");
-            }
+            string[] row = rows[i];
+            string C(string name) => row[Col(name)];
+            var r = roster[i];
+            Assert.Equal(header.Length, row.Length);
+            string where = $"{faction}.md Units row {r.Name}";
+            Assert.True((r.Slot, r.Name) == (FactionPage.Slot<UnitSlot>(C("Slot")), C("Unit")), where + " slot/name");
+            if (idColumn >= 0) Pin(where, "id", row[idColumn], r.Id);
+            if (scaleColumn >= 0) Pin(where, "scale", row[scaleColumn], FactionPage.Text(Math.Round(Unit(r.Id).Scale, 4)));
+            if (spawnColumn >= 0) Pin(where, "spawnCount", row[spawnColumn], Unit(r.Id).SpawnCount.ToString(CultureInfo.InvariantCulture));
+            Assert.True((r.Hp, r.Armor, r.Class) == (int.Parse(C("HP")), int.Parse(C("Armor")), C("Class").ToLowerInvariant()), where + " hp/armor/class");
+            Assert.True((r.Atk, r.Type, r.Cd) == (int.Parse(C("Attack")), C("Type").ToLowerInvariant(), FactionPage.Num(C("CD"))), where + " attack");
+            // BUG-0111: invariant culture, so a page range like 7.5 is not expected as "7,5" on a de-DE machine.
+            string range = r.Range == Melee ? "melee"
+                : r.MinRange > 0 ? $"{FactionPage.Text(r.Range)} (min {FactionPage.Text(r.MinRange)})"
+                : FactionPage.Text(r.Range);
+            Assert.True(range == C("Range"), where + $" range '{C("Range")}'");
+            Pin(where, "targets", C("Targets"), TargetOf(r.Id));
+            Assert.True((r.Speed, (double)r.Sight) == (FactionPage.Num(C("Speed")), FactionPage.Num(C("Sight"))), where + " speed/sight");
+            Assert.True((r.Gold, r.Wood) == FactionPage.Cost(C("Cost (G/W)")), where + " cost");
+            Assert.True((r.Pop, r.Train) == (int.Parse(C("Pop")), int.Parse(C("Train"))), where + " pop/train");
+            Assert.True(Data.Buildings[Data.FindBuilding(r.TrainedAt)].DisplayName == C("Trained at"), where + " trained at");
         }
+    }
+
+    /// <summary>malazan.md with one column added to its Units table after <paramref name="after"/>, every row's cell from <paramref name="cell"/>.</summary>
+    private static string[] WithUnitsColumn(string name, string after, Func<string, string> cell)
+    {
+        string[] lines = PageTables.FactionLines("malazan");
+        int h = Array.IndexOf(lines, "## Units");
+        int i = h + 1;
+        while (!lines[i].StartsWith('|')) i++;
+        int at = Array.IndexOf(PageTables.Cells(lines[i]), after) + 1;
+        Assert.True(at > 0, $"malazan.md Units has no '{after}' column");
+        for (int k = i; k < lines.Length && lines[k].StartsWith('|'); k++)
+        {
+            List<string> cells = PageTables.Cells(lines[k]).ToList();
+            cells.Insert(at, k == i ? name : k == i + 1 ? "---" : cell(PageTables.Cells(lines[k], stripBackticks: true)[1]));
+            lines[k] = "| " + string.Join(" | ", cells) + " |";
+        }
+        return lines;
+    }
+
+    private static string IdOf(string name) => RosterOf("malazan").Single(r => r.Name == name).Id;
+
+    /// <summary>
+    /// D-R36: the optional columns teblor.md writes pin when present. On malazan.md, an Id, Scale or Spawn column with the
+    /// data's values passes; one wrong cell fails naming the row and the field; an unknown column fails naming the header.
+    /// </summary>
+    [Theory]
+    [InlineData("Id", "", null)]
+    [InlineData("Id", "Sapper", "malazan.md Units row Sapper id: page malazan_sapper_x vs data malazan_sapper")]
+    [InlineData("Scale", "", null)]
+    [InlineData("Scale", "Catapult", "malazan.md Units row Catapult scale: page 1.5 vs data 1")]
+    [InlineData("Spawn", "", null)]
+    [InlineData("Spawn", "Laborer", "malazan.md Units row Laborer spawnCount: page 3 vs data 1")]
+    [InlineData("Size", "", "malazan.md Units: header")]
+    public void G2_AnOptionalUnitsColumn_PinsWhenPresent(string column, string wrongRow, string? want)
+    {
+        string Cell(string unit) => column switch
+        {
+            "Id" => IdOf(unit) + (unit == wrongRow ? "_x" : ""),
+            "Scale" => unit == wrongRow ? "1.5" : "1",
+            "Spawn" => unit == wrongRow ? "3" : "1",
+            _ => "1",
+        };
+        string[] lines = WithUnitsColumn(column, "Unit", Cell);
+        Exception? e = Record.Exception(() => PinUnitsTable("malazan", lines));
+        if (want == null) Assert.True(e == null, e?.Message);
+        else Assert.True(e != null && e.Message.Contains(want, StringComparison.Ordinal), $"expected '{want}', got: {e?.Message ?? "no failure"}");
     }
 
     /// <summary>"attacks buildings only" / "attacks units only" in a unit note: the sentence form of a narrowed <c>attack.targets</c>.</summary>
@@ -249,7 +336,7 @@ public class UnitContentTests
         foreach (string faction in Factions)
         {
             string[] notes = FactionPage.Bullets(faction, "Unit notes", 3);
-            foreach (var r in Roster[faction])
+            foreach (var r in RosterOf(faction))
             {
                 string where = $"{faction}.md Unit notes {r.Name}";
                 string[] own = notes.Where(n => n.StartsWith(r.Name + ":", StringComparison.Ordinal)
@@ -261,7 +348,7 @@ public class UnitContentTests
             }
             // No note may say it of a unit outside the roster (a renamed unit would otherwise drop its check silently).
             foreach (string n in notes.Where(n => AttacksOnly.IsMatch(n)))
-                Assert.True(Roster[faction].Any(r => n.StartsWith(r.Name + ":", StringComparison.Ordinal) || n.StartsWith(r.Name + " (", StringComparison.Ordinal)),
+                Assert.True(RosterOf(faction).Any(r => n.StartsWith(r.Name + ":", StringComparison.Ordinal) || n.StartsWith(r.Name + " (", StringComparison.Ordinal)),
                     $"{faction}.md Unit notes: '{n}' says 'attacks ... only' but names no unit of the roster");
         }
     }
@@ -296,7 +383,7 @@ public class UnitContentTests
     internal static List<string> PageDetectorProblems(GameData data, string faction, string[] notes)
     {
         var problems = new List<string>();
-        foreach (var r in Roster[faction])
+        foreach (var r in RosterOf(faction))
         {
             string where = $"{faction}.md Unit notes {r.Name} detector";
             string[] own = notes.Where(n => IsNoteOf(n, r.Name)).ToArray();
@@ -309,7 +396,7 @@ public class UnitContentTests
             if (page != have) problems.Add($"{where}: page {page} vs data {have}");
         }
         foreach (string n in notes.Where(n => NoteDetector.IsMatch(n)))
-            if (!Roster[faction].Any(r => IsNoteOf(n, r.Name)))
+            if (!RosterOf(faction).Any(r => IsNoteOf(n, r.Name)))
                 problems.Add($"{faction}.md Unit notes: '{n}' states a detector but names no unit of the roster");
         return problems;
     }
@@ -373,9 +460,13 @@ public class UnitContentTests
     {
         List<string> problems = AllDetectorProblems(Data, ShippedNotes, Docs02Stealth());
         Assert.True(problems.Count == 0, string.Join("\n", problems));
-        // Not vacuous: both pages state the casters' detector, and docs/02 states the casters' radius.
-        foreach ((string faction, string name) in new[] { ("malazan", "Cadre Mage"), ("whirlwind", "Priest of the Whirlwind") })
+        // Not vacuous: every page states its caster's detector, and docs/02 states the casters' radius.
+        foreach (string faction in Factions)
+        {
+            int f = Data.FindFaction(faction);
+            string name = Data.Units.Single(u => u.Faction == f && u.Slot == UnitSlot.Caster).DisplayName;
             Assert.Contains(ShippedNotes(faction), n => IsNoteOf(n, name) && n.Contains("detector 10 m", StringComparison.Ordinal));
+        }
         Assert.Matches(CastersDetect, Docs02Stealth());
     }
 
