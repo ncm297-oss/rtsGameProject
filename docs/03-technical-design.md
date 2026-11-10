@@ -8156,7 +8156,8 @@ internal, shared), one knob. No `Command` kind: the hunt sends `AttackMove` (and
   walks the perimeter leg as soon as it reaches a ring point, before the ground round where it began (M5-H5 measured,
   BUG-1116: a lone worker 75 m from the origin is seen only after the 2 km leg; the two fixes tried, the points round the
   origin first and the leg waiting for them, each sank a QA hide or leg row; the skipped row
-  `EndGameHardeningTests.ALoneIdleWorker_NearWhereTheHuntBegins_IsSeenBeforeThePerimeterLeg` keeps the case); Pale Hills
+  `EndGameHardeningTests.ALoneIdleWorker_NearWhereTheHuntBegins_IsSeenBeforeThePerimeterLeg` keeps the case; M5-H6 measured
+  a third order and shipped the free starts first from the second hunt instead, "Implementation (M5-H6)"); Pale Hills
   seed 2's stalemate (both sides keep two halls; BUG-1068, narrowed to it) is not a hunt case. BUG-1067 (a seat whose scouts
   all die at the door finds no wood for minutes) is not taken here: neither rider is a few lines (gatherers searching near home
   is a new behaviour; the hall's sight reaching its woodlot is a faction-data change or a global `buildingSight` change that
@@ -9184,14 +9185,22 @@ tests `Ai/CriterionMatch.cs` (the harness), `Ai/MatchCriterionTests`, `CommandRe
 
   | Row | Map, seed | Ends (bound) | Winner | Waves | Hunts | Refused (kind count) |
   | --- | --- | --- | --- | --- | --- | --- |
-  | literal | Vathar Crossing 1 | 23,043 = 19:12 (24,000) | seat 1 (Whirlwind) | 5 | 0 | none |
-  | | Raraku 1 | 28,083 = 23:24 (36,000) | seat 0 (Malazan) | 7 | 1 | none |
-  | | Pale Hills 1 | 48,858 = 40:42 (72,000; BUG-1153, Producer decision 2026-11-08-1556) | seat 1 (Whirlwind) | 24 | 1 | Build UnitInTheWay 9, UnitGone 1; UseAbility UnitGone 1 |
-  | | generated 2 | 15,691 = 13:05 (24,000) | seat 1 | 2 | 0 | Build UnitInTheWay 4 |
-  | FFA | Vathar Crossing 2, 4 seats | 58,155 = 48:27 (72,000) | seat 3 | 18 | 9 | AttackMove UnitGone 4; Build SealsGround 2, UnitInTheWay 6 |
-  | 2v2 | Vathar Crossing 1, 4 seats | 35,648 = 29:42 (72,000) | team 1 | 18 | 8 | AttackMove UnitGone 1; Build Blocked 1, SealsGround 2, UnitInTheWay 8; Gather UnitGone 1 |
+  | literal | Vathar Crossing 1 | 23,322 = 19:26 (24,000) | seat 1 (Whirlwind) | 6 | 0 | none |
+  | | Raraku 1 | 28,231 = 23:31 (36,000) | seat 0 (Malazan) | 7 | 1 | none |
+  | | Pale Hills 1 | 50,140 = 41:47 (72,000; BUG-1153, Producer decision 2026-11-08-1556) | seat 1 (Whirlwind) | 24 | 1 | Build UnitInTheWay 6; UseAbility UnitGone 1 |
+  | | generated 2 | 17,053 = 14:12 (24,000) | seat 1 | 3 | 0 | Build UnitInTheWay 3 |
+  | FFA | Vathar Crossing 2, 4 seats | 56,896 = 47:24 (72,000) | seat 3 | 19 | 10 | Build SealsGround 2, UnitInTheWay 8; UseAbility UnitGone 1 |
+  | 2v2 | Vathar Crossing 1, 4 seats | 26,070 = 21:43 (72,000) | team 1 | 14 | 4 | Build Blocked 1, SealsGround 2, UnitInTheWay 1; Gather UnitGone 1; Move UnitGone 1 |
 
   Waves and hunts are the match's totals over its seats. The longest refusal run on any row is 1 think (no command refused twice on one target).
+  **Re-measured for M5-H6** (the house rule, the hunt's free starts from its second hunt, the leg's fixes; "Implementation
+  (M5-H6)"): every row moves and every row ends inside its bound with every check clean; before it the table read Vathar
+  23,043 (5 waves), Raraku 28,083, Pale Hills 48,858 (Build UnitInTheWay 9, UnitGone 1; UseAbility UnitGone 1), generated
+  15,691 (2 waves, Build UnitInTheWay 4), FFA 58,155 (18 waves, 9 hunts; AttackMove UnitGone 4; Build SealsGround 2,
+  UnitInTheWay 6), 2v2 35,648 (18 waves, 8 hunts; AttackMove UnitGone 1; Build Blocked 1, SealsGround 2, UnitInTheWay 8;
+  Gather UnitGone 1). QA's 42-match Hard v Normal tally (to 72,000) reads **29 / 11 / 2** (was 26 / 11 / 5 at M5-9b): Raraku
+  10 / 4 / 0, Vathar 7 / 7 / 0, Pale Hills 12 / 0 / 2 (the two: Hard seat 0 seeds 3 / 6, one match, a war Normal wins at
+  116,335); "Implementation (M5-H6)".
   **Re-measured for M5-9b** (the far expansion, `ai.farExpandReach` 384 m): Vathar, Raraku, the generated row, the FFA and the
   2v2 end on the same ticks with the same winners and fold hashes (no seat there builds a far depot); **Pale Hills seed 1 ends
   at 48,858 (40:42), seat 1**, every check clean (both seats expand to a free start at about 28,000; gathered gold 14,090 /
@@ -9224,7 +9233,7 @@ tests `Ai/CriterionMatch.cs` (the harness), `Ai/MatchCriterionTests`, `CommandRe
     other unit orders' `UnitGone`, and `Attack:AttackTargetInvalid` (the target died that tick).
 - **What does not end, and why.** Pale Hills seed 2 Normal v Normal (BUG-1068: the gold runs out, the `expand` step looks
   40 m only, the empty starts' 18,000 gold is never touched; since M5-9b the empty starts are taken and the match ends at
-  79,504, decided by 40:00 but finished late, BUG-1157); the lone-unit gap (BUG-1116: one seat keeps a few units and no
+  79,504, decided by 40:00 but finished late, BUG-1157; since M5-H6 it ends at 49,565); the lone-unit gap (BUG-1116: one seat keeps a few units and no
   building against a hunt that sweeps the perimeter leg first) and two live seats still fighting at the hour: QA's M5-H5
   sweep of 24 four-seat matches to 72,000 ended 6 / 12 FFA and 8 / 12 2v2. The criterion's rows avoid those seeds on
   purpose. **BUG-1151 (found here):** the economy's rebalance (one gatherer a think moved to the other kind) can send a
@@ -9508,7 +9517,9 @@ with the knob at 0 too).
   contract allows) off it. One Move a think at most, only once the last applied; a point is looked at when the worker is
   within `ai.scoutReach` of it or stands still after the Move to it applied. The start's last point marks it
   (`FarLooked`, a bit per start) and the leg goes on to the next; with none left it ends and the seat waits armed. A leg
-  worker that dies is replaced at the next think from the point it was walking to. While on the leg the worker is the
+  worker that dies is replaced at the next think from the point it was walking to (since M5-H6, BUG-1158, only while the
+  player's own unit losses are at most `ai.scoutReplacements`; past that the leg is over; and only starts within
+  `farExpandReach` are walked to, BUG-1159: "Implementation (M5-H6)"). While on the leg the worker is the
   seat's scout to every other manager (`AiPlayer.IsScout`: no gather, build, flee or ability order). Distances are compared
   in whole cells; on a tie the seat's own turn of the tied starts (a ring from index `PlayerCount + Player`): on Pale Hills
   1v1 both free starts are 129 cells from both halls, and the lowest index sent both seats to one start, where they fought
@@ -9537,7 +9548,8 @@ with the knob at 0 too).
   The reader requires the phase 0-2, looked-at bits only for starts the map has, the start -1 or a start, the look point
   0-4, the leg worker -1 or a unit slot (generation 0 with none, above 0 with one), the pending order none or a Build, the
   site -1 / -1 or a building type and a cell, a non-negative count, and the phases' shapes (off: no leg, Build or site;
-  armed: no Build or site; building: no leg and exactly one of a Build and a site); else `Malformed`
+  armed: no Build or site; building: no leg and exactly one of a Build and a site; since M5-H6, BUG-1159, "no leg" means no
+  leg worker: a kept start and look point are valid in any phase); else `Malformed`
   (`SaveRefusalTests.AFormat8Save_WithAForgedFarExpansion_IsMalformed`). `PreMapFixtures.CountersAt` counts the 67 bytes
   (`FarBytes`). The AI's state stays out of `StateHash`. A seat saved mid-arm follows the run hash for hash through its
   depot (`FarExpandTests.ASeatSavedMidArm_LoadsAndFollows`).
@@ -9579,6 +9591,141 @@ with the knob at 0 too).
 
   Found on the way: the start tie (both seats to start 2 on Pale Hills seed 1: 45,003, both expansions razed in the fight
   over it), fixed by the seat's turn above.
+
+### Implementation (M5-H6)
+
+The end-of-M5 sim hardening, pulled forward (brief 2026-11-09-1336). First item: since the far expansion (M5-9b) a *decided*
+AI-against-AI match on Pale Hills finished late (BUG-1157: seeds 2 / 5 past 72,000, five Hard-seat-0 tally no-results): the
+loser's remnant is a depot and workers at a far start, and it rebuilds houses with its wood (BUG-1116), so the hunt reached it
+late. Then the far expansion's own two bugs (BUG-1158, BUG-1159). Code: `MilitaryManager.NextSweep` / `NextHuntStart` /
+`StartProxy`, `BuildOrderExecutor.ReopenLost`, `FarExpansion.Leg` / `NextStart` / `EndLeg` / `AllStarts`,
+`Blackboard.ReadFarFrom`. No knob, no `ai.json` value, no save-format change (formats 8 / 9, replay 9).
+
+- **The four levers, measured alone and together** (the brief's (a); a temporary toggle, removed). Normal v Normal
+  (Malazan v Whirlwind, starts 0 and 1) unless "H v N" (Hard seat 0, Normal seat 1, `--ai hard,normal`); end tick and winner
+  seat, to 144,000. Seeds 3 / 6 and 7 / 8 of the Hard tally are one match each on a map file (the seed picks only the
+  openings). "(b) + (c)" is this task's BUG-1158 / BUG-1159 fixes, which move every Pale Hills match on their own.
+
+  | Variant | PH 1 | PH 2 | PH 5 | H v N PH 2 | H v N PH 3 / 6 | H v N PH 7 / 8 | Vathar 1 (24,000) | generated 2 (24,000) | PH 3 / 4 / 6 | Raraku 5 |
+  | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+  | `main` (e27eefd) | 48,858 p1 | 79,504 p1 | 96,321 p0 | 92,963 p0 | 143,525 p1 | 129,320 p0 | 23,043 p1 | 15,691 p1 | 29,514 p1 | 52,360 p0 |
+  | (i) the free starts first, every hunt | 48,858 p1 | 66,796 p1 | 96,092 p0 | 48,693 p0 | 92,438 p1 | 43,127 p0 | 23,043 | 15,691 | 29,514 | 52,360 |
+  | (i) variant: the starts only when the next point would start the leg | 48,858 p1 | 78,544 p1 | 81,757 p0 | 106,045 p0 | none | 107,127 p0 | 23,043 | 15,691 | 29,514 | 52,360 |
+  | (ii) the leg deferred while an interior point is nearer the origin than the reached ring point | 48,858 p1 | 77,935 p1 | 81,921 p0 | 68,492 p0 | 124,166 p1 | 65,754 p0 | 23,043 | 15,691 | 29,514 | 52,360 |
+  | (iii) the house rule | 48,729 p1 | 52,240 p1 | 66,790 p0 | 92,456 p0 | 77,511 p1 | 89,953 p0 | 23,322 | 17,053 | 33,484 | 36,004 p0 |
+  | (iv) a wave whose target is gone takes the nearest enemy drop-off first | 49,836 p1 | 50,511 p1 | 55,048 p0 | 50,297 p0 | 89,194 p1 | 125,320 p0 | 22,661 | 17,103 | 29,314 | **116,044 p1** |
+  | (i) + (ii) + (iii) | 48,729 p1 | 49,048 p1 | 68,583 p0 | 48,331 p0 | 82,538 p1 | 54,441 p0 | 23,322 | 17,053 | 32,824 | 36,004 p0 |
+  | all four | 48,891 p1 | 51,522 p1 | 57,823 p0 | 48,461 p0 | 89,781 p1 | 46,765 p0 | 23,466 | 16,799 | 29,237 | 37,118 p1 |
+  | (b) + (c) alone | 50,332 p1 | **104,818 p0** | 61,122 p0 | 48,650 p0 | 82,378 p0 | **none** | 23,043 | 15,691 | 29,514 | 52,360 p0 |
+  | (b) + (c) + (i) + (iii) | 50,143 p1 | 52,969 p1 | 54,322 p0 | 48,007 p0 | 78,278 p1 | 71,853 p0 | 23,322 | 17,053 | 32,824 | 36,004 p0 |
+  | (b) + (c) + (i) + (iii) + (iv) | 49,223 p1 | 51,407 p1 | **86,817 p0** | 48,707 p0 | 69,322 p0 | 46,743 p0 | 23,466 | 16,799 | 29,237 | 37,118 p1 |
+  | (b) + (c) + (iii) | 50,140 p1 | 52,430 p1 | **123,289 p0** | 90,811 p0 | 116,335 p1 | 89,953 p0 | 23,322 | 17,053 | 33,484 | 36,004 p0 |
+  | **shipped: (b) + (c) + (i) from the second hunt + (iii)** | **50,140 p1** | **49,565 p1** | **55,485 p0** | **49,301 p0** | 116,335 p1 | **67,593 p0** (fix round 1: 68,277 p0) | **23,322 p1** | **17,053 p1** | 33,484 p1 | 36,004 p0 |
+
+  The match is chaotic past the first change (any lever moves every later wave), so the combination was chosen on the rows
+  together, not lever by lever. **Why (i) only from the second hunt:** with the starts first on every hunt QA's
+  `HuntSweepRound2HideQaTests` Pale Hills AI-seat-1 row (a human seat's five workers at QA's hide points, the interior one a
+  quarter cell off both lattices) no longer ended: the first hunt began at the free starts, the route changed and the
+  quarter-cell worker at (166.5, 344.7) went unseen for the hour (also with the starts targeted at their exact centres, and
+  with the starts only on the first pass). From the second hunt on, the row is untouched (36:26, as on `main`) and the
+  decided matches still end. **Why not (ii):** it adds nothing once (i) and (iii) are in (H v N 7 / 8 54,441 against
+  71,853 before (b) / (c) moved the matches again) and is the order M5-H5's two tries sank QA's rows with; not shipped, and
+  `EndGameHardeningTests.ALoneIdleWorker_*` stays skipped under BUG-1116. **Why not (iv):** alone it turns Raraku seed 5
+  (52,360) into 116,044 and H v N 7 / 8 into 125,320; with the rest it sinks Pale Hills seed 5 back past 72,000 (86,817).
+- **(i) The hunt looks at the free starts first, from its second hunt** (`MilitaryManager.NextSweep` / `NextHuntStart` /
+  `StartProxy`). While the match's `HuntsStarted` is above 1, the sweep's next point is, before nearest-first, the
+  **start proxy** of the free start (no player starts there, or its player is defeated: `FarExpansion.NextStart`'s set, the
+  start list every seat is given) nearest the point it comes from, whose proxy is unvisited: the interior sweep point (cell
+  centre or interior corner; on an odd pass a cell edge's midpoint; never a ring point, so reaching it starts no perimeter
+  leg) nearest the start's centre. On Pale Hills every start's centre is a cell centre of the scout grid (1.4 m off). The
+  proxy's visited mark is the start's, so nothing new is stored (no save change) and a start the army's sight sweeps on
+  the way counts as looked at (`SeenPoints`). Each pass and each later hunt look again. **Fix round 1 (BUG-1162):** once
+  every free start's proxy is visited, a live enemy's own start comes next the same way (nearest first), then nearest-first
+  as before: with the free starts only, re-planning nearest-first from a far free start never saw a lone worker standing
+  at its own start on QA's 512 m hide scene (72,000 ticks; the first hunt sees it at 39,797). Why the second hunt: the first
+  sweeps from where the enemy was beaten, where a remnant usually is (QA's hide rows); a second hunt means the first did
+  not finish it (or it rebuilt and was razed again), and since M5-9b the rest is often a far depot.
+- **(iii) The house rule** (`BuildOrderExecutor.ReopenLost`, BUG-1116's own proposal, tried and reverted twice in M5-4d
+  slice 2 and M5-H5): a lost House step is reopened only when the economy's house test would build one now: below the
+  hard cap and `HalfPopCap - HalfPop <= ai.houseWhenPopWithin` (`AiRulesDef.HouseHalfPopMargin`, 2, the rule
+  `EconomyManager.House` uses). Before it a beaten seat with a few workers and ten tents rebuilt every lost tent (115 in
+  BUG-1116's match), each a fresh target that kept the winner's waves on houses. Both earlier tries sank Pale Hills seed 1
+  against its old 36,000 bound and seed 5 (the rebuilt house had been the beacon the hunt found); with (i) and the far
+  expansion's gold that no longer holds: seed 1 50,140 inside its 72,000 bound, seed 5 55,485.
+- **BUG-1158, the leg's death cap** (`FarExpansion.Leg`, `AllStarts`; `ai.scoutReplacements` reused, no new knob). A leg
+  worker found dead is replaced from the point it was walking to only while the player's own unit losses
+  (`PlayerView.OwnUnitLosses`) are at most `ai.scoutReplacements` (2), the scout's own cap (BUG-1052); past it every start
+  is marked looked (`FarLooked`) and the leg ends: the seat waits armed and builds only by a free mine it comes to know
+  otherwise. **Builder's call: the losses, not a count of leg deaths** (the brief's "replaced at most `scoutReplacements`
+  times"): a count would be a new saved field, a save-format bump, which is out of scope. The consequence: late in a match
+  (losses past 2) a leg worker's first death ends the leg for good. In the guarded-start scene (QA's
+  `ALegWorker_KilledAtAGuardedStart_*`, towers on both free starts) the seat loses 3 workers (`scoutReplacements` + 1)
+  and keeps 2; `FarExpandTests.ALegWorker_Killed_IsReplacedOnlyWithinTheScoutCap_ThenTheLegEnds` (each leg worker killed
+  at once: 3 killed, all four starts marked, the seat armed with no leg). QA's
+  `TheLegWorker_KilledOnTheWay_AnotherTakesTheLeg_*` (one death at 0 losses) still gets its replacement.
+- **BUG-1159** (`FarExpansion.NextStart`, `EndLeg`, `Blackboard.ReadFarFrom`, `SaveRefusalTests`). (1) `NextStart` skips a
+  start whose centre is farther than `ai.farExpandReach` from the hall's (no mine there could be a candidate; shipped
+  384 m covers every start on the three map files). (2) A leg ended on a candidate (`EndLeg(stop: false)`) keeps its start
+  and look point (`FarStart` / `FarLook`; the worker slot cleared as before), so when that mine is spent and the seat arms
+  again the leg walks the rest of that start from the point it had reached, not its centre again; a start is still marked
+  looked only after its last point. The loader therefore allows a start and look point in any phase (off and building
+  require no leg **worker**, as before; the start's range check is unchanged). (3)
+  `SaveRefusalTests.AFormat8Save_WithAForgedFarExpansion_IsMalformed`'s summary claimed a leg worker "with a generation
+  that doesn't match its slot" is refused; the reader checks only generation > 0 (the slot is checked at use,
+  `AiPlayer.OwnUnit`): the summary now says so, and its "a leg while building" row forges a leg worker.
+- **Tests.** `Ai/EndGameHardeningTests.AHunt_SweepsTheFreeStartsFirst_AndFindsARemnantAtTheFarOne` (512 m flat map with
+  four starts, a second hunt, the remnant one worker at the far free start: the targets are start 3's then start 2's
+  proxy and the worker is seen within 6,000 ticks; failed first: never seen in 20,000, the sweep nearest-first from the
+  army), `TheHuntsStarts_AreTheFreeAndDefeatedOnes_NearestFirst`; `Ai/RebuildTests.ARazedHouse_BelowTheCap_IsRebuiltOnlyWhenThePopulationNeedsIt`
+  (was `ARazedHouse_BelowTheCap_IsRebuilt`: near the cap the step reopens and a Billet is sent; far below it neither,
+  failed first); `Ai/FarExpandTests` (the death cap, `TheLeg_WalksOnlyToAStartWithinTheReach` x3,
+  `ALegEnded_OnACandidate_KeepsItsStart_AndTheNextArmWalksOnFromItsPoint`; each failed first); QA's two `FarExpandQaTests`
+  rows un-skipped (both failed first); `Stress/MapSlice2StressTests` Pale Hills 2 and 5 un-skipped.
+- **HUNT's tick and count range-checked** (the brief's (d), the M5-4d note): `ReadHuntFrom` now requires the sighting's tick
+  -1 or a tick and the hunt count not negative (the sweep reads the count since (i)); a forged -2 / -1 is `Malformed`
+  (`SaveRefusalTests.AForgedHuntCountOrSightingTick_OutOfRange_IsMalformed`, failed first: both loaded). No format change.
+- **Cost.** A re-target from the second hunt on adds one pass over the interior points per free start (225 points and two
+  starts on Pale Hills); the house rule two compares; the leg one compare. No allocation (`AiPerfTests`).
+- **Pins re-measured (rule 43), M5-9b -> M5-H6** (the golden `30C51BB619A7E650` has no AI seat and is unchanged; formats 8 / 9,
+  replay 9):
+
+  | Pin | M5-9b | M5-H6 |
+  | --- | --- | --- |
+  | `MatchCriterionTests` Vathar 1 / Raraku 1 / Pale Hills 1 / generated 2 / FFA / 2v2 | 23,043 / 28,083 / 48,858 / 15,691 / 58,155 / 35,648 | **23,322** (bound 24,000) / 28,231 / **50,140** (72,000) / **17,053** (24,000) / 56,896 / 26,070; same winners, every check clean ("Implementation (M5-5)") |
+  | `MapFileTests` Pale Hills / Vathar | 48,858 / 23,043 | 50,140 / 23,322 |
+  | `MapSlice2` Pale Hills 2 | 79,504, skipped (BUG-1157) | **49,565** (41:18), seat 1, three hunts: **un-skipped** |
+  | `MapSlice2` Pale Hills 5 | 96,321, skipped (BUG-1157) | **55,485** (46:14), seat 0, three hunts: **un-skipped** |
+  | `MapSlice2 KnownStalls` Pale Hills 3 / 4 / 6, generated 6 | 29,514 / 25,941 | 33,484 (one hunt) / 25,941 |
+  | `MapSlice2` Raraku 5 | 52,360 | 36,004 |
+  | `NonHardMatchPinQaTests` | 8 digests | 4 move: Raraku 1 Normal `5A6F64C1AF757499 28231 1503`, Pale Hills 3 Normal `9271EBE2FC074DC3 33484 3354`, Pale Hills 3 Easy `0819960BDEBD1EF9 36000 2811`, Vathar 1 Normal `2D4804D993CBC56A 23322 1543` (old digests in the comments); the 4 others unchanged |
+  | the 8 pre-M5-9a digests at strength 0 + starved 0 + far 0 (`CounterCompositionTests.TheNonHardPins_*`) | reproduced | **6 of 8 move** (a finding, below): the house rule and the hunt's starts have no knob, so the rows now pin M5-H6's play at the three knobs 0 (Raraku 1 Normal `4765275972CD8BD8 28193 1531`, Pale Hills 1 Normal `A0884E7E95EEA8AB 36000 3483`, Pale Hills 1 Easy `07EC9909C8DDF1C3 36000 2486`, Pale Hills 3 Normal `9753F06856D81476 28517 2459`, Pale Hills 3 Easy `BC6868F49655A4DE 33508 3033`, Vathar 1 Normal `72BC8BD819A35B0F 23219 1495`), the pre-M5-9a digest in each comment; Raraku and Vathar Easy reproduce |
+  | `StandardPresetPinQaTests`, `HardKnobsPinTests`, `DH6ThresholdQaTests` (`KnownBeatenAlive`) | green | unchanged (green) |
+  | the faction pages (rule 40): "Age II against the Whirlwind" (`D21OpeningsQaTests`, `AiOpeningPairsReportTests`) and "Fast Age II against the raider rush" (`Bug0982_*`) | as printed | re-printed: `crossbow_push` v `raider_rush` seed 19 "never (defeated 19:17)"; v `holy_war` seed 45 "9:28 (defeated 19:02)"; `cadre_rush` v `raider_rush` seed 8 "defeated 13:47", seed 14 "defeated 14:16" (both tables); the Whirlwind page's twin, `raider_rush` v `crossbow_push` seed 19 "10:34" (was 10:21). The prose above both tables still quotes the old defeats (a data-track edit, not a cell) |
+  | the hunt rows on Pale Hills seed 1 (`AiDeterminismTests`, `HuntStressTests` mid-hunt save) | 48,858, one hunt | 50,140, one hunt: green |
+  | `HuntStressTests` Pale Hills FFA seed 2 / seed 3 / 2v2 seed 1 | 97,140 / green / green | 105,690 (seat 3) / 53,892 / 64,226: green |
+  | `HuntStressTests` Pale Hills FFA seed 1 | no result by 144,000, skipped | no result by 144,000 (40 waves, 1 hunt): stays skipped (BUG-1068 / BUG-1116) |
+  | QA's `MatchCriterionSweepQaStressTests.Known` | generated 4 (BUG-1151), Raraku 1 / 5 (BUG-1152) | Raraku 1 (28,231) and 5 (36,004) no longer fail the checks: their entries are out (BUG-1152 is not fixed; the matches no longer reach it); generated 4 still fails as recorded |
+  | QA's `RebuildLookMatchQaStressTests` | green | two preconditions re-pointed: the four-seat Pale Hills row plays seed 3 (seed 1 now reopens nothing by 36,000, its first reopen at 36,100: the house rule), and the seed-2 two-process row runs to 42,000 (its hall is lost at 41,160, was 40,460) |
+  | QA's `FarExpandProbeQaStressTests.PaleHillsFfa_*` seed 2 | measured | trips the refusal-streak check at 35,301 (BUG-1151's re-send); the row is skipped under BUG-1151 with the measurement (a finding) |
+  | Hard v Normal, the 42 matches (to 72,000) | 26 / 11 / 5 | **29 / 11 / 2**: Raraku 10 / 4 / 0, Vathar 7 / 7 / 0 (as before), Pale Hills 12 / 0 / 2. Not inverted; Hard is level on Vathar, as at M5-9a and M5-9b. The two no-results are Pale Hills Hard seat 0 seeds 3 / 6 (one match): a war Normal wins at 116,335 |
+
+  **Fix round 1 (BUG-1162, the live enemy's start after the free ones), re-measured (rule 43):** the default loop's pins
+  are all unchanged (`MatchCriterionTests`, `MapFileTests`, `NonHardMatchPinQaTests`, `StandardPresetPinQaTests`,
+  `HardKnobsPinTests`, the 8 digests above); Pale Hills 1 / 2 / 5 50,140 / 49,565 / 55,485, H v N Pale Hills 2 / 3-6
+  49,301 / 116,335 unchanged, H v N 7 / 8 67,593 -> **68,277 p0**; `HuntStressTests` FFA seed 2 105,690 -> **75,382**
+  (FFA seed 3, 2v2 seed 1 unchanged); the Malazan page's `crossbow_push` v `raider_rush` seed 19 cell is back to "never"
+  (as at M5-9b, `KnownBeatenAlive`: the side beaten at 20:00, pop 1 / cap 0, not defeated; round 1 had "defeated 19:17");
+  the 42-match tally is the same **29 / 11 / 2** (Vathar 7 / 7 / 0). QA's hide rows (second hunt): free start 3 60,945 ->
+  58,257, own start 1 never -> **52,061**, far corner 17,921 -> 17,301, interior quarter 51,545 -> 48,421. Tried first and
+  dropped: the live enemy's start in the same nearest-first list as the free ones (own start 1 41,649, but the interior
+  quarter row never seen in 72,000).
+
+  **Finding (criterion 4's "the 8 pre-M5-9a digests reproduce"):** they cannot while the two rules have no knob, and the brief
+  allowed none. Fix round 1 measured the one in-brief switch there is, gating both rules on `ai.farExpandReach` > 0 (the
+  far expansion's knob, which the digest rows set to 0): all six old digests come back exactly, but
+  `FarExpandTests.AWholeMatch_WithNoSeatArmed_SendsTheSameCommands_AtKnobZero` (M5-9b's "knob 0 changes nothing but the far
+  expansion") fails on Vathar seed 1 (23,322 against 23,043: the house rule), so the gate was not kept. The rows still prove the three knobs turn M5-9a / M5-9b off (the new digests are the M5-H6 rules alone); a
+  knob for the house rule (or the hunt's starts) would restore the old digests, the Producer's call.
 
 ## Save/load and replays
 

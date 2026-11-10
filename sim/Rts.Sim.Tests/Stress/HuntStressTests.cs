@@ -133,7 +133,7 @@ public class HuntStressTests
     /// 72,000). M5-H5 fixed the two hunt causes once named here (BUG-1119, a defeated seat's buildings kept as known, and the
     /// lone-idle-worker hunt gap); the stall left was BUG-1068's gold starvation alone. M5-9a round 2 fix round 1 (BUG-1154:
     /// the starved check judges the unit production would train) ends it: 80,278 (66:53), seat 3 the winner; un-skipped.
-    /// M5-9b (the far expansion): 97,140 (80:57), seat 3, still inside 144,000.
+    /// M5-9b (the far expansion): 97,140 (80:57), seat 3, still inside 144,000. M5-H6: 105,690 (88:04), seat 3; fix round 1 (BUG-1162): 75,382 (62:49), seat 3.
     /// </summary>
     [Theory]
     [Trait("Category", "Stress")]
@@ -196,7 +196,8 @@ public class HuntStressTests
     /// Pale Hills seed 3 (a BUG-1068 stall before M5-4d): saved at the first think a seat hunts by a sweep and at the first
     /// it hunts a sighting; each load follows the uninterrupted run hash for hash to the match's end, the AI seats field for field equal there.
     /// M5-9a: with Normal's counter shift seed 3 ends at 31,891 without a hunt, so the row plays seed 5 (<see cref="MidHuntSeed"/>,
-    /// one hunt, ends at 45,358) to keep a save taken mid-hunt. M5-9b: seed 1 (one hunt, ends at 48,858; seed 5 ends past 72,000).
+    /// one hunt, ends at 45,358) to keep a save taken mid-hunt. M5-9b: seed 1 (one hunt, ends at 48,858; seed 5 ends past 72,000;
+    /// M5-H6: 50,140, one hunt).
     /// </summary>
     [Fact]
     [Trait("Category", "Stress")]

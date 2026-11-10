@@ -102,7 +102,8 @@ internal static class BuildOrderExecutor
     /// type held fewer times than its done steps lost one: its newest done step becomes due again now (<c>StepDone</c> false,
     /// one accepted command fewer, due at this think less the slack, so it acts at once; the site search, the reserve and
     /// <see cref="NoSiteRetryThinks"/> as for any step). One step a type a think: a second loss reopens the next one at the next
-    /// think. A House step at the hard cap stays done (D15 C). An <c>expand</c> step is never reopened (a lost expansion is
+    /// think. A House step at the hard cap stays done (D15 C), and since M5-H6 (BUG-1116) one whose house the population
+    /// doesn't need yet too (the economy's house test: within <c>ai.houseWhenPopWithin</c> of the cap). An <c>expand</c> step is never reopened (a lost expansion is
     /// not rebuilt yet). Why the newest: the file's earlier steps came first for a reason, so the last one built is the
     /// least needed of them, and a reopened step later in the file never holds an earlier one's reserve.
     /// </summary>
@@ -125,10 +126,14 @@ internal static class BuildOrderExecutor
         if (!any) return;
         Array.Clear(held);
         for (int k = 0; k < ai.OwnBuildingCount; k++) held[ai.OwnBuildingTypes[k]]++;
-        bool atCap = ai.View.HalfPopCap >= ai.Data.Rules.HalfPopCap;
+        // M5-H6 (BUG-1116): a lost house is built again only when the economy's own house rule would want one now (below the
+        // hard cap, the population within ai.houseWhenPopWithin of the cap). A beaten seat with a few workers and ten tents
+        // reopened a House step at every loss (115 tents in one match), each a fresh target that kept the hunt off its last
+        // units; a house that adds nothing is not built (D15 C's intent).
+        bool houseWanted = ai.View.HalfPopCap < ai.Data.Rules.HalfPopCap && ai.View.HalfPopCap - ai.View.HalfPop <= ai.Rules.HouseHalfPopMargin;
         for (int t = 0; t < types; t++)
         {
-            if (done[t] <= held[t] || t == ai.HouseType && atCap) continue;
+            if (done[t] <= held[t] || t == ai.HouseType && !houseWanted) continue;
             int i = newest[t];
             board.StepDone[i] = false;
             board.StepQueued[i] = Math.Max(0, board.StepQueued[i] - 1);

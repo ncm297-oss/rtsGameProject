@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S3 (two pinned non-criterion rows stop ending inside 72,000; every criterion row ends) |
-| Status | open (found by M5-9b's rule-43 re-measure, 2026-11-09-0426; the two rows are skipped with the measurement under BUG-1116 / BUG-1068) |
+| Status | fixed (M5-H6, 2026-11-09-1336, ACCEPTED; QA verified: Pale Hills 2 / 5 un-skipped at 49,565 / 55,485, seed 1 50,140, the tally 29 / 11 / 2 with 2 no-results) |
 | Found | 2026-11-09-0426, task M5-9b (developer, rule 43 re-measure) |
 | System | AI end game: the hunt's sweep (BUG-1116's sweep order) and the losing seat's rebuilding, made longer by the far expansion |
-| Fixed by | |
+| Fixed by | M5-H6 (the house rule, BUG-1116; the hunt sweeps the free starts first from its second hunt; the leg fixes BUG-1158 / BUG-1159) |
 
 ## Repro
 1. On the M5-9b branch: `dotnet tools/Rts.Cli/bin/Debug/net8.0/Rts.Cli.dll match --map pale_hills --seed 2 --ticks 144000`
@@ -50,3 +50,19 @@ Both rows ended inside 72,000 on the M5-9a branch: seed 2 at 53,797, seed 5 at 4
 - Severity S3 confirmed under criterion 5 (a `Known` skip under an existing id with the measurement). For the Producer:
   seed 2 is skipped on `main` as well, but **seed 5 is green on `main`** (`KnownStalls`), so this is a pinned row `main` has
   green that the branch skips.
+
+## Fix (M5-H6, 2026-11-09-1336, the developer)
+
+- Shipped: (i) from the match's second hunt on, the sweep's next point is first the free start (no player, or a defeated
+  one) nearest it, through the interior sweep point at the start's centre (`MilitaryManager.NextHuntStart` / `StartProxy`);
+  (iii) a lost House step is reopened only when the population is within `ai.houseWhenPopWithin` of the cap
+  (`BuildOrderExecutor.ReopenLost`); with BUG-1158 / BUG-1159's leg fixes. Not shipped: (ii) the sweep-order deferral (adds
+  nothing with (i) and (iii)) and (iv) drop-offs first (sinks Raraku seed 5 and Pale Hills seed 5). The lever x row table
+  is in docs/03 "Implementation (M5-H6)".
+- Pale Hills Normal v Normal: seed 2 **49,565** (41:18, seat 1), seed 5 **55,485** (46:14, seat 0): both `MapSlice2` rows
+  un-skipped. Seed 1 50,140 (bound 72,000); Vathar seed 1 23,322 (bound 24,000); generated seed 2 17,053 (24,000).
+- The Hard v Normal tally (42 matches to 72,000, run once): **29 / 11 / 2** (was 26 / 11 / 5): Raraku 10 / 4 / 0, Vathar
+  7 / 7 / 0, Pale Hills 12 / 0 / 2. The five Hard-seat-0 no-results: seed 2 ends at 49,301, seeds 7 / 8 at 67,593 (Hard);
+  seeds 3 / 6 (one match) are a long war Normal wins at 116,335, still a no-result at 72,000.
+- Why (i) only from the second hunt: with the starts first on every hunt QA's `HuntSweepRound2HideQaTests` Pale Hills
+  AI-seat-1 row no longer ended (its quarter-cell hide went unseen on the changed route).

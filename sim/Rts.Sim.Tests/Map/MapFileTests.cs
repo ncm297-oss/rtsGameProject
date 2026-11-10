@@ -598,9 +598,9 @@ public class MapFileTests
     /// <summary>
     /// M6-S8: two Normal AI seats (seed 1, Malazan v Whirlwind, starts 0 and 1) play a match on Pale Hills or Vathar Crossing to
     /// the end within its bound; the result, the length and each side's gathering are printed (docs/03 "Implementation (M6-S8)"
-    /// quotes them), and both sides gather wood. Vathar Crossing: 36,000 ticks (30 minutes; it ends at 23,043). Pale Hills:
-    /// <see cref="MatchCriterionTests.PaleHillsBound"/>, 72,000 since M5-9b (BUG-1153, Producer decision 2026-11-08-1556: it
-    /// ends at 48,858 with the far expansion; 34,219 before M5-9a).
+    /// quotes them), and both sides gather wood. Vathar Crossing: 36,000 ticks (30 minutes; it ends at 23,322 since M5-H6,
+    /// 23,043 before). Pale Hills: <see cref="MatchCriterionTests.PaleHillsBound"/>, 72,000 since M5-9b (BUG-1153, Producer
+    /// decision 2026-11-08-1556: it ended at 48,858 with the far expansion, 50,140 since M5-H6; 34,219 before M5-9a).
     /// </summary>
     [Theory]
     [Trait("Category", "Stress")]

@@ -153,7 +153,7 @@ public class AiDeterminismTests
     /// tick and count the same hunts. Asserted here too: the match ends and a hunt was started. M5-9a: with Normal's counter
     /// shift seed 3 ends at 31,891 with no hunt (the winner razes the rest), so the row plays seed 5 (<see cref="HuntSeed"/>:
     /// ends at 45,358 after one hunt, QA's sweep) to keep a hunt in the two-process proof. M5-9b: the far expansion lengthens
-    /// seed 5 past 72,000 (96,321), so the row plays seed 1 (48,858, one hunt).
+    /// seed 5 past 72,000 (96,321), so the row plays seed 1 (48,858, one hunt; 50,140 since M5-H6, one hunt).
     /// </summary>
     [Fact]
     [Trait("Category", "Stress")]

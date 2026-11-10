@@ -208,7 +208,8 @@ public class MapSlice2StressTests
     /// Pale Hills 3 / 4 / 6 (one match: openings 0 / 2): Malazan razed, 1 unit left, Whirlwind 87 units; 5: the mirror
     /// (Whirlwind razed, 6 units left). Generated 6: Malazan razed, 1 unit left (the AI's waves targeted buildings only).
     /// M5-4d (BUG-1068): the winner now hunts the last units once no enemy building is known, so each row must end by
-    /// 72,000; the fog oracle for the hunt's memory runs at every think of both seats (criterion 4).
+    /// 72,000; the fog oracle for the hunt's memory runs at every think of both seats (criterion 4). M5-H6: Pale Hills 3 / 4 / 6
+    /// end at 33,484 (27:54, seat 1, one hunt; 29,514 at M5-9b), generated 6 at 25,941 (unchanged).
     /// </summary>
     [Theory]
     [Trait("Category", "Stress")]
@@ -225,8 +226,10 @@ public class MapSlice2StressTests
     /// 28,200; seat 1 a second at 44,560, seat 0 one by the 2,000-gold pair near start 2 at 53,080), the war runs on with
     /// 25-37 units a side, and at 70:00 seat 1 has no army and no gold left; seat 0 (25 units) then needs to 96,321 (80:16) to
     /// raze and hunt down a seat that keeps rebuilding with 14,000-17,000 wood (four hunts): BUG-1116's slow end, BUG-1157.
+    /// M5-H6 (the house rule, the hunt's free starts from its second hunt, BUG-1158 / 1159's leg fixes): ends at 55,485
+    /// (46:14), seat 0, three hunts. Un-skipped.
     /// </summary>
-    [Theory(Skip = "BUG-1116 (open; BUG-1157): ends at 96,321 since M5-9b's far expansion (both seats funded longer; the loser rebuilds and is hunted late), past 72,000")]
+    [Theory]
     [Trait("Category", "Stress")]
     [InlineData(PaleHills, 5UL)]
     public void NormalVersusNormal_PaleHillsSeed5_SlowRaze_EndsWithin72000(string id, ulong seed) => SweepRow(id, seed, oracle: true);
@@ -239,8 +242,10 @@ public class MapSlice2StressTests
     /// 14,000-16,000 gold; the match is decided by 40:00 (seat 0 no army, no producer; seat 1 44-65 units) but seat 1 needs to
     /// 79,504 (66:15) and five hunts to find the rest (BUG-1157: the loser's far depot and its workers stand at a start the
     /// hunt's sweep reaches late; BUG-1116's sweep order). Skipped again with the measurement (rule 43: a finding, not a re-bound).
+    /// M5-H6 (the house rule, the hunt's free starts from its second hunt, BUG-1158 / 1159's leg fixes): ends at 49,565
+    /// (41:18), seat 1, three hunts. Un-skipped.
     /// </summary>
-    [Theory(Skip = "BUG-1068 / BUG-1116 (open; BUG-1157): ends at 79,504 since M5-9b, decided by 40:00, the hunt finds the loser's far remnant late")]
+    [Theory]
     [Trait("Category", "Stress")]
     [InlineData(PaleHills, 2UL)]
     public void NormalVersusNormal_PaleHillsSeed2_Stalemate_EndsWithin72000(string id, ulong seed) => SweepRow(id, seed);
@@ -250,7 +255,7 @@ public class MapSlice2StressTests
     /// starved wave does not reach it: seat 0 holds 4,454 gold / 35 wood, 5 army and no worker from 30,000 (it can pay for a
     /// Heavy Infantry, so it is never starved, and trains nothing), seat 1 1,970 gold / 5 wood and no army. Fix round 1
     /// (BUG-1154: the check judges the unit production would train, and a gatherable kind no longer saves a unit short of
-    /// one that is not) ends it at 52,360 (43:38), seat 0 the winner. Un-skipped.
+    /// one that is not) ends it at 52,360 (43:38), seat 0 the winner. Un-skipped. M5-H6: 36,004 (30:00), seat 0.
     /// </summary>
     [Theory]
     [Trait("Category", "Stress")]

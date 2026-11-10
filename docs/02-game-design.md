@@ -430,7 +430,10 @@ own cues (select, order, refused, building placed or finished, unit or tech read
   where the AI last saw an enemy unit (a worker counts) if that was at most `rules.json` `ai.huntMemory` (120 s) ago, else
   it sweeps the map (the centres and the corners of the scout's grid, every second pass the midpoints between them instead,
   plus the map's edges and corners, from the point nearest the army, then always the nearest one not yet walked to or seen;
-  once it reaches the map's edge it walks the whole border round once), and turns at once toward any enemy unit it sees. In a team match a
+  once it reaches the map's edge it walks the whole border round once), and turns at once toward any enemy unit it sees.
+  From its second hunt of the match on, it first looks at the start locations no player holds (or a defeated player's),
+  nearest first, where a beaten side's last depot and workers often stand, then an enemy's own start (M5-H6, BUG-1157 /
+  BUG-1162). In a team match a
   sighting on or right beside an ally's building is aimed just off that building, on the army's side. A hunt ends like a wave (heavy losses, nobody busy for a while,
   a raid at home), and becomes a wave again on the first enemy building it finds. So a beaten side's last unit hiding in
   the woods is found, and AI-against-AI matches end (built in M5-4d, BUG-1068; hardened in M5-H5, BUG-1119 / BUG-1120;
@@ -445,13 +448,17 @@ own cues (select, order, refused, building placed or finished, unit or tech read
   round 2, BUG-1153; [03 Implementation (M5-9a)](03-technical-design.md#implementation-m5-9a)).
 - When its own gold is spent the AI expands to the far mines with a depot: short of gold for the unit it would train next,
   with no worker on gold and no gold mine it knows, it sends a worker to look at the start locations no player took, and
-  once it has seen a free mine there (or anywhere within `rules.json` `ai.farExpandReach`, 384 m) with no enemy drop-off by
-  it, it builds its cheapest drop-off that costs no gold beside it (a Town Hall only if it can pay for one) and moves
+  once it has seen a free mine within `rules.json` `ai.farExpandReach` (384 m) of its Town Hall with no enemy drop-off by
+  it (at one of those starts or anywhere else: the reach applies to every mine, a start location's included; BUG-1181), it
+  builds its cheapest drop-off that costs no gold beside it (a Town Hall only if it can pay for one) and moves
   gatherers to it; one at a time, and 0 turns the rule off (built in M5-9b, BUG-1068;
-  [03 Implementation (M5-9b)](03-technical-design.md#implementation-m5-9b)).
+  [03 Implementation (M5-9b)](03-technical-design.md#implementation-m5-9b)). It walks only to starts within that reach, and
+  replaces a worker killed on the way only while it has lost at most `ai.scoutReplacements` (2) units in the match, as
+  for its scout; past that it stops looking (M5-H6, BUG-1158 / BUG-1159).
 - The AI rebuilds what it loses: a building its build order put up that is razed (or a site cancelled) is ordered again
   within a think or two, as a build order step due again, with the same reserve and site search as before; a House is
-  not rebuilt once the population cap is at the hard cap. With no Town Hall left and a worker alive, the Town Hall comes
+  rebuilt only when the population is within `rules.json` `ai.houseWhenPopWithin` (2) of its cap, the test it builds a
+  new one by, and never at the hard cap (M5-H6, BUG-1116: a beaten side no longer rebuilds houses it doesn't need). With no Town Hall left and a worker alive, the Town Hall comes
   before every other step: on its old spot when that is free, else as near it as a site is, banking for it when it can't
   pay yet (army production spends only what is above its cost). A lost expansion is not rebuilt yet (built in M5-4d
   slice 2; [03 Implementation (M5-4d slice 2)](03-technical-design.md#implementation-m5-4d-slice-2)).
@@ -501,6 +508,9 @@ own cues (select, order, refused, building placed or finished, unit or tech read
   Hard 1.0). A Hard AI that has seen only cavalry gives its Line twice the usual weight, a Normal one 1.5 times. No unit
   is weighted below its opening's mix and a unit the mix doesn't list is not added, so the shift tilts the army, it
   doesn't replace it (built in M5-9a, D14 c; [03 Implementation (M5-9a)](03-technical-design.md#implementation-m5-9a)).
+  The shift shows only when the bank, not a saturated producer, limits what is trained: a single barracks that already
+  trains the countering unit every time its queue empties cannot train more of it for a heavier weight (measured in D26a,
+  BUG-1156; the pages' "How the AI adapts" say where that is the case for each faction).
 - The AI sees only its own fog-of-war view. It never reads hidden enemy state.
 
 ## Game flow

@@ -203,7 +203,9 @@ public class EndGameHardeningTests
     /// the whole perimeter leg first (2 km), seeing the worker 14,937 ticks after the hunt began (Pale Hills seed 5's camp
     /// follower under the house rule: its point unvisited for 30,000 ticks). M5-H5 measured two fixes that make this row
     /// green (the points within two grid cells of the sweep's origin first; the leg waiting for them) and both sank QA's
-    /// rows (BUG-1116's file); the row waits for the next sweep change.
+    /// rows (BUG-1116's file); the row waits for the next sweep change. M5-H6 measured a third (the leg deferred only while an
+    /// interior point is nearer the origin than the reached ring point) on the match rows: it adds nothing once the hunt's
+    /// free starts and the house rule are in, so it was not shipped (docs/03 "Implementation (M5-H6)").
     /// </summary>
     [Fact(Skip = "BUG-1116 (open, S3): the sweep walks the perimeter leg before the ground round where it began; both measured fixes sank QA's hide / leg rows")]
     public void ALoneIdleWorker_NearWhereTheHuntBegins_IsSeenBeforeThePerimeterLeg()
@@ -243,6 +245,79 @@ public class EndGameHardeningTests
         }
         Assert.True(ai.Board.HuntsStarted >= 1);
         Assert.True(seenAt >= 0 && seenAt - start <= 6_000, $"the lone worker was seen {(seenAt < 0 ? "never" : $"{seenAt - start} ticks")} after the hunt began (ring leg {ai.Board.HuntRing}, visited {ai.Board.HuntVisited.Count(v => v)})");
+    }
+
+    /// <summary>
+    /// M5-H6 (BUG-1157; failed first: the sweep went nearest-first from the army, walked the perimeter leg and saw the worker
+    /// only after it): on a 512 m flat map with four start locations, player 1 has nothing left but one worker standing at a
+    /// free start (2) far across the map, as a beaten side's far depot workers stand. Player 0 has hunted once before, so
+    /// this hunt sweeps the free starts first, the one nearest its army (3) then the next (2), each through the sweep point
+    /// at its centre, and sees the worker within 6,000 ticks of the hunt's start.
+    /// </summary>
+    [Fact]
+    public void AHunt_SweepsTheFreeStartsFirst_AndFindsARemnantAtTheFarOne()
+    {
+        StartLocation[] starts = { new(7 * 256 + 136, 0), new(240 * 256 + 128, 0), new(200 * 256 + 200, 0), new(200 * 256 + 40, 0) };
+        Simulation sim = AiScenes.Flat(AiScenes.Seats(AiDifficulty.Normal, SeatController.Ai, SeatController.Human), s_data.Value,
+            map: LocalMovementTests.Flat(256).WithStartLocations(starts));
+        World w = sim.World;
+        AiPlayer ai = sim.AiOf(0)!;
+        ai.Board.WaveCooldownUntil = int.MaxValue;
+        sim.Tick();
+        for (int i = 0; i < w.Buildings.Capacity; i++)
+            if (w.Buildings.Alive[i] && w.Buildings.Owner[i] == 1) Assert.True(w.Buildings.Free(new EntityHandle(i, w.Buildings.Generation[i])));
+        for (int i = 0; i < w.Units.Capacity; i++)
+            if (w.Units.Alive[i] && w.Units.Owner[i] == 1) w.Units.Free(new EntityHandle(i, w.Units.Generation[i]));
+        Vector2 far = ai.CellCentre(starts[2].Cell), near = ai.CellCentre(starts[3].Cell);
+        EntityHandle worker = CombatScenes.Place(sim, 1, TestSim.Data.FindUnit("whirlwind_camp_follower"), far);
+        Army(sim, 4, 18, 28); // round (40, 60) m: start 3 is the nearer free start
+        NextThink(sim);
+        ai.Board.WavesStarted = 1;
+        ai.Board.HuntsStarted = 1; // a hunt before: this is the match's second
+        ai.Board.WaveCooldownUntil = 0;
+        int start = sim.TickNumber, seenAt = -1, cols = ScoutManager.GridLines(256, ai.Rules.ScoutGrid);
+        near = MilitaryManager.HuntPoint(ai, cols, cols, MilitaryManager.StartProxy(ai, cols, cols, near));
+        far = MilitaryManager.HuntPoint(ai, cols, cols, MilitaryManager.StartProxy(ai, cols, cols, far));
+        var targets = new List<Vector2>();
+        while (sim.TickNumber < start + 20_000 && seenAt < 0)
+        {
+            sim.Tick();
+            if (ai.Board.Hunting && (targets.Count == 0 || targets[^1] != ai.Board.WaveTargetPoint)) targets.Add(ai.Board.WaveTargetPoint);
+            if (w.Fog.CanSeeUnit(0, worker.Index)) seenAt = sim.TickNumber;
+        }
+        _out!.WriteLine($"seen {(seenAt < 0 ? "never" : $"{seenAt - start} ticks")} after the hunt began; targets {string.Join(" ", targets.Take(4))}");
+        Assert.True(ai.Board.HuntsStarted >= 1);
+        Assert.True(targets.Count >= 2, "the hunt never left its first target");
+        Assert.Equal(near, targets[0]);
+        Assert.Equal(far, targets[1]);
+        Assert.True(seenAt >= 0 && seenAt - start <= 6_000, $"the worker at the far free start was seen {(seenAt < 0 ? "never" : $"{seenAt - start} ticks")} after the hunt began");
+    }
+
+    /// <summary>
+    /// M5-H6: the starts the hunt sweeps first (<see cref="MilitaryManager.NextHuntStart"/>) are the free ones and a defeated
+    /// player's, nearest first, and (fix round 1, BUG-1162; failed first: -1 once the free starts were visited) then a live
+    /// enemy's; never the seat's own; each stands for the interior sweep point nearest its centre, and one visited is not
+    /// picked again.
+    /// </summary>
+    [Fact]
+    public void TheHuntsStarts_AreTheFreeAndDefeatedOnes_NearestFirst_ThenALiveEnemys()
+    {
+        StartLocation[] starts = { new(7 * 256 + 136, 0), new(240 * 256 + 128, 0), new(200 * 256 + 200, 0), new(200 * 256 + 40, 0) };
+        Simulation sim = AiScenes.Flat(AiScenes.Seats(AiDifficulty.Normal, SeatController.Ai, SeatController.Human), s_data.Value,
+            map: LocalMovementTests.Flat(256).WithStartLocations(starts));
+        AiPlayer ai = sim.AiOf(0)!;
+        sim.Tick();
+        int cols = ScoutManager.GridLines(256, ai.Rules.ScoutGrid);
+        int Point(int k) => MilitaryManager.StartProxy(ai, cols, cols, ai.CellCentre(starts[k].Cell));
+        Vector2 from = ai.CellCentre(starts[0].Cell);
+        Assert.Equal(Point(2), MilitaryManager.NextHuntStart(ai, from, -1)); // start 2 nearer start 0 than start 3 is
+        Assert.True(Point(2) < MilitaryManager.RingStart(cols, cols));
+        ai.Board.HuntVisited[Point(2)] = true;
+        Assert.Equal(Point(3), MilitaryManager.NextHuntStart(ai, from, -1));
+        ai.Board.HuntVisited[Point(3)] = true;
+        Assert.Equal(Point(1), MilitaryManager.NextHuntStart(ai, from, -1)); // the live enemy's own start, after the free ones
+        ai.Board.HuntVisited[Point(1)] = true;
+        Assert.Equal(-1, MilitaryManager.NextHuntStart(ai, from, -1)); // 0 its own
     }
 
     private const string FourSeatChild = "RTS_M5H5_FOUR_SEAT_CHILD", FourSeatLine = "M5H5-FOUR-SEAT ";

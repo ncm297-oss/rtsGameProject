@@ -50,15 +50,11 @@ public class MatchCriterionSweepQaStressTests
     {
         // The rebalance re-sends a Gather to a gone mine every think: check (e)'s streak fires at tick 18,421.
         [("generated", 4)] = "BUG-1151",
-        // A losing seat whose last worker gathers only gold, wood under the cost of anything, sends nothing for 4+ minutes.
-        [("raraku", 1)] = "BUG-1152",
-        // M5-9a: Raraku seed 2 no longer fails (the Normal counter shift changed the match: it ends at 29,190 with every
-        // oracle clean), so its entry is out; BUG-1152 stays open (seed 1 still shows it).
-        // M5-9a round 2 (the starved wave does not reach it): no result at 72,000, seat 1 silent 35,621..72,000 (36,379 ticks)
-        // with 1,970 gold / 5 wood and no army; seat 0 holds 4,454 gold / 35 wood, 5 army, no worker, and trains nothing.
-        // Fix round 1 (BUG-1154, the starved check reads production's pick): the match ends at 52,360 (seat 0), but still
-        // fails the silent-seat check: p1 silent 27,461..33,900 (6,439 ticks), p0 46,861..52,360.
-        [("raraku", 5)] = "BUG-1152",
+        // BUG-1152 (a losing seat whose last worker gathers only gold, wood under the cost of anything, sends nothing for 4+
+        // minutes): M5-9a took Raraku seed 2 out (it ended at 29,190, every oracle clean). M5-H6 (the house rule, the hunt's
+        // free starts from its second hunt) takes seeds 1 and 5 out too, though BUG-1152 is not fixed: seed 1 ends at 28,231
+        // (seat 0; longest silence 739 ticks, p0 24,221..24,960) and seed 5 at 36,004 (seat 0; longest 939, p0
+        // 33,381..34,320), both under the check's bound. The losing seat no longer reaches the wood-starved state there.
     };
 
     /// <summary>The extra oracles' state over one match.</summary>

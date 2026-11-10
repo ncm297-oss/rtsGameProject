@@ -760,6 +760,14 @@ open S1 / S2. Retro below; open S3 / S4 listed there.)_
       by a free mine it has seen there (`rules.json` `ai.farExpandReach` 384 m, 0 = off; docs/03 "Implementation (M5-9b)").
       Pale Hills seed 1 Normal v Normal now ends at **48,858 (40:42)**, seat 1, every check clean: the terminal rule's
       outcome (b), the three 1v1 Pale Hills rows bound at 72,000 (Producer decision 2026-11-08-1556), BUG-1153 to S3.)
+      **M5-H6 (2026-11-09-1336, the end-of-M5 sim hardening, accepted after one fix round):** the house rule shipped
+      (`BuildOrderExecutor.ReopenLost`: a lost House step reopened only when the population is within
+      `ai.houseWhenPopWithin` of its cap, BUG-1116), the hunt looks at the free start locations from its second hunt on
+      (`MilitaryManager.NextHuntStart` / `StartProxy`, then a live enemy's own start, BUG-1157 / BUG-1162), the far
+      expansion's leg capped and bounded (BUG-1158 / BUG-1159); Pale Hills 2 / 5 Normal v Normal un-skipped at 49,565 /
+      55,485, seed 1 50,140, the literal row 23,322, the Hard v Normal tally 29 / 11 / 2 (Vathar level at 7 / 7: BUG-1163
+      S3, the data track's Hard tuning); golden unchanged, formats unchanged; docs/03 "Implementation (M5-H6)". **The
+      sim's end-of-M5 hardening is done; the sign-off waits only on criterion 6.**)
 
 ## M6 — Game shell & real art
 

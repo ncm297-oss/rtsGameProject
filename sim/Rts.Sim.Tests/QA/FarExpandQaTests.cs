@@ -323,7 +323,7 @@ public class FarExpandQaTests
     /// Asserts the seat keeps at least one worker over 12,000 ticks (10 minutes): it must not feed its whole economy to the
     /// tower one worker at a time.
     /// </summary>
-    [Fact(Skip = "BUG-1158 (open): the leg replaces a killed worker without limit; all 5 workers die")]
+    [Fact]
     public void ALegWorker_KilledAtAGuardedStart_IsNotReplacedWithoutLimit()
     {
         GameData data = Shipped.Value;
@@ -352,7 +352,7 @@ public class FarExpandQaTests
     /// BUG-1159 item 1: with <c>ai.farExpandReach</c> 20 m no free start's mine can ever be a candidate (both free starts are
     /// about 65 m from the hall), yet the leg walks a worker to both. Asserts no leg starts toward a start outside the reach.
     /// </summary>
-    [Fact(Skip = "BUG-1159 item 1 (open): the leg walks to free starts outside ai.farExpandReach")]
+    [Fact]
     public void TheLeg_DoesNotWalkToAStartOutsideTheReach()
     {
         GameData data = AiScenes.DataWith(dir =>

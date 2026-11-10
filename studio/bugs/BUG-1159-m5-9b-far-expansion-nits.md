@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S4 |
-| Status | open |
+| Status | fixed (M5-H6, 2026-11-09-1336, ACCEPTED; QA verified: `TheLeg_DoesNotWalkToAStartOutsideTheReach` un-skipped, the kept start row, the save-refusal summary) |
 | Found | 2026-11-09-0426, task M5-9b (QA inspection) |
 | System | AI: the far expansion (`Ai/FarExpansion.cs`), its save fields (`Blackboard.Save.cs`), `SaveRefusalTests` |
-| Fixed by | |
+| Fixed by | M5-H6 (`FarExpansion.NextStart` / `EndLeg`, `Blackboard.ReadFarFrom`, `SaveRefusalTests`) |
 
 ## Repro
 1. **The leg ignores `ai.farExpandReach`.** `FarExpandQaTests.TheLeg_DoesNotWalkToAStartOutsideTheReach` (skipped with this
@@ -34,3 +34,15 @@ As above.
 
 ## Notes
 None of the three moves a pinned row (shipped reach, two expansions at most per seat in every measured match).
+
+## Fix (M5-H6, 2026-11-09-1336, the developer)
+
+1. `NextStart` skips a start whose centre is farther than `ai.farExpandReach` from the hall's centre. QA's
+   `TheLeg_DoesNotWalkToAStartOutsideTheReach` un-skipped (failed first: first leg at 1); dev rows
+   `FarExpandTests.TheLeg_WalksOnlyToAStartWithinTheReach` x3 (64 m: none, 66 m: start 3 only, 67 m: start 2 by the turn).
+2. A leg ended on a candidate (`EndLeg(stop: false)`) keeps its start and look point; a later arm walks the rest of that
+   start from the point reached, not its centre. A start is still marked looked only after its last point. The loader
+   allows a kept start in every phase (off and building still require no leg worker). Dev row
+   `FarExpandTests.ALegEnded_OnACandidate_KeepsItsStart_AndTheNextArmWalksOnFromItsPoint` (failed first: the start dropped).
+3. `SaveRefusalTests.AFormat8Save_WithAForgedFarExpansion_IsMalformed`'s summary now says what the reader checks (generation
+   above 0; the slot match is checked at use by `AiPlayer.OwnUnit`); its "leg while building" row forges a leg worker.
