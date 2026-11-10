@@ -3012,7 +3012,8 @@ ViewApi change, no data file changed (shipped units are all at 1.0, so the game 
   3.0 unit's is 3.6 m); its thickness doesn't scale, so the cast bar and status markers stacked above it keep their
   spacing (they too sit over the drawn top, `AbilityViews`); the corpse disc and its rim (`radius x scale`, rim x1.2); the
   refused-cast cue disc round a caster (drawn radius + 0.9 m). Units have no death fade (the body goes the frame the death
-  is shown), so there is nothing else to scale. **Not scaled:** the minimap dot (one size), the cargo cube (it sits over the
+  is shown), so there is nothing else to scale. **Since M7-V2** the aimed shots follow it too: a shot leaves its shooter at
+  `ProjectileViews.HeightFor(scale)` = `1.2 m x scale` and its hit flash sits at its victim's (see "Implementation (M7-V2)"). **Not scaled:** the minimap dot (one size), the cargo cube (it sits over the
   drawn top, its size is the zoom's).
 - **The hit test keeps the sim's `radius`** (Producer default): a click picks by the screen circle of the collision radius
   round the scale-1 body centre (`ScreenPicker.PickClick`, floor 12 px) and a box by that centre, exactly as before; a
@@ -3025,6 +3026,43 @@ ViewApi change, no data file changed (shipped units are all at 1.0, so the game 
   the ground, both rings, the bar lengths, the corpse discs, the click / box rows for the 1.5 catapult and the 3.0 Sapper,
   0 bytes over 20 frames of the mixed scales; windowed with `-- --shots <dir>` it saves the row), `UnitViewsTest` (every
   type's mesh is the formula), `ShellTest` (every body of the menu's match is the formula).
+
+### Implementation (M7-V2)
+
+The view half of M7-2's packs, and two riders. View code only; no sim, ViewApi or data file changed (no shipped unit is a
+pack or scaled, so the game draws exactly as before).
+
+- **A pack's square** (`ProductionQueueStrip`, "Implementation (M3-V3)"): a unit item whose type's `SpawnCount` is above 1
+  reads its initial plus "×N" (`ProductionQueueStrip.SquareText`: "H×3" for a Heavy Infantry pack of three); a single unit
+  its initial alone, a tech its name, the head's bar unchanged, the tooltip the type's `displayName`. "×N" is a **number
+  format composed in C#** (as `PopText`'s "9.5"), not player-facing prose, so it has no `ui.json` key and the rename pass
+  doesn't touch it (rule 8: the initial still comes from `displayName`). The text is built once per type at `Init` and
+  written only when the item changes, so a steady frame allocates nothing. The view reads `UnitDef.SpawnCount` as it reads
+  `UnitDef.Scale`. A click on the square is `CancelTrain` for that item as before: one item, so the cost back once and the
+  whole reservation (`ItemHalfPop`) released when it had started ("Implementation (M7-2)").
+- **Shot heights** (BUG-1177 item 1, Producer default): `ProjectileViews.HeightFor(scale)` = `LaunchHeight (1.2 m) x scale`.
+  An aimed shot leaves at its shooter type's height and closes on its victim type's, linear in the share of the flight flown
+  (`Tracker.Launch` to the drawn point over `Tracker.Length`); a hit flash sits at its victim's height (a building victim:
+  1.2 m). With both ends at scale 1 the shot flies level at exactly 1.2 m, so shipped visuals are pixel-identical. The
+  alternative (a share of `DrawnHeight`) would have moved the catapult's launch point today; lobs are unchanged (they ride
+  the ground). **How the view knows the ends** without a ViewApi change (the store's shooter type is internal): the tick a
+  shot is first seen, its shooter is the live unit of the shot's owner nearest its launch point and within its own radius of
+  it (`World.Spatial.QueryRadius`, 2 m, into a fixed buffer; a unit fires from where it stands), and its victim that unit's
+  `Target` (a building: 1.2 m); a shot with no such shooter (a tower fires from its footprint's centre) takes the unit
+  nearest its aim point not its owner's. Both heights are kept per projectile slot; a landing's flash takes the victim height
+  of the slot that died this tick whose last aim point is the landing (an aimed shot isn't steered on its landing tick, so
+  they are equal), else the unit nearest the landing. Anything not found is scale 1. Every array is made at `Bind`: no
+  per-frame allocation. **Known limit:** a shot whose shooter moved more than its radius between firing and the view's first
+  look (a test or a frame that skips ticks) draws from 1.2 m.
+- **BUG-1178** (test only): `QaM6V18Test` expects format 10's empty map id string (`int32` 0) between the preset and `HMAP`
+  for a generated-map save, and its rows naming save formats 4-6 read format 10 (every save is format 10 since M7-1).
+- **Tests:** `game/tests/QueuePackTest` (a forged copy with Heavy Infantry `spawnCount` 3 and mixed scales: every type's
+  square text; "H×3" at a Barracks and "L" at the keep in a real match, 60 steady frames 0 bytes and no rewrite; a click on
+  the started pack refunds its cost once and releases its 6 halves, on an unstarted one refunds it and moves no pop; 20 pack
+  items queued and a 150 v 150 mixed-scale brawl: 60 frames of the strip and the projectile views 0 bytes, shots drawn from
+  0.6 m and 3.6 m and scaled flashes), `ScaleViewTest`'s shot-height row (a 0.5 Crossbowman and a 3.0 Desert Archer shoot
+  each other: launches at 0.6 / 3.6 m, flashes at 3.6 / 0.6 m, every draw between its ends), `QaM6V18Test`,
+  `ProjectileViewTest` (shipped data: every aimed shot at 1.2 m, 0 bytes over 300 brawl frames).
 
 ## Vision, detection, fog
 
@@ -4315,7 +4353,7 @@ Match.tscn  (new nodes)
   footprint centre with one Command sound; a refused press enqueues nothing and plays nothing. A production card owns the
   whole grid (docs/02 "Grid hotkeys"): an empty cell's key does nothing.
 - **Queue strip** (`ProductionQueueStrip`): the selected own finished building's queue, up to `QueueStrip.MaxItems` = 5
-  items (64 x 44 px, 4 px gaps), head first: a unit is a square in its type's colour with its initial, a tech a slate
+  items (64 x 44 px, 4 px gaps), head first: a unit is a square in its type's colour with its initial (a pack "×N" since M7-V2: "H×3"), a tech a slate
   square with its `displayName`. The head carries a yellow bar of `QueueStrip.HeadFill` = `Progress / ItemTicks(slot, 0)`
   clamped to [0, 1]. A click on item k is `SelectionController.CancelQueueItem(k)`: `Command.CancelTrain(player, footprint
   centre, k)`, a full refund, one Command sound. Items are rewritten only when their type changes, the bar only when the
@@ -4693,7 +4731,7 @@ Match.tscn  (new node)
   each side's volleys read apart. Lob: a dark stone, radius 0.28 m. Position: `lerp(PrevPosition, Position, alpha)` with
   the runner's render alpha **clamped to [0, 1]** (never extrapolated: a re-led bolt can step 1.8 m in a tick,
   BUG-0184; NaN draws the current tick), on `TerrainHeight` under that point plus `LaunchHeight` (1.2 m) for an aimed
-  shot, plus `StoneRide` (0.18 m) and the arc for a lob. Placeholder look until M6 (real models, trails, sounds).
+  shot (since M7-V2 `1.2 m x scale` of its shooter at launch, closing on its victim's: see "Implementation (M7-V2)"), plus `StoneRide` (0.18 m) and the arc for a lob. Placeholder look until M6 (real models, trails, sounds).
 - **The tracker** (`ViewApi.ProjectileTracker`, view state, fixed arrays, read-only on the store's spans): the sim keeps
   no launch point, so on the first observation of a live slot it records the launch point (`PrevPosition`: on the
   firing tick and one tick later it is exactly the launch point), the flight length (launch to `Target`), the kind, type

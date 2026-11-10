@@ -10,7 +10,7 @@ namespace Rts.Game;
 /// <summary>The production queue strip above the command card (M3-V3): the selected own finished building's queue, the head's progress, a click cancels an item.</summary>
 /// <remarks>
 /// Up to <see cref="QueueStrip.MaxItems"/> squares, head first: a unit is a square in its type's colour
-/// (<see cref="SelectionPanel.TypeColor"/>) with its initial, a tech a slate square with its <c>displayName</c>. The head
+/// (<see cref="SelectionPanel.TypeColor"/>) with its initial (a pack, <c>SpawnCount</c> above 1, adds "×N": "H×3", M7-V2), a tech a slate square with its <c>displayName</c>. The head
 /// carries a bar of <see cref="QueueStrip.HeadFill"/> (<c>Progress / ItemTicks(slot, 0)</c>). A click on item k is
 /// <see cref="SelectionController.CancelQueueItem"/>(k): <c>Command.CancelTrain(player, building, k)</c>, a full refund.
 /// Polled every frame from <see cref="BuildingStore.QueueCount"/>, <see cref="BuildingStore.QueueTypeAt"/> and
@@ -117,14 +117,22 @@ public partial class ProductionQueueStrip : Control
         for (int t = 0; t < _data.Units.Length; t++)
         {
             _typeColors[t] = SelectionPanel.TypeColor(t);
-            string n = _data.Units[t].DisplayName;
-            _initials[t] = n.Length > 0 ? n.Substring(0, 1).ToUpperInvariant() : "";
+            _initials[t] = SquareText(_data.Units[t]);
         }
         _shownCount = -1;
         Sync();
     }
 
     public override void _Process(double delta) => Sync();
+
+    /// <summary>A unit square's text: the first letter of its <c>displayName</c>, and for a pack (<c>SpawnCount</c> above 1) "×N", so one order of three reads "H×3".</summary>
+    /// <remarks>"×N" is a number format composed here (as <c>PopText</c>'s "9.5"), not player-facing prose: no <c>ui.json</c> key. Built once per type at <see cref="Init"/>.</remarks>
+    public static string SquareText(UnitDef def)
+    {
+        string n = def.DisplayName;
+        string initial = n.Length > 0 ? n.Substring(0, 1).ToUpperInvariant() : "";
+        return def.SpawnCount > 1 ? initial + "×" + def.SpawnCount.ToString(System.Globalization.CultureInfo.InvariantCulture) : initial;
+    }
 
     /// <summary>Shows the selected own finished building's queue (nothing without one). Allocation-free.</summary>
     public void Sync()

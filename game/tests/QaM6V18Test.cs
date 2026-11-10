@@ -17,9 +17,10 @@ namespace Rts.Game.Tests;
 /// M6-V18: a map file carried through a save and its load, the recording and Watch, and the Load Game list, through the shell
 /// (<c>Main.tscn</c>):
 /// <list type="bullet">
-/// <item>A generated menu match (the setup's Generated) saves format 4 (<see cref="SaveFormat.MaplessVersion"/>) with no map
-/// id after the preset, its config's map parameters as before M6-V18, and records format 6 with no <c>map</c> line.</item>
-/// <item>A menu match on the map file: saved at tick <see cref="SaveTick"/> (format 5, <see cref="SaveFormat.CurrentVersion"/>,
+/// <item>A generated menu match (the setup's Generated) saves format 10 (<see cref="SaveFormat.CurrentVersion"/>, every save's
+/// since M7-1) with the empty map id string right after the preset (format 10 always writes it, docs/03 "Save format"; BUG-1178),
+/// its config's map parameters as before M6-V18, and records format 6 with no <c>map</c> line.</item>
+/// <item>A menu match on the map file: saved at tick <see cref="SaveTick"/> (format 10, <see cref="SaveFormat.CurrentVersion"/>,
 /// the summary's <see cref="SaveSummary.MapId"/> the map's) and played on to tick <see cref="EndTick"/>; its recording is
 /// format 9 with <c>map &lt;id&gt;</c> right after <c>starting-resources</c>.</item>
 /// <item>Load Game: the map file's save and recording name the map (<c>load.map</c> with its <c>displayName</c>); the generated
@@ -91,16 +92,19 @@ public partial class QaM6V18Test : Node
 
     private async Task Run(Main main)
     {
-        // ---- a generated menu match: save format 6 (an AI seat, M5-4d: BUG-1108) / recording format 6 ----
+        // ---- a generated menu match: save format 10 (every save since M7-1) / recording format 6 ----
         Menu gen = await MenuMatch(main, "", GeneratedSave, GeneratedTicks);
         if (!Check(gen.Replay != null && gen.Save != null && File.Exists(gen.Replay) && File.Exists(gen.Save), $"generated files: {gen.Replay} / {gen.Save}")) return;
         byte[] genBytes = File.ReadAllBytes(gen.Save!);
         Check(SaveSummary.TryParse(genBytes, out SaveSummary? genSummary) && genSummary!.FormatVersion == SaveFormat.HuntMaplessVersion && genSummary.MapId == "",
             $"the generated save is format {genSummary?.FormatVersion} (want {SaveFormat.HuntMaplessVersion}) with map id '{genSummary?.MapId}'");
-        // Right after the preset string comes the heightmap's tag: no map id string was written.
-        byte[] preset = StringField(StartingResourcesDef.StandardId);
+        // BUG-1178: format 10 always writes the map id after the preset, "" for a generated map (an int32 byte count of 0),
+        // and right after it comes the heightmap's tag.
+        byte[] preset = StringField(StartingResourcesDef.StandardId), emptyId = StringField("");
         int presetAt = IndexOf(genBytes, preset);
-        Check(presetAt > 0 && genBytes.AsSpan(presetAt + preset.Length, 4).SequenceEqual("HMAP"u8), "the generated save holds something between its preset and its heightmap");
+        Check(presetAt > 0 && genBytes.AsSpan(presetAt + preset.Length, emptyId.Length).SequenceEqual(emptyId)
+            && genBytes.AsSpan(presetAt + preset.Length + emptyId.Length, 4).SequenceEqual("HMAP"u8),
+            "the generated save does not hold exactly the empty map id string between its preset and its heightmap");
         Check(gen.Config!.MapId == "" && gen.Config.Map == MapGenParams.Default with
             {
                 Width = 128, Height = 128, Forests = LaunchOptions.DefaultForests, GoldMines = LaunchOptions.DefaultMines, StartLocations = 2,
@@ -109,7 +113,7 @@ public partial class QaM6V18Test : Node
         Check(genLines[0] == "rts-replay 6" && !genLines.Any(l => l.StartsWith("map ", StringComparison.Ordinal)), $"the generated recording is '{genLines[0]}' (want format 6, no map line)");
         Check(ReplayStore.TryReadHeader(gen.Replay!, out ReplayEntry? genEntry) && genEntry!.MapId == "", "the generated recording's header");
 
-        // ---- a match on the map file: format 5 / format 9 ----
+        // ---- a match on the map file: save format 10 / recording format 9 ----
         Menu file = await MenuMatch(main, _map.Key, SaveTick, EndTick);
         if (!Check(file.Replay != null && file.Save != null && File.Exists(file.Replay) && File.Exists(file.Save), $"map files: {file.Replay} / {file.Save}")) return;
         Check(file.Config!.MapId == _map.Key && file.Config.Map == MapGenParams.Default with { Width = _map.Size, Height = _map.Size },

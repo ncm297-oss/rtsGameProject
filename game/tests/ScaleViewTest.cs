@@ -29,6 +29,10 @@ namespace Rts.Game.Tests;
 /// radius but on the drawn body of the 1.5x catapult or the 3.0x Sapper selects nothing (a click inside it selects the unit),
 /// and a box over the drawn body but not the sim centre selects nothing; the per-frame view update of the mixed scales
 /// allocates nothing.</item>
+/// <item>Shot heights (M7-V2, a second copy with the Desert Archer at 3.0): a 0.5 Crossbowman and a 3.0 Desert Archer shoot each
+/// other; the Crossbowman's bolt leaves at 0.6 m and its hit flash on the Archer is at 3.6 m, the Archer's arrow leaves at 3.6 m
+/// and its flash on the Crossbowman is at 0.6 m (<see cref="ProjectileViews.HeightFor"/>, 1.2 m x scale), and in between a shot
+/// is between its two ends.</item>
 /// </list>
 /// Headless: <c>&amp; $env:GODOT --headless --path game res://tests/ScaleViewTest.tscn</c>; prints "SCALE VIEW TEST PASS" or
 /// "SCALE VIEW TEST FAIL: ..." lines. Windowed with <c>-- --shots &lt;dir&gt;</c> it saves <c>scale-row.png</c> (the row at zoom
@@ -63,6 +67,7 @@ public partial class ScaleViewTest : Node
             ShippedRows(loaded.Data!);
             GameData forged = Forge(dataDir, root);
             await Staged(forged);
+            await ShotHeights(root);
         }
         catch (Exception ex)
         {
@@ -269,6 +274,76 @@ public partial class ScaleViewTest : Node
         // The catapult's drawn top is too close above its sim centre for the row above; the 3.0 Sapper's is far.
         HitRows(world, slots[6], data.Units[row[6].Type], above: false);
         HitRows(world, slots[5], data.Units[row[5].Type], above: true);
+        match.QueueFree();
+        await Frames(1);
+    }
+
+    // Criterion 4 (M7-V2): a 0.5 Crossbowman and a 3.0 Desert Archer 10 m apart shoot each other; each shot leaves at its
+    // shooter's 1.2 m x scale and flashes at its victim's.
+    private async Task ShotHeights(string root)
+    {
+        string copy = Path.Combine(root, "data");
+        string path = Path.Combine(copy, "factions", "whirlwind", "units.json");
+        JsonNode units = JsonNode.Parse(File.ReadAllText(path)) ?? throw new InvalidOperationException($"{path} is empty");
+        units["units"]!.AsArray().First(n => (string?)n!["id"] == "whirlwind_desert_archer")!["scale"] = 3.0;
+        File.WriteAllText(path, units.ToJsonString());
+        DataLoadResult loaded = DataLoader.LoadAll(copy);
+        if (!loaded.Ok) throw new InvalidOperationException("forged data failed to load: " + string.Join("; ", loaded.Errors.Take(5)));
+        GameData data = loaded.Data!;
+        int crossbow = Type(data, "malazan_crossbowman")!.Value, archer = Type(data, "whirlwind_desert_archer")!.Value;
+        Check(data.Units[crossbow].Scale == 0.5f && data.Units[archer].Scale == 3f, "shot-height copy: scales not 0.5 / 3.0");
+
+        var match = GD.Load<PackedScene>("res://scenes/Match.tscn").Instantiate<Match>();
+        AddChild(match);
+        match.Start(data, LaunchOptions.Parse(new[] { "--seed", "1", "--units", "0", "--no-bases", "--no-fog", "--mute" }));
+        var runner = match.GetNode<SimRunner>("SimRunner");
+        runner.ProcessMode = ProcessModeEnum.Disabled; // ticked here
+        Simulation sim = runner.Simulation!;
+        World world = sim.World;
+        var shots = match.GetNode<ProjectileViews>("World3D/ProjectileViews");
+        System.Numerics.Vector2 anchor = StartLayout.Block(world.NavGrid, 1, west: true, 1f)[0];
+        sim.Enqueue(Command.SpawnUnit(0, crossbow, anchor));
+        sim.Enqueue(Command.SpawnUnit(1, archer, anchor + new System.Numerics.Vector2(10f, 0f)));
+        float small = ProjectileViews.HeightFor(0.5f), big = ProjectileViews.HeightFor(3f);
+        Check(Mathf.Abs(small - 0.6f) < 1e-6f && Mathf.Abs(big - 3.6f) < 1e-6f && ProjectileViews.HeightFor(1f) == ProjectileViews.LaunchHeight,
+            $"HeightFor: 0.5 -> {small}, 3.0 -> {big}, 1.0 -> {ProjectileViews.HeightFor(1f)}");
+        // Per owner (0 the Crossbowman, 1 the Archer): the launch height seen, the flash height seen, mid-flight outside its ends.
+        var launch = new float[] { -1f, -1f };
+        var flash = new float[] { -1f, -1f };
+        int outside = 0, drawn = 0;
+        ProjectileStore p = world.Projectiles;
+        for (int t = 0; t < 600 && (launch[0] < 0f || launch[1] < 0f || flash[0] < 0f || flash[1] < 0f); t++)
+        {
+            sim.Tick();
+            shots.CollectTick(world);
+            shots.Sync(world, 0f); // alpha 0 draws a shot at PrevPosition: its launch point on the tick it was fired
+            for (int k = 0; k < shots.Shown; k++)
+            {
+                if (shots.DrawnIsLob(k)) continue;
+                int slot = shots.DrawnSlot(k), owner = p.Owner[slot];
+                Vector3 at = shots.DrawnAt(k);
+                float h = at.Y - TerrainHeight.At(world.Heightmap, at.X, at.Z);
+                float from = owner == 0 ? small : big, to = owner == 0 ? big : small;
+                drawn++;
+                if (h < Math.Min(from, to) - 1e-4f || h > Math.Max(from, to) + 1e-4f) outside++;
+                if (p.PrevPosition[slot] == shots.Tracker.Launch[slot] && (uint)owner < 2u && launch[owner] < 0f) launch[owner] = h;
+            }
+            for (int m = 0; m < shots.Marks.Capacity; m++)
+            {
+                if (!shots.Marks.Active[m] || shots.Marks.Kind[m] != ImpactMarkKind.Flash) continue;
+                int owner = shots.Marks.Owner[m];
+                System.Numerics.Vector2 mp = shots.Marks.Position[m];
+                float h = shots.MarkTransform(m).Origin.Y - TerrainHeight.At(world.Heightmap, mp.X, mp.Y);
+                if ((uint)owner < 2u && flash[owner] < 0f) flash[owner] = h;
+            }
+        }
+        GD.Print($"  shot heights: 0.5 crossbowman leaves at {launch[0]:0.###} m, flashes on the 3.0 archer at {flash[0]:0.###} m; " +
+            $"the archer leaves at {launch[1]:0.###} m, flashes on the crossbowman at {flash[1]:0.###} m; {drawn} shot draws, {outside} outside their ends");
+        Check(Mathf.Abs(launch[0] - small) < 1e-3f, $"the 0.5 crossbowman's bolt left at {launch[0]} m, want {small}");
+        Check(Mathf.Abs(launch[1] - big) < 1e-3f, $"the 3.0 archer's arrow left at {launch[1]} m, want {big}");
+        Check(Mathf.Abs(flash[0] - big) < 1e-3f, $"the crossbowman's hit flash on the 3.0 archer at {flash[0]} m, want {big}");
+        Check(Mathf.Abs(flash[1] - small) < 1e-3f, $"the archer's hit flash on the 0.5 crossbowman at {flash[1]} m, want {small}");
+        Check(drawn > 0 && outside == 0, $"{outside} of {drawn} shot draws outside their two ends' heights");
         match.QueueFree();
         await Frames(1);
     }
