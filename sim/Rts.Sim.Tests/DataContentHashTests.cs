@@ -27,6 +27,23 @@ public class DataContentHashTests
         Assert.NotEqual(TestSim.Data.ContentHash(), load.Data!.ContentHash());
     }
 
+    /// <summary>M7-1 criteria 1 and 3: a <c>scale</c> set on a shipped unit, and a <c>regen</c> on a faction, each move the hash.</summary>
+    [Theory]
+    [InlineData("scale", "1.5")]
+    [InlineData("scale", "1")] // written out at its default: the same def, the same hash
+    [InlineData("regen", "{\"hpPerSecond\": 1, \"delay\": 6}")]
+    [InlineData("regen", "{\"hpPerSecond\": 1, \"delay\": 5}")]
+    public void AScaleOrARegen_InTheFiles_ChangesTheHash(string field, string json)
+    {
+        using TestDataDir dir = TestDataDir.CopyOfShipped();
+        if (field == "scale") dir.SetUnitField("malazan", "malazan_heavy_infantry", "scale", json);
+        else dir.EditJson("factions/malazan/faction.json", r => r["regen"] = JsonNode.Parse(json));
+        DataLoadResult load = DataLoader.LoadAll(dir.Path);
+        Assert.True(load.Ok, string.Join("\n", load.Errors));
+        if (json == "1") Assert.Equal(TestSim.Data.ContentHash(), load.Data!.ContentHash());
+        else Assert.NotEqual(TestSim.Data.ContentHash(), load.Data!.ContentHash());
+    }
+
     private static string FirstKey(string faction) =>
         TestSim.Data.Units.First(u => TestSim.Data.Factions[u.Faction].Key == faction).Key;
 
@@ -432,6 +449,11 @@ public class DataContentHashTests
         Assert.Contains("UnitDef.Abilities", checkedFields);
         foreach (string f in new[] { "Passives", "BelowHpPassive", "DeathPassive" }) // M4-4b-3a
             Assert.Contains($"UnitDef.{f}", checkedFields);
+        // M7-1: the unit's visual scale, the faction's regeneration, the status's state-hash number.
+        Assert.Contains("UnitDef.Scale", checkedFields);
+        foreach (string f in new[] { "RegenPerTick", "RegenDelayTicks" })
+            Assert.Contains($"FactionDef.{f}", checkedFields);
+        Assert.Contains("StatusDef.StateHashId", checkedFields);
         // M5-3: rules.json ai and every faction's ai.json (the list elements' own fields: EveryAiStructField_ChangesTheHash).
         Check(d.AiRules, r => With(d, aiRules: r));
         foreach (string f in new[] { "GoldShare", "HouseHalfPopMargin", "PlacementSearchCells", "SpacingCells", "ExpandReachCells", "ScoutAfterTicks",

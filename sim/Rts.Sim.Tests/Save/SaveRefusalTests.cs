@@ -71,7 +71,8 @@ public class SaveRefusalTests
     [InlineData(0)]
     [InlineData(1)] // M6-S3: slice 1's format (no AI section) has no reader
     [InlineData(2)] // M6-S4: M6-S3's format (no team byte) has no reader
-    [InlineData(10)] // M5-9a: format 9 is current (8 / 9 with an AI seat, 4 / 5 without), formats 3-8 still read
+    [InlineData(9)] // M7-1: format 10 is current for every save, every older one refused
+    [InlineData(11)]
     [InlineData(-1)]
     public void AnotherFormatVersion_IsFormatVersionMismatch(int version)
     {
@@ -118,23 +119,24 @@ public class SaveRefusalTests
     [Fact]
     public void AHumanSeatForgedIntoAnAiOne_IsMalformed()
     {
-        // The header now builds an AI for the seat, whose state the body (no AI section entry) doesn't hold. M5-4d: the
-        // human save is format 4, which can't hold an AI seat (no HUNT): FormatVersionMismatch; relabelled 8, Malformed.
+        // The header now builds an AI for the seat, whose state the body (no AI section entry) doesn't hold. M7-1: every save is
+        // format 10, which holds HUNT and CTRM exactly with an AI seat: Malformed; relabelled 6 or 8, a format mismatch.
         byte[] bad = SaveBytes.Small();
         SaveBytes.Offsets at = SaveBytes.HeaderOffsets(bad);
         Assert.Equal((byte)SeatController.Human, bad[at.Seat0Controller]);
         bad[at.Seat0Controller] = (byte)SeatController.Ai;
-        Assert.Equal(SaveError.FormatVersionMismatch, SaveTestRun.TryLoad(Data, SaveBytes.Rechecksum(bad)));
-        BinaryPrimitives.WriteInt32LittleEndian(bad.AsSpan(SaveFormat.MagicLength), SaveFormat.HuntMaplessVersion);
         Assert.Equal(SaveError.Malformed, SaveTestRun.TryLoad(Data, SaveBytes.Rechecksum(bad)));
-        BinaryPrimitives.WriteInt32LittleEndian(bad.AsSpan(SaveFormat.MagicLength), SaveFormat.HuntOnlyMaplessVersion); // M5-9a: 6 lacks CTRM
-        Assert.Equal(SaveError.FormatVersionMismatch, SaveTestRun.TryLoad(Data, SaveBytes.Rechecksum(bad)));
+        foreach (int old in new[] { PreMapFixtures.Format6, PreMapFixtures.Format8 })
+        {
+            BinaryPrimitives.WriteInt32LittleEndian(bad.AsSpan(SaveFormat.MagicLength), old);
+            Assert.Equal(SaveError.FormatVersionMismatch, SaveTestRun.TryLoad(Data, SaveBytes.Rechecksum(bad)));
+        }
     }
 
     /// <summary>
     /// M5-4d criterion 5: a save with an AI seat in an older format (5 and before: no hunt memory) is refused cleanly,
-    /// <see cref="SaveError.FormatVersionMismatch"/>, sim null, whether the HUNT section is there or taken out; the same save
-    /// with no AI seat in it (a human-only match) still loads at format 4.
+    /// <see cref="SaveError.FormatVersionMismatch"/>, sim null, whether the HUNT section is there or taken out. M7-1: the
+    /// human-only match loads at format 10 only.
     /// </summary>
     [Theory]
     [InlineData(3)]
@@ -142,29 +144,29 @@ public class SaveRefusalTests
     [InlineData(5)]
     public void AnAiSave_InAFormatBeforeTheHunt_IsFormatVersionMismatch(int version)
     {
-        // Format 5 names a map: its source is an AI match on Raraku (format 9); 3 and 4 the small generated one (format 8).
+        // Format 5 names a map: its source is an AI match on Raraku; 3 and 4 the small generated one (both format 10).
         byte[] good = version == 5 ? SaveTestRun.Save(MapFileTests.RarakuMatch(1, false, out _)) : SaveBytes.SmallAi();
-        Assert.Equal(version == 5 ? SaveFormat.CurrentVersion : SaveFormat.HuntMaplessVersion, BinaryPrimitives.ReadInt32LittleEndian(good.AsSpan(SaveFormat.MagicLength)));
+        Assert.Equal(SaveFormat.CurrentVersion, BinaryPrimitives.ReadInt32LittleEndian(good.AsSpan(SaveFormat.MagicLength)));
         byte[] relabelled = (byte[])good.Clone();
         BinaryPrimitives.WriteInt32LittleEndian(relabelled.AsSpan(SaveFormat.MagicLength), version);
         Assert.Equal(SaveError.FormatVersionMismatch, SaveTestRun.TryLoad(Data, SaveBytes.Rechecksum(relabelled)));
         byte[] old = PreMapFixtures.WithoutHunt(good);
         BinaryPrimitives.WriteInt32LittleEndian(old.AsSpan(SaveFormat.MagicLength), version);
         Assert.Equal(SaveError.FormatVersionMismatch, SaveTestRun.TryLoad(Data, SaveBytes.Rechecksum(old)));
-        Assert.Equal(SaveFormat.MaplessVersion, BinaryPrimitives.ReadInt32LittleEndian(SaveBytes.Small().AsSpan(SaveFormat.MagicLength)));
+        Assert.Equal(SaveFormat.CurrentVersion, BinaryPrimitives.ReadInt32LittleEndian(SaveBytes.Small().AsSpan(SaveFormat.MagicLength)));
         Assert.Equal(SaveError.None, SaveTestRun.TryLoad(Data, SaveBytes.Small()));
     }
 
     /// <summary>
     /// M5-4d: the HUNT section is required in format 6: taken out (the version left at 6), or its seat count forged, Malformed.
-    /// M5-9a: likewise in format 8 (HUNT and CTRM taken out, the version left at 8).
+    /// M5-9a: likewise in format 8 (HUNT and CTRM taken out, the version left at 8); M7-1: in format 10 with an AI seat.
     /// </summary>
     [Fact]
-    public void AFormat8Save_WithoutItsHuntSection_OrAForgedSeatCount_IsMalformed()
+    public void AFormat10Save_WithoutItsHuntSection_OrAForgedSeatCount_IsMalformed()
     {
         byte[] good = SaveBytes.SmallAi();
-        byte[] cut = PreMapFixtures.WithoutHunt(good);
-        BinaryPrimitives.WriteInt32LittleEndian(cut.AsSpan(SaveFormat.MagicLength), SaveFormat.HuntMaplessVersion);
+        byte[] cut = PreMapFixtures.WithoutAiMemories(good);
+        Assert.Equal(SaveFormat.CurrentVersion, BinaryPrimitives.ReadInt32LittleEndian(cut.AsSpan(SaveFormat.MagicLength)));
         Assert.Equal(SaveError.Malformed, SaveTestRun.TryLoad(Data, SaveBytes.Rechecksum(cut)));
         byte[] forged = (byte[])good.Clone();
         int hunt = forged.AsSpan().LastIndexOf("HUNT"u8);
@@ -356,8 +358,8 @@ public class SaveRefusalTests
         Assert.Equal(SaveError.Malformed, SaveTestRun.TryLoad(Data, SaveBytes.Rechecksum(longer)));
         byte[] relabelled = (byte[])good.Clone();
         BinaryPrimitives.WriteInt32LittleEndian(relabelled.AsSpan(SaveFormat.MagicLength), 3);
-        // M5-4d: with an AI seat a format-3 header is refused as a format before the hunt, before the body is read.
-        Assert.Equal(ai ? SaveError.FormatVersionMismatch : SaveError.Malformed, SaveTestRun.TryLoad(Data, SaveBytes.Rechecksum(relabelled)));
+        // M5-4d: with an AI seat a format-3 header was refused as a format before the hunt; M7-1: every format before 10 is.
+        Assert.Equal(SaveError.FormatVersionMismatch, SaveTestRun.TryLoad(Data, SaveBytes.Rechecksum(relabelled)));
         // An empty id (length 0) names no preset either.
         byte[] empty = new byte[good.Length - "standard".Length];
         good.AsSpan(0, at.Preset).CopyTo(empty);
@@ -540,7 +542,7 @@ public class SaveRefusalTests
     public void AnAiSave_InAFormatBeforeTheCounterMemory_IsFormatVersionMismatch(int version)
     {
         byte[] good = version == 7 ? SaveTestRun.Save(MapFileTests.RarakuMatch(1, false, out _)) : SaveBytes.SmallAi();
-        Assert.Equal(version + 2, BinaryPrimitives.ReadInt32LittleEndian(good.AsSpan(SaveFormat.MagicLength)));
+        Assert.Equal(SaveFormat.CurrentVersion, BinaryPrimitives.ReadInt32LittleEndian(good.AsSpan(SaveFormat.MagicLength))); // M7-1: was version + 2
         byte[] relabelled = (byte[])good.Clone();
         BinaryPrimitives.WriteInt32LittleEndian(relabelled.AsSpan(SaveFormat.MagicLength), version);
         Assert.Equal(SaveError.FormatVersionMismatch, SaveTestRun.TryLoad(Data, SaveBytes.Rechecksum(relabelled)));
@@ -560,8 +562,7 @@ public class SaveRefusalTests
     {
         byte[] good = SaveBytes.SmallAi();
         Assert.Equal(SaveError.None, SaveTestRun.TryLoad(Data, good));
-        byte[] cut = PreMapFixtures.WithoutCounters(good);
-        BinaryPrimitives.WriteInt32LittleEndian(cut.AsSpan(SaveFormat.MagicLength), SaveFormat.HuntMaplessVersion);
+        byte[] cut = PreMapFixtures.WithoutCountersAt10(good); // M7-1: CTRM cut, the version left at 10
         Assert.Equal(SaveError.Malformed, SaveTestRun.TryLoad(Data, SaveBytes.Rechecksum(cut)));
 
         int at = PreMapFixtures.CountersAt(good, 1);

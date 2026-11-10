@@ -123,6 +123,14 @@ internal sealed class FactionJson
     public TextJson? Bonus { get; set; }
     public ResourceNamesJson? Resources { get; set; }
     public PaletteJson? Palette { get; set; }
+    public RegenJson? Regen { get; set; } // M7-1, optional
+}
+
+// M7-1: faction.json "regen", the faction's regeneration (both fields required when the object is present).
+internal sealed class RegenJson
+{
+    public double? HpPerSecond { get; set; }
+    public double? Delay { get; set; }
 }
 
 internal sealed class TextJson
@@ -172,6 +180,7 @@ internal sealed class UnitJson
     public List<string?>? Abilities { get; set; }
     public List<PassiveJson?>? Passives { get; set; }
     public double? Detector { get; set; }
+    public double? Scale { get; set; } // M7-1, optional
 }
 
 internal sealed class PassiveJson

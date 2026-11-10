@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Immutable;
+using Rts.Sim.Data;
 using Rts.Sim.Determinism;
 
 namespace Rts.Sim.Abilities;
@@ -55,6 +57,16 @@ public sealed partial class StatusStore
     /// </summary>
     internal int StealthedUnits;
 
+    // M7-1: per unit slot, how many of its entries are of the regenerating kind. Derived from the entries, kept by
+    // StatusSystem as they are added and removed and by Clear, as the stealth count; not hashed.
+    private readonly byte[] _regen;
+
+    /// <summary>
+    /// Unit slots with at least one regenerating entry (M7-1), so phase 5's regeneration pass skips in O(1) when none and no
+    /// faction of the match regenerates; derived, not hashed.
+    /// </summary>
+    internal int RegeneratingUnits;
+
     /// <summary>A store for <paramref name="capacity"/> unit slots, all empty.</summary>
     public StatusStore(int capacity)
     {
@@ -66,6 +78,19 @@ public sealed partial class StatusStore
         SourcePlayer = new int[capacity * PerUnit];
         _blind = new int[capacity];
         _stealth = new byte[capacity];
+        _regen = new byte[capacity];
+    }
+
+    /// <summary>Whether unit slot <paramref name="unit"/> carries a regenerating entry (M7-1). Derived, not hashed.</summary>
+    public bool HasRegen(int unit) => _regen[unit] != 0;
+
+    /// <summary>Counts a regenerating entry added to (+1) or removed from (-1) unit slot <paramref name="unit"/> (M7-1).</summary>
+    internal void CountRegen(int unit, int delta)
+    {
+        int was = _regen[unit];
+        _regen[unit] = (byte)(was + delta);
+        if (was == 0 && delta > 0) RegeneratingUnits++;
+        else if (was + delta == 0 && was != 0) RegeneratingUnits--;
     }
 
     /// <summary>Whether unit slot <paramref name="unit"/> carries a stealthed entry (M4-5; in force or not: <see cref="World.IsStealthed"/> decides). Derived, not hashed.</summary>
@@ -171,6 +196,8 @@ public sealed partial class StatusStore
         _blind[unit] = 0;
         if (_stealth[unit] != 0) StealthedUnits--;
         _stealth[unit] = 0;
+        if (_regen[unit] != 0) RegeneratingUnits--;
+        _regen[unit] = 0;
         int head = unit * PerUnit;
         Array.Clear(StatusId, head, PerUnit);
         Array.Clear(Magnitude, head, PerUnit);
@@ -179,14 +206,19 @@ public sealed partial class StatusStore
         Array.Clear(SourcePlayer, head, PerUnit);
     }
 
-    /// <summary>Unit slot <paramref name="unit"/>'s count and every field of each of its entries.</summary>
-    internal void AddToHash(ref StateHasher h, int unit)
+    /// <summary>
+    /// Unit slot <paramref name="unit"/>'s count and every field of each of its entries; each entry's status as its
+    /// <see cref="StatusDef.StateHashId"/> (M7-1: its id in hand-built data).
+    /// </summary>
+    internal void AddToHash(ref StateHasher h, int unit, ImmutableArray<StatusDef> defs)
     {
         h.Add(Count[unit]);
         int head = unit * PerUnit;
         for (int k = 0; k < Count[unit]; k++)
         {
-            h.Add(StatusId[head + k]);
+            int id = StatusId[head + k];
+            int hashId = (uint)id < (uint)defs.Length ? defs[id].StateHashId : -1;
+            h.Add(hashId >= 0 ? hashId : id);
             h.Add(Magnitude[head + k]);
             h.Add(TicksRemaining[head + k]);
             h.Add(PulseTicks[head + k]);

@@ -8,7 +8,7 @@ namespace Rts.Sim.Abilities;
 /// <summary>
 /// Tick phase 5 (M4-4a, docs/03 "Implementation (M4-4a)"): every unit's statuses count down, damage over time lands, and
 /// the expired ones end. Also the one place a unit's derived speed follows its slows, and (M4-4b-2) its blind in force
-/// follows its blind statuses.
+/// follows its blind statuses. M7-1: a regenerating entry's magnitude is read by <see cref="RegenSystem"/>, which runs right after.
 /// </summary>
 /// <remarks>
 /// Damage over time lands in pulses, one every <see cref="SimConstants.TicksPerSecond"/> ticks from the first application,
@@ -54,6 +54,7 @@ public static class StatusSystem
                 if (def.Kind == StatusKind.Slow) slowChanged = true;
                 else if (def.Kind == StatusKind.Blind) blindChanged = true;
                 else if (def.Kind == StatusKind.Stealthed) s.CountStealth(i, -1); // M4-5
+                else if (def.Kind == StatusKind.Regenerating) s.CountRegen(i, -1); // M7-1
                 s.RemoveAt(i, at);
             }
             if (slowChanged && u.Alive[i]) RecomputeSpeed(world, i);
@@ -76,6 +77,7 @@ public static class StatusSystem
         if (kind == StatusKind.Slow) RecomputeSpeed(world, i);
         else if (kind == StatusKind.Blind) RecomputeBlind(world, i);
         else if (kind == StatusKind.Stealthed && s.Count[i] > before && s.CountStealth(i, 1)) StealthSystem.OnStealthStarted(world, i);
+        else if (kind == StatusKind.Regenerating && s.Count[i] > before) s.CountRegen(i, 1); // M7-1
     }
 
     /// <summary>
@@ -87,6 +89,7 @@ public static class StatusSystem
         StatusStore s = world.Units.Statuses;
         StatusKind kind = world.Data.Statuses[s.StatusId[at]].Kind;
         if (kind == StatusKind.Stealthed) s.CountStealth(i, -1);
+        else if (kind == StatusKind.Regenerating) s.CountRegen(i, -1); // M7-1
         s.RemoveAt(i, at);
         if (kind == StatusKind.Slow) RecomputeSpeed(world, i);
         else if (kind == StatusKind.Blind) RecomputeBlind(world, i);

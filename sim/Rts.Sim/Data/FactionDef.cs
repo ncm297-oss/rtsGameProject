@@ -33,4 +33,11 @@ public sealed class FactionDef
     public uint AccentColor { get; init; }
     /// <summary>Ids of this faction's units, ascending.</summary>
     public required ImmutableArray<int> Units { get; init; }
+    /// <summary>
+    /// M7-1: the faction's regeneration (<c>regen.hpPerSecond</c>) in fixed-point HP per tick, at
+    /// <see cref="Combat.CombatConstants.RegenFixedOne"/> per HP (1 HP/s = 20); 0 for none (no <c>regen</c> object).
+    /// </summary>
+    public int RegenPerTick { get; init; }
+    /// <summary>M7-1: ticks a unit of the faction must go without damage before <see cref="RegenPerTick"/> applies (<c>regen.delay</c>); 0 without regen.</summary>
+    public int RegenDelayTicks { get; init; }
 }

@@ -92,7 +92,10 @@ phases in this fixed order:
    live unit has such a type; see "Implementation (M4-4b-3a)". M4-4a: `StatusSystem.Run`: every unit
    with statuses, in slot order, counts each down, lands damage-over-time pulses and ends the expired ones; a slow that ends
    restores the unit's speed. See "Implementation (M4-4a)". M4-4b-2: then `ZoneSystem.Run`: every live zone, in slot order,
-   counts down (freed when its time is up) or applies its statuses to the units inside; see "Implementation (M4-4b-2)".)
+   counts down (freed when its time is up) or applies its statuses to the units inside; see "Implementation (M4-4b-2)".
+   M7-1: between the two, `RegenSystem.Run`: every live unit below its maximum gains its faction's regeneration (after the
+   faction's delay without damage) plus its regenerating statuses' rates, through a fixed-point accumulator; skipped when
+   no faction of the match regenerates and no unit carries the status; see "Implementation (M7-1)".)
 6. **Abilities:** cast timers, effect resolution. (M4-4a: `AbilitySystem.Run`: every caster in slot order starts casting
    once in range (or drops a walk that stopped short), counts its cast down, and on the last tick resolves the effects on
    the units in the radius and starts the cooldown. Before phase 7, so a caster whose cast resolved takes its next queued
@@ -2857,6 +2860,68 @@ read `World.MaxHp(slot)` (the type's `hp` plus the owner's hp techs); `ViewApi.U
 still use the type's `hp`, so a Zealot at 83 / 83 with Prophecy would read above full and one at 70 / 83 would show no
 bar: switch the bar's maximum to `World.MaxHp`. (Done in M4-V7b, BUG-0450: see "Implementation (M4-V1)".)
 
+### Implementation (M7-1)
+
+M7's first two bullets (docs/05), the sim half: a per-unit visual scale in data and regeneration, both generic and both in the
+schema before any faction uses them (no shipped faction file sets `scale` or `regen`; the Teblor roster and the view's
+rendering of `scale` come next).
+
+- **`units.json` `scale`** (optional, default 1, 0.5-3.0): `UnitDef.Scale`, in `GameData.ContentHash`. The sim never reads
+  it: collision is `radius`. The view reads `UnitDef.Scale` as it reads `UnitDef.Radius` (no ViewApi accessor).
+- **`faction.json` `regen {hpPerSecond, delay}`** → `FactionDef.RegenPerTick` (fixed-point) and `RegenDelayTicks`, both in
+  `ContentHash`. `World` copies each seat's faction's pair into per-player arrays at construction (`World.Regen.cs`,
+  derived from the seats and the data, never saved or hashed) and notes whether any is above 0.
+- **The fixed-point unit:** `CombatConstants.RegenFixedOne` = 400 units a hit point (as the repair accumulators'
+  `EconomyConstants.RepairFixedOne`, a named rule of the format): a rate in HP per second becomes
+  `round(hpPerSecond x 400 / 20)` units a tick (`DataLoader.RegenPerTick`, half away from zero): 1 HP/s = 20, 1.5 HP/s =
+  30, 2 HP/s = 40; the step is 0.05 HP/s, and a rate that rounds to 0 is a load error. The accumulator carries every fraction,
+  so 1.5 HP/s is exactly 3 HP every 40 ticks for ever (no drift).
+- **The status kind:** `StatusKind.Regenerating` (`regenerating`, appended: value 6); its magnitude is HP per second (above
+  0, at most 100, at least the step), no damage type, sight or reach. Shipped: one entry in `common/statuses.json`, id
+  `regenerating`, its name and text in data. Nothing applies it in shipped data; a `createZone` / `applyStatus` / passive
+  can. `StatusStore` keeps a per-slot count of regenerating entries and the number of slots with one
+  (`RegeneratingUnits`), maintained as the stealth count is (on apply, expiry, `RemoveEntry` and `Clear`); derived, not
+  hashed, saved.
+- **The rule** (`Combat/RegenSystem.Run`, phase 5 after `StatusSystem.Run`, before `ZoneSystem.Run`): every live unit, in
+  slot order. Its rate is the sum of (a) its faction's `RegenPerTick` when the unit has never been damaged or
+  `tick - LastDamagedTick >= RegenDelayTicks` (a unit hit in tick t heals from tick t + delay; with delay 6 s, a Heavy
+  Infantry hit to 100 / 130 in tick t is 100 through tick t + 119 and 101 after tick t + 139), and (b) each regenerating
+  entry's magnitude converted the same way, whatever the delay. A unit at or above its maximum (`World.MaxHp`: the type's
+  hp plus its owner's hp techs) has its accumulator cleared and gains nothing; below it, the accumulator gains the rate,
+  every whole 400 becomes a hit point, and reaching the maximum clears the remainder (never above it). A hit doesn't clear
+  the accumulator (the fraction already gained is kept; a unit waiting out the delay keeps it too). An hp tech researched
+  mid-regen raises the maximum and the current hp together (M4-4b-3b) and healing goes on to the new maximum. A
+  regenerating entry acts in the ticks it is still on the unit after the countdown, as a slow does: an entry of d ticks
+  applied between ticks heals on d - 1 of them (its last tick's countdown ends it first).
+  **O(1) skip:** with no faction of the match regenerating and `RegeneratingUnits` 0 the pass returns at once, so a match
+  without either pays nothing.
+- **`UnitStore.LastDamagedTick`** (int per slot, -1 = never, reset at spawn and free) is set in `CombatSystem.HitUnit`, the
+  one path every melee hit, projectile landing, splash victim, friendly-fire hit and damage-over-time pulse goes through,
+  to the tick's number, when the victim's owner's faction regenerates (nothing else reads it, so it stays -1 in a match
+  without regeneration). **`UnitStore.RegenAccum`** (int per slot, 0 to 399). Both are state: hashed under bit 21 of the
+  unit's state word when either isn't at its default (-1, 0), so a match without regeneration hashes exactly as before;
+  both saved.
+- **Status ids in the hash:** status ids are the ordinal order of their string ids, so `regenerating` sorts before
+  `revealed`, `slowed` and `stealthed` and renumbers them. `StatusDef.StateHashId` (set by the loader, in `ContentHash`)
+  is the number a unit's status entry adds to `StateHash` instead of its id: the M4 kinds first in id order (0-5, exactly
+  their old ids), then the newer kinds (the shipped Regenerating is 6), so a match without the new status hashes as before
+  (every pinned digest held). Hand-built data (-1) hashes the id.
+- **Save format 10** (see "Save format (M6-S2)"): every save is format 10 and every older one is refused
+  `FormatVersionMismatch` (the unit store's `REGN` part: tag, `LastDamagedTick`, `RegenAccum`, the regenerating counts and
+  their total; the map id always written; `HUNT` / `CTRM` with an AI seat). Every save made before M7-1 no longer loads.
+  The replay format stays 9 (a replay holds no unit state); the golden's header data hash was regenerated once, its `k`
+  lines identical. The test fixtures' byte-for-byte proofs (`PreMapFixtures`) take the new parts out
+  (`PreMapFixtures.WithoutRegen`) and still match the saves recorded before map files.
+- **Half-step population** (docs/02 "Economy"; M3-4's half-pop) is proven end to end on a test copy (Heavy Infantry pop
+  1.5, Crossbowman 3): the producer's cap check (one half short refuses, exactly enough starts), `PopText`'s `x.5`, the AI's
+  `pop` step trigger and `attack.minArmyPop` (both half-pop since M5-1), and a 2,000-tick invariant (each player's
+  `HalfPop` = live units' + started items' every tick through trains, cap refusals, cancels and deaths). No code changed.
+- **Tests:** `RegenTests` (the rule, the delay restart, max no-op and its hash, 1.5 HP/s over a minute, the tech ceiling, the
+  status through the delay and stacked, a faction without regen, two-run hash equality on a 3,000-tick brawl, the
+  allocation gate), `PopulationTests`, `SaveFormatTests` (version 10, the refusals, the `REGN` part, a mid-regen round
+  trip), `DataValidationTests` / `DataConversionTests` / `StatusLoaderTests` / `DataContentHashTests` rows,
+  `DamageCalcTests.TheGiantRow_*` (the shipped `giant` armor class: x1.25 pierce and magic, x0.75 siege, x1.0 melee).
+
 ## Vision, detection, fog
 
 Fog of war and the high-ground rule are in since M4-3a (`sim/Rts.Sim/Vision/`); the last-known building ghosts, buildings
@@ -3106,9 +3171,9 @@ game/data/
     resources.json           # resource node types: tree, gold mine (M3-1)
     techs.json               # techs every faction shares: Age II, Forge upgrades (M3-5)
     projectiles.json         # projectile types: aimed / lob, speed, hit tolerance, lead speed (M4-2b)
-    statuses.json            # status types: damage over time, slow (M4-4a), blind (M4-4b-2), frenzied (M4-4b-3a)
+    statuses.json            # status types: damage over time, slow (M4-4a), blind (M4-4b-2), frenzied (M4-4b-3a), regenerating (M7-1)
   factions/<faction_id>/
-    faction.json             # id, displayName, bonus, palette, resource display names
+    faction.json             # id, displayName, bonus, palette, resource display names; regen (M7-1, optional)
     units.json
     buildings.json           # building types (M3-2 schema; all ten slots per faction since D1)
     techs.json               # the faction upgrade (M3-5)
@@ -3173,12 +3238,12 @@ consumes it.
 | `damage_table.json` | `armorClasses: [{id, displayName}]`, `damageTypes: [{id, displayName, ignoresArmor?, multipliers: {<armorClass>: x}}]`. Every type must list every class. `ignoresArmor` (default false) is how Magic skips armor |
 | `resources.json` | `{ "resources": [ ... ] }`, each `{id, displayName, description, resource, footprint {width, height}}`: `resource` is `gold` or `wood`, footprint sides are cells, 1-4 (`DataLimits.MaxFootprint`). Amounts are not here: a tree holds `rules.json` `treeWood`, a mine `startMines.gold` (M3-1, see "Economy implementation") |
 | `rules.json` | docs/02 Economy table: `startingResources` (M6-S6, replacing `startingGold` / `startingWood`: a list of presets in the setup's order, each `{id, displayName, description?, gold, wood, aiSpendAbove?}`; ids unique snake_case of at most 64 characters, a `standard` entry required, gold and wood 0 to 1,000,000, at most 16 presets; shipped `standard` 200 / 200 and `high` 1000 / 1000, Producer default; `aiSpendAbove` (M6-S6 fix round 1, BUG-1050) optional, 0 to 1,000,000, 0 or left out = off: the AI's spend-down threshold in gold + wood, shipped `high` 200, `standard` none; every field, the count and the order in `ContentHash`), `startingWorkers`, `popCap`, `workerCarry`, `gatherRate {gold, wood}` (per second), `startMines` / `expansionMines {count, gold}`, `treeWood`, `nodeSearchRadius`, `repair {rateFactor, costFactor}` (M3-3), `buildingSight` (M4-3a: meters, above 0 and at most 64, the sight of a building whose entry gives none; shipped 12, a Producer default: docs/02 gives sight only for the Watch Tower), `stealth {proximity, revealSeconds}` (M4-5: meters and seconds, above 0; shipped 3 and 3, docs/02 "Stealth and detection"). Pop provided by buildings comes with `buildings.json` (M3); the Age II cost with `techs.json` (M3-5) |
-| `faction.json` | `id` (must equal the folder name), `displayName`, `description`, `bonus {displayName, description}`, `resources {gold, wood: {displayName}}`, `palette {primary, secondary, accent}` as `#RRGGBB` |
+| `faction.json` | `id` (must equal the folder name), `displayName`, `description`, `bonus {displayName, description}`, `resources {gold, wood: {displayName}}`, `palette {primary, secondary, accent}` as `#RRGGBB`; `regen` (M7-1, optional: absent = no regeneration) `{hpPerSecond, delay}`, both required when the object is there: `hpPerSecond` above 0 and at most 100 (`DataLimits.MaxRegenPerSecond`) and at least 0.05 (one fixed-point unit a tick), to `FactionDef.RegenPerTick` (`round(hpPerSecond x 400 / 20)`: 1 → 20); `delay` seconds, 0 or more, at most 3600, to `FactionDef.RegenDelayTicks` (6 → 120); an unknown key is an error. No shipped faction has one yet (Teblor, Andii: M7 / M9). See "Implementation (M7-1)" |
 | `buildings.json` | `{ "buildings": [ ... ] }`, each `{id, displayName, description, slot, footprint {width, height}, hp, armor, cost {gold, wood}, buildTime, popProvided, dropOff}`: `slot` is one of the ten template slots (`DataLimits.BuildingSlotIds`), footprint sides 1-4 cells, `buildTime` in seconds (to ticks), `popProvided` a multiple of 0.5 (to half-pop), `dropOff` a required bool, `requires` an optional list of tech / building ids (M3-5; resolved and gating placement since M3-6), `sight` optional meters (M4-3a: above 0 and at most 64, default `rules.json` `buildingSight`; shipped 24 on both watch towers, docs/02), `attack` optional (M4-3b: the unit `attack` object; value at least 1, range above 0, an aimed `projectile` required, `targets` not `buildings`; shipped on both watch towers), `detector` optional meters (M4-3b: above 0 and at most 64; shipped 16 on both watch towers; unused until M4-5). Ids unique across factions (M3-2, see "Economy implementation"); exactly one building per slot per faction (M3-6, BUG-0010) |
 | `techs.json` | `{ "techs": [ ... ] }` in `common/` (shared by every faction) and in each faction folder (its own), each `{id, displayName, description, researchedAt, cost {gold, wood}, researchTime, requires?, requiresAnyOf?, effects: [{stat, amount, appliesTo {attackType?, tags?, units?, siege?}}]}`: `researchedAt` is a building slot id (a common tech resolves to each faction's building of it; a faction without one is an error), `researchTime` in seconds (to ticks), `requires` tech / building ids (resolved and gating research since M3-6), `requiresAnyOf` `{count, of: [slot ids, or in a faction file its own building ids]}`: met when `count` of the distinct listed slots hold an own finished building (M3-6; shipped on `age_ii` only), `effects` may be empty. `stat` is one of `attack`, `armor`, `range`, `hp`, `abilityCooldown` (`DataLimits.TechStatIds`); `amount` is non-zero, whole for attack / armor / hp, meters for range, seconds for ability cooldown (to ticks, negative shortens it). `appliesTo` is required (`{}` = every unit); each filter it sets must match: `attackType` a damage type, `tags` any one of the unit's tags (each must be a tag some unit has), `units` unit ids (a faction tech's must be its own), `siege` true / false for the `siege` slot; a `tags` or `units` list set to `[]` is an error (M3-6, BUG-0098). Tech ids are unique across all techs files and may not equal a building id (M3-6); `DataLimits.AgeTechIds` (`age_ii`) must be a common tech (M3-5, see "Implementation (M3-5)") |
 | `projectiles.json` | `{ "projectiles": [ ... ] }`, each `{id, kind, speed, hitTolerance?, leadSpeed?}`: `kind` `aimed` or `lob`, `speed` m/s (at least 1), `hitTolerance` m (aimed only, 0-2, default 0.3; an error on a lob), `leadSpeed` m/s (aimed only, not negative, default 0 = never leads; an error on a lob). Ids unique; every unit's `attack.projectile` must name one (M4-2b, see "Implementation (M4-2b)") |
-| `units.json` | `{ "units": [ ... ] }`, entries as in the example. `attack` also takes optional `minRange`, `splash` (m), and `friendlyFire` (docs/02 "Combat / Stats"); they default to 0 / false. Melee range is written as `0.5` (edge to edge). `abilities` (M4-4a, optional): ability ids of the unit's own faction, at most 4 (`DataLimits.MaxUnitAbilities`), no repeats; resolved to `UnitDef.Abilities`; shipped on the Cadre Mage (`telas_fire`), the Sapper (`cusser`) and the Priest of the Whirlwind (`sandstorm`). `passives` (M4-4b-3a, optional): at most 2 (`DataLimits.MaxUnitPassives`), one per `trigger` (`DataLimits.PassiveTriggerIds`): `{trigger: whenBelowHp, hpFraction, status, magnitude}` or `{trigger: onDeath, status, magnitude, duration, radius, units}` (see "Implementation (M4-4b-3a)"); resolved to `UnitDef.Passives`; shipped on the Zealot only. `detector` (M4-5, optional): meters, above 0, at most 64 (`UnitDef.Detector`; see "Implementation (M4-5)") |
-| `statuses.json` | `{ "statuses": [ ... ] }` (M4-4a), each `{id, displayName, description, kind, damageType?, sight?, reach?}`: `kind` `damageOverTime`, `slow`, (M4-4b-2) `blind`, (M4-4b-3a) `frenzied`, or (M4-5) `stealthed` / `revealed` (`DataLimits.StatusKindIds`; at most one `revealed`); `damageType` (a damage table type) required on `damageOverTime`, an error on any other kind; `sight` and `reach` (m, above 0, at most 64) required on `blind`, errors on any other kind. The magnitude and duration come from the effect applying it (a blind, stealthed or revealed status takes no magnitude). Ids unique; shipped `burning` (magic damage over time), `slowed`, `blinded` (2 / 3, M4-4b-2) and `frenzied` (M4-4b-3a; its magnitude, the attack-speed increase, any fraction above 0, is the applying effect's or passive's), `stealthed` and `revealed` (M4-5, "Implementation (M4-5)") |
+| `units.json` | `{ "units": [ ... ] }`, entries as in the example. `attack` also takes optional `minRange`, `splash` (m), and `friendlyFire` (docs/02 "Combat / Stats"); they default to 0 / false. Melee range is written as `0.5` (edge to edge). `abilities` (M4-4a, optional): ability ids of the unit's own faction, at most 4 (`DataLimits.MaxUnitAbilities`), no repeats; resolved to `UnitDef.Abilities`; shipped on the Cadre Mage (`telas_fire`), the Sapper (`cusser`) and the Priest of the Whirlwind (`sandstorm`). `passives` (M4-4b-3a, optional): at most 2 (`DataLimits.MaxUnitPassives`), one per `trigger` (`DataLimits.PassiveTriggerIds`): `{trigger: whenBelowHp, hpFraction, status, magnitude}` or `{trigger: onDeath, status, magnitude, duration, radius, units}` (see "Implementation (M4-4b-3a)"); resolved to `UnitDef.Passives`; shipped on the Zealot only. `detector` (M4-5, optional): meters, above 0, at most 64 (`UnitDef.Detector`; see "Implementation (M4-5)"). `scale` (M7-1, optional, default 1): the view's model size, 0.5-3.0 (`DataLimits.MinUnitScale` / `MaxUnitScale`), to `UnitDef.Scale`; presentation only, collision stays `radius` (docs/02 "Combat / Stats"); no shipped unit sets it yet |
+| `statuses.json` | `{ "statuses": [ ... ] }` (M4-4a), each `{id, displayName, description, kind, damageType?, sight?, reach?}`: `kind` `damageOverTime`, `slow`, (M4-4b-2) `blind`, (M4-4b-3a) `frenzied`, (M4-5) `stealthed` / `revealed` (at most one `revealed`), or (M7-1) `regenerating` (`DataLimits.StatusKindIds`; its magnitude is HP per second, above 0, at most 100 and at least 0.05); `damageType` (a damage table type) required on `damageOverTime`, an error on any other kind; `sight` and `reach` (m, above 0, at most 64) required on `blind`, errors on any other kind. The magnitude and duration come from the effect applying it (a blind, stealthed or revealed status takes no magnitude). Ids unique; shipped `burning` (magic damage over time), `slowed`, `blinded` (2 / 3, M4-4b-2) and `frenzied` (M4-4b-3a; its magnitude, the attack-speed increase, any fraction above 0, is the applying effect's or passive's), `stealthed` and `revealed` (M4-5, "Implementation (M4-5)"), `regenerating` (M7-1: nothing applies it in shipped data yet; the hook M9's Darkness zone and later abilities use) |
 | `abilities.json` | `{ "abilities": [ ... ] }` (M4-4a, per faction, optional), each `{id, displayName, description, kind, range, radius, castTime, cooldown, duration?, affects, autocast?, effects}`: `kind` `targetGround` or (M4-4b-3a) `selfAura` (`targetUnit`, `summon`: "not supported yet"); `range` m above 0 and at most `DataLimits.MaxSight` (64), required on `targetGround` and an error on `selfAura` (0 included); `radius` m above 0 and at most `DataLimits.MaxAbilityRadius` (16); `castTime` s, 0 or more, to ticks; `cooldown` s above 0, to ticks (at least 1); `duration` s, optional (0), to ticks (required with a `createZone` effect, M4-4b-2); `affects` `enemy_units`, `own_units` or `all_units`; `autocast` only `false` ("not supported yet"); `effects` at least one, each `{kind: damage, type, amount, buildings?, friendlyFire?}` (a whole amount, at least 1; M4-4b-1: `buildings` true also hits other players' buildings as structure, not with `own_units`; `friendlyFire` 0-1, the fraction own units take, above 0 only with `enemy_units`) or `{kind: applyStatus, status, magnitude, duration}` (a `statuses.json` id; magnitude whole and at least 1 for damage over time, above 0 and below 1 for a slow; duration s, at least a tick, and for damage over time a whole number of seconds, at least 1, M4-4b-1); M4-4b-2: `{kind: createZone, blocksVision?, statuses: [{status, magnitude, duration}]}` (at least one status, each by the `applyStatus` rules, a blind status without a magnitude; the ability's `duration`, at least a tick, is then required: the zone's lifetime; at most one per ability); `teleport`, `spawn`: "not supported yet"; a field the effect kind doesn't use is an error. Ids unique across factions. Shipped: Malazan `telas_fire`, `cusser` (M4-4b-1); Whirlwind `sandstorm` (M4-4b-2) |
 | `maps/<file>.json` | (M6-S7, optional folder, one file a hand-made map, loaded in the files' names' ordinal order into `GameData.Maps`) `{id, displayName, description, players, size, terrain, ramps?, starts, mines, forests}`: see "Implementation (M6-S7)" for every field and check |
 | `ai.json` | (M5-1, per faction, required) `{difficulties {easy, normal, hard}, buildOrder, compositions, attack, retreat}`: the shape and every refusal in "AI architecture", "For the data track (M5-1)". Not in `ContentHash` yet (M5-2 adds it) |
@@ -3212,7 +3277,7 @@ building's `attack` (M4-3b) resolves the same way to `BuildingDef.Attack`.
 Not resolved yet (kept as a plain string): `model` (M2/M6 asset pipeline). `abilities` resolves at load (M4-4a) to
 `UnitDef.Abilities` (own-faction ability ids; one error at an entry naming an unknown, foreign or repeated id). Unit passives,
 detection on units, and faction modifiers (e.g. Whirlwind's gather bonus) are not in the schema yet; they arrive with the
-systems that use them. Collision radii in the shipped units (0.4 foot, 0.7 mounted, 0.9 siege) are
+systems that use them (M7-1: the first faction modifier, `regen`). Collision radii in the shipped units (0.4 foot, 0.7 mounted, 0.9 siege) are
 first-pass values; the faction pages don't list them.
 
 ## Rendering and presentation
@@ -9870,7 +9935,12 @@ version 2) stores the AI seats too, so every match saves. Code in `sim/Rts.Sim/S
   patterns. Strings are an int32 byte count and printable ASCII (the sim version, snake_case faction ids). An array is its
   int32 length, then its elements; the reader requires the length the header's capacities give. Structs holding a bool
   (commands, ghosts, events) go field by field.
-- **Header**, in order: magic `RTSSAVE\0` (8 bytes); format version (int32, `SaveFormat.CurrentVersion` = 9 since M5-9a,
+- **Header**, in order: magic `RTSSAVE\0` (8 bytes); format version (int32, `SaveFormat.CurrentVersion` = 10 since M7-1
+  for **every** save: the unit store ends with the regeneration part, `REGN`, which every save holds; format 10 is format
+  9's layout with the map id always written after the preset (`""` for a generated map) and `HUNT` / `CTRM` written exactly
+  when a seat is an AI (the header's seats say so); `HuntMaplessVersion`, `MapVersion` and `MaplessVersion` are kept as names
+  of 10; `OldestReadVersion` is 10, so a save of any format before 10 is refused `FormatVersionMismatch` and every save made
+  before M7-1 no longer loads ("Implementation (M7-1)"). Before: 9 since M5-9a,
   which added the `CTRM` section after `HUNT` for a match with an AI seat: 8 (`SaveFormat.HuntMaplessVersion`, the name
   M5-4d's) is format 6 plus `CTRM` (a generated map), 9 is format 7 plus `CTRM` (a hand-made map), a match with no AI seat
   is still saved 4 / 5 byte for byte, and a save of format 3-7 with an AI seat is refused `FormatVersionMismatch` since its
@@ -9913,7 +9983,7 @@ version 2) stores the AI seats too, so every match saves. Code in `sim/Rts.Sim/S
   | `GRID` | the nav grid: every cell's flags and cost, `Version`, `BlockVersion`, `PassableCount` |
   | `RSSC` | the resource store whole (felled trees' freed slots and generations), free list, high-water mark |
   | `BLDG` | the building store whole: construction work, queues (tech flags), progress, rally points, repair accumulators, tower state, free list, high-water mark |
-  | `UNIT` | the unit store whole (every array, `Flank`, `PrevPosition` / `PrevFacing`, order queues, cargo, combat and cast state, the counted population and live flags, the free list, the derived counters), then the statuses whole |
+  | `UNIT` | the unit store whole (every array, `Flank`, `PrevPosition` / `PrevFacing`, order queues, cargo, combat and cast state, the counted population and live flags, the free list, the derived counters), then the statuses whole; then (format 10, M7-1) the tag `REGN` and the regeneration part: `LastDamagedTick` and `RegenAccum` (int32 per slot), the statuses' per-slot regenerating counts (byte) and their total |
   | `LEDR` | the ledger: gold, wood, half-pop, provided, cap, kills, losses, live buildings and units, production buildings, `EverBuilt`, `Defeated`, the finished-building counts; then `STAT`, the M6-S1 stats whole (every counter, each tech's tick, the samples and their count) |
   | `TECH` | the researched-tech flags and the bonus sums (stored, not re-summed) |
   | `PROJ` | the projectiles in flight, count and loop bounds |
@@ -9926,8 +9996,8 @@ version 2) stores the AI seats too, so every match saves. Code in `sim/Rts.Sim/S
   | `EVNT` | the last tick's `Deaths`, `Impacts`, `AbilityEvents`, `DefeatEvents` (`Tick()` clears them first, but a view reads them between ticks) |
   | `CMDS` | each player's next sequence number, then the pending queue: count, every command, every field, in queue order |
   | `AIST` | (format 2) the AI seat count, then per AI seat in player order its player index and its state (below) |
-  | `HUNT` | (formats 6 to 9, M5-4d, only with an AI seat) the AI seat count, then per AI seat in player order its player index and its hunt memory: `EnemyUnitPoint`, `EnemyUnitTick`, `Hunting`, `HuntSweep` (-1 to the last sweep point's index), `HuntOrigin`, `HuntVisited`, `HuntsStarted` |
-  | `CTRM` | (formats 8 and 9, M5-9a, only with an AI seat) the AI seat count, then per AI seat in player order its player index and its counter memory: `SeenSlotCount` (7 int32, each 0 to the match's unit capacity), `SeenSlotTick` (7 int32, each 0 to the seat's last think), then (round 2) `StarvedSince` (int32, -1 or 0 to the seat's last think) |
+  | `HUNT` | (formats 6 to 10, M5-4d, only with an AI seat) the AI seat count, then per AI seat in player order its player index and its hunt memory: `EnemyUnitPoint`, `EnemyUnitTick`, `Hunting`, `HuntSweep` (-1 to the last sweep point's index), `HuntOrigin`, `HuntVisited`, `HuntsStarted` |
+  | `CTRM` | (formats 8 to 10, M5-9a, only with an AI seat) the AI seat count, then per AI seat in player order its player index and its counter memory: `SeenSlotCount` (7 int32, each 0 to the match's unit capacity), `SeenSlotTick` (7 int32, each 0 to the seat's last think), then (round 2) `StarvedSince` (int32, -1 or 0 to the seat's last think) |
   | `END!` | nothing: the body's end |
 
   Last, the checksum: FNV-1a 64 over every byte before it (the replay file's). A flow field's slot holds its keys
@@ -9986,7 +10056,7 @@ version 2) stores the AI seats too, so every match saves. Code in `sim/Rts.Sim/S
   `InvalidHeader` (a player count outside 1-16, a capacity outside its range, a faction id the data lacks, an unknown
   controller or difficulty, a team outside 0-8 (M6-S4), a starting-resources preset the data lacks, an empty id included (M6-S6),
   a map parameter or config value `SimConfig.Validate` refuses (M6-S7: a map id the data lacks, or one the header's players,
-  map size or resource capacity don't fit), (format 5) an empty map id, an AI seat whose faction has no
+  map size or resource capacity don't fit), (formats 5 to 9) an empty map id (in format 10 it is a generated map), an AI seat whose faction has no
   `ai.json`); `Malformed` for a body too short for the header's capacities (the
   pre-check) or that doesn't parse (a tag out
   of place, an AI seat count or player that doesn't match the header's seats, a stored opening pick other than the load's, an array of the wrong length, a count past its capacity, a

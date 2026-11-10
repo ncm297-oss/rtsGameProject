@@ -11,6 +11,20 @@ public static class DataLimits
     /// <summary>Largest unit collision radius in meters: half a 2 m cell, one pathfinding size class (docs/02).</summary>
     public const double MaxUnitRadius = 1.0;
 
+    /// <summary>
+    /// M7-1: the smallest and the largest unit <c>scale</c> (the view's model size, docs/02 "Combat / Stats": a visual scale
+    /// may be larger than the collision radius; the Teblor page: 1.5x). A rule of the format: a model half or three times
+    /// its template size is still a readable unit.
+    /// </summary>
+    public const double MinUnitScale = 0.5, MaxUnitScale = 3.0;
+
+    /// <summary>
+    /// M7-1: the most HP per second a regeneration may add: <c>faction.json</c> <c>regen.hpPerSecond</c> and a
+    /// <c>regenerating</c> status's magnitude. Far above any designed rate (docs/factions: 1-1.5 HP/s); bounds the
+    /// fixed-point rate (<see cref="Combat.CombatConstants.RegenFixedOne"/>) well inside an int.
+    /// </summary>
+    public const double MaxRegenPerSecond = 100;
+
     /// <summary>Largest value a decimal field (meters, rates, multipliers) may hold; checked before narrowing to float (BUG-0007).</summary>
     public const double MaxDecimal = 1_000_000;
 
@@ -85,8 +99,8 @@ public static class DataLimits
     /// </summary>
     public const double MaxAbilityRadius = 16;
 
-    /// <summary>JSON spelling of each <see cref="StatusKind"/>, indexed by the enum value (<c>common/statuses.json</c>, M4-4a; stealthed / revealed M4-5).</summary>
-    public static readonly ImmutableArray<string> StatusKindIds = ImmutableArray.Create("damageOverTime", "slow", "blind", "frenzied", "stealthed", "revealed");
+    /// <summary>JSON spelling of each <see cref="StatusKind"/>, indexed by the enum value (<c>common/statuses.json</c>, M4-4a; stealthed / revealed M4-5; regenerating M7-1).</summary>
+    public static readonly ImmutableArray<string> StatusKindIds = ImmutableArray.Create("damageOverTime", "slow", "blind", "frenzied", "stealthed", "revealed", "regenerating");
 
     /// <summary>JSON spelling of each supported <see cref="AbilityKind"/>, indexed by the enum value (M4-4a; selfAura M4-4b-3a; summon M4-4b-3b).</summary>
     public static readonly ImmutableArray<string> AbilityKindIds = ImmutableArray.Create("targetGround", "selfAura", "summon");

@@ -33,4 +33,11 @@ public enum StatusKind
     /// No magnitude.
     /// </summary>
     Revealed = 5,
+
+    /// <summary>
+    /// Regenerating (M7-1): the unit gains the magnitude in HP per second while it lasts, through the faction regeneration's
+    /// delay (<see cref="Combat.RegenSystem"/>); several regenerating entries and the faction's rate add up. The hook M9's
+    /// Darkness zone and later abilities use.
+    /// </summary>
+    Regenerating = 6,
 }

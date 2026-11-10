@@ -311,8 +311,9 @@ public class MapFileQaTests
     }
 
     /// <summary>
-    /// A format-5 save relabelled 4 with the id left in (read as the next section) is refused. With the id cut out too it is a
-    /// well-formed format-4 save: it loads, names no map, and plays on hash-equal to the Raraku save, since a save stores
+    /// A map save relabelled 4 with the id left in (read as the next section) is refused. With the id emptied (M7-1, format
+    /// 10: the id is always there and "" is a generated map; before, the id cut out and the file relabelled 4) it is a
+    /// well-formed generated-map save: it loads, names no map, and plays on hash-equal to the Raraku save, since a save stores
     /// its terrain (the HMAP section) and a load never rebuilds it from the id or the seed (M6-S2's rule, unchanged).
     /// </summary>
     [Fact]
@@ -323,10 +324,9 @@ public class MapFileQaTests
         BinaryPrimitives.WriteInt32LittleEndian(relabelled.AsSpan(SaveFormat.MagicLength), 4);
         Assert.NotEqual(SaveError.None, TryLoad(SaveBytes.Rechecksum(relabelled), "relabelled 4"));
         int map = MapIdAt(bytes);
-        byte[] cut = new byte[bytes.Length - 10];
+        byte[] cut = new byte[bytes.Length - 6]; // the id's six bytes out, its length word 0
         bytes.AsSpan(0, map).CopyTo(cut);
-        bytes.AsSpan(map + 10).CopyTo(cut.AsSpan(map));
-        BinaryPrimitives.WriteInt32LittleEndian(cut.AsSpan(SaveFormat.MagicLength), 4);
+        bytes.AsSpan(map + 10).CopyTo(cut.AsSpan(map + 4));
         Simulation asGenerated = SaveTestRun.Load(TestSim.Data, WithLength(cut));
         Simulation asRaraku = SaveTestRun.Load(TestSim.Data, bytes);
         Assert.Equal("", asGenerated.World.Config.MapId);

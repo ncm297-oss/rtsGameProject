@@ -591,6 +591,13 @@ public static partial class DataLoader
         TextJson? bonus = c.Obj(j.Bonus, "bonus");
         ResourceNamesJson? res = c.Obj(j.Resources, "resources");
         PaletteJson? pal = c.Obj(j.Palette, "palette");
+        // M7-1: the optional regeneration modifier (docs/03 "Data format": dynamic bonuses are faction modifiers).
+        int regenPerTick = 0, regenDelay = 0;
+        if (j.Regen != null)
+        {
+            regenPerTick = RegenRate(c, j.Regen.HpPerSecond, "regen.hpPerSecond");
+            regenDelay = c.Ticks(j.Regen.Delay, "regen.delay", 0);
+        }
         return new FactionDef
         {
             Id = id,
@@ -605,8 +612,37 @@ public static partial class DataLoader
             SecondaryColor = c.Color(pal?.Secondary, "palette.secondary"),
             AccentColor = c.Color(pal?.Accent, "palette.accent"),
             Units = units,
+            RegenPerTick = regenPerTick,
+            RegenDelayTicks = regenDelay,
         };
     }
+
+    /// <summary>
+    /// M7-1: a regeneration rate in HP per second (<c>regen.hpPerSecond</c>) as fixed-point units a tick: required, above 0,
+    /// at most <see cref="DataLimits.MaxRegenPerSecond"/>, and at least one unit a tick once converted
+    /// (<see cref="RegenPerTick"/>); 0 after reporting otherwise.
+    /// </summary>
+    private static int RegenRate(Checker c, double? hpPerSecond, string path)
+    {
+        int errorsBefore = c.Errors.Count;
+        double v = c.Pos(hpPerSecond, path);
+        if (c.Errors.Count > errorsBefore) return 0;
+        if (v > DataLimits.MaxRegenPerSecond)
+        {
+            c.Error(path, $"{v} HP/s is above the maximum {DataLimits.MaxRegenPerSecond} HP/s");
+            return 0;
+        }
+        int perTick = RegenPerTick(v);
+        if (perTick < 1) c.Error(path, $"{v} HP/s rounds to 0 (the step is {1.0 * SimConstants.TicksPerSecond / Combat.CombatConstants.RegenFixedOne} HP/s)");
+        return perTick;
+    }
+
+    /// <summary>
+    /// M7-1: HP per second as regeneration units a tick, <c>round(hpPerSecond x RegenFixedOne / TicksPerSecond)</c> (half away
+    /// from zero): 1 → 20, 1.5 → 30 (<see cref="Combat.CombatConstants.RegenFixedOne"/>).
+    /// </summary>
+    public static int RegenPerTick(double hpPerSecond) =>
+        (int)Math.Round(hpPerSecond * Combat.CombatConstants.RegenFixedOne / SimConstants.TicksPerSecond, MidpointRounding.AwayFromZero);
 
     private static UnitDef BuildUnit(Checker c, UnitJson u, string p, int id, int faction, DamageTable? table, ProjectileDef[]? projectiles)
     {
@@ -624,6 +660,13 @@ public static partial class DataLoader
         if (halfPop < 0) c.Error(p + ".pop", $"pop {pop} is not a multiple of 0.5");
 
         CostJson? cost = c.Obj(u.Cost, p + ".cost");
+        // M7-1: the view's model scale, optional (1 when absent).
+        double scale = u.Scale ?? 1.0;
+        if (!(scale >= DataLimits.MinUnitScale && scale <= DataLimits.MaxUnitScale))
+        {
+            c.Error(p + ".scale", $"{u.Id}: scale {scale} is outside {DataLimits.MinUnitScale}-{DataLimits.MaxUnitScale}");
+            scale = 1.0;
+        }
         return new UnitDef
         {
             Id = id,
@@ -649,6 +692,7 @@ public static partial class DataLoader
             Tags = c.Ids(u.Tags, p + ".tags"),
             // M4-5: optional; a unit without one detects only by proximity.
             Detector = u.Detector == null ? 0f : (float)c.Sight(u.Detector, p + ".detector", u.Id!, "detector"),
+            Scale = (float)scale,
         };
     }
 

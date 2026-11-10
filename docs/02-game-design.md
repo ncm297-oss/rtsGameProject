@@ -230,7 +230,7 @@ toggled with right-click on the button (AI always manages its own casting).
 | Revealed | Cannot be stealthed (overrides Stealthed) | Attacking from stealth, detector abilities |
 | Slowed | Movement speed × (1 - magnitude) | Sandstorm, war-dog bite, Frenzy aftermath |
 | Frenzied | Attacks faster: the attack cooldown is divided by 1 + the strength; the wind-up is unchanged; only the strongest counts | Blood-oil Frenzy, Zealot passive |
-| Regenerating | +HP per second | Andii and Teblor passives |
+| Regenerating | +HP per second; a faction's regeneration starts only once the unit has gone its delay without taking damage (every hit restarts the wait), while a Regenerating status heals through it | Andii and Teblor passives |
 | Blinded | Sight radius 2 m; can't acquire or attack targets more than 3 m away | Sandstorm, Darkness |
 | Burning | Damage over time (magic) | Telas Fire |
 

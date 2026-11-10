@@ -23,4 +23,12 @@ public sealed class StatusDef
     public float Sight { get; init; }
     /// <summary>Blind (M4-4b-2): the farthest in meters a unit with this status takes or strikes a target (center to center; to a footprint for a building); 0 for any other kind.</summary>
     public float Reach { get; init; }
+    /// <summary>
+    /// M7-1: the number a unit's entry of this status adds to the state hash in place of its id: the statuses of the M4 kinds
+    /// first (<see cref="StatusKind.Revealed"/> and below) in id order, then the newer kinds in id order. A status of a new
+    /// kind sorts among the old ids (<c>regenerating</c> before <c>revealed</c>) and so renumbers them, but its hash number
+    /// doesn't renumber theirs: a match without it hashes as before it existed. -1 in hand-built data (the id is hashed).
+    /// </summary>
+    /// <remarks>Set once by the loader; never written afterwards. In <see cref="GameData.ContentHash"/> (derived from the ids and kinds, which it covers too).</remarks>
+    public int StateHashId { get; internal set; } = -1;
 }

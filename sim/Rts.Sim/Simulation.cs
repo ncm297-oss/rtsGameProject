@@ -103,8 +103,7 @@ public sealed partial class Simulation : ICommandSink
             w.Write(p);
             _ai[p]!.WriteTo(w);
         }
-        // M5-4d (formats 6 to 9): each AI seat's hunt memory, written only when there is an AI seat, so a human-only match
-        // keeps format 4 / 5 byte for byte (the header's version says which: SaveHeader.VersionFor).
+        // M5-4d: each AI seat's hunt memory, written only when there is an AI seat (the header's seats say so).
         if (_aiSeats > 0)
         {
             w.Tag(SaveFormat.TagHunt);
@@ -115,7 +114,7 @@ public sealed partial class Simulation : ICommandSink
                 w.Write(p);
                 _ai[p]!.WriteHuntTo(w);
             }
-            // M5-9a (formats 8 and 9): each AI seat's counter memory, after HUNT, under the same rule.
+            // M5-9a: each AI seat's counter memory, after HUNT, under the same rule.
             w.Tag(SaveFormat.TagCounters);
             w.Write(_aiSeats);
             for (int p = 0; p < _ai.Length; p++)
@@ -175,7 +174,7 @@ public sealed partial class Simulation : ICommandSink
         int prefix = Math.Min(bytes.Length, magic.Length);
         if (!bytes.AsSpan(0, prefix).SequenceEqual(magic[..prefix])) return SaveError.BadMagic;
         if (bytes.Length < SaveFormat.FixedPrefix) return SaveError.Truncated;
-        // M6-S6: format 3 (no starting-resources preset, read as standard) to the current one (M6-S7: 4 without a map id, 5 with).
+        // M7-1: format 10 only (every older format's unit store lacks the regeneration part).
         int version = System.Buffers.Binary.BinaryPrimitives.ReadInt32LittleEndian(bytes.AsSpan(SaveFormat.MagicLength));
         if (version < SaveFormat.OldestReadVersion || version > SaveFormat.CurrentVersion) return SaveError.FormatVersionMismatch;
         long declared = System.Buffers.Binary.BinaryPrimitives.ReadInt64LittleEndian(bytes.AsSpan(SaveFormat.LengthOffset));
@@ -189,10 +188,8 @@ public sealed partial class Simulation : ICommandSink
         var r = new SaveReader(bytes, SaveFormat.FixedPrefix, body);
         SaveError header = SaveHeader.TryRead(r, data, version, out SimConfig? config, out int tick);
         if (header != SaveError.None) return header;
-        // M5-4d: an AI seat's state before format 6 has no hunt memory: such a save is another format's, not this build's.
-        // M5-9a: nor before format 8 its counter memory.
-        bool hunt = SaveFormat.HasHunt(version), counters = SaveFormat.HasCounters(version);
-        if (!counters && SaveHeader.HasAiSeat(config!)) return SaveError.FormatVersionMismatch;
+        // M5-4d / M5-9a: the AI seats' hunt and counter memories, written exactly when the match seats an AI (format 10).
+        bool hunt = SaveHeader.HasAiSeat(config!), counters = hunt;
         Heightmap? map = World.ReadHeightmap(r);
         if (map == null || r.Failed) return SaveError.Malformed;
         // BUG-0960 item 1: a body too short for the header's capacities is refused before the world is allocated for them
@@ -337,6 +334,8 @@ public sealed partial class Simulation : ICommandSink
         SummonSystem.Run(World);
         PassiveSystem.Run(World);
         StatusSystem.Run(World);
+        // M7-1: then regeneration, after the countdown (a regenerating status heals in each tick it is still on the unit).
+        RegenSystem.Run(World);
         ZoneSystem.Run(World);
         // M4-5: then which players detect each stealthed unit, from this tick's statuses and positions and the last fog
         // update, so phases 6-12 (casts, scans, towers, swings) read one answer. Nothing to do while no unit carries stealth.
@@ -431,7 +430,10 @@ public sealed partial class Simulation : ICommandSink
             bool summoned = u.ExpiresAtTick[i] != 0;
             // Pathing slice 2 (BUG-0881): bit 20 a unit that has flanked its own line, whose flank mark comes last.
             bool flank = u.Flank[i] != 0;
-            h.Add((ulong)(byte)u.State[i] | ((ulong)(OrderBits(u, i) | (combat ? 1u << 17 : 0u) | (ability ? 1u << 18 : 0u) | (summoned ? 1u << 19 : 0u) | (flank ? 1u << 20 : 0u)) << 32));
+            // M7-1: bit 21 a unit with regeneration state: a fraction of a hit point regenerated, or a last damage tick (recorded
+            // only under a faction that regenerates); both come last, so a match without regeneration hashes as before.
+            bool regen = u.RegenAccum[i] != 0 || u.LastDamagedTick[i] != -1;
+            h.Add((ulong)(byte)u.State[i] | ((ulong)(OrderBits(u, i) | (combat ? 1u << 17 : 0u) | (ability ? 1u << 18 : 0u) | (summoned ? 1u << 19 : 0u) | (flank ? 1u << 20 : 0u) | (regen ? 1u << 21 : 0u)) << 32));
             h.Add(u.Goal[i]);
             h.Add(u.GoalCell[i]);
             h.Add(u.OrderTick[i]);
@@ -451,9 +453,14 @@ public sealed partial class Simulation : ICommandSink
                 h.Add(u.BuildTarget[i].Generation);
             }
             if (combat) AddCombatToHash(ref h, u, i);
-            if (ability) AddAbilityToHash(ref h, u, i);
+            if (ability) AddAbilityToHash(ref h, u, i, World.Data.Statuses);
             if (summoned) h.Add(u.ExpiresAtTick[i]);
             if (flank) h.Add(u.Flank[i]);
+            if (regen)
+            {
+                h.Add(u.LastDamagedTick[i]);
+                h.Add(u.RegenAccum[i]);
+            }
         }
         h.Add(u.FreeCount);
         for (int i = 0; i < u.FreeCount; i++)
@@ -605,7 +612,7 @@ public sealed partial class Simulation : ICommandSink
     }
 
     /// <summary>Unit <paramref name="i"/>'s ability fields, as flagged by bit 18: the cast, every cooldown's ready tick, and every status field.</summary>
-    private static void AddAbilityToHash(ref StateHasher h, UnitStore u, int i)
+    private static void AddAbilityToHash(ref StateHasher h, UnitStore u, int i, System.Collections.Immutable.ImmutableArray<Data.StatusDef> statuses)
     {
         h.Add(u.CastAbility[i]);
         h.Add(u.CastTicks[i]);
@@ -613,7 +620,7 @@ public sealed partial class Simulation : ICommandSink
         int head = i * Data.DataLimits.MaxUnitAbilities;
         for (int k = 0; k < Data.DataLimits.MaxUnitAbilities; k++)
             h.Add(u.AbilityReadyTick[head + k]);
-        u.Statuses.AddToHash(ref h, i);
+        u.Statuses.AddToHash(ref h, i, statuses);
     }
 
     /// <summary>True when any gather-loop or cargo field (M3-2) or the build target (M3-3) of unit <paramref name="i"/> isn't default; flagged in <see cref="OrderBits"/>, then hashed.</summary>

@@ -121,6 +121,9 @@ public class DataValidationTests
     [InlineData("radius", "0.3", "units[2].radius", "outside")]
     [InlineData("radius", "1.2", "units[2].radius", "outside")]
     [InlineData("pop", "1.25", "units[2].pop", "multiple of 0.5")]
+    [InlineData("scale", "0.4", "units[2].scale", "scale 0.4 is outside 0.5-3")] // M7-1
+    [InlineData("scale", "3.5", "units[2].scale", "scale 3.5 is outside 0.5-3")]
+    [InlineData("scale", "-1", "units[2].scale", "outside 0.5-3")]
     [InlineData("displayName", null, "units[2].displayName", "missing")]
     [InlineData("attack.windup", null, "units[2].attack.windup", "missing")]
     // BUG-0007: bounds are checked before narrowing, so messages show the input, not an overflowed int.
@@ -140,6 +143,43 @@ public class DataValidationTests
         DataError e = Assert.Single(DataLoader.LoadAll(dir.Path).Errors);
         Assert.Equal(MalazanUnits, e.File);
         Assert.Equal(path, e.Path);
+        Assert.Contains(message, e.Message);
+    }
+
+    /// <summary>M7-1: a unit's <c>scale</c> that isn't a number is one error, as every field (the reader's "expected a number").</summary>
+    [Fact]
+    public void ANonNumberScale_YieldsOneError()
+    {
+        using TestDataDir dir = TestDataDir.CopyOfShipped();
+        dir.SetUnitField("malazan", "malazan_crossbowman", "scale", "\"big\"");
+        DataError e = Assert.Single(DataLoader.LoadAll(dir.Path).Errors);
+        Assert.Equal(MalazanUnits, e.File);
+        Assert.Contains("expected a number", e.Message);
+    }
+
+    /// <summary>
+    /// M7-1 criterion 3: <c>faction.json</c> <c>regen</c> (optional): <c>hpPerSecond</c> above 0 and at most 100, and at least
+    /// the fixed-point step once converted; <c>delay</c> seconds, 0 or more, at most 3600; both required when the object is
+    /// there; an unknown key is an error. One error each, at <c>factions/malazan/faction.json</c>.
+    /// </summary>
+    [Theory]
+    [InlineData("{\"hpPerSecond\": 0, \"delay\": 6}", "regen.hpPerSecond", "must be positive")]
+    [InlineData("{\"hpPerSecond\": -1, \"delay\": 6}", "regen.hpPerSecond", "must be positive")]
+    [InlineData("{\"delay\": 6}", "regen.hpPerSecond", "missing required field")]
+    [InlineData("{\"hpPerSecond\": 100.5, \"delay\": 6}", "regen.hpPerSecond", "above the maximum 100")]
+    [InlineData("{\"hpPerSecond\": 0.02, \"delay\": 6}", "regen.hpPerSecond", "rounds to 0")]
+    [InlineData("{\"hpPerSecond\": 1}", "regen.delay", "missing required field")]
+    [InlineData("{\"hpPerSecond\": 1, \"delay\": -1}", "regen.delay", "must not be negative")]
+    [InlineData("{\"hpPerSecond\": 1, \"delay\": 3601}", "regen.delay", "above the maximum 3600")]
+    [InlineData("{\"hpPerSecond\": 1, \"delay\": 6, \"rate\": 2}", null, "rate")]
+    [InlineData("{\"hpPerSecond\": \"fast\", \"delay\": 6}", null, "expected a number")]
+    public void BrokenFactionRegen_YieldsExactlyOneError(string regen, string? path, string message)
+    {
+        using TestDataDir dir = TestDataDir.CopyOfShipped();
+        dir.EditJson("factions/malazan/faction.json", r => r["regen"] = JsonNode.Parse(regen));
+        DataError e = Assert.Single(DataLoader.LoadAll(dir.Path).Errors);
+        Assert.Equal("factions/malazan/faction.json", e.File);
+        if (path != null) Assert.Equal(path, e.Path);
         Assert.Contains(message, e.Message);
     }
 

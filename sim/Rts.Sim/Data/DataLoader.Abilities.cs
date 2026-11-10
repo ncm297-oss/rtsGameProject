@@ -63,6 +63,11 @@ public static partial class DataLoader
         }
         if (stealthed != null && revealed == null)
             c.Error("statuses", $"status '{stealthed}' is stealthed but no status has kind 'revealed' (the one an attack or cast from stealth applies)");
+        // M7-1: the state hash's number of each status (StatusDef.StateHashId): the M4 kinds first, then the newer ones.
+        int next = 0;
+        for (int pass = 0; pass < 2; pass++)
+            foreach (StatusDef? d in defs)
+                if (d != null && (d.Kind > StatusKind.Revealed ? 1 : 0) == pass) d.StateHashId = next++;
         return defs;
     }
 
@@ -439,6 +444,17 @@ public static partial class DataLoader
                 else if (sk == StatusKind.Slow && !(magnitude < 1))
                 {
                     c.Error(q + ".magnitude", $"{magnitude} must be below 1 (the fraction of speed '{key}' takes away)");
+                    magnitude = 0;
+                }
+                else if (sk == StatusKind.Regenerating && magnitude > DataLimits.MaxRegenPerSecond)
+                {
+                    // M7-1: HP per second, as the faction regen's rate.
+                    c.Error(q + ".magnitude", $"{magnitude} HP/s is above the maximum {DataLimits.MaxRegenPerSecond} HP/s (regenerating '{key}')");
+                    magnitude = 0;
+                }
+                else if (sk == StatusKind.Regenerating && RegenPerTick(magnitude) < 1)
+                {
+                    c.Error(q + ".magnitude", $"{magnitude} HP/s rounds to 0 (regenerating '{key}'; the step is {1.0 * SimConstants.TicksPerSecond / Combat.CombatConstants.RegenFixedOne} HP/s)");
                     magnitude = 0;
                 }
                 // M4-4b-3a: a frenzied magnitude is any fraction above 0 (the attack-speed increase; 0.5 = +50 %).

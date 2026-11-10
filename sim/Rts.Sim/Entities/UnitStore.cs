@@ -187,6 +187,18 @@ public sealed partial class UnitStore
     /// (<see cref="IsSummoned"/>).
     /// </summary>
     public readonly int[] ExpiresAtTick;
+    /// <summary>
+    /// M7-1: the number of the tick in which the unit last took damage (<c>CombatSystem.HitUnit</c>: every hit, landing,
+    /// splash, friendly-fire hit and damage-over-time pulse), -1 for never. Its faction's regeneration waits its delay
+    /// after it (<see cref="Combat.RegenSystem"/>). Recorded only when the owner's faction regenerates (nothing else reads
+    /// it), so it stays -1 in a match without regeneration. Hashed when not -1; saved.
+    /// </summary>
+    public readonly int[] LastDamagedTick;
+    /// <summary>
+    /// M7-1: the regeneration accumulator in fixed-point HP (<see cref="Combat.CombatConstants.RegenFixedOne"/> = 1 HP): the
+    /// fraction of a hit point regenerated so far, 0 to just under one; cleared at full health. Hashed when not 0; saved.
+    /// </summary>
+    public readonly int[] RegenAccum;
     /// <summary>Whether the slot holds a live unit.</summary>
     public readonly bool[] Alive;
 
@@ -297,6 +309,9 @@ public sealed partial class UnitStore
         AbilityReadyTick = new int[capacity * DataLimits.MaxUnitAbilities];
         Statuses = new Abilities.StatusStore(capacity);
         ExpiresAtTick = new int[capacity];
+        LastDamagedTick = new int[capacity];
+        Array.Fill(LastDamagedTick, -1);
+        RegenAccum = new int[capacity];
         _belowHp = new bool[capacity];
         Alive = new bool[capacity];
         Generation = new int[capacity];
@@ -357,6 +372,8 @@ public sealed partial class UnitStore
         ClearCombat(index);
         ClearAbilities(index);
         Hp[index] = 0;
+        LastDamagedTick[index] = -1;
+        RegenAccum[index] = 0;
         ExpiresAtTick[index] = 0;
         _countedHalfPop[index] = 0;
         Alive[index] = true;
@@ -472,6 +489,8 @@ public sealed partial class UnitStore
         // M4-4a: a dead unit's cast, cooldowns and statuses go with it.
         ClearAbilities(handle.Index);
         Hp[handle.Index] = 0;
+        LastDamagedTick[handle.Index] = -1; // M7-1
+        RegenAccum[handle.Index] = 0;
         // A freed slot stands still: since units die (M4-1), a scan over slots must not count a dead walker as Moving.
         State[handle.Index] = UnitState.Idle;
         Velocity[handle.Index] = default;

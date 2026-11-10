@@ -6,7 +6,8 @@ namespace Rts.Sim.Entities;
 
 // M6-S2: the unit store in a save, every array whole (docs/03 "Save/load and replays"): the hashed fields, the ones outside
 // the hash that decide later ticks (Flank, the counted population and live flags, the free list) and the render ones
-// (PrevPosition, PrevFacing), plus the statuses.
+// (PrevPosition, PrevFacing), plus the statuses. M7-1 (format 10): then the regeneration part (REGN): the last damage tick and
+// the accumulator of every slot, and the statuses' derived regenerating counts.
 public sealed partial class UnitStore
 {
     /// <summary>Writes every slot's every field, the free list and the derived counters (M6-S2).</summary>
@@ -76,6 +77,11 @@ public sealed partial class UnitStore
         w.Write(BelowHpUnits);
         w.Write(SummonedUnits);
         Statuses.WriteTo(w);
+        // M7-1 (format 10): regeneration, its own tagged part at the end of the store, after the statuses.
+        w.Tag(SaveFormat.TagRegen);
+        w.WriteArray(LastDamagedTick);
+        w.WriteArray(RegenAccum);
+        Statuses.WriteRegenTo(w);
     }
 
     /// <summary>
@@ -149,6 +155,10 @@ public sealed partial class UnitStore
         BelowHpUnits = r.ReadInt32In(0, Capacity);
         SummonedUnits = r.ReadInt32In(0, Capacity);
         Statuses.ReadFrom(r, statuses);
+        if (!r.Expect(SaveFormat.TagRegen)) return;
+        r.ReadArray(LastDamagedTick);
+        r.ReadArray(RegenAccum);
+        Statuses.ReadRegenFrom(r);
         if (r.Failed) return;
 
         int live = 0;
@@ -158,6 +168,8 @@ public sealed partial class UnitStore
             if (!Alive[i]) continue;
             live++;
             if (!r.Check((uint)Owner[i] < (uint)players && (uint)TypeId[i] < (uint)unitTypes)) return;
+            // M7-1: a fraction of a hit point, and a tick that has been.
+            if (!r.Check(RegenAccum[i] >= 0 && RegenAccum[i] < Combat.CombatConstants.RegenFixedOne && LastDamagedTick[i] >= -1)) return;
         }
         if (!r.Check(live == Capacity - _freeCount)) return;
         for (int k = 0; k < _freeCount; k++)

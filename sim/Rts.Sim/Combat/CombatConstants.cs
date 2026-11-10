@@ -43,6 +43,14 @@ public static class CombatConstants
     /// <summary>Damage factor for own and allied units in a friendly-fire splash, after the falloff (docs/02: 50 %).</summary>
     public const float FriendlyFireFactor = 0.5f;
 
+    /// <summary>
+    /// M7-1: the fixed-point scale of regeneration (<see cref="RegenSystem"/>): one hit point is this many units, so a rate
+    /// in HP per second becomes a whole number of units a tick (<c>hpPerSecond x 400 / 20</c>: 1 HP/s = 20, 1.5 HP/s = 30)
+    /// and the accumulator carries every fraction, integer math with no drift. A rule of the format (the step a rate is
+    /// written in, 0.05 HP/s), not a stat, as <c>EconomyConstants.RepairFixedOne</c>.
+    /// </summary>
+    public const int RegenFixedOne = 400;
+
     /// <summary>The armor class id (<c>common/damage_table.json</c>) buildings take damage as.</summary>
     public const string StructureClassKey = "structure";
 }

@@ -507,8 +507,9 @@ public class TeamQaTests
         for (int t = 0; t < 3; t++) sim.Tick();
         byte[] bytes = SaveTestRun.Save(sim);
         int hmap = bytes.AsSpan().IndexOf("HMAP"u8);
-        // M6-S6 (save format 4): the starting-resources preset's string field sits between the team bytes and HMAP.
-        int teams = hmap - 4 - (4 + "standard".Length);
+        // M6-S6 (save format 4): the starting-resources preset's string field sits between the team bytes and HMAP; M7-1
+        // (format 10): then the map id's, "" here (its 4-byte length alone).
+        int teams = hmap - 4 - (4 + "standard".Length) - 4;
         Assert.True(teams > 0);
         Assert.Equal(new byte[] { 1, 2, 1, 2 }, bytes[teams..(teams + 4)]);
         return (bytes, teams);

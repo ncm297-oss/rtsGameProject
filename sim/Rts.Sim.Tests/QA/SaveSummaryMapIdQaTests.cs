@@ -139,8 +139,10 @@ public class SaveSummaryMapIdQaTests
     [Fact]
     public void TheVersionGate_AndAnUnreadablePreset_GiveNoMapId()
     {
-        byte[] gen = SaveTestRun.Save(SaveScenes.Menu(2).Build());
-        Assert.True(SaveSummary.TryParse(gen, out SaveSummary? g) && g!.FormatVersion == SaveFormat.MaplessVersion);
+        // M7-1: every save is format 10 (its header always holds a map id); the format-4 header is the same save as the build
+        // before M7-1 wrote it.
+        byte[] gen = PreMapFixtures.WithoutRegen(SaveTestRun.Save(SaveScenes.Menu(2).Build()));
+        Assert.True(SaveSummary.TryParse(gen, out SaveSummary? g) && g!.FormatVersion == PreMapFixtures.Format4);
         int end = PresetAt(gen) + 4 + BinaryPrimitives.ReadInt32LittleEndian(gen.AsSpan(PresetAt(gen)));
         byte[] appended = gen[..end].Concat(StringField("raraku"u8.ToArray())).Concat(gen[end..]).ToArray();
         Assert.True(SaveSummary.TryParse(appended, out SaveSummary? a));
