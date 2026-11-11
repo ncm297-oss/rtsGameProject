@@ -9,7 +9,7 @@ public sealed class TechDef
     {
     }
 
-    /// <summary>Dense tech id (index into <see cref="GameData.Techs"/>), ordinal order of the string ids across every techs file.</summary>
+    /// <summary>Dense tech id (index into <see cref="GameData.Techs"/>), the common file's first, then faction by faction in faction order, ordinal within each file (M7-3b).</summary>
     public int Id { get; init; }
     /// <summary>String id, e.g. <c>age_ii</c>.</summary>
     public required string Key { get; init; }

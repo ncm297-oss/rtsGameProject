@@ -341,14 +341,14 @@ public class CounterCompositionTests
     /// </summary>
     [Theory]
     [Trait("Category", "Stress")]
-    [InlineData("raraku", 1UL, AiDifficulty.Normal, "4765275972CD8BD8 28193 1531")] // pre-M5-9a: E0612240C3E713D2 28083 1476
-    [InlineData("raraku", 1UL, AiDifficulty.Easy, "0D877B9258F20265 24498 1448")]
-    [InlineData("pale_hills", 1UL, AiDifficulty.Normal, "A0884E7E95EEA8AB 36000 3483")] // pre-M5-9a: 69C4358E67DF7FC3 34219 3144
-    [InlineData("pale_hills", 1UL, AiDifficulty.Easy, "07EC9909C8DDF1C3 36000 2486")] // pre-M5-9a: 62F16C733AF6D9C8 36000 2601
-    [InlineData("pale_hills", 3UL, AiDifficulty.Normal, "9753F06856D81476 28517 2459")] // pre-M5-9a: C9CB142CF3C97C88 29562 3103
-    [InlineData("pale_hills", 3UL, AiDifficulty.Easy, "BC6868F49655A4DE 33508 3033")] // pre-M5-9a: 4FF13AE84024D0BB 33524 3075
-    [InlineData("vathar_crossing", 1UL, AiDifficulty.Normal, "72BC8BD819A35B0F 23219 1495")] // pre-M5-9a: 4FA98DA390936D9B 22794 1395
-    [InlineData("vathar_crossing", 1UL, AiDifficulty.Easy, "325B1E0137F84D8D 36000 1798")]
+    [InlineData("raraku", 1UL, AiDifficulty.Normal, "ABF56AB721E8B0DC 28193 1531")] // M7-3b (tech / ability ids by faction order; outcomes unchanged): was 4765275972CD8BD8; pre-M5-9a: E0612240C3E713D2 28083 1476
+    [InlineData("raraku", 1UL, AiDifficulty.Easy, "B2B828CADAC9DC88 24498 1448")] // M7-3b (tech / ability ids by faction order; outcomes unchanged): was 0D877B9258F20265
+    [InlineData("pale_hills", 1UL, AiDifficulty.Normal, "2E5531DF16DDEA11 36000 3483")] // M7-3b (tech / ability ids by faction order; outcomes unchanged): was A0884E7E95EEA8AB; pre-M5-9a: 69C4358E67DF7FC3 34219 3144
+    [InlineData("pale_hills", 1UL, AiDifficulty.Easy, "42DF7252D93BC98E 36000 2486")] // M7-3b (tech / ability ids by faction order; outcomes unchanged): was 07EC9909C8DDF1C3; pre-M5-9a: 62F16C733AF6D9C8 36000 2601
+    [InlineData("pale_hills", 3UL, AiDifficulty.Normal, "B812C76579CC4AE2 28517 2459")] // M7-3b (tech / ability ids by faction order; outcomes unchanged): was 9753F06856D81476; pre-M5-9a: C9CB142CF3C97C88 29562 3103
+    [InlineData("pale_hills", 3UL, AiDifficulty.Easy, "0C9E51DFCBF08050 33508 3033")] // M7-3b (tech / ability ids by faction order; outcomes unchanged): was BC6868F49655A4DE; pre-M5-9a: 4FF13AE84024D0BB 33524 3075
+    [InlineData("vathar_crossing", 1UL, AiDifficulty.Normal, "EDB60FD8CE0D203B 23219 1495")] // M7-3b (tech / ability ids by faction order; outcomes unchanged): was 72BC8BD819A35B0F; pre-M5-9a: 4FA98DA390936D9B 22794 1395
+    [InlineData("vathar_crossing", 1UL, AiDifficulty.Easy, "642A59FFA8E6EF34 36000 1798")] // M7-3b (tech / ability ids by faction order; outcomes unchanged): was 325B1E0137F84D8D
     public void TheNonHardPins_WithNormalStrengthZero_PlayAsBeforeThisTask(string map, ulong seed, AiDifficulty first, string before)
     {
         GameData zero = NormalStrengthZero.Value;

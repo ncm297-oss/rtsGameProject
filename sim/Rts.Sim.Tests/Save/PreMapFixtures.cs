@@ -16,7 +16,11 @@ namespace Rts.Sim.Tests.Save;
 /// Never rewrite them: a fixture that needs regenerating means a generated match no longer writes the old bytes.
 /// Exception: <c>replay_ai_ffa_standard.replay</c> (seat 1 a Hard AI) was re-recorded when Hard's play changed on purpose,
 /// in M5-4c slice 2 (947a273, the Hard knobs) and in D27 (Hard's <c>gatherBonus</c> 0.25 -> 0.4); its header lines are the
-/// ab54ddb ones byte for byte (the format is the point), only its commands and checkpoints moved.
+/// ab54ddb ones byte for byte (the format is the point), only its commands and checkpoints moved. M7-3b (tech ids by faction
+/// order, BUG-1171): <c>replay_ffa_high.replay</c> rewritten once with <see cref="WriteFlag"/>: its four Research commands
+/// name the same techs under their new ids (<c>melee_weapons_1</c> 4 to 3, <c>ranged_weapons_1</c> 7 to 5) and its
+/// <c>k</c> lines from tick 200 moved (the research flags are hashed by id); every other line byte for byte, and the other
+/// three files came out identical.
 /// <para>
 /// The data hash (and so every checksum over it) is normalized away before comparing: it follows from the data, which the
 /// data track edits in parallel (text only) and which this task extends with <c>maps/</c>; every other byte is compared.

@@ -73,12 +73,14 @@ public static partial class DataLoader
 
     /// <summary>
     /// Every faction's <c>abilities.json</c> (M4-4a; optional: a faction without one has no abilities). Ids unique across
-    /// factions (a repeat is an error at its second definition), indexed in ordinal order of their string ids. When
+    /// factions (a repeat is an error at its second definition). M7-3b (BUG-1171): indexed faction by faction in faction
+    /// order, ordinal within a faction (<see cref="FactionKeys"/>), so a faction appended to the order moves no shipped
+    /// ability id. When
     /// <paramref name="statuses"/> is null (its file failed) <c>applyStatus</c> ids aren't checked: that file's error says why.
     /// M4-4b-3b: a <c>spawn</c> effect names a unit of <paramref name="unitKeys"/> (<paramref name="units"/>, null where a
     /// unit failed) of the ability's own faction.
     /// </summary>
-    private static AbilityDef[] BuildAbilities(Checker c, string[] folders, DamageTable? table, StatusDef[]? statuses, string[] unitKeys, UnitDef[] units)
+    private static AbilityDef[] BuildAbilities(Checker c, string[] folders, DamageTable? table, StatusDef[]? statuses, KeyIndex unitKeys, UnitDef[] units)
     {
         var files = new AbilityFileJson?[folders.Length];
         var firstFile = new Dictionary<string, string>(StringComparer.Ordinal); // load-time only
@@ -102,9 +104,7 @@ public static partial class DataLoader
                 }
             }
         }
-        string[] keys = new string[accepted.Count];
-        for (int k = 0; k < accepted.Count; k++) keys[k] = files[accepted[k].Faction]!.Abilities![accepted[k].Index]!.Id!;
-        Array.Sort(keys, StringComparer.Ordinal);
+        var keys = new KeyIndex(FactionKeys(folders.Length, accepted, (f, i) => files[f]!.Abilities![i]!.Id!));
         string[]? statusKeys = null;
         if (statuses != null)
         {
@@ -116,14 +116,14 @@ public static partial class DataLoader
         {
             c.CurrentFile = $"factions/{folders[f]}/abilities.json";
             AbilityJson a = files[f]!.Abilities![i]!;
-            int id = Array.BinarySearch(keys, a.Id!, StringComparer.Ordinal);
+            int id = keys.IdOf(a.Id!);
             defs[id] = BuildAbility(c, a, $"abilities[{i}]", id, f, table, statuses, statusKeys, new UnitRefs(folders, unitKeys, units));
         }
         return defs;
     }
 
-    /// <summary>What a <c>spawn</c> effect's <c>unit</c> is checked against (M4-4b-3b): the faction folders, the sorted unit ids and their defs.</summary>
-    private readonly record struct UnitRefs(string[] Folders, string[] Keys, UnitDef[] Units);
+    /// <summary>What a <c>spawn</c> effect's <c>unit</c> is checked against (M4-4b-3b): the faction folders, the unit id table and their defs.</summary>
+    private readonly record struct UnitRefs(string[] Folders, KeyIndex Keys, UnitDef[] Units);
 
     private static AbilityDef BuildAbility(Checker c, AbilityJson a, string p, int id, int faction, DamageTable? table, StatusDef[]? statuses, string[]? statusKeys,
         UnitRefs unitRefs)
@@ -349,7 +349,7 @@ public static partial class DataLoader
         string key = c.Id(x.Unit, q + ".unit");
         if (key.Length > 0)
         {
-            int id = KeyId(refs.Keys, key);
+            int id = refs.Keys.IdOf(key);
             if (id < 0 || refs.Units[id] == null)
                 c.Error(q + ".unit", $"unknown unit '{key}' (not in any units.json)");
             else if (refs.Units[id].Faction != faction)
@@ -519,15 +519,16 @@ public static partial class DataLoader
     /// <see cref="DataLimits.MaxUnitAbilities"/>.
     /// </summary>
     private static void ResolveUnitAbilities(Checker c, string[] folders, UnitFileJson?[] unitFiles, List<(int Faction, int Index)> accepted,
-        string[] unitKeys, UnitDef[] units, AbilityDef[] abilities)
+        KeyIndex unitKeys, UnitDef[] units, AbilityDef[] abilities)
     {
-        var keys = new string[abilities.Length];
-        for (int k = 0; k < abilities.Length; k++) keys[k] = abilities[k].Key;
+        var table = new string[abilities.Length];
+        for (int k = 0; k < abilities.Length; k++) table[k] = abilities[k].Key;
+        var keys = new KeyIndex(table);
         foreach ((int f, int i) in accepted)
         {
             UnitJson json = unitFiles[f]!.Units![i]!;
             if (json.Abilities == null) continue;
-            UnitDef u = units[KeyId(unitKeys, json.Id!)];
+            UnitDef u = units[unitKeys.IdOf(json.Id!)];
             if (u == null) continue;
             c.CurrentFile = $"factions/{folders[f]}/units.json";
             string p = $"units[{i}].abilities";
@@ -539,7 +540,7 @@ public static partial class DataLoader
                 string q = $"{p}[{k}]";
                 string key = c.Id(json.Abilities[k], q);
                 if (key.Length == 0) continue;
-                int a = Array.BinarySearch(keys, key, StringComparer.Ordinal);
+                int a = keys.IdOf(key);
                 if (a < 0)
                     c.Error(q, $"unknown ability '{key}' (not in any abilities.json)");
                 else if (abilities[a].Faction != u.Faction)

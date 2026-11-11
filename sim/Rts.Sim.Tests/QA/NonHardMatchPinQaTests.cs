@@ -28,14 +28,14 @@ public class NonHardMatchPinQaTests
     private const int Ticks = 36_000;
 
     [Theory]
-    [InlineData("raraku", 1UL, AiDifficulty.Normal, "5A6F64C1AF757499 28231 1503")] // M5-H6 (the house rule, the hunt's free starts, the leg fixes): was E0612240C3E713D2 28083 1476
-    [InlineData("raraku", 1UL, AiDifficulty.Easy, "CFE55368B0CBD15D 24498 1445")] // M5-9a: was 0D877B9258F20265 24498 1448
-    [InlineData("pale_hills", 1UL, AiDifficulty.Normal, "7A4B426913372A53 36000 3109")] // M5-9a: was 69C4358E67DF7FC3 34219 3144; round 1 D714943B782A74E0 36000 2599 (fix round 1, BUG-1154: seat 0 now starved too) 70635F3A0D539227 36000 2598; M5-9b: both seats expand to a free start (ends 48,858)
-    [InlineData("pale_hills", 1UL, AiDifficulty.Easy, "7BEB9DD74B7C779F 36000 2850")] // M5-9a: was 62F16C733AF6D9C8 36000 2601, then 9B5F2C36AE77DD3A 36000 2689; M5-9b: the far expansion (every difficulty)
-    [InlineData("pale_hills", 3UL, AiDifficulty.Normal, "9271EBE2FC074DC3 33484 3354")] // M5-H6: was 1D84903554D236D3 29514 2366; M5-9a: was C9CB142CF3C97C88 29562 3103, then 49143BF840792D0F 31891 2447; M5-9b: the far expansion
-    [InlineData("pale_hills", 3UL, AiDifficulty.Easy, "0819960BDEBD1EF9 36000 2811")] // M5-H6: was 08CE3315062BC646 36000 2811; M5-9a: was 4FF13AE84024D0BB 33524 3075; round 1 63DE1922B755D390 36000 2708, then 8FBFA3820C590F5A 36000 2606; M5-9b: the far expansion
-    [InlineData("vathar_crossing", 1UL, AiDifficulty.Normal, "2D4804D993CBC56A 23322 1543")] // M5-H6: was 66A1290256133869 23043 1386; M5-9a: was 4FA98DA390936D9B 22794 1395
-    [InlineData("vathar_crossing", 1UL, AiDifficulty.Easy, "5DD4CB05A846BBF1 27344 1790")] // M5-9a: was 325B1E0137F84D8D 36000 1798
+    [InlineData("raraku", 1UL, AiDifficulty.Normal, "A34087348965703F 28231 1503")] // M7-3b (tech / ability ids by faction order; outcomes unchanged): was 5A6F64C1AF757499; M5-H6 (the house rule, the hunt's free starts, the leg fixes): was E0612240C3E713D2 28083 1476
+    [InlineData("raraku", 1UL, AiDifficulty.Easy, "C25F2BE046658B19 24498 1445")] // M7-3b (tech / ability ids by faction order; outcomes unchanged): was CFE55368B0CBD15D; M5-9a: was 0D877B9258F20265 24498 1448
+    [InlineData("pale_hills", 1UL, AiDifficulty.Normal, "B2DABF941D3151B4 36000 3109")] // M7-3b (tech / ability ids by faction order; outcomes unchanged): was 7A4B426913372A53; M5-9a: was 69C4358E67DF7FC3 34219 3144; round 1 D714943B782A74E0 36000 2599 (fix round 1, BUG-1154: seat 0 now starved too) 70635F3A0D539227 36000 2598; M5-9b: both seats expand to a free start (ends 48,858)
+    [InlineData("pale_hills", 1UL, AiDifficulty.Easy, "2F22DC97C2B76A45 36000 2850")] // M7-3b (tech / ability ids by faction order; outcomes unchanged): was 7BEB9DD74B7C779F; M5-9a: was 62F16C733AF6D9C8 36000 2601, then 9B5F2C36AE77DD3A 36000 2689; M5-9b: the far expansion (every difficulty)
+    [InlineData("pale_hills", 3UL, AiDifficulty.Normal, "B8F9C9DDC93F4156 33484 3354")] // M7-3b (tech / ability ids by faction order; outcomes unchanged): was 9271EBE2FC074DC3; M5-H6: was 1D84903554D236D3 29514 2366; M5-9a: was C9CB142CF3C97C88 29562 3103, then 49143BF840792D0F 31891 2447; M5-9b: the far expansion
+    [InlineData("pale_hills", 3UL, AiDifficulty.Easy, "EA65627F2096D533 36000 2811")] // M7-3b (tech / ability ids by faction order; outcomes unchanged): was 0819960BDEBD1EF9; M5-H6: was 08CE3315062BC646 36000 2811; M5-9a: was 4FF13AE84024D0BB 33524 3075; round 1 63DE1922B755D390 36000 2708, then 8FBFA3820C590F5A 36000 2606; M5-9b: the far expansion
+    [InlineData("vathar_crossing", 1UL, AiDifficulty.Normal, "15606843729C070D 23322 1543")] // M7-3b (tech / ability ids by faction order; outcomes unchanged): was 2D4804D993CBC56A; M5-H6: was 66A1290256133869 23043 1386; M5-9a: was 4FA98DA390936D9B 22794 1395
+    [InlineData("vathar_crossing", 1UL, AiDifficulty.Easy, "B5A1F19E8F3537B6 27344 1790")] // M7-3b (tech / ability ids by faction order; outcomes unchanged): was 5DD4CB05A846BBF1; M5-9a: was 325B1E0137F84D8D 36000 1798
     public void AMatchWithoutHard_PlaysAsBeforeTheHardKnobs(string map, ulong seed, AiDifficulty first, string expected)
     {
         string got = Run(map, seed, first, null, out bool over);

@@ -23,8 +23,8 @@ public class SharedVisionFfaPinTests
     {
         new object[] { "menu_human_vs_ai_seed1", 0x37CF8428520DC8E5UL },
         new object[] { "menu_human_vs_ai_seed3", 0xD4CA1E11BBB6585AUL },
-        new object[] { "four_seats_256", 0x2FAB4CEE371B9051UL },
-        new object[] { "ai_seed4_4seats_Normal", 0x9D9A10C292023A01UL }, // D27 (BUG-1163, Hard gatherBonus 0.4): was 0x47DF11AA7761612F (M5-4c slice 2: was 0x35907C9787F39EEA); seat 1 of the four is Hard
+        new object[] { "four_seats_256", 0x39B9C71EFF58A8EDUL }, // M7-3b (tech / ability ids by faction order; outcomes unchanged): was 0x2FAB4CEE371B9051
+        new object[] { "ai_seed4_4seats_Normal", 0x3F904F7C7C5EC075UL }, // M7-3b (tech ids by faction order): was 0x9D9A10C292023A01; D27 (BUG-1163, Hard gatherBonus 0.4): was 0x47DF11AA7761612F (M5-4c slice 2: was 0x35907C9787F39EEA); seat 1 of the four is Hard
         new object[] { "surround_brawl", 0xEAC1911851154EACUL },
     };
 

@@ -916,8 +916,10 @@ open S1 / S2. Retro below; open S3 / S4 listed there.)_
       sim has room for a third faction**: `game/data/common/factions.json` `order` (append-only) fixes the faction ids and
       the unit / building type ids faction by faction, so a `teblor` folder appended moves no Malazan v Whirlwind digest
       (proven on a full Teblor copy playing as an AI seat; the shipped ids and the golden bit-identical). **Left before the
-      roster:** techs and abilities under the same order with one golden regen (M7-3b, BUG-1171); then D28 the roster +
-      `ai.json` (the page is pin-ready since D-R36), models, the balance pass.)
+      roster:** D28 the roster + `ai.json` (the page is pin-ready since D-R36), models, the balance pass. **M7-3b,
+      2026-11-10-2116:** tech and ability ids under the same order too (common techs first; BUG-1171) with one golden regen
+      and pin sweep, outcomes unchanged; the loader's key lookups through a sorted index (BUG-1172); every earlier save and
+      recording is refused `DataMismatch`. A Teblor `blood_oil_frenzy` now moves no shipped id.)
 
 ## M8 — Shadow
 

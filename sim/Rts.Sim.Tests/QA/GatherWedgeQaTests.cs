@@ -50,6 +50,12 @@ public class GatherWedgeQaTests
     // D27 (BUG-1163, BUG-0750's rule): regenerated once more, 64DF327980743173 -> 3E33BCE5D418EC9B, because Hard's ai.json
     // gatherBonus moved 0.25 -> 0.4 in both factions (difficulty values are in GameData.ContentHash); the golden's one seat is
     // a human Normal seat, so its k lines are byte for byte as before (header data-hash and checksum only).
+    // M7-3b (BUG-1171, the one regen of SameGameDataHashes' rule): "M7-3b: tech / ability ids by faction order; outcomes
+    // unchanged". GameData.Techs is the common techs first, then each faction's in common/factions.json order, and
+    // GameData.Abilities faction by faction, so ContentHash (it hashes the keys in id order) moved: 3E33BCE5D418EC9B ->
+    // 3A04D4E370C643DA. The golden's game researches nothing and casts nothing, so its k lines are byte for byte as
+    // before (header data-hash and checksum only). seed21_playable.replay holds two Research commands by id (ticks 4348
+    // and 5556); its checkpoints still hold to CheckpointPrefixTicks on the M7-3b tree (this row passes unchanged).
 
     /// <summary>
     /// Ticks the replay must still match its recorded checkpoints: all of them (M4-H1, BUG-0211; before the re-recording

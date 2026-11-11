@@ -18,7 +18,7 @@ public static partial class DataLoader
     /// <paramref name="statuses"/> is null (its file failed) status ids aren't checked: that file's error says why.
     /// </summary>
     private static void ResolveUnitPassives(Checker c, string[] folders, UnitFileJson?[] unitFiles, List<(int Faction, int Index)> accepted,
-        string[] unitKeys, UnitDef[] units, StatusDef[]? statuses)
+        KeyIndex unitKeys, UnitDef[] units, StatusDef[]? statuses)
     {
         string[]? statusKeys = null;
         if (statuses != null)
@@ -30,7 +30,7 @@ public static partial class DataLoader
         {
             UnitJson json = unitFiles[f]!.Units![i]!;
             if (json.Passives == null) continue;
-            UnitDef u = units[KeyId(unitKeys, json.Id!)];
+            UnitDef u = units[unitKeys.IdOf(json.Id!)];
             if (u == null) continue;
             c.CurrentFile = $"factions/{folders[f]}/units.json";
             string p = $"units[{i}].passives";
@@ -106,7 +106,7 @@ public static partial class DataLoader
     }
 
     /// <summary>An <c>onDeath</c> passive's <c>units</c> (at <paramref name="path"/>): required, at least one, each an own-faction unit id, no repeats; file order.</summary>
-    private static ImmutableArray<int> PassiveUnits(Checker c, List<string?>? list, string path, string[] folders, int faction, string[] unitKeys, UnitDef[] units)
+    private static ImmutableArray<int> PassiveUnits(Checker c, List<string?>? list, string path, string[] folders, int faction, KeyIndex unitKeys, UnitDef[] units)
     {
         if (c.Obj(list, path) == null) return ImmutableArray<int>.Empty;
         if (list!.Count == 0) c.Error(path, "an onDeath passive needs at least one unit type");
@@ -116,7 +116,7 @@ public static partial class DataLoader
             string q = $"{path}[{k}]";
             string key = c.Id(list[k], q);
             if (key.Length == 0) continue;
-            int id = KeyId(unitKeys, key);
+            int id = unitKeys.IdOf(key);
             if (id < 0 || units[id] == null)
                 c.Error(q, $"unknown unit '{key}' (not in any units.json)");
             else if (units[id].Faction != faction)

@@ -263,18 +263,20 @@ public class TechDataQaTests
     [Fact]
     public void SeventyTechs_UseASecondFlagWord_AndEveryFlagIsHashed_AndResearchable()
     {
-        // 61 extra common techs at the Forge (+1 hp each on every unit): 70 in all, so tech ids 64-69 live in word 1.
+        // 63 extra common techs at the Forge (+1 hp each on every unit): 72 in all, so tech ids 64-71 live in word 1. M7-3b:
+        // the common techs come first (ids 0-69), then the two faction techs (70, 71), so ids 64-69 are six common extras
+        // (before M7-3b, 61 extras made 70 techs sorted globally, and 64-69 were the last six extras).
         using TestDataDir dir = TestDataDir.CopyOfShipped();
         dir.EditJson(Common, root =>
         {
             JsonArray list = root["techs"]!.AsArray();
-            for (int n = 0; n < 61; n++)
+            for (int n = 0; n < 63; n++)
                 list.Add(JsonNode.Parse($"{{\"id\": \"zz_extra_{n:D2}\", \"displayName\": \"X\", \"description\": \"X\", \"researchedAt\": \"forge\", " +
                     "\"cost\": {\"gold\": 1, \"wood\": 1}, \"researchTime\": 0.05, \"requires\": [], " +
                     "\"effects\": [{\"stat\": \"hp\", \"amount\": 1, \"appliesTo\": {}}]}"));
         });
         GameData d = Loads(dir);
-        Assert.Equal(70, d.Techs.Length);
+        Assert.Equal(72, d.Techs.Length);
         var sim = new Simulation(new SimConfig(5, 2, 16, 512) { Data = d }, ResourceMaps.Flat(32, 32));
         Assert.Equal(2, sim.World.Techs.WordsPerPlayer);
         var seen = new HashSet<ulong> { sim.StateHash() };
@@ -294,7 +296,8 @@ public class TechDataQaTests
         Run(sim, 2);
         int k = BuildMaps.SiteAt(sim, 10, 10);
         BuildMaps.Give(sim, 0, 1000, 1000);
-        Assert.Equal("zz_extra_60", d.Techs[69].Key);
+        Assert.Equal("zz_extra_62", d.Techs[69].Key);
+        Assert.Equal(-1, d.Techs[69].Faction);
         for (int t = 64; t < 70; t++) sim.Enqueue(Command.Research(0, In(sim, k), t));
         Run(sim, 2 + 6);
         for (int t = 64; t < 69; t++) Assert.True(sim.World.HasTech(0, t), d.Techs[t].Key);

@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S4 |
-| Status | open |
+| Status | fixed (D-R37, verified by QA 2026-11-10-2116) |
 | Found | 2026-11-10-1236, task D-R36 |
 | System | Tests (comment), docs: `docs/factions/malazan.md`, `docs/factions/teblor.md` |
-| Fixed by | |
+| Fixed by | c49e971 (D-R37): `D21OpeningsQaTests` line 310 indented; malazan.md line 417 split (108 characters); the War band description names "Javelin Throwers" and "War-dogs" (158 characters, the same in both tables) |
 
 ## Repro
 1. `sim/Rts.Sim.Tests/QA/Content/D21OpeningsQaTests.cs` line 306 (the BUG-1183 edit): `/// 270 wood and the Whirlwind's

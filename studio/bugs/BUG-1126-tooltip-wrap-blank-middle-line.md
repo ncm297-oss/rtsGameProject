@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S4 |
-| Status | open |
+| Status | fixed (M7-VH1, verified by QA 2026-11-11-0739) |
 | Found | 2026-11-07-0236, task M6-VH6 (QA, standard) |
 | System | view: `game/scripts/TooltipWrap.cs` |
-| Fixed by | |
+| Fixed by | 6ec217d (M7-VH1): `TooltipWrap.Wrap` per data line, the spaces beside every break consumed (the Producer's ruling); `game/tests/TooltipWrapRule`. Proof: `QaVh6Test` edge fuzz 0 / 20,000 blank lines, `QaVh5Test` fuzz 0 faults; QA's independent oracle in `QaM7Vh1Test` 0 / 30,000 (47,651 added breaks) + the 34 shipped descriptions |
 
 ## Repro
 1. `& $env:GODOT --headless --path game res://tests/QaVh6Test.tscn` prints

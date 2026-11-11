@@ -55,8 +55,10 @@ public static partial class DataLoader
     /// <summary>
     /// M7-3: the id table of a per-faction key set: faction by faction in faction order, each faction's keys in ordinal
     /// order. <paramref name="accepted"/> holds (faction, entry) pairs; <paramref name="keyOf"/> reads an entry's id.
-    /// For the shipped two factions this is the global ordinal order the loader used before (every Malazan key sorts
-    /// before every Whirlwind key), so no id moved.
+    /// For the shipped two factions' units and buildings this is the global ordinal order the loader used before (every
+    /// Malazan key sorts before every Whirlwind key), so no unit or building id moved. M7-3b: techs (the common file as
+    /// group 0, faction f as group f + 1) and abilities use it too; their ids did move, once (BUG-1171). A lookup goes
+    /// through a <see cref="KeyIndex"/> built on the table, never a binary search on it (it is ordinal only within a group).
     /// </summary>
     private static string[] FactionKeys(int factions, List<(int Faction, int Index)> accepted, Func<int, int, string> keyOf)
     {
@@ -71,10 +73,4 @@ public static partial class DataLoader
         }
         return keys;
     }
-
-    /// <summary>
-    /// The id of <paramref name="key"/> in a per-faction id table (<see cref="FactionKeys"/>), or -1. A walk, not a binary
-    /// search: the table is ordinal only within each faction. Load time only.
-    /// </summary>
-    private static int KeyId(string[] keys, string key) => Array.IndexOf(keys, key);
 }
