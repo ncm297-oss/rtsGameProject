@@ -1,0 +1,49 @@
+rts-replay 6
+sim-version 0.0.1
+data-hash 3E33BCE5D418EC9B
+seed 3
+players 2
+seat 0 malazan human normal
+seat 1 whirlwind human normal
+unit-capacity 16
+command-capacity 32
+resource-capacity 4096
+checkpoint-interval 50
+ticks 200
+combat 1
+map.width 128
+map.height 128
+map.edge-margin 6
+map.level1-plateaus 5
+map.level1-min-size 16
+map.level1-max-size 34
+map.level2-plateaus 2
+map.level2-min-size 7
+map.level2-max-size 14
+map.level2-inset 2
+map.ramp-width 3
+map.ramp-length 4
+map.ramps-per-plateau 2
+map.ramp-tries 32
+map.min-passable-fraction 3F000000
+map.max-attempts 8
+map.forests 0
+map.forest-min-trees 12
+map.forest-max-trees 40
+map.gold-mines 0
+map.mine-spacing 41C00000
+map.start-locations 2
+map.start-clear-radius 8
+map.start-edge-margin 10
+map.start-mine-distance 41900000
+map.start-forest-distance 41C00000
+commands 2
+c 1 0 0 6 0 43040000 43020000 0 0 0 0 0 0
+c 2 0 1 15 4 43040000 43020000 0 0 0 0 0 0
+checkpoints 4
+k 50 9C6224522858DD37
+k 100 3B8E5009BE3D31A6
+k 150 499585E7B44624E5
+k 200 2B74EB9957D4E158
+end
+checksum C3430274F6D47370

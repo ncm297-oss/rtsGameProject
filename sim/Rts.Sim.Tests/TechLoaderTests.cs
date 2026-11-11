@@ -22,8 +22,9 @@ public class TechLoaderTests
 
     // ---------- criterion 1: shipped data ----------
 
+    /// <summary>M7-3b (BUG-1171): the common techs first, then each faction's in faction order, each ordinal within (was one ordinal table).</summary>
     [Fact]
-    public void ShippedData_HoldsNineTechs_SevenCommonAndOnePerFaction_InOrdinalIdOrder()
+    public void ShippedData_HoldsNineTechs_SevenCommonAndOnePerFaction_CommonFirstThenByFaction()
     {
         Assert.Equal(9, D.Techs.Length);
         Assert.Equal(7, D.Techs.Count(t => t.Faction == -1));
@@ -32,7 +33,11 @@ public class TechLoaderTests
         for (int i = 0; i < D.Techs.Length; i++)
         {
             Assert.Equal(i, D.Techs[i].Id);
-            if (i > 0) Assert.True(string.CompareOrdinal(D.Techs[i - 1].Key, D.Techs[i].Key) < 0);
+            if (i > 0)
+            {
+                TechDef p = D.Techs[i - 1], t = D.Techs[i];
+                Assert.True(p.Faction < t.Faction || p.Faction == t.Faction && string.CompareOrdinal(p.Key, t.Key) < 0, $"{p.Key} before {t.Key}");
+            }
             Assert.False(string.IsNullOrWhiteSpace(D.Techs[i].DisplayName));
             Assert.False(string.IsNullOrWhiteSpace(D.Techs[i].Description));
         }

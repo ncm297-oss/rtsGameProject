@@ -26,7 +26,7 @@ public class FactionOrderQaTests(ITestOutputHelper output)
     /// <c>zteblor_*</c> so they sort after every shipped ability (BUG-1171: a <c>teblor_*</c> ability would renumber
     /// <c>telas_fire</c>), its tech <c>teblor_supply</c>. <paramref name="order"/> is the whole order list.
     /// </summary>
-    internal static void AddFullTeblor(TestDataDir dir, string[] order, string abilityPrefix = "zteblor_")
+    internal static void AddFullTeblor(TestDataDir dir, string[] order, string abilityPrefix = "zteblor_", string tech = "teblor_supply")
     {
         string from = dir.FullPath("factions/malazan"), to = dir.FullPath("factions/teblor");
         Directory.CreateDirectory(to);
@@ -34,7 +34,7 @@ public class FactionOrderQaTests(ITestOutputHelper output)
         {
             string text = File.ReadAllText(file)
                 .Replace("malazan_", "teblor_")
-                .Replace("moranth_supply", "teblor_supply")
+                .Replace("moranth_supply", tech)
                 .Replace("\"telas_fire\"", $"\"{abilityPrefix}telas_fire\"")
                 .Replace("\"cusser\"", $"\"{abilityPrefix}cusser\"");
             File.WriteAllText(Path.Combine(to, Path.GetFileName(file)), text);
@@ -53,10 +53,10 @@ public class FactionOrderQaTests(ITestOutputHelper output)
         return r.Data!;
     }
 
-    private static GameData LoadWith(string[] order, bool teblor)
+    private static GameData LoadWith(string[] order, bool teblor, string abilityPrefix = "zteblor_", string tech = "teblor_supply")
     {
         using TestDataDir dir = TestDataDir.CopyOfShipped();
-        if (teblor) AddFullTeblor(dir, order);
+        if (teblor) AddFullTeblor(dir, order, abilityPrefix, tech);
         else WriteOrder(dir, order);
         return Load(dir);
     }
@@ -78,14 +78,18 @@ public class FactionOrderQaTests(ITestOutputHelper output)
     /// <summary>
     /// Under each order: factions are the list; every unit / building id is grouped by faction in list order and ordinal
     /// within; every faction's roster names only its own types; trainedAt resolves to the same key; FindUnit / FindBuilding /
-    /// FindFaction invert the tables; the same order loads to the same ContentHash twice.
+    /// FindFaction invert the tables; the same order loads to the same ContentHash twice. M7-3b (BUG-1171): tech ids are the
+    /// common techs first, then grouped by faction in list order, and ability ids grouped by faction, each ordinal within;
+    /// every reference to them (a unit's abilities, a requires list, the age tech) resolves to the same key. The Teblor copy
+    /// here names its abilities <c>a_*</c> and its tech <c>aa_supply</c>, sorting before every shipped key (and before
+    /// <c>age_ii</c>), so an ordinal table would renumber them all.
     /// </summary>
     [Theory]
     [MemberData(nameof(Orders))]
     public void TheIdRule_HoldsUnderEveryOrder(string list, bool teblor)
     {
         string[] order = list.Split(',');
-        GameData d = LoadWith(order, teblor);
+        GameData d = LoadWith(order, teblor, abilityPrefix: "a_", tech: "aa_supply");
         Assert.Equal(order, d.Factions.Select(f => f.Key));
         for (int f = 0; f < d.Factions.Length; f++)
         {
@@ -115,7 +119,33 @@ public class FactionOrderQaTests(ITestOutputHelper output)
             for (int k = 1; k < t.Length; k++) Assert.True(t[k - 1] < t[k], $"{d.Buildings[b].Key}: trains not ascending");
             foreach (int u in t) Assert.Equal(d.Buildings[b].Faction, d.Units[u].Faction);
         }
-        Assert.Equal(d.ContentHash(), LoadWith(order, teblor).ContentHash());
+        CheckGrouped(d.Techs.Select(t => (t.Key, t.Faction, t.Id)).ToArray(), "tech");
+        CheckGrouped(d.Abilities.Select(a => (a.Key, a.Faction, a.Id)).ToArray(), "ability");
+        GameData s = TestSim.Data;
+        foreach (TechDef t in d.Techs)
+        {
+            Assert.Equal(t.Id, d.FindTech(t.Key));
+            foreach (int r in t.RequiresTechs) Assert.Contains(d.Techs[r].Faction, new[] { -1, t.Faction });
+            int shipped = s.FindTech(t.Key);
+            if (shipped < 0) continue;
+            // The same tech, renumbered only: its requires name the same keys.
+            Assert.Equal(s.Techs[shipped].RequiresTechs.Select(r => s.Techs[r].Key).Order(StringComparer.Ordinal),
+                t.RequiresTechs.Select(r => d.Techs[r].Key).Order(StringComparer.Ordinal));
+            Assert.Equal(s.Techs[shipped].Faction < 0 ? "" : s.Factions[s.Techs[shipped].Faction].Key, t.Faction < 0 ? "" : d.Factions[t.Faction].Key);
+        }
+        Assert.All(d.AgeTechs, t => Assert.Equal(-1, d.Techs[t].Faction));
+        Assert.Equal(s.AgeTechs.Select(t => s.Techs[t].Key), d.AgeTechs.Select(t => d.Techs[t].Key));
+        foreach (AbilityDef a in d.Abilities) Assert.Equal(a.Id, d.FindAbility(a.Key));
+        foreach (UnitDef u in d.Units)
+        {
+            foreach (int a in u.Abilities) Assert.Equal(u.Faction, d.Abilities[a].Faction);
+            int shipped = s.FindUnit(u.Key);
+            if (shipped >= 0) Assert.Equal(s.Units[shipped].Abilities.Select(a => s.Abilities[a].Key), u.Abilities.Select(a => d.Abilities[a].Key));
+        }
+        // The common techs come first whatever the order, so their ids never move.
+        foreach (TechDef t in s.Techs)
+            if (t.Faction < 0) Assert.Equal(t.Id, d.FindTech(t.Key));
+        Assert.Equal(d.ContentHash(), LoadWith(order, teblor, abilityPrefix: "a_", tech: "aa_supply").ContentHash());
         output.WriteLine($"{list}: {d.Units.Length} unit types, {d.Buildings.Length} buildings, hash {d.ContentHash():X16}");
     }
 
@@ -228,7 +258,8 @@ public class FactionOrderQaTests(ITestOutputHelper output)
 
     /// <summary>
     /// BUG-1171's symptom, pinned so its fix shows: a full Teblor whose abilities are named <c>teblor_*</c> (the natural name)
-    /// renumbers the shipped <c>telas_fire</c> even appended last; with <c>zteblor_*</c> it doesn't.
+    /// renumbered the shipped <c>telas_fire</c> even appended last; with <c>zteblor_*</c> it didn't. M7-3b fixed it: the
+    /// first assertion is flipped (no shipped ability moves, whatever the Teblor names).
     /// </summary>
     [Fact]
     public void ATeblorAbility_NamedNaturally_RenumbersTelasFire_Bug1171Symptom()
@@ -237,7 +268,8 @@ public class FactionOrderQaTests(ITestOutputHelper output)
         AddFullTeblor(dir, new[] { "malazan", "whirlwind", "teblor" }, abilityPrefix: "teblor_");
         GameData d = Load(dir);
         int shipped = TestSim.Data.FindAbility("telas_fire");
-        Assert.NotEqual(shipped, d.FindAbility("telas_fire"));
+        Assert.Equal(shipped, d.FindAbility("telas_fire"));
+        foreach (AbilityDef a in TestSim.Data.Abilities) Assert.Equal(a.Id, d.FindAbility(a.Key));
         Assert.Equal(shipped, s_full.Value.FindAbility("telas_fire"));
         Assert.Equal(TestSim.Data.FindAbility("cusser"), s_full.Value.FindAbility("cusser"));
     }

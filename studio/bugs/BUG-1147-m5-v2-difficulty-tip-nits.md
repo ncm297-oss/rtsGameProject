@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S4 |
-| Status | open |
+| Status | fixed (item 1: M7-VH1, verified by QA 2026-11-11-0739; the 33.33 item was the brief's slip, nothing to fix) |
 | Found | 2026-11-07-0926, task M5-V2 |
 | System | skirmish setup (difficulty tooltips), `ui.json` |
-| Fixed by | |
+| Fixed by | 6ec217d (M7-VH1): `{1}` in `setup.difficulty_easy_tip` / `_hard_tip` = `ThinkTicks / 20` in seconds (`UiText.Seconds`, `0.##`), load rule: Easy / Hard must name `{1}`, no `{2}`. Proof: `DifficultyTipTest` (a copy of `ai.json` at 7 / 2 / 0.333: "7", "0.35"), `QaM7Vh1Test` tips at 0.333 / 2 / 7, `QaM5V2Test` load rows. Shipped: "Thinks every 2 seconds" (as before), "thinks every 0.5 seconds" (was "half second"; accepted by the Producer). Residual: BUG-1200 ("1 seconds" at exactly 1 s, a stale comment) |
 
 ## Repro
 1. Read `game/data/common/ui.json` `setup.difficulty_easy_tip` / `difficulty_hard_tip`: "Thinks every 2 seconds" and

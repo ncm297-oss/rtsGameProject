@@ -10,8 +10,9 @@ public static partial class DataLoader
     /// M3-5: reads <c>common/techs.json</c> and every <c>factions/&lt;id&gt;/techs.json</c> (all required) into
     /// <see cref="TechDef"/>s. M3-6: resolves every <c>requires</c> list (techs, buildings, units) to tech and building
     /// type ids and every <c>requiresAnyOf</c> to building slots, and rejects a tech id that is also a building id and a
-    /// <c>requires</c> cycle. Tech ids are unique across the files (a repeat is an error at its second definition) and
-    /// ordered ordinally across them.
+    /// <c>requires</c> cycle. Tech ids are unique across the files (a repeat is an error at its second definition). M7-3b
+    /// (BUG-1171): ids are the common file's techs first, then each faction's in faction order, ordinal within each file
+    /// (<see cref="FactionKeys"/>), so a faction appended to the order moves no shipped tech id.
     /// </summary>
     private sealed class TechReader
     {
@@ -21,17 +22,17 @@ public static partial class DataLoader
         private readonly string[] _folders;
         private readonly DamageTable? _table;
         private readonly UnitDef[] _units;
-        private readonly string[] _unitKeys;
+        private readonly KeyIndex _unitKeys;
         private readonly string[] _unitTags;
         private readonly BuildingDef[] _buildings;
-        private readonly string[] _buildingKeys;
+        private readonly KeyIndex _buildingKeys;
         // Index 0 is the common file (faction -1); index f + 1 is faction f's file.
         private readonly TechFileJson?[] _files;
         private readonly List<(int File, int Index)> _accepted = new();
-        private string[] _keys = Array.Empty<string>();
+        private KeyIndex _keys = new(Array.Empty<string>());
         private TechDef[] _defs = Array.Empty<TechDef>();
 
-        public TechReader(Checker c, string[] folders, DamageTable? table, UnitDef[] units, string[] unitKeys, string[] unitTags, BuildingDef[] buildings)
+        public TechReader(Checker c, string[] folders, DamageTable? table, UnitDef[] units, KeyIndex unitKeys, string[] unitTags, BuildingDef[] buildings)
         {
             _c = c;
             _folders = folders;
@@ -40,8 +41,9 @@ public static partial class DataLoader
             _unitKeys = unitKeys;
             _unitTags = unitTags;
             _buildings = buildings;
-            _buildingKeys = new string[buildings.Length];
-            for (int b = 0; b < buildings.Length; b++) _buildingKeys[b] = buildings[b].Key;
+            var buildingKeys = new string[buildings.Length];
+            for (int b = 0; b < buildings.Length; b++) buildingKeys[b] = buildings[b].Key;
+            _buildingKeys = new KeyIndex(buildingKeys);
             _files = new TechFileJson?[folders.Length + 1];
         }
 
@@ -74,17 +76,15 @@ public static partial class DataLoader
                 }
             }
 
-            _keys = new string[_accepted.Count];
-            for (int k = 0; k < _accepted.Count; k++)
-                _keys[k] = _files[_accepted[k].File]!.Techs![_accepted[k].Index]!.Id!;
-            Array.Sort(_keys, StringComparer.Ordinal);
+            // File 0 (the common file) first, then file f + 1 for faction f: FactionKeys' "faction" here is the file index.
+            _keys = new KeyIndex(FactionKeys(_files.Length, _accepted, (file, i) => _files[file]!.Techs![i]!.Id!));
 
             _defs = new TechDef[_keys.Length];
             foreach ((int file, int i) in _accepted)
             {
                 _c.CurrentFile = FileOf(file);
                 TechJson t = _files[file]!.Techs![i]!;
-                int id = Array.BinarySearch(_keys, t.Id!, StringComparer.Ordinal);
+                int id = _keys.IdOf(t.Id!);
                 _defs[id] = BuildTech(t, $"techs[{i}]", id, file - 1, refs);
             }
             return _defs;
@@ -171,7 +171,7 @@ public static partial class DataLoader
                 if (slot < 0)
                 {
                     if (!refs) continue; // the buildings files are broken; that is already reported
-                    int b = KeyId(_buildingKeys, id);
+                    int b = _buildingKeys.IdOf(id);
                     if (b < 0 || faction < 0 || _buildings[b].Faction != faction)
                     {
                         _c.Error(path, faction < 0
@@ -264,7 +264,7 @@ public static partial class DataLoader
 
         private (int Id, string? Error) UnitOf(string key, int faction)
         {
-            int i = KeyId(_unitKeys, key);
+            int i = _unitKeys.IdOf(key);
             if (i < 0) return (-1, $"unknown unit '{key}' (not in any units.json)");
             // A faction's upgrade changes its own units only.
             if (faction >= 0 && _units[i].Faction != faction)
@@ -308,7 +308,7 @@ public static partial class DataLoader
             foreach ((int file, int i) in _accepted)
             {
                 string key = _files[file]!.Techs![i]!.Id!;
-                if (KeyId(_buildingKeys, key) < 0) continue;
+                if (_buildingKeys.IdOf(key) < 0) continue;
                 _c.CurrentFile = FileOf(file);
                 _c.Error($"techs[{i}].id", $"tech id '{key}' is also a building id (a requires entry naming it would be ambiguous)");
             }
@@ -321,21 +321,21 @@ public static partial class DataLoader
             {
                 _c.CurrentFile = FileOf(file);
                 TechJson json = _files[file]!.Techs![i]!;
-                TechDef def = _defs[Array.BinarySearch(_keys, json.Id!, StringComparer.Ordinal)];
+                TechDef def = _defs[_keys.IdOf(json.Id!)];
                 (def.RequiresTechs, def.RequiresBuildings) = Resolve(json.Requires, $"techs[{i}].requires", def.Faction, edges[def.Id]);
             }
             foreach ((int f, int i) in buildings)
             {
                 _c.CurrentFile = $"factions/{_folders[f]}/buildings.json";
                 BuildingJson json = buildingFiles[f]!.Buildings![i]!;
-                BuildingDef def = _buildings[KeyId(_buildingKeys, json.Id!)];
+                BuildingDef def = _buildings[_buildingKeys.IdOf(json.Id!)];
                 (def.RequiresTechs, def.RequiresBuildings) = Resolve(json.Requires, $"buildings[{i}].requires", def.Faction, edges[techs + def.Id]);
             }
             foreach ((int f, int i) in units)
             {
                 _c.CurrentFile = $"factions/{_folders[f]}/units.json";
                 UnitJson json = unitFiles[f]!.Units![i]!;
-                UnitDef def = _units[KeyId(_unitKeys, json.Id!)];
+                UnitDef def = _units[_unitKeys.IdOf(json.Id!)];
                 (def.RequiresTechs, def.RequiresBuildings) = Resolve(json.Requires, $"units[{i}].requires", def.Faction, null);
             }
             FindCycles(edges);
@@ -363,8 +363,8 @@ public static partial class DataLoader
                 string? id = requires[j];
                 if (!Checker.IsId(id)) continue;
                 // An id that is both a tech and a building was reported at the tech's id; it reads as the tech here.
-                int t = Array.BinarySearch(_keys, id!, StringComparer.Ordinal);
-                int b = t >= 0 ? -1 : KeyId(_buildingKeys, id!);
+                int t = _keys.IdOf(id!);
+                int b = t >= 0 ? -1 : _buildingKeys.IdOf(id!);
                 if (t < 0 && b < 0)
                 {
                     _c.Error($"{path}[{j}]", $"unknown tech or building '{id}' (requires names a tech or building id)");
@@ -446,7 +446,7 @@ public static partial class DataLoader
             foreach ((int file, int i) in _accepted)
             {
                 TechJson json = _files[file]!.Techs![i]!;
-                TechDef td = _defs[Array.BinarySearch(_keys, json.Id!, StringComparer.Ordinal)];
+                TechDef td = _defs[_keys.IdOf(json.Id!)];
                 List<string>? factions = blocked[td.Id];
                 if (factions == null) continue;
                 _c.CurrentFile = FileOf(file);
@@ -480,14 +480,14 @@ public static partial class DataLoader
             foreach ((int bf, int i) in buildings)
             {
                 if (bf != f) continue;
-                BuildingDef bd = _buildings[KeyId(_buildingKeys, buildingFiles[bf]!.Buildings![i]!.Id!)];
+                BuildingDef bd = _buildings[_buildingKeys.IdOf(buildingFiles[bf]!.Buildings![i]!.Id!)];
                 if (buildingOk[bd.Id]) continue;
                 ids.Add(bd.Key);
                 if (path == null) (file, path) = ($"factions/{_folders[f]}/buildings.json", $"buildings[{i}].requires");
             }
             foreach ((int tf, int i) in _accepted)
             {
-                TechDef td = _defs[Array.BinarySearch(_keys, _files[tf]!.Techs![i]!.Id!, StringComparer.Ordinal)];
+                TechDef td = _defs[_keys.IdOf(_files[tf]!.Techs![i]!.Id!)];
                 if ((td.Faction >= 0 && td.Faction != f) || techOk[td.Id]) continue;
                 ids.Add(td.Key);
                 if (path == null) (file, path) = (FileOf(tf), $"techs[{i}].researchedAt");
@@ -495,7 +495,7 @@ public static partial class DataLoader
             foreach ((int uf, int i) in units)
             {
                 if (uf != f) continue;
-                UnitDef ud = _units[KeyId(_unitKeys, unitFiles[uf]!.Units![i]!.Id!)];
+                UnitDef ud = _units[_unitKeys.IdOf(unitFiles[uf]!.Units![i]!.Id!)];
                 bool ok = (uint)ud.TrainedAtTypeId < (uint)buildingOk.Length && buildingOk[ud.TrainedAtTypeId] && AllOk(ud.RequiresTechs, ud.RequiresBuildings, techOk, buildingOk);
                 if (ok) continue;
                 ids.Add(ud.Key);
@@ -574,7 +574,7 @@ public static partial class DataLoader
             for (int k = 0; k < ids.Length; k++)
             {
                 string key = DataLimits.AgeTechIds[k];
-                ids[k] = Array.BinarySearch(_keys, key, StringComparer.Ordinal);
+                ids[k] = _keys.IdOf(key);
                 if (ids[k] < 0 || _defs[ids[k]].Faction >= 0)
                     _c.Error("techs", $"no common tech '{key}' (every age after the first is researched through one)");
             }

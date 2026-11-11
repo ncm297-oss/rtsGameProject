@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S3 (latent: bites the day a faction's tech or ability id sorts among the shipped ones) |
-| Status | open |
+| Status | fixed (M7-3b, verified by QA 2026-11-10-2116 / resumed 2026-11-11-0739) |
 | Found | M7-3 (the developer), 2026-11-10 |
 | System | data loader (`DataLoader.TechReader`, `DataLoader.BuildAbilities`), `GameData.Techs` / `Abilities` ids |
-| Fixed by | |
+| Fixed by | db4b1d8 (M7-3b): `GameData.Techs` = the common file's techs first, then each faction's in `common/factions.json` order (ordinal within a file); `GameData.Abilities` faction by faction (`DataLoader.FactionKeys`). One golden header regen 3E33BCE5D418EC9B -> 3A04D4E370C643DA (no `k` line moved), reason in `GatherWedgeQaTests`. Proof: `FactionOrderTests.TheShippedIds_*` (the tech / ability tables as literals), the copy pins with `blood_oil_frenzy`, `FactionOrderQaTests.TheIdRule_HoldsUnderEveryOrder`, `TechAbilityIdRuleQaTests`; no outcome moved against de591f0 (`OutcomePinM73bQaTests` 20 / 20, the 42-match tally line for line 32 / 8 / 2) |
 
 ## Repro
 1. Shipped tech ids (one global ordinal table of `common/techs.json` + every faction's): `age_ii` 0, `armor_1` 1, `armor_2` 2,

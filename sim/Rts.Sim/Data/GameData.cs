@@ -37,13 +37,13 @@ public sealed class GameData
     public ImmutableArray<int> UnitsTrainedAt(int buildingTypeId) =>
         (uint)buildingTypeId < (uint)Trains.Length ? Trains[buildingTypeId] : ImmutableArray<int>.Empty;
 
-    /// <summary>Techs of <c>common/techs.json</c> and every faction's <c>techs.json</c>, indexed by tech id (ordinal order of their string ids across the files, not by faction: BUG-1171), M3-5. Empty for hand-built data.</summary>
+    /// <summary>Techs of <c>common/techs.json</c> and every faction's <c>techs.json</c>, indexed by tech id (M7-3b: the common file's first, then faction by faction in faction order, ordinal within each file), M3-5. Empty for hand-built data.</summary>
     public ImmutableArray<TechDef> Techs { get; init; } = ImmutableArray<TechDef>.Empty;
 
     /// <summary>Every status type (<c>common/statuses.json</c>, M4-4a), indexed by status id (ordinal order of the string ids).</summary>
     public ImmutableArray<StatusDef> Statuses { get; init; } = ImmutableArray<StatusDef>.Empty;
 
-    /// <summary>Every ability of every faction (<c>factions/&lt;id&gt;/abilities.json</c>, M4-4a), indexed by ability id (ordinal order of the string ids across factions, not by faction: BUG-1171).</summary>
+    /// <summary>Every ability of every faction (<c>factions/&lt;id&gt;/abilities.json</c>, M4-4a), indexed by ability id (M7-3b: faction by faction in faction order, ordinal within a faction).</summary>
     public ImmutableArray<AbilityDef> Abilities { get; init; } = ImmutableArray<AbilityDef>.Empty;
 
     /// <summary>

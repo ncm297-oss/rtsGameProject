@@ -19,7 +19,8 @@ namespace Rts.Game.Tests;
 /// the list's tooltip follows a pick.</item>
 /// <item>Forged data (a copy of <c>res://data</c> under <c>user://</c> with Hard's <c>gatherBonus</c> 0.4 for the first faction
 /// and 0.15 for the others): Hard reads "40" / "15" by the slot's faction, and a faction pick re-applies the tips.</item>
-/// <item><c>ui.json</c> checks: a Hard tip without <c>{0}</c> or with <c>{1}</c> is a load error naming the key.</item>
+/// <item><c>ui.json</c> checks: a Hard tip without <c>{0}</c>, an Easy or Hard tip without <c>{1}</c> (M7-VH1: the think
+/// interval), or any tip with <c>{2}</c> is a load error naming the key.</item>
 /// </list>
 /// Headless: <c>&amp; $env:GODOT --headless --path game res://tests/QaM5V2Test.tscn</c>; prints "QA M5-V2 TEST PASS" or
 /// "QA M5-V2 TEST FAIL: ..." lines. Windowed with <c>-- --shots &lt;dir&gt;</c> it saves the forged setup with Hard's popup tip.
@@ -124,7 +125,9 @@ public partial class QaM5V2Test : Node
         {
             string template = _ui.Setup(tips[d]);
             float bonus = data.Ai[faction].Difficulties[d].GatherBonus;
-            string want = TooltipWrap.Wrap(string.Format(CultureInfo.InvariantCulture, template, Expected(bonus)));
+            // M7-VH1 (BUG-1147): {1} is the think interval the AI keeps, in seconds.
+            double think = data.Ai[faction].Difficulties[d].ThinkTicks / (double)Rts.Sim.SimConstants.TicksPerSecond;
+            string want = TooltipWrap.Wrap(string.Format(CultureInfo.InvariantCulture, template, Expected(bonus), Math.Round(think, 2).ToString(CultureInfo.InvariantCulture)));
             string got = list!.GetItemTooltip(d);
             Check(template.Length > 0 && got == want, $"{what} slot {slot} faction {faction} item {d}: tooltip '{got}', want '{want}'");
         }
@@ -170,7 +173,7 @@ public partial class QaM5V2Test : Node
         return forged;
     }
 
-    // The new keys' load rules: Hard must name {0}, no tip may name {1}; the shipped file loads.
+    // The keys' load rules: Hard must name {0}; Easy and Hard must name {1} (M7-VH1), Normal may; none {2}; the shipped file loads.
     private void UiChecks()
     {
         string path = ProjectSettings.GlobalizePath("res://data/common/ui.json");
@@ -179,12 +182,18 @@ public partial class QaM5V2Test : Node
         Check(UiText.Parse(json, errors) != null && errors.Count == 0, $"the shipped ui.json: {string.Join("; ", errors)}");
         foreach ((string key, string text, bool loads) in new[]
         {
-            ("difficulty_hard_tip", "Gathers more.", false),
-            ("difficulty_hard_tip", "Gathers {0}% and {1}.", false),
-            ("difficulty_hard_tip", "Gathers {0:0}%.", true),
-            ("difficulty_easy_tip", "Slow {1}.", false),
-            ("difficulty_easy_tip", "Gathers {0}% more.", true),
+            ("difficulty_hard_tip", "Gathers more every {1} s.", false),
+            ("difficulty_hard_tip", "Gathers {0}% and {2}.", false),
+            ("difficulty_hard_tip", "Gathers {0}% faster.", false),
+            ("difficulty_hard_tip", "Gathers {0:0}% every {1} s.", true),
+            ("difficulty_hard_tip", "Gathers {0}% and {1}.", true),
+            ("difficulty_easy_tip", "Slow {1}.", true),
+            ("difficulty_easy_tip", "Gathers {0}% more.", false),
+            ("difficulty_easy_tip", "Gathers {0}% more every {1} s.", true),
             ("difficulty_normal_tip", "Broken {0.", false),
+            ("difficulty_normal_tip", "Relaxed.", true),
+            ("difficulty_normal_tip", "Every {1} s.", true),
+            ("difficulty_normal_tip", "Every {2} s.", false),
         })
         {
             JsonNode forged = JsonNode.Parse(json)!;

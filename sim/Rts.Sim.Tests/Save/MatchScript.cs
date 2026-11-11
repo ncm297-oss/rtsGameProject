@@ -149,8 +149,10 @@ internal sealed class MatchScript
     }
 
     /// <summary>
-    /// With <paramref name="research"/> the player's first tech it may research (buildings in slot order) is queued first;
-    /// then every other finished building trains its first unit it may while its queue is short.
+    /// With <paramref name="research"/> the player's first tech it may research (buildings in slot order, a building's techs
+    /// in ordinal key order) is queued first; then every other finished building trains its first unit it may while its
+    /// queue is short. M7-3b: key order, not id order, so the script's choice doesn't follow the tech id numbering (it is
+    /// the id order before M7-3b, when tech ids were one ordinal table).
     /// </summary>
     private void Produce(World w, int p, List<Command> output, bool research)
     {
@@ -159,7 +161,7 @@ internal sealed class MatchScript
         for (int k = 0; k < b.Capacity && researchedAt < 0 && research; k++)
         {
             if (!b.Alive[k] || b.Owner[k] != p || b.UnderConstruction[k]) continue;
-            foreach (int tech in w.Data.TechsResearchableAt(b.TypeId[k]))
+            foreach (int tech in w.Data.TechsResearchableAt(b.TypeId[k]).OrderBy(t => w.Data.Techs[t].Key, StringComparer.Ordinal))
                 if (w.CanResearch(p, k, tech, out _))
                 {
                     output.Add(Command.Research(p, StartBase.FootprintCenter(w.NavGrid, w.Data.Buildings[b.TypeId[k]], b.Cell[k]), tech));

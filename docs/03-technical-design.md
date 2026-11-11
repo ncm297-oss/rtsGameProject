@@ -3008,22 +3008,38 @@ state hash, digest or golden `k` line; and the two pack bugs its war-dog row and
   `GameData.Factions` is in the list's order, and the **unit type** and **building type** id tables go faction by faction in
   that order, each faction's keys ordinal-sorted within it (`DataLoader.FactionKeys`). For the shipped two this is
   bit-identical to the old ids (every `malazan_*` key sorts before every `whirlwind_*` one): `Data/FactionOrderTests` pins
-  every unit, building, tech and ability id as generated on 0416dcc. A new faction appends its id; listed anywhere else it
+  every unit and building id as generated on 0416dcc. A new faction appends its id; listed anywhere else it
   renumbers the factions after it (the order is the rule, not the folder name). Why one list in one file and not an `order`
   integer in each `faction.json`: one decision in one place, and a gap or a tie can't happen.
-- **Not under the order: techs and abilities** (BUG-1171). Common and faction techs share one id table, and the factions'
-  abilities another, both still sorted globally by key (`age_ii`, `armor_1`, `armor_2`, `dryjhnas_prophecy` (Whirlwind),
-  ..., `moranth_supply` (Malazan), ...; `cusser`, `sandstorm`, `telas_fire`). No faction-grouped rule reproduces those ids,
-  so splitting them would move every hash once (a golden regen this task does not make). Until then a new faction's tech and
-  ability ids must sort after every shipped one, or the shipped digests move: a `teblor_` tech sorts after every shipped
-  tech, but a `teblor_` ability sorts **before** `telas_fire` and would renumber it. Statuses, resources and projectiles are
-  common and keep the global rule.
+- **Techs and abilities under the order too** (M7-3b, BUG-1171). Until M7-3b common and faction techs shared one id table
+  sorted globally by key, and the factions' abilities another, so a Teblor `blood_oil_frenzy` (it sorts before `cusser`) or
+  M9's `andii_*` techs (before `armor_1`) would renumber shipped ids. Now `GameData.Techs` is `common/techs.json`'s techs
+  first (ordinal within), then each faction's `techs.json` in the order (ordinal within); `GameData.Abilities` goes faction
+  by faction in the order (ordinal within). Both reuse `FactionKeys` (for techs the common file is group 0 and faction `f`
+  group `f + 1`). The common techs come first so their ids never move whatever a faction is called or where it is listed.
+  Shipped ids since M7-3b: `age_ii` 0, `armor_1` 1, `armor_2` 2, `melee_weapons_1` 3, `melee_weapons_2` 4,
+  `ranged_weapons_1` 5, `ranged_weapons_2` 6, `moranth_supply` (Malazan) 7, `dryjhnas_prophecy` (Whirlwind) 8; `cusser` 0,
+  `telas_fire` 1 (Malazan), `sandstorm` 2 (Whirlwind) (pinned as literals in `Data/FactionOrderTests`). No faction-grouped
+  rule reproduces the old ids, so this moved `ContentHash` and every state hash holding a tech or ability id once, with one
+  golden regeneration and a pin sweep in the same commit (see "Testing strategy"); no outcome moved (no system decides by
+  iterating tech or ability ids in an order that matters). Statuses, resources, projectiles and damage classes are common
+  only and keep the global ordinal rule. Nothing visible moves: `ProductionMenu` already listed a building's common techs
+  before the faction's own.
+- **The lookup index** (M7-3b, BUG-1172). Since the id tables are ordinal only within a group, a binary search on one is
+  wrong, and M7-3's `Array.IndexOf` walk made a load quadratic in its rows (10,000 units: 1.3-1.5 s, from 0.56 s). Each
+  unit, building, tech and ability table is now a `DataLoader.KeyIndex`: the table in id order plus, built once at load,
+  the same keys sorted ordinally with their ids; a lookup binary-searches the sorted copy. The sorted copy is only searched,
+  never iterated, so no order can leak from it into an id or a hash. Load time only (`GameData.Find*` stay walks: setup
+  and test calls on tens of entries). `QA/DataLoaderQaTests.TenThousandUnitFile_LoadsUnderTwoSeconds`: 442-714 ms against
+  1,212-1,630 ms on de591f0, measured interleaved on the same machine (bound unchanged, 2 s).
 - **What is hashed.** The order file is not: `GameData.ContentHash` already hashes every key in id order, so a reordering
-  changes it through the keys. The shipped data's hash, and so the golden replay's header (`3E33BCE5D418EC9B`), did not move;
-  no golden was regenerated. Lookups by key (`GameData.FindUnit` and the rest) walk the table instead of a binary search,
-  since a table is ordinal only within a faction (setup and test calls; the sim's hot paths use ids).
+  changes it through the keys. In M7-3 the shipped data's hash, and so the golden replay's header (`3E33BCE5D418EC9B`), did
+  not move; no golden was regenerated (M7-3b's tech / ability renumbering did move it, once). Lookups by key
+  (`GameData.FindUnit` and the rest) walk the table instead of a binary search, since a table is ordinal only within a
+  faction (setup and test calls; the sim's hot paths use ids).
 - **The proof on a copy** (`Data/FactionOrderTests`): the shipped data plus a third faction `teblor` (a copy of Malazan's
-  files, ids renamed `teblor_*`, no abilities) appended to the order keeps every shipped id; a 3,000-tick Malazan v Whirlwind
+  files, ids renamed `teblor_*`; since M7-3b with its abilities too, named naturally `blood_oil_frenzy` and `teblor_cusser`,
+  and its tech `teblor_blood_oil_anointing`) appended to the order keeps every shipped id; a 3,000-tick Malazan v Whirlwind
   AI match hashes the same on every tick as on the shipped data; two `StandardPresetPinQaTests` AI rows and two
   `NonHardMatchPinQaTests` rows give their pinned digests on the copy (Stress); the copy's `ContentHash` differs (new keys).
   With `teblor` first every shipped type is renumbered and the match's hashes move. Why a whole copy and not a minimal folder:
@@ -3099,15 +3115,12 @@ pack or scaled, so the game draws exactly as before).
   (`Tracker.Launch` to the drawn point over `Tracker.Length`); a hit flash sits at its victim's height (a building victim:
   1.2 m). With both ends at scale 1 the shot flies level at exactly 1.2 m, so shipped visuals are pixel-identical. The
   alternative (a share of `DrawnHeight`) would have moved the catapult's launch point today; lobs are unchanged (they ride
-  the ground). **How the view knows the ends** without a ViewApi change (the store's shooter type is internal): the tick a
-  shot is first seen, its shooter is the live unit of the shot's owner nearest its launch point and within its own radius of
-  it (`World.Spatial.QueryRadius`, 2 m, into a fixed buffer; a unit fires from where it stands), and its victim that unit's
-  `Target` (a building: 1.2 m); a shot with no such shooter (a tower fires from its footprint's centre) takes the unit
-  nearest its aim point not its owner's. Both heights are kept per projectile slot; a landing's flash takes the victim height
-  of the slot that died this tick whose last aim point is the landing (an aimed shot isn't steered on its landing tick, so
-  they are equal), else the unit nearest the landing. Anything not found is scale 1. Every array is made at `Bind`: no
-  per-frame allocation. **Known limit:** a shot whose shooter moved more than its radius between firing and the view's first
-  look (a test or a frame that skips ticks) draws from 1.2 m.
+  the ground). **How the view knows the ends:** since M7-VH1 the read-only `ViewApi.ShotEnds` accessor gives the shot's
+  attacker type and victim exactly (see "Implementation (M7-VH1)"); M7-V2's inference from the nearest own unit at the
+  launch point (wrong for a shooter killed on its firing tick, BUG-1179) and its spatial query are gone. Both heights are
+  kept per projectile slot; a landing's flash takes the victim height of the slot that died this tick whose last aim point
+  is the landing (an aimed shot isn't steered on its landing tick, so they are equal). Every array is made at `Bind`: no
+  per-frame allocation.
 - **BUG-1178** (test only): `QaM6V18Test` expects format 10's empty map id string (`int32` 0) between the preset and `HMAP`
   for a generated-map save, and its rows naming save formats 4-6 read format 10 (every save is format 10 since M7-1).
 - **Tests:** `game/tests/QueuePackTest` (a forged copy with Heavy Infantry `spawnCount` 3 and mixed scales: every type's
@@ -3117,6 +3130,64 @@ pack or scaled, so the game draws exactly as before).
   0.6 m and 3.6 m and scaled flashes), `ScaleViewTest`'s shot-height row (a 0.5 Crossbowman and a 3.0 Desert Archer shoot
   each other: launches at 0.6 / 3.6 m, flashes at 3.6 / 0.6 m, every draw between its ends), `QaM6V18Test`,
   `ProjectileViewTest` (shipped data: every aimed shot at 1.2 m, 0 bytes over 300 brawl frames).
+
+### Implementation (M7-VH1)
+
+The view's hardening: an exact projectile accessor, the tooltip wrap's blank lines, the difficulty tips' think interval.
+One new file in `sim/Rts.Sim/ViewApi/` (reads only); no other sim file; in `game/data` only the two tip strings in `ui.json`.
+
+```
+sim/Rts.Sim/ViewApi/ShotEnds.cs      Of(store, slot): a live slot's attacker type / handle, victim handle, building flags;
+                                     ShooterUnitType, VictimUnitType(unit spans)  (BUG-1179)
+game/scripts/ProjectileViews.cs      the shot heights from ShotEnds; Nearest, FindRadius and the spatial query removed
+game/scripts/TooltipWrap.cs          per data line, the spaces beside every break consumed (BUG-1126)
+game/scripts/UiText.cs               DifficultyTip(difficulty, gatherBonus, thinkSeconds), Seconds, the tips' {1} load rule
+game/scripts/SkirmishSetup.cs        ThinkSeconds(data, faction, difficulty)  (BUG-1147 item 1)
+game/data/common/ui.json             setup.difficulty_easy_tip / _hard_tip: "every {1} seconds"
+```
+
+- **`ShotEnds` (BUG-1179).** `ProjectileStore`'s attacker type, attacker, victim and their building flags are `internal`
+  arrays; `ShotEnds.Of(store, slot)` (in the sim assembly, so it can read them) copies one live slot's into a readonly
+  struct, `Live` false for a free or out-of-range slot. It has no setter and calls nothing that writes: drawing changes no
+  state hash (`QaM7V2Test`'s twin replay and per-tick hash rows, `ShotEndsTests`). `ShooterUnitType` is the attacker
+  type, -1 for a tower. `VictimUnitType(alive, generation, typeId)` (the unit store's spans: QA's ViewApi source guard
+  forbids naming `UnitStore` there) is the victim's type while it lives, or while it is a corpse: a freed unit slot keeps
+  its `TypeId` until `TryAlloc` reuses it, and its generation is then exactly one past the handle's. Units
+  spawn in phases 3-5 and die from phase 6 on, and a shot is fired in phase 10 at a live unit, so a view that reads every
+  tick always finds its victim alive or as that corpse; a victim whose slot already holds another unit (only a view that
+  skipped ticks) is -1, drawn at 1.2 m.
+- **The view's ends.** The tick `ProjectileViews` first sees a shot (a slot it didn't know, or whose launch, owner, type,
+  attacker or victim changed: a skipping observer's reused slot), the launch height is `HeightFor` of the shooter type's
+  `scale` (a tower: 1.2 m) and the strike height of the victim type's (a building or unknowable victim: 1.2 m). Exact even
+  when the shooter died the tick it fired: `QaM7V2Test`'s brawl, 1,411 aimed shots (4 by such a shooter, 9 at a victim
+  killed that tick), 0 wrong at either end (M7-V2's inference: 3 and 8). M7-V2's known limit (a shooter that moved off its
+  launch point before the first look) is gone with the inference. A landing no known slot matches (a view that skipped the
+  whole flight) flashes at 1.2 m, no longer at the unit nearest it. The view no longer queries `World.Spatial`, so it no
+  longer writes the sim's query buffer.
+- **The wrap (BUG-1126, the Producer's ruling).** `TooltipWrap.Wrap` wraps each data line on its own, greedily: a word
+  joins the line if the spaces before it and it fit in the width, else a break replaces those spaces. At every line break,
+  the data's or the wrap's, the spaces beside it are consumed, so a space before a data break (`e60 + " \n"`), after one
+  (`"\n " + w61`) or a double space at a break (`e60 + "  " + w61`) never leaves a blank line, and a line passes the width
+  only as one word longer than it. The text's own edge spaces with no break beside them are kept (BUG-1115); a double space
+  inside a line stays. The output is no longer always the text's length, so "the added breaks turned back into spaces give
+  the data" now holds for single-spaced text only (every shipped description). `game/tests/TooltipWrapRule.Fault` is the
+  rule as a checker (words and data breaks in order, a space run kept whole or consumed whole beside a break, no edge space
+  beside a break, no blank line made, a line over the width a single word, greedy), shared by `QaVh5Test`'s and
+  `QaVh6Test`'s fuzz: 0 faults of 20,000 each (the old wrap: 5,411 and 15,533).
+- **The tips' interval (BUG-1147 item 1).** `{1}` in a difficulty tip is that difficulty's think interval in the slot's
+  faction's `ai.json`, in seconds, `0.##` (`UiText.Seconds`). It is the interval the AI keeps, `ThinkTicks / 20`: the
+  loader rounds `thinkInterval` to whole ticks, so 0.333 s reads "0.35". Shipped text: "Thinks every 2 seconds, ..." (as
+  before) and "thinks every 0.5 seconds, ..." (was "every half second"). The load rule: every tip formats with two numbers
+  (`{2}` is an error); Hard's must name `{0}`; Easy's and Hard's must name `{1}` (changing the interval changes the text);
+  Normal's may name either (it states neither today). An interval of exactly 1 s would read "1 seconds"; only Normal's is
+  1 s today, and its tip doesn't say it.
+- **The old S4s** (BUG-0860, 0830, 0890, 0861): already fixed and verified in M6-VH3; nothing left to do.
+- **Tests:** `sim/Rts.Sim.Tests/ViewApi/ShotEndsTests` (a free slot, a unit's shot, a shooter freed and its slot reused, a
+  victim's corpse then its reused slot, a tower's shot and a building victim, reading every slot of a 12 v 12 crossbow
+  fight every tick: no hash change against a twin, 0 bytes, every shot with both ends); `QaM7V2Test`'s exactness row (was
+  the inference row); `QaVh5Test` / `QaVh6Test` under the ruling (QaVh6's blank-line count a check at 0, edge rows for the
+  three shapes); `DifficultyTipTest` (the shipped tips; a data copy with Easy / Normal / Hard 7 / 2 / 0.333 and 3 / 1 /
+  1.5: "7", "0.35", "3", "1.5" by faction); `QaM5V2Test`'s load-rule rows for `{1}`, `QaM5V2bTest` with the interval.
 
 ## Vision, detection, fog
 
@@ -3437,11 +3508,11 @@ consumes it.
 | `common/factions.json` | M7-3: `{ "order": ["malazan", "whirlwind"] }`, the faction order: faction id = index in `order`, and unit and building type ids go faction by faction in this order (ordinal within a faction). Every folder under `factions/` must be listed and every entry must have a folder; a repeat, an entry that isn't a snake_case id (or a string) and more than 8 entries (`DataLimits.MaxFactions`) are errors, one each at `order[i]` (a folder not listed: at `order`, naming the folder). Append-only: a new faction adds its id at the end. Not hashed (the keys in id order are). See "Implementation (M7-3)" |
 | `faction.json` | `id` (must equal the folder name), `displayName`, `description`, `bonus {displayName, description}`, `resources {gold, wood: {displayName}}`, `palette {primary, secondary, accent}` as `#RRGGBB`; `regen` (M7-1, optional: absent = no regeneration) `{hpPerSecond, delay}`, both required when the object is there: `hpPerSecond` above 0 and at most 100 (`DataLimits.MaxRegenPerSecond`) and at least 0.05 (one fixed-point unit a tick), to `FactionDef.RegenPerTick` (`round(hpPerSecond x 400 / 20)`: 1 → 20); `delay` seconds, 0 or more, at most 3600, to `FactionDef.RegenDelayTicks` (6 → 120); an unknown key is an error. No shipped faction has one yet (Teblor, Andii: M7 / M9). See "Implementation (M7-1)" |
 | `buildings.json` | `{ "buildings": [ ... ] }`, each `{id, displayName, description, slot, footprint {width, height}, hp, armor, cost {gold, wood}, buildTime, popProvided, dropOff}`: `slot` is one of the ten template slots (`DataLimits.BuildingSlotIds`), footprint sides 1-4 cells, `buildTime` in seconds (to ticks), `popProvided` a multiple of 0.5 (to half-pop), `dropOff` a required bool, `requires` an optional list of tech / building ids (M3-5; resolved and gating placement since M3-6), `sight` optional meters (M4-3a: above 0 and at most 64, default `rules.json` `buildingSight`; shipped 24 on both watch towers, docs/02), `attack` optional (M4-3b: the unit `attack` object; value at least 1, range above 0, an aimed `projectile` required, `targets` not `buildings`; shipped on both watch towers), `detector` optional meters (M4-3b: above 0 and at most 64; shipped 16 on both watch towers; unused until M4-5). Ids unique across factions (M3-2, see "Economy implementation"); exactly one building per slot per faction (M3-6, BUG-0010) |
-| `techs.json` | `{ "techs": [ ... ] }` in `common/` (shared by every faction) and in each faction folder (its own), each `{id, displayName, description, researchedAt, cost {gold, wood}, researchTime, requires?, requiresAnyOf?, effects: [{stat, amount, appliesTo {attackType?, tags?, units?, siege?}}]}`: `researchedAt` is a building slot id (a common tech resolves to each faction's building of it; a faction without one is an error), `researchTime` in seconds (to ticks), `requires` tech / building ids (resolved and gating research since M3-6), `requiresAnyOf` `{count, of: [slot ids, or in a faction file its own building ids]}`: met when `count` of the distinct listed slots hold an own finished building (M3-6; shipped on `age_ii` only), `effects` may be empty. `stat` is one of `attack`, `armor`, `range`, `hp`, `abilityCooldown` (`DataLimits.TechStatIds`); `amount` is non-zero, whole for attack / armor / hp, meters for range, seconds for ability cooldown (to ticks, negative shortens it). `appliesTo` is required (`{}` = every unit); each filter it sets must match: `attackType` a damage type, `tags` any one of the unit's tags (each must be a tag some unit has), `units` unit ids (a faction tech's must be its own), `siege` true / false for the `siege` slot; a `tags` or `units` list set to `[]` is an error (M3-6, BUG-0098). Tech ids are unique across all techs files and may not equal a building id (M3-6); `DataLimits.AgeTechIds` (`age_ii`) must be a common tech (M3-5, see "Implementation (M3-5)") |
+| `techs.json` | `{ "techs": [ ... ] }` in `common/` (shared by every faction) and in each faction folder (its own), each `{id, displayName, description, researchedAt, cost {gold, wood}, researchTime, requires?, requiresAnyOf?, effects: [{stat, amount, appliesTo {attackType?, tags?, units?, siege?}}]}`: `researchedAt` is a building slot id (a common tech resolves to each faction's building of it; a faction without one is an error), `researchTime` in seconds (to ticks), `requires` tech / building ids (resolved and gating research since M3-6), `requiresAnyOf` `{count, of: [slot ids, or in a faction file its own building ids]}`: met when `count` of the distinct listed slots hold an own finished building (M3-6; shipped on `age_ii` only), `effects` may be empty. `stat` is one of `attack`, `armor`, `range`, `hp`, `abilityCooldown` (`DataLimits.TechStatIds`); `amount` is non-zero, whole for attack / armor / hp, meters for range, seconds for ability cooldown (to ticks, negative shortens it). `appliesTo` is required (`{}` = every unit); each filter it sets must match: `attackType` a damage type, `tags` any one of the unit's tags (each must be a tag some unit has), `units` unit ids (a faction tech's must be its own), `siege` true / false for the `siege` slot; a `tags` or `units` list set to `[]` is an error (M3-6, BUG-0098). Tech ids are unique across all techs files and may not equal a building id (M3-6); they number the common file's techs first, then each faction's in `common/factions.json` order, ordinal within each file (M7-3b), so a new faction's techs move no shipped id; `DataLimits.AgeTechIds` (`age_ii`) must be a common tech (M3-5, see "Implementation (M3-5)") |
 | `projectiles.json` | `{ "projectiles": [ ... ] }`, each `{id, kind, speed, hitTolerance?, leadSpeed?}`: `kind` `aimed` or `lob`, `speed` m/s (at least 1), `hitTolerance` m (aimed only, 0-2, default 0.3; an error on a lob), `leadSpeed` m/s (aimed only, not negative, default 0 = never leads; an error on a lob). Ids unique; every unit's `attack.projectile` must name one (M4-2b, see "Implementation (M4-2b)") |
 | `units.json` | `{ "units": [ ... ] }`, entries as in the example. `attack` also takes optional `minRange`, `splash` (m), and `friendlyFire` (docs/02 "Combat / Stats"); they default to 0 / false. Melee range is written as `0.5` (edge to edge). `abilities` (M4-4a, optional): ability ids of the unit's own faction, at most 4 (`DataLimits.MaxUnitAbilities`), no repeats; resolved to `UnitDef.Abilities`; shipped on the Cadre Mage (`telas_fire`), the Sapper (`cusser`) and the Priest of the Whirlwind (`sandstorm`). `passives` (M4-4b-3a, optional): at most 2 (`DataLimits.MaxUnitPassives`), one per `trigger` (`DataLimits.PassiveTriggerIds`): `{trigger: whenBelowHp, hpFraction, status, magnitude}` or `{trigger: onDeath, status, magnitude, duration, radius, units}` (see "Implementation (M4-4b-3a)"); resolved to `UnitDef.Passives`; shipped on the Zealot only. `detector` (M4-5, optional): meters, above 0, at most 64 (`UnitDef.Detector`; see "Implementation (M4-5)"). `scale` (M7-1, optional, default 1): the view's model size, 0.5-3.0 (`DataLimits.MinUnitScale` / `MaxUnitScale`), to `UnitDef.Scale`; presentation only, collision stays `radius` (docs/02 "Combat / Stats"); no shipped unit sets it yet. `spawnCount` (M7-2, optional, default 1): units one queue item spawns, a whole number 1-8 (`DataLimits.MaxSpawnCount`), to `UnitDef.SpawnCount`; `cost` and `trainTime` are the item's, `pop` each unit's (see "Implementation (M7-2)"); no shipped unit sets it yet. `passives` also takes (M7-2) `{trigger: onHit, status, magnitude, duration}`, so at most 3, still one per trigger |
 | `statuses.json` | `{ "statuses": [ ... ] }` (M4-4a), each `{id, displayName, description, kind, damageType?, sight?, reach?}`: `kind` `damageOverTime`, `slow`, (M4-4b-2) `blind`, (M4-4b-3a) `frenzied`, (M4-5) `stealthed` / `revealed` (at most one `revealed`), or (M7-1) `regenerating` (`DataLimits.StatusKindIds`; its magnitude is HP per second, above 0, at most 100 and at least 0.05); `damageType` (a damage table type) required on `damageOverTime`, an error on any other kind; `sight` and `reach` (m, above 0, at most 64) required on `blind`, errors on any other kind. The magnitude and duration come from the effect applying it (a blind, stealthed or revealed status takes no magnitude). Ids unique; shipped `burning` (magic damage over time), `slowed`, `blinded` (2 / 3, M4-4b-2) and `frenzied` (M4-4b-3a; its magnitude, the attack-speed increase, any fraction above 0, is the applying effect's or passive's), `stealthed` and `revealed` (M4-5, "Implementation (M4-5)"), `regenerating` (M7-1: nothing applies it in shipped data yet; the hook M9's Darkness zone and later abilities use) |
-| `abilities.json` | `{ "abilities": [ ... ] }` (M4-4a, per faction, optional), each `{id, displayName, description, kind, range, radius, castTime, cooldown, duration?, affects, autocast?, effects}`: `kind` `targetGround` or (M4-4b-3a) `selfAura` (`targetUnit`, `summon`: "not supported yet"); `range` m above 0 and at most `DataLimits.MaxSight` (64), required on `targetGround` and an error on `selfAura` (0 included); `radius` m above 0 and at most `DataLimits.MaxAbilityRadius` (16); `castTime` s, 0 or more, to ticks; `cooldown` s above 0, to ticks (at least 1); `duration` s, optional (0), to ticks (required with a `createZone` effect, M4-4b-2); `affects` `enemy_units`, `own_units` or `all_units`; `autocast` only `false` ("not supported yet"); `effects` at least one, each `{kind: damage, type, amount, buildings?, friendlyFire?}` (a whole amount, at least 1; M4-4b-1: `buildings` true also hits other players' buildings as structure, not with `own_units`; `friendlyFire` 0-1, the fraction own units take, above 0 only with `enemy_units`) or `{kind: applyStatus, status, magnitude, duration}` (a `statuses.json` id; magnitude whole and at least 1 for damage over time, above 0 and below 1 for a slow; duration s, at least a tick, and for damage over time a whole number of seconds, at least 1, M4-4b-1); M4-4b-2: `{kind: createZone, blocksVision?, statuses: [{status, magnitude, duration}]}` (at least one status, each by the `applyStatus` rules, a blind status without a magnitude; the ability's `duration`, at least a tick, is then required: the zone's lifetime; at most one per ability); `teleport`, `spawn`: "not supported yet"; a field the effect kind doesn't use is an error. Ids unique across factions. Shipped: Malazan `telas_fire`, `cusser` (M4-4b-1); Whirlwind `sandstorm` (M4-4b-2) |
+| `abilities.json` | `{ "abilities": [ ... ] }` (M4-4a, per faction, optional), each `{id, displayName, description, kind, range, radius, castTime, cooldown, duration?, affects, autocast?, effects}`: `kind` `targetGround` or (M4-4b-3a) `selfAura` (`targetUnit`, `summon`: "not supported yet"); `range` m above 0 and at most `DataLimits.MaxSight` (64), required on `targetGround` and an error on `selfAura` (0 included); `radius` m above 0 and at most `DataLimits.MaxAbilityRadius` (16); `castTime` s, 0 or more, to ticks; `cooldown` s above 0, to ticks (at least 1); `duration` s, optional (0), to ticks (required with a `createZone` effect, M4-4b-2); `affects` `enemy_units`, `own_units` or `all_units`; `autocast` only `false` ("not supported yet"); `effects` at least one, each `{kind: damage, type, amount, buildings?, friendlyFire?}` (a whole amount, at least 1; M4-4b-1: `buildings` true also hits other players' buildings as structure, not with `own_units`; `friendlyFire` 0-1, the fraction own units take, above 0 only with `enemy_units`) or `{kind: applyStatus, status, magnitude, duration}` (a `statuses.json` id; magnitude whole and at least 1 for damage over time, above 0 and below 1 for a slow; duration s, at least a tick, and for damage over time a whole number of seconds, at least 1, M4-4b-1); M4-4b-2: `{kind: createZone, blocksVision?, statuses: [{status, magnitude, duration}]}` (at least one status, each by the `applyStatus` rules, a blind status without a magnitude; the ability's `duration`, at least a tick, is then required: the zone's lifetime; at most one per ability); `teleport`, `spawn`: "not supported yet"; a field the effect kind doesn't use is an error. Ids unique across factions, numbered faction by faction in `common/factions.json` order, ordinal within a faction (M7-3b), so a new faction's abilities move no shipped id. Shipped: Malazan `telas_fire`, `cusser` (M4-4b-1); Whirlwind `sandstorm` (M4-4b-2) |
 | `maps/<file>.json` | (M6-S7, optional folder, one file a hand-made map, loaded in the files' names' ordinal order into `GameData.Maps`) `{id, displayName, description, players, size, terrain, ramps?, starts, mines, forests}`: see "Implementation (M6-S7)" for every field and check |
 | `ai.json` | (M5-1, per faction, required) `{difficulties {easy, normal, hard}, buildOrder, compositions, attack, retreat}`: the shape and every refusal in "AI architecture", "For the data track (M5-1)". Not in `ContentHash` yet (M5-2 adds it) |
 
@@ -7185,7 +7256,8 @@ game/tests/QaM6V18Test.cs       the "other size" forgery: a side the first map f
   splits. 57 shipped descriptions wrap to at most 4 lines (Raraku: 4). The tests that compared a tooltip to a
   `description` compare to `TooltipWrap.Wrap(description)`. Since M6-VH6 (BUG-1115) spaces at the start or end of the
   text are left out of the wrap (never a break, not counted toward the 60), so an edge space leaves no empty first or last
-  line; the text is still unchanged.
+  line. Since M7-VH1 (BUG-1126) the spaces beside every line break are consumed, so the output is shorter than a text with
+  a double space at a break or a space beside a data break (see "Implementation (M7-VH1)").
 - **BUG-1093 (made robust; the cause not reproduced).** The error was GodotSharp's "Handle is not initialized" inside
   `GD.Load<PackedScene>("res://scenes/Match.tscn")` at a match start right after a match was freed. That load is the only
   managed reference to a cached `RefCounted`; its throwaway wrapper is left to the GC, and the next load swaps the native
@@ -7272,10 +7344,12 @@ game/tests/ShellTest.cs             the shell key count (setup 34)
   starting-resources list's. The tips are set at build and again when the slot's faction list is picked from, since each
   faction's `ai.json` carries its own bonus. Hand-built data with no `Ai` reads 0. Only Hard's text names `{0}` today.
 - **The load rule.** `setup.difficulty_hard_tip` must be a format naming `{0}` (two numbers give two texts) with no other
-  placeholder; the Easy and Normal tips may name `{0}` and nothing else. Otherwise one error naming the key.
-- **The tips' other words are text, not data.** "Every 2 seconds" and "every half second" are typed in `ui.json` from
-  docs/02, not read from `thinkInterval`; only the gather bonus is formatted in (the brief's scope).
-- **BUG-1126 left open.** Fixing it in `TooltipWrap.Wrap` (break only between two words) leaves some lines over the width
+  placeholder; the Easy and Normal tips may name `{0}` and nothing else. Otherwise one error naming the key. (Since M7-VH1
+  `{1}` too: see "Implementation (M7-VH1)".)
+- **The tips' other words are text, not data.** "Every 2 seconds" and "every half second" were typed in `ui.json` from
+  docs/02, not read from `thinkInterval`; only the gather bonus was formatted in (the brief's scope). Since M7-VH1
+  (BUG-1147 item 1) the interval is `{1}`, from the data.
+- **BUG-1126 left open** (fixed in M7-VH1 under the Producer's ruling). Fixing it in `TooltipWrap.Wrap` (break only between two words) leaves some lines over the width
   with a space in them (a trailing or leading space beside a long word), which `QaVh5Test`'s wrap fuzz fails. For
   `e60 + "  " + w61` every output breaks one rule or the other, so the fix needs a ruling on which rule wins (or the data
   checker rejecting double and edge spaces), not a few lines.
@@ -10256,7 +10330,7 @@ version 2) stores the AI seats too, so every match saves. Code in `sim/Rts.Sim/S
 - **Refusals** (`SaveError`, frozen; checked in this order, `TryLoad` false and the sim null): `BadMagic` (the bytes there are
   don't start the magic: a 1-byte stream of another byte too); `Truncated` (shorter than the fixed prefix or the
   declared length; an empty stream); `FormatVersionMismatch`; `Malformed` for a declared length out of range or bytes past
-  it; `ChecksumMismatch`; `DataMismatch` (another `ContentHash`, so any data edit refuses a save, as a replay);
+  it; `ChecksumMismatch`; `DataMismatch` (another `ContentHash`, so any data edit refuses a save, as a replay; M7-3b's tech / ability renumbering moved it, so every earlier save and recording is refused this way, whose ids index the old tables: `Save/PreM73bRefusalTests`);
   `InvalidHeader` (a player count outside 1-16, a capacity outside its range, a faction id the data lacks, an unknown
   controller or difficulty, a team outside 0-8 (M6-S4), a starting-resources preset the data lacks, an empty id included (M6-S6),
   a map parameter or config value `SimConfig.Validate` refuses (M6-S7: a map id the data lacks, or one the header's players,
@@ -10951,7 +11025,12 @@ quarter points: two neighbouring starts must stand half the side apart).
   made with other data: `ReplayGoldenTests.TheGoldenAsRecorded_IsRefusedForItsDataHash_WhenTheShippedHashHasMoved` (played
   as recorded, `ReplayError.DataMismatch` before tick 1) and `TheGoldenWithAForeignDataHash_IsRefused`. M6-SH1 moved the
   shipped hash (two `rules.json` `ai` knobs) and left the file byte-identical at `30C51BB619A7E650`: the proof the decoupling
-  works.
+  works. **M7-3b** (tech and ability ids by faction order, BUG-1171) regenerated it once for the header: `ContentHash` hashes
+  the keys in id order, so it moved (`3E33BCE5D418EC9B` to `3A04D4E370C643DA`, reason in `GatherWedgeQaTests`); the
+  cross-map run researches and casts nothing, so no `k` line moved. A renumbering like that one moves every digest that hashes
+  a researched tech or a cast but no outcome: the pins that moved were re-measured in the same commit with the old value
+  in a comment, and every outcome pin (end ticks, winners, tallies, page cells) had to hold unedited; one that moves means
+  the id order leaked into a decision.
 - `DeterminismTests`: two sims with the same seed and commands keep equal hashes every 100 ticks
   over 2,000 ticks of movement; different seeds differ by tick 100. Since M3-1 also on a map with 12
   forests and 8 mines, with scripted `Take`s between ticks that fell trees mid-run.

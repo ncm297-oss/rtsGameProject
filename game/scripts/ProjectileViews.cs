@@ -29,12 +29,12 @@ namespace Rts.Game;
 /// visible to the local player, and a mark only while its landing cell is (<see cref="FogView.ShowsPoint"/>). Combat may fire
 /// at a unit the screen still hides for up to 4 ticks (docs/03 "Vision, detection, fog", Known limits (1)), so the rule is
 /// the shot's own cell, not its target's. A hidden mark still counts as drawn, so it expires on time.</para>
-/// <para><b>Who shot at whom</b> (M7-V2): the store keeps its shooter's type internal, so the view finds it the tick it first sees
-/// a shot: the live unit of the shot's owner nearest its launch point and within its own radius of it (a spatial-hash query;
-/// a unit fires from where it stands), its victim that unit's target (a building: scale 1), and with no such shooter (a
-/// tower fires from its footprint's centre) the unit nearest the aim point not the owner's. Each end's height is kept per
-/// slot, and a landing's flash takes the victim height of the dead slot whose last aim point it is. Nothing found is scale 1,
-/// today's height.</para>
+/// <para><b>Who shot at whom</b> (M7-VH1, BUG-1179): the tick a shot is first seen, its ends come from the read-only
+/// <see cref="ShotEnds"/> accessor: the launch height is its attacker type's (a tower's: <see cref="LaunchHeight"/>), exact
+/// even when the shooter died the tick it fired, and the strike height its victim's type (<see cref="ShotEnds.VictimUnitType"/>:
+/// the live unit or its corpse; a building or an unknowable victim: <see cref="LaunchHeight"/>). Each end's height is kept per
+/// slot, and a landing's flash takes the victim height of the dead slot whose last aim point it is (none: <see cref="LaunchHeight"/>).
+/// The view queries no spatial hash.</para>
 /// Views hold no gameplay state: shots are redrawn from the store each frame; the tracker and the marks are presentation.
 /// Everything is made in <see cref="Bind"/>, so a steady frame allocates nothing.
 /// </remarks>
@@ -42,9 +42,6 @@ public partial class ProjectileViews : Node3D
 {
     /// <summary>Height (m) above the terrain an aimed shot leaves a scale-1 shooter and strikes a scale-1 victim (about the chest).</summary>
     public const float LaunchHeight = 1.2f;
-
-    /// <summary>How far (m) from a shot's launch point the view looks for its shooter, and from its aim point for a victim it can't name.</summary>
-    public const float FindRadius = 2f;
 
     /// <summary>The launch and hit height (m) of a unit drawn at <paramref name="scale"/>: <see cref="LaunchHeight"/> x scale (M7-V2).</summary>
     public static float HeightFor(float scale) => LaunchHeight * scale;
@@ -89,8 +86,8 @@ public partial class ProjectileViews : Node3D
     private bool[] _known = Array.Empty<bool>();
     private System.Numerics.Vector2[] _knownLaunch = Array.Empty<System.Numerics.Vector2>(), _knownAim = Array.Empty<System.Numerics.Vector2>();
     private int[] _knownOwner = Array.Empty<int>(), _knownType = Array.Empty<int>();
+    private EntityHandle[] _knownAttacker = Array.Empty<EntityHandle>(), _knownVictim = Array.Empty<EntityHandle>();
     private int[] _dead = Array.Empty<int>();
-    private readonly int[] _near = new int[256];
     private float[] _markHeight = Array.Empty<float>();
     private long _heightsTick = long.MinValue;
     private static readonly Transform3D Hidden = new(new Basis(Vector3.Zero, Vector3.Zero, Vector3.Zero), Vector3.Zero);
@@ -189,6 +186,8 @@ public partial class ProjectileViews : Node3D
         _knownAim = new System.Numerics.Vector2[projectileCapacity];
         _knownOwner = new int[projectileCapacity];
         _knownType = new int[projectileCapacity];
+        _knownAttacker = new EntityHandle[projectileCapacity];
+        _knownVictim = new EntityHandle[projectileCapacity];
         _dead = new int[projectileCapacity];
         _heightsTick = long.MinValue;
         _drawnSlot = new int[projectileCapacity];
@@ -257,7 +256,8 @@ public partial class ProjectileViews : Node3D
         return n;
     }
 
-    // Each live shot first seen this tick gets its ends' heights (see the remarks); every live shot's aim point is kept.
+    // Each live shot first seen this tick gets its ends' heights (see the remarks); every live shot's aim point is kept. A slot
+    // holds a new shot when its shooter, victim, launch, owner or type differ from what was seen there (a skipping observer).
     private void ObserveHeights(World world)
     {
         ProjectileStore s = world.Projectiles;
@@ -268,59 +268,29 @@ public partial class ProjectileViews : Node3D
         for (int i = 0; i < alive.Length && i < _known.Length; i++)
         {
             if (!alive[i]) continue;
-            if (!_known[i] || launch[i] != _knownLaunch[i] || owner[i] != _knownOwner[i] || type[i] != _knownType[i])
+            ShotEnds ends = ShotEnds.Of(s, i);
+            if (!_known[i] || launch[i] != _knownLaunch[i] || owner[i] != _knownOwner[i] || type[i] != _knownType[i]
+                || ends.Attacker != _knownAttacker[i] || ends.Victim != _knownVictim[i])
             {
                 _known[i] = true;
                 _knownLaunch[i] = launch[i];
                 _knownOwner[i] = owner[i];
                 _knownType[i] = type[i];
-                ResolveEnds(world, i, launch[i], target[i], owner[i]);
+                _knownAttacker[i] = ends.Attacker;
+                _knownVictim[i] = ends.Victim;
+                int shooter = ends.ShooterUnitType, victim = ends.VictimUnitType(world.Units.Alive, world.Units.Generation, world.Units.TypeId);
+                _fromHeight[i] = shooter >= 0 ? HeightFor(ScaleOf(shooter)) : LaunchHeight;
+                _toHeight[i] = victim >= 0 ? HeightFor(ScaleOf(victim)) : LaunchHeight;
             }
             _knownAim[i] = target[i];
         }
     }
 
-    private void ResolveEnds(World world, int i, System.Numerics.Vector2 launch, System.Numerics.Vector2 aim, int owner)
-    {
-        UnitStore u = world.Units;
-        int shooter = Nearest(world, launch, owner, own: true);
-        if (shooter >= 0 && System.Numerics.Vector2.Distance(u.Position[shooter], launch) > u.Radius[shooter]) shooter = -1;
-        _fromHeight[i] = shooter >= 0 ? HeightFor(ScaleOf(u.TypeId[shooter])) : LaunchHeight;
-        int victim = -1;
-        if (shooter >= 0)
-        {
-            EntityHandle t = u.Target[shooter];
-            if (!u.TargetIsBuilding[shooter] && u.IsAlive(t)) victim = t.Index;
-        }
-        else victim = Nearest(world, aim, owner, own: false);
-        _toHeight[i] = victim >= 0 ? HeightFor(ScaleOf(u.TypeId[victim])) : LaunchHeight;
-    }
-
-    // The live unit nearest `at` within FindRadius: the owner's (own) or anyone else's. -1 for none. No allocation.
-    private int Nearest(World world, System.Numerics.Vector2 at, int owner, bool own)
-    {
-        UnitStore u = world.Units;
-        int n = Math.Min(world.Spatial.QueryRadius(at, FindRadius, _near), _near.Length);
-        int best = -1;
-        float bestD2 = float.MaxValue;
-        for (int k = 0; k < n; k++)
-        {
-            int c = _near[k];
-            if ((uint)c >= (uint)u.Capacity || !u.Alive[c] || (u.Owner[c] == owner) != own) continue;
-            float d2 = System.Numerics.Vector2.DistanceSquared(u.Position[c], at);
-            if (d2 < bestD2)
-            {
-                bestD2 = d2;
-                best = c;
-            }
-        }
-        return best;
-    }
-
     private float ScaleOf(int type) => (uint)type < (uint)_scaleOf.Length ? _scaleOf[type] : 1f;
 
     // A landing's flash sits at its shot's victim height: the dead slot of the same owner and type whose last aim point the
-    // landing is (an aimed shot is not steered on its landing tick, so the two are equal); otherwise the unit nearest it.
+    // landing is (an aimed shot is not steered on its landing tick, so the two are equal); a landing no known slot matches
+    // (only an observer that skipped the shot's whole flight) sits at LaunchHeight.
     private void FlashHeights(World world, int added, int dead)
     {
         ReadOnlySpan<ProjectileImpact> impacts = world.Impacts;
@@ -329,7 +299,7 @@ public partial class ProjectileViews : Node3D
             int mark = _added[k];
             if ((uint)mark >= (uint)_markHeight.Length) continue;
             ProjectileImpact im = impacts[k];
-            float h = -1f;
+            float h = LaunchHeight;
             for (int d = 0; d < dead; d++)
             {
                 int slot = _dead[d];
@@ -337,11 +307,6 @@ public partial class ProjectileViews : Node3D
                 h = _toHeight[slot];
                 _dead[d] = -1; // one landing per shot
                 break;
-            }
-            if (h < 0f)
-            {
-                int victim = Nearest(world, im.Position, im.Owner, own: false);
-                h = victim >= 0 ? HeightFor(ScaleOf(world.Units.TypeId[victim])) : LaunchHeight;
             }
             _markHeight[mark] = h;
         }

@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S4 |
-| Status | open |
+| Status | fixed (M7-VH1, verified by QA 2026-11-11-0739) |
 | Found | 2026-11-10-1236, task M7-V2 |
 | System | view: ProjectileViews (shot heights, M7-V2) |
-| Fixed by | |
+| Fixed by | 6ec217d (M7-VH1): read-only `sim/Rts.Sim/ViewApi/ShotEnds.cs` (`Of`, `ShooterUnitType`, `VictimUnitType`); `ProjectileViews` reads the ends from it, `Nearest` / `FindRadius` / the spatial query removed. Proof: `QaM7V2Test` brawl 1,411 aimed shots, launch wrong 0 (4 by a shooter dead on its firing tick), strike wrong 0, tower 24 / 0 wrong, hash twin 905 / 905, 0 B over 60 ticks; `ShotEndsQaTests` 4 seeds 2,168 new shots 0 wrong, no hash move; `QaM7Vh1Test` landing flashes 1,116 / 0 wrong |
 
 ## Repro
 1. `powershell -File tools/qa/scene-loop.ps1 -Filter QaM7V2Test -LogDir <dir>` and read the `brawl inference` line.

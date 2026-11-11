@@ -67,3 +67,10 @@ the slowdown may outlast the load). The developer measured 203 / 0 Perf earlier 
   Cloud, Epic, Chrome), so rule 42's "alone" was not met and the numbers are not a verdict either way. Stays open as a
   machine-state record, no re-bound; the sim's next hardening (counter 4 / 4) measures once more with the PC idle and
   profiles `ASweepRetarget` only if it is still red then. An item for the owner is in STATE's "Wanted".
+- Producer, ACCEPT 2026-11-11-0739 (M7-3b, QA's numbers): the dead session's Perf-alone run at about 00:xx on 2026-11-11 was
+  **203 / 0 / 3**, every row green incl. these four. The same morning at ~09:00 with the PC idle (0-11 % load, only QA's testhost)
+  Perf alone failed 15 and then 13 rows on the branch and 29 on de591f0, different rows each run, 9 min a run against 4 m 44 s;
+  `ASweepRetarget` 82.4 us (branch) / 95.5 us (base) against 16.4 us when recorded. So the rows pass when the PC runs at full
+  speed and fail when it runs slow, with no load to blame: a power or thermal state, not code and not the owner's apps alone.
+  No re-bound. M7-H1 runs Perf once first: green means close this as machine state with the two runs as the record; red at
+  base and head alike means record the numbers and move on (an owner item is in STATE's Wanted, item 8).

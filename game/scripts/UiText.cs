@@ -152,12 +152,17 @@ public sealed class UiText
 
     /// <summary>
     /// Difficulty <paramref name="difficulty"/>'s tooltip (M5-V2): its <c>setup</c> tip with <c>{0}</c> the gather bonus
-    /// <paramref name="gatherBonus"/> (a fraction, <c>ai.json</c> <c>gatherBonus</c>) in percent, invariant, at most two decimals.
+    /// <paramref name="gatherBonus"/> (a fraction, <c>ai.json</c> <c>gatherBonus</c>) in percent and, since M7-VH1 (BUG-1147),
+    /// <c>{1}</c> the think interval <paramref name="thinkSeconds"/> in seconds (<see cref="Seconds"/>), both invariant, at most
+    /// two decimals.
     /// </summary>
-    public string DifficultyTip(AiDifficulty difficulty, float gatherBonus) =>
+    public string DifficultyTip(AiDifficulty difficulty, float gatherBonus, float thinkSeconds) =>
         (uint)difficulty < (uint)DifficultyTipKeys.Length
-            ? string.Format(CultureInfo.InvariantCulture, Setup(DifficultyTipKeys[(int)difficulty]), Percent(gatherBonus))
+            ? string.Format(CultureInfo.InvariantCulture, Setup(DifficultyTipKeys[(int)difficulty]), Percent(gatherBonus), Seconds(thinkSeconds))
             : "";
+
+    /// <summary>Seconds as the difficulty tips show them (M7-VH1): 2 is "2", 0.5 "0.5", 0.35 "0.35" (invariant, at most two decimals).</summary>
+    public static string Seconds(float seconds) => ((double)seconds).ToString("0.##", CultureInfo.InvariantCulture);
 
     /// <summary><paramref name="fraction"/> in percent as the tips show it: 0.25 is "25", 0.125 "12.5" (invariant, at most two decimals).</summary>
     public static string Percent(float fraction) => ((double)fraction * 100.0).ToString("0.##", CultureInfo.InvariantCulture);
@@ -363,13 +368,15 @@ public sealed class UiText
             string teamItem = ui._setup[(int)SetupText.TeamItem];
             if (teamItem.Length > 0 && !IsSizeFormat(teamItem))
                 errors.Add($"ui.json: setup.{Key(SetupText.TeamItem)} must be a format with {{0}} (the team number) and no other placeholder: '{teamItem}'");
-            // M5-V2: the difficulty tips format with one number, {0} (the gather bonus in percent); Hard's must name it (docs/02).
+            // M5-V2: the difficulty tips format with {0} (the gather bonus in percent), Hard's naming it (docs/02); M7-VH1
+            // (BUG-1147): and {1} (the think interval in seconds), Easy's and Hard's naming it (they state it), Normal's may.
             foreach (SetupText tip in DifficultyTipKeys)
             {
                 string f = ui._setup[(int)tip];
-                bool named = tip == SetupText.DifficultyHardTip;
-                if (f.Length > 0 && !IsPercentFormat(f, named))
-                    errors.Add($"ui.json: setup.{Key(tip)} must be a format {(named ? "with" : "with at most")} {{0}} (the gather bonus in percent) and no other placeholder: '{f}'");
+                bool bonus = tip == SetupText.DifficultyHardTip, interval = tip != SetupText.DifficultyNormalTip;
+                if (f.Length > 0 && !IsTipFormat(f, bonus, interval))
+                    errors.Add($"ui.json: setup.{Key(tip)} must be a format {(bonus ? "with" : "with at most")} {{0}} (the gather bonus in percent), "
+                        + $"{(interval ? "with" : "at most")} {{1}} (the think interval in seconds) and no other placeholder: '{f}'");
             }
             ReadColours(root, ui, errors);
             Section<PauseText>(root, "pause", ui._pause, skipZero: false, forward: false, errors);
@@ -506,12 +513,15 @@ public sealed class UiText
     }
 
     // A difficulty tip format (M5-V2): it formats with one number, and with `named` it names it (two numbers give two texts).
-    private static bool IsPercentFormat(string format, bool named)
+    // A difficulty tip format: it formats with two numbers ({2} and up throw), and names each one it must (changing it
+    // changes the text).
+    private static bool IsTipFormat(string format, bool namesBonus, bool namesInterval)
     {
         try
         {
-            string a = string.Format(CultureInfo.InvariantCulture, format, "25");
-            return !named || a != string.Format(CultureInfo.InvariantCulture, format, "40");
+            string a = string.Format(CultureInfo.InvariantCulture, format, "25", "2");
+            return (!namesBonus || a != string.Format(CultureInfo.InvariantCulture, format, "40", "2"))
+                && (!namesInterval || a != string.Format(CultureInfo.InvariantCulture, format, "25", "7"));
         }
         catch (FormatException)
         {
