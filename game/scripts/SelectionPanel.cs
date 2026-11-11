@@ -27,6 +27,9 @@ namespace Rts.Game;
 /// amount left (<c>hud.resource_left</c> with the local faction's name for its resource), live while a footprint cell is in
 /// sight, else the amount last seen (<see cref="SeenResources.Amount"/>) after <c>hud.last_seen</c>; that line is rebuilt
 /// only when the amount or the seen state changes.
+/// M7-V3a: under one unit's state, the regeneration cue (<c>hud.regenerating</c>) while the unit heals by regeneration on the
+/// next tick (<see cref="RegenCue.Healing"/>: its faction's rule after the delay, or a regenerating status, below its maximum),
+/// read from the sim each frame; only its visibility changes, so it allocates nothing.
 /// Holds view state only.
 /// </remarks>
 public partial class SelectionPanel : Control
@@ -60,7 +63,7 @@ public partial class SelectionPanel : Control
     // Single unit / building.
     private Control _single = null!;
     private ColorRect _portrait = null!;
-    private Label _initial = null!, _name = null!, _state = null!;
+    private Label _initial = null!, _name = null!, _state = null!, _regen = null!;
     private readonly Label[] _statName = new Label[StatRows.Length];
     private readonly Label[] _statValue = new Label[StatRows.Length];
     private readonly Label[] _statBonus = new Label[StatRows.Length];
@@ -107,6 +110,9 @@ public partial class SelectionPanel : Control
 
     /// <summary>The state label (one unit).</summary>
     public Label StateLabel => _state;
+
+    /// <summary>The regeneration cue under the state (M7-V3a): visible while the one unit shown heals by regeneration.</summary>
+    public Label RegenLabel => _regen;
 
     /// <summary>The value label of stat row <paramref name="row"/> (0 hp, 1 attack, 2 armor, 3 range, 4 speed); for hp, the current hit points.</summary>
     public Label StatValue(int row) => _statValue[row];
@@ -169,6 +175,11 @@ public partial class SelectionPanel : Control
         _single.AddChild(_initial);
         _single.AddChild(_name);
         _single.AddChild(_state);
+        // Under the state, no wider than the portrait column, so it never runs into the stat names beside it.
+        _regen = Text("Regen", new Vector2(0f, PortraitSize + 38f), new Vector2(PortraitSize + 8f, 20f), 12);
+        _regen.AddThemeColorOverride(FontColor, BonusColor);
+        _regen.Visible = false;
+        _single.AddChild(_regen);
         for (int r = 0; r < StatRows.Length; r++)
         {
             float y = 28f + r * 20f;
@@ -232,6 +243,7 @@ public partial class SelectionPanel : Control
             _initials[t] = n.Length > 0 ? n.Substring(0, 1).ToUpperInvariant() : "";
         }
         for (int r = 0; r < StatRows.Length; r++) _statName[r].Text = ui.Hud(StatRows[r]);
+        _regen.Text = ui.Hud(HudText.Regenerating);
         int maxHp = 0;
         foreach (UnitDef u in _data.Units) maxHp = Math.Max(maxHp, u.Hp);
         foreach (BuildingDef b in _data.Buildings) maxHp = Math.Max(maxHp, b.Hp);
@@ -279,6 +291,7 @@ public partial class SelectionPanel : Control
         _kind = kind;
         _single.Visible = kind is Kind.Unit or Kind.Building or Kind.Resource;
         _amount.Visible = kind == Kind.Resource;
+        _regen.Visible = false;
         _grid.Visible = kind == Kind.Units;
         _backdrop.Visible = kind != Kind.None;
         _slot = -1;
@@ -329,6 +342,8 @@ public partial class SelectionPanel : Control
             _state.Text = state == OrderedChase ? _ui.OrderedAttackText : _ui.StateText((UnitState)state);
             Rebuilds++;
         }
+        bool regen = RegenCue.Healing(_data, u.Statuses, slot, world.FactionOf(p), u.Hp[slot], world.MaxHp(slot), u.LastDamagedTick[slot], world.TickNumber);
+        if (regen != _regen.Visible) _regen.Visible = regen;
     }
 
     private void ShowBuilding(World world, int slot)

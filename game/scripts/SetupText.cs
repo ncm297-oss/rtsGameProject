@@ -74,4 +74,11 @@ public enum SetupText
     DifficultyNormalTip,
     /// <summary>The Hard difficulty item's tooltip (M5-V2): a format that must name <c>{0}</c>, Hard's gather bonus in percent (from <c>ai.json</c>).</summary>
     DifficultyHardTip,
+    /// <summary>
+    /// BUG-1200 (M7-V3a): a number of seconds that is exactly 1, as the difficulty tips' <c>{1}</c> says it: a format naming
+    /// <c>{0}</c> (the number, <see cref="UiText.Seconds"/>), "1 second".
+    /// </summary>
+    SecondsOne,
+    /// <summary>BUG-1200 (M7-V3a): any other number of seconds, as the tips' <c>{1}</c> says it: a format naming <c>{0}</c>, "2 seconds", "0.5 seconds".</summary>
+    SecondsOther,
 }

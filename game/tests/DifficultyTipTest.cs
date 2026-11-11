@@ -18,6 +18,9 @@ namespace Rts.Game.Tests;
 /// <item>A copy of the data with the first faction's Easy / Normal / Hard <c>thinkInterval</c> 7 / 2 / 0.333 and the others'
 /// 3 / 1 / 1.5: the tips read "7", "0.35" (0.333 s is 7 ticks, the interval the AI keeps) and "3", "1.5" by the slot's
 /// faction, and picking the faction re-applies them.</item>
+/// <item>M7-V3a (BUG-1200): the number comes with its unit from <c>setup.seconds_one</c> / <c>seconds_other</c>: a forged Easy and
+/// Hard interval of exactly 1 s (20 ticks) reads "every 1 second,", 19 and 21 ticks "every 0.95 seconds," / "every 1.05 seconds,";
+/// the shipped tips read exactly as before (the two sentences above).</item>
 /// </list>
 /// Headless: <c>&amp; $env:GODOT --headless --path game res://tests/DifficultyTipTest.tscn</c>; prints "DIFFICULTY TIP TEST
 /// PASS" or "DIFFICULTY TIP TEST FAIL: ..." lines.
@@ -75,6 +78,25 @@ public partial class DifficultyTipTest : Node
                 Check(UiText.Seconds(s) == want, $"Seconds({s}) = '{UiText.Seconds(s)}', want '{want}'");
             setup.QueueFree();
             await Frames(1);
+
+            // BUG-1200: exactly 1 s is singular; 19 and 21 ticks either side are plural. The forged setup reads the data.
+            foreach ((int ticks, string want) in new[] { (20, "1 second"), (19, "0.95 seconds"), (21, "1.05 seconds"), (40, "2 seconds"), (10, "0.5 seconds") })
+            {
+                string phrase = _ui.SecondsPhrase(ticks / (float)Rts.Sim.SimConstants.TicksPerSecond);
+                Check(phrase == want, $"{ticks} ticks: '{phrase}', want '{want}'");
+                GameData one = Forge(dataDir, root, data, ticks / 20.0, 1.0, ticks / 20.0);
+                SkirmishSetup s1 = await NewSetup(one);
+                for (int slot = 1; slot < SkirmishSetup.MaxSlots; slot++)
+                {
+                    string easy = Plain(s1.DifficultyOptions[slot]!.GetItemTooltip((int)AiDifficulty.Easy));
+                    string hard = Plain(s1.DifficultyOptions[slot]!.GetItemTooltip((int)AiDifficulty.Hard));
+                    Check(easy.StartsWith($"Thinks every {want}, follows", StringComparison.Ordinal), $"Easy at {ticks} ticks, slot {slot}: '{easy}'");
+                    Check(hard.Contains($"thinks every {want}, focuses fire", StringComparison.Ordinal), $"Hard at {ticks} ticks, slot {slot}: '{hard}'");
+                }
+                if (ticks == 20) GD.Print($"  forged Easy at exactly 1 s: '{Plain(s1.DifficultyOption.GetItemTooltip(0))}'");
+                s1.QueueFree();
+                await Frames(1);
+            }
         }
         catch (Exception ex)
         {
@@ -99,7 +121,10 @@ public partial class DifficultyTipTest : Node
         Check(list.TooltipText == list.GetItemTooltip(list.Selected), $"{what}: the list's tooltip is not the picked item's");
     }
 
-    private GameData Forge(string dataDir, string root, GameData shipped)
+    private GameData Forge(string dataDir, string root, GameData shipped) => Forge(dataDir, root, shipped, -1, -1, -1);
+
+    // Every faction's Easy / Normal / Hard thinkInterval; a negative easy: the first faction 7 / 2 / 0.333, the others 3 / 1 / 1.5.
+    private GameData Forge(string dataDir, string root, GameData shipped, double easy, double normal, double hard)
     {
         if (Directory.Exists(root)) Directory.Delete(root, true);
         string copy = Path.Combine(root, "data");
@@ -113,9 +138,9 @@ public partial class DifficultyTipTest : Node
             string path = Path.Combine(copy, "factions", shipped.Factions[f].Key, "ai.json");
             JsonNode ai = JsonNode.Parse(File.ReadAllText(path)) ?? throw new InvalidOperationException($"{path} is empty");
             JsonNode d = ai["difficulties"]!;
-            d["easy"]!["thinkInterval"] = f == 0 ? 7.0 : 3.0;
-            d["normal"]!["thinkInterval"] = f == 0 ? 2.0 : 1.0;
-            d["hard"]!["thinkInterval"] = f == 0 ? 0.333 : 1.5;
+            d["easy"]!["thinkInterval"] = easy >= 0 ? easy : f == 0 ? 7.0 : 3.0;
+            d["normal"]!["thinkInterval"] = easy >= 0 ? normal : f == 0 ? 2.0 : 1.0;
+            d["hard"]!["thinkInterval"] = easy >= 0 ? hard : f == 0 ? 0.333 : 1.5;
             File.WriteAllText(path, ai.ToJsonString());
         }
         DataLoadResult loaded = DataLoader.LoadAll(copy);

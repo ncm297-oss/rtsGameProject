@@ -155,7 +155,7 @@ public partial class QaM5V2bTest : Node
             {
                 float bonus = _data.Ai[faction].Difficulties[d].GatherBonus;
                 float think = _data.Ai[faction].Difficulties[d].ThinkTicks / (float)Rts.Sim.SimConstants.TicksPerSecond; // M7-VH1: {1}
-                string want = TooltipWrap.Wrap(string.Format(CultureInfo.InvariantCulture, _ui.Setup(UiText.DifficultyTipKeys[d]), UiText.Percent(bonus), UiText.Seconds(think)));
+                string want = TooltipWrap.Wrap(string.Format(CultureInfo.InvariantCulture, _ui.Setup(UiText.DifficultyTipKeys[d]), UiText.Percent(bonus), _ui.SecondsPhrase(think))); // M7-V3a: {1} with its unit
                 string got = list!.GetItemTooltip(d);
                 Check(got.Length > 0 && got == want, $"{what}: slot {slot} faction {faction} item {d} tip '{got}', want '{want}'");
             }

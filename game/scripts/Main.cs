@@ -114,6 +114,12 @@ public partial class Main : Node3D
     /// <summary>The user args to read instead of the command line's (tests); null for <see cref="OS.GetCmdlineUserArgs"/>.</summary>
     public string[]? UserArgs { get; set; }
 
+    /// <summary>
+    /// The game data folder the shell loads (a <c>res://</c>, <c>user://</c> or OS path; M7-V3a): the shipped
+    /// <c>res://data</c>, or in a test a forged copy (a third faction) under <c>user://</c>. Set before the node enters the tree.
+    /// </summary>
+    public string DataPath { get; set; } = "res://data";
+
     /// <summary>The settings file to read and write (tests point it elsewhere so they never touch the player's); set before the node enters the tree.</summary>
     public string SettingsPath { get; set; } = GameSettings.DefaultPath;
 
@@ -170,7 +176,7 @@ public partial class Main : Node3D
         // The smoke gate (tools/qa/smoke.ps1) greps for this banner.
         GD.Print($"Rts.Sim {SimInfo.Version}");
 
-        DataLoadResult result = DataLoader.LoadAll(ProjectSettings.GlobalizePath("res://data"));
+        DataLoadResult result = DataLoader.LoadAll(ProjectSettings.GlobalizePath(DataPath));
         if (!result.Ok)
         {
             foreach (DataError error in result.Errors)

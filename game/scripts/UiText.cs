@@ -153,13 +153,23 @@ public sealed class UiText
     /// <summary>
     /// Difficulty <paramref name="difficulty"/>'s tooltip (M5-V2): its <c>setup</c> tip with <c>{0}</c> the gather bonus
     /// <paramref name="gatherBonus"/> (a fraction, <c>ai.json</c> <c>gatherBonus</c>) in percent and, since M7-VH1 (BUG-1147),
-    /// <c>{1}</c> the think interval <paramref name="thinkSeconds"/> in seconds (<see cref="Seconds"/>), both invariant, at most
-    /// two decimals.
+    /// <c>{1}</c> the think interval <paramref name="thinkSeconds"/> as a number of seconds (since M7-V3a, BUG-1200, the whole
+    /// phrase, <see cref="SecondsPhrase"/>: "2 seconds", "1 second"), both invariant, at most two decimals.
     /// </summary>
     public string DifficultyTip(AiDifficulty difficulty, float gatherBonus, float thinkSeconds) =>
         (uint)difficulty < (uint)DifficultyTipKeys.Length
-            ? string.Format(CultureInfo.InvariantCulture, Setup(DifficultyTipKeys[(int)difficulty]), Percent(gatherBonus), Seconds(thinkSeconds))
+            ? string.Format(CultureInfo.InvariantCulture, Setup(DifficultyTipKeys[(int)difficulty]), Percent(gatherBonus), SecondsPhrase(thinkSeconds))
             : "";
+
+    /// <summary>
+    /// A number of seconds with its unit (M7-V3a, BUG-1200): <c>setup.seconds_one</c> when <see cref="Seconds"/> reads exactly
+    /// "1", else <c>setup.seconds_other</c>, each with that number for its <c>{0}</c> ("1 second", "0.95 seconds", "2 seconds").
+    /// </summary>
+    public string SecondsPhrase(float seconds)
+    {
+        string n = Seconds(seconds);
+        return string.Format(CultureInfo.InvariantCulture, Setup(n == "1" ? SetupText.SecondsOne : SetupText.SecondsOther), n);
+    }
 
     /// <summary>Seconds as the difficulty tips show them (M7-VH1): 2 is "2", 0.5 "0.5", 0.35 "0.35" (invariant, at most two decimals).</summary>
     public static string Seconds(float seconds) => ((double)seconds).ToString("0.##", CultureInfo.InvariantCulture);
@@ -378,6 +388,13 @@ public sealed class UiText
                     errors.Add($"ui.json: setup.{Key(tip)} must be a format {(bonus ? "with" : "with at most")} {{0}} (the gather bonus in percent), "
                         + $"{(interval ? "with" : "at most")} {{1}} (the think interval in seconds) and no other placeholder: '{f}'");
             }
+            // M7-V3a (BUG-1200): the tips' {1} phrase, singular and plural, each naming the number.
+            foreach (SetupText unit in new[] { SetupText.SecondsOne, SetupText.SecondsOther })
+            {
+                string f = ui._setup[(int)unit];
+                if (f.Length > 0 && !IsTextFormat(f))
+                    errors.Add($"ui.json: setup.{Key(unit)} must be a format with {{0}} (the number of seconds) and no other placeholder: '{f}'");
+            }
             ReadColours(root, ui, errors);
             Section<PauseText>(root, "pause", ui._pause, skipZero: false, forward: false, errors);
             Section<SettingsText>(root, "settings", ui._settings, skipZero: false, forward: false, errors);
@@ -512,7 +529,6 @@ public sealed class UiText
         }
     }
 
-    // A difficulty tip format (M5-V2): it formats with one number, and with `named` it names it (two numbers give two texts).
     // A difficulty tip format: it formats with two numbers ({2} and up throw), and names each one it must (changing it
     // changes the text).
     private static bool IsTipFormat(string format, bool namesBonus, bool namesInterval)

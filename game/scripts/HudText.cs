@@ -35,4 +35,6 @@ public enum HudText
     ResourceLeft,
     /// <summary>The lead-in to that line for a node in explored, not visible ground: the amount is the one last seen (M6-V8).</summary>
     LastSeen,
+    /// <summary>The selection panel's cue under one unit's state while it heals by regeneration (M7-V3a, <c>RegenCue</c>).</summary>
+    Regenerating,
 }

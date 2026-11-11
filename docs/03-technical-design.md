@@ -3179,8 +3179,8 @@ game/data/common/ui.json             setup.difficulty_easy_tip / _hard_tip: "eve
   loader rounds `thinkInterval` to whole ticks, so 0.333 s reads "0.35". Shipped text: "Thinks every 2 seconds, ..." (as
   before) and "thinks every 0.5 seconds, ..." (was "every half second"). The load rule: every tip formats with two numbers
   (`{2}` is an error); Hard's must name `{0}`; Easy's and Hard's must name `{1}` (changing the interval changes the text);
-  Normal's may name either (it states neither today). An interval of exactly 1 s would read "1 seconds"; only Normal's is
-  1 s today, and its tip doesn't say it.
+  Normal's may name either (it states neither today). An interval of exactly 1 s read "1 seconds" until M7-V3a (BUG-1200):
+  since then `{1}` is the number with its unit from data, "1 second" (see "Implementation (M7-V3a)").
 - **The old S4s** (BUG-0860, 0830, 0890, 0861): already fixed and verified in M6-VH3; nothing left to do.
 - **Tests:** `sim/Rts.Sim.Tests/ViewApi/ShotEndsTests` (a free slot, a unit's shot, a shooter freed and its slot reused, a
   victim's corpse then its reused slot, a tower's shot and a building victim, reading every slot of a 12 v 12 crossbow
@@ -3188,6 +3188,64 @@ game/data/common/ui.json             setup.difficulty_easy_tip / _hard_tip: "eve
   the inference row); `QaVh5Test` / `QaVh6Test` under the ruling (QaVh6's blank-line count a check at 0, edge rows for the
   three shapes); `DifficultyTipTest` (the shipped tips; a data copy with Easy / Normal / Hard 7 / 2 / 0.333 and 3 / 1 /
   1.5: "7", "0.35", "3", "1.5" by faction); `QaM5V2Test`'s load-rule rows for `{1}`, `QaM5V2bTest` with the interval.
+
+### Implementation (M7-V3a)
+
+The view ready for a third faction, proven on a forged copy of the data before the real one (D28) lands; the
+"Regenerating" cue; BUG-1191's view half; BUG-1200 items 1 and 2. One new file in `sim/Rts.Sim/ViewApi/` (reads only); in
+`game/data` only `common/ui.json` (three new keys and the two tip strings; `ui.json` is view-only, not in
+`GameData.ContentHash`: `FactionOrderTests.TheShippedContentHash_IsTheGoldenHeaders` stays green).
+
+```
+sim/Rts.Sim/ViewApi/RegenCue.cs      Healing(data, statuses, slot, faction, hp, maxHp, lastDamagedTick, nextTick)
+game/scripts/SelectionPanel.cs       RegenLabel: the cue under one unit's state
+game/scripts/Main.cs                 DataPath (tests: a forged data copy under user://)
+game/scripts/UiText.cs, SetupText.cs SecondsPhrase; setup.seconds_one / seconds_other; the stale IsTipFormat comment gone
+game/tests/ThirdFactionForge.cs      the forged copy: a third faction appended (the brief's recipe, names prefixed)
+game/tests/ThreeFactionTest, RegenCueTest; QaM6V11Test's oracle (friendly fire)
+```
+
+- **Nothing in the view assumed two factions.** Every faction list, seat, colour, name, stats row and Load Game cell
+  already read `GameData.Factions` (id order = `common/factions.json`'s order) and `World.FactionOf`; no C# names a faction
+  (a grep for `malazan` / `whirlwind` / `Factions[0|1]` in `game/scripts` finds one doc comment). `ThreeFactionTest` proves
+  it end to end on the copy: the setup lists the three in the data's order by `displayName`; slot s defaults to faction
+  `s mod 3` (an added third slot is the third faction, a fourth Malazan); a slot picks it; a 3-player match (third,
+  Whirlwind, Malazan) runs 600 ticks; its hall, worker, hall card, build menu and their tooltips read its data; the stats
+  screen lists it; a tick-300 save loads to the same hash and reaches the live match's tick-600 hash; the recording replays
+  with all 6 checkpoints equal; `--faction 1 third` / `--faction 2 third` seat it. **Test hook:** `Main.DataPath` (default
+  `res://data`) lets a scene run the real shell on a copy; the game never sets it.
+- **BUG-1191, the view half: the scene's oracle was wrong, not the sim.** On a scratch clone with the third faction on disk,
+  seed 11's four seats become malazan, whirlwind, teblor, malazan (`p mod 3`), so seat 3 plays Malazan (it played Whirlwind
+  with two factions). Its Hard army fights with Sappers and Cadre Mages beside its own infantry, and four of its own units
+  die to its own splash: ticks 19,954 (a Laborer), 19,956, 20,177 and 20,193 (three Heavy Infantry), all at about
+  (142-150, 134-138). Since M6-S5 a friendly-fire death is the victim's loss and nobody's kill (`World.RecordDeath`), so
+  the sim's 68 was right; the oracle credited every death with a killer to the killer (72). The oracle now applies the
+  same rule (`World.IsEnemy`; the loss still counts) and prints each friendly-fire death with the killer's units near it.
+  Green on the clone and on the shipped data (where no seed-11 seat kills its own).
+- **The cue.** `RegenCue.Healing` is `RegenSystem`'s rule asked between ticks for the next one (the world's `TickNumber`):
+  below `World.MaxHp`, and either a `regenerating` status entry that survives the next countdown (`TicksRemaining > 1`) or
+  the faction's rate with `next - LastDamagedTick >= RegenDelayTicks` (never damaged counts), no faction rate while a
+  damage-over-time pulse is due next tick (it lands first in phase 5 and restarts the delay). So a unit hit in the last
+  tick reads false at once (gone on the next hit), the cue appears exactly 6 s (120 ticks) after the last hit, and goes at
+  full health. It takes the store and plain values, not `World` (the ViewApi source guard), writes nothing and allocates
+  nothing. The panel shows `hud.regenerating` ("Regenerating", green, 12 px) under one unit's state, in the portrait
+  column's width so it never runs into the stat names; only its visibility changes each frame. Not shown for a grid,
+  a building or a resource node. The panel lists no statuses by name, so the cue is a `ui.json` key, not the status's
+  `displayName`.
+- **BUG-1200.** Item 1: the old M5-V2 comment over `UiText.IsTipFormat` is gone. Item 2 (Producer ruling): the tips' `{1}`
+  is now the whole phrase, `UiText.SecondsPhrase`: `setup.seconds_one` ("{0} second") when `Seconds` reads exactly "1"
+  (20 ticks), else `setup.seconds_other` ("{0} seconds"); the tips read "Thinks every {1}, ..." and "... thinks every
+  {1}, ...", so the shipped sentences are word for word as before ("Thinks every 2 seconds, ...", "... thinks every 0.5
+  seconds, ..."), 1 s reads "1 second", 19 and 21 ticks "0.95 seconds" / "1.05 seconds". Both keys must be formats naming
+  `{0}` (one load error each otherwise). English plural only: a language with other plural rules would need more keys.
+- **Tests:** `sim/Rts.Sim.Tests/ViewApi/RegenCueTests` (the five moments on a Heavy Infantry; a status to its last tick; a
+  faction without regen; a burning pulse due; a 3,000-tick 30 v 30 brawl with statuses where the cue read before each tick
+  is exactly whether the tick healed every unit not hit in it, and the state hash equals a twin's that never calls it on
+  every tick; 0 bytes reading every slot; out-of-range input); `game/tests/RegenCueTest` (the faction rule on the copy's
+  third faction: a Desert Archer's real hits, every frame against an oracle from the raw store, the cue first at exactly
+  hit + 120, gone on the next hit's frame, gone at full; 60 steady frames 0 bytes in `SelectionPanel.Sync`; grid and
+  building no cue; layout); `ThreeFactionTest`; `QaM6V11Test`; `DifficultyTipTest` (the BUG-1200 rows on forged
+  intervals), `QaM7Vh1Test`, `QaM5V2Test`, `QaM5V2bTest` (their expected tips built with the phrase).
 
 ## Vision, detection, fog
 

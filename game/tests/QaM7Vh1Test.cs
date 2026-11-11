@@ -241,8 +241,10 @@ public partial class QaM7Vh1Test : Node
             Check(e == 2f && n == 1f && h == 0.5f, $"shipped faction {f} think seconds {e} / {n} / {h}, want 2 / 1 / 0.5");
             Check(ui.DifficultyTip(AiDifficulty.Easy, 0f, e).StartsWith("Thinks every 2 seconds, follows its build order slowly", StringComparison.Ordinal), $"shipped faction {f} Easy tip");
         }
-        // Noted, not failed (no shipped interval is 1 s on Easy or Hard): the plural is typed in the data.
-        GD.Print($"  an Easy interval of exactly 1 s reads: '{ui.DifficultyTip(AiDifficulty.Easy, 0f, 1f)[..24]}...'");
+        // M7-V3a (BUG-1200): an interval of exactly 1 s reads "1 second" (setup.seconds_one); it was "1 seconds".
+        string one = ui.DifficultyTip(AiDifficulty.Easy, 0f, 1f);
+        Check(one.StartsWith("Thinks every 1 second, ", StringComparison.Ordinal), $"an Easy interval of exactly 1 s reads '{one}'");
+        GD.Print($"  an Easy interval of exactly 1 s reads: '{one[..24]}...'");
     }
 
     // ---- (3) landing flashes ----

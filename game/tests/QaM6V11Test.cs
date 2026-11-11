@@ -226,6 +226,8 @@ public partial class QaM6V11Test : Node
         // already have nudged them); the matched units' handles are the killers.
         public List<(int Owner, int Type, System.Numerics.Vector2 At, int Tick)> DevSpawns = new();
         public List<(EntityHandle Unit, int Type)> DevUnits = new();
+        // BUG-1191 (M7-V3a): the friendly-fire deaths seen (no one's kill), printed as notes so a count change is explained.
+        public List<string> FriendlyKills = new();
     }
 
     // M6-V13 (BUG-0953): seat 0 (the idle human) is put out by a staged defeat, not by the AIs: since M5-H3 they never hunt its
@@ -452,6 +454,9 @@ public partial class QaM6V11Test : Node
             Check(ageChecked, $"no seat reached Age II by tick {sim.TickNumber}: the exact-tick row did not run (an AI change? raise --ticks or MatchTicks)");
             Check(bannerChecked, $"no banner by tick {sim.TickNumber}: the defeated-seat row did not run");
             _notes.Add($"start-base units seen by tick 2 (excluded from trained): {o.StartUnits}");
+            _notes.Add($"factions by seat: {string.Join(", ", Enumerable.Range(0, players).Select(p => _data.Factions[w.FactionOf(p)].Key))}");
+            _notes.Add($"friendly-fire deaths (a loss, nobody's kill): {o.FriendlyKills.Count}");
+            foreach (string f in o.FriendlyKills) _notes.Add($"  {f}");
 
             // The end: every cell and the graph v the oracle; allocation and redraws while the screen stays open.
             main.PauseMatch();
@@ -585,9 +590,19 @@ public partial class QaM6V11Test : Node
             if (o.PrevSite[i] && b.Alive[i] && b.Generation[i] == o.PrevBGen[i] && !b.UnderConstruction[i]) o.Built[b.Owner[i]]++;
         foreach (DeathEvent d in w.Deaths)
         {
-            if (d.Expired || d.Collapsed || d.KillerOwner < 0) continue;
-            if (d.IsBuilding) { o.BuildingKills[d.KillerOwner]++; o.BuildingLosses[d.VictimOwner]++; }
-            else { o.UnitKills[d.KillerOwner]++; o.UnitLosses[d.VictimOwner]++; }
+            if (d.Expired || d.Collapsed) continue;
+            // BUG-1191 (M7-V3a): a friendly-fire death (an own or an allied killer, docs/03 M6-S5) is the victim's loss and
+            // nobody's kill. The oracle used to credit it to the killer; with two factions on disk no seed-11 seat hit its own
+            // units, but with a third faction seat 3 plays Malazan (p mod 3) and its Cusser / Telas Fire splash kills its own.
+            // (KillerOwner is -1 only on an expiry or a collapse, both skipped above.)
+            bool friendly = !w.IsEnemy(d.KillerOwner, d.VictimOwner);
+            if (friendly)
+                o.FriendlyKills.Add($"tick {s.TickNumber}: seat {d.KillerOwner} ({w.Data.Factions[w.FactionOf(d.KillerOwner)].Key}) killed "
+                    + $"{(d.KillerOwner == d.VictimOwner ? "its own" : $"ally seat {d.VictimOwner}'s")} "
+                    + (d.IsBuilding ? w.Data.Buildings[d.VictimType].Key : w.Data.Units[d.VictimType].Key) + $" at {d.Position}; "
+                    + $"its units within 14 m: {NearbyTypes(w, d.KillerOwner, d.Position, 14f)}");
+            if (d.IsBuilding) { if (!friendly) o.BuildingKills[d.KillerOwner]++; o.BuildingLosses[d.VictimOwner]++; }
+            else { if (!friendly) o.UnitKills[d.KillerOwner]++; o.UnitLosses[d.VictimOwner]++; }
         }
         for (int p = 0; p < n; p++)
         {
@@ -612,6 +627,17 @@ public partial class QaM6V11Test : Node
         }
         o.Ticks = s.TickNumber;
         Snapshot(o, w);
+    }
+
+    // BUG-1191: who stood near a friendly-fire death (the splash's likely source), "type x count" by type id; a note only.
+    private static string NearbyTypes(World w, int owner, System.Numerics.Vector2 at, float radius)
+    {
+        UnitStore u = w.Units;
+        var counts = new SortedDictionary<int, int>();
+        for (int i = 0; i < u.Capacity; i++)
+            if (u.Alive[i] && u.Owner[i] == owner && System.Numerics.Vector2.Distance(u.Position[i], at) <= radius)
+                counts[u.TypeId[i]] = counts.GetValueOrDefault(u.TypeId[i]) + 1;
+        return counts.Count == 0 ? "none" : string.Join(", ", counts.Select(c => $"{w.Data.Units[c.Key].Key} x{c.Value}"));
     }
 
     private static bool DevSpawn(Oracle o, int tick, int slot, int generation, int owner, int type, System.Numerics.Vector2 at)

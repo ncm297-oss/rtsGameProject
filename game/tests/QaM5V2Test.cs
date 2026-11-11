@@ -125,9 +125,12 @@ public partial class QaM5V2Test : Node
         {
             string template = _ui.Setup(tips[d]);
             float bonus = data.Ai[faction].Difficulties[d].GatherBonus;
-            // M7-VH1 (BUG-1147): {1} is the think interval the AI keeps, in seconds.
+            // M7-VH1 (BUG-1147): {1} is the think interval the AI keeps, in seconds; M7-V3a (BUG-1200): with its unit, the
+            // number from setup.seconds_one when it is exactly 1, else setup.seconds_other.
             double think = data.Ai[faction].Difficulties[d].ThinkTicks / (double)Rts.Sim.SimConstants.TicksPerSecond;
-            string want = TooltipWrap.Wrap(string.Format(CultureInfo.InvariantCulture, template, Expected(bonus), Math.Round(think, 2).ToString(CultureInfo.InvariantCulture)));
+            string number = Math.Round(think, 2).ToString(CultureInfo.InvariantCulture);
+            string phrase = string.Format(CultureInfo.InvariantCulture, _ui.Setup(number == "1" ? SetupText.SecondsOne : SetupText.SecondsOther), number);
+            string want = TooltipWrap.Wrap(string.Format(CultureInfo.InvariantCulture, template, Expected(bonus), phrase));
             string got = list!.GetItemTooltip(d);
             Check(template.Length > 0 && got == want, $"{what} slot {slot} faction {faction} item {d}: tooltip '{got}', want '{want}'");
         }
