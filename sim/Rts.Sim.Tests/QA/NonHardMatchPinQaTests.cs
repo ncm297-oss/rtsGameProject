@@ -38,7 +38,18 @@ public class NonHardMatchPinQaTests
     [InlineData("vathar_crossing", 1UL, AiDifficulty.Easy, "5DD4CB05A846BBF1 27344 1790")] // M5-9a: was 325B1E0137F84D8D 36000 1798
     public void AMatchWithoutHard_PlaysAsBeforeTheHardKnobs(string map, ulong seed, AiDifficulty first, string expected)
     {
-        Simulation sim = MapFileTests.MapMatch(map, seed, false, out _, first, AiDifficulty.Normal);
+        string got = Run(map, seed, first, null, out bool over);
+        _out.WriteLine($"{map} seed {seed} {first} v Normal: {got}; match over {over}");
+        Assert.Equal(expected, got);
+    }
+
+    /// <summary>
+    /// One row's "digest ticks commands" on <paramref name="data"/> (the shipped data when null). M7-3: split out of the row
+    /// so <c>Data/FactionOrderTests</c> plays the same rows on a copy with a third faction appended to the order.
+    /// </summary>
+    internal static string Run(string map, ulong seed, AiDifficulty first, GameData? data, out bool matchOver)
+    {
+        Simulation sim = MapFileTests.MapMatch(map, seed, false, out _, first, AiDifficulty.Normal, data);
         var log = new List<Command>();
         for (int p = 0; p < 2; p++) sim.AiOf(p)!.SentForTests = c => log.Add(c);
         string? dump = Environment.GetEnvironmentVariable("RTS_QA_DUMP");
@@ -66,9 +77,8 @@ public class NonHardMatchPinQaTests
             }
         }
         w?.Dispose();
-        string got = $"{digest:X16} {sim.TickNumber} {log.Count}";
-        _out.WriteLine($"{map} seed {seed} {first} v Normal: {got}; match over {sim.MatchOver}");
-        Assert.Equal(expected, got);
+        matchOver = sim.MatchOver;
+        return $"{digest:X16} {sim.TickNumber} {log.Count}";
     }
 
     private static ulong Fold(ulong digest, ulong word)

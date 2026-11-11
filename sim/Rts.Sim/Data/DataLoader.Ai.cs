@@ -247,7 +247,7 @@ public static partial class DataLoader
         {
             case AiStepAction.Build:
             {
-                int b = Array.BinarySearch(ids.BuildingKeys, key, StringComparer.Ordinal);
+                int b = KeyId(ids.BuildingKeys, key);
                 if (b < 0) c.Error(p, $"unknown building '{key}' (not in any buildings.json)");
                 else if (ids.Buildings[b].Faction != faction)
                     c.Error(p, $"building '{key}' belongs to faction '{ids.Folders[ids.Buildings[b].Faction]}', not '{own}'");
@@ -270,7 +270,7 @@ public static partial class DataLoader
 
     private static int AiUnit(Checker c, AiIds ids, string key, int faction, string p)
     {
-        int u = Array.BinarySearch(ids.UnitKeys, key, StringComparer.Ordinal);
+        int u = KeyId(ids.UnitKeys, key);
         if (u < 0) c.Error(p, $"unknown unit '{key}' (not in any units.json)");
         else if (ids.Units[u].Faction != faction)
             c.Error(p, $"unit '{key}' belongs to faction '{ids.Folders[ids.Units[u].Faction]}', not '{ids.Folders[faction]}'");

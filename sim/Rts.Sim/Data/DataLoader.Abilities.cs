@@ -349,7 +349,7 @@ public static partial class DataLoader
         string key = c.Id(x.Unit, q + ".unit");
         if (key.Length > 0)
         {
-            int id = Array.BinarySearch(refs.Keys, key, StringComparer.Ordinal);
+            int id = KeyId(refs.Keys, key);
             if (id < 0 || refs.Units[id] == null)
                 c.Error(q + ".unit", $"unknown unit '{key}' (not in any units.json)");
             else if (refs.Units[id].Faction != faction)
@@ -527,7 +527,7 @@ public static partial class DataLoader
         {
             UnitJson json = unitFiles[f]!.Units![i]!;
             if (json.Abilities == null) continue;
-            UnitDef u = units[Array.BinarySearch(unitKeys, json.Id!, StringComparer.Ordinal)];
+            UnitDef u = units[KeyId(unitKeys, json.Id!)];
             if (u == null) continue;
             c.CurrentFile = $"factions/{folders[f]}/units.json";
             string p = $"units[{i}].abilities";

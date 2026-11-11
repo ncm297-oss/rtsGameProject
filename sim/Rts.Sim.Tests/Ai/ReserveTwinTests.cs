@@ -117,7 +117,7 @@ public class ReserveTwinTests
     /// <summary>Every opening's steps moved past the run (step i at 3,600 - i s: the loader's maximum, and no two steps alike): none is ever due.</summary>
     private static readonly Lazy<GameData> s_notDue = new(() => AiScenes.DataWith(dir =>
     {
-        foreach (string f in new[] { "malazan", "whirlwind" })
+        foreach (string f in TestSim.ShippedFactions)
             dir.EditJson($"factions/{f}/ai.json", root =>
             {
                 foreach (System.Text.Json.Nodes.JsonNode? o in root["openings"]!.AsArray())

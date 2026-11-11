@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Immutable;
 
 namespace Rts.Sim.Data;
@@ -101,4 +102,14 @@ public sealed class UnitDef
     public int SpawnCount { get; init; } = 1;
     /// <summary>The half-pop one queue item of this type reserves when it starts: <see cref="HalfPop"/> x <see cref="SpawnCount"/> (M7-2).</summary>
     public int ItemHalfPop => HalfPop * SpawnCount;
+    /// <summary>
+    /// M7-3 (BUG-1168): one unit's share of the item's gold, <see cref="CostGold"/> / <see cref="SpawnCount"/>, the remainder
+    /// dropped (a 120-gold pack of 3: 40 a dog; a 20-wood pack of 3: 6 a unit). What every per-unit worth reads (the AI's
+    /// army and defense sums, the army-value sample); what is paid is still <see cref="CostGold"/>, per item.
+    /// </summary>
+    public int UnitCostGold => CostGold / Math.Max(1, SpawnCount);
+    /// <summary>M7-3 (BUG-1168): one unit's share of the item's wood, <see cref="CostWood"/> / <see cref="SpawnCount"/> (as <see cref="UnitCostGold"/>).</summary>
+    public int UnitCostWood => CostWood / Math.Max(1, SpawnCount);
+    /// <summary>M7-3: <see cref="UnitCostGold"/> + <see cref="UnitCostWood"/>, a unit's worth in every per-unit sum.</summary>
+    public int UnitWorth => UnitCostGold + UnitCostWood;
 }

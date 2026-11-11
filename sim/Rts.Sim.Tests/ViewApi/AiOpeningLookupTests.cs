@@ -17,7 +17,7 @@ public class AiOpeningLookupTests
 
     public AiOpeningLookupTests(ITestOutputHelper output) => _out = output;
 
-    private static readonly string[] Factions = { "malazan", "whirlwind" };
+    private static IReadOnlyList<string> Factions => TestSim.ShippedFactions; // M7-3: every shipped faction, in id order
 
     // Both factions' ai.json cut to exactly three openings: the first shipped one and two copies (opening_1, opening_2), so the
     // fixture holds whatever the data track ships (D21 edits both files this session).
@@ -61,7 +61,7 @@ public class AiOpeningLookupTests
                 {
                     var seats = new PlayerSeat[players];
                     for (int p = 0; p < players; p++)
-                        seats[p] = new PlayerSeat(data.FindFaction(Factions[p % 2]), SeatController.Ai, Difficulties[(rot + p) % 3]);
+                        seats[p] = new PlayerSeat(data.FindFaction(Factions[p % Factions.Count]), SeatController.Ai, Difficulties[(rot + p) % 3]);
                     var config = new SimConfig(seed, players, 16, 16) { Data = data, Seats = ImmutableArray.Create(seats) };
                     var sim = new Simulation(config, LocalMovementTests.Flat(32));
                     for (int p = 0; p < players; p++)

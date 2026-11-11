@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S3 |
-| Status | open |
+| Status | fixed (M7-3; QA verified 2026-11-10-1236) |
 | Found | 2026-11-10-0146, task M7-2 |
 | System | data loader (`DataLoader` unit rows, `rules.popCap`) / production (`ProductionSystem.TryStart`) |
-| Fixed by | |
+| Fixed by | `M7-3` |
 
 ## Repro
 1. `dotnet test sim/Rts.Sim.Tests --filter "FullyQualifiedName~PackQaTests.APackAboveTheHardCap"`.
@@ -32,3 +32,15 @@ lose that building for the match.
 - No shipped unit is affected (largest shipped `pop` 3, no `spawnCount`); the planned war-dog row (3 x pop 1) is far below.
 - Fix sketch: one check in the unit pass once `rules.json` is read: `HalfPop * SpawnCount <= rules.HalfPopCap`, error at
   `units[i].spawnCount` (or `.pop` when `spawnCount` is absent) naming both numbers.
+- M7-3: `DataLoader.BuildUnit` refuses `HalfPop * SpawnCount > rules.HalfPopCap` in the unit pass (rules.json is read
+  first): one error at `units[i].spawnCount`, or at `units[i].pop` when `spawnCount` is absent, naming both numbers
+  ("malazan_heavy_infantry: one queue item is spawnCount 8 x pop 13 = 104 pop, above rules.popCap 100: it could never
+  start"). A broken `popCap` (HalfPopCap 0) skips the check, so it is reported once. Proof: QA's
+  `PackQaTests.APackAboveTheHardCap_IsALoadError` un-skipped and green (asserts the single error, its file, path and both
+  numbers); the symptom row `APackAboveTheHardCap_LoadsAndWedgesTheQueue_Bug1167Symptom` removed with the hole;
+  `DataValidationTests.BrokenUnitField_YieldsExactlyOneErrorNamingFileAndField` rows pop 101 and pop 100.5 (at `.pop`);
+  `DataValidationTests.AnItemAboveTheHardCap_IsOneErrorAtSpawnCount` (pop 100 and 8 x 12.5 load; 8 x 13 and 2 x 50.5 one
+  error each at `.spawnCount`).
+- QA 2026-11-10-1236 (M7-3): verified independently. `QA/FactionOrderQaTests.TheCapCheck_ReadsRulesPopCap` (the check
+  follows `rules.popCap`, not 100: at popCap 20, pop 20 and 8 x 2.5 load; 20.5 is refused at `.pop` and 8 x 3 at
+  `.spawnCount`), `ATinyPopCap_IsOneErrorPerUnitAboveIt`, `ABrokenPopCap_IsReportedOnce_NotAtEveryUnit`.

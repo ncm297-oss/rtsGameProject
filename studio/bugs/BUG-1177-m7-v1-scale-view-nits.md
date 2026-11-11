@@ -3,7 +3,7 @@
 | Field | Value |
 | --- | --- |
 | Severity | S4 |
-| Status | open |
+| Status | open, narrowed (item 1, the shot / flash height, fixed by M7-V2 2026-11-10-1236: `ProjectileViews.HeightFor(scale)`; left: item 2, the drawn head not clickable, the owner's taste call) |
 | Found | 2026-11-10-0146, task M7-V1 |
 | System | unit views / projectile views / selection (view) |
 | Fixed by | |

@@ -198,7 +198,7 @@ internal sealed partial class AiPlayer
     /// <summary>See <see cref="IntruderCount"/>.</summary>
     internal Vector2 IntruderCentroid { get; private set; }
 
-    /// <summary>M5-4f: the intruders' worth, the sum of their types' gold + wood cost (<see cref="GameData.Units"/>).</summary>
+    /// <summary>M5-4f: the intruders' worth, the sum of their types' per-unit gold + wood (<see cref="UnitDef.UnitWorth"/>: a pack unit its share of the item, M7-3).</summary>
     internal int IntruderWorth { get; private set; }
 
     /// <summary>M5-4f: the building slot of the building <see cref="HallPoint"/> is the centre of (-1 with none).</summary>
@@ -350,7 +350,7 @@ internal sealed partial class AiPlayer
         return half >= share * Opening.AttackMinHalfPop && cost >= share * Opening.AttackMinCost;
     }
 
-    /// <summary>The half-pop and the gold + wood cost of the player's live non-worker units, from this think's census (<see cref="Live"/>).</summary>
+    /// <summary>The half-pop and the gold + wood worth (<see cref="UnitDef.UnitWorth"/>, M7-3) of the player's live non-worker units, from this think's census (<see cref="Live"/>).</summary>
     internal void ArmySize(out int half, out int cost)
     {
         half = cost = 0;
@@ -359,7 +359,7 @@ internal sealed partial class AiPlayer
             if (IsWorkerType[t] || Live[t] == 0) continue;
             UnitDef def = Data.Units[t];
             half += Live[t] * def.HalfPop;
-            cost += Live[t] * (def.CostGold + def.CostWood);
+            cost += Live[t] * def.UnitWorth; // M7-3 (BUG-1168): a pack unit counts its share of the item
         }
     }
 
@@ -574,7 +574,7 @@ internal sealed partial class AiPlayer
                     IntruderCount++;
                     intruders += u.Position;
                     UnitDef def = Data.Units[u.TypeId];
-                    IntruderWorth += def.CostGold + def.CostWood;
+                    IntruderWorth += def.UnitWorth;
                 }
                 continue;
             }
@@ -829,7 +829,7 @@ internal sealed partial class AiPlayer
             }
             int n = View.QueueCount(s);
             for (int item = 0; item < n; item++)
-                if (View.TryGetQueueItem(s, item, out int type, out bool isTech) && !isTech) Queued[type]++;
+                if (View.TryGetQueueItem(s, item, out int type, out bool isTech) && !isTech) Queued[type] += Data.Units[type].SpawnCount; // M7-3: a pack is its units
         }
         s = -1;
         while (View.NextGhost(ref s, out Vision.BuildingGhost g))

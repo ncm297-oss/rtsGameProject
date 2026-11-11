@@ -91,7 +91,7 @@ internal static class AiScenes
     /// </summary>
     internal static GameData EarlyWaves(double minArmyPop = 2) => DataWith(dir =>
     {
-        foreach (string f in new[] { "malazan", "whirlwind" })
+        foreach (string f in TestSim.ShippedFactions)
             dir.EditJson($"factions/{f}/ai.json", root =>
             {
                 foreach (JsonNode? o in root["openings"]!.AsArray())

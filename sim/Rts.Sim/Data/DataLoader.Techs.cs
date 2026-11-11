@@ -171,7 +171,7 @@ public static partial class DataLoader
                 if (slot < 0)
                 {
                     if (!refs) continue; // the buildings files are broken; that is already reported
-                    int b = Array.BinarySearch(_buildingKeys, id, StringComparer.Ordinal);
+                    int b = KeyId(_buildingKeys, id);
                     if (b < 0 || faction < 0 || _buildings[b].Faction != faction)
                     {
                         _c.Error(path, faction < 0
@@ -264,7 +264,7 @@ public static partial class DataLoader
 
         private (int Id, string? Error) UnitOf(string key, int faction)
         {
-            int i = Array.BinarySearch(_unitKeys, key, StringComparer.Ordinal);
+            int i = KeyId(_unitKeys, key);
             if (i < 0) return (-1, $"unknown unit '{key}' (not in any units.json)");
             // A faction's upgrade changes its own units only.
             if (faction >= 0 && _units[i].Faction != faction)
@@ -308,7 +308,7 @@ public static partial class DataLoader
             foreach ((int file, int i) in _accepted)
             {
                 string key = _files[file]!.Techs![i]!.Id!;
-                if (Array.BinarySearch(_buildingKeys, key, StringComparer.Ordinal) < 0) continue;
+                if (KeyId(_buildingKeys, key) < 0) continue;
                 _c.CurrentFile = FileOf(file);
                 _c.Error($"techs[{i}].id", $"tech id '{key}' is also a building id (a requires entry naming it would be ambiguous)");
             }
@@ -328,14 +328,14 @@ public static partial class DataLoader
             {
                 _c.CurrentFile = $"factions/{_folders[f]}/buildings.json";
                 BuildingJson json = buildingFiles[f]!.Buildings![i]!;
-                BuildingDef def = _buildings[Array.BinarySearch(_buildingKeys, json.Id!, StringComparer.Ordinal)];
+                BuildingDef def = _buildings[KeyId(_buildingKeys, json.Id!)];
                 (def.RequiresTechs, def.RequiresBuildings) = Resolve(json.Requires, $"buildings[{i}].requires", def.Faction, edges[techs + def.Id]);
             }
             foreach ((int f, int i) in units)
             {
                 _c.CurrentFile = $"factions/{_folders[f]}/units.json";
                 UnitJson json = unitFiles[f]!.Units![i]!;
-                UnitDef def = _units[Array.BinarySearch(_unitKeys, json.Id!, StringComparer.Ordinal)];
+                UnitDef def = _units[KeyId(_unitKeys, json.Id!)];
                 (def.RequiresTechs, def.RequiresBuildings) = Resolve(json.Requires, $"units[{i}].requires", def.Faction, null);
             }
             FindCycles(edges);
@@ -364,7 +364,7 @@ public static partial class DataLoader
                 if (!Checker.IsId(id)) continue;
                 // An id that is both a tech and a building was reported at the tech's id; it reads as the tech here.
                 int t = Array.BinarySearch(_keys, id!, StringComparer.Ordinal);
-                int b = t >= 0 ? -1 : Array.BinarySearch(_buildingKeys, id!, StringComparer.Ordinal);
+                int b = t >= 0 ? -1 : KeyId(_buildingKeys, id!);
                 if (t < 0 && b < 0)
                 {
                     _c.Error($"{path}[{j}]", $"unknown tech or building '{id}' (requires names a tech or building id)");
@@ -480,7 +480,7 @@ public static partial class DataLoader
             foreach ((int bf, int i) in buildings)
             {
                 if (bf != f) continue;
-                BuildingDef bd = _buildings[Array.BinarySearch(_buildingKeys, buildingFiles[bf]!.Buildings![i]!.Id!, StringComparer.Ordinal)];
+                BuildingDef bd = _buildings[KeyId(_buildingKeys, buildingFiles[bf]!.Buildings![i]!.Id!)];
                 if (buildingOk[bd.Id]) continue;
                 ids.Add(bd.Key);
                 if (path == null) (file, path) = ($"factions/{_folders[f]}/buildings.json", $"buildings[{i}].requires");
@@ -495,7 +495,7 @@ public static partial class DataLoader
             foreach ((int uf, int i) in units)
             {
                 if (uf != f) continue;
-                UnitDef ud = _units[Array.BinarySearch(_unitKeys, unitFiles[uf]!.Units![i]!.Id!, StringComparer.Ordinal)];
+                UnitDef ud = _units[KeyId(_unitKeys, unitFiles[uf]!.Units![i]!.Id!)];
                 bool ok = (uint)ud.TrainedAtTypeId < (uint)buildingOk.Length && buildingOk[ud.TrainedAtTypeId] && AllOk(ud.RequiresTechs, ud.RequiresBuildings, techOk, buildingOk);
                 if (ok) continue;
                 ids.Add(ud.Key);

@@ -35,7 +35,7 @@ public class AbilityManagerFuzzStressTests
     /// </summary>
     private static readonly Lazy<GameData> s_easyOff = new(() => AbilityManagerQaTests.Data(castMinTargets: 1, more: dir =>
     {
-        foreach (string f in new[] { "malazan", "whirlwind" })
+        foreach (string f in TestSim.ShippedFactions)
             dir.EditJson($"factions/{f}/ai.json", root => root["difficulties"]!["easy"]!["useAbilities"] = false);
     }));
 
