@@ -106,7 +106,7 @@ internal sealed partial class MatchStats
         (uint)player < (uint)_players ? _samples.AsSpan(player * SampleCapacity, SampleCount) : ReadOnlySpan<int>.Empty;
 
     /// <summary>
-    /// Takes one army-value sample for every player, unless the buffers are full: the summed gold + wood cost of each player's
+    /// Takes one army-value sample for every player, unless the buffers are full: the summed per-unit gold + wood (<see cref="UnitDef.UnitWorth"/>, M7-3) of each player's
     /// live non-worker units (<see cref="UnitDef.IsWorker"/>), summoned ones included, saturating at <see cref="int.MaxValue"/>.
     /// One pass over the unit slots; no allocation.
     /// </summary>
@@ -121,7 +121,7 @@ internal sealed partial class MatchStats
             if ((uint)owner >= (uint)_players) continue;
             UnitDef def = data.Units[u.TypeId[i]];
             if (def.IsWorker) continue;
-            _sampleSums[owner] += def.CostGold + def.CostWood;
+            _sampleSums[owner] += def.UnitWorth; // M7-3 (BUG-1168): a pack unit's share of the item
         }
         for (int p = 0; p < _players; p++)
             _samples[p * SampleCapacity + SampleCount] = (int)Math.Min(_sampleSums[p], int.MaxValue);

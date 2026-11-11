@@ -279,7 +279,7 @@ public class AbilityManagerTests
     {
         GameData data = Data(more: dir =>
         {
-            foreach (string f in new[] { "malazan", "whirlwind" })
+            foreach (string f in TestSim.ShippedFactions)
                 dir.EditJson($"factions/{f}/ai.json", root => root["difficulties"]!["easy"]!["useAbilities"] = false);
         });
         Assert.False(data.Ai[0].Difficulty(AiDifficulty.Easy).UseAbilities);

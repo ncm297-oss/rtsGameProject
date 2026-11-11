@@ -170,7 +170,7 @@ public class DataConversionTests
     public void Ids_DoNotDependOnOrderInsideFiles()
     {
         using TestDataDir dir = TestDataDir.CopyOfShipped();
-        foreach (string faction in new[] { "malazan", "whirlwind" })
+        foreach (string faction in TestSim.ShippedFactions)
         {
             dir.EditJson($"factions/{faction}/units.json", root =>
             {

@@ -115,6 +115,12 @@ internal sealed class MinesJson
     public int? Gold { get; set; }
 }
 
+/// <summary>M7-3: <c>common/factions.json</c>, the faction order (faction id = index in <c>order</c>; new factions append).</summary>
+internal sealed class FactionOrderJson
+{
+    public List<string?>? Order { get; set; }
+}
+
 internal sealed class FactionJson
 {
     public string? Id { get; set; }

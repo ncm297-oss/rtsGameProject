@@ -22,7 +22,8 @@ decisive fights between minutes 15 and 30.
 
 Every faction fills the same seven unit slots and ten building slots, so the sim, AI, and UI are
 written once. Factions differ through stats, one unique unit, one signature caster ability, one
-faction bonus, and one faction upgrade. A new faction is JSON plus models, not new systems.
+faction bonus, and one faction upgrade. A new faction is JSON plus models, not new systems: a folder under
+`game/data/factions/` and a line appended to the order in `common/factions.json` (M7-3).
 
 | Slot | Role | Default armor class | Counters | Countered by |
 | --- | --- | --- | --- | --- |

@@ -319,7 +319,7 @@ public class CounterCompositionTests
         GameData zero = AiScenes.DataWith(dir =>
         {
             EarlyWavesEdit(dir);
-            foreach (string f in new[] { "malazan", "whirlwind" })
+            foreach (string f in TestSim.ShippedFactions)
                 dir.EditJson($"factions/{f}/ai.json", r => r["difficulties"]!["normal"]!["counterStrength"] = 0);
         });
         var a = Match(AiDifficulty.Normal, empty, 12_000);
@@ -395,7 +395,7 @@ public class CounterCompositionTests
     /// <summary>Normal's <c>counterStrength</c> 0 in both factions, (round 2) <c>ai.starvedWaveAfter</c> 0 and (M5-9b) <c>ai.farExpandReach</c> 0: every lever of M5-9a / M5-9b off.</summary>
     private static readonly Lazy<GameData> NormalStrengthZero = new(() => AiScenes.DataWith(dir =>
     {
-        foreach (string f in new[] { "malazan", "whirlwind" })
+        foreach (string f in TestSim.ShippedFactions)
             dir.EditJson($"factions/{f}/ai.json", r => r["difficulties"]!["normal"]!["counterStrength"] = 0);
         dir.EditJson("common/rules.json", r =>
         {
@@ -406,7 +406,7 @@ public class CounterCompositionTests
 
     private static void EarlyWavesEdit(TestDataDir dir)
     {
-        foreach (string f in new[] { "malazan", "whirlwind" })
+        foreach (string f in TestSim.ShippedFactions)
             dir.EditJson($"factions/{f}/ai.json", root =>
             {
                 foreach (JsonNode? o in root["openings"]!.AsArray())

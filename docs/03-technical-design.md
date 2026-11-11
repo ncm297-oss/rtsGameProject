@@ -2974,13 +2974,12 @@ slow is **not** here: a "when it ends, apply" hook needs a decision on the statu
   more (the `onHit` entry itself is hashed with the passives, every field, since M4-4b-3a). So data without packs or
   `onHit` passives hashes exactly as before: the golden replay's header data hash did not move, nor did any `k` line. No
   new hashed state: a pack is ordinary units, a bite an ordinary status entry.
-- **The AI.** `PlayerView.HalfPop` is `World.HalfPop` (live units + started items), so the `pop` step trigger and
-  `attack.minArmyPop` count a pack from its start, before a dog stands (proven, no code). **Correction (QA, BUG-1168):** only
-  the `pop` step trigger reads `World.HalfPop`; `attack.minArmyPop` is the live army's half-pop (`MilitaryManager` /
-  `ArmySize`), so it counts a pack once its dogs stand (×3 then), and every per-unit worth (`ArmySize`, `minArmyCost`, the
-  defense, the army-value sample) counts a pack unit at the whole item's cost: the next sim task fixes both. `ProductionManager`'s
-  composition share counts queued items (one pack = one unit's share); no shipped unit is a pack, so no AI behaviour
-  changed; revisit with the Teblor AI.
+- **The AI.** `PlayerView.HalfPop` is `World.HalfPop` (live units + started items), so the `pop` step trigger counts a
+  pack from its start, before a dog stands (`PackProductionTests`). `attack.minArmyPop` is the live army's half-pop
+  (`MilitaryManager` / `ArmySize`), so it counts a pack once its dogs stand (three units' half-pop then). Since M7-3
+  (BUG-1168) every per-unit worth (`ArmySize`, the wave's `minArmyCost` sum, the defense's worths, the intruders' worth, the
+  army-value sample) reads a pack unit at its share of the item (`UnitDef.UnitCostGold` / `UnitCostWood`), and the
+  composition share (`ProductionManager`) counts a queued pack as its `spawnCount` units: see "Implementation (M7-3)".
 - **Tests:** `Economy/PackProductionTests` (one item, 3 units, the reservation, cancels at 2 / 150 / 279 of 280, the cap
   with room for two, the spawn rule with 2 then 3 free cells and with 2 free unit slots, the rally order twice, the AI's
   pop trigger), `Combat/OnHitPassiveTests` (melee, projectile, splash neighbour, pulse, tower, killing blow, the refresh,
@@ -2993,7 +2992,62 @@ slow is **not** here: a "when it ends, apply" hook needs a decision on the statu
 `trainTime` per item, `pop` per unit) and a third passive shape,
 `{ "trigger": "onHit", "status": <statuses.json id>, "magnitude": <as applyStatus>, "duration": <s, at least a tick> }`
 (Hamstring: `slowed`, 0.2, 2). The war-dog row is then `spawnCount` 3, `pop` 1, `cost` 120 / 0, `trainTime` 24, with the
-`onHit` passive.
+`onHit` passive. In `ai.json`, a build-order `train` step's `count` counts **items** (queue Trains), not units: "train 1
+war-dog pack = 1", and it spawns three dogs (M7-3). The AI's worth of a dog is 40 / 0 (the item's cost / 3), so an
+opening's `attack.minArmyCost` is written in what the army cost. An item's whole population (`spawnCount` x `pop`) must be at
+most `rules.popCap` (M7-3, BUG-1167: one load error otherwise).
+
+### Implementation (M7-3)
+
+M7's room for a third faction: the Teblor roster (data, D28) must land as data only, without moving any Malazan v Whirlwind
+state hash, digest or golden `k` line; and the two pack bugs its war-dog row and AI need.
+
+- **The faction order** (`common/factions.json`, `{ "order": [...] }`, see "Data schema"). Before M7-3 the loader sorted the
+  faction folders ordinally ("faction id = index in this order") and every per-faction key table globally, so a `teblor`
+  folder and its `teblor_*` keys would land between `malazan` and `whirlwind` and renumber every Whirlwind type. Now
+  `GameData.Factions` is in the list's order, and the **unit type** and **building type** id tables go faction by faction in
+  that order, each faction's keys ordinal-sorted within it (`DataLoader.FactionKeys`). For the shipped two this is
+  bit-identical to the old ids (every `malazan_*` key sorts before every `whirlwind_*` one): `Data/FactionOrderTests` pins
+  every unit, building, tech and ability id as generated on 0416dcc. A new faction appends its id; listed anywhere else it
+  renumbers the factions after it (the order is the rule, not the folder name). Why one list in one file and not an `order`
+  integer in each `faction.json`: one decision in one place, and a gap or a tie can't happen.
+- **Not under the order: techs and abilities** (BUG-1171). Common and faction techs share one id table, and the factions'
+  abilities another, both still sorted globally by key (`age_ii`, `armor_1`, `armor_2`, `dryjhnas_prophecy` (Whirlwind),
+  ..., `moranth_supply` (Malazan), ...; `cusser`, `sandstorm`, `telas_fire`). No faction-grouped rule reproduces those ids,
+  so splitting them would move every hash once (a golden regen this task does not make). Until then a new faction's tech and
+  ability ids must sort after every shipped one, or the shipped digests move: a `teblor_` tech sorts after every shipped
+  tech, but a `teblor_` ability sorts **before** `telas_fire` and would renumber it. Statuses, resources and projectiles are
+  common and keep the global rule.
+- **What is hashed.** The order file is not: `GameData.ContentHash` already hashes every key in id order, so a reordering
+  changes it through the keys. The shipped data's hash, and so the golden replay's header (`3E33BCE5D418EC9B`), did not move;
+  no golden was regenerated. Lookups by key (`GameData.FindUnit` and the rest) walk the table instead of a binary search,
+  since a table is ordinal only within a faction (setup and test calls; the sim's hot paths use ids).
+- **The proof on a copy** (`Data/FactionOrderTests`): the shipped data plus a third faction `teblor` (a copy of Malazan's
+  files, ids renamed `teblor_*`, no abilities) appended to the order keeps every shipped id; a 3,000-tick Malazan v Whirlwind
+  AI match hashes the same on every tick as on the shipped data; two `StandardPresetPinQaTests` AI rows and two
+  `NonHardMatchPinQaTests` rows give their pinned digests on the copy (Stress); the copy's `ContentHash` differs (new keys).
+  With `teblor` first every shipped type is renumbered and the match's hashes move. Why a whole copy and not a minimal folder:
+  the loader requires every faction's `techs.json` and `ai.json` and every template slot filled (BUG-0010).
+- **A unit's worth** (BUG-1168). `UnitDef.UnitCostGold` / `UnitCostWood` = the item's `CostGold` / `CostWood` /
+  `SpawnCount`, integer division with the remainder dropped (a 120 / 0 pack of 3 is 40 / 0 a dog; a 54 / 20 pack of 3 is
+  18 / 6, so three such units are worth 72 of the 74 paid), and `UnitWorth` their sum. Every per-unit worth reads it:
+  `AiPlayer.ArmySize`, `MilitaryManager`'s wave check against `attack.minArmyCost`, `DefenseManager`'s picked, member,
+  cheapest and recall worths, `AiPlayer.IntruderWorth`, and `MatchStats.Sample`'s army value. What is paid, refunded and
+  checked for affordability stays the item's `CostGold` / `CostWood`. The AI's queue census counts a queued pack as
+  `SpawnCount` units (`Queued[type] += SpawnCount`, per think), so `ProductionManager`'s composition share sees the dogs
+  coming; a build-order `train` step's `count` counts items (accepted Trains), unchanged and now documented. For a unit
+  that is not a pack every number is what it was, so no shipped number, pin or digest moved.
+- **The hard-cap check** (BUG-1167). A unit row whose item population is above the hard cap, `HalfPop x SpawnCount >
+  rules.HalfPopCap`, is one load error, at `units[i].spawnCount` (or at `.pop` when `spawnCount` is absent), naming both
+  numbers ("spawnCount 8 x pop 13 = 104 pop, above rules.popCap 100: it could never start"). Before it such an item loaded,
+  was accepted and paid, and waited at the head of its queue for the match (`ProductionSystem` starts an item only with
+  room). Checked in the unit pass once `rules.json` is read; a broken `popCap` is reported once, not again at every unit.
+- **Tests:** `Data/FactionOrderTests` (the id pin, the golden header, every order-file error, the swap, the appended and the
+  first `teblor`, the 3,000-tick match, the four copy pins), `Ai/PackWorthTests` (the worth, a Normal wave at
+  `minArmyCost` counted per dog, the census and the train step's count), `DataValidationTests` rows (pop 101 / 100.5 at
+  `.pop`, the cap's edges at `.spawnCount`), QA's `PackQaTests.APackAboveTheHardCap_IsALoadError` and
+  `APacksArmyValue_IsTheItemsCost_NotSpawnCountTimesIt` un-skipped. Tests that edit every faction's files read
+  `TestSim.ShippedFactions` (the data's keys in id order) instead of a literal pair.
 
 ### Implementation (M7-V1)
 
@@ -3332,7 +3386,7 @@ checked. The data-validation test is `DataValidationTests.ShippedData_LoadsWithN
 
 Shipped files: `common/damage_table.json`, `common/rules.json`, `common/resources.json` (M3-1), `common/techs.json`
 (M3-5), `common/projectiles.json` (M4-2b), and `faction.json` + `units.json` + `buildings.json` (M3-2) + `techs.json`
-(M3-5) for `malazan` and `whirlwind`, and `common/statuses.json` (M4-4a). All fourteen are required, and since M5-1 `factions/<id>/ai.json` for every faction (sixteen). `factions/<id>/abilities.json`
+(M3-5) for `malazan` and `whirlwind`, and `common/statuses.json` (M4-4a). All fourteen are required, and since M5-1 `factions/<id>/ai.json` for every faction (sixteen), and since M7-3 `common/factions.json` (seventeen). `factions/<id>/abilities.json`
 (M4-4a) is optional: shipped for `malazan` and (M4-4b-2) `whirlwind`. `maps/*.json` (M6-S7) is optional too: one file a
 hand-made map, shipped `maps/raraku.json`. Everything else in the tree above (other factions) arrives with the milestone that
 consumes it.
@@ -3342,6 +3396,7 @@ consumes it.
 | `damage_table.json` | `armorClasses: [{id, displayName}]`, `damageTypes: [{id, displayName, ignoresArmor?, multipliers: {<armorClass>: x}}]`. Every type must list every class. `ignoresArmor` (default false) is how Magic skips armor |
 | `resources.json` | `{ "resources": [ ... ] }`, each `{id, displayName, description, resource, footprint {width, height}}`: `resource` is `gold` or `wood`, footprint sides are cells, 1-4 (`DataLimits.MaxFootprint`). Amounts are not here: a tree holds `rules.json` `treeWood`, a mine `startMines.gold` (M3-1, see "Economy implementation") |
 | `rules.json` | docs/02 Economy table: `startingResources` (M6-S6, replacing `startingGold` / `startingWood`: a list of presets in the setup's order, each `{id, displayName, description?, gold, wood, aiSpendAbove?}`; ids unique snake_case of at most 64 characters, a `standard` entry required, gold and wood 0 to 1,000,000, at most 16 presets; shipped `standard` 200 / 200 and `high` 1000 / 1000, Producer default; `aiSpendAbove` (M6-S6 fix round 1, BUG-1050) optional, 0 to 1,000,000, 0 or left out = off: the AI's spend-down threshold in gold + wood, shipped `high` 200, `standard` none; every field, the count and the order in `ContentHash`), `startingWorkers`, `popCap`, `workerCarry`, `gatherRate {gold, wood}` (per second), `startMines` / `expansionMines {count, gold}`, `treeWood`, `nodeSearchRadius`, `repair {rateFactor, costFactor}` (M3-3), `buildingSight` (M4-3a: meters, above 0 and at most 64, the sight of a building whose entry gives none; shipped 12, a Producer default: docs/02 gives sight only for the Watch Tower), `stealth {proximity, revealSeconds}` (M4-5: meters and seconds, above 0; shipped 3 and 3, docs/02 "Stealth and detection"). Pop provided by buildings comes with `buildings.json` (M3); the Age II cost with `techs.json` (M3-5) |
+| `common/factions.json` | M7-3: `{ "order": ["malazan", "whirlwind"] }`, the faction order: faction id = index in `order`, and unit and building type ids go faction by faction in this order (ordinal within a faction). Every folder under `factions/` must be listed and every entry must have a folder; a repeat, an entry that isn't a snake_case id (or a string) and more than 8 entries (`DataLimits.MaxFactions`) are errors, one each at `order[i]` (a folder not listed: at `order`, naming the folder). Append-only: a new faction adds its id at the end. Not hashed (the keys in id order are). See "Implementation (M7-3)" |
 | `faction.json` | `id` (must equal the folder name), `displayName`, `description`, `bonus {displayName, description}`, `resources {gold, wood: {displayName}}`, `palette {primary, secondary, accent}` as `#RRGGBB`; `regen` (M7-1, optional: absent = no regeneration) `{hpPerSecond, delay}`, both required when the object is there: `hpPerSecond` above 0 and at most 100 (`DataLimits.MaxRegenPerSecond`) and at least 0.05 (one fixed-point unit a tick), to `FactionDef.RegenPerTick` (`round(hpPerSecond x 400 / 20)`: 1 → 20); `delay` seconds, 0 or more, at most 3600, to `FactionDef.RegenDelayTicks` (6 → 120); an unknown key is an error. No shipped faction has one yet (Teblor, Andii: M7 / M9). See "Implementation (M7-1)" |
 | `buildings.json` | `{ "buildings": [ ... ] }`, each `{id, displayName, description, slot, footprint {width, height}, hp, armor, cost {gold, wood}, buildTime, popProvided, dropOff}`: `slot` is one of the ten template slots (`DataLimits.BuildingSlotIds`), footprint sides 1-4 cells, `buildTime` in seconds (to ticks), `popProvided` a multiple of 0.5 (to half-pop), `dropOff` a required bool, `requires` an optional list of tech / building ids (M3-5; resolved and gating placement since M3-6), `sight` optional meters (M4-3a: above 0 and at most 64, default `rules.json` `buildingSight`; shipped 24 on both watch towers, docs/02), `attack` optional (M4-3b: the unit `attack` object; value at least 1, range above 0, an aimed `projectile` required, `targets` not `buildings`; shipped on both watch towers), `detector` optional meters (M4-3b: above 0 and at most 64; shipped 16 on both watch towers; unused until M4-5). Ids unique across factions (M3-2, see "Economy implementation"); exactly one building per slot per faction (M3-6, BUG-0010) |
 | `techs.json` | `{ "techs": [ ... ] }` in `common/` (shared by every faction) and in each faction folder (its own), each `{id, displayName, description, researchedAt, cost {gold, wood}, researchTime, requires?, requiresAnyOf?, effects: [{stat, amount, appliesTo {attackType?, tags?, units?, siege?}}]}`: `researchedAt` is a building slot id (a common tech resolves to each faction's building of it; a faction without one is an error), `researchTime` in seconds (to ticks), `requires` tech / building ids (resolved and gating research since M3-6), `requiresAnyOf` `{count, of: [slot ids, or in a faction file its own building ids]}`: met when `count` of the distinct listed slots hold an own finished building (M3-6; shipped on `age_ii` only), `effects` may be empty. `stat` is one of `attack`, `armor`, `range`, `hp`, `abilityCooldown` (`DataLimits.TechStatIds`); `amount` is non-zero, whole for attack / armor / hp, meters for range, seconds for ability cooldown (to ticks, negative shortens it). `appliesTo` is required (`{}` = every unit); each filter it sets must match: `attackType` a damage type, `tags` any one of the unit's tags (each must be a tag some unit has), `units` unit ids (a faction tech's must be its own), `siege` true / false for the `siege` slot; a `tags` or `units` list set to `[]` is an error (M3-6, BUG-0098). Tech ids are unique across all techs files and may not equal a building id (M3-6); `DataLimits.AgeTechIds` (`age_ii`) must be a common tech (M3-5, see "Implementation (M3-5)") |

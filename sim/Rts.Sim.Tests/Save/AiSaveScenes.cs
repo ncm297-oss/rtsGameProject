@@ -81,9 +81,10 @@ internal static class AiSaveScenes
     /// a hall, five workers and a small army (line, ranged and a caster), and two line units of each seat raiding the next
     /// seat's base from the start (so there is a fight to defend against).
     /// </summary>
-    internal static SaveScene AiMatch(ulong seed, int players, AiDifficulty difficulty, bool cramped = false) =>
+    /// <remarks>M7-3: <paramref name="data"/> (not with <paramref name="cramped"/>) plays the same scene on other data, e.g. a third faction appended to the order (<c>Data/FactionOrderTests</c>).</remarks>
+    internal static SaveScene AiMatch(ulong seed, int players, AiDifficulty difficulty, bool cramped = false, GameData? data = null) =>
         Match($"ai_seed{seed}_{players}seats_{difficulty}{(cramped ? "_cramped" : "")}", seed, Enumerable.Range(0, players)
-            .Select(p => new PlayerSeat(p % 2, SeatController.Ai, (AiDifficulty)(((int)difficulty + p) % 3))).ToArray(), raiders: 2, script: null, cramped ? CrampedData : null);
+            .Select(p => new PlayerSeat(p % 2, SeatController.Ai, (AiDifficulty)(((int)difficulty + p) % 3))).ToArray(), raiders: 2, script: null, cramped ? CrampedData : data);
 
     /// <summary>The menu's match as the game starts it: a human (scripted by <see cref="MatchScript"/>) against an AI at Normal.</summary>
     internal static SaveScene HumanVsAi(ulong seed)

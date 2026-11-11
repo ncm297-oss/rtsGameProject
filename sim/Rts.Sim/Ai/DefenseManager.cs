@@ -152,17 +152,17 @@ internal static class DefenseManager
             UnitDef def = ai.Data.Units[u.TypeId];
             if (board.DefenderGeneration[slot] == generation)
             {
-                picked += def.CostGold + def.CostWood;
+                picked += def.UnitWorth;
                 continue;
             }
             bool member = board.WaveActive && board.WaveGeneration[slot] == generation && board.WaveFlag[slot] != MilitaryManager.ToRally;
             if (member)
             {
                 memberHalf += def.HalfPop;
-                memberCost += def.CostGold + def.CostWood;
+                memberCost += def.UnitWorth;
             }
             if (!Free(ai, slot, u)) continue;
-            cheapest = Math.Min(cheapest, def.CostGold + def.CostWood);
+            cheapest = Math.Min(cheapest, def.UnitWorth);
             int at = member ? --top : home++;
             board.DefenseOrder[at] = slot;
             board.DefenseKey[at] = Vector2.DistanceSquared(u.Position, member ? ai.HallPoint : board.DefensePoint);
@@ -184,7 +184,7 @@ internal static class DefenseManager
             for (int i = 0; i < board.DefenseOrderCount; i++)
             {
                 UnitDef def = TypeOf(ai, board.DefenseOrder[i]);
-                int cost = def.CostGold + def.CostWood;
+                int cost = def.UnitWorth;
                 if (i >= home)
                 {
                     if (!Keeps(board, half - def.HalfPop, worth - cost)) continue;
@@ -206,7 +206,7 @@ internal static class DefenseManager
             Swap(board, 0, --left);
             SiftDown(board, 0, 0, left, minHeap: true);
             UnitDef def = TypeOf(ai, slot);
-            int cost = def.CostGold + def.CostWood;
+            int cost = def.UnitWorth;
             if (picked > 0f && picked + cost * 0.5f >= answer) continue;
             ai.View.TryGetUnit(slot, out SeenUnit u);
             board.DefenderGeneration[slot] = u.Handle.Generation;
@@ -219,7 +219,7 @@ internal static class DefenseManager
         {
             int slot = board.DefenseOrder[i];
             UnitDef def = TypeOf(ai, slot);
-            int cost = def.CostGold + def.CostWood;
+            int cost = def.UnitWorth;
             if (picked > 0f && picked + cost * 0.5f >= answer || !Keeps(board, memberHalf - def.HalfPop, memberCost - cost)) continue;
             memberHalf -= def.HalfPop;
             memberCost -= cost;

@@ -19,15 +19,15 @@ public sealed class GameData
     public required DamageTable DamageTable { get; init; }
     /// <summary>Global economy rules.</summary>
     public required RulesDef Rules { get; init; }
-    /// <summary>Factions, indexed by faction id (ordinal order of their string ids).</summary>
+    /// <summary>Factions, indexed by faction id (M7-3: the order of <c>common/factions.json</c>, append-only).</summary>
     public required ImmutableArray<FactionDef> Factions { get; init; }
-    /// <summary>Unit types of every faction, indexed by unit id (ordinal order of their string ids).</summary>
+    /// <summary>Unit types of every faction, indexed by unit id (M7-3: faction by faction in faction order, ordinal order of the string ids within a faction).</summary>
     public required ImmutableArray<UnitDef> Units { get; init; }
     /// <summary>Resource node types (trees, gold mines), indexed by resource type id (ordinal order of their string ids). The loader always sets it; empty only for hand-built data.</summary>
     public ImmutableArray<ResourceDef> Resources { get; init; } = ImmutableArray<ResourceDef>.Empty;
     /// <summary>Projectile types of <c>common/projectiles.json</c> (M4-2b), indexed by id (ordinal order of their string ids); what <see cref="AttackDef.ProjectileTypeId"/> indexes. The loader always sets it; empty only for hand-built data.</summary>
     public ImmutableArray<ProjectileDef> Projectiles { get; init; } = ImmutableArray<ProjectileDef>.Empty;
-    /// <summary>Building types of every faction, indexed by building id (ordinal order of their string ids). The loader always sets it; empty only for hand-built data.</summary>
+    /// <summary>Building types of every faction, indexed by building id (M7-3: faction by faction in faction order, ordinal within a faction). The loader always sets it; empty only for hand-built data.</summary>
     public ImmutableArray<BuildingDef> Buildings { get; init; } = ImmutableArray<BuildingDef>.Empty;
     /// <summary>Per building type id, the unit type ids it trains (whose <see cref="UnitDef.TrainedAtTypeId"/> names it), ascending; built at load (M3-4). Empty for hand-built data.</summary>
     /// <remarks>Derived from the units' <see cref="UnitDef.TrainedAtTypeId"/>, which <see cref="ContentHash"/> covers.</remarks>
@@ -37,13 +37,13 @@ public sealed class GameData
     public ImmutableArray<int> UnitsTrainedAt(int buildingTypeId) =>
         (uint)buildingTypeId < (uint)Trains.Length ? Trains[buildingTypeId] : ImmutableArray<int>.Empty;
 
-    /// <summary>Techs of <c>common/techs.json</c> and every faction's <c>techs.json</c>, indexed by tech id (ordinal order of their string ids across the files), M3-5. Empty for hand-built data.</summary>
+    /// <summary>Techs of <c>common/techs.json</c> and every faction's <c>techs.json</c>, indexed by tech id (ordinal order of their string ids across the files, not by faction: BUG-1171), M3-5. Empty for hand-built data.</summary>
     public ImmutableArray<TechDef> Techs { get; init; } = ImmutableArray<TechDef>.Empty;
 
     /// <summary>Every status type (<c>common/statuses.json</c>, M4-4a), indexed by status id (ordinal order of the string ids).</summary>
     public ImmutableArray<StatusDef> Statuses { get; init; } = ImmutableArray<StatusDef>.Empty;
 
-    /// <summary>Every ability of every faction (<c>factions/&lt;id&gt;/abilities.json</c>, M4-4a), indexed by ability id (ordinal order of the string ids).</summary>
+    /// <summary>Every ability of every faction (<c>factions/&lt;id&gt;/abilities.json</c>, M4-4a), indexed by ability id (ordinal order of the string ids across factions, not by faction: BUG-1171).</summary>
     public ImmutableArray<AbilityDef> Abilities { get; init; } = ImmutableArray<AbilityDef>.Empty;
 
     /// <summary>
@@ -545,17 +545,13 @@ public sealed class GameData
     /// <summary>Faction id for a string id, or -1.</summary>
     public int FindFaction(string key) => Find(Factions, static f => f.Key, key);
 
-    // Binary search: the arrays are in ordinal order of their keys, which is how ids were assigned.
+    // A walk, not a binary search (M7-3): unit types, buildings and factions are in faction order, ordinal only within a
+    // faction (common/factions.json), so no table is safely sorted by its keys. Lookups by string id are setup-time and test
+    // calls (the tables are tens of entries); the sim's hot paths use ids.
     private static int Find<T>(ImmutableArray<T> items, Func<T, string> keyOf, string key)
     {
-        int lo = 0, hi = items.Length - 1;
-        while (lo <= hi)
-        {
-            int mid = (lo + hi) >> 1;
-            int c = string.CompareOrdinal(keyOf(items[mid]), key);
-            if (c == 0) return mid;
-            if (c < 0) lo = mid + 1; else hi = mid - 1;
-        }
+        for (int i = 0; i < items.Length; i++)
+            if (string.Equals(keyOf(items[i]), key, StringComparison.Ordinal)) return i;
         return -1;
     }
 }

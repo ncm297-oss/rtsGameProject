@@ -39,7 +39,10 @@ public class DataLoaderBoundsQaTests
     [InlineData("attack.cooldown", "3601", false)]
     [InlineData("attack.windup", "0", true)]
     [InlineData("attack.windup", "3601", false)]
-    [InlineData("pop", "1000000", true)]
+    // M7-3 (BUG-1167): a pop above rules.popCap (100) can never start, so it is one error at .pop before the format bound;
+    // the cap itself loads.
+    [InlineData("pop", "1000000", false)]
+    [InlineData("pop", "100", true)]
     [InlineData("pop", "1000000.5", false)]
     public void UnitNumber_AtAndJustAboveTheLimit(string field, string raw, bool ok)
     {
