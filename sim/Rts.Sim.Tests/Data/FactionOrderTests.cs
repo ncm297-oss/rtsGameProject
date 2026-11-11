@@ -12,6 +12,8 @@ namespace Rts.Sim.Tests;
 /// <c>order</c>, and unit and building type ids go faction by faction in that order (ordinal within a faction), so a third
 /// faction's folder appended to the list moves no Malazan or Whirlwind id, state hash or digest; listed first, it renumbers
 /// everything (the order is the rule, not the folder name). The load errors are one each, at <c>order[i]</c> or naming the folder.
+/// M7-3b (BUG-1171): tech ids are <c>common/techs.json</c>'s first, then each faction's in the order, and ability ids faction
+/// by faction, each ordinal within its file, so a third faction's naturally named tech and ability move nothing either.
 /// </summary>
 [Collection(SerialCollection.Name)]
 public class FactionOrderTests
@@ -25,8 +27,8 @@ public class FactionOrderTests
     // ------------------------------------------------------------------ criterion 2: the shipped ids
 
     /// <summary>
-    /// Every shipped unit, building, tech and ability key's id, generated once on 0416dcc (the folders' ordinal order and the
-    /// global key sort, before the order file). The order file must reproduce it bit for bit.
+    /// Every shipped unit and building key's id, generated once on 0416dcc (the folders' ordinal order and the global key
+    /// sort, before the order file). The order file must reproduce it bit for bit.
     /// </summary>
     private static readonly (string Key, int Id)[] Units0416 =
     {
@@ -45,29 +47,41 @@ public class FactionOrderTests
         ("whirlwind_shrine", 16), ("whirlwind_smithy", 17), ("whirlwind_supply_cache", 18), ("whirlwind_tent", 19),
     };
 
-    private static readonly (string Key, int Id, int Faction)[] Techs0416 =
+    /// <summary>
+    /// M7-3b: every shipped tech key's id under the rule (the common file's ordinally, then Malazan's, then Whirlwind's). Before
+    /// M7-3b (0416dcc to de591f0) one ordinal table across the files: age_ii 0, armor_1 1, armor_2 2, dryjhnas_prophecy 3,
+    /// melee_weapons_1 4, melee_weapons_2 5, moranth_supply 6, ranged_weapons_1 7, ranged_weapons_2 8.
+    /// </summary>
+    private static readonly (string Key, int Id, int Faction)[] TechsM73b =
     {
-        ("age_ii", 0, -1), ("armor_1", 1, -1), ("armor_2", 2, -1), ("dryjhnas_prophecy", 3, 1), ("melee_weapons_1", 4, -1),
-        ("melee_weapons_2", 5, -1), ("moranth_supply", 6, 0), ("ranged_weapons_1", 7, -1), ("ranged_weapons_2", 8, -1),
+        ("age_ii", 0, -1), ("armor_1", 1, -1), ("armor_2", 2, -1), ("melee_weapons_1", 3, -1), ("melee_weapons_2", 4, -1),
+        ("ranged_weapons_1", 5, -1), ("ranged_weapons_2", 6, -1), ("moranth_supply", 7, 0), ("dryjhnas_prophecy", 8, 1),
     };
 
-    private static readonly (string Key, int Id, int Faction)[] Abilities0416 = { ("cusser", 0, 0), ("sandstorm", 1, 1), ("telas_fire", 2, 0) };
+    /// <summary>M7-3b: every shipped ability key's id (Malazan's ordinally, then Whirlwind's). Before: cusser 0, sandstorm 1, telas_fire 2.</summary>
+    private static readonly (string Key, int Id, int Faction)[] AbilitiesM73b = { ("cusser", 0, 0), ("telas_fire", 1, 0), ("sandstorm", 2, 1) };
 
     [Fact]
-    public void TheShippedIds_AreBitIdenticalTo0416dcc()
+    public void TheShippedIds_AreBitIdenticalTo0416dcc_AndTheTechsAndAbilitiesToM73b()
     {
         GameData d = TestSim.Data;
         Assert.Equal(new[] { "malazan", "whirlwind" }, TestSim.ShippedFactions); // the pin is about these two
         Assert.Equal(Units0416, d.Units.Select(u => (u.Key, u.Id)));
         Assert.Equal(Buildings0416, d.Buildings.Select(b => (b.Key, b.Id)));
-        Assert.Equal(Techs0416, d.Techs.Select(t => (t.Key, t.Id, t.Faction)));
-        Assert.Equal(Abilities0416, d.Abilities.Select(a => (a.Key, a.Id, a.Faction)));
+        Assert.Equal(TechsM73b, d.Techs.Select(t => (t.Key, t.Id, t.Faction)));
+        Assert.Equal(AbilitiesM73b, d.Abilities.Select(a => (a.Key, a.Id, a.Faction)));
         foreach ((string key, int id) in Units0416) Assert.Equal(id, d.FindUnit(key));
         foreach ((string key, int id) in Buildings0416) Assert.Equal(id, d.FindBuilding(key));
+        foreach ((string key, int id, _) in TechsM73b) Assert.Equal(id, d.FindTech(key));
+        foreach ((string key, int id, _) in AbilitiesM73b) Assert.Equal(id, d.FindAbility(key));
         Assert.Equal((0, 1), (d.FindFaction("malazan"), d.FindFaction("whirlwind")));
+        // The age tech and the units' ability lists follow the renumbering (they resolve by key at load).
+        Assert.Equal(new[] { d.FindTech("age_ii") }, d.AgeTechs);
+        Assert.Equal(new[] { d.FindAbility("telas_fire") }, d.Units[d.FindUnit("malazan_cadre_mage")].Abilities);
+        Assert.Equal(new[] { d.FindAbility("sandstorm") }, d.Units[d.FindUnit("whirlwind_priest")].Abilities);
     }
 
-    /// <summary>The order file is not hashed (<see cref="GameData.ContentHash"/> hashes the keys in id order): the golden's header is unchanged (rule 49, compared dynamically).</summary>
+    /// <summary>The order file is not hashed (<see cref="GameData.ContentHash"/> hashes the keys in id order): the shipped hash is the golden's header (rule 49, compared dynamically).</summary>
     [Fact]
     public void TheShippedContentHash_IsTheGoldenHeaders()
     {
@@ -159,27 +173,27 @@ public class FactionOrderTests
     // ------------------------------------------------------------------ criterion 3: a third faction on a copy
 
     /// <summary>
-    /// Adds a third faction <c>teblor</c> to <paramref name="dir"/>, a copy of Malazan's files with its ids renamed
-    /// (<c>malazan_*</c> to <c>teblor_*</c>, its tech to <c>teblor_supply</c>), without abilities, listed last or
-    /// <paramref name="first"/>. Why a whole copy and not the brief's minimal folder (a worker, a hall and a house, no
-    /// <c>ai.json</c>): the loader requires every faction's <c>ai.json</c> and <c>techs.json</c> and every template slot filled
-    /// (BUG-0010), so a minimal folder is a load error. Why no abilities and a <c>teblor_</c> tech: tech and ability ids are
-    /// still one global ordinal table (BUG-1171), and a key sorting among the shipped ones would renumber them.
+    /// Adds a third faction <c>teblor</c> to <paramref name="dir"/>, a full copy of Malazan's files (abilities too) with its ids
+    /// renamed the way D28 will name them: <c>malazan_*</c> to <c>teblor_*</c>, its tech to <c>teblor_blood_oil_anointing</c>,
+    /// its abilities to <c>blood_oil_frenzy</c> (it sorts before every shipped ability) and <c>teblor_cusser</c>; listed last
+    /// or <paramref name="first"/>. Why a whole copy and not a minimal folder: the loader requires every faction's
+    /// <c>ai.json</c> and <c>techs.json</c> and every template slot filled (BUG-0010). M7-3b: before it, natural names like
+    /// these renumbered the shipped techs and abilities (BUG-1171), so the copy had no abilities and a tech sorting last.
     /// </summary>
     internal static void AddTeblor(TestDataDir dir, bool first = false)
     {
         string from = dir.FullPath("factions/malazan"), to = dir.FullPath("factions/teblor");
         Directory.CreateDirectory(to);
-        foreach (string name in new[] { "faction.json", "units.json", "buildings.json", "techs.json", "ai.json" })
+        foreach (string file in Directory.GetFiles(from))
         {
-            string text = File.ReadAllText(Path.Combine(from, name)).Replace("malazan_", "teblor_").Replace("moranth_supply", "teblor_supply");
-            File.WriteAllText(Path.Combine(to, name), text);
+            string text = File.ReadAllText(file)
+                .Replace("malazan_", "teblor_")
+                .Replace("moranth_supply", "teblor_blood_oil_anointing")
+                .Replace("\"telas_fire\"", "\"blood_oil_frenzy\"")
+                .Replace("\"cusser\"", "\"teblor_cusser\"");
+            File.WriteAllText(Path.Combine(to, Path.GetFileName(file)), text);
         }
         dir.EditJson("factions/teblor/faction.json", root => root["id"] = "teblor");
-        dir.EditJson("factions/teblor/units.json", root =>
-        {
-            foreach (JsonNode? u in root["units"]!.AsArray()) u!.AsObject().Remove("abilities");
-        });
         WriteOrder(dir, first ? "{\"order\": [\"teblor\", \"malazan\", \"whirlwind\"]}" : "{\"order\": [\"malazan\", \"whirlwind\", \"teblor\"]}");
     }
 
@@ -211,12 +225,15 @@ public class FactionOrderTests
         Assert.Equal(new[] { "malazan", "whirlwind", "teblor" }, d.Factions.Select(f => f.Key));
         Assert.Equal(Units0416, d.Units.Take(Units0416.Length).Select(u => (u.Key, u.Id)));
         Assert.Equal(Buildings0416, d.Buildings.Take(Buildings0416.Length).Select(b => (b.Key, b.Id)));
-        Assert.Equal(Techs0416, d.Techs.Take(Techs0416.Length).Select(t => (t.Key, t.Id, t.Faction)));
-        Assert.Equal(Abilities0416, d.Abilities.Select(a => (a.Key, a.Id, a.Faction)));
+        Assert.Equal(TechsM73b, d.Techs.Take(TechsM73b.Length).Select(t => (t.Key, t.Id, t.Faction)));
+        Assert.Equal(AbilitiesM73b, d.Abilities.Take(AbilitiesM73b.Length).Select(a => (a.Key, a.Id, a.Faction)));
         Assert.All(d.Units.Skip(Units0416.Length), u => Assert.Equal(2, u.Faction));
         Assert.Equal("teblor_cadre_mage", d.Units[Units0416.Length].Key); // ordinal within the faction
         Assert.All(d.Buildings.Skip(Buildings0416.Length), b => Assert.Equal(2, b.Faction));
-        Assert.Equal(("teblor_supply", 2), (d.Techs[^1].Key, d.Techs[^1].Faction));
+        Assert.Equal(new[] { ("teblor_blood_oil_anointing", 9, 2) }, d.Techs.Skip(TechsM73b.Length).Select(t => (t.Key, t.Id, t.Faction)));
+        // blood_oil_frenzy sorts before every shipped ability, yet its id comes after theirs (BUG-1171's symptom gone).
+        Assert.Equal(new[] { ("blood_oil_frenzy", 3, 2), ("teblor_cusser", 4, 2) }, d.Abilities.Skip(AbilitiesM73b.Length).Select(a => (a.Key, a.Id, a.Faction)));
+        Assert.Equal(new[] { d.FindAbility("blood_oil_frenzy") }, d.Units[d.FindUnit("teblor_cadre_mage")].Abilities);
         Assert.NotEqual(TestSim.Data.ContentHash(), d.ContentHash()); // new keys
     }
 
@@ -227,6 +244,10 @@ public class FactionOrderTests
         Assert.Equal(new[] { "teblor", "malazan", "whirlwind" }, d.Factions.Select(f => f.Key));
         Assert.Equal(7 + 0, d.FindUnit("malazan_cadre_mage"));
         Assert.Equal(10 + 0, d.FindBuilding("malazan_armory"));
+        // M7-3b: the common techs keep their ids (they come first whatever the order); every faction tech and ability moves.
+        Assert.Equal(TechsM73b.Take(7), d.Techs.Take(7).Select(t => (t.Key, t.Id, t.Faction)));
+        Assert.Equal((7, 8, 9), (d.FindTech("teblor_blood_oil_anointing"), d.FindTech("moranth_supply"), d.FindTech("dryjhnas_prophecy")));
+        Assert.Equal(new[] { "blood_oil_frenzy", "teblor_cusser", "cusser", "telas_fire", "sandstorm" }, d.Abilities.Select(a => a.Key));
         Assert.NotEqual(TestSim.Data.ContentHash(), d.ContentHash());
         Assert.NotEqual(s_appended.Value.ContentHash(), d.ContentHash());
     }

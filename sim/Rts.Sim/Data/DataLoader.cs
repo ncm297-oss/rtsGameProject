@@ -11,7 +11,8 @@ namespace Rts.Sim.Data;
 /// <summary>Reads and validates every JSON definition under <c>game/data/</c> into a <see cref="GameData"/>.</summary>
 /// <remarks>
 /// Collects every problem instead of stopping at the first, so one run lists all broken data.
-/// String ids become dense ints in ordinal-sorted order, so ids never depend on file-system order.
+/// String ids become dense ints in a data-defined order (ordinal, or since M7-3 / M7-3b faction by faction in
+/// <c>common/factions.json</c>'s order, ordinal within a faction), so ids never depend on file-system order.
 /// Seconds become ticks and per-second rates become per-tick rates here; the sim never sees seconds.
 /// <c>trainedAt</c> resolves to an own-faction building type id (M3-4); every <c>requires</c> entry resolves to a tech or
 /// building type id (M3-6, kept as a string too); <c>attack.projectile</c> resolves to a <c>common/projectiles.json</c> id
@@ -81,7 +82,7 @@ public static partial class DataLoader
         }
 
         // M7-3: unit type ids faction by faction (the order file's), ordinal within each faction.
-        string[] unitKeys = FactionKeys(folders.Length, accepted, (f, i) => unitFiles[f]!.Units![i]!.Id!);
+        KeyIndex unitKeys = new(FactionKeys(folders.Length, accepted, (f, i) => unitFiles[f]!.Units![i]!.Id!));
 
         // Pass 2: validate and convert each accepted unit, in file order so errors come out in file order.
         var units = new UnitDef[unitKeys.Length];
@@ -89,7 +90,7 @@ public static partial class DataLoader
         {
             c.CurrentFile = $"factions/{folders[f]}/units.json";
             UnitJson u = unitFiles[f]!.Units![i]!;
-            int id = KeyId(unitKeys, u.Id!);
+            int id = unitKeys.IdOf(u.Id!);
             units[id] = BuildUnit(c, u, $"units[{i}]", id, f, rules, table, projectiles);
         }
         // BUG-0010: every faction fills the seven unit template slots, one unit each (docs/02 "Faction template").
@@ -97,7 +98,7 @@ public static partial class DataLoader
         {
             if (unitFiles[f]?.Units == null) continue;
             c.CurrentFile = $"factions/{folders[f]}/units.json";
-            CheckSlots(c, "units", "unit", DataLimits.SlotIds, accepted, f, k => units[KeyId(unitKeys, unitFiles[f]!.Units![k]!.Id!)] is { } u ? ((int)u.Slot, u.Key) : (-1, ""));
+            CheckSlots(c, "units", "unit", DataLimits.SlotIds, accepted, f, k => units[unitKeys.IdOf(unitFiles[f]!.Units![k]!.Id!)] is { } u ? ((int)u.Slot, u.Key) : (-1, ""));
         }
 
         var factions = new FactionDef[folders.Length];
@@ -245,17 +246,18 @@ public static partial class DataLoader
     /// unit's <c>trainedAt</c> (a missing one was already reported).
     /// </summary>
     private static void ResolveTrainedAt(Checker c, string[] folders, UnitFileJson?[] unitFiles, List<(int Faction, int Index)> accepted,
-        string[] unitKeys, UnitDef[] units, BuildingDef[] buildings)
+        KeyIndex unitKeys, UnitDef[] units, BuildingDef[] buildings)
     {
-        var keys = new string[buildings.Length];
-        for (int b = 0; b < buildings.Length; b++) keys[b] = buildings[b].Key;
+        var table = new string[buildings.Length];
+        for (int b = 0; b < buildings.Length; b++) table[b] = buildings[b].Key;
+        var keys = new KeyIndex(table);
         foreach ((int f, int i) in accepted)
         {
-            UnitDef u = units[KeyId(unitKeys, unitFiles[f]!.Units![i]!.Id!)];
+            UnitDef u = units[unitKeys.IdOf(unitFiles[f]!.Units![i]!.Id!)];
             if (u == null || u.TrainedAt.Length == 0) continue;
             c.CurrentFile = $"factions/{folders[f]}/units.json";
             string path = $"units[{i}].trainedAt";
-            int b = KeyId(keys, u.TrainedAt);
+            int b = keys.IdOf(u.TrainedAt);
             if (b < 0)
                 c.Error(path, $"unknown building '{u.TrainedAt}' (not in any buildings.json)");
             else if (buildings[b].Faction != u.Faction)
@@ -517,14 +519,14 @@ public static partial class DataLoader
         List<(int Faction, int Index)> acceptedList = accepted;
         BuildingFileJson?[] fileList = files;
         // M7-3: building type ids faction by faction (the order file's), ordinal within each faction.
-        string[] keys = FactionKeys(folders.Length, accepted, (f, i) => fileList[f]!.Buildings![i]!.Id!);
+        KeyIndex keys = new(FactionKeys(folders.Length, accepted, (f, i) => fileList[f]!.Buildings![i]!.Id!));
         var defs = new BuildingDef[keys.Length];
         foreach ((int f, int i) in accepted)
         {
             c.CurrentFile = $"factions/{folders[f]}/buildings.json";
             BuildingJson b = files[f]!.Buildings![i]!;
             string p = $"buildings[{i}]";
-            int id = KeyId(keys, b.Id!);
+            int id = keys.IdOf(b.Id!);
             string slotKey = c.Text(b.Slot, p + ".slot");
             int slot = DataLimits.BuildingSlotIds.IndexOf(slotKey);
             if (slotKey.Length > 0 && slot < 0)
@@ -568,7 +570,7 @@ public static partial class DataLoader
             if (fileList[f]?.Buildings == null) continue;
             c.CurrentFile = $"factions/{folders[f]}/buildings.json";
             CheckSlots(c, "buildings", "building", DataLimits.BuildingSlotIds, acceptedList, f,
-                k => defs[KeyId(keys, fileList[f]!.Buildings![k]!.Id!)] is { } d ? ((int)d.Slot, d.Key) : (-1, ""));
+                k => defs[keys.IdOf(fileList[f]!.Buildings![k]!.Id!)] is { } d ? ((int)d.Slot, d.Key) : (-1, ""));
         }
         return defs;
     }

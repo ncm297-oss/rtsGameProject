@@ -9,7 +9,7 @@ public sealed class AbilityDef
     {
     }
 
-    /// <summary>Dense ability id (index into <see cref="GameData.Abilities"/>), ordinal order of the string ids across factions.</summary>
+    /// <summary>Dense ability id (index into <see cref="GameData.Abilities"/>), faction by faction in faction order, ordinal within a faction (M7-3b).</summary>
     public int Id { get; init; }
     /// <summary>String id, e.g. <c>telas_fire</c>.</summary>
     public required string Key { get; init; }

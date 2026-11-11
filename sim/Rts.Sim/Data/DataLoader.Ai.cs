@@ -12,13 +12,13 @@ public static partial class DataLoader
     /// compositions name ids of the faction's own (or, for a tech, a common one). <paramref name="refs"/> false skips the id
     /// checks (a units, buildings or techs file is already broken, and reported once). Every other error at once.
     /// </summary>
-    private static AiDef[] BuildAi(Checker c, string[] folders, bool refs, string[] unitKeys, UnitDef[] units, BuildingDef[] buildings, TechDef[] techs)
+    private static AiDef[] BuildAi(Checker c, string[] folders, bool refs, KeyIndex unitKeys, UnitDef[] units, BuildingDef[] buildings, TechDef[] techs)
     {
         var buildingKeys = new string[buildings.Length];
         for (int b = 0; b < buildings.Length; b++) buildingKeys[b] = buildings[b].Key;
         var techKeys = new string[techs.Length];
         for (int t = 0; t < techs.Length; t++) techKeys[t] = techs[t].Key;
-        var ids = new AiIds(unitKeys, units, buildingKeys, buildings, techKeys, techs, folders);
+        var ids = new AiIds(unitKeys, units, new KeyIndex(buildingKeys), buildings, new KeyIndex(techKeys), techs, folders);
 
         var result = new AiDef[folders.Length];
         for (int f = 0; f < folders.Length; f++)
@@ -31,7 +31,7 @@ public static partial class DataLoader
     }
 
     /// <summary>The id tables a faction's <c>ai.json</c> resolves against (load time only).</summary>
-    private sealed record AiIds(string[] UnitKeys, UnitDef[] Units, string[] BuildingKeys, BuildingDef[] Buildings, string[] TechKeys,
+    private sealed record AiIds(KeyIndex UnitKeys, UnitDef[] Units, KeyIndex BuildingKeys, BuildingDef[] Buildings, KeyIndex TechKeys,
         TechDef[] Techs, string[] Folders);
 
     private static AiDef BuildAiDef(Checker c, AiFileJson j, int faction, AiIds? ids)
@@ -247,7 +247,7 @@ public static partial class DataLoader
         {
             case AiStepAction.Build:
             {
-                int b = KeyId(ids.BuildingKeys, key);
+                int b = ids.BuildingKeys.IdOf(key);
                 if (b < 0) c.Error(p, $"unknown building '{key}' (not in any buildings.json)");
                 else if (ids.Buildings[b].Faction != faction)
                     c.Error(p, $"building '{key}' belongs to faction '{ids.Folders[ids.Buildings[b].Faction]}', not '{own}'");
@@ -258,7 +258,7 @@ public static partial class DataLoader
                 return AiUnit(c, ids, key, faction, p);
             default:
             {
-                int t = Array.BinarySearch(ids.TechKeys, key, StringComparer.Ordinal);
+                int t = ids.TechKeys.IdOf(key);
                 if (t < 0) c.Error(p, $"unknown tech '{key}' (not in any techs.json)");
                 else if (ids.Techs[t].Faction >= 0 && ids.Techs[t].Faction != faction)
                     c.Error(p, $"tech '{key}' belongs to faction '{ids.Folders[ids.Techs[t].Faction]}', not '{own}'");
@@ -270,7 +270,7 @@ public static partial class DataLoader
 
     private static int AiUnit(Checker c, AiIds ids, string key, int faction, string p)
     {
-        int u = KeyId(ids.UnitKeys, key);
+        int u = ids.UnitKeys.IdOf(key);
         if (u < 0) c.Error(p, $"unknown unit '{key}' (not in any units.json)");
         else if (ids.Units[u].Faction != faction)
             c.Error(p, $"unit '{key}' belongs to faction '{ids.Folders[ids.Units[u].Faction]}', not '{ids.Folders[faction]}'");
