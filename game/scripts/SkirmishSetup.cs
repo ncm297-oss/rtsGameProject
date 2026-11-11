@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Globalization;
 using Godot;
+using Rts.Sim;
 using Rts.Sim.Data;
 using Rts.Sim.Map;
 
@@ -679,8 +680,8 @@ public partial class SkirmishSetup : CanvasLayer
 
     /// <summary>
     /// M5-V2 (docs/02 "AI opponent"): sets each item of <paramref name="slot"/>'s difficulty list's tooltip to the difficulty's
-    /// <c>setup</c> tip, <c>{0}</c> its gather bonus from the slot's faction's <c>ai.json</c> in percent, and the list's own to the
-    /// picked item's. Runs at build and when the slot's faction list is picked from; nothing for slot 0 (no difficulty list).
+    /// <c>setup</c> tip, <c>{0}</c> its gather bonus from the slot's faction's <c>ai.json</c> in percent and <c>{1}</c> its think
+    /// interval in seconds (M7-VH1, <see cref="ThinkSeconds"/>), and the list's own to the picked item's. Runs at build and when the slot's faction list is picked from; nothing for slot 0 (no difficulty list).
     /// </summary>
     public void ShowDifficultyTips(int slot)
     {
@@ -688,7 +689,8 @@ public partial class SkirmishSetup : CanvasLayer
         if (list == null || _ui == null || _data == null) return;
         int faction = FactionOptions[slot].Selected;
         for (int d = 0; d < list.ItemCount && d < DifficultyKeys.Length; d++)
-            list.SetItemTooltip(d, TooltipWrap.Wrap(_ui.DifficultyTip((AiDifficulty)d, GatherBonus(_data, faction, (AiDifficulty)d))));
+            list.SetItemTooltip(d, TooltipWrap.Wrap(_ui.DifficultyTip((AiDifficulty)d, GatherBonus(_data, faction, (AiDifficulty)d),
+                ThinkSeconds(_data, faction, (AiDifficulty)d))));
         ShowDifficultyTooltip(list);
     }
 
@@ -698,6 +700,20 @@ public partial class SkirmishSetup : CanvasLayer
         if ((uint)faction >= (uint)data.Ai.Length) return 0f;
         ImmutableArray<AiDifficultyDef> difficulties = data.Ai[faction].Difficulties;
         return !difficulties.IsDefault && (uint)difficulty < (uint)difficulties.Length ? difficulties[(int)difficulty].GatherBonus : 0f;
+    }
+
+    /// <summary>
+    /// Difficulty <paramref name="difficulty"/>'s think interval in seconds in faction <paramref name="faction"/>'s <c>ai.json</c>
+    /// (M7-VH1, BUG-1147): the interval the AI really keeps, its <c>ThinkTicks</c> over the tick rate (the loader rounds
+    /// <c>thinkInterval</c> to whole ticks, so 0.333 s is 7 ticks, 0.35 s); 0 when the data has none (hand-built data).
+    /// </summary>
+    public static float ThinkSeconds(GameData data, int faction, AiDifficulty difficulty)
+    {
+        if ((uint)faction >= (uint)data.Ai.Length) return 0f;
+        ImmutableArray<AiDifficultyDef> difficulties = data.Ai[faction].Difficulties;
+        return !difficulties.IsDefault && (uint)difficulty < (uint)difficulties.Length
+            ? difficulties[(int)difficulty].ThinkTicks / (float)SimConstants.TicksPerSecond
+            : 0f;
     }
 
     // The list's tooltip is the picked difficulty's (each item carries its own in the popup), as ShowPresetTooltip.

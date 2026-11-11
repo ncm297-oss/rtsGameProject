@@ -3099,15 +3099,12 @@ pack or scaled, so the game draws exactly as before).
   (`Tracker.Launch` to the drawn point over `Tracker.Length`); a hit flash sits at its victim's height (a building victim:
   1.2 m). With both ends at scale 1 the shot flies level at exactly 1.2 m, so shipped visuals are pixel-identical. The
   alternative (a share of `DrawnHeight`) would have moved the catapult's launch point today; lobs are unchanged (they ride
-  the ground). **How the view knows the ends** without a ViewApi change (the store's shooter type is internal): the tick a
-  shot is first seen, its shooter is the live unit of the shot's owner nearest its launch point and within its own radius of
-  it (`World.Spatial.QueryRadius`, 2 m, into a fixed buffer; a unit fires from where it stands), and its victim that unit's
-  `Target` (a building: 1.2 m); a shot with no such shooter (a tower fires from its footprint's centre) takes the unit
-  nearest its aim point not its owner's. Both heights are kept per projectile slot; a landing's flash takes the victim height
-  of the slot that died this tick whose last aim point is the landing (an aimed shot isn't steered on its landing tick, so
-  they are equal), else the unit nearest the landing. Anything not found is scale 1. Every array is made at `Bind`: no
-  per-frame allocation. **Known limit:** a shot whose shooter moved more than its radius between firing and the view's first
-  look (a test or a frame that skips ticks) draws from 1.2 m.
+  the ground). **How the view knows the ends:** since M7-VH1 the read-only `ViewApi.ShotEnds` accessor gives the shot's
+  attacker type and victim exactly (see "Implementation (M7-VH1)"); M7-V2's inference from the nearest own unit at the
+  launch point (wrong for a shooter killed on its firing tick, BUG-1179) and its spatial query are gone. Both heights are
+  kept per projectile slot; a landing's flash takes the victim height of the slot that died this tick whose last aim point
+  is the landing (an aimed shot isn't steered on its landing tick, so they are equal). Every array is made at `Bind`: no
+  per-frame allocation.
 - **BUG-1178** (test only): `QaM6V18Test` expects format 10's empty map id string (`int32` 0) between the preset and `HMAP`
   for a generated-map save, and its rows naming save formats 4-6 read format 10 (every save is format 10 since M7-1).
 - **Tests:** `game/tests/QueuePackTest` (a forged copy with Heavy Infantry `spawnCount` 3 and mixed scales: every type's
@@ -3117,6 +3114,64 @@ pack or scaled, so the game draws exactly as before).
   0.6 m and 3.6 m and scaled flashes), `ScaleViewTest`'s shot-height row (a 0.5 Crossbowman and a 3.0 Desert Archer shoot
   each other: launches at 0.6 / 3.6 m, flashes at 3.6 / 0.6 m, every draw between its ends), `QaM6V18Test`,
   `ProjectileViewTest` (shipped data: every aimed shot at 1.2 m, 0 bytes over 300 brawl frames).
+
+### Implementation (M7-VH1)
+
+The view's hardening: an exact projectile accessor, the tooltip wrap's blank lines, the difficulty tips' think interval.
+One new file in `sim/Rts.Sim/ViewApi/` (reads only); no other sim file; in `game/data` only the two tip strings in `ui.json`.
+
+```
+sim/Rts.Sim/ViewApi/ShotEnds.cs      Of(store, slot): a live slot's attacker type / handle, victim handle, building flags;
+                                     ShooterUnitType, VictimUnitType(unit spans)  (BUG-1179)
+game/scripts/ProjectileViews.cs      the shot heights from ShotEnds; Nearest, FindRadius and the spatial query removed
+game/scripts/TooltipWrap.cs          per data line, the spaces beside every break consumed (BUG-1126)
+game/scripts/UiText.cs               DifficultyTip(difficulty, gatherBonus, thinkSeconds), Seconds, the tips' {1} load rule
+game/scripts/SkirmishSetup.cs        ThinkSeconds(data, faction, difficulty)  (BUG-1147 item 1)
+game/data/common/ui.json             setup.difficulty_easy_tip / _hard_tip: "every {1} seconds"
+```
+
+- **`ShotEnds` (BUG-1179).** `ProjectileStore`'s attacker type, attacker, victim and their building flags are `internal`
+  arrays; `ShotEnds.Of(store, slot)` (in the sim assembly, so it can read them) copies one live slot's into a readonly
+  struct, `Live` false for a free or out-of-range slot. It has no setter and calls nothing that writes: drawing changes no
+  state hash (`QaM7V2Test`'s twin replay and per-tick hash rows, `ShotEndsTests`). `ShooterUnitType` is the attacker
+  type, -1 for a tower. `VictimUnitType(alive, generation, typeId)` (the unit store's spans: QA's ViewApi source guard
+  forbids naming `UnitStore` there) is the victim's type while it lives, or while it is a corpse: a freed unit slot keeps
+  its `TypeId` until `TryAlloc` reuses it, and its generation is then exactly one past the handle's. Units
+  spawn in phases 3-5 and die from phase 6 on, and a shot is fired in phase 10 at a live unit, so a view that reads every
+  tick always finds its victim alive or as that corpse; a victim whose slot already holds another unit (only a view that
+  skipped ticks) is -1, drawn at 1.2 m.
+- **The view's ends.** The tick `ProjectileViews` first sees a shot (a slot it didn't know, or whose launch, owner, type,
+  attacker or victim changed: a skipping observer's reused slot), the launch height is `HeightFor` of the shooter type's
+  `scale` (a tower: 1.2 m) and the strike height of the victim type's (a building or unknowable victim: 1.2 m). Exact even
+  when the shooter died the tick it fired: `QaM7V2Test`'s brawl, 1,411 aimed shots (4 by such a shooter, 9 at a victim
+  killed that tick), 0 wrong at either end (M7-V2's inference: 3 and 8). M7-V2's known limit (a shooter that moved off its
+  launch point before the first look) is gone with the inference. A landing no known slot matches (a view that skipped the
+  whole flight) flashes at 1.2 m, no longer at the unit nearest it. The view no longer queries `World.Spatial`, so it no
+  longer writes the sim's query buffer.
+- **The wrap (BUG-1126, the Producer's ruling).** `TooltipWrap.Wrap` wraps each data line on its own, greedily: a word
+  joins the line if the spaces before it and it fit in the width, else a break replaces those spaces. At every line break,
+  the data's or the wrap's, the spaces beside it are consumed, so a space before a data break (`e60 + " \n"`), after one
+  (`"\n " + w61`) or a double space at a break (`e60 + "  " + w61`) never leaves a blank line, and a line passes the width
+  only as one word longer than it. The text's own edge spaces with no break beside them are kept (BUG-1115); a double space
+  inside a line stays. The output is no longer always the text's length, so "the added breaks turned back into spaces give
+  the data" now holds for single-spaced text only (every shipped description). `game/tests/TooltipWrapRule.Fault` is the
+  rule as a checker (words and data breaks in order, a space run kept whole or consumed whole beside a break, no edge space
+  beside a break, no blank line made, a line over the width a single word, greedy), shared by `QaVh5Test`'s and
+  `QaVh6Test`'s fuzz: 0 faults of 20,000 each (the old wrap: 5,411 and 15,533).
+- **The tips' interval (BUG-1147 item 1).** `{1}` in a difficulty tip is that difficulty's think interval in the slot's
+  faction's `ai.json`, in seconds, `0.##` (`UiText.Seconds`). It is the interval the AI keeps, `ThinkTicks / 20`: the
+  loader rounds `thinkInterval` to whole ticks, so 0.333 s reads "0.35". Shipped text: "Thinks every 2 seconds, ..." (as
+  before) and "thinks every 0.5 seconds, ..." (was "every half second"). The load rule: every tip formats with two numbers
+  (`{2}` is an error); Hard's must name `{0}`; Easy's and Hard's must name `{1}` (changing the interval changes the text);
+  Normal's may name either (it states neither today). An interval of exactly 1 s would read "1 seconds"; only Normal's is
+  1 s today, and its tip doesn't say it.
+- **The old S4s** (BUG-0860, 0830, 0890, 0861): already fixed and verified in M6-VH3; nothing left to do.
+- **Tests:** `sim/Rts.Sim.Tests/ViewApi/ShotEndsTests` (a free slot, a unit's shot, a shooter freed and its slot reused, a
+  victim's corpse then its reused slot, a tower's shot and a building victim, reading every slot of a 12 v 12 crossbow
+  fight every tick: no hash change against a twin, 0 bytes, every shot with both ends); `QaM7V2Test`'s exactness row (was
+  the inference row); `QaVh5Test` / `QaVh6Test` under the ruling (QaVh6's blank-line count a check at 0, edge rows for the
+  three shapes); `DifficultyTipTest` (the shipped tips; a data copy with Easy / Normal / Hard 7 / 2 / 0.333 and 3 / 1 /
+  1.5: "7", "0.35", "3", "1.5" by faction); `QaM5V2Test`'s load-rule rows for `{1}`, `QaM5V2bTest` with the interval.
 
 ## Vision, detection, fog
 
@@ -7185,7 +7240,8 @@ game/tests/QaM6V18Test.cs       the "other size" forgery: a side the first map f
   splits. 57 shipped descriptions wrap to at most 4 lines (Raraku: 4). The tests that compared a tooltip to a
   `description` compare to `TooltipWrap.Wrap(description)`. Since M6-VH6 (BUG-1115) spaces at the start or end of the
   text are left out of the wrap (never a break, not counted toward the 60), so an edge space leaves no empty first or last
-  line; the text is still unchanged.
+  line. Since M7-VH1 (BUG-1126) the spaces beside every line break are consumed, so the output is shorter than a text with
+  a double space at a break or a space beside a data break (see "Implementation (M7-VH1)").
 - **BUG-1093 (made robust; the cause not reproduced).** The error was GodotSharp's "Handle is not initialized" inside
   `GD.Load<PackedScene>("res://scenes/Match.tscn")` at a match start right after a match was freed. That load is the only
   managed reference to a cached `RefCounted`; its throwaway wrapper is left to the GC, and the next load swaps the native
@@ -7272,10 +7328,12 @@ game/tests/ShellTest.cs             the shell key count (setup 34)
   starting-resources list's. The tips are set at build and again when the slot's faction list is picked from, since each
   faction's `ai.json` carries its own bonus. Hand-built data with no `Ai` reads 0. Only Hard's text names `{0}` today.
 - **The load rule.** `setup.difficulty_hard_tip` must be a format naming `{0}` (two numbers give two texts) with no other
-  placeholder; the Easy and Normal tips may name `{0}` and nothing else. Otherwise one error naming the key.
-- **The tips' other words are text, not data.** "Every 2 seconds" and "every half second" are typed in `ui.json` from
-  docs/02, not read from `thinkInterval`; only the gather bonus is formatted in (the brief's scope).
-- **BUG-1126 left open.** Fixing it in `TooltipWrap.Wrap` (break only between two words) leaves some lines over the width
+  placeholder; the Easy and Normal tips may name `{0}` and nothing else. Otherwise one error naming the key. (Since M7-VH1
+  `{1}` too: see "Implementation (M7-VH1)".)
+- **The tips' other words are text, not data.** "Every 2 seconds" and "every half second" were typed in `ui.json` from
+  docs/02, not read from `thinkInterval`; only the gather bonus was formatted in (the brief's scope). Since M7-VH1
+  (BUG-1147 item 1) the interval is `{1}`, from the data.
+- **BUG-1126 left open** (fixed in M7-VH1 under the Producer's ruling). Fixing it in `TooltipWrap.Wrap` (break only between two words) leaves some lines over the width
   with a space in them (a trailing or leading space beside a long word), which `QaVh5Test`'s wrap fuzz fails. For
   `e60 + "  " + w61` every output breaks one rule or the other, so the fix needs a ruling on which rule wins (or the data
   checker rejecting double and edge spaces), not a few lines.

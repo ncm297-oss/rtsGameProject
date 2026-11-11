@@ -15,8 +15,9 @@ namespace Rts.Game.Tests;
 /// QA for M6-VH5 (session 2026-11-06-0926).
 /// <list type="bullet">
 /// <item>(1) <see cref="TooltipWrap"/> fuzz: 20,000 seeded strings (words 1-90 characters, single / double / triple spaces,
-/// leading and trailing spaces, existing line breaks, widths 1-80). Every output: same length, only spaces turned into line
-/// breaks, every line with a space within the width, and (single-spaced text) greedy: no break where the next word fit.
+/// leading and trailing spaces, existing line breaks, widths 1-80). Every output under BUG-1126's ruling (M7-VH1,
+/// <see cref="TooltipWrapRule"/>): words and data breaks the text's, the spaces beside every break consumed, no blank line
+/// the wrap made, a line over the width only a single word, and greedy: no break where the next word fit.
 /// Plus the named edges (empty, null, exactly the width, a 61-character word, a trailing space at the break).</item>
 /// <item>(2) The slot give-back in <c>SkirmishSetup.ApplyMap</c>: per-slot faction / difficulty / team kept across Raraku ->
 /// Vathar Crossing; colours unique after a slot comes back even when a shown slot took its colour meanwhile; 3 slots ->
@@ -147,42 +148,9 @@ public partial class QaVh5Test : Node
         }
     }
 
-    private static string? WrapFault(string text, string w, int width, bool single)
-    {
-        if (w.Length != text.Length) return "length changed";
-        for (int i = 0; i < w.Length; i++)
-            if (w[i] != text[i] && !(text[i] == ' ' && w[i] == '\n')) return $"character {i} changed";
-        string[] lines = w.Split('\n');
-        // The text's own edge spaces are outside the wrap (BUG-1115): never a break, so the first / last line is measured
-        // without them, and neither line is blank unless the text is.
-        // (A blank line the wrap made: its break was a space in the text, not a line break of the data's own.)
-        if (lines.Length > 1 && (lines[0].Trim(' ').Length == 0 && text[lines[0].Length] == ' '
-            || lines[^1].Trim(' ').Length == 0 && text[w.Length - lines[^1].Length - 1] == ' ')) return "an edge space left a blank first or last line";
-        for (int li = 0; li < lines.Length; li++)
-        {
-            string l = lines[li];
-            if (li == 0) l = l.TrimStart(' ');
-            if (li == lines.Length - 1) l = l.TrimEnd(' ');
-            if (l.Length > width && l.Contains(' ')) return $"line of {l.Length} with a space";
-        }
-        if (!single) return null;
-        // Greedy: an added break only where the next word would not fit on the line.
-        int at = 0;
-        for (int li = 0; li < lines.Length - 1; li++)
-        {
-            at += lines[li].Length;
-            bool added = text[at] == ' ';
-            if (added)
-            {
-                string next = lines[li + 1];
-                int sp = next.IndexOf(' ');
-                int nextWord = sp < 0 ? next.Length : sp;
-                if (lines[li].Length + 1 + nextWord <= width) return $"break after line {li} ({lines[li].Length}) though the next word ({nextWord}) fit";
-            }
-            at += 1;
-        }
-        return null;
-    }
+    // M7-VH1 (BUG-1126's ruling): the rule is shared with QaVh6Test; greedy now holds for every spacing (the consumed gap
+    // is known), not only single-spaced text.
+    private static string? WrapFault(string text, string w, int width, bool single) => TooltipWrapRule.Fault(text, w, width, out _);
 
     // ---- (2) the slot give-back ----
 

@@ -26,10 +26,11 @@ namespace Rts.Game.Tests;
 /// <item>Strip: a full queue of MaxItems with a pack at the head, the middle and the last square; a pack cancelled from the
 /// middle (the squares behind it shift, each changed square rewritten once, then nothing); a pack under a tech; every
 /// state's steady Sync allocates 0 bytes and rewrites nothing; every square's label fits its 64 px square.</item>
-/// <item>Shooter inference vs the store's internal ground truth (attacker type / victim): over a 150 v 150 mixed-scale brawl
-/// plus a watchtower, the share of aimed shots whose drawn launch / strike height is not the true shooter's / victim's.</item>
+/// <item>Exactness (M7-VH1, BUG-1179) vs the store's internal ground truth read by reflection (attacker type / victim): over a
+/// 150 v 150 mixed-scale brawl plus a watchtower, every aimed shot's drawn launch / strike height is its true shooter's /
+/// victim's (0 wrong), shots whose shooter died the tick it fired included.</item>
 /// <item>Determinism: the brawl run with the projectile views collecting and drawing every tick equals its headless replay
-/// twin at every tick (the view's spatial queries change nothing), and a CollectTick + Sync leaves the state hash alone.</item>
+/// twin at every tick (the view's reads change nothing), and a CollectTick + Sync leaves the state hash alone.</item>
 /// </list>
 /// Headless: <c>&amp; $env:GODOT --headless --path game res://tests/QaM7V2Test.tscn</c>; prints "QA M7V2 TEST PASS" or
 /// "QA M7V2 TEST FAIL: ..." lines.
@@ -288,7 +289,7 @@ public partial class QaM7V2Test : Node
         Check(_strip.Updates == updates, $"{what}: 60 steady Syncs rewrote {_strip.Updates - updates}");
     }
 
-    // A 150 v 150 mixed-scale brawl plus a player-0 watchtower: inference vs ground truth, hash twin, allocation.
+    // A 150 v 150 mixed-scale brawl plus a player-0 watchtower: drawn ends vs ground truth, hash twin, allocation.
     private async Task Brawl()
     {
         int tower = _data.FindBuilding("malazan_watchtower");
@@ -316,7 +317,7 @@ public partial class QaM7V2Test : Node
         var attackerIsBuilding = (bool[])AttackerIsBuildingP.GetValue(W.Projectiles)!;
         var victim = (EntityHandle[])VictimP.GetValue(W.Projectiles)!;
         var attacker = (EntityHandle[])AttackerP.GetValue(W.Projectiles)!;
-        int deadShooterWrong = 0, lobs = 0, lobWrong = 0;
+        int deadShooterWrong = 0, deadShooterShots = 0, deadVictimShots = 0, victimUnknown = 0, lobs = 0, lobWrong = 0;
         float mageHeight = -1f;
         var victimIsBuilding = (bool[])VictimIsBuildingP.GetValue(W.Projectiles)!;
         ProjectileStore p = W.Projectiles;
@@ -361,9 +362,14 @@ public partial class QaM7V2Test : Node
                 float wantFrom = attackerIsBuilding[i] ? ProjectileViews.LaunchHeight : ProjectileViews.HeightFor(_data.Units[attackerType[i]].Scale);
                 float wantTo = ProjectileViews.LaunchHeight;
                 EntityHandle v = victim[i];
-                bool vKnown = victimIsBuilding[i] || U.IsAlive(v);
-                if (!victimIsBuilding[i] && U.IsAlive(v)) wantTo = ProjectileViews.HeightFor(_data.Units[U.TypeId[v.Index]].Scale);
-                bool fw = _shots.ShotFromHeight(i) != wantFrom, tw = vKnown && _shots.ShotToHeight(i) != wantTo;
+                // The victim was alive when the shot was fired (phase 10); one killed later this tick is its corpse (not
+                // alive, generation one on), whose slot keeps its type until a later spawn takes it.
+                bool corpse = !victimIsBuilding[i] && !U.Alive[v.Index] && U.Generation[v.Index] == v.Generation + 1;
+                if (!victimIsBuilding[i] && (U.IsAlive(v) || corpse)) wantTo = ProjectileViews.HeightFor(_data.Units[U.TypeId[v.Index]].Scale);
+                else if (!victimIsBuilding[i]) victimUnknown++;
+                if (corpse) deadVictimShots++;
+                if (!attackerIsBuilding[i] && !U.IsAlive(attacker[i])) deadShooterShots++;
+                bool fw = _shots.ShotFromHeight(i) != wantFrom, tw = _shots.ShotToHeight(i) != wantTo;
                 if (!attackerIsBuilding[i] && _data.Units[attackerType[i]].Key == "malazan_cadre_mage") mageHeight = _shots.ShotFromHeight(i);
                 if (fw) fromWrong++;
                 if (fw && !attackerIsBuilding[i] && !U.IsAlive(attacker[i])) deadShooterWrong++;
@@ -377,7 +383,8 @@ public partial class QaM7V2Test : Node
             }
             if (U.Count < 40) break;
         }
-        GD.Print($"brawl inference: {seen} aimed shots seen on their firing tick; launch height wrong {fromWrong} ({deadShooterWrong} of them by a shooter that died the tick it fired), strike height wrong {toWrong}; " +
+        GD.Print($"brawl exactness: {seen} aimed shots seen on their firing tick ({deadShooterShots} by a shooter that died the tick it fired, {deadVictimShots} at a victim that did, {victimUnknown} victims unknowable); " +
+            $"launch height wrong {fromWrong} ({deadShooterWrong} of them by a dead shooter), strike height wrong {toWrong}; " +
             $"tower shots {towerShots} ({towerWrong} wrong); same-slot same-launch new-victim refires {reuses}; hash moved by the view {hashMoved}; {measured} measured ticks {bytes} bytes");
         foreach (var kv in fromBy.OrderByDescending(k => k.Value).Take(8)) GD.Print($"  wrong launch: {kv.Key}: {kv.Value}");
         GD.Print($"lob draws {lobs} ({lobWrong} off ground + ride + arc); a 1.5 cadre mage's bolt left at {mageHeight} m (want {ProjectileViews.HeightFor(1.5f)})");
@@ -386,8 +393,10 @@ public partial class QaM7V2Test : Node
         Check(seen > 200, $"only {seen} aimed shots seen");
         Check(hashMoved == 0, $"CollectTick + Sync changed the state hash on {hashMoved} ticks");
         Check(bytes == 0, $"brawl: {measured} ticks of CollectTick + Sync allocated {bytes} bytes");
-        Check((fromWrong - deadShooterWrong) * 100 <= seen, $"launch height wrong on {fromWrong} of {seen} shots (> 1%)");
-        Check(toWrong * 100 <= seen * 5, $"strike height wrong on {toWrong} of {seen} shots (> 5%)");
+        Check(fromWrong == 0, $"launch height wrong on {fromWrong} of {seen} shots ({deadShooterWrong} by a shooter dead on its firing tick)");
+        Check(toWrong == 0, $"strike height wrong on {toWrong} of {seen} shots");
+        Check(victimUnknown == 0, $"{victimUnknown} shots' victims were neither alive nor a corpse on the firing tick");
+        Check(deadShooterShots > 0, "no shot by a shooter that died the tick it fired: the BUG-1179 case went unexercised");
 
         Replay replay = _runner.Recorder!.ToReplay();
         ReplayResult twin = ReplayPlayer.Run(replay, _data);

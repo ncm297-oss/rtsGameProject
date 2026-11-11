@@ -154,7 +154,8 @@ public partial class QaM5V2bTest : Node
             for (int d = 0; d < 3; d++)
             {
                 float bonus = _data.Ai[faction].Difficulties[d].GatherBonus;
-                string want = TooltipWrap.Wrap(string.Format(CultureInfo.InvariantCulture, _ui.Setup(UiText.DifficultyTipKeys[d]), UiText.Percent(bonus)));
+                float think = _data.Ai[faction].Difficulties[d].ThinkTicks / (float)Rts.Sim.SimConstants.TicksPerSecond; // M7-VH1: {1}
+                string want = TooltipWrap.Wrap(string.Format(CultureInfo.InvariantCulture, _ui.Setup(UiText.DifficultyTipKeys[d]), UiText.Percent(bonus), UiText.Seconds(think)));
                 string got = list!.GetItemTooltip(d);
                 Check(got.Length > 0 && got == want, $"{what}: slot {slot} faction {faction} item {d} tip '{got}', want '{want}'");
             }
@@ -180,10 +181,10 @@ public partial class QaM5V2bTest : Node
         // Formatted into the shipped Hard tip at the brief's values.
         foreach ((float f, string want) in new[] { (0f, "0%"), (0.25f, "25%"), (0.333f, "33.3%"), (0.3333f, "33.33%"), (1f, "100%") })
         {
-            string tip = _ui.DifficultyTip(AiDifficulty.Hard, f);
+            string tip = _ui.DifficultyTip(AiDifficulty.Hard, f, 0.5f);
             Check(tip.Contains(want, StringComparison.Ordinal) && !tip.Contains("{0}", StringComparison.Ordinal), $"Hard tip at {f}: '{tip}' lacks '{want}'");
         }
-        Check(_ui.DifficultyTip((AiDifficulty)3, 0.25f) == "" && _ui.DifficultyTip((AiDifficulty)(-1), 0.25f) == "", "an out-of-range difficulty's tip is not empty");
+        Check(_ui.DifficultyTip((AiDifficulty)3, 0.25f, 0.5f) == "" && _ui.DifficultyTip((AiDifficulty)(-1), 0.25f, 0.5f) == "", "an out-of-range difficulty's tip is not empty");
     }
 
     private void WrapChecks()
@@ -193,7 +194,7 @@ public partial class QaM5V2bTest : Node
         {
             foreach (float f in new[] { 0f, 0.25f, 0.3333f, 1f, 12.3456f })
             {
-                string tip = _ui.DifficultyTip((AiDifficulty)d, f);
+                string tip = _ui.DifficultyTip((AiDifficulty)d, f, f > 1f ? 3600f : 0.35f); // M7-VH1: the longest interval text too
                 longest = Math.Max(longest, tip.Length);
                 string wrapped = TooltipWrap.Wrap(tip);
                 foreach (string line in wrapped.Split('\n'))

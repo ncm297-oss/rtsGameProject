@@ -19,9 +19,9 @@ namespace Rts.Game.Tests;
 /// team as last picked, colours unique among shown slots, Start off exactly when the one-team rule holds, and
 /// <c>MatchArgs</c>' <c>--players</c> the shown count.</item>
 /// <item>(2) <see cref="TooltipWrap"/> edges (BUG-1115 item 3): edge spaces (one, two, both ends), a 61-character word with
-/// edge spaces, double spaces, existing line breaks at the edge; and a 20,000-string fuzz of edge-spaced text: same length,
-/// only spaces turned into breaks, never a blank first or last line the wrap made. Blank middle lines the wrap made (a
-/// space beside a data line break, a double space at a break) are counted and printed, not failed: outside item 3.</item>
+/// edge spaces, double spaces, existing line breaks at the edge; and a 20,000-string fuzz of edge-spaced text under BUG-1126's
+/// ruling (M7-VH1, <see cref="TooltipWrapRule"/>): the spaces beside every break consumed, the text's other spaces kept, and
+/// no blank line the wrap made anywhere (first, last or middle: 0 of 20,000).</item>
 /// </list>
 /// </summary>
 /// <remarks>Headless: <c>&amp; $env:GODOT --headless --path game res://tests/QaVh6Test.tscn</c>; prints "QA VH6 TEST PASS" or
@@ -187,23 +187,24 @@ public partial class QaVh6Test : Node
         Edge("  " + e60 + " x", "  " + e60 + "\nx", "two leading spaces then a word past the width");
         Edge(e60 + " x  ", e60 + "\nx  ", "a break then trailing spaces");
         Edge("\n\n" + e60 + " ", "\n\n" + e60 + " ", "leading line breaks and a trailing space");
-        // Not an edge space (a line break follows it): the wrap may break there, a blank line before the data's own last
-        // (empty) line. Printed, outside BUG-1115 item 3's edges.
+        // BUG-1126 (M7-VH1): a space beside a data line break is consumed, not made a blank line; a double space at a break
+        // is consumed whole (the ruling), so no line is over the width with a space in it.
+        Edge(e60 + " \n", e60 + "\n", "a space before a data break at the width");
+        Edge("\n " + w61, "\n" + w61, "a space after a data break before a long word");
+        Edge(e60 + "  " + w61, e60 + "\n" + w61, "a double space after a full line before a long word");
+        Edge("ab  cd", "ab  cd", "a double space inside a short line (kept)");
+        Edge("ab \n cd", "ab\ncd", "spaces beside a data break in a short text");
         GD.Print($"  e60 + \" \\n\" wraps to '{Esc(TooltipWrap.Wrap(e60 + " \n"))}'; \"\\n \" + w61 to '{Esc(TooltipWrap.Wrap("\n " + w61))}'");
-        // Double space inside: the break takes the last space, the other stays (unchanged from M6-VH5).
-        Edge(new string('a', 30) + "  " + new string('b', 30), new string('a', 30) + " \n" + new string('b', 30), "a double space at the break");
+        // A double space at the break: both consumed (M7-VH1; M6-VH5 kept one at the line's end).
+        Edge(new string('a', 30) + "  " + new string('b', 30), new string('a', 30) + "\n" + new string('b', 30), "a double space at the break");
     }
 
     private void Edge(string text, string want, string what)
     {
         string got = TooltipWrap.Wrap(text);
         Check(got == want, $"wrap edge, {what}: '{Esc(got)}' (want '{Esc(want)}')");
-        string[] lines = got.Split('\n');
-        if (lines.Length > 1)
-        {
-            Check(!(lines[0].Trim(' ').Length == 0 && text[lines[0].Length] == ' '), $"wrap edge, {what}: blank first line '{Esc(got)}'");
-            Check(!(lines[^1].Trim(' ').Length == 0 && text[got.Length - lines[^1].Length - 1] == ' '), $"wrap edge, {what}: blank last line '{Esc(got)}'");
-        }
+        string? why = TooltipWrapRule.Fault(text, got, TooltipWrap.Width, out _);
+        Check(why == null, $"wrap edge, {what}: {why}: '{Esc(got)}'");
     }
 
     private void WrapEdgeFuzz()
@@ -231,33 +232,12 @@ public partial class QaVh6Test : Node
             if (rng.Next(3) == 0) sb.Append('\n', 1 + rng.Next(2));
             string text = sb.ToString();
             string w = TooltipWrap.Wrap(text, width);
-            string? why = null;
-            if (w.Length != text.Length) why = "length changed";
-            for (int i = 0; i < w.Length && why == null; i++)
-                if (w[i] != text[i] && !(text[i] == ' ' && w[i] == '\n')) why = $"character {i} changed";
-            if (why == null)
+            // M7-VH1 (BUG-1126's ruling): every blank line the wrap made is a failure now, first, last or middle.
+            string? why = TooltipWrapRule.Fault(text, w, width, out bool blank);
+            if (blank)
             {
-                // A wrap-made break at the very start or end of the text's non-space content leaves a blank first / last line.
-                int start = 0, end = text.Length;
-                while (start < end && text[start] == ' ') start++;
-                while (end > start && text[end - 1] == ' ') end--;
-                for (int i = 0; i < w.Length && why == null; i++)
-                    if (w[i] == '\n' && text[i] == ' ' && (i < start || i >= end)) why = $"an edge space at {i} became a break";
-                // Wrap-made blank lines anywhere: counted (outside BUG-1115 item 3's edge scope).
-                string[] lines = w.Split('\n');
-                int at = 0;
-                for (int li = 0; li < lines.Length; li++)
-                {
-                    bool madeBefore = li > 0 && text[at - 1] == ' ';
-                    bool madeAfter = li < lines.Length - 1 && text[at + lines[li].Length] == ' ';
-                    if (lines[li].Trim(' ').Length == 0 && (madeBefore || madeAfter))
-                    {
-                        middleBlanks++;
-                        middleExample ??= $"width {width} in '{Esc(text)}' out '{Esc(w)}'";
-                        break;
-                    }
-                    at += lines[li].Length + 1;
-                }
+                middleBlanks++;
+                middleExample ??= $"width {width} in '{Esc(text)}' out '{Esc(w)}'";
             }
             if (why != null)
             {
@@ -265,7 +245,8 @@ public partial class QaVh6Test : Node
                 Check(false, $"edge fuzz {n} width {width}: {why}: in '{Esc(text)}' out '{Esc(w)}'");
             }
         }
-        GD.Print($"  wrap edge fuzz: 20000 strings, {failures} failures, {middleBlanks} with a blank line the wrap made (not at an edge space)");
+        GD.Print($"  wrap edge fuzz: 20000 strings, {failures} failures, {middleBlanks} with a blank line the wrap made");
+        Check(middleBlanks == 0, $"{middleBlanks} fuzzed strings with a blank line the wrap made (BUG-1126)");
         if (middleExample != null) GD.Print($"  e.g. {middleExample}");
     }
 
