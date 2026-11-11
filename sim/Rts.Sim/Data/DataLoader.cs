@@ -48,14 +48,8 @@ public static partial class DataLoader
         StatusDef[]? statuses = statusesJson == null ? null : BuildStatuses(c, statusesJson, table);
         if (c.Errors.Count != errorsBeforeStatuses) statuses = null;
 
-        string[] folders = Array.Empty<string>();
-        string factionsDir = Path.Combine(dataDir, "factions");
-        if (Directory.Exists(factionsDir))
-        {
-            folders = Directory.GetDirectories(factionsDir);
-            for (int i = 0; i < folders.Length; i++) folders[i] = Path.GetFileName(folders[i]);
-            Array.Sort(folders, StringComparer.Ordinal); // faction id = index in this order
-        }
+        // M7-3: faction id = index in common/factions.json's order (append-only), not the folders' ordinal order.
+        string[] folders = FactionOrder(c, dataDir);
         if (folders.Length == 0)
         {
             c.CurrentFile = "factions/";
@@ -86,10 +80,8 @@ public static partial class DataLoader
             }
         }
 
-        string[] unitKeys = new string[accepted.Count];
-        for (int k = 0; k < accepted.Count; k++)
-            unitKeys[k] = unitFiles[accepted[k].Faction]!.Units![accepted[k].Index]!.Id!;
-        Array.Sort(unitKeys, StringComparer.Ordinal);
+        // M7-3: unit type ids faction by faction (the order file's), ordinal within each faction.
+        string[] unitKeys = FactionKeys(folders.Length, accepted, (f, i) => unitFiles[f]!.Units![i]!.Id!);
 
         // Pass 2: validate and convert each accepted unit, in file order so errors come out in file order.
         var units = new UnitDef[unitKeys.Length];
@@ -97,15 +89,15 @@ public static partial class DataLoader
         {
             c.CurrentFile = $"factions/{folders[f]}/units.json";
             UnitJson u = unitFiles[f]!.Units![i]!;
-            int id = Array.BinarySearch(unitKeys, u.Id!, StringComparer.Ordinal);
-            units[id] = BuildUnit(c, u, $"units[{i}]", id, f, table, projectiles);
+            int id = KeyId(unitKeys, u.Id!);
+            units[id] = BuildUnit(c, u, $"units[{i}]", id, f, rules, table, projectiles);
         }
         // BUG-0010: every faction fills the seven unit template slots, one unit each (docs/02 "Faction template").
         for (int f = 0; f < folders.Length; f++)
         {
             if (unitFiles[f]?.Units == null) continue;
             c.CurrentFile = $"factions/{folders[f]}/units.json";
-            CheckSlots(c, "units", "unit", DataLimits.SlotIds, accepted, f, k => units[Array.BinarySearch(unitKeys, unitFiles[f]!.Units![k]!.Id!, StringComparer.Ordinal)] is { } u ? ((int)u.Slot, u.Key) : (-1, ""));
+            CheckSlots(c, "units", "unit", DataLimits.SlotIds, accepted, f, k => units[KeyId(unitKeys, unitFiles[f]!.Units![k]!.Id!)] is { } u ? ((int)u.Slot, u.Key) : (-1, ""));
         }
 
         var factions = new FactionDef[folders.Length];
@@ -259,11 +251,11 @@ public static partial class DataLoader
         for (int b = 0; b < buildings.Length; b++) keys[b] = buildings[b].Key;
         foreach ((int f, int i) in accepted)
         {
-            UnitDef u = units[Array.BinarySearch(unitKeys, unitFiles[f]!.Units![i]!.Id!, StringComparer.Ordinal)];
+            UnitDef u = units[KeyId(unitKeys, unitFiles[f]!.Units![i]!.Id!)];
             if (u == null || u.TrainedAt.Length == 0) continue;
             c.CurrentFile = $"factions/{folders[f]}/units.json";
             string path = $"units[{i}].trainedAt";
-            int b = Array.BinarySearch(keys, u.TrainedAt, StringComparer.Ordinal);
+            int b = KeyId(keys, u.TrainedAt);
             if (b < 0)
                 c.Error(path, $"unknown building '{u.TrainedAt}' (not in any buildings.json)");
             else if (buildings[b].Faction != u.Faction)
@@ -496,7 +488,7 @@ public static partial class DataLoader
 
     /// <summary>
     /// Every faction's <c>buildings.json</c> (required, M3-2): ids unique across factions (a repeat is an
-    /// error at its second definition), indexed in ordinal order of their string ids.
+    /// error at its second definition), indexed faction by faction in faction order, ordinal within a faction (M7-3).
     /// </summary>
     private static BuildingDef[] BuildBuildings(Checker c, string[] folders, RulesDef? rules, DamageTable? table, ProjectileDef[]? projectiles, out BuildingFileJson?[] files, out List<(int Faction, int Index)> accepted)
     {
@@ -521,20 +513,18 @@ public static partial class DataLoader
             }
         }
 
-        var keys = new string[accepted.Count];
-        for (int k = 0; k < accepted.Count; k++)
-            keys[k] = files[accepted[k].Faction]!.Buildings![accepted[k].Index]!.Id!;
-        Array.Sort(keys, StringComparer.Ordinal);
-        var defs = new BuildingDef[keys.Length];
-        // Copies of the out parameters, which the slot check's lambda below can't capture.
+        // Copies of the out parameters, which the lambdas below can't capture.
         List<(int Faction, int Index)> acceptedList = accepted;
         BuildingFileJson?[] fileList = files;
+        // M7-3: building type ids faction by faction (the order file's), ordinal within each faction.
+        string[] keys = FactionKeys(folders.Length, accepted, (f, i) => fileList[f]!.Buildings![i]!.Id!);
+        var defs = new BuildingDef[keys.Length];
         foreach ((int f, int i) in accepted)
         {
             c.CurrentFile = $"factions/{folders[f]}/buildings.json";
             BuildingJson b = files[f]!.Buildings![i]!;
             string p = $"buildings[{i}]";
-            int id = Array.BinarySearch(keys, b.Id!, StringComparer.Ordinal);
+            int id = KeyId(keys, b.Id!);
             string slotKey = c.Text(b.Slot, p + ".slot");
             int slot = DataLimits.BuildingSlotIds.IndexOf(slotKey);
             if (slotKey.Length > 0 && slot < 0)
@@ -578,7 +568,7 @@ public static partial class DataLoader
             if (fileList[f]?.Buildings == null) continue;
             c.CurrentFile = $"factions/{folders[f]}/buildings.json";
             CheckSlots(c, "buildings", "building", DataLimits.BuildingSlotIds, acceptedList, f,
-                k => defs[Array.BinarySearch(keys, fileList[f]!.Buildings![k]!.Id!, StringComparer.Ordinal)] is { } d ? ((int)d.Slot, d.Key) : (-1, ""));
+                k => defs[KeyId(keys, fileList[f]!.Buildings![k]!.Id!)] is { } d ? ((int)d.Slot, d.Key) : (-1, ""));
         }
         return defs;
     }
@@ -644,7 +634,7 @@ public static partial class DataLoader
     public static int RegenPerTick(double hpPerSecond) =>
         (int)Math.Round(hpPerSecond * Combat.CombatConstants.RegenFixedOne / SimConstants.TicksPerSecond, MidpointRounding.AwayFromZero);
 
-    private static UnitDef BuildUnit(Checker c, UnitJson u, string p, int id, int faction, DamageTable? table, ProjectileDef[]? projectiles)
+    private static UnitDef BuildUnit(Checker c, UnitJson u, string p, int id, int faction, RulesDef? rules, DamageTable? table, ProjectileDef[]? projectiles)
     {
         string slotKey = c.Text(u.Slot, p + ".slot");
         int slot = DataLimits.SlotIds.IndexOf(slotKey);
@@ -673,6 +663,16 @@ public static partial class DataLoader
         {
             if (n >= 1 && n <= DataLimits.MaxSpawnCount && n == Math.Floor(n)) spawnCount = (int)n;
             else c.Error(p + ".spawnCount", $"{u.Id}: spawnCount {n} is not a whole number 1-{DataLimits.MaxSpawnCount}");
+        }
+        // M7-3 (BUG-1167): an item whose population is above the hard cap can never start (ProductionSystem waits for
+        // room), so it would wedge its building's queue for the match. Checked once rules.json is read.
+        if (rules != null && rules.HalfPopCap > 0 && halfPop > 0 && (long)halfPop * spawnCount > rules.HalfPopCap) // a broken popCap is reported once
+        {
+            string itemPop = (halfPop * (long)spawnCount / 2.0).ToString(CultureInfo.InvariantCulture), cap = (rules.HalfPopCap / 2).ToString(CultureInfo.InvariantCulture);
+            if (u.SpawnCount != null)
+                c.Error(p + ".spawnCount", $"{u.Id}: one queue item is spawnCount {spawnCount} x pop {pop.ToString(CultureInfo.InvariantCulture)} = {itemPop} pop, above rules.popCap {cap}: it could never start");
+            else
+                c.Error(p + ".pop", $"{u.Id}: pop {itemPop} is above rules.popCap {cap}: it could never start");
         }
         return new UnitDef
         {

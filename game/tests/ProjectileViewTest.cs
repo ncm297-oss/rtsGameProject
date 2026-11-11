@@ -203,6 +203,14 @@ public partial class ProjectileViewTest : Node
         string at = $"seed {seed} tick {tick} ({_runner.GameSpeed:0}x)";
         Check(_views.Shown == s.Count && _views.ShownAimed + _views.ShownLobs == s.Count, $"{at}: {_views.Shown} drawn ({_views.ShownAimed} + {_views.ShownLobs}), {s.Count} in flight");
         int bad = 0;
+        // M7-V2: every hit flash sits exactly LaunchHeight over the ground at scale 1, as before.
+        for (int fm = 0; fm < _views.Marks.Capacity; fm++)
+        {
+            if (!_views.Marks.Active[fm] || _views.Marks.Kind[fm] != ImpactMarkKind.Flash || _views.MarkTransform(fm).Basis.X.Length() == 0f) continue;
+            System.Numerics.Vector2 mp = _views.Marks.Position[fm];
+            float y = _views.MarkTransform(fm).Origin.Y;
+            if (y != TerrainHeight.At(W.Heightmap, mp.X, mp.Y) + ProjectileViews.LaunchHeight && bad++ < 3) Check(false, $"{at}: flash {fm} at y {y}, not exactly ground + {ProjectileViews.LaunchHeight}");
+        }
         for (int k = 0; k < _views.Shown && k < s.Capacity; k++)
         {
             int i = _views.DrawnSlot(k);
@@ -219,6 +227,8 @@ public partial class ProjectileViewTest : Node
                 _aimedSamples++;
                 if (SegmentDistance(xz, q, p) > Eps && bad++ < 3) Check(false, $"{at}: aimed slot {i} drawn {SegmentDistance(xz, q, p):F4} m off its segment {q} -> {p}");
                 if (MathF.Abs(h - ProjectileViews.LaunchHeight) > Eps && bad++ < 3) Check(false, $"{at}: aimed slot {i} {h:F3} m above the ground");
+                // M7-V2: shipped data is all scale 1, so the shot is exactly where it was before scaled heights (pixel-identical).
+                if (o.Y != ground + ProjectileViews.LaunchHeight && bad++ < 3) Check(false, $"{at}: aimed slot {i} at y {o.Y}, not exactly ground + {ProjectileViews.LaunchHeight}");
                 continue;
             }
             float t = _views.Tracker.Progress(i, xz);

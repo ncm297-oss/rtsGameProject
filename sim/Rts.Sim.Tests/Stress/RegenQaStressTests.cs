@@ -167,7 +167,7 @@ public class RegenQaStressTests(ITestOutputHelper output)
         string[] scales = { "0.5", "1.5", "3", "2.25", "0.75" };
         GameData scaled = AiScenes.DataWith(dir =>
         {
-            foreach (string f in new[] { "malazan", "whirlwind" })
+            foreach (string f in TestSim.ShippedFactions)
                 dir.EditJson($"factions/{f}/units.json", root =>
                 {
                     int n = 0;

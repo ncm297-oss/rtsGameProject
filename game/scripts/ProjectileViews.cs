@@ -14,25 +14,40 @@ namespace Rts.Game;
 /// arrows, magic bolts) as a short streak along their flight in a light shade of the owner's colour, lobs (Catapult stones,
 /// Sapper sharpers) as a small dark stone. Every frame each live slot gets one instance, written densely, at
 /// <c>PrevPosition → Position</c> interpolated by the render alpha (clamped: never extrapolated, BUG-0184: a re-led bolt
-/// can step 1.8 m in a tick). An aimed shot flies <see cref="LaunchHeight"/> above the terrain under it; a lob rides the
+/// can step 1.8 m in a tick). An aimed shot leaves its shooter at <see cref="HeightFor"/>(the shooter type's <c>scale</c>) above the
+/// terrain and closes on its victim's (M7-V2: a 0.5 unit shoots from 0.6 m, a 3.0 unit from 3.6 m, linear in the share of the
+/// flight flown; at scale 1 both ends are <see cref="LaunchHeight"/> and the shot flies level, exactly as before); a lob rides the
 /// ground (<see cref="StoneRide"/>) plus its arc, <see cref="ProjectileTracker.ArcHeight"/> from the launch point the
 /// <see cref="ProjectileTracker"/> recorded.</para>
 /// <para><b>Marks.</b> Every <see cref="ProjectileImpact"/> (read between ticks from <see cref="SimRunner.Ticked"/>, so a
 /// frame of several ticks misses none, and from the frame loop for scenes that tick the sim themselves) adds a mark to an
 /// <see cref="ImpactMarks"/> ring (<see cref="ImpactMarks.DefaultCapacity"/>): a flash for a hit, a dust puff for a miss,
-/// a burst for a lob sized by the widest splash of the attacks that throw it. One instance per pool slot; a mark grows and
+/// a burst for a lob sized by the widest splash of the attacks that throw it; a flash sits at its victim's height
+/// (<see cref="HeightFor"/> of the victim type's <c>scale</c>; a building's is <see cref="LaunchHeight"/>). One instance per pool slot; a mark grows and
 /// fades over its life; a free slot has a zero transform.</para>
 /// <para><b>Fog</b> (M4-V4): with <see cref="Fog"/> set, a shot is drawn only while its current cell (<c>Position</c>'s) is
 /// visible to the local player, and a mark only while its landing cell is (<see cref="FogView.ShowsPoint"/>). Combat may fire
 /// at a unit the screen still hides for up to 4 ticks (docs/03 "Vision, detection, fog", Known limits (1)), so the rule is
 /// the shot's own cell, not its target's. A hidden mark still counts as drawn, so it expires on time.</para>
+/// <para><b>Who shot at whom</b> (M7-V2): the store keeps its shooter's type internal, so the view finds it the tick it first sees
+/// a shot: the live unit of the shot's owner nearest its launch point and within its own radius of it (a spatial-hash query;
+/// a unit fires from where it stands), its victim that unit's target (a building: scale 1), and with no such shooter (a
+/// tower fires from its footprint's centre) the unit nearest the aim point not the owner's. Each end's height is kept per
+/// slot, and a landing's flash takes the victim height of the dead slot whose last aim point it is. Nothing found is scale 1,
+/// today's height.</para>
 /// Views hold no gameplay state: shots are redrawn from the store each frame; the tracker and the marks are presentation.
 /// Everything is made in <see cref="Bind"/>, so a steady frame allocates nothing.
 /// </remarks>
 public partial class ProjectileViews : Node3D
 {
-    /// <summary>Height (m) above the terrain an aimed shot flies at (about a shooter's chest).</summary>
+    /// <summary>Height (m) above the terrain an aimed shot leaves a scale-1 shooter and strikes a scale-1 victim (about the chest).</summary>
     public const float LaunchHeight = 1.2f;
+
+    /// <summary>How far (m) from a shot's launch point the view looks for its shooter, and from its aim point for a victim it can't name.</summary>
+    public const float FindRadius = 2f;
+
+    /// <summary>The launch and hit height (m) of a unit drawn at <paramref name="scale"/>: <see cref="LaunchHeight"/> x scale (M7-V2).</summary>
+    public static float HeightFor(float scale) => LaunchHeight * scale;
 
     /// <summary>An aimed shot's streak: length and thickness (m), larger than a real bolt so it reads at the default zoom.</summary>
     public const float StreakLength = 1.2f, StreakWidth = 0.12f;
@@ -68,6 +83,16 @@ public partial class ProjectileViews : Node3D
     private bool[] _drawnLob = Array.Empty<bool>();
     private int[] _added = Array.Empty<int>(), _removed = Array.Empty<int>();
     private Transform3D[] _markTransform = Array.Empty<Transform3D>();
+    // M7-V2, per projectile slot: the shot's ends' heights, resolved the tick it was first seen, and what it was seen as.
+    private float[] _scaleOf = Array.Empty<float>();
+    private float[] _fromHeight = Array.Empty<float>(), _toHeight = Array.Empty<float>();
+    private bool[] _known = Array.Empty<bool>();
+    private System.Numerics.Vector2[] _knownLaunch = Array.Empty<System.Numerics.Vector2>(), _knownAim = Array.Empty<System.Numerics.Vector2>();
+    private int[] _knownOwner = Array.Empty<int>(), _knownType = Array.Empty<int>();
+    private int[] _dead = Array.Empty<int>();
+    private readonly int[] _near = new int[256];
+    private float[] _markHeight = Array.Empty<float>();
+    private long _heightsTick = long.MinValue;
     private static readonly Transform3D Hidden = new(new Basis(Vector3.Zero, Vector3.Zero, Vector3.Zero), Vector3.Zero);
 
     /// <summary>The runner whose sim is shown each frame; null shows nothing (tests call <see cref="Sync"/> directly).</summary>
@@ -115,6 +140,15 @@ public partial class ProjectileViews : Node3D
     /// <summary>The transform written to mark instance <paramref name="slot"/> (a zero basis while unused).</summary>
     public Transform3D MarkTransform(int slot) => _markTransform[slot];
 
+    /// <summary>The height (m) above the ground slot <paramref name="slot"/>'s aimed shot left at (its shooter's; <see cref="LaunchHeight"/> when unknown).</summary>
+    public float ShotFromHeight(int slot) => (uint)slot < (uint)_fromHeight.Length ? _fromHeight[slot] : LaunchHeight;
+
+    /// <summary>The height (m) above the ground slot <paramref name="slot"/>'s aimed shot strikes at (its victim's; <see cref="LaunchHeight"/> when unknown).</summary>
+    public float ShotToHeight(int slot) => (uint)slot < (uint)_toHeight.Length ? _toHeight[slot] : LaunchHeight;
+
+    /// <summary>The height (m) above the ground mark <paramref name="slot"/>'s flash is drawn at (its victim's).</summary>
+    public float MarkFlashHeight(int slot) => (uint)slot < (uint)_markHeight.Length ? _markHeight[slot] : LaunchHeight;
+
     /// <summary>The burst's final radius (m) for projectile type <paramref name="type"/>.</summary>
     public float BurstRadius(int type) => (uint)type < (uint)_burstRadius.Length ? _burstRadius[type] : BurstMin;
 
@@ -144,6 +178,19 @@ public partial class ProjectileViews : Node3D
         for (int p = 0; p < _burstRadius.Length; p++) _burstRadius[p] = Math.Max(_burstRadius[p], BurstMin);
 
         Tracker = new ProjectileTracker(projectileCapacity);
+        _scaleOf = new float[data.Units.Length];
+        for (int t = 0; t < _scaleOf.Length; t++) _scaleOf[t] = data.Units[t].Scale;
+        _fromHeight = new float[projectileCapacity];
+        _toHeight = new float[projectileCapacity];
+        Array.Fill(_fromHeight, LaunchHeight);
+        Array.Fill(_toHeight, LaunchHeight);
+        _known = new bool[projectileCapacity];
+        _knownLaunch = new System.Numerics.Vector2[projectileCapacity];
+        _knownAim = new System.Numerics.Vector2[projectileCapacity];
+        _knownOwner = new int[projectileCapacity];
+        _knownType = new int[projectileCapacity];
+        _dead = new int[projectileCapacity];
+        _heightsTick = long.MinValue;
         _drawnSlot = new int[projectileCapacity];
         _drawnAt = new Vector3[projectileCapacity];
         _drawnLob = new bool[projectileCapacity];
@@ -157,6 +204,8 @@ public partial class ProjectileViews : Node3D
         _added = new int[Math.Max(projectileCapacity, markCapacity)];
         _removed = new int[markCapacity];
         _markTransform = new Transform3D[markCapacity];
+        _markHeight = new float[markCapacity];
+        Array.Fill(_markHeight, LaunchHeight);
         var markMat = new StandardMaterial3D
         {
             VertexColorUseAsAlbedo = true, VertexColorIsSrgb = true, AlbedoColor = Colors.White,
@@ -184,9 +233,118 @@ public partial class ProjectileViews : Node3D
     public void CollectTick(World world)
     {
         if (Tracker == null) return;
+        bool fresh = world.TickNumber != _heightsTick;
+        _heightsTick = world.TickNumber;
+        int dead = fresh ? DropDead(world.Projectiles) : 0;
         Tracker.Observe(world.Projectiles, _data.Projectiles.AsSpan(), world.TickNumber);
+        if (fresh) ObserveHeights(world);
         // New marks need no write here: Sync redraws every active mark each frame (they grow and fade).
-        Marks.Collect(world.Impacts, _data.Projectiles.AsSpan(), world.TickNumber, _added);
+        int added = Marks.Collect(world.Impacts, _data.Projectiles.AsSpan(), world.TickNumber, _added);
+        if (added > 0) FlashHeights(world, Math.Min(added, _added.Length), dead);
+    }
+
+    // The slots this view knew last tick whose shot is gone now (landed or lost) go to _dead, for the landings' flashes.
+    private int DropDead(ProjectileStore store)
+    {
+        ReadOnlySpan<bool> alive = store.Alive;
+        int n = 0;
+        for (int i = 0; i < alive.Length && i < _known.Length; i++)
+        {
+            if (!_known[i] || alive[i]) continue;
+            _known[i] = false;
+            _dead[n++] = i;
+        }
+        return n;
+    }
+
+    // Each live shot first seen this tick gets its ends' heights (see the remarks); every live shot's aim point is kept.
+    private void ObserveHeights(World world)
+    {
+        ProjectileStore s = world.Projectiles;
+        ReadOnlySpan<bool> alive = s.Alive;
+        ReadOnlySpan<System.Numerics.Vector2> target = s.Target;
+        ReadOnlySpan<int> owner = s.Owner, type = s.ProjectileTypeId;
+        ReadOnlySpan<System.Numerics.Vector2> launch = Tracker.Launch;
+        for (int i = 0; i < alive.Length && i < _known.Length; i++)
+        {
+            if (!alive[i]) continue;
+            if (!_known[i] || launch[i] != _knownLaunch[i] || owner[i] != _knownOwner[i] || type[i] != _knownType[i])
+            {
+                _known[i] = true;
+                _knownLaunch[i] = launch[i];
+                _knownOwner[i] = owner[i];
+                _knownType[i] = type[i];
+                ResolveEnds(world, i, launch[i], target[i], owner[i]);
+            }
+            _knownAim[i] = target[i];
+        }
+    }
+
+    private void ResolveEnds(World world, int i, System.Numerics.Vector2 launch, System.Numerics.Vector2 aim, int owner)
+    {
+        UnitStore u = world.Units;
+        int shooter = Nearest(world, launch, owner, own: true);
+        if (shooter >= 0 && System.Numerics.Vector2.Distance(u.Position[shooter], launch) > u.Radius[shooter]) shooter = -1;
+        _fromHeight[i] = shooter >= 0 ? HeightFor(ScaleOf(u.TypeId[shooter])) : LaunchHeight;
+        int victim = -1;
+        if (shooter >= 0)
+        {
+            EntityHandle t = u.Target[shooter];
+            if (!u.TargetIsBuilding[shooter] && u.IsAlive(t)) victim = t.Index;
+        }
+        else victim = Nearest(world, aim, owner, own: false);
+        _toHeight[i] = victim >= 0 ? HeightFor(ScaleOf(u.TypeId[victim])) : LaunchHeight;
+    }
+
+    // The live unit nearest `at` within FindRadius: the owner's (own) or anyone else's. -1 for none. No allocation.
+    private int Nearest(World world, System.Numerics.Vector2 at, int owner, bool own)
+    {
+        UnitStore u = world.Units;
+        int n = Math.Min(world.Spatial.QueryRadius(at, FindRadius, _near), _near.Length);
+        int best = -1;
+        float bestD2 = float.MaxValue;
+        for (int k = 0; k < n; k++)
+        {
+            int c = _near[k];
+            if ((uint)c >= (uint)u.Capacity || !u.Alive[c] || (u.Owner[c] == owner) != own) continue;
+            float d2 = System.Numerics.Vector2.DistanceSquared(u.Position[c], at);
+            if (d2 < bestD2)
+            {
+                bestD2 = d2;
+                best = c;
+            }
+        }
+        return best;
+    }
+
+    private float ScaleOf(int type) => (uint)type < (uint)_scaleOf.Length ? _scaleOf[type] : 1f;
+
+    // A landing's flash sits at its shot's victim height: the dead slot of the same owner and type whose last aim point the
+    // landing is (an aimed shot is not steered on its landing tick, so the two are equal); otherwise the unit nearest it.
+    private void FlashHeights(World world, int added, int dead)
+    {
+        ReadOnlySpan<ProjectileImpact> impacts = world.Impacts;
+        for (int k = 0; k < added && k < impacts.Length; k++)
+        {
+            int mark = _added[k];
+            if ((uint)mark >= (uint)_markHeight.Length) continue;
+            ProjectileImpact im = impacts[k];
+            float h = -1f;
+            for (int d = 0; d < dead; d++)
+            {
+                int slot = _dead[d];
+                if (slot < 0 || _knownAim[slot] != im.Position || _knownOwner[slot] != im.Owner || _knownType[slot] != im.ProjectileTypeId) continue;
+                h = _toHeight[slot];
+                _dead[d] = -1; // one landing per shot
+                break;
+            }
+            if (h < 0f)
+            {
+                int victim = Nearest(world, im.Position, im.Owner, own: false);
+                h = victim >= 0 ? HeightFor(ScaleOf(world.Units.TypeId[victim])) : LaunchHeight;
+            }
+            _markHeight[mark] = h;
+        }
     }
 
     /// <summary>One frame: the last tick's landings, expired marks, every live shot and every mark. No allocation.</summary>
@@ -233,7 +391,7 @@ public partial class ProjectileViews : Node3D
                 System.Numerics.Vector2 d = pos[i] - prev[i];
                 if (d.LengthSquared() < 1e-8f) d = target[i] - pos[i];
                 float yaw = d.LengthSquared() < 1e-8f ? 0f : MathF.Atan2(d.X, d.Y);
-                origin = new Vector3(at.X, ground + LaunchHeight, at.Y);
+                origin = new Vector3(at.X, ground + AimedHeight(i, at), at.Y);
                 _aimed.SetInstanceTransform(nAimed, new Transform3D(new Basis(Vector3.Up, yaw), origin));
                 int o = owner[i];
                 _aimed.SetInstanceColor(nAimed, (uint)o < (uint)_streakColors.Length ? _streakColors[o] : Colors.White);
@@ -283,13 +441,25 @@ public partial class ProjectileViews : Node3D
             System.Numerics.Vector2 p = m.Position[i];
             float ground = TerrainHeight.At(world.Heightmap, p.X, p.Y);
             // A flash sits where an aimed shot flies; dust and bursts hug the ground (flattened).
-            float y = kind == ImpactMarkKind.Flash ? ground + LaunchHeight : ground + r * 0.25f;
+            float y = kind == ImpactMarkKind.Flash ? ground + _markHeight[i] : ground + r * 0.25f;
             float flat = kind == ImpactMarkKind.Flash ? 1f : 0.5f;
             _markTransform[i] = new Transform3D(Basis.FromScale(new Vector3(r, r * flat, r)), new Vector3(p.X, y, p.Y));
             _marks.SetInstanceTransform(i, _markTransform[i]);
             _marks.SetInstanceColor(i, new Color(c.R, c.G, c.B, 0.85f * (1f - age)));
             m.MarkDrawn(i);
         }
+    }
+
+    // An aimed shot's height above the ground at `at`: its shooter's at launch to its victim's at the aim point, linear in the
+    // share flown; level (exactly the one height) when both ends match, as in every scale-1 fight.
+    private float AimedHeight(int slot, System.Numerics.Vector2 at)
+    {
+        float from = _fromHeight[slot], to = _toHeight[slot];
+        if (from == to) return from;
+        float length = Tracker.Length[slot];
+        float t = length > 0f ? System.Numerics.Vector2.Distance(at, Tracker.Launch[slot]) / length : 1f;
+        t = t > 0f ? MathF.Min(t, 1f) : 0f; // NaN to 0
+        return from + (to - from) * t;
     }
 
     private void HideMark(int slot)

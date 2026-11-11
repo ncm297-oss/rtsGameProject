@@ -126,7 +126,7 @@ internal static class MilitaryManager
             if (!Free(ai, ai.ArmySlots[k], out SeenUnit u)) continue;
             UnitDef def = ai.Data.Units[u.TypeId];
             half += def.HalfPop;
-            cost += def.CostGold + def.CostWood;
+            cost += def.UnitWorth; // M7-3 (BUG-1168): a pack unit's share of the item
             count++;
         }
         float scale = ai.Knobs.WaveSizeMultiplier;

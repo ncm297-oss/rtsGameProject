@@ -616,7 +616,7 @@ public class ReplayQaTests
         }
 
         // Re-serialized (compact, no whitespace) and with the units array reversed: same defs, same hash.
-        foreach (string faction in new[] { "malazan", "whirlwind" })
+        foreach (string faction in TestSim.ShippedFactions)
         {
             dir.EditJson($"factions/{faction}/units.json", root =>
             {

@@ -33,11 +33,12 @@ public class MapFileTests
     private static MapDef Def(string id) => TestSim.Data.Maps[TestSim.Data.FindMap(id)];
 
     /// <summary>M6-S8: a match on map <paramref name="id"/> of two AI seats (starts 0 and 1), as <see cref="RarakuMatch"/>, the generator params sized to the map's side.</summary>
-    internal static Simulation MapMatch(string id, ulong seed, bool record, out ReplayRecorder? recorder, AiDifficulty a = AiDifficulty.Normal, AiDifficulty b = AiDifficulty.Normal)
+    internal static Simulation MapMatch(string id, ulong seed, bool record, out ReplayRecorder? recorder, AiDifficulty a = AiDifficulty.Normal, AiDifficulty b = AiDifficulty.Normal,
+        GameData? data = null)
     {
         int size = Def(id).Size;
         PlayerSeat[] seats = { new(0, SeatController.Ai, a), new(1, SeatController.Ai, b) };
-        return AiScenes.Generated(seats, seed, record, out recorder, configure: c => c with { MapId = id, Map = c.Map with { Width = size, Height = size } });
+        return AiScenes.Generated(seats, seed, record, out recorder, data: data, configure: c => c with { MapId = id, Map = c.Map with { Width = size, Height = size } });
     }
 
     /// <summary>A Raraku match of two AI seats (Normal unless given), each base a hall and five workers placed by commands as the game does (<see cref="AiScenes.Generated"/>).</summary>

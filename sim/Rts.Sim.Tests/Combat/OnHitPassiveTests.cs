@@ -21,7 +21,7 @@ public class OnHitPassiveTests
 
     internal static void BiteAll(TestDataDir dir)
     {
-        foreach (string f in new[] { "malazan", "whirlwind" })
+        foreach (string f in TestSim.ShippedFactions)
             dir.EditJson($"factions/{f}/units.json", root =>
             {
                 foreach (JsonNode? unit in root["units"]!.AsArray())

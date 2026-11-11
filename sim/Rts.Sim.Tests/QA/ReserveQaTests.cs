@@ -385,7 +385,7 @@ public class ReserveQaTests
         GameData shipped = TestSim.Data;
         return AiScenes.DataWith(dir =>
         {
-            foreach (string f in new[] { "malazan", "whirlwind" })
+            foreach (string f in TestSim.ShippedFactions)
             {
                 int fi = shipped.FindFaction(f);
                 var steps = new List<(string, double, string, string?, int)>();

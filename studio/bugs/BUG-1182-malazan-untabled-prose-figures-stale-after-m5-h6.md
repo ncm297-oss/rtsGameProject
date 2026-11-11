@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S3 |
-| Status | open |
+| Status | fixed (D-R36, 2026-11-10-1236: the four figures re-worded with their dates (10:50; three waves from 12:29, falls 18:49; 12:22 / tick 14,843; 502 gold), the old ones kept dated; QA verified against BUG-1182's printout) |
 | Found | 2026-11-09-2226, task D-R35 |
 | System | Docs: `docs/factions/malazan.md` (`cadre_rush` BUG-0982 paragraph, "Fast Age II against the raider rush") |
-| Fixed by | |
+| Fixed by | `D-R36` (b7082a8) |
 
 ## Repro
 1. On D-R35's HEAD (`780d73c`, the sim is M5-H6), run

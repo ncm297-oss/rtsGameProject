@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S4 |
-| Status | open |
+| Status | fixed (D-R36, 2026-11-10-1236: the summary line wrapped, the seed-19 comment carries today's figures; QA verified) |
 | Found | 2026-11-09-2226, task D-R35 |
 | System | Tests: `Content/AiAdaptsContentTests`, `QA/Content/D21OpeningsQaTests` (comments only) |
-| Fixed by | |
+| Fixed by | `D-R36` (b7082a8) |
 
 ## Repro
 1. `sim/Rts.Sim.Tests/Content/AiAdaptsContentTests.cs` line 19: the re-wrapped `<summary>` line is 145 characters

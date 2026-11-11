@@ -32,7 +32,7 @@ public class ProportionalDefenseFuzzStressTests
 
     private static GameData Data(double ratio, double min, double recall) => AiScenes.DataWith(dir =>
     {
-        foreach (string f in new[] { "malazan", "whirlwind" })
+        foreach (string f in TestSim.ShippedFactions)
             dir.EditJson($"factions/{f}/ai.json", root => AiScenes.Opening(root)["attack"] = new JsonObject { ["minArmyPop"] = 3, ["minArmyCost"] = 0 });
         dir.EditJson("common/rules.json", r =>
         {

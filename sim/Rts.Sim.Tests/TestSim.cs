@@ -47,6 +47,19 @@ public static class TestSim
     /// </summary>
     public static GameData DataWithoutBuildingRequires => s_withoutBuildingRequires.Value;
 
+    private static readonly Lazy<string[]> s_factions = new(() =>
+    {
+        var keys = new string[Data.Factions.Length];
+        for (int f = 0; f < keys.Length; f++) keys[f] = Data.Factions[f].Key;
+        return keys;
+    });
+
+    /// <summary>
+    /// M7-3: the shipped factions' ids in faction id order (<c>common/factions.json</c>'s <c>order</c>): for a test that edits
+    /// every faction's files, so a faction appended to the order is edited too. A test about two particular factions names them.
+    /// </summary>
+    public static IReadOnlyList<string> ShippedFactions => s_factions.Value;
+
     /// <summary>Number of unit types in the shipped data; valid type ids are 0 to this minus 1.</summary>
     public static int UnitTypeCount => Data.Units.Length;
 

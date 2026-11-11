@@ -331,7 +331,7 @@ public class SurroundQaTests
     private static GameData OneByOneHouses()
     {
         using TestDataDir dir = TestDataDir.CopyOfShipped();
-        foreach (string faction in new[] { "malazan", "whirlwind" })
+        foreach (string faction in TestSim.ShippedFactions)
             dir.EditJson($"factions/{faction}/buildings.json", root =>
             {
                 foreach (JsonNode? bn in root["buildings"]!.AsArray())

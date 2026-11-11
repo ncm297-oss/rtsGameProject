@@ -9,6 +9,7 @@ namespace Rts.Sim.Data;
     UnmappedMemberHandling = JsonUnmappedMemberHandling.Disallow)]
 [JsonSerializable(typeof(DamageTableJson))]
 [JsonSerializable(typeof(RulesJson))]
+[JsonSerializable(typeof(FactionOrderJson))] // M7-3
 [JsonSerializable(typeof(FactionJson))]
 [JsonSerializable(typeof(UnitFileJson))]
 [JsonSerializable(typeof(ResourceFileJson))]

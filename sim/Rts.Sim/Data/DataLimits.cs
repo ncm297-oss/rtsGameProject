@@ -31,6 +31,12 @@ public static class DataLimits
     /// </summary>
     public const double MaxRegenPerSecond = 100;
 
+    /// <summary>
+    /// M7-3: the most factions <c>common/factions.json</c> may list (and so the most <c>factions/</c> folders). A rule of the
+    /// format, not a design number: the setup screen lists every faction in one list and a load bounds its tables.
+    /// </summary>
+    public const int MaxFactions = 8;
+
     /// <summary>Largest value a decimal field (meters, rates, multipliers) may hold; checked before narrowing to float (BUG-0007).</summary>
     public const double MaxDecimal = 1_000_000;
 

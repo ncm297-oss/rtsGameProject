@@ -21,7 +21,11 @@ public class DataValidationTests
     public void ShippedData_MalazanAndWhirlwind_EachFillAllSevenSlotsOnce()
     {
         GameData data = Load(TestDataDir.Shipped);
-        Assert.Equal(new[] { "malazan", "whirlwind" }, data.Factions.Select(f => f.Key));
+        // M7-3: the factions are common/factions.json's order (the order file is the rule, not a literal pair here).
+        JsonArray order = JsonNode.Parse(File.ReadAllText(Path.Combine(TestDataDir.Shipped, "common", "factions.json")))!["order"]!.AsArray();
+        Assert.Equal(order.Select(n => (string)n!), data.Factions.Select(f => f.Key));
+        Assert.Contains("malazan", data.Factions.Select(f => f.Key));
+        Assert.Contains("whirlwind", data.Factions.Select(f => f.Key));
         foreach (FactionDef f in data.Factions)
         {
             Assert.Equal(7, f.Units.Length);
@@ -140,6 +144,9 @@ public class DataValidationTests
     [InlineData("pop", "1e10", "units[2].pop", "is above the maximum")]
     [InlineData("speed", "1e300", "units[2].speed", "is above the maximum")]
     [InlineData("hp", "2000000000", "units[2].hp", "2000000000 is above the maximum 1000000")]
+    // M7-3 (BUG-1167): a unit (or pack, PackQaTests) above the hard cap could never start; at .pop when spawnCount is absent.
+    [InlineData("pop", "101", "units[2].pop", "pop 101 is above rules.popCap 100: it could never start")]
+    [InlineData("pop", "100.5", "units[2].pop", "pop 100.5 is above rules.popCap 100")]
     // BUG-0009: list entries are ids too.
     [InlineData("requires", "[\"Age_II\"]", "units[2].requires[0]", "not snake_case")]
     [InlineData("tags", "[\"infantry\", null]", "units[2].tags[1]", "missing")]
@@ -151,6 +158,31 @@ public class DataValidationTests
         DataError e = Assert.Single(DataLoader.LoadAll(dir.Path).Errors);
         Assert.Equal(MalazanUnits, e.File);
         Assert.Equal(path, e.Path);
+        Assert.Contains(message, e.Message);
+    }
+
+    /// <summary>
+    /// M7-3 (BUG-1167): the hard-cap check's edges. A unit at pop 100 and a pack of 8 at pop 12.5 (100 an item) are at the cap
+    /// and load; 8 x 13 (104) is one error at <c>spawnCount</c> naming both numbers.
+    /// </summary>
+    [Theory]
+    [InlineData("100", null, null)]
+    [InlineData("12.5", "8", null)]
+    [InlineData("13", "8", "spawnCount 8 x pop 13 = 104 pop, above rules.popCap 100")]
+    [InlineData("50.5", "2", "spawnCount 2 x pop 50.5 = 101 pop, above rules.popCap 100")]
+    public void AnItemAboveTheHardCap_IsOneErrorAtSpawnCount(string pop, string? spawnCount, string? message)
+    {
+        using TestDataDir dir = TestDataDir.CopyOfShipped();
+        dir.SetUnitField("malazan", "malazan_crossbowman", "pop", pop);
+        if (spawnCount != null) dir.SetUnitField("malazan", "malazan_crossbowman", "spawnCount", spawnCount);
+        DataLoadResult r = DataLoader.LoadAll(dir.Path);
+        if (message == null)
+        {
+            Assert.True(r.Ok, string.Join(Environment.NewLine, r.Errors));
+            return;
+        }
+        DataError e = Assert.Single(r.Errors);
+        Assert.Equal((MalazanUnits, "units[2].spawnCount"), (e.File, e.Path));
         Assert.Contains(message, e.Message);
     }
 

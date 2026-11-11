@@ -374,7 +374,11 @@ public class PackQaTests(ITestOutputHelper output)
     /// start: the loader accepts it, the Train is accepted and paid, and the queue is wedged for the match. A single unit of
     /// pop 101 has the same hole today; a pack makes it reachable with ordinary per-unit pops. Expected: a load error.
     /// </summary>
-    [Fact(Skip = "BUG-1167: the loader accepts spawnCount x pop above rules.popCap; the item can never start")]
+    /// <remarks>
+    /// M7-3 (BUG-1167 fixed): un-skipped; the symptom row (<c>APackAboveTheHardCap_LoadsAndWedgesTheQueue_Bug1167Symptom</c>,
+    /// a 2,000-tick wedge on the old loader) is removed with the hole. The error is one, at <c>spawnCount</c>, naming both numbers.
+    /// </remarks>
+    [Fact]
     public void APackAboveTheHardCap_IsALoadError()
     {
         using TestDataDir dir = TestDataDir.CopyOfShipped();
@@ -382,26 +386,10 @@ public class PackQaTests(ITestOutputHelper output)
         dir.SetUnitField("malazan", "malazan_heavy_infantry", "pop", "13");
         DataLoadResult r = DataLoader.LoadAll(dir.Path);
         Assert.False(r.Ok, "a queue item of 104 pop loads against a 100-pop hard cap");
-    }
-
-    /// <summary>The BUG-1167 symptom on today's loader: 104 pop of pack, cap 100 (every billet built), never starts in 2,000 ticks.</summary>
-    [Fact]
-    public void APackAboveTheHardCap_LoadsAndWedgesTheQueue_Bug1167Symptom()
-    {
-        GameData d = AiScenes.DataWith(dir =>
-        {
-            dir.SetUnitField("malazan", "malazan_heavy_infantry", "spawnCount", "8");
-            dir.SetUnitField("malazan", "malazan_heavy_infantry", "pop", "13");
-        });
-        int heavy = d.FindUnit("malazan_heavy_infantry");
-        (Simulation sim, EntityHandle bar, _) = Base(d, laborers: 0, units: 64);
-        World w = sim.World;
-        for (int n = 0; n < 12; n++) Assert.True(w.Buildings.Spawn(0, d.FindBuilding("malazan_billet"), (2 + 3 * (n / 6)) * 48 + 30 + 3 * (n % 6) - 14, out _));
-        Assert.Equal(d.Rules.HalfPopCap, Math.Min(w.HalfPopCap[0], d.Rules.HalfPopCap));
-        sim.Enqueue(Command.Train(0, In(sim, bar.Index), heavy));
-        for (int n = 0; n < 2_000; n++) sim.Tick();
-        Assert.Equal((1, 0, 0), (w.Buildings.QueueCount[bar.Index], w.Buildings.Progress[bar.Index], Count(w, heavy)));
-        output.WriteLine($"cap {w.HalfPopCap[0]} half (rules {d.Rules.HalfPopCap}); item {d.Units[heavy].ItemHalfPop} half: wedged");
+        DataError e = Assert.Single(r.Errors);
+        Assert.Equal(("factions/malazan/units.json", true), (e.File, e.Path.EndsWith(".spawnCount", StringComparison.Ordinal)));
+        Assert.Contains("104", e.Message);
+        Assert.Contains("100", e.Message);
     }
 
     // ------------------------------------------------------------------ onHit
@@ -631,7 +619,7 @@ public class PackQaTests(ITestOutputHelper output)
     {
         GameData d = AiScenes.DataWith(dir =>
         {
-            foreach (string f in new[] { "malazan", "whirlwind" })
+            foreach (string f in TestSim.ShippedFactions)
                 dir.EditJson($"factions/{f}/units.json", root =>
                 {
                     foreach (JsonNode? unit in root["units"]!.AsArray())
@@ -727,17 +715,19 @@ public class PackQaTests(ITestOutputHelper output)
     /// not 74. The end-of-match army-value sample (<see cref="Economy.MatchStats.Sample"/>) is the player-facing one; the AI's
     /// wave <c>minArmyCost</c>, reserve and defense worths read the same per-unit cost.
     /// </summary>
-    [Fact(Skip = "BUG-1168: a pack unit's worth is the whole item's cost (x SpawnCount overcount)")]
+    /// <remarks>
+    /// M7-3 (BUG-1168 fixed): un-skipped. The worth rule (docs/03 "Implementation (M7-3)") is each unit's share of the item,
+    /// <c>cost / spawnCount</c> per resource with the remainder dropped: 54 / 20 of three is 18 + 6 = 24 a unit, so the pack
+    /// samples <b>72</b>, not the 74 paid (the 2 wood of 20 / 3's remainder) and not 222. The QA row as written expected 74;
+    /// the brief's integer rule gives 72 for this pack (the developer's report, M7-3). A pack whose cost divides (the war-dog's
+    /// 120 / 0) samples exactly what was paid (<c>Ai/PackWorthTests</c>).
+    /// </remarks>
+    [Fact]
     public void APacksArmyValue_IsTheItemsCost_NotSpawnCountTimesIt()
     {
-        Assert.Equal(74, PackArmyValue());
-    }
-
-    /// <summary>The BUG-1168 symptom as it stands: 222 for one 74-cost pack of three.</summary>
-    [Fact]
-    public void APacksArmyValue_IsThreeTimesTheItemsCost_Bug1168Symptom()
-    {
-        Assert.Equal(3 * 74, PackArmyValue());
+        UnitDef heavy = Pack.Units[Pack.FindUnit("malazan_heavy_infantry")];
+        Assert.Equal((18, 6), (heavy.UnitCostGold, heavy.UnitCostWood));
+        Assert.Equal(72, PackArmyValue());
     }
 
     private static int PackArmyValue()
