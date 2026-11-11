@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S3 (Perf headroom; no gameplay effect; shipped data has 14 units and 20 buildings) |
-| Status | open |
+| Status | fixed (M7-3b, verified by QA 2026-11-10-2116 / resumed 2026-11-11-0739) |
 | Found | 2026-11-10-1236, task M7-3 (QA, full) |
 | System | data loader (`DataLoader.KeyId`, `DataLoader.Factions.cs`; callers in `DataLoader.cs`, `.Techs.cs`, `.Passives.cs`, `.Abilities.cs`, `.Ai.cs`) |
-| Fixed by | |
+| Fixed by | db4b1d8 (M7-3b): `DataLoader.KeyIndex` (the id table + the same keys sorted with their ids, binary-searched; built once per table) replaces `KeyId`'s `Array.IndexOf` and every `Array.BinarySearch` on unit / building / tech / ability keys. Proof: `DataLoaderQaTests.TenThousandUnitFile_LoadsUnderTwoSeconds` alone 296 / 321 / 433 ms on the branch v 1,143 / 1,209 / 1,285 ms on de591f0 (bound unchanged) |
 
 ## Repro
 1. `git archive` the diff base (dacd5b9) and the M7-3 head into two scratch folders and build both.

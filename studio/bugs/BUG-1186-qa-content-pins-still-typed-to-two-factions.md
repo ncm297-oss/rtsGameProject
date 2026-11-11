@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S3 |
-| Status | open |
+| Status | fixed (D-R37, verified by QA 2026-11-10-2116; residual BUG-1210) |
 | Found | 2026-11-10-1236, task D-R36 |
 | System | Tests: `sim/Rts.Sim.Tests/Content/**`, `sim/Rts.Sim.Tests/QA/Content/**`; docs: `docs/factions/teblor.md` |
-| Fixed by | |
+| Fixed by | c49e971 (D-R37): the ten pin classes iterate `ContentFactions.Keys`; the four report classes stay two-faction with a comment line (the Producer's ruling); teblor.md's Defense and High-start bullets. Proof: the literal-pair grep matches only the four report classes; QA's six mutations each red in the expected rows only (`D20PinQaTests.DefenseLine_QuotesTheRulesJsonKnobs`, `TeblorPageParseQaTests`), `PagePinReadinessTests` teblor row; the four filters 1,920 / 1,920 |
 
 ## Repro
 1. `git grep -n -e '"malazan", "whirlwind"' -e 'InlineData("malazan")' -- sim/Rts.Sim.Tests/Content sim/Rts.Sim.Tests/QA/Content`
