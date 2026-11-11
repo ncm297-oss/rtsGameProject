@@ -147,6 +147,7 @@ public class AiOpeningPairsReportTests
     /// </summary>
     internal static void AssertAgeTwoCells(int malazan, int whirlwind, int nth, ulong seed, int[] ageTwo, int[] defeated)
     {
+        // Two-faction by design (D-R37, the Producer's ruling on BUG-1186): a report measures what exists; the pins cover every data faction.
         string[] factions = { "malazan", "whirlwind" };
         int[] openings = { malazan, whirlwind };
         for (int p = 0; p < 2; p++)

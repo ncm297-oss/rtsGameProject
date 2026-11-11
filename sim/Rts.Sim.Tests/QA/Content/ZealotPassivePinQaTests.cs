@@ -16,7 +16,7 @@ public class ZealotPassivePinQaTests
     [Fact]
     public void ShippedPagesAndData_AreClean_ForPassivesStatusesAndDescriptions()
     {
-        foreach (string f in new[] { "malazan", "whirlwind" })
+        foreach (string f in ContentFactions.Keys) // D-R37: every data faction, not a typed pair
         {
             AbilityContentTests.Result r = PassiveContentTests.Compare(Data, f, PageTables.FactionLines(f));
             Assert.True(r.Problems.Count == 0, string.Join("\n", r.Problems));

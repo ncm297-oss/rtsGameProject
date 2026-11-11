@@ -15,11 +15,11 @@ namespace Rts.Sim.Tests.QA.Content;
 public class D20PinQaTests
 {
     /// <summary>The knobs the Defense line must quote (M5-4f's three); any other <c>`ai.x` N</c> it quotes is pinned too.</summary>
-    private static readonly string[] SizedDefenseKnobs = { "defendRatio", "defendMinValue", "recallHallHp" };
+    internal static readonly string[] SizedDefenseKnobs = { "defendRatio", "defendMinValue", "recallHallHp" };
 
-    private static readonly Regex QuotedKnob = new(@"`ai\.(\w+)` \(?(\d+(?:\.\d+)?)", RegexOptions.CultureInvariant);
+    internal static readonly Regex QuotedKnob = new(@"`ai\.(\w+)` \(?(\d+(?:\.\d+)?)", RegexOptions.CultureInvariant);
 
-    private static readonly Regex OneRaiderCase = new(
+    internal static readonly Regex OneRaiderCase = new(
         @"One ([A-Z][\w ]+?) \((\d+) gold \+ wood\) is answered with (\d+) worth, e\.g\. two ([A-Z][\w ]+?)s? from home \((\d+)\), and a wave out keeps going\.",
         RegexOptions.CultureInvariant);
 
@@ -36,11 +36,12 @@ public class D20PinQaTests
 
     /// <summary>Every <c>`ai.x` N</c> the Defense line quotes equals <c>rules.json</c>'s <c>ai.x</c>, and the three sized-defense knobs are quoted.</summary>
     [Theory]
-    [InlineData("malazan")]
-    [InlineData("whirlwind")]
-    public void DefenseLine_QuotesTheRulesJsonKnobs(string faction)
+    [MemberData(nameof(ContentFactions.Theory), MemberType = typeof(ContentFactions))]
+    public void DefenseLine_QuotesTheRulesJsonKnobs(string faction) => QuotesTheKnobs(faction, DefenseLine(faction));
+
+    /// <summary>The knob check on one Defense line (shared with <see cref="TeblorPageParseQaTests"/>, which reads a page ahead of its data).</summary>
+    internal static void QuotesTheKnobs(string faction, string line)
     {
-        string line = DefenseLine(faction);
         JsonObject ai = RulesAi();
         var quoted = new HashSet<string>(StringComparer.Ordinal);
         foreach (Match m in QuotedKnob.Matches(line))
@@ -64,8 +65,7 @@ public class D20PinQaTests
     /// exactly two of the named defender, worth what the page says.
     /// </summary>
     [Theory]
-    [InlineData("malazan")]
-    [InlineData("whirlwind")]
+    [MemberData(nameof(ContentFactions.Theory), MemberType = typeof(ContentFactions))]
     public void DefenseLine_OneUnitCase_FollowsTheSizingRule(string faction)
     {
         string line = DefenseLine(faction);
@@ -80,8 +80,7 @@ public class D20PinQaTests
         AiRulesDef rules = d.AiRules;
         double answer = Math.Max(rules.DefendRatio * cost, rules.DefendMinValue);
         Assert.Equal(answer.ToString(CultureInfo.InvariantCulture), m.Groups[3].Value);
-        int picks = 0, picked = 0;
-        while (picks == 0 || answer - picked > each / 2.0) { picks++; picked += each; }
+        (int picks, int picked) = Picks(answer, each);
         Assert.True(picks == 2, $"{faction}: the pick rule takes {picks} {defender.DisplayName} for an answer of {answer}, the page says two");
         Assert.Equal(picked.ToString(CultureInfo.InvariantCulture), m.Groups[5].Value);
     }
@@ -95,8 +94,7 @@ public class D20PinQaTests
     /// Build was sent once the cap was the hard cap (D15 C, asserted on the run itself).
     /// </summary>
     [Theory]
-    [InlineData("malazan")]
-    [InlineData("whirlwind")]
+    [MemberData(nameof(ContentFactions.Theory), MemberType = typeof(ContentFactions))]
     public void HouseNote_SaysWhatTheMenuMapRunsShow(string faction)
     {
         AiDef ai = TestSim.Data.Ai[TestSim.Data.FindFaction(faction)];
@@ -116,6 +114,14 @@ public class D20PinQaTests
             foreach (string want in wants)
                 Assert.True(note.Contains(want, StringComparison.Ordinal), $"{faction}.md opening {k + 1} 'Houses at the cap' lacks \"{want}\"; it reads: {note}");
         }
+    }
+
+    /// <summary>The pick rule: defenders of cost <paramref name="each"/> are picked while the answer is short by more than half of one, the first always.</summary>
+    internal static (int Picks, int Picked) Picks(double answer, int each)
+    {
+        int picks = 0, picked = 0;
+        while (picks == 0 || answer - picked > each / 2.0) { picks++; picked += each; }
+        return (picks, picked);
     }
 
     private static string Note(string[] lines, string where)

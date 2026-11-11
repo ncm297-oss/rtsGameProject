@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Text.RegularExpressions;
 using Rts.Sim.Data;
+using Rts.Sim.Tests.QA.Content;
 
 namespace Rts.Sim.Tests.Content;
 
@@ -220,9 +221,11 @@ public class PagePinReadinessTests
         string[][] openings = tables[0].Skip(2).Select(r => PageTables.Cells(r, stripBackticks: true)).ToArray();
         if (openings.Length == 0) problems.Add($"{page} openings: no rows (AiContentTests A)");
 
-        string? retreat = BulletsAfter(shared, 0, shared.Length).FirstOrDefault(b => b.StartsWith("Retreat:", StringComparison.Ordinal));
+        List<string> sharedBullets = BulletsAfter(shared, 0, shared.Length);
+        string? retreat = sharedBullets.FirstOrDefault(b => b.StartsWith("Retreat:", StringComparison.Ordinal));
         if (retreat == null || !Regex.IsMatch(retreat, AiContentTests.RetreatPattern, Opts))
             problems.Add($"{page} AI build order: no 'Retreat: ... lost N% falls back; a unit under N% hp' bullet (AiContentTests A)");
+        DefenseAndHighProblems(page, sharedBullets, openings, problems);
         if (AiAdaptsContentTests.SectionText(lines, out string? where) == null)
             problems.Add($"{page}: {where} (AiAdaptsContentTests)");
 
@@ -256,6 +259,36 @@ public class PagePinReadinessTests
             string? attack = bullets.FirstOrDefault(b => b.StartsWith("Attack waves:", StringComparison.Ordinal));
             if (attack == null || !Regex.IsMatch(attack, AiContentTests.AttackPattern, Opts))
                 problems.Add($"{who}: no 'Attack waves: first at N army pop and N gold + wood' bullet (AiContentTests A)");
+        }
+    }
+
+    /// <summary>
+    /// D-R37 (BUG-1186): the AI section's "Defense" bullet in the shape <see cref="D20PinQaTests"/> reads (the one-unit
+    /// sentence, the three sized-defense knobs quoted with a value) and its "High starting resources" bullet in the shape
+    /// <see cref="D22PresetTextQaTests"/> reads (<c>aiSpendAbove</c>, "Standard has no threshold", "not pinned", one of the
+    /// page's own openings by id). The values are the pins' to compare once the faction's data ships.
+    /// </summary>
+    private static void DefenseAndHighProblems(string page, List<string> bullets, string[][] openings, List<string> problems)
+    {
+        string? defense = bullets.FirstOrDefault(b => b.StartsWith("Defense ", StringComparison.Ordinal));
+        if (defense == null) problems.Add($"{page} AI build order: no 'Defense' bullet (D20PinQaTests, D20DefenseWordingQaTests)");
+        else
+        {
+            if (!D20PinQaTests.OneRaiderCase.IsMatch(defense))
+                problems.Add($"{page} Defense: no 'One X (N gold + wood) is answered with N worth, e.g. two Y from home (N), and a wave out keeps going.' sentence (D20PinQaTests)");
+            var quoted = new HashSet<string>(D20PinQaTests.QuotedKnob.Matches(defense).Select(m => m.Groups[1].Value), StringComparer.Ordinal);
+            foreach (string knob in D20PinQaTests.SizedDefenseKnobs)
+                if (!quoted.Contains(knob)) problems.Add($"{page} Defense: does not quote `ai.{knob}` with its value (D20PinQaTests)");
+        }
+
+        string? high = bullets.FirstOrDefault(b => b.StartsWith("High starting resources ", StringComparison.Ordinal));
+        if (high == null) problems.Add($"{page} AI build order: no 'High starting resources' bullet (D22PresetTextQaTests)");
+        else
+        {
+            foreach (string phrase in new[] { "`aiSpendAbove`", "Standard has no threshold", "not pinned" })
+                if (!high.Contains(phrase, StringComparison.Ordinal)) problems.Add($"{page} High starting resources: no '{phrase}' (D22PresetTextQaTests)");
+            if (!openings.Any(o => o.Length > 1 && high.Contains($"`{o[1]}`", StringComparison.Ordinal)))
+                problems.Add($"{page} High starting resources: names none of the page's openings by `id` (D22PresetTextQaTests)");
         }
     }
 
@@ -304,6 +337,13 @@ public class PagePinReadinessTests
     [InlineData("first at 8 army pop and 600 gold + wood", "first at 8 army pop", "teblor.md opening 1 `standard`: no 'Attack waves:")]
     [InlineData("a unit under 40% hp", "a unit below 40% hp", "teblor.md AI build order: no 'Retreat:")]
     [InlineData("| Siege Works | Breaker's Hall |", "| Siege Works | Breaker's Hall | `x` |", "teblor.md Buildings row Breaker's Hall: 12 cells")]
+    [InlineData("- **Defense** (proposed", "- **Defence** (proposed", "teblor.md AI build order: no 'Defense' bullet")]
+    [InlineData("e.g. two Javelin Throwers from home", "e.g. a few Javelin Throwers from home", "teblor.md Defense: no 'One X (N gold + wood)")]
+    [InlineData("`ai.recallHallHp` 0.5 of its", "`ai.recallHallHp` of its", "teblor.md Defense: does not quote `ai.recallHallHp`")]
+    [InlineData("- **High starting resources** (proposed", "- **High start** (proposed", "teblor.md AI build order: no 'High starting resources' bullet")]
+    [InlineData("Standard has no threshold", "Standard has none", "teblor.md High starting resources: no 'Standard has no threshold'")]
+    [InlineData("(not pinned)", "(not yet)", "teblor.md High starting resources: no 'not pinned'")]
+    [InlineData("`standard` at High", "the opening at High", "teblor.md High starting resources: names none of the page's openings")]
     [InlineData("Age II, at the Bloodwood Carver, 200 G / 150 W, 45 s.", "Age II at the Bloodwood Carver, 200 G / 150 W, 45 s.", "teblor.md '## Faction upgrade: Blood-oil Anointing': the line does not start")]
     public void AnEditedTeblorPage_FailsNamingTheSection(string find, string replace, string expected)
     {

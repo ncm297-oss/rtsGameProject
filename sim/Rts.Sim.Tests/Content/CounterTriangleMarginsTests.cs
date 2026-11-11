@@ -112,6 +112,7 @@ public class CounterTriangleMarginsTests
     }
 
     [Theory]
+    // Two-faction by design (D-R37, the Producer's ruling on BUG-1186): a report measures what exists; the pins cover every data faction.
     [InlineData("malazan")]
     [InlineData("whirlwind")]
     public void EveryPrintedRow_EqualsItsPageRow(string faction)

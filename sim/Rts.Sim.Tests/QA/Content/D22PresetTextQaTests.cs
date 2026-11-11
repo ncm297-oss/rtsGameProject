@@ -71,10 +71,7 @@ public class D22PresetTextQaTests
     {
         string line = FactionPage.Bullets(faction, AiContentTests.Section, 2)
             .Single(b => b.StartsWith("High starting resources ", StringComparison.Ordinal));
-        Assert.Contains("`aiSpendAbove`", line);
-        Assert.Contains("Standard has no threshold", line);
-        Assert.Contains("not pinned", line);
-        Assert.Contains($"`{opening}`", line);
+        HighLineWording(line, opening);
 
         StartingResourcesDef standard = Data.Rules.StartingResources[Data.Rules.FindStartingResources("standard")];
         StartingResourcesDef high = Data.Rules.StartingResources[Data.Rules.FindStartingResources("high")];
@@ -84,5 +81,14 @@ public class D22PresetTextQaTests
 
         // The opening the line names exists in this faction's ai.json.
         Assert.Contains(Data.Ai[Data.FindFaction(faction)].Openings, o => o.Id == opening);
+    }
+
+    /// <summary>The High line's wording (shared with <see cref="TeblorPageParseQaTests"/>, which reads a page ahead of its data).</summary>
+    internal static void HighLineWording(string line, string opening)
+    {
+        Assert.Contains("`aiSpendAbove`", line);
+        Assert.Contains("Standard has no threshold", line);
+        Assert.Contains("not pinned", line);
+        Assert.Contains($"`{opening}`", line);
     }
 }

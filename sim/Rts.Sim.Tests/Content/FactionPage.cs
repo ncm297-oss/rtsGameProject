@@ -58,10 +58,13 @@ internal static class FactionPage
     /// The bullets under the heading <c>#..# <paramref name="section"/></c> of a faction page (its "### Unit notes"),
     /// each with its continuation lines joined by spaces and the <c>**</c> bold markers removed, the leading "- " dropped.
     /// </summary>
-    public static string[] Bullets(string faction, string section, int level)
+    public static string[] Bullets(string faction, string section, int level) =>
+        Bullets(PageTables.FactionLines(faction), faction + ".md", section, level);
+
+    /// <summary>As <see cref="Bullets(string, string, int)"/>, over a page's <paramref name="lines"/> (an edited or substituted copy).</summary>
+    public static string[] Bullets(string[] lines, string page, string section, int level)
     {
-        string[] lines = PageTables.FactionLines(faction);
-        int i = PageTables.Heading(lines, new string('#', level) + " " + section, faction + ".md");
+        int i = PageTables.Heading(lines, new string('#', level) + " " + section, page);
         var bullets = new List<string>();
         for (i++; i < lines.Length && !lines[i].StartsWith('#'); i++)
         {

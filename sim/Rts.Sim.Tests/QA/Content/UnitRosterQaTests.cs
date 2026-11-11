@@ -1,5 +1,6 @@
 using System.Text.Json.Nodes;
 using Rts.Sim.Data;
+using Rts.Sim.Tests.Content;
 
 namespace Rts.Sim.Tests.QA.Content;
 
@@ -126,8 +127,13 @@ public class UnitRosterQaTests
 
     public static IEnumerable<object[]> AllEntries()
     {
-        foreach (string f in new[] { "malazan", "whirlwind" })
-            for (int i = 0; i < 7; i++) yield return new object[] { f, i };
+        // D-R37 (BUG-1186): every data faction and every entry of its file, not a typed pair of seven-entry files.
+        GameData d = TestSim.Data;
+        foreach (string f in ContentFactions.Keys)
+        {
+            int n = d.Units.Count(u => d.Factions[u.Faction].Key == f);
+            for (int i = 0; i < n; i++) yield return new object[] { f, i };
+        }
     }
 
     /// <summary>Mutation: one stat of any entry changed by 1 changes the content hash (the golden data-hash catches drift).</summary>

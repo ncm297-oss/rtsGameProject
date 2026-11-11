@@ -63,6 +63,49 @@ public class TeblorPageParseQaTests
         Assert.True(problems.Count == 0, "teblor.md 'Difficulty':\n" + string.Join("\n", problems));
     }
 
+    private static string AiBullet(string[] lines, string start) =>
+        FactionPage.Bullets(lines, "teblor.md", AiContentTests.Section, 2).Single(b => b.StartsWith(start, StringComparison.Ordinal));
+
+    /// <summary>
+    /// D-R37 (BUG-1186): the Defense bullet passes the D20 pins' own checks (the knobs against <c>rules.json</c>, the wording
+    /// clauses), and its one-unit sentence follows the sizing rule with the raider's shipped cost and the defender's cost
+    /// from teblor.md's Units table (the Teblor costs are the page's until D28 ships them).
+    /// </summary>
+    [Fact]
+    public void DefenseBullet_PassesTheD20Pins()
+    {
+        string line = AiBullet(AsMalazan(), "Defense ");
+        D20PinQaTests.QuotesTheKnobs("teblor", line);
+        D20DefenseWordingQaTests.WavePull(line);
+        D20DefenseWordingQaTests.CandidateOrders(line);
+        D20DefenseWordingQaTests.RecallClauses(line);
+
+        // The one-unit case on the unswapped page: the Malazan swap would rename the Teblor defender.
+        string own = AiBullet(PageTables.FactionLines("teblor"), "Defense ");
+        System.Text.RegularExpressions.Match m = D20PinQaTests.OneRaiderCase.Match(own);
+        Assert.True(m.Success, "teblor.md Defense has no one-unit sentence: " + own);
+        GameData d = TestSim.Data;
+        UnitDef raider = d.Units.Single(u => u.DisplayName == m.Groups[1].Value);
+        int cost = raider.CostGold + raider.CostWood;
+        Assert.Equal(cost.ToString(System.Globalization.CultureInfo.InvariantCulture), m.Groups[2].Value);
+        string[] row = FactionPage.Table("teblor", "Units").Single(r => r[1] == m.Groups[4].Value);
+        (int gold, int wood) = FactionPage.Cost(row[13]);
+        double answer = Math.Max(d.AiRules.DefendRatio * cost, d.AiRules.DefendMinValue);
+        Assert.Equal(answer.ToString(System.Globalization.CultureInfo.InvariantCulture), m.Groups[3].Value);
+        (int picks, int picked) = D20PinQaTests.Picks(answer, gold + wood);
+        Assert.True(picks == 2, $"the pick rule takes {picks} {m.Groups[4].Value} for {answer}; the page says two");
+        Assert.Equal(picked.ToString(System.Globalization.CultureInfo.InvariantCulture), m.Groups[5].Value);
+    }
+
+    /// <summary>D-R37 (BUG-1186): the High starting resources bullet passes D22's wording check, naming the one Teblor opening.</summary>
+    [Fact]
+    public void HighStartBullet_PassesTheD22Pin() =>
+        D22PresetTextQaTests.HighLineWording(AiBullet(AsMalazan(), "High starting resources "), "standard");
+
+    /// <summary>D-R37: the "How the AI adapts" intro passes DR35's count of rules and bullets.</summary>
+    [Fact]
+    public void HowTheAiAdaptsIntro_PassesTheDR35Pin() => DR35ProsePinQaTests.IntroCounts(AsMalazan());
+
     /// <summary>Not vacuous: a stray number in the Teblor sub-section is caught by the pin's page-to-data guard.</summary>
     [Fact]
     public void HowTheAiAdapts_AStrayNumber_IsCaught()

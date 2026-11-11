@@ -69,6 +69,7 @@ public class AiSpendingReportTests
     public AiSpendingReportTests(ITestOutputHelper output) => _out = output;
 
     [Theory]
+    // Two-faction by design (D-R37, the Producer's ruling on BUG-1186): a report measures what exists; the pins cover every data faction.
     [InlineData("malazan")]
     [InlineData("whirlwind")]
     public void FlatNormal_Spending_Report(string faction)

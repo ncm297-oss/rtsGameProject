@@ -89,6 +89,7 @@ public class BuildingKillTimeReportTests
                 if (to != null) t["multipliers"]!["structure"] = to.Value;
             }
         });
+        // Two-faction by design (D-R37, the Producer's ruling on BUG-1186): a report measures what exists; the pins cover every data faction.
         foreach (string f in new[] { "malazan", "whirlwind" })
             dir.EditJson($"factions/{f}/buildings.json", root =>
             {

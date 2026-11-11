@@ -414,7 +414,8 @@ falls, at 18:49 (seeds 8 and 14 re-printed 2026-11-09 for the sim's M5-H6, was 1
 measured 2026-11-07 after the sim's M5-4d slice 2, seed 18 destroyed at 10:44 and seed 23 one wave at 13:53, destroyed
 at 18:27, and re-measured 2026-11-09 on the sim's M5-H6 by `QA/Content/DH6ThresholdQaTests`; before slice 2 seed 23
 sent none, peaked at 10 pop and fell at 15:36, and seed 18 stood at 20:00, BUG-1010). A lower wave threshold doesn't
-help: at 16 or 14 army pop the same three seeds still send no wave, because the army never grows past 11 pop (seed 8), 7 (seed 14) or 6 (seed 18). So the wave stays at 18
+help: at 16 or 14 army pop the same three seeds still send no wave, because the army never grows past 11 pop
+(seed 8), 7 (seed 14) or 6 (seed 18). So the wave stays at 18
 (the Producer's default, measured; re-read after M5-4g on 2026-10-26, the same pick; the owner may revisit). The
 measurement is under "Fast Age II against the raider rush" at the end of this page.
 

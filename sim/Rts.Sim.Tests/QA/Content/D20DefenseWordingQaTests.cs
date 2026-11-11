@@ -18,11 +18,12 @@ public class D20DefenseWordingQaTests
     /// can ever be pulled (any pull shrinks the wave below the size it was sent at).
     /// </summary>
     [Theory]
-    [InlineData("malazan")]
-    [InlineData("whirlwind")]
-    public void DefenseLine_WavePull_IsBoundByTheStartThreshold(string faction)
+    [MemberData(nameof(ContentFactions.Theory), MemberType = typeof(ContentFactions))]
+    public void DefenseLine_WavePull_IsBoundByTheStartThreshold(string faction) => WavePull(DefenseLine(faction));
+
+    /// <summary>The wave-pull clause of one Defense line (shared with <see cref="TeblorPageParseQaTests"/>).</summary>
+    internal static void WavePull(string line)
     {
-        string line = DefenseLine(faction);
         Assert.DoesNotContain("the size it was sent at", line);
         Assert.Contains("threshold", line);
     }
@@ -32,11 +33,12 @@ public class D20DefenseWordingQaTests
     /// wave's members nearest the hall first (BUG-0870's note: "nearest home first" read as one order for both).
     /// </summary>
     [Theory]
-    [InlineData("malazan")]
-    [InlineData("whirlwind")]
-    public void DefenseLine_CandidateOrders_MatchDocs03(string faction)
+    [MemberData(nameof(ContentFactions.Theory), MemberType = typeof(ContentFactions))]
+    public void DefenseLine_CandidateOrders_MatchDocs03(string faction) => CandidateOrders(DefenseLine(faction));
+
+    /// <summary>The two candidate orders of one Defense line (shared with <see cref="TeblorPageParseQaTests"/>).</summary>
+    internal static void CandidateOrders(string line)
     {
-        string line = DefenseLine(faction);
         Assert.DoesNotContain("nearest home first", line);
         Assert.Contains("the army at home first (nearest the defense point first)", line);
         Assert.Matches(@"then from the members of a wave out \(nearest the [A-Z][A-Za-z ]+ first\)", line);
@@ -47,8 +49,7 @@ public class D20DefenseWordingQaTests
     /// <c>gatherRate</c> so a rate change turns the title red directly, not only through the report numbers.
     /// </summary>
     [Theory]
-    [InlineData("malazan")]
-    [InlineData("whirlwind")]
+    [MemberData(nameof(ContentFactions.Theory), MemberType = typeof(ContentFactions))]
     public void SpendingTitle_GatherRates_MatchRulesJson(string faction)
     {
         System.Text.Json.Nodes.JsonNode rules = System.Text.Json.Nodes.JsonNode.Parse(
@@ -64,11 +65,12 @@ public class D20DefenseWordingQaTests
 
     /// <summary>docs/03 (M5-4f): the whole-wave recall (c1) compares the threat's worth, not the 1.5x answer, and needs a wave out; the hall rule (c2) needs the hall hit below <c>recallHallHp</c>.</summary>
     [Theory]
-    [InlineData("malazan")]
-    [InlineData("whirlwind")]
-    public void DefenseLine_RecallClauses_MatchDocs03(string faction)
+    [MemberData(nameof(ContentFactions.Theory), MemberType = typeof(ContentFactions))]
+    public void DefenseLine_RecallClauses_MatchDocs03(string faction) => RecallClauses(DefenseLine(faction));
+
+    /// <summary>The recall clauses of one Defense line (shared with <see cref="TeblorPageParseQaTests"/>).</summary>
+    internal static void RecallClauses(string line)
     {
-        string line = DefenseLine(faction);
         Assert.Contains("A raid worth more than the home army and the wave's spare units together calls the whole wave home", line);
         Assert.Contains("of its max hp does the same, however small the raid", line);
         // The second quote of defendMinValue, which D20PinQaTests' `ai.x` N pattern doesn't reach.

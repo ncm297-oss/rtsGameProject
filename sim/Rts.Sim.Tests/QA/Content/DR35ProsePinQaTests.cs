@@ -60,12 +60,15 @@ public class DR35ProsePinQaTests
         AssertCaught(dir, "malazan", "malazan the far drop-off: page '75' vs data '76'");
     }
 
+    /// <summary>The word each page's far-expansion bullet uses for its town hall (D-R37: typed, failing naming a faction it lacks).</summary>
+    private static readonly Dictionary<string, string> HallWord = new() { ["malazan"] = "keep", ["whirlwind"] = "camp" };
+
     /// <summary>BUG-1181: both pages say the reach holds for every mine, a start's included.</summary>
     [Theory]
-    [InlineData("malazan", "keep")]
-    [InlineData("whirlwind", "camp")]
-    public void TheFarExpansionBullet_SaysTheReachHoldsForStarts(string faction, string hall)
+    [MemberData(nameof(ContentFactions.Theory), MemberType = typeof(ContentFactions))]
+    public void TheFarExpansionBullet_SaysTheReachHoldsForStarts(string faction)
     {
+        string hall = ContentFactions.Typed(HallWord, faction, "DR35ProsePinQaTests.HallWord");
         string text = AiAdaptsContentTests.SectionText(PageTables.FactionLines(faction), out string? where)!;
         Assert.True(text != null, where);
         Assert.Contains("The reach holds for every mine, a start location's included: a free start farther than that from the "
@@ -74,11 +77,12 @@ public class DR35ProsePinQaTests
 
     /// <summary>BUG-1181 nit 1: the intro's "Three rules" and "five bullets" count what follows.</summary>
     [Theory]
-    [InlineData("malazan")]
-    [InlineData("whirlwind")]
-    public void TheIntro_CountsTheBullets(string faction)
+    [MemberData(nameof(ContentFactions.Theory), MemberType = typeof(ContentFactions))]
+    public void TheIntro_CountsTheBullets(string faction) => IntroCounts(PageTables.FactionLines(faction));
+
+    /// <summary>The intro check on one page's lines (shared with <see cref="TeblorPageParseQaTests"/>).</summary>
+    internal static void IntroCounts(string[] lines)
     {
-        string[] lines = PageTables.FactionLines(faction);
         int h = Array.IndexOf(lines, AiAdaptsContentTests.Heading);
         int bullets = 0;
         for (int i = h + 1; i < lines.Length && !lines[i].StartsWith('#'); i++)

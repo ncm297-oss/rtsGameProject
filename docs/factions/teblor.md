@@ -60,8 +60,9 @@ one item trains; its **Cost** (120 / 0) and **Train** (24 s) are the item's, pai
 
 - **Gatherer:** carries 15 instead of 10 (not in the data: `rules.json` `workerCarry` is one number for every
   faction). Expensive, tough enough to survive a light raid.
-- **Warrior:** ×1.25 vs Mounted. The core of the army: long strides make it faster than human
-  infantry, and it out-trades two or three template line units.
+- **Warrior:** ×1.5 vs Mounted (×1.25 on this page until 2026-11-10: docs/02's Line rule applies, docs/01 2026-11-10
+  (d); the M7 balance pass may lower it). The core of the army: long strides make it faster than human infantry, and it
+  out-trades two or three template line units.
 - **Javelin Thrower:** weak, short-ranged, but lets Teblor hit flying units and kite a little.
 - **Destrier Rider:** ×1.5 vs Light. A giant on a huge horse; armor class is Mounted, so line
   infantry counters it.
@@ -154,7 +155,7 @@ table, composition table and wave line, and the retreat line below to the file, 
 
 | # | Id | Name (shown to the player) | Description (shown to the player) |
 | --- | --- | --- | --- |
-| 1 | `standard` | War band | A War Lodge and a Bloodwood Carver first; four Warriors raid at 8 army pop, then Shamans, Destrier Riders, war-dogs and Breakers join in Age II. |
+| 1 | `standard` | War band | War Lodge and Bloodwood Carver first; four Warriors raid at 8 army pop, then Javelin Throwers, Destrier Riders, Shamans, Breakers and War-dogs join in Age II. |
 
 Not in the file, because the schema has no field for it (requests to the sim track): the sketch's later waves "whenever
 army pop ≥ 24" (an opening has one wave threshold, used for every wave), its expansion condition "when army ≥ 16 pop"
@@ -167,13 +168,32 @@ sketch: the composition lists Javelin Throwers, so a step must place their hall.
   back to regenerate). The 40% is the sketch's; the 50% is the other pages' loss share (the data track's proposal).
 - **Later waves:** one wave at a time; a new one starts when none is out, at least `ai.waveCooldown` after the last
   began, at the opening's threshold, and never while the base is defended.
+- **High starting resources** (proposed for D28; docs/02 "Game flow" 2, docs/03 "Implementation (M6-S6)"): the AI
+  plays the same opening as at Standard, but while it holds more gold + wood than the preset's spend-down threshold
+  (`rules.json` `startingResources` `high` `aiSpendAbove`) it brings its next timed step forward, trains at every
+  producer and leans its gatherers toward the kind it holds less of; Standard has no threshold, so it plays exactly as
+  before. Not measured for the Teblor yet (not pinned): `standard` at High is measured once the files land (D28).
+- **Defense** (proposed for D28, the shared rule in Teblor names; docs/02 "AI opponent", docs/03 "Implementation
+  (M5-4b)" and "(M5-4f)", as re-worded in D20, 2026-10-17): a threat starts when an own building (a site too) within
+  the defend radius of the Longhouse is hit, or an enemy soldier (not a worker) is seen within it (`rules.json`
+  `ai.defendRadius` 48 m; the threat holds `ai.defendFor` 20 s after the last sign). The AI answers with defenders
+  worth `ai.defendRatio` 1.5 times the intruders' gold + wood cost, at least `ai.defendMinValue` 150 (a building hit
+  with nobody seen gets 150), taken from the army at home first (nearest the defense point first), then from the
+  members of a wave out (nearest the Longhouse first), each only while the members left keep the wave's start
+  threshold (`attack.minArmyPop` and `minArmyCost` times the difficulty's wave size ×, so a wave sent above it gives
+  its surplus). One Cadre Mage (150 gold + wood) is answered with 225 worth, e.g. two Javelin Throwers from home
+  (240), and a wave out keeps going. A raid worth more than the home army and the wave's spare units together calls
+  the whole wave home (it ends like a retreat) and every free army unit answers. A hit that leaves the Longhouse below
+  `ai.recallHallHp` 0.5 of its max hp does the same, however small the raid. Gatherers within `ai.workerFleeRadius`
+  (16 m) of the threat flee to the nearest finished drop-off away from the threat (the Longhouse or a Woodcutters'
+  Lodge, whichever is nearest among those more than 16 m from the threat; else the nearest one).
 
 #### How the AI adapts
 
-Three rules sit on top of the opening below, the counter shift, the starved charge and the far expansion, and two notes
-go with the first: what answers what, and where the shift doesn't show (docs/02 "AI opponent"; docs/03 "Implementation
-(M5-9a)" and "(M5-9b)"). `Content/AiAdaptsContentTests` pins every number and name in the five bullets to `ai.json`,
-`rules.json` and `buildings.json`, both ways.
+Three rules sit on top of every opening above, the counter shift, the starved charge and the far expansion, and two
+notes go with the first: what answers what, and where the shift doesn't show (docs/02 "AI opponent"; docs/03
+"Implementation (M5-9a)" and "(M5-9b)"). `Content/AiAdaptsContentTests` pins every number and name in the five
+bullets to `ai.json`, `rules.json` and `buildings.json`, both ways.
 
 - **Counter shift:** the AI remembers how many enemy soldiers of each slot it has seen at once (workers never count, and
   it sees only what its own fog of war shows), and that memory fades to nothing over `rules.json` `ai.counterMemory`
@@ -321,7 +341,7 @@ rules for the shipped factions).
 | `buildings.json` | `teblor_stone_cairn` | Stone Cairn | A lookout of piled stone that watches the passes, spots hidden enemies and shoots at intruders; needs Age II. |
 | `techs.json` | `teblor_blood_oil_anointing` | Blood-oil Anointing | Blood-oil rubbed into the skin before battle: Warriors and Destrier Riders gain +2 armor. Needs Age II. |
 | `abilities.json` | `blood_oil_frenzy` | Blood-oil Frenzy | Drives nearby warriors into a frenzy: own units within 8 m attack 40% faster for 10 seconds. |
-| `ai.json` opening | `standard` | War band | A War Lodge and a Bloodwood Carver first; four Warriors raid at 8 army pop, then Shamans, Destrier Riders, war-dogs and Breakers join in Age II. |
+| `ai.json` opening | `standard` | War band | War Lodge and Bloodwood Carver first; four Warriors raid at 8 army pop, then Javelin Throwers, Destrier Riders, Shamans, Breakers and War-dogs join in Age II. |
 
 **Counter answers (the data track's proposal, the owner's call).** `rules.json` `ai.counters` is one rule by slot for
 every faction, so the Teblor answers in "How the AI adapts" are that rule in Teblor units. The proposal differs in one

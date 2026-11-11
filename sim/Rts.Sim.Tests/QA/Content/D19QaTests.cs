@@ -134,17 +134,20 @@ public class D19QaTests
     {
         GameData data = AiScenes.DataWith(dir =>
         {
-            foreach (string f in new[] { "malazan", "whirlwind" })
+            foreach (string f in ContentFactions.Keys) // D-R37: every data faction's seat quieted, not a typed pair
+            {
+                string worker = TestSim.Data.Units.First(u => TestSim.Data.Factions[u.Faction].Key == f && u.Slot == UnitSlot.Worker).Key;
                 dir.EditJson($"factions/{f}/ai.json", root =>
                 {
                     // D21: every opening quieted, not the first only (Easy plays the first; the loop keeps the scene
                     // the same if a later edit made the seat pick another).
                     for (int k = 0; k < root["openings"]!.AsArray().Count; k++)
                     {
-                        AiScenes.Opening(root, k)["buildOrder"] = AiScenes.BuildOrder(("time", 3600, "train", f == "malazan" ? "malazan_laborer" : "whirlwind_camp_follower", 1));
+                        AiScenes.Opening(root, k)["buildOrder"] = AiScenes.BuildOrder(("time", 3600, "train", worker, 1));
                         AiScenes.Opening(root, k)["attack"] = new JsonObject { ["minArmyPop"] = 100, ["minArmyCost"] = 0 };
                     }
                 });
+            }
             dir.EditJson("common/rules.json", r =>
             {
                 r["ai"]!["scoutAfter"] = 3600;

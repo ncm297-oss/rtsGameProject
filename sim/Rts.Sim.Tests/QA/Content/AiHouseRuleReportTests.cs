@@ -60,6 +60,7 @@ public class AiHouseRuleReportTests
     /// The brief's row is Malazan over 12,000 ticks; the 36,000-tick row (30 min) answers "do the later house steps complete
     /// past the cap", which 10 minutes on this scene doesn't reach; the Whirlwind row is the same question for the other order.
     /// </summary>
+    // A report kept to its brief's rows (D15); the menu-map rows below run every data faction (D-R37).
     [Theory]
     [InlineData("malazan", 12_000)]
     [InlineData("malazan", 36_000)]
@@ -81,12 +82,7 @@ public class AiHouseRuleReportTests
     /// (<see cref="AiOpeningSeeds.Smallest"/>; asserted on the run); plus <see cref="MenuMapNormal_TwelfthHouse_Report"/>.
     /// </summary>
     [Theory]
-    [InlineData("malazan", 0)]
-    [InlineData("malazan", 1)]
-    [InlineData("malazan", 2)]
-    [InlineData("whirlwind", 0)]
-    [InlineData("whirlwind", 1)]
-    [InlineData("whirlwind", 2)]
+    [MemberData(nameof(D21OpeningsQaTests.AllOpenings), MemberType = typeof(D21OpeningsQaTests))]
     public void MenuMapNormal_HouseSources_Report(string faction, int opening)
     {
         HouseRun r = MenuMapRun(faction, opening);
@@ -103,8 +99,7 @@ public class AiHouseRuleReportTests
     /// manager's house rule places the 12th house anyway, so the step stays (in every opening).
     /// </summary>
     [Theory]
-    [InlineData("malazan")]
-    [InlineData("whirlwind")]
+    [MemberData(nameof(ContentFactions.Theory), MemberType = typeof(ContentFactions))]
     public void MenuMapNormal_TwelfthHouse_Report(string faction)
     {
         HouseRun r = TwelfthHouseRun(faction);
@@ -113,7 +108,15 @@ public class AiHouseRuleReportTests
     }
 
     /// <summary>The standard opening's 12th house step: its index in the order and its pop trigger.</summary>
-    internal static (int Index, double Pop) TwelfthHouse(string faction) => faction == "malazan" ? (17, 81) : (18, 79);
+    internal static (int Index, double Pop) TwelfthHouse(string faction) =>
+        ContentFactions.Typed(TwelfthHouseSteps, faction, "AiHouseRuleReportTests.TwelfthHouseSteps");
+
+    /// <summary>The 12th house step per faction, typed from its page (D-R37: fails naming a faction it lacks, not a two-way ternary).</summary>
+    private static readonly Dictionary<string, (int Index, double Pop)> TwelfthHouseSteps = new()
+    {
+        ["malazan"] = (17, 81),
+        ["whirlwind"] = (18, 79),
+    };
 
     /// <summary>The menu-map run for one faction's opening (deterministic; computed once per test process and shared with the pin row).</summary>
     internal static HouseRun MenuMapRun(string faction, int opening)

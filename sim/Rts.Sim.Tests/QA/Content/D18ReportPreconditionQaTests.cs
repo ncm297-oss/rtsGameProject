@@ -4,6 +4,7 @@ using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
 using Rts.Sim.Data;
 using Rts.Sim.Map;
+using Rts.Sim.Tests.Content;
 using Xunit.Abstractions;
 
 namespace Rts.Sim.Tests.QA.Content;
@@ -51,7 +52,7 @@ public class D18ReportPreconditionQaTests
                     if (to != null) t["multipliers"]!["structure"] = to.Value;
                 }
             });
-            foreach (string f in new[] { "malazan", "whirlwind" })
+            foreach (string f in ContentFactions.Keys) // D-R37: every data faction, as the halving check below reads every building
                 dir.EditJson($"factions/{f}/buildings.json", root =>
                 {
                     foreach (JsonNode? b in root["buildings"]!.AsArray()) b!["armor"] = (int)b["armor"]! / 2;

@@ -1,5 +1,6 @@
 using Rts.Sim.Ai;
 using Rts.Sim.Data;
+using Rts.Sim.Tests.Content;
 using Xunit.Abstractions;
 
 namespace Rts.Sim.Tests.QA.Content;
@@ -19,7 +20,10 @@ public class D21OpeningsQaTests
 
     public D21OpeningsQaTests(ITestOutputHelper output) => _out = output;
 
-    private static readonly string[] Factions = { "malazan", "whirlwind" };
+    private static string[] Factions => ContentFactions.Keys; // D-R37: the data's factions, not a typed pair
+
+    /// <summary>D21's opening count per faction, typed from its page; a faction the data adds fails naming this table.</summary>
+    private static readonly Dictionary<string, int> OpeningCounts = new() { ["malazan"] = 3, ["whirlwind"] = 3 };
 
     public static TheoryData<string, int> AllOpenings()
     {
@@ -32,15 +36,15 @@ public class D21OpeningsQaTests
     private static AiOpening Opening(string faction, int index) => TestSim.Data.Ai[TestSim.Data.FindFaction(faction)].Openings[index];
 
     [Theory]
-    [InlineData("malazan")]
-    [InlineData("whirlwind")]
+    [MemberData(nameof(ContentFactions.Theory), MemberType = typeof(ContentFactions))]
     public void EachFaction_ShipsThreeOpenings_StandardFirst_UniqueIdsAndNames(string faction)
     {
         AiDef ai = TestSim.Data.Ai[TestSim.Data.FindFaction(faction)];
-        Assert.Equal(3, ai.Openings.Length);
+        int n = ContentFactions.Typed(OpeningCounts, faction, "D21OpeningsQaTests.OpeningCounts");
+        Assert.Equal(n, ai.Openings.Length);
         Assert.Equal("standard", ai.Openings[0].Id);
-        Assert.Equal(3, ai.Openings.Select(o => o.Id).Distinct(StringComparer.Ordinal).Count());
-        Assert.Equal(3, ai.Openings.Select(o => o.DisplayName).Distinct(StringComparer.OrdinalIgnoreCase).Count());
+        Assert.Equal(n, ai.Openings.Select(o => o.Id).Distinct(StringComparer.Ordinal).Count());
+        Assert.Equal(n, ai.Openings.Select(o => o.DisplayName).Distinct(StringComparer.OrdinalIgnoreCase).Count());
     }
 
     /// <summary>The holy_camp rename's reason, as a rule: no opening is named like one of the faction's buildings or units.</summary>
@@ -303,7 +307,7 @@ public class D21OpeningsQaTests
     /// **Re-listed at the 2026-11-07-0236 merge (the Producer):** since M5-4d slice 2 (the AI rebuilds what it loses) the same
     /// side stands at 20:00 again: its hall razed, its last worker rebuilds and the hunt has not found it (at 20:00 pop 1 / cap 0,
     /// 522 gold, 210 wood, no wave, 340 thinks defending; the Whirlwind 1 wave, Age II 10:21; today, since the sim's M5-H6, 502 gold,
-/// 270 wood and the Whirlwind's Age II 10:34, as the Whirlwind table's re-printed cell). BUG-1010's pattern with BUG-1116 /
+    /// 270 wood and the Whirlwind's Age II 10:34, as the Whirlwind table's re-printed cell). BUG-1010's pattern with BUG-1116 /
     /// BUG-1119 underneath; <c>DR33QaTests.KnownBeatenAlive_HoldsOnlyTheNamedCases</c> pins this one entry. Seed 25 stays out.
     /// </summary>
     private static readonly (int Malazan, int Whirlwind, ulong Seed, int Player)[] KnownBeatenAlive = { (1, 1, 19, 0) };
