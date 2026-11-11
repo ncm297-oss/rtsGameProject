@@ -1,5 +1,20 @@
 # Handoff: brief for the next session
 
+**RESUME (PLAN of 2026-11-11-0739, session 1 / 8 of 2026-11-11):** session 2026-11-10-2116 died after its builds, before ACCEPT (no
+session log). All three plans below are **resumed unchanged** on their 2116 branches (diff base `de591f0`); no new work is planned.
+- **Sim M7-3b** (`db4b1d8` + recovered QA `980d4f5`): QA's report `studio/qa/2026-11-10-2116-M7-3b.md` is written (PASS_WITH_ISSUES,
+  BUG-1190 S4) but unfinished: its Stress + Soak line is a placeholder (`STRESS_RESULT`), one failed row of the full run is unnamed,
+  and rule 47's re-check on the commit with QA's own files was not run. QA **completes** it (no re-doing the verified criteria).
+- **View M7-VH1** (`6ec217d` + recovered QA `b03a28f`): no QA report exists. QA runs **standard from the start**, reusing the
+  recovered `QaM7Vh1Test` / `ShotEndsQaTests` / BUG-1200. Producer ruling on BUG-1200 item 3: "thinks every 0.5 seconds" is accepted
+  (criterion 3 allowed the wording to come from the data).
+- **Data D-R37** (`c49e971` + QA `9b18012`): QA is complete and committed (PASS_WITH_ISSUES, BUG-1210 S4); **not re-run**, goes
+  straight to ACCEPT.
+- Producer checks at 0739: `origin/main` (`de591f0`) builds 0 / 0, 350 / 350 on the data-validation + faction-order filter (scratch
+  archive); the golden's diff on the sim branch is the header data hash + checksum only (no `k` line); the premap replay's Research
+  ids moved 4 → 3 and 7 → 5 (melee_weapons_1 and ranged_weapons_1 by key in both tables: correct); no branch leaves its files; no
+  `testhost` / Godot process was left running. Dev reports are lost: QA and ACCEPT work from the diffs.
+
 Confirmed by the Producer at the PLAN of session **2026-11-10-2116** (session 3 / 8 of 2026-11-10; base `fae4074` = `origin/main`).
 Last session (1236): sim **M7-3**, view **M7-V2**, data **D-R36** all ACCEPTED (0 fix rounds each). **M5 8 / 9 (criterion 6 owner-only),
 M6 5 / 10, M7 0 / 4 (bullets 1-3 built as rules, the sim has room for a third faction; nothing shipped).** Counters: **sim 3 / 4,
