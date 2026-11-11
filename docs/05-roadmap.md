@@ -12,9 +12,9 @@ Status legend: **Next** = start here, **Planned** = not started, **Done** = acce
 | M2 | Presentation | **Done** (2026-10-07, Producer sign-off after the M2-H2 hardening) | Move an army around a 3D map |
 | M3 | Economy & buildings | **Done** (2026-10-08, Producer sign-off in session 2026-10-08-0313 after every track's end-of-M3 hardening (M3-H1 / H2, M3-V3b, D4) and the BUG-0146 fix; retro below) | Build a Malazan base |
 | M4 | Combat, fog, abilities | **Done** (2026-10-11, Producer sign-off in session 2026-10-10-2334 after every track's end-of-M4 hardening (M4-H3, M4-VH3, D-H3); the data track's D12 is accepted and held on its branch, landing at the next session's data merge; 10 / 10 criteria, in progress since 2026-10-07-2315; retro below) | Malazan vs. Whirlwind armies fight with abilities and fog |
-| M5 | AI opponent | **In progress** (since 2026-10-11; 6 / 9 criteria (1, 2, 3, 4, 7, 8), three owner-requested criteria added 2026-10-14) | Lose to a Whirlwind AI |
+| M5 | AI opponent | **In progress** (since 2026-10-11; 8 / 9 criteria (1, 2, 3, 4, 5, 7, 8, 9), three owner-requested criteria added 2026-10-14; left: criterion 6, the owner's playtest) | Lose to a Whirlwind AI |
 | M6 | Game shell & real art | **Started ahead** (view track since 2026-10-11; 5 / 10 criteria (1, 2, 3, 4, 7); criterion 7 ticked 2026-11-06-0326 when M6-S8's two maps landed) | A friend can play it |
-| M7 | Teblor | Planned | Third faction: scale and population systems proven |
+| M7 | Teblor | **Started** (2026-11-09-2226, while M5 waits on the owner's playtest and M6 on the owner's items; 0 / 4 criteria) | Third faction: scale and population systems proven |
 | M8 | Shadow | Planned | Fourth faction: stealth polish, summons |
 | M9 | Tiste Andii | Planned | Fifth faction: darkness, flying, elite balance |
 
