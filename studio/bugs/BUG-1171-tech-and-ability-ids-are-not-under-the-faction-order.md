@@ -33,3 +33,11 @@ As unit and building types since M7-3: a faction appended to `common/factions.js
   `QA/FactionOrderQaTests.ATeblorAbility_NamedNaturally_RenumbersTelasFire_Bug1171Symptom`: a full Teblor copy appended
   last with abilities `teblor_telas_fire` / `teblor_cusser` moves `telas_fire`'s id; named `zteblor_*` it doesn't. When
   this is fixed, flip that row's first assertion.
+- **Producer decision (ACCEPT 2026-11-10-1236, owner may revisit):** techs and abilities go under the faction order in the
+  sim's next task (**M7-3b**): common techs first in ordinal order, then each faction's techs in faction order (ordinal
+  within), and the factions' abilities faction by faction likewise; **one deliberate golden regen** (header and `k` lines)
+  and a full pin sweep in the same commit, with the reason in `GatherWedgeQaTests.SameGameDataHashes`. The alternative
+  (name every new faction's techs and abilities so they sort after the shipped ones) fails at M9 already (`andii_*` sorts
+  before `armor_1`) and makes `blood_oil_frenzy` impossible. D28 (the Teblor roster) waits for M7-3b before it ships
+  `abilities.json`; its units, buildings and `teblor_blood_oil_anointing` are safe today (that tech sorts after
+  `ranged_weapons_2`), but the roster lands whole, after M7-3b.

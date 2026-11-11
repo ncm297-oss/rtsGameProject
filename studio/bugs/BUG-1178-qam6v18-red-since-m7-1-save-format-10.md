@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S3 |
-| Status | open |
+| Status | fixed (M7-V2, 2026-11-10-1236: `QaM6V18Test` expects format 10's empty map-id field; red with the old file on a clean clone, green with the fix; the scene loop 88 / 88 twice) |
 | Found | 2026-11-10-0146, task M7-V1 (pre-existing, not caused by it) |
 | System | view tests / save format |
-| Fixed by | |
+| Fixed by | `M7-V2` (3133c6a) |
 
 ## Repro
 1. `powershell -File tools/qa/scene-loop.ps1 -Filter QaM6V18Test` in the view worktree at HEAD `96e4a0a`, and in a clean

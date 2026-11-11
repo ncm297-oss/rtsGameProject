@@ -63,3 +63,7 @@ the slowdown may outlast the load). The developer measured 203 / 0 Perf earlier 
   `ZoneScalePerfTests` 64 blockers, `SimHardeningQaTests` 400 stacked) were rerun alone at head and base: base failed all
   six, head failed four and passed two. No M7-3 regression; allocation probes 0 B throughout. Still a machine state; the
   idle-machine re-measure stays open.
+- Producer, ACCEPT 2026-11-10-1236: QA's cold rerun was made with **31-52 % CPU from the owner's own apps** (Spotify, Creative
+  Cloud, Epic, Chrome), so rule 42's "alone" was not met and the numbers are not a verdict either way. Stays open as a
+  machine-state record, no re-bound; the sim's next hardening (counter 4 / 4) measures once more with the PC idle and
+  profiles `ASweepRetarget` only if it is still red then. An item for the owner is in STATE's "Wanted".

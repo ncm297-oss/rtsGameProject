@@ -906,10 +906,18 @@ open S1 / S2. Retro below; open S3 / S4 listed there.)_
       reserved at the start, all N spawned on the N free cells nearest the rally or none that tick; no save-format change)
       and the `onHit` passive (`{onHit, status, magnitude, duration}` on a surviving victim of a melee hit or an aimed
       projectile landing; not splash, pulses, towers or a killing blow), both on test copies only, the data hash unchanged
-      for shipped data. **Deferred to M7-3:** Blood-oil Frenzy's aftermath slow (it needs a decision on the status store's
-      one-entry-per-id merge, docs/03 M4-4b-3a "Known limits" (1)). Left: the Teblor war-dog row (data), the view's queue
-      strip "×3".)
-- [ ] Teblor AI build order; models and animations; balance pass vs. Malazan and Whirlwind.
+      for shipped data. **Deferred to M7-4:** Blood-oil Frenzy's aftermath slow (it needs a decision on the status store's
+      one-entry-per-id merge, docs/03 M4-4b-3a "Known limits" (1)). **M7-3, 2026-11-10-1236:** the pack's AI riders: a
+      pack unit's worth is the item's cost / `spawnCount` (`UnitDef.UnitWorth`, every AI and stats sum; BUG-1168), the AI's
+      census counts a queued pack as its units, an item above `rules.popCap` is a load error (BUG-1167). **M7-V2,
+      2026-11-10-1236:** the queue strip's square reads "H×3" for a pack, shots leave and land at `1.2 m × scale`. Left: the
+      Teblor war-dog row (data, D28), the aftermath (M7-4).)
+- [ ] Teblor AI build order; models and animations; balance pass vs. Malazan and Whirlwind. (M7-3, 2026-11-10-1236: **the
+      sim has room for a third faction**: `game/data/common/factions.json` `order` (append-only) fixes the faction ids and
+      the unit / building type ids faction by faction, so a `teblor` folder appended moves no Malazan v Whirlwind digest
+      (proven on a full Teblor copy playing as an AI seat; the shipped ids and the golden bit-identical). **Left before the
+      roster:** techs and abilities under the same order with one golden regen (M7-3b, BUG-1171); then D28 the roster +
+      `ai.json` (the page is pin-ready since D-R36), models, the balance pass.)
 
 ## M8 — Shadow
 
