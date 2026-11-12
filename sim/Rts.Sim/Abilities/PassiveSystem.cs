@@ -45,7 +45,7 @@ public static class PassiveSystem
             // World.MaxHp's rule, inline: this pass visits every such unit every tick.
             int maxHp = Math.Max(1, def.Hp + Combat.DamageCalc.Points(world.Techs.Bonus(u.Owner[i], u.TypeId[i], TechStat.Hp)));
             if (!IsBelow(u.Hp[i], maxHp, p.HpLine)) continue;
-            StatusSystem.Apply(world, i, p.Status, p.Magnitude, HeldTicks, u.Owner[i]);
+            StatusSystem.Hold(world, i, p.Status, p.Magnitude, HeldTicks, u.Owner[i]); // M7-4: held, never lengthened
         }
     }
 

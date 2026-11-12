@@ -554,4 +554,57 @@ public class AllocationTests
         Assert.True(impacts > 0, "no projectile landed inside the measured ticks");
         Assert.True(w.Kills[0] + w.Kills[1] > before, "no deaths inside the measured ticks");
     }
+
+    /// <summary>
+    /// M7-4 criterion 7: ticks of a Teblor-against-Whirlwind brawl on the Blood-oil copy allocate nothing while Frenzied
+    /// blows and javelins land with the damage bonus, Frenzies run out into their aftermath (the onEnd application), and a
+    /// Shaman's cast resolves with Blood-oil Anointing lengthening it.
+    /// </summary>
+    [Fact]
+    public void BrawlTicks_WithFrenzyBonusHits_OnEndSlows_AndALengthenedCast_AllocateNothing()
+    {
+        Simulation sim = new(new SimConfig(3, 2, 256, 2080) { Data = BloodOilScenes.Data }, LocalMovementTests.Flat(64));
+        World w = sim.World;
+        string[] teblor = { "teblor_warrior", "teblor_warrior", "teblor_javelin_thrower", "teblor_shaman" };
+        var shamans = new List<Rts.Sim.Entities.EntityHandle>();
+        for (int k = 0; k < 60; k++)
+        {
+            var h = BloodOilScenes.Place(sim, 0, teblor[k % 4], CombatScenes.At(sim, 20 + k % 10, 20 + k / 10));
+            if (k % 4 == 3) shamans.Add(h);
+            BloodOilScenes.Place(sim, 1, k % 3 == 0 ? "whirlwind_desert_archer" : "whirlwind_raider", CombatScenes.At(sim, 20 + k % 10, 30 + k / 10));
+        }
+        w.Techs.Set(0, BloodOilScenes.Anointing, true);
+        for (int i = 0; i < w.Units.Capacity; i++)
+            if (w.Units.Alive[i] && w.Units.Owner[i] == 0) Abilities.StatusSystem.Apply(w, i, BloodOilScenes.Frenzy, 0.4f, 1, 0); // 81 ticks
+        w.Fog.Update();
+        for (int i = 0; i < w.Units.Capacity; i++)
+            if (w.Units.Alive[i])
+                sim.Enqueue(Command.AttackMove(w.Units.Owner[i], new Rts.Sim.Entities.EntityHandle(i, w.Units.Generation[i]), CombatScenes.At(sim, 25, 25)));
+        for (int t = 0; t < 70; t++) sim.Tick(); // the Frenzies end in tick 81, inside the window
+        foreach (var h in shamans) BloodOilScenes.Cast(sim, 0, h);
+        int slowedBefore = CountSlowed(w);
+        int kills = w.Kills[0] + w.Kills[1];
+        Action ticks = () =>
+        {
+            for (int t = 0; t < 30; t++) sim.Tick();
+        };
+        AllocationProbe.AssertZero(ticks);
+        Assert.True(CountSlowed(w) > slowedBefore, $"no aftermath inside the measured ticks ({slowedBefore} before, {CountSlowed(w)} after)");
+        Assert.True(w.Kills[0] + w.Kills[1] > kills, "no deaths inside the measured ticks");
+        int longest = 0;
+        for (int i = 0; i < w.Units.Capacity; i++)
+        {
+            int at = w.Units.Alive[i] ? w.Units.Statuses.IndexOf(i, BloodOilScenes.Frenzy) : -1;
+            if (at >= 0) longest = Math.Max(longest, w.Units.Statuses.TicksRemaining[at]);
+        }
+        Assert.True(longest > BloodOilScenes.FrenzyTicks, $"no lengthened cast landed inside the measured ticks (longest {longest})");
+    }
+
+    private static int CountSlowed(World w)
+    {
+        int n = 0;
+        for (int i = 0; i < w.Units.Capacity; i++)
+            if (w.Units.Alive[i] && w.Units.Statuses.IndexOf(i, BloodOilScenes.Slowed) >= 0) n++;
+        return n;
+    }
 }

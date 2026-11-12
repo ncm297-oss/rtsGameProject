@@ -32,6 +32,12 @@ public static class DataLimits
     public const double MaxRegenPerSecond = 100;
 
     /// <summary>
+    /// M7-4: the largest <c>damageBonus</c> a frenzied-kind status may carry (4 = +400 %). A rule of the format: it bounds one
+    /// hit at five times its attack, far above any designed bonus (docs/factions/teblor.md: +20 %).
+    /// </summary>
+    public const double MaxStatusDamageBonus = 4;
+
+    /// <summary>
     /// M7-3: the most factions <c>common/factions.json</c> may list (and so the most <c>factions/</c> folders). A rule of the
     /// format, not a design number: the setup screen lists every faction in one list and a load bounds its tables.
     /// </summary>
@@ -94,7 +100,7 @@ public static class DataLimits
     public const double MinProjectileSpeed = 1.0;
 
     /// <summary>JSON spelling of each <see cref="TechStat"/>, indexed by the enum value (docs/03 "Data format", M3-5).</summary>
-    public static readonly ImmutableArray<string> TechStatIds = ImmutableArray.Create("attack", "armor", "range", "hp", "abilityCooldown");
+    public static readonly ImmutableArray<string> TechStatIds = ImmutableArray.Create("attack", "armor", "range", "hp", "abilityCooldown", "statusDuration");
 
     /// <summary>
     /// The common techs that advance a player's age, in order: researching entry k puts the player in Age k + 2 (docs/02

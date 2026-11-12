@@ -247,6 +247,8 @@ public sealed class GameData
             h.Add(b.Attack != null);
             if (b.Attack != null) AddAttack(ref h, b.Attack);
             h.Add(b.Detector);
+            // M7-4: only away from the default, so data without a building scale hashes as before (the golden's header holds).
+            if (b.Scale != 1f) h.Add(b.Scale);
         }
 
         h.Add(Techs.Length);
@@ -276,6 +278,8 @@ public sealed class GameData
                 AddAll(ref h, e.Tags);
                 AddAll(ref h, e.Units);
                 h.Add(e.Siege);
+                // M7-4: a statusDuration effect's statuses, only on that stat (no shipped tech has one).
+                if (e.Stat == TechStat.StatusDuration || !e.Statuses.IsDefaultOrEmpty) AddAll(ref h, e.Statuses);
             }
         }
         // M4-4a: the status types and the abilities. Hand-built data has none and adds two words.
@@ -291,6 +295,14 @@ public sealed class GameData
             h.Add(st.Sight); // M4-4b-2
             h.Add(st.Reach);
             h.Add(st.StateHashId); // M7-1
+            // M7-4: only away from the defaults, so data without them hashes as before (the golden's header holds).
+            if (st.DamageBonus != 0f) h.Add(st.DamageBonus);
+            if (st.OnEndStatus >= 0 || st.OnEndMagnitude != 0f || st.OnEndTicks != 0)
+            {
+                h.Add(st.OnEndStatus);
+                h.Add(st.OnEndMagnitude);
+                h.Add(st.OnEndTicks);
+            }
         }
         h.Add(Abilities.Length);
         foreach (AbilityDef a in Abilities)

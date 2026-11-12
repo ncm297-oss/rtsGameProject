@@ -53,6 +53,12 @@ public sealed class BuildingDef
     public AttackDef? Attack { get; init; }
     /// <summary>Detection radius in meters (M4-3b: <c>detector</c>, docs/02 "Stealth and detection"; above 0 and at most <see cref="DataLimits.MaxSight"/>); 0 for none. A finished building detects with it since M4-5.</summary>
     public float Detector { get; init; }
+    /// <summary>
+    /// The view's model scale (M7-4: <c>scale</c>, optional, default 1; <see cref="DataLimits.MinUnitScale"/> to
+    /// <see cref="DataLimits.MaxUnitScale"/>, the unit's range). Presentation only: the sim never reads it (the footprint is
+    /// the building's room).
+    /// </summary>
+    public float Scale { get; init; } = 1f;
     /// <summary>Tech / building ids it requires, as written (M3-5: every id exists, checked at load). Empty when none. Kept for tools; the sim reads <see cref="RequiresTechs"/> / <see cref="RequiresBuildings"/>.</summary>
     public ImmutableArray<string> Requires { get; init; } = ImmutableArray<string>.Empty;
     /// <summary><see cref="Requires"/>' tech ids, resolved at load (M3-6), ascending: each must be researched to place the building.</summary>

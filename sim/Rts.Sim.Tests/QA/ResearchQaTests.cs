@@ -412,7 +412,8 @@ public class ResearchQaTests
         Simulation sim = Scene(out _, out _, out _);
         TechState ts = sim.World.Techs;
         var hashed = new HashSet<string> { "_flags" };
-        var derived = new HashSet<string> { "_table", "_bonus", "_buildingTable", "_buildingBonus" }; // M4-3b: the building attack bonuses
+        var derived = new HashSet<string> { "_table", "_bonus", "_buildingTable", "_buildingBonus", // M4-3b: the building attack bonuses
+            "_statusTable", "_statusBonus" }; // M7-4: the statusDuration ticks per status (whole ticks, rebuilt on load)
         int audited = 0;
         foreach (FieldInfo f in typeof(TechState).GetFields(BindingFlags.NonPublic | BindingFlags.Instance))
         {
@@ -439,14 +440,14 @@ public class ResearchQaTests
                 {
                     ulong h0 = sim.StateHash();
                     object old = arr.GetValue(e)!;
-                    arr.SetValue((float)old + 1f, e);
+                    arr.SetValue(old is int n ? (object)(n + 1) : (float)old + 1f, e);
                     Assert.Equal(h0, sim.StateHash());
                     arr.SetValue(old, e);
                 }
             }
             audited++;
         }
-        Assert.Equal(5, audited); // M4-3b: + the building attack table and sums
+        Assert.Equal(7, audited); // M4-3b: + the building attack table and sums; M7-4: + the status-duration table and sums
     }
 
     [Fact]
