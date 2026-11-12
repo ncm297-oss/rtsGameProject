@@ -13,7 +13,8 @@ namespace Rts.Game.Tests;
 
 /// <summary>
 /// M7-V3a: the view with a third faction, on a forged copy of the data (<see cref="ThirdFactionForge"/>: faction
-/// <c>third</c>, "Forged Third Host", appended to the order; the worktree's data untouched), through the real shell
+/// <c>third</c>, "Forged Third Host", appended to the order's first two shipped factions, Malazan and Whirlwind, whatever
+/// else ships; the worktree's data untouched), through the real shell
 /// (<see cref="Main.DataPath"/> pointed at the copy).
 /// <list type="bullet">
 /// <item>The skirmish setup: every slot's faction list has the three factions in the data's order by their data names; the
@@ -283,7 +284,7 @@ public partial class ThreeFactionTest : Node
             {
                 Simulation? sim = main.CurrentMatch?.Simulation;
                 if (!Check(sim != null, $"--faction {slot} {ThirdFactionForge.Id}: no match")) continue;
-                Check(sim!.World.FactionOf(player) == _third && sim.World.FactionOf(1 - player) == (1 - player) % 3,
+                Check(sim!.World.FactionOf(player) == _third && sim.World.FactionOf(1 - player) == (1 - player) % _data.Factions.Length,
                     $"--faction {slot} third: player {player} plays {sim.World.FactionOf(player)}, the other {sim.World.FactionOf(1 - player)}");
                 var clock = System.Diagnostics.Stopwatch.StartNew();
                 while (sim.TickNumber < 50 && clock.Elapsed.TotalSeconds < 30) await Frames(1);

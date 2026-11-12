@@ -3265,7 +3265,8 @@ sim/Rts.Sim/ViewApi/RegenCue.cs      Healing(data, statuses, slot, faction, hp, 
 game/scripts/SelectionPanel.cs       RegenLabel: the cue under one unit's state
 game/scripts/Main.cs                 DataPath (tests: a forged data copy under user://)
 game/scripts/UiText.cs, SetupText.cs SecondsPhrase; setup.seconds_one / seconds_other; the stale IsTipFormat comment gone
-game/tests/ThirdFactionForge.cs      the forged copy: a third faction appended (the brief's recipe, names prefixed)
+game/tests/ThirdFactionForge.cs      the forged copy: a third faction appended (the brief's recipe, names prefixed);
+                                     since M7-V3b (BUG-1231) after the copy is cut to the order's first two factions
 game/tests/ThreeFactionTest, RegenCueTest; QaM6V11Test's oracle (friendly fire)
 ```
 
@@ -6902,7 +6903,9 @@ game/tests/QaM6V11Test (staged defeat), StatsScreenCheck, ReplayPlaybackTest, Fr
     is no upgrade; two building hits in one step upgrade once.
   - `ReplayPlaybackTest`: the shipped-data recordings' watched stats show the live match's lines; on a 3-opening fixture
     (a temp copy of `res://data`, never the shipped files) a Normal AI on a seed that picks opening 2, one that picks 0, and
-    four seats Easy / Normal / Hard: the live lines, then the watched replay's (its sim with no AI) equal them.
+    four seats Easy / Normal / Hard: the live lines, then the watched replay's (its sim with no AI) equal them. Since M7-V3b
+    (BUG-1231) the fixture is Malazan's and Whirlwind's only and the four seats are pinned to them (`--faction 3 malazan
+    --faction 4 whirlwind`, the two-faction defaults), so a later faction with one opening leaves it as it was.
   - `QaM6V11Test`: the staged defeat; three AI lines at 1280 x 720 inside the screen between the table and the graph
     (`StatsScreenCheck.Fits` holds the lines now), the watched replay's the same. `FreeForAllTest`: a line per AI seat.
   - `ShellTest`: `match_over.opening` required, and a format naming `{0}` and `{1}` (four bad formats, one error each).

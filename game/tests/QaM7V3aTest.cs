@@ -16,14 +16,15 @@ namespace Rts.Game.Tests;
 /// <summary>
 /// QA M7-V3a (session 2026-11-11-1317): the view pushed past the developer's one forged third faction.
 /// <list type="number">
-/// <item>Eight factions (<see cref="DataLimits.MaxFactions"/>): a copy with six Malazan clones appended (ids <c>qf2</c> to
-/// <c>qf7</c>, the first named by a 40-character <c>displayName</c>, <c>qf4</c> with regen 1 HP/s after 6 s). Every slot's list
+/// <item>Eight factions (<see cref="DataLimits.MaxFactions"/>): a copy with Malazan clones appended up to the limit (M7-V3b,
+/// BUG-1231: <c>MaxFactions</c> minus the shipped count; ids <c>qf&lt;index&gt;</c>, with two shipped <c>qf2</c> to <c>qf7</c>),
+/// the first named by a 40-character <c>displayName</c>, the third (<c>qf4</c> with two shipped) with regen 1 HP/s after 6 s). Every slot's list
 /// has the eight in data order; slot s defaults to faction s (s mod 8); a ninth faction is refused by the loader with an
 /// error that names the limit. The 40-character name's width against its list and the setup's width is measured and printed.</item>
-/// <item>Four slots, each on a different faction (qf2 local, Whirlwind, qf7, Malazan): Start's args, the four seats, 400 ticks with
+/// <item>Four slots, each on a different faction (the first clone local, Whirlwind, the last clone, Malazan): Start's args, the four seats, 400 ticks with
 /// no ERROR, the stats screen's four names (the long one's label measured against the next column), a save at tick 200 that
 /// loads to the same hash and reaches the live tick-400 hash, and the recording replayed with every checkpoint equal.</item>
-/// <item>The cue with 30 units selected: 30 qf4 Heavy Infantry hurt by Whirlwind archers and left 6 s: the 30-unit grid shows no
+/// <item>The cue with 30 units selected: 30 of the regen clone's Heavy Infantry hurt by Whirlwind archers and left 6 s: the 30-unit grid shows no
 /// cue; each one of them alone shows the cue exactly when "below its maximum and 120 ticks since its last hit" holds; and
 /// the grid again hides it.</item>
 /// </list>
@@ -33,14 +34,17 @@ namespace Rts.Game.Tests;
 public partial class QaM7V3aTest : Node
 {
     private const string LongName = "The Forty Character Faction Display Name"; // 40 characters
-    private static readonly string[] Extra = { "qf2", "qf3", "qf4", "qf5", "qf6", "qf7" };
-    private const string RegenId = "qf4";
 
     private readonly List<string> _failures = new();
     private readonly List<string> _notes = new();
     private string _root = "", _copy = "";
     private string? _shots;
     private GameData _data = null!;
+    // M7-V3b (BUG-1231): the clones fill the order up to MaxFactions from what ships, named qf<index in the order>: with two
+    // shipped they are longF to lastF as before; with three, qf3 to lastF. The first is the long name, the third has regen, and
+    // the four-faction match seats the first and the last.
+    private string[] _extra = Array.Empty<string>();
+    private string _longId = "", _regenId = "", _lastId = "";
 
     public override async void _Ready()
     {
@@ -54,7 +58,15 @@ public partial class QaM7V3aTest : Node
                 if (user[i] == "--shots") _shots = user[i + 1];
             await Frames(1);
             Check(LongName.Length == 40, $"the long name is {LongName.Length} characters");
-            _data = Forge(Extra, out _copy);
+            string orderFile = Path.Combine(ProjectSettings.GlobalizePath("res://data"), "common", "factions.json");
+            int shipped = JsonNode.Parse(File.ReadAllText(orderFile))!["order"]!.AsArray().Count;
+            // Three clones at least: the long name, a plain one, the regen one (and the four-seat match needs two of them).
+            if (!Check(shipped >= 2 && DataLimits.MaxFactions - shipped >= 3, $"{shipped} factions ship: no room for three clones under {DataLimits.MaxFactions}"))
+                throw new InvalidOperationException("the scene cannot forge its clones");
+            _extra = Enumerable.Range(shipped, DataLimits.MaxFactions - shipped).Select(i => $"qf{i}").ToArray();
+            (_longId, _regenId, _lastId) = (_extra[0], _extra[2], _extra[^1]);
+            _notes.Add($"{shipped} factions ship; clones {string.Join(", ", _extra)} (long {_longId}, regen {_regenId})");
+            _data = Forge(_extra, out _copy);
             Check(_data.Factions.Length == DataLimits.MaxFactions, $"forged {_data.Factions.Length} factions, want {DataLimits.MaxFactions}");
             NinthRefused();
             await SetupEight();
@@ -97,8 +109,8 @@ public partial class QaM7V3aTest : Node
             Edit(Path.Combine(to, "faction.json"), f =>
             {
                 f["id"] = id;
-                f["displayName"] = id == "qf2" ? LongName : $"Forged {id.ToUpperInvariant()}";
-                if (id == RegenId) f["regen"] = new JsonObject { ["hpPerSecond"] = 1, ["delay"] = 6 };
+                f["displayName"] = id == _longId ? LongName : $"Forged {id.ToUpperInvariant()}";
+                if (id == _regenId) f["regen"] = new JsonObject { ["hpPerSecond"] = 1, ["delay"] = 6 };
             });
             Edit(Path.Combine(copy, "common", "factions.json"), r => r["order"]!.AsArray().Add(id));
         }
@@ -113,7 +125,7 @@ public partial class QaM7V3aTest : Node
         // A ninth faction: the eight-faction copy plus one more folder and order entry.
         try
         {
-            Forge(Extra.Append("qf8").ToArray(), out dataDir, "nine");
+            Forge(_extra.Append($"qf{DataLimits.MaxFactions}").ToArray(), out dataDir, "nine");
             Check(false, "a ninth faction loaded");
         }
         catch (InvalidOperationException ex)
@@ -163,9 +175,9 @@ public partial class QaM7V3aTest : Node
                 OptionButton list = setup.FactionOptions[slot];
                 string[] items = Enumerable.Range(0, list.ItemCount).Select(i => list.GetItemText(i)).ToArray();
                 Check(items.SequenceEqual(want), $"slot {slot}: [{string.Join(", ", items)}]");
-                Check(setup.FactionPick(slot) == slot % _data.Factions.Length, $"slot {slot} defaults to {setup.FactionPick(slot)}, want {slot % 8}");
+                Check(setup.FactionPick(slot) == slot % _data.Factions.Length, $"slot {slot} defaults to {setup.FactionPick(slot)}, want {slot % DataLimits.MaxFactions}");
             }
-            int longIndex = _data.FindFaction("qf2");
+            int longIndex = _data.FindFaction(_longId);
             Pick(setup.FactionOptions[0], longIndex);
             await Frames(2);
             OptionButton l0 = setup.FactionOptions[0];
@@ -205,20 +217,20 @@ public partial class QaM7V3aTest : Node
             SkirmishSetup setup = main.Setup!;
             setup.AddSlot();
             setup.AddSlot();
-            int qf2 = _data.FindFaction("qf2"), qf7 = _data.FindFaction("qf7");
-            Pick(setup.FactionOptions[0], qf2);
+            int longF = _data.FindFaction(_longId), lastF = _data.FindFaction(_lastId); // the first and the last clone
+            Pick(setup.FactionOptions[0], longF);
             Pick(setup.FactionOptions[1], 1);
-            Pick(setup.FactionOptions[2], qf7);
+            Pick(setup.FactionOptions[2], lastF);
             Pick(setup.FactionOptions[3], 0);
             string joined = string.Join(" ", setup.MatchArgs() ?? Array.Empty<string>());
-            Check(joined.Contains("--players 4") && joined.Contains("--faction 1 qf2") && joined.Contains("--faction 2 whirlwind")
-                && joined.Contains("--faction 3 qf7") && joined.Contains("--faction 4 malazan"), $"Start's args '{joined}'");
+            Check(joined.Contains("--players 4") && joined.Contains($"--faction 1 {_longId}") && joined.Contains("--faction 2 whirlwind")
+                && joined.Contains($"--faction 3 {_lastId}") && joined.Contains("--faction 4 malazan"), $"Start's args '{joined}'");
             setup.StartButton.EmitSignal(BaseButton.SignalName.Pressed);
             await Frames(1);
             Simulation? sim = main.CurrentMatch?.Simulation;
             if (!Check(sim != null, "Start started no match")) return;
             World w = sim!.World;
-            Check(w.Config.PlayerCount == 4 && w.FactionOf(0) == qf2 && w.FactionOf(1) == 1 && w.FactionOf(2) == qf7 && w.FactionOf(3) == 0,
+            Check(w.Config.PlayerCount == 4 && w.FactionOf(0) == longF && w.FactionOf(1) == 1 && w.FactionOf(2) == lastF && w.FactionOf(3) == 0,
                 $"seats {w.Config.PlayerCount}: {w.FactionOf(0)} {w.FactionOf(1)} {w.FactionOf(2)} {w.FactionOf(3)}");
             string? replayPath = main.ReplayPath;
             var clock = System.Diagnostics.Stopwatch.StartNew();
@@ -286,10 +298,10 @@ public partial class QaM7V3aTest : Node
 
     private async Task ThirtySelected()
     {
-        int regenFaction = _data.FindFaction(RegenId);
+        int regenFaction = _data.FindFaction(_regenId);
         var match = GD.Load<PackedScene>("res://scenes/Match.tscn").Instantiate<Match>();
         AddChild(match);
-        match.Start(_data, LaunchOptions.Parse(new[] { "--units", "0", "--workers", "0", "--no-fog", "--mute", "--faction", "1", RegenId }));
+        match.Start(_data, LaunchOptions.Parse(new[] { "--units", "0", "--workers", "0", "--no-fog", "--mute", "--faction", "1", _regenId }));
         SimRunner runner = match.GetNode<SimRunner>("SimRunner");
         runner.FixedFrameDelta = 0.05;
         Simulation sim = runner.Simulation!;
@@ -302,7 +314,7 @@ public partial class QaM7V3aTest : Node
         {
             Check(w.FactionOf(0) == regenFaction, $"player 0 plays {w.FactionOf(0)}");
             while (sim.TickNumber < 3) await Frames(1);
-            int heavy = _data.FindUnit(RegenId + "_heavy_infantry"), archer = _data.FindUnit("whirlwind_desert_archer");
+            int heavy = _data.FindUnit(_regenId + "_heavy_infantry"), archer = _data.FindUnit("whirlwind_desert_archer");
             System.Numerics.Vector2 mid = w.NavGrid.CellCenter(w.NavGrid.Width / 2, w.NavGrid.Height / 2);
             var mine = new List<EntityHandle>();
             for (int k = 0; k < 30; k++)

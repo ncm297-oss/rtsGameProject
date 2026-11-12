@@ -12,7 +12,8 @@ namespace Rts.Game.Tests;
 /// <c>user://</c> folder. The recipe is the brief's (BUG-1191's with other ids): Malazan's files copied to
 /// <c>factions/&lt;id&gt;/</c>, <c>malazan_</c> to <c>&lt;id&gt;_</c>, <c>moranth_supply</c> to <c>&lt;id&gt;_upgrade</c>,
 /// <c>"telas_fire"</c> to <c>"&lt;id&gt;_fire"</c>, <c>"cusser"</c> to <c>"&lt;id&gt;_cusser"</c>, the faction's id and
-/// <c>displayName</c> set, and <c>&lt;id&gt;</c> appended to <c>common/factions.json</c>'s order. Every unit, building, tech and
+/// <c>displayName</c> set, and <c>&lt;id&gt;</c> appended to <c>common/factions.json</c>'s order after the copy is cut to the
+/// order's first <see cref="ShippedKept"/> factions (M7-V3b, BUG-1231: three ship once the Teblor land). Every unit, building, tech and
 /// ability <c>displayName</c> of the copy gets <see cref="NamePrefix"/> and every <c>description</c> <see cref="TextPrefix"/>, so
 /// a screen that shows Malazan's words for the third faction is caught.
 /// </summary>
@@ -26,6 +27,9 @@ public static class ThirdFactionForge
 
     /// <summary>The prefix on every forged description.</summary>
     public const string TextPrefix = "Third host: ";
+
+    /// <summary>How many shipped factions the copy keeps (the first of the order) before the forged one is added.</summary>
+    public const int ShippedKept = 2;
 
     /// <summary>
     /// Copies <paramref name="dataDir"/> to <paramref name="root"/>/data (deleting <paramref name="root"/> first), adds the
@@ -73,12 +77,32 @@ public static class ThirdFactionForge
                 }
             });
         }
+        // M7-V3b (BUG-1231): the scenes are written for "two shipped + this one", so the copy keeps the first two factions of
+        // the shipped order (Malazan, Whirlwind) and drops every later one (its folder too) before the forged one is added,
+        // as the sim's TestDataDir.CopyOfShippedTwoFactions does. With two shipped this changes nothing.
         string order = Path.Combine(copy, "common", "factions.json");
+        CutToFirstFactions(copy, order, ShippedKept);
         Edit(order, r => r["order"]!.AsArray().Add(Id));
 
         DataLoadResult loaded = DataLoader.LoadAll(copy);
         if (!loaded.Ok) throw new InvalidOperationException("forged data failed to load: " + string.Join("; ", loaded.Errors.Take(5)));
         return loaded.Data!;
+    }
+
+    // Keeps the first count ids of the order; deletes the folders of the rest.
+    private static void CutToFirstFactions(string copy, string orderFile, int count)
+    {
+        Edit(orderFile, r =>
+        {
+            JsonArray ids = r["order"]!.AsArray();
+            while (ids.Count > count)
+            {
+                string id = (string)ids[ids.Count - 1]!;
+                string folder = Path.Combine(copy, "factions", id);
+                if (Directory.Exists(folder)) Directory.Delete(folder, true);
+                ids.RemoveAt(ids.Count - 1);
+            }
+        });
     }
 
     private static void Edit(string path, Action<JsonNode> edit)
