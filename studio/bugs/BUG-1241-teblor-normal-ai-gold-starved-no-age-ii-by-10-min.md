@@ -41,3 +41,11 @@ Gatherers between 8:00 and 9:00 (Whirlwind raid) while holding 395-515 wood. The
   400) against the Teblor's 16-worker economy, not the wave's defense pull-back. Candidates for the balance pass: step 19
   after step 18 in time, a wood-heavier mix, cheaper Gatherers; or a sim-side reserve for a due research (a request).
 - Not in D28's scope (the numbers are the page's).
+- **Producer's probe at the 2026-11-12-0546 PLAN** (a scratch clone of `main` 9a9555b, the repro's eight rows, seed 1,
+  only `ai.json` edited): the eight extra Gatherers (step 19) moved to time 480: Age II in 1 of 8 (Pale Hills v Malazan,
+  as shipped), a wave in 5 of 8. Armor I moved to time 600 and the eight Gatherers to time 600, both after every other
+  step: **Age II in 3 of 8** (Vathar v Malazan, Pale Hills v Whirlwind, Pale Hills v Malazan), **a wave in 6 of 8** (none
+  on Raraku in either pairing). The order helps and is not enough alone. A step's cost is already held back
+  (`AiPlayer.MayReserve`, M5-4g), but only while the army is at least one wave and the base is not defended, and only
+  from train steps after it in file order: the likely missing rule. D29 (this session) measures the variants and lands
+  no shipped file.

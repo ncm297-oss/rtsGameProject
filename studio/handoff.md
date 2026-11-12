@@ -11,6 +11,20 @@ status's duration, a building `scale`; feature, QA full) · view **M7-V3c** (BUG
 they take, a scene with the real Teblor; feature, QA standard) · data **D29** (BUG-1241's AI half inside `ai.json`, only
 if the PLAN's measurement shows it is fixable without M7-4's rules; else STOP until M7-4 is on `main`).
 
+**PLAN 2026-11-12-0546 (session 1 / 8 of 2026-11-12): sim GO M7-4 · view GO M7-V3c · data GO D29 (a measurement; lands
+nothing in the shipped files).** Each track's "Current session plan" is in its section below. Three things differ from the
+proposal above, decided at this PLAN (docs/01 2026-11-12):
+- **M7-4 puts Frenzy's damage and aftermath on the status row** (`statuses.json` `damageBonus` / `onEnd`), not on the
+  ability's effect: no new stored state, no save format, and the Zealot's `frenzied` stays apart by id.
+- **D29 measures and lands no shipped file.** The PLAN's scratch probe (QA's eight pairings, seed 1): shipped opening Age
+  II in 1 of 8, a wave in 4 of 8 (BUG-1241); the eight Gatherers after Age II: 1 of 8 and 5 of 8; Armor I and the
+  Gatherers after every other step: **3 of 8 and 6 of 8**. The order moves it but does not reach the target. Landing
+  `ai.json` now would also move the golden header in the same session as M7-4's hash change (two tracks, one file): the
+  chosen opening lands next session with M7-4's rows, one header move.
+- **A giant's placeholder is about twice a soldier each way** (1.5 m across, 3.75 m tall against 0.8 m and 1.8 m): the
+  height formula `(2 radius + 1) x scale` is unchanged; earlier notes said "one and a half times as tall", which was
+  wrong for the capsule.
+
 ## Where things stand
 
 - **`main` after this session = sim 1262b0e + view 4ff96b0 + data 60619c8.** The Producer's scratch clone of that tree:
@@ -116,7 +130,86 @@ criterion's test name again.)
 
 ### Where we are
 M7-5 on `main` (BUG-1222 fixed). Counter **1 / 4**. Debt: BUG-1220 / 1221 S4, the three `SaveFormat` alias names
-(BUG-1161 S4), BUG-1149 / 1151 / 1152 S3, BUG-1150 S4, BUG-1010. No "Current session plan": the next PLAN writes it.
+(BUG-1161 S4), BUG-1149 / 1151 / 1152 S3, BUG-1150 S4, BUG-1010.
+
+### Current session plan (2026-11-12-0546): M7-4, the rules Blood-oil Frenzy needs (feature, QA full; bug ids 1280+)
+
+**Goal.** Give the data the four things the Teblor page asks for and the files cannot say yet: a Frenzy that also hits
+harder, a Slow when it wears off, an upgrade that lengthens it, and a drawn size for buildings. Generic rules with data
+hooks; the Teblor rows are the data track's next session. This is the last sim piece of M7 criterion 3.
+
+**Scope.**
+- **`statuses.json` `damageBonus`** (optional, a `frenzied`-kind row only; above 0, at most 4; an error on any other
+  kind). A unit's own attacks (melee swings and shots, against units and buildings) deal attack x (1 + the largest
+  `damageBonus` among its frenzied-kind entries). Read where the hit's attack value and tech attack bonus are read today;
+  rounding by `DamageCalc`'s existing rule, stated in docs/03 with a worked number (22 at +20%). Not ability damage, not
+  damage-over-time pulses, not zones. Attack speed stays the entry's magnitude (largest across frenzied-kind entries).
+- **`statuses.json` `onEnd`** (optional, any row): `{ "status", "magnitude", "duration" }`, validated like an
+  `applyStatus` for the named status's kind. The named status may not be the row itself and may not carry an `onEnd`
+  (no chains: load errors). A `whenBelowHp` passive naming a row with `onEnd` is a load error (a held entry has no end).
+  When an entry of the row runs out of time in phase 5 it is removed, then the named status is applied to the same unit
+  through `StatusSystem.Apply` (the normal stacking rule), source = the ended entry's source player. It does not fire
+  when the unit died, when the entry was refreshed instead of ending, or when the entry was removed early
+  (`RemoveEntry`). The applied status lasts exactly its duration: it must not be counted down in the pass that applied it.
+- **A re-cast during the aftermath** (decided): the Frenzy entry comes back, the Slow runs out its own time, and when
+  the second Frenzy ends the Slow is applied again by the stacking rule. Two frenzied-kind rows on one unit (a Zealot's
+  `frenzied` and the new kind of row): two entries, speed and damage each take the largest, only the row with `onEnd` slows.
+- **Tech stat `statusDuration`** (Request 49; model it on `abilityCooldown`): an effect names statuses and an amount in
+  seconds. While a player has the tech, every application of a named status whose source is that player (ability
+  effect, passive, `onEnd`) lasts that much longer, decided when it is applied; entries already running do not change;
+  never under one tick. No new stored or hashed state: anything derived is rebuilt on load.
+- **`buildings.json` `scale`** (Request 47): optional, default 1, the same range, validation and hash treatment as the
+  unit's (M7-1); `BuildingDef.Scale`; the sim never reads it.
+- **`GameData.ContentHash`** covers every new field (`DataContentHashTests` rows). If that moves the shipped data's hash,
+  regenerate the golden header once, every `k` line identical, the reason in `GatherWedgeQaTests`' comment (rule 49).
+- docs/03 "Implementation (M7-4)" with a "For the data track (M7-4)" block: the exact JSON for a Frenzy status row
+  (`damageBonus` 0.2, `onEnd` slowed 0.2 for 4 s), the ability's effect, the Anointing's +4 s effect, a building `scale`.
+- **Out of scope:** any shipped data row (`game/data/**` is not touched: tests use test-only data or copies);
+  docs/02's tables and `docs/factions/**` (the data track's, with the rows); the view; Requests 46 / 48 / 51; AI
+  casting; BUG-1220 / 1221 / 1161 / 1149-1152.
+
+**Acceptance criteria.**
+1. Loader: each new field loads; each bad value is one error at its path (a `damageBonus` on a non-frenzied row, 0, above
+   the cap; an `onEnd` naming itself, an unknown id, a row with its own `onEnd`, a magnitude or duration its kind refuses;
+   a `whenBelowHp` passive on an `onEnd` row; a `statusDuration` effect naming an unknown status; a building `scale` out of range).
+2. Damage: a unit with a frenzied-kind entry of `damageBonus` 0.2 deals the documented rounded value on melee and on
+   ranged hits, against a unit and a building; without the entry, and with a plain `frenzied` entry, the old value; the
+   bonus stops with the entry (a test for a shot in flight when it ends, the answer stated).
+3. On end: the named status is on the unit the tick the entry ends and lasts exactly its duration in ticks (pinned);
+   not on death, not on a refresh, not on an early removal; with the unit's status store full it still lands; the
+   re-cast case above; the two-rows case above.
+4. Tech: with the tech an application lasts amount longer, without it not, a running entry is unchanged by the research
+   finishing, another player's applications are unchanged; after a save and load mid-match the next application still
+   gets it.
+5. No shipped file under `game/data/**` changes; every pinned match digest and every golden `k` line is identical; if
+   the header moved, it moved once, with the reason comment. No save or replay format version changes.
+6. Determinism and fuzz: a Stress fuzz on test data that uses all three rules (3 seeds x 2,000 ticks, twins, a replay
+   round trip, a save / load in the middle of an aftermath) with the unit invariants; `StateHashTests` rows showing the
+   aftermath is ordinary hashed status state.
+7. No allocation in the per-tick and per-hit paths (`AllocationTests`); the Perf rows' budgets unchanged, the brawl row
+   with 100 frenzied units measured before and after and printed (a failure counts only under rule 42).
+8. Build 0 / 0; the default loop green; the Stress pin classes green; smoke PASS; docs/03 written; every test process ended.
+
+**Design references.** docs/factions/teblor.md "Abilities" and "Faction upgrade" (+20% damage, Slowed 20% for 4 s, +4 s);
+docs/03 "Implementation (M4-4a)" (stacking, phase 5), "(M4-4b-3a)" (Frenzied, "Known limits" (1)), "(M7-1)" (unit
+`scale`, the hash), "(M7-2)" (why the aftermath waited); docs/02 "Status effects"; docs/01 2026-11-12 (b).
+
+**Tests required.** Loader tests per field; `Abilities/` tests for damage, on-end and the tech; `DataContentHashTests`
+rows; `StateHashTests` rows; a save round trip; the Stress fuzz; an allocation row; the golden replay tests re-run.
+
+**Constraints.** No stat in C# (the 0.2, 4 s and +4 s exist only in test data and docs). No allocation per tick or per
+hit. Entry order and removal inside phase 5's loop decide determinism: say in docs/03 where the applied status sits and
+when it first counts down. Rule 43 does not apply (no shipped data uses the fields, the Teblor are in no pinned match);
+rule 50 does not apply if no format changes: if one must, stop and report instead. Size around 800 lines; if it runs
+over, deliver the status fields and the tech first and report the building `scale` as left.
+
+**QA focus.** Full tier. Attack the phase-5 loop: an entry ending while another entry of the same unit ends the same
+tick; the applied status merging into an existing stronger or longer Slow; a unit dying from a pulse the tick its Frenzy
+ends; 16 units ending on one tick in slot order; an `onEnd` naming a damage-over-time or a stealthed status. The damage
+read: tech attack bonus plus `damageBonus` plus a class multiplier, rounding at .5; a shot launched frenzied landing
+after. The tech: research finishing the same tick as an application; a negative amount down to one tick; load, then
+apply. Twins in two processes and a replay round trip of the fuzz. Mutants: drop the on-end apply, count the applied
+entry down in the same pass, read the bonus from a plain `frenzied` row. Run the scene loop once on the branch (the header may move).
 
 ### Next task candidates
 1. **M7-4: Blood-oil Frenzy, whole** (feature, QA full; around 800 lines: a new hook on the status store). Request 50:
@@ -141,6 +234,58 @@ M7-5 on `main` (BUG-1222 fixed). Counter **1 / 4**. Debt: BUG-1220 / 1221 S4, th
 ### Where we are
 M7-V3b on `main` (BUG-1231 fixed). Counter **2 / 4**. 97 scenes. Debt: **BUG-1260 S3 (new: the next task, not debt)**,
 BUG-1230 S3, BUG-1177 item 2 (the owner's taste), BUG-1115 item 4.
+
+### Current session plan (2026-11-12-0546): M7-V3c, the real Teblor on screen (BUG-1260; feature, QA standard; bug ids 1290+)
+
+**Goal.** Giants are drawn 1.125 m wide on 0.75 m of room and stand inside each other. Draw every unit as wide as the
+room it takes, keep `scale` for the height, and prove it on the shipped Teblor with a scene and pictures. This is what
+M7 criterion 1 waits on.
+
+**Scope.**
+- `UnitViews.DrawnRadius` (both overloads) returns the collision radius alone. Everything that reads it follows with no
+  second edit: the capsule's width, the selection ring (1.35 x), the target ring (1.7 x), the corpse disc and rim, the
+  refused-cast cue disc. `DrawnHeight` (`(2 radius + 1) x scale`), the hp bar's length and height, the status and cast
+  markers over the top and the shot heights stay as they are.
+- A new scene on the shipped data, no forge, with the real Teblor (criteria 3).
+- The scenes that pin `radius x scale` for the width or a ring are updated to the new rule; list every changed
+  assertion in the report. Nothing else in them is weakened.
+- Four screenshots of the same views as `studio/review/2026-11-11-2256/` (setup row, the base at the start, a Warrior
+  beside a Heavy Infantry, giants in a group), written under the scratchpad, looked at and described (rule 56).
+- BUG-1260 item 2 (the white first frame): reproduce it in a normal Teblor match start, or show it was the scratch scene's.
+- docs/03: the formula paragraph of "Implementation (M7-V1)" and a short "Implementation (M7-V3c)".
+- **Out of scope:** models; the buildings' 1.25 x (the data's row comes after the sim's M7-4); BUG-1230; any file under
+  `sim/` (no ViewApi change is expected: if one is needed, stop and report); `game/data/**`.
+
+**Acceptance criteria.**
+1. For every shipped unit type the drawn width equals twice its collision radius and the rings and corpse disc their
+   multiples of it (asserted over the whole roster in a scene); `scale` appears in the height only.
+2. Scale-1 units are unchanged: every Malazan and Whirlwind type's mesh radius and height equal the old formula's, and one
+   existing fixed-camera screenshot of a two-faction scene is pixel-identical before and after (both files named).
+3. The new scene, on shipped data: (a) the setup's third row can be set to Teblor and Start works; (b) a Teblor base
+   around tick 30: no two of the five Gatherers' drawn bodies overlap (centre distance at least the sum of drawn radii
+   wherever the sim keeps them that far apart); (c) a Warrior beside a Heavy Infantry: width ratio 0.75 / 0.4, heights
+   3.75 m and 1.8 m, printed; (d) "Regenerating" on a real hurt Warrior; (e) the War-dog's "x3" square in the Stables &
+   Kennels queue.
+4. The four screenshots exist, were looked at, and the report says in plain words what each shows (do giants in a group
+   stand apart; does a giant read as taller than wide).
+5. BUG-1260 item 2 answered with evidence.
+6. Build 0 / 0; smoke PASS; the scene loop green with the new scene (98); the default loop green; docs/03 updated; the
+   bug's proof lines as a patch in the scratchpad; every Godot and test process the developer started is ended.
+
+**Design references.** BUG-1260; docs/01 2026-11-12 (a); docs/03 "Implementation (M7-V1)" / "(M7-V2)" / "(M7-V3a)";
+docs/factions/teblor.md "Faction bonus" (scale 1.5, radius 0.75) and the unit table.
+
+**Tests required.** The new scene; the updated M7-V1 / M7-V2 scenes; the roster-wide width assertion.
+
+**Constraints.** Views hold no gameplay state and no number per faction in C#: width from `UnitDef.Radius`, height from
+`UnitDef.Scale`, nothing typed. Player-facing text from data only. The hit test keeps the sim's radius. Never kill
+another track's Godot or `testhost`.
+
+**QA focus.** Standard tier. A forged unit with scale 3 and radius 0.3, and one with scale 0.5 and radius 0.9: rings,
+bar, markers, corpse disc and shots still sit right. Thirty giants ordered to one point: do any drawn bodies overlap
+more than the sim's own overlap. Selection by click and by box on a giant at its drawn edge. The War-dog (scale 1) beside
+a giant. Mutants: put `x scale` back in one overload only; scale the ring but not the body. Compare the four pictures
+with last session's. The `DebugOverlayTest` and `QaM25Test` 1 ms rows flake under load: rerun alone before counting them.
 
 ### Next task candidates
 1. **M7-V3c: the real Teblor on screen (BUG-1260).** Feature, QA standard.
@@ -167,6 +312,60 @@ BUG-1230 S3, BUG-1177 item 2 (the owner's taste), BUG-1115 item 4.
 ### Where we are
 **D28 is on `main`** (D28-L). Counter **2 / 4**. BUG-1210 fixed. Debt: BUG-1241 S3 (the Normal Teblor AI is
 gold-starved: the balance pass).
+
+### Current session plan (2026-11-12-0546): D29, measure the Teblor AI's opening (BUG-1241; feature, QA standard; bug ids 1300+)
+
+**Goal.** A Normal Teblor AI is still in Age I at ten minutes in 7 of 8 pairings and never attacks in 4. Find out how
+far `ai.json` alone can fix that, hand over the best opening ready to land, and say exactly what the sim must add if
+the file cannot do it. **Nothing in the shipped files changes this session** (the sim's M7-4 may move the data hash this
+session; the chosen opening lands next session with M7-4's Teblor rows, one hash move).
+
+**Scope.**
+- Report tests in `sim/Rts.Sim.Tests/QA/Content/` or `Content/` (category Stress) that play QA's eight pairings
+  (`TeblorAiMatchQaStressTests`: four maps, Teblor on seat 0 against Malazan and on seat 1 against Whirlwind, Normal
+  against Normal, 12,000 ticks) on seeds 1, 2 and 3 with the shipped opening and with each variant, on a data copy
+  whose Teblor `standard` opening is replaced. Per row: the tick Age II completes (or "not by 12,000"), waves started,
+  Gatherers alive, gold and wood in hand at 7:00 and 10:00.
+- Variants, at least: **V0** shipped; **V1** the eight Gatherers (step 19) after the Age II step in time; **V2** Armor I
+  and the eight Gatherers after every other step (the PLAN's probe: seed 1, Age II 3 of 8, a wave 6 of 8); **V3** V2
+  with the Age II step due earlier; **V4** the developer's best idea inside the schema (step order, triggers, times,
+  counts, the composition weights, the wave thresholds). Read `BuildOrderExecutor.Run` and `AiPlayer.MayReserve` first:
+  a step's cost is held back only while the army is at least one wave and the base is not defended, and only from the
+  train steps after it in file order.
+- The best variant with the seats swapped (Teblor on seat 1 against Malazan, seat 0 against Whirlwind), beside V0.
+- The best variant's opening as a JSON fixture in the test folder, with one default-loop test that a copy of the
+  shipped data carrying it passes the loader's validation.
+- A written conclusion in the report: does any variant give Age II by 10:00 and a wave in at least 6 of 8 on each seed?
+  If not, which rule is missing, with a per-minute gold table from one failing row (the bug file's format).
+- **Out of scope:** `game/data/**`, `docs/factions/**`, the golden replay, any unit or building number, any C# outside
+  the two test folders, the sim's Stress classes (call their helpers, do not edit them).
+
+**Acceptance criteria.**
+1. The report rows run and print the table for V0-V4 on seeds 1-3 (120 matches) and the swapped-seat rows; V0 on seed 1
+   reproduces BUG-1241's figures (Age II in 1 of 8, a wave in 4 of 8) or the difference is explained.
+2. Measure and report, not pass / fail (rule 48): the count of pairings with Age II by 10:00 and with a wave, per
+   variant and seed, against the target of 6 of 8.
+3. The proposed opening's fixture loads and validates on a shipped-data copy (default loop).
+4. The conclusion names the opening to land, what the player would read differently (the opening's description says
+   "four Warriors raid at 8 army pop": does it still hold), and either "the file is enough" or the missing sim rule
+   stated as a request (what, where in `ai.json` or `rules.json`, the measured reason).
+5. `git diff` against the base touches only the two test folders; build 0 / 0; the default loop green; every test
+   process ended.
+
+**Design references.** docs/factions/teblor.md "AI build order (Normal)", "Opening 1" and "Spending on the menu's map";
+BUG-1241; docs/03 "Implementation (M5-4g)" (the reserve) and "(M5-8a)" (openings); docs/02 "AI opponent".
+
+**Tests required.** The report class (Stress); the fixture's validation test (default loop).
+
+**Constraints.** The AI plays through its fog-filtered view and the command API: the tests change data, never the AI's
+state. No shipped file moves, so no pin moves: if one does, something else was touched. Rule 41: the sim's task this
+session changes no shipped behaviour, so the figures hold on the merged tree; QA re-runs one variant there.
+
+**QA focus.** Standard tier. Re-run V0 and the proposed variant on seed 1 and on one seed the developer did not use
+(4 or 5): does the improvement hold. Check the variant copy really differs only in the opening (diff the two loaded
+openings). Is the proposed opening worse anywhere (a pairing that reached Age II or sent a wave on V0 and does not now)?
+Does a proposed opening still expand, build every hall and research the Anointing by 15:00? Check the conclusion's
+missing-rule claim against `MayReserve` and the executor's code, not against the developer's words.
 
 ### Next task candidates
 1. **D29: the Teblor AI reaches Age II (BUG-1241's opening half).** Standard tier (it needs scenario numbers). Only
