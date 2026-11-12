@@ -199,7 +199,7 @@ public partial class UnitViewsTest : Node
         }
     }
 
-    // M7-V1: one capsule per type, radius x scale by BodyHeight(radius) x scale; a scale-1 type is exactly today's capsule.
+    // M7-V1: one capsule per type, BodyHeight(radius) x scale tall; M7-V3c: radius wide (scale is the height only); a scale-1 type is exactly today's capsule.
     private void MeshRows(UnitViews views, GameData data)
     {
         for (int t = 0; t < data.Units.Length; t++)
@@ -207,8 +207,8 @@ public partial class UnitViewsTest : Node
             UnitDef def = data.Units[t];
             CapsuleMesh? mesh = views.MeshOf(t);
             Check(mesh != null && mesh.Radius == UnitViews.DrawnRadius(def) && mesh.Height == UnitViews.DrawnHeight(def)
-                && UnitViews.DrawnRadius(def) == def.Radius * def.Scale && UnitViews.DrawnHeight(def) == UnitViews.BodyHeight(def.Radius) * def.Scale,
-                $"{def.Key} (scale {def.Scale}): capsule {mesh?.Radius} x {mesh?.Height}, want {def.Radius * def.Scale} x {UnitViews.BodyHeight(def.Radius) * def.Scale}");
+                && UnitViews.DrawnRadius(def) == def.Radius && UnitViews.DrawnHeight(def) == UnitViews.BodyHeight(def.Radius) * def.Scale,
+                $"{def.Key} (scale {def.Scale}): capsule {mesh?.Radius} x {mesh?.Height}, want {def.Radius} x {UnitViews.BodyHeight(def.Radius) * def.Scale}");
             if (def.Scale == 1f)
                 Check(mesh != null && mesh.Radius == def.Radius && mesh.Height == UnitViews.BodyHeight(def.Radius),
                     $"{def.Key} at scale 1: capsule {mesh?.Radius} x {mesh?.Height}, today's is {def.Radius} x {UnitViews.BodyHeight(def.Radius)}");

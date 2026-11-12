@@ -2375,7 +2375,8 @@ three gates below.
 - `AbilityDef` (data) → `AbilitySystem` executes cast timers and resolves `effects[]`.
 - `StatusSystem` stores active statuses per unit in a small fixed array (max 8) with
   `(statusId, magnitude, ticksRemaining, pulseTicks, sourcePlayer)`. Derived stats (speed, sight) are recomputed when the
-  status set changes, not every tick; attack speed (Frenzied, M4-4b-3a) is read when a swing starts.
+  status set changes, not every tick; attack speed (Frenzied, M4-4b-3a) is read when a swing starts, and (M7-4) a frenzied
+  row's damage bonus where a hit's attack value is read.
 - `ZoneSystem` keeps active zones; each tick it applies their statuses to units inside (via the
   spatial hash) and marks their cells in a per-player "vision blocker" mask used by the vision
   pass.
@@ -2647,7 +2648,7 @@ death hook in `CombatSystem.HitUnit`, `UnitStore.BelowHpUnits`; data in `Data/Da
   cooldown already running is not shortened and the first swing after the status ends is back to the full cooldown; never
   stored (derived from the hashed statuses and the data). Towers have no statuses. The "damage up" half of docs/02's
   "attack speed and/or damage up" is **not** in this slice: no shipped status uses it before M7's Blood-oil Frenzy, which
-  will add it as a field or a kind. Status ids follow the ordinal order of the string ids, so `frenzied` took dense id 2 and
+  will add it as a field or a kind (since M7-4: a frenzied row's `damageBonus`, see "Implementation (M7-4)"). Status ids follow the ordinal order of the string ids, so `frenzied` took dense id 2 and
   `slowed` moved from 2 to 3; nothing keys on the dense ids (code and the view look statuses up by key or by kind).
 - **Passives** (`units.json` `passives`, `UnitDef.Passives` in file order with `BelowHpPassive` / `DeathPassive`, the index
   of each trigger's or -1): at most `DataLimits.MaxUnitPassives` (2), one per trigger. Data, not state: the content hash
@@ -3083,22 +3084,142 @@ state hash, digest or golden `k` line; and the two pack bugs its war-dog row and
   `APacksArmyValue_IsTheItemsCost_NotSpawnCountTimesIt` un-skipped. Tests that edit every faction's files read
   `TestSim.ShippedFactions` (the data's keys in id order) instead of a literal pair.
 
+### Implementation (M7-4)
+
+The last sim piece of M7 criterion 3: the four things docs/factions/teblor.md asks of Blood-oil Frenzy and the Teblor
+buildings that the files could not say, as generic rules with data hooks (docs/01 2026-11-12 (b): the extra damage and the
+aftermath live on the **status row**, not on the ability's effect). No shipped file uses them yet (the Teblor rows are the
+data track's next session). Code: `StatusSystem.Run` / `Apply` / `Hold` / `DamageFactor`, `CombatSystem.QueueHit` /
+`AttackerFactor`, `ProjectileSystem.Strike` / `Splash`, `DamageCalc.Compute` (the factor), `TechState.StatusDurationTicks`,
+the loaders in `DataLoader.Abilities.cs` (`ResolveOnEnds`), `DataLoader.Techs.cs`, `DataLoader.Passives.cs`, `DataLoader.cs`.
+
+- **`statuses.json` `damageBonus`** (optional, a `frenzied`-kind row only; above 0, at most
+  `DataLimits.MaxStatusDamageBonus` = 4; on another kind, at 0 or above 4 it is one error at `statuses[i].damageBonus`):
+  `StatusDef.DamageBonus`. A unit's **own attacks** deal `attack x (1 + b)`, `b` the largest bonus among its entries (only
+  frenzied-kind rows carry one, so a Zealot's plain `frenzied` adds nothing). The factor is the last multiplier of
+  `DamageCalc`'s raw value, before its usual rounding: `raw = (value + tech attack bonus) x table x bonusVs x (1 + b)`, then
+  half up, then armor (Magic ignores it). **Worked number:** the Warrior's 22 melee at +20 % on a Heavy target is
+  22 x 1.2 = 26.4, rounded half up to **26** before armor (a Battering Ram's 6 leaves 20; 16 without); on a Tent
+  (structure x0.7, armor 1) 22 x 0.7 x 1.2 = 18.48 -> 18 - 1 = 17 (15 - 1 = 14 without). A factor of 1 multiplies exactly,
+  so every hit without the bonus is bit-identical to before. A tech's attack bonus is multiplied too (25 x 1.2 = 30).
+  **Where it is read:** where the hit's attack value and its tech attack bonus are read today: a melee blow at the strike
+  (`QueueHit`, phase 10, the wind-up's end), a shot and its splash at the landing (`ProjectileSystem.Strike`, phase 11,
+  from the shooter's statuses then), a melee splash in phase 11. So **a shot in flight when the entry ends lands without
+  the bonus**, one thrown before the entry starts and landing while it is on lands with it, and a shot whose shooter died
+  in flight lands without it (the statuses went with the slot; no projectile field, no save-format change). A melee
+  attacker killed earlier in the same phase 11 still lands its queued blow with the bonus it struck with, but its (melee)
+  splash goes without (none ships). Not applied by ability damage, damage-over-time pulses, zones or a tower's shot
+  (buildings have no statuses). Attack speed stays the entry's magnitude, the largest across frenzied-kind entries
+  (M4-4b-3a). Derived at each hit from the hashed entries and the data; never stored.
+- **`statuses.json` `onEnd`** (optional, any row): `{ "status", "magnitude", "duration" }`, checked as an `applyStatus`
+  entry for the named status's kind (`StatusEntry`: a slow's magnitude below 1, damage over time whole per second and
+  whole seconds, none on a blind / stealthed / revealed status, a duration of at least a tick), errors at
+  `statuses[i].onEnd.<field>`. Also one error each at `statuses[i].onEnd.status`: the row names itself; it names a row
+  that has an `onEnd` of its own (no chains: an ended entry applies one status, which ends quietly). A `whenBelowHp`
+  passive may not name a row with an `onEnd` (one error at `units[k].passives[j].status`): its entry is held a tick at a
+  time and never runs out. `StatusDef.OnEndStatus` (-1 none), `OnEndMagnitude`, `OnEndTicks`.
+- **The rule** (`StatusSystem.Run`, phase 5). When an entry of a row with an `onEnd` runs out of time in the countdown
+  pass it is removed as before, and its status id and source player are noted (a `stackalloc` of `StatusStore.PerUnit`
+  pairs). **After that unit's whole pass** (and its speed / blind recomputes), each noted end, in the order the entries
+  ended, applies the named status to the same unit through `StatusSystem.Apply` (the normal stacking rule), source = the
+  ended entry's source player. **Where it sits and when it first counts down:** a new entry is appended after the unit's
+  others (an existing entry of that status is merged in place, longer duration, stronger magnitude); either way the pass
+  that applied it has already gone over every entry, so it is first counted down in the **next** tick's phase 5 and lasts
+  exactly its duration: Frenzy applied between ticks for 30 ticks ends in the 30th phase 5, and in that same phase the
+  Slow is on with 80 ticks left (4 s), on for the next 79 tick ends and gone in the 80th phase 5. Later phase-5 passes in
+  the same tick (`RegenSystem`, `ZoneSystem`) see it (a regenerating aftermath would heal that tick). The ended entries made
+  room, so **a full store still takes it** (eight entries, the Frenzy ends: seven, the Slow appended as the eighth).
+  **It does not fire** when the unit died in the pass (a pulse kill: the death frees the slot and the noted ends are
+  dropped; a unit killed in another phase never reaches its end), when the entry was refreshed (it simply did not run
+  out), or when it was removed early (`StatusSystem.RemoveEntry`, a reveal making room). Entry order and the removal
+  inside the loop are unchanged; the deferral is what keeps an applied or refreshed entry out of the pass that applied it.
+- **Re-cast during the aftermath** (decided, docs/01 2026-11-12 (b)): the Frenzy entry comes back (a new entry), the Slow
+  runs out its own time (Frenzied and Slowed at once meanwhile), and when the second Frenzy ends the Slow is applied again
+  by the stacking rule (a Slow still running is refreshed to the full 80 ticks, the latest source on an equal magnitude).
+  **Two frenzied-kind rows on one unit** (a Zealot's `frenzied` and the Shaman's Frenzy): two entries; attack speed takes
+  the largest magnitude, damage the largest bonus; only the row with an `onEnd` slows when it ends.
+- **Tech stat `statusDuration`** (Request 49; `TechStat.StatusDuration` = 5, appended): an effect
+  `{ "stat": "statusDuration", "amount": <s>, "statuses": [<statuses.json ids>] }`, modelled on `abilityCooldown`: the
+  amount is seconds to ticks, non-zero, within +/-3,600 s, not rounding to 0 ticks, negative shortens; `statuses` required,
+  at least one, each a known id (one error at `effects[j].statuses[k]` otherwise); `appliesTo` is an error on it (it names
+  statuses, not units), and `statuses` is an error on every other stat. `TechEffect.Statuses` (ascending ids). **The
+  rule:** while a player has the tech, every application of a named status whose source is that player lasts that much
+  longer, `max(1, ticks + bonus)`, decided when it is applied (`StatusSystem.Apply`): ability effects, zones (each tick's
+  re-application), the `onDeath` and `onHit` passives, `onEnd` (the ended entry's source), the reveal. An entry already
+  running is not changed by the research finishing; another player's applications are not changed. A `whenBelowHp`
+  passive's hold (`StatusSystem.Hold`) is not lengthened: it has no duration (it would otherwise outlast the line by the
+  bonus). **No new stored or hashed state:** `TechState` keeps a per-(player, status) sum of whole ticks, derived from
+  the hashed research flags, rebuilt in `Set` and after a load (`TechState.ReadFrom`), never saved (no save-format change);
+  the per-unit bonus tables keep their five unit stats, so the saved bonus array is unchanged and `World.TechBonus` is 0 for
+  `statusDuration`. `TechState.AnyStatusDuration` (from the data) skips the lookup when no tech has one.
+- **`buildings.json` `scale`** (Request 47; optional, default 1, `DataLimits.MinUnitScale`-`MaxUnitScale` = 0.5-3.0, one
+  error at `buildings[i].scale` outside it): `BuildingDef.Scale`. Presentation only, the unit's M7-1 rule: the sim never
+  reads it (the footprint is the building's room); the view reads it as it reads `UnitDef.Scale`.
+- **What is hashed.** `GameData.ContentHash` adds every new field **only away from its default** (as M7-2's
+  `spawnCount`): a status's `DamageBonus` when not 0, its three `onEnd` fields when any is set, a tech effect's `Statuses`
+  on a `statusDuration` effect (or when set), a building's `Scale` when not 1. So the shipped data's hash, and with it the
+  golden replay's header, **did not move**; no golden was regenerated and no `k` line moved. (The unit's M7-1 `scale` is
+  hashed always; a building's is not, so the Teblor rows' `scale` 1.25 moves the data hash once, with the rest of the data
+  track's rows, in one refusal of old recordings.) No state hash field: the aftermath is an ordinary status entry, the
+  damage factor and the duration bonus are derived. No save or replay format version changed.
+- **Cost.** The damage factor costs a status-count read per blow and per landing (the entry scan only for a unit with
+  statuses); the `onEnd` check one field read per ended entry; the duration lookup one flag test per application (an
+  array read only when the data has a `statusDuration` tech). No allocation (`AllocationTests.BrawlTicks_WithFrenzyBonusHits_
+  OnEndSlows_AndALengthenedCast_AllocateNothing`). Measured (Debug, 2026-11-12, three runs alternating with the base
+  098e108 built from the same tree, nothing else running): the 500-unit brawl with 100 Zealots
+  (`PassivePerfTests.ZealotBrawl500_First200Ticks_AverageUnder4Ms`, budget 4 ms) ticks 5-205 median **1.947 ms here,
+  1.916 ms on the base** (2.260 / 1.894 / 1.916 base, 1.947 / 1.953 / 1.945 here), ticks 205-605 1.662 / 1.619 ms; the same
+  outcome in every run on both (173 dead, 42 Zealots left), as it must be: no shipped row uses the fields. Budgets
+  unchanged.
+- **Tests.** `Data/FrenzyRulesLoaderTests` (each field loads, each bad value is one error at its path),
+  `Abilities/FrenzyDamageTests` (melee and ranged, unit and building, none / plain / Frenzy, the end of the entry, a shot in
+  flight both ways, a dead shooter), `Abilities/StatusOnEndTests` (the exact 80 ticks, death, refresh, early removal, a
+  full store, the re-cast, a second end refreshing, two rows), `Abilities/StatusDurationTechTests` (+4 s with the tech, not
+  without, not for the other player, a running entry unchanged, a save and load, a shortening floor at 1 tick, an onEnd
+  lengthened, a hold not), `DataContentHashTests` (each field in the files; the reflection rows), `StateHashTests.
+  Hash_TheAftermath_IsAnOrdinaryStatusEntry_TheBonusesAreDerived`, `Stress/FrenzyAftermathFuzzStressTests` (3 seeds x
+  2,000 ticks, three players, the Anointing researched by command, twins, invariants, a save and load in an aftermath, a
+  replay round trip), the allocation row, `Abilities/PassivePerfTests` (the brawl, before and after, below).
+  The shared test copy is `Abilities/BloodOilScenes`.
+
+**For the data track (M7-4).** All four fields are in the schema; nothing ships them. Docs/factions/teblor.md's numbers:
+
+- A Frenzy status row in `common/statuses.json` (its own id beside the Zealot's `frenzied`, so the one-entry-per-status
+  rule keeps them apart):
+  `{ "id": "teblor_frenzied", "displayName": "Blood-oil Frenzy", "description": "...", "kind": "frenzied", "damageBonus": 0.2, "onEnd": { "status": "slowed", "magnitude": 0.2, "duration": 4 } }`.
+  **Pick an id that sorts after `stealthed`** (`teblor_frenzied` does): a `frenzied`-kind row is one of the M4 kinds, whose
+  state-hash numbers (`StatusDef.StateHashId`, M7-1) follow their ids' ordinal order, so an id sorting before `burning`
+  (`blood_oil_frenzied`, say) renumbers Burning, Slowed and the rest and moves every pinned digest with a burn or a slow
+  in it. After `stealthed` only `regenerating`'s number moves (6 to 7), which no shipped match carries.
+- The ability's effect in `factions/teblor/abilities.json` (`blood_oil_frenzy`):
+  `{ "kind": "applyStatus", "status": "teblor_frenzied", "magnitude": 0.4, "duration": 10 }` (+40 % attack speed for 10 s).
+- Blood-oil Anointing's +4 s, a third effect in `factions/teblor/techs.json`:
+  `{ "stat": "statusDuration", "amount": 4, "statuses": ["teblor_frenzied"] }` (no `appliesTo`). The aftermath Slow is
+  not named, so it stays 4 s.
+- A building's drawn size in `factions/teblor/buildings.json`: `"scale": 1.25` on each Teblor building (the footprint is
+  unchanged).
+
+Before writing numbers into the Frenzy row's `description` ("20% more damage", "Slowed 20% for 4 s"), check the content
+tests' description-number reading (D-H2, "For the data track" under M4-4a): it knows the `applyStatus` fields, not
+`damageBonus` or `onEnd`, so such a text needs a pin taught about them, added with the rows.
+
 ### Implementation (M7-V1)
 
 M7's first bullet, the view half ("1.5× visuals"): each unit type is drawn at its data `scale`. View code only; no sim or
 ViewApi change, no data file changed (shipped units are all at 1.0, so the game draws exactly as before).
 
-- **The formula:** a type's placeholder capsule is `UnitViews.DrawnRadius(def)` = `radius x scale` wide and
-  `UnitViews.DrawnHeight(def)` = `BodyHeight(radius) x scale` = `(2 radius + 1) x scale` tall, so 1.5 is 1.5x in every
-  dimension and 0.5 half. The scale is applied once per type when `UnitViews.Bind` builds the shared `CapsuleMesh`; the
+- **The formula** (since M7-V3c, BUG-1260; M7-V1 drew the width at `radius x scale`): a type's placeholder capsule is
+  `UnitViews.DrawnRadius(def)` = `radius` (the collision radius alone) wide and `UnitViews.DrawnHeight(def)` =
+  `BodyHeight(radius) x scale` = `(2 radius + 1) x scale` tall, so `scale` is the height only: a body is never wider than
+  the room the sim gives it, and a 1.5 unit is 1.5x as tall. The scale is applied once per type when `UnitViews.Bind` builds the shared `CapsuleMesh`; the
   per-frame path reads nothing new for the body (it already placed the node at half the mesh's height, so feet stay on the
   ground). The view reads `UnitDef.Scale` from `GameData` as it reads `UnitDef.Radius`; nothing else from the sim.
-- **What follows the drawn body:** the selection ring (`1.35 x radius x scale`) and the attack-order target ring
-  (`1.7 x radius x scale`), both through `UnitViews.DrawnRadius(world, slot)` (the slot's radius times its type's scale,
-  three array reads a ring, no allocation); the hp bar sits over the drawn top and its length is
+- **What follows the drawn body:** the selection ring (`1.35 x radius`) and the attack-order target ring
+  (`1.7 x radius`), both through `UnitViews.DrawnRadius(world, slot)` (the slot's radius, one array read a ring, no
+  allocation; `radius x scale` until M7-V3c); the hp bar sits over the drawn top and its length is
   `1.2 m x max(scale, 0.75)` (`CombatViews.BarScaleFor`, per type at `Bind`: a 0.5 unit's bar stays readable at 0.9 m, a
   3.0 unit's is 3.6 m); its thickness doesn't scale, so the cast bar and status markers stacked above it keep their
-  spacing (they too sit over the drawn top, `AbilityViews`); the corpse disc and its rim (`radius x scale`, rim x1.2); the
+  spacing (they too sit over the drawn top, `AbilityViews`); the corpse disc and its rim (`radius`, rim x1.2); the
   refused-cast cue disc round a caster (drawn radius + 0.9 m). Units have no death fade (the body goes the frame the death
   is shown), so there is nothing else to scale. **Since M7-V2** the aimed shots follow it too: a shot leaves its shooter at
   `ProjectileViews.HeightFor(scale)` = `1.2 m x scale` and its hit flash sits at its victim's (see "Implementation (M7-V2)"). **Not scaled:** the minimap dot (one size), the cargo cube (it sits over the
@@ -3107,9 +3228,10 @@ ViewApi change, no data file changed (shipped units are all at 1.0, so the game 
   round the scale-1 body centre (`ScreenPicker.PickClick`, floor 12 px) and a box by that centre, exactly as before; a
   bigger body is not easier to click, and a 3.0 unit's drawn head above its sim body selects nothing. The scale changes
   only how a unit looks: never what it hits, blocks or is hit by (docs/02 "Combat / Stats").
-- **Known look:** a 3.0 body (3.6 m wide at radius 0.6) overlaps its neighbours and can overlap a building's mesh beside it;
-  collision is still the radius, so that is drawing only.
-- **Tests:** `game/tests/ScaleViewTest` (shipped data: every type today's capsule; a forged data copy with Heavy Infantry
+- **Known look (until M7-V3c):** a 3.0 body (3.6 m wide at radius 0.6) overlapped its neighbours and could overlap a
+  building's mesh beside it. Since M7-V3c the width is the radius, so bodies overlap only where the sim's soft separation
+  lets two units closer than their radii.
+- **Tests:** `game/tests/ScaleViewTest` (shipped data: every type's capsule the formula; a forged data copy with Heavy Infantry
   1.5, Crossbowman 0.5, Sapper 3.0 and the catapult 1.5 in a real match: mesh sizes against the Laborer beside them, feet on
   the ground, both rings, the bar lengths, the corpse discs, the click / box rows for the 1.5 catapult and the 3.0 Sapper,
   0 bytes over 20 frames of the mixed scales; windowed with `-- --shots <dir>` it saves the row), `UnitViewsTest` (every
@@ -3312,6 +3434,33 @@ game/tests/ThreeFactionTest, RegenCueTest; QaM6V11Test's oracle (friendly fire)
   hit + 120, gone on the next hit's frame, gone at full; 60 steady frames 0 bytes in `SelectionPanel.Sync`; grid and
   building no cue; layout); `ThreeFactionTest`; `QaM6V11Test`; `DifficultyTipTest` (the BUG-1200 rows on forged
   intervals), `QaM7Vh1Test`, `QaM5V2Test`, `QaM5V2bTest` (their expected tips built with the phrase).
+
+### Implementation (M7-V3c)
+
+BUG-1260: a Teblor giant (radius 0.75, scale 1.5) was drawn at `radius x scale` = 1.125 m, so giants standing at the
+1.5 m the sim keeps between them were drawn 0.75 m inside each other; the scale was counted twice in the width (once in
+the data's giant radius, once by the view). View code only; no sim, ViewApi or data file changed.
+
+- **The rule** (Producer default, owner may revisit): the drawn width is the collision radius,
+  `UnitViews.DrawnRadius(def)` = `radius` and `DrawnRadius(world, slot)` = the slot's `Radius`; `scale` is the height only
+  (`DrawnHeight` unchanged). Every reader follows with no other edit: the capsule, the selection ring (1.35x), the target
+  ring (1.7x), the corpse disc and rim (1x, 1.2x), the refused-cast cue disc (radius + 0.9 m). Unchanged: the hp bar's
+  length and height, the cast and status markers over the drawn top, the shot heights, the hit test (the sim's radius).
+  A Warrior is now 1.5 m wide and 3.75 m tall beside a Heavy Infantry's 0.8 m x 1.8 m (1.875x as wide, 2.08x as tall).
+- **Scale-1 units draw exactly as before** (every Malazan and Whirlwind type): `CombatViewTest`'s seed-1 brawl shot is
+  pixel-identical before and after. When real models arrive the model's width replaces the capsule's; the rings keep the
+  collision radius.
+- **BUG-1260 item 2 (the white first frame):** not a colour bug. A unit first seen below its maximum hp flashes white once
+  (the M4-V2 hit flash, BUG-0160); QA's scratch scene hurt its Warriors before their first frame. A normal Teblor match
+  start draws every unit in its player's colour on every frame, with no flash.
+- **Tests:** `game/tests/TeblorViewTest` (shipped data, real Teblor: the roster's widths, heights and the old formula for
+  the two scale-1 factions; rings, target ring, corpse disc and rim per type in a match; the setup's third row set to Teblor
+  and Start; the Gatherers of both Teblor bases at tick 30 and a packed group of Warriors and Gatherers drawn apart wherever
+  the sim keeps them apart; the Warrior / Heavy Infantry sizes; "Regenerating" on a Warrior hurt by real archer hits; the
+  War-dog's "W×3" in the Stables & Kennels queue after Age II; the white first frame, both ways; windowed with
+  `-- --shots <dir>` it saves five pictures), `ScaleViewTest`, `UnitViewsTest`, `ShellTest` (their width pins moved to the
+  rule; `ScaleViewTest`'s click / box rows prove the hit test above the centre, where the drawn body now reaches past the
+  sim's pick circle).
 
 ## Vision, detection, fog
 
@@ -3631,11 +3780,11 @@ consumes it.
 | `rules.json` | docs/02 Economy table: `startingResources` (M6-S6, replacing `startingGold` / `startingWood`: a list of presets in the setup's order, each `{id, displayName, description?, gold, wood, aiSpendAbove?}`; ids unique snake_case of at most 64 characters, a `standard` entry required, gold and wood 0 to 1,000,000, at most 16 presets; shipped `standard` 200 / 200 and `high` 1000 / 1000, Producer default; `aiSpendAbove` (M6-S6 fix round 1, BUG-1050) optional, 0 to 1,000,000, 0 or left out = off: the AI's spend-down threshold in gold + wood, shipped `high` 200, `standard` none; every field, the count and the order in `ContentHash`), `startingWorkers`, `popCap`, `workerCarry`, `gatherRate {gold, wood}` (per second), `startMines` / `expansionMines {count, gold}`, `treeWood`, `nodeSearchRadius`, `repair {rateFactor, costFactor}` (M3-3), `buildingSight` (M4-3a: meters, above 0 and at most 64, the sight of a building whose entry gives none; shipped 12, a Producer default: docs/02 gives sight only for the Watch Tower), `stealth {proximity, revealSeconds}` (M4-5: meters and seconds, above 0; shipped 3 and 3, docs/02 "Stealth and detection"). Pop provided by buildings comes with `buildings.json` (M3); the Age II cost with `techs.json` (M3-5) |
 | `common/factions.json` | M7-3: `{ "order": ["malazan", "whirlwind"] }`, the faction order: faction id = index in `order`, and unit and building type ids go faction by faction in this order (ordinal within a faction). Every folder under `factions/` must be listed and every entry must have a folder; a repeat, an entry that isn't a snake_case id (or a string) and more than 8 entries (`DataLimits.MaxFactions`) are errors, one each at `order[i]` (a folder not listed: at `order`, naming the folder). Append-only: a new faction adds its id at the end. Not hashed (the keys in id order are). See "Implementation (M7-3)" |
 | `faction.json` | `id` (must equal the folder name), `displayName`, `description`, `bonus {displayName, description}`, `resources {gold, wood: {displayName}}`, `palette {primary, secondary, accent}` as `#RRGGBB`; `regen` (M7-1, optional: absent = no regeneration) `{hpPerSecond, delay}`, both required when the object is there: `hpPerSecond` above 0 and at most 100 (`DataLimits.MaxRegenPerSecond`) and at least 0.05 (one fixed-point unit a tick), to `FactionDef.RegenPerTick` (`round(hpPerSecond x 400 / 20)`: 1 → 20); `delay` seconds, 0 or more, at most 3600, to `FactionDef.RegenDelayTicks` (6 → 120); an unknown key is an error. No shipped faction has one yet (Teblor, Andii: M7 / M9). See "Implementation (M7-1)" |
-| `buildings.json` | `{ "buildings": [ ... ] }`, each `{id, displayName, description, slot, footprint {width, height}, hp, armor, cost {gold, wood}, buildTime, popProvided, dropOff}`: `slot` is one of the ten template slots (`DataLimits.BuildingSlotIds`), footprint sides 1-4 cells, `buildTime` in seconds (to ticks), `popProvided` a multiple of 0.5 (to half-pop), `dropOff` a required bool, `requires` an optional list of tech / building ids (M3-5; resolved and gating placement since M3-6), `sight` optional meters (M4-3a: above 0 and at most 64, default `rules.json` `buildingSight`; shipped 24 on both watch towers, docs/02), `attack` optional (M4-3b: the unit `attack` object; value at least 1, range above 0, an aimed `projectile` required, `targets` not `buildings`; shipped on both watch towers), `detector` optional meters (M4-3b: above 0 and at most 64; shipped 16 on both watch towers; unused until M4-5). Ids unique across factions (M3-2, see "Economy implementation"); exactly one building per slot per faction (M3-6, BUG-0010) |
-| `techs.json` | `{ "techs": [ ... ] }` in `common/` (shared by every faction) and in each faction folder (its own), each `{id, displayName, description, researchedAt, cost {gold, wood}, researchTime, requires?, requiresAnyOf?, effects: [{stat, amount, appliesTo {attackType?, tags?, units?, siege?}}]}`: `researchedAt` is a building slot id (a common tech resolves to each faction's building of it; a faction without one is an error), `researchTime` in seconds (to ticks), `requires` tech / building ids (resolved and gating research since M3-6), `requiresAnyOf` `{count, of: [slot ids, or in a faction file its own building ids]}`: met when `count` of the distinct listed slots hold an own finished building (M3-6; shipped on `age_ii` only), `effects` may be empty. `stat` is one of `attack`, `armor`, `range`, `hp`, `abilityCooldown` (`DataLimits.TechStatIds`); `amount` is non-zero, whole for attack / armor / hp, meters for range, seconds for ability cooldown (to ticks, negative shortens it). `appliesTo` is required (`{}` = every unit); each filter it sets must match: `attackType` a damage type, `tags` any one of the unit's tags (each must be a tag some unit has), `units` unit ids (a faction tech's must be its own), `siege` true / false for the `siege` slot; a `tags` or `units` list set to `[]` is an error (M3-6, BUG-0098). Tech ids are unique across all techs files and may not equal a building id (M3-6); they number the common file's techs first, then each faction's in `common/factions.json` order, ordinal within each file (M7-3b), so a new faction's techs move no shipped id; `DataLimits.AgeTechIds` (`age_ii`) must be a common tech (M3-5, see "Implementation (M3-5)") |
+| `buildings.json` | `{ "buildings": [ ... ] }`, each `{id, displayName, description, slot, footprint {width, height}, hp, armor, cost {gold, wood}, buildTime, popProvided, dropOff}`: `slot` is one of the ten template slots (`DataLimits.BuildingSlotIds`), footprint sides 1-4 cells, `buildTime` in seconds (to ticks), `popProvided` a multiple of 0.5 (to half-pop), `dropOff` a required bool, `requires` an optional list of tech / building ids (M3-5; resolved and gating placement since M3-6), `sight` optional meters (M4-3a: above 0 and at most 64, default `rules.json` `buildingSight`; shipped 24 on both watch towers, docs/02), `attack` optional (M4-3b: the unit `attack` object; value at least 1, range above 0, an aimed `projectile` required, `targets` not `buildings`; shipped on both watch towers), `detector` optional meters (M4-3b: above 0 and at most 64; shipped 16 on both watch towers; unused until M4-5), `scale` optional (M7-4: the view's model size, 0.5-3.0, default 1; the sim never reads it). Ids unique across factions (M3-2, see "Economy implementation"); exactly one building per slot per faction (M3-6, BUG-0010) |
+| `techs.json` | `{ "techs": [ ... ] }` in `common/` (shared by every faction) and in each faction folder (its own), each `{id, displayName, description, researchedAt, cost {gold, wood}, researchTime, requires?, requiresAnyOf?, effects: [{stat, amount, appliesTo {attackType?, tags?, units?, siege?}}]}`: `researchedAt` is a building slot id (a common tech resolves to each faction's building of it; a faction without one is an error), `researchTime` in seconds (to ticks), `requires` tech / building ids (resolved and gating research since M3-6), `requiresAnyOf` `{count, of: [slot ids, or in a faction file its own building ids]}`: met when `count` of the distinct listed slots hold an own finished building (M3-6; shipped on `age_ii` only), `effects` may be empty. `stat` is one of `attack`, `armor`, `range`, `hp`, `abilityCooldown`, `statusDuration` (M7-4) (`DataLimits.TechStatIds`); `amount` is non-zero, whole for attack / armor / hp, meters for range, seconds for ability cooldown and status duration (to ticks, negative shortens it). A `statusDuration` effect takes `statuses` (statuses.json ids, at least one) and no `appliesTo`; no other stat takes `statuses` (see "Implementation (M7-4)"). `appliesTo` is required (`{}` = every unit) except on `statusDuration`; each filter it sets must match: `attackType` a damage type, `tags` any one of the unit's tags (each must be a tag some unit has), `units` unit ids (a faction tech's must be its own), `siege` true / false for the `siege` slot; a `tags` or `units` list set to `[]` is an error (M3-6, BUG-0098). Tech ids are unique across all techs files and may not equal a building id (M3-6); they number the common file's techs first, then each faction's in `common/factions.json` order, ordinal within each file (M7-3b), so a new faction's techs move no shipped id; `DataLimits.AgeTechIds` (`age_ii`) must be a common tech (M3-5, see "Implementation (M3-5)") |
 | `projectiles.json` | `{ "projectiles": [ ... ] }`, each `{id, kind, speed, hitTolerance?, leadSpeed?}`: `kind` `aimed` or `lob`, `speed` m/s (at least 1), `hitTolerance` m (aimed only, 0-2, default 0.3; an error on a lob), `leadSpeed` m/s (aimed only, not negative, default 0 = never leads; an error on a lob). Ids unique; every unit's `attack.projectile` must name one (M4-2b, see "Implementation (M4-2b)") |
 | `units.json` | `{ "units": [ ... ] }`, entries as in the example. `attack` also takes optional `minRange`, `splash` (m), and `friendlyFire` (docs/02 "Combat / Stats"); they default to 0 / false. Melee range is written as `0.5` (edge to edge). `abilities` (M4-4a, optional): ability ids of the unit's own faction, at most 4 (`DataLimits.MaxUnitAbilities`), no repeats; resolved to `UnitDef.Abilities`; shipped on the Cadre Mage (`telas_fire`), the Sapper (`cusser`) and the Priest of the Whirlwind (`sandstorm`). `passives` (M4-4b-3a, optional): at most 2 (`DataLimits.MaxUnitPassives`), one per `trigger` (`DataLimits.PassiveTriggerIds`): `{trigger: whenBelowHp, hpFraction, status, magnitude}` or `{trigger: onDeath, status, magnitude, duration, radius, units}` (see "Implementation (M4-4b-3a)"); resolved to `UnitDef.Passives`; shipped on the Zealot only. `detector` (M4-5, optional): meters, above 0, at most 64 (`UnitDef.Detector`; see "Implementation (M4-5)"). `scale` (M7-1, optional, default 1): the view's model size, 0.5-3.0 (`DataLimits.MinUnitScale` / `MaxUnitScale`), to `UnitDef.Scale`; presentation only, collision stays `radius` (docs/02 "Combat / Stats"); no shipped unit sets it yet. `spawnCount` (M7-2, optional, default 1): units one queue item spawns, a whole number 1-8 (`DataLimits.MaxSpawnCount`), to `UnitDef.SpawnCount`; `cost` and `trainTime` are the item's, `pop` each unit's (see "Implementation (M7-2)"); no shipped unit sets it yet. `passives` also takes (M7-2) `{trigger: onHit, status, magnitude, duration}`, so at most 3, still one per trigger |
-| `statuses.json` | `{ "statuses": [ ... ] }` (M4-4a), each `{id, displayName, description, kind, damageType?, sight?, reach?}`: `kind` `damageOverTime`, `slow`, (M4-4b-2) `blind`, (M4-4b-3a) `frenzied`, (M4-5) `stealthed` / `revealed` (at most one `revealed`), or (M7-1) `regenerating` (`DataLimits.StatusKindIds`; its magnitude is HP per second, above 0, at most 100 and at least 0.05); `damageType` (a damage table type) required on `damageOverTime`, an error on any other kind; `sight` and `reach` (m, above 0, at most 64) required on `blind`, errors on any other kind. The magnitude and duration come from the effect applying it (a blind, stealthed or revealed status takes no magnitude). Ids unique; shipped `burning` (magic damage over time), `slowed`, `blinded` (2 / 3, M4-4b-2) and `frenzied` (M4-4b-3a; its magnitude, the attack-speed increase, any fraction above 0, is the applying effect's or passive's), `stealthed` and `revealed` (M4-5, "Implementation (M4-5)"), `regenerating` (M7-1: nothing applies it in shipped data yet; the hook M9's Darkness zone and later abilities use) |
+| `statuses.json` | `{ "statuses": [ ... ] }` (M4-4a), each `{id, displayName, description, kind, damageType?, sight?, reach?, damageBonus?, onEnd?}`: `kind` `damageOverTime`, `slow`, (M4-4b-2) `blind`, (M4-4b-3a) `frenzied`, (M4-5) `stealthed` / `revealed` (at most one `revealed`), or (M7-1) `regenerating` (`DataLimits.StatusKindIds`; its magnitude is HP per second, above 0, at most 100 and at least 0.05); `damageType` (a damage table type) required on `damageOverTime`, an error on any other kind; `sight` and `reach` (m, above 0, at most 64) required on `blind`, errors on any other kind; (M7-4) `damageBonus` (above 0, at most 4) on `frenzied` only, and `onEnd {status, magnitude, duration}` on any row (see "Implementation (M7-4)"). The magnitude and duration come from the effect applying it (a blind, stealthed or revealed status takes no magnitude). Ids unique; shipped `burning` (magic damage over time), `slowed`, `blinded` (2 / 3, M4-4b-2) and `frenzied` (M4-4b-3a; its magnitude, the attack-speed increase, any fraction above 0, is the applying effect's or passive's), `stealthed` and `revealed` (M4-5, "Implementation (M4-5)"), `regenerating` (M7-1: nothing applies it in shipped data yet; the hook M9's Darkness zone and later abilities use) |
 | `abilities.json` | `{ "abilities": [ ... ] }` (M4-4a, per faction, optional), each `{id, displayName, description, kind, range, radius, castTime, cooldown, duration?, affects, autocast?, effects}`: `kind` `targetGround` or (M4-4b-3a) `selfAura` (`targetUnit`, `summon`: "not supported yet"); `range` m above 0 and at most `DataLimits.MaxSight` (64), required on `targetGround` and an error on `selfAura` (0 included); `radius` m above 0 and at most `DataLimits.MaxAbilityRadius` (16); `castTime` s, 0 or more, to ticks; `cooldown` s above 0, to ticks (at least 1); `duration` s, optional (0), to ticks (required with a `createZone` effect, M4-4b-2); `affects` `enemy_units`, `own_units` or `all_units`; `autocast` only `false` ("not supported yet"); `effects` at least one, each `{kind: damage, type, amount, buildings?, friendlyFire?}` (a whole amount, at least 1; M4-4b-1: `buildings` true also hits other players' buildings as structure, not with `own_units`; `friendlyFire` 0-1, the fraction own units take, above 0 only with `enemy_units`) or `{kind: applyStatus, status, magnitude, duration}` (a `statuses.json` id; magnitude whole and at least 1 for damage over time, above 0 and below 1 for a slow; duration s, at least a tick, and for damage over time a whole number of seconds, at least 1, M4-4b-1); M4-4b-2: `{kind: createZone, blocksVision?, statuses: [{status, magnitude, duration}]}` (at least one status, each by the `applyStatus` rules, a blind status without a magnitude; the ability's `duration`, at least a tick, is then required: the zone's lifetime; at most one per ability); `teleport`, `spawn`: "not supported yet"; a field the effect kind doesn't use is an error. Ids unique across factions, numbered faction by faction in `common/factions.json` order, ordinal within a faction (M7-3b), so a new faction's abilities move no shipped id. Shipped: Malazan `telas_fire`, `cusser` (M4-4b-1); Whirlwind `sandstorm` (M4-4b-2) |
 | `maps/<file>.json` | (M6-S7, optional folder, one file a hand-made map, loaded in the files' names' ordinal order into `GameData.Maps`) `{id, displayName, description, players, size, terrain, ramps?, starts, mines, forests}`: see "Implementation (M6-S7)" for every field and check |
 | `ai.json` | (M5-1, per faction, required) `{difficulties {easy, normal, hard}, buildOrder, compositions, attack, retreat}`: the shape and every refusal in "AI architecture", "For the data track (M5-1)". Not in `ContentHash` yet (M5-2 adds it) |

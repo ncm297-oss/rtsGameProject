@@ -9,6 +9,9 @@ Commit and push after editing, from either machine (or ask Claude to).
 
 ## New
 
+- 2026-11-12 · **The art call (owner): look: go.** Keep the Quaternius stack; add outfits + team colour (per the
+  Producer's recommendation under STATE's "The art call"). Unblocks the art pass (M6 criterion 5's second half).
+
 ## Processed
 
 - 2026-10-14 · **Producer's take wanted (owner), one-off session.** Before planning, please read the note below

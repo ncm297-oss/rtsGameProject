@@ -23,7 +23,7 @@ namespace Rts.Game;
 /// stacked above it keep their spacing.</para>
 /// <para><b>Markers.</b> Every <see cref="DeathEvent"/> but an expiry (read between ticks: from <see cref="SimRunner.Ticked"/>, so a
 /// frame of several ticks misses none, and from the frame loop for scenes that tick the sim themselves) adds a marker to a
-/// <see cref="DeathMarkers"/> ring: a disc of the unit's drawn radius (M7-V1: <see cref="UnitViews.DrawnRadius(UnitDef)"/>) in its owner's colour (<see cref="CorpseShade"/>) on a wider,
+/// <see cref="DeathMarkers"/> ring: a disc of the unit's drawn radius (M7-V3c: <see cref="UnitViews.DrawnRadius(UnitDef)"/>, its collision radius) in its owner's colour (<see cref="CorpseShade"/>) on a wider,
 /// darker rim disc (<see cref="CorpseRimShade"/>, <see cref="CorpseRimScale"/>; M4-V2, BUG-0160: at 35 % both teams read
 /// black) for <see cref="DeathMarkers.UnitLifetimeTicks"/>,
 /// or a low grey box over a building's footprint for <see cref="DeathMarkers.BuildingLifetimeTicks"/>, both in game time
@@ -347,7 +347,7 @@ public partial class CombatViews : Node3D
         }
         else
         {
-            float r = UnitViews.DrawnRadius(_data.Units[Math.Clamp(type, 0, _data.Units.Length - 1)]); // M7-V1: the drawn body's
+            float r = UnitViews.DrawnRadius(_data.Units[Math.Clamp(type, 0, _data.Units.Length - 1)]); // M7-V3c: the drawn body's, the collision radius
             // At the highest ground under the rim, so a disc on a ramp is not half buried (BUG-0190 item 1).
             y = TerrainHeight.MaxUnder(world.Heightmap, p.X, p.Y, r * CorpseRimScale);
             _markerTransform[slot] = new Transform3D(Basis.FromScale(new Vector3(r, CorpseHeight, r)), new Vector3(p.X, y + CorpseHeight / 2f, p.Y));

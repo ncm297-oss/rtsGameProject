@@ -25,4 +25,10 @@ public readonly struct TechEffect
 
     /// <summary>1: siege-slot units only; 0: every unit but the siege slot; -1: either.</summary>
     public int Siege { get; init; }
+
+    /// <summary>
+    /// M7-4, a <see cref="TechStat.StatusDuration"/> effect only: the status ids (<see cref="GameData.Statuses"/>) it
+    /// lengthens, ascending, at least one; empty on every other stat.
+    /// </summary>
+    public ImmutableArray<int> Statuses { get; init; }
 }

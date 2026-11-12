@@ -10,8 +10,8 @@ namespace Rts.Game;
 /// <summary>Placeholder unit views: one capsule <see cref="MeshInstance3D"/> per unit slot, placed from the sim every frame.</summary>
 /// <remarks>
 /// A slot's node is created the first time the slot holds a live unit and hidden while it is dead,
-/// so a unit respawned into the slot reuses it. Meshes (one per unit type, radius from data, M7-V1: radius and height times the
-/// type's data <c>scale</c>, <see cref="DrawnRadius(UnitDef)"/> / <see cref="DrawnHeight"/>) and
+/// so a unit respawned into the slot reuses it. Meshes (one per unit type, radius from data, M7-V1: height times the
+/// type's data <c>scale</c>, M7-V3c: width the collision radius alone, <see cref="DrawnRadius(UnitDef)"/> / <see cref="DrawnHeight"/>) and
 /// materials (one per faction, its <c>PrimaryColor</c>; M6-V3: with the match's per-player colours, one per player, set
 /// on a slot's node as its material override when the slot's owner changes) are all made in <see cref="Bind"/>. Views
 /// hold no gameplay state; they only read the unit store.
@@ -351,19 +351,20 @@ public partial class UnitViews : Node3D
     /// <summary>Placeholder capsule height for a unit radius (at scale 1; the hit test's body, M7-V1).</summary>
     public static float BodyHeight(float radius) => 2f * radius + ExtraBodyHeight;
 
-    /// <summary>A unit type's drawn capsule radius (M7-V1): its collision radius times its data <c>scale</c>.</summary>
-    public static float DrawnRadius(UnitDef def) => def.Radius * def.Scale;
+    /// <summary>A unit type's drawn capsule radius (M7-V3c): its collision radius alone, so a body is as wide as the room the sim gives it.</summary>
+    /// <remarks>Data <c>scale</c> is the height only (<see cref="DrawnHeight"/>); scaling the width as well drew a 0.75 m giant 1.125 m wide,
+    /// inside its neighbours (BUG-1260).</remarks>
+    public static float DrawnRadius(UnitDef def) => def.Radius;
 
     /// <summary>A unit type's drawn capsule height (M7-V1): <see cref="BodyHeight"/> of its radius times its data <c>scale</c>.</summary>
     public static float DrawnHeight(UnitDef def) => BodyHeight(def.Radius) * def.Scale;
 
     /// <summary>
-    /// Live unit slot <paramref name="slot"/>'s drawn radius (M7-V1): its collision radius times its type's data <c>scale</c>,
-    /// what the rings, corpse and cue discs size from. Two array reads, allocation-free. Click and box select keep the sim's
-    /// radius (docs/03 "Implementation (M7-V1)").
+    /// Live unit slot <paramref name="slot"/>'s drawn radius (M7-V3c): its collision radius, what the rings, corpse and cue
+    /// discs size from. One array read, allocation-free. Click and box select keep the sim's radius too
+    /// (docs/03 "Implementation (M7-V1)", "(M7-V3c)").
     /// </summary>
-    public static float DrawnRadius(World world, int slot) =>
-        world.Units.Radius[slot] * world.Data.Units[world.Units.TypeId[slot]].Scale;
+    public static float DrawnRadius(World world, int slot) => world.Units.Radius[slot];
 
     /// <summary>The capsule mesh of unit type <paramref name="type"/> (shared by every unit of it), or null before <see cref="Bind"/>.</summary>
     public CapsuleMesh? MeshOf(int type) => (uint)type < (uint)_meshes.Length ? _meshes[type] : null;

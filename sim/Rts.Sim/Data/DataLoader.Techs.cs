@@ -26,14 +26,22 @@ public static partial class DataLoader
         private readonly string[] _unitTags;
         private readonly BuildingDef[] _buildings;
         private readonly KeyIndex _buildingKeys;
+        // M7-4: the status ids a statusDuration effect names, ordinal (= status id); null when statuses.json failed.
+        private readonly string[]? _statusKeys;
         // Index 0 is the common file (faction -1); index f + 1 is faction f's file.
         private readonly TechFileJson?[] _files;
         private readonly List<(int File, int Index)> _accepted = new();
         private KeyIndex _keys = new(Array.Empty<string>());
         private TechDef[] _defs = Array.Empty<TechDef>();
 
-        public TechReader(Checker c, string[] folders, DamageTable? table, UnitDef[] units, KeyIndex unitKeys, string[] unitTags, BuildingDef[] buildings)
+        public TechReader(Checker c, string[] folders, DamageTable? table, UnitDef[] units, KeyIndex unitKeys, string[] unitTags, BuildingDef[] buildings,
+            StatusDef[]? statuses)
         {
+            if (statuses != null)
+            {
+                _statusKeys = new string[statuses.Length];
+                for (int s = 0; s < statuses.Length; s++) _statusKeys[s] = statuses[s].Key;
+            }
             _c = c;
             _folders = folders;
             _table = table;
@@ -118,8 +126,9 @@ public static partial class DataLoader
                 int errors = _c.Errors.Count;
                 TechEffect effect = BuildEffect(e, $"{p}.effects[{j}]", faction, refs);
                 built.Add(effect);
-                // BUG-0099: filters that no unit meets (a typo, most likely) would make a tech that changes nothing.
-                if (refs && _c.Errors.Count == errors && !MatchesAnyUnit(effect, faction))
+                // BUG-0099: filters that no unit meets (a typo, most likely) would make a tech that changes nothing. M7-4: a
+                // statusDuration effect names statuses, not units.
+                if (refs && _c.Errors.Count == errors && effect.Stat != TechStat.StatusDuration && !MatchesAnyUnit(effect, faction))
                     _c.Error($"{p}.effects[{j}].appliesTo", faction < 0
                         ? "no unit of any faction matches every filter set here, so the effect would change nothing"
                         : $"no unit of faction '{_folders[faction]}' matches every filter set here, so the effect would change nothing");
@@ -202,6 +211,26 @@ public static partial class DataLoader
             if (statKey.Length > 0 && stat < 0)
                 _c.Error(p + ".stat", $"unknown stat '{statKey}' (expected one of {string.Join(", ", DataLimits.TechStatIds)})");
             float amount = Amount(e.Amount, p + ".amount", stat);
+            // M7-4: a statusDuration effect names the statuses it lengthens and no units; no other effect names statuses.
+            ImmutableArray<int> statuses = ImmutableArray<int>.Empty;
+            if (stat == (int)TechStat.StatusDuration)
+            {
+                if (e.AppliesTo != null) _c.Error(p + ".appliesTo", "a statusDuration effect names statuses, not units (it has no appliesTo)");
+                if (e.Statuses == null) _c.Error(p + ".statuses", "missing required field (the statuses a statusDuration effect lengthens)");
+                else if (e.Statuses.Count == 0) _c.Error(p + ".statuses", "an empty list lengthens nothing (name at least one status)");
+                else statuses = Resolve(e.Statuses, p + ".statuses", _statusKeys != null, StatusOf);
+                return new TechEffect
+                {
+                    Stat = TechStat.StatusDuration,
+                    Amount = amount,
+                    AttackType = -1,
+                    Tags = ImmutableArray<int>.Empty,
+                    Units = ImmutableArray<int>.Empty,
+                    Siege = -1,
+                    Statuses = statuses,
+                };
+            }
+            if (e.Statuses != null && stat >= 0) _c.Error(p + ".statuses", $"only a statusDuration effect names statuses ('{statKey}' has none)");
             AppliesToJson? a = _c.Obj(e.AppliesTo, p + ".appliesTo");
             string ap = p + ".appliesTo";
             // BUG-0098: a filter set to [] matches no unit; it must not read as "no filter" (every unit of every faction).
@@ -215,12 +244,13 @@ public static partial class DataLoader
                 Tags = a == null ? ImmutableArray<int>.Empty : Resolve(a.Tags, ap + ".tags", refs, TagOf),
                 Units = a == null ? ImmutableArray<int>.Empty : Resolve(a.Units, ap + ".units", refs, key => UnitOf(key, faction)),
                 Siege = a?.Siege == null ? -1 : a.Siege.Value ? 1 : 0,
+                Statuses = statuses,
             };
         }
 
         /// <summary>
         /// A non-zero amount in sim units: whole points for attack / armor / hp, meters for range, seconds to ticks for
-        /// ability cooldown (negative shortens it). 0 (after reporting) when missing or out of bounds.
+        /// ability cooldown and (M7-4) status duration (negative shortens it). 0 (after reporting) when missing or out of bounds.
         /// </summary>
         private float Amount(double? value, string path, int stat)
         {
@@ -243,7 +273,7 @@ public static partial class DataLoader
                 else return (float)v;
                 return 0f;
             }
-            if (stat == (int)TechStat.AbilityCooldown)
+            if (stat == (int)TechStat.AbilityCooldown || stat == (int)TechStat.StatusDuration) // M7-4: seconds to ticks, as a cooldown
             {
                 if (Math.Abs(v) > DataLimits.MaxSeconds) _c.Error(path, $"{v} s is beyond +/-{DataLimits.MaxSeconds} s");
                 else if (SecondsToTicks(v) == 0) _c.Error(path, $"{v} s rounds to 0 ticks");
@@ -254,6 +284,12 @@ public static partial class DataLoader
             if (Math.Abs(v) > DataLimits.MaxDecimal) _c.Error(path, $"{v} is beyond +/-{DataLimits.MaxDecimal}");
             else return (float)v;
             return 0f;
+        }
+
+        private (int Id, string? Error) StatusOf(string key)
+        {
+            int i = Array.BinarySearch(_statusKeys!, key, StringComparer.Ordinal);
+            return (i, i < 0 ? $"unknown status '{key}' (not in common/statuses.json)" : null);
         }
 
         private (int Id, string? Error) TagOf(string tag)

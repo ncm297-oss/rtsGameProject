@@ -21,18 +21,27 @@ namespace Rts.Sim.Abilities;
 /// </remarks>
 public static class StatusSystem
 {
-    /// <summary>Phase 5: counts every status down, lands damage-over-time pulses, and ends the expired ones.</summary>
+    /// <summary>
+    /// Phase 5: counts every status down, lands damage-over-time pulses, and ends the expired ones. M7-4: an entry that runs
+    /// out whose status has an <c>onEnd</c> applies that status to the unit once the unit's own countdown pass is over
+    /// (<see cref="Apply"/>, the ended entry's source as source), so the new or refreshed entry is not counted down in the
+    /// pass that applied it; none when the unit died in the pass.
+    /// </summary>
     public static void Run(World world)
     {
         UnitStore u = world.Units;
         StatusStore s = u.Statuses;
         GameData data = world.Data;
         if (s.UnitsWithStatuses == 0) return;
+        // M7-4: the onEnd applications owed by the unit being counted down (status ids of the ended entries, their sources).
+        Span<int> endedStatus = stackalloc int[StatusStore.PerUnit];
+        Span<int> endedSource = stackalloc int[StatusStore.PerUnit];
         for (int i = 0; i < u.Capacity; i++)
         {
             if (s.Count[i] == 0 || !u.Alive[i]) continue;
             int generation = u.Generation[i];
             bool slowChanged = false, blindChanged = false;
+            int ended = 0;
             int k = 0;
             while (k < s.Count[i])
             {
@@ -55,10 +64,21 @@ public static class StatusSystem
                 else if (def.Kind == StatusKind.Blind) blindChanged = true;
                 else if (def.Kind == StatusKind.Stealthed) s.CountStealth(i, -1); // M4-5
                 else if (def.Kind == StatusKind.Regenerating) s.CountRegen(i, -1); // M7-1
+                if (def.OnEndStatus >= 0)
+                {
+                    endedStatus[ended] = def.Id;
+                    endedSource[ended++] = s.SourcePlayer[at];
+                }
                 s.RemoveAt(i, at);
             }
             if (slowChanged && u.Alive[i]) RecomputeSpeed(world, i);
             if (blindChanged && u.Alive[i]) RecomputeBlind(world, i);
+            // M7-4: after the pass, in the order the entries ended; the ended ones made room, so a full store still takes them.
+            for (int e = 0; e < ended && u.Alive[i] && u.Generation[i] == generation; e++)
+            {
+                StatusDef def = data.Statuses[endedStatus[e]];
+                Apply(world, i, def.OnEndStatus, def.OnEndMagnitude, def.OnEndTicks, endedSource[e]);
+            }
         }
     }
 
@@ -67,7 +87,23 @@ public static class StatusSystem
     /// and recomputes its speed when a slow changed, its blind in force when a blind was added (M4-4b-2). M4-5: a new
     /// stealthed entry is counted, and a unit that had none is checked for detection at once (<see cref="StealthSystem.OnStealthStarted"/>).
     /// </summary>
+    /// <remarks>
+    /// M7-4: the duration is <paramref name="source"/>'s <c>statusDuration</c> techs for the status longer (decided now; an
+    /// entry already running is not changed by a later research), at least one tick. Every application with a duration goes
+    /// through here: ability effects, zones, the onDeath and onHit passives, onEnd, the reveal. A held entry
+    /// (<see cref="Hold"/>) is not lengthened.
+    /// </remarks>
     internal static void Apply(World world, int i, int status, float magnitude, int ticks, int source)
+    {
+        if (world.Techs.AnyStatusDuration) ticks = Math.Max(1, ticks + world.Techs.StatusDurationTicks(source, status));
+        Hold(world, i, status, magnitude, ticks, source);
+    }
+
+    /// <summary>
+    /// <see cref="Apply"/> without the <c>statusDuration</c> techs (M7-4): a <c>whenBelowHp</c> passive's entry, held a tick
+    /// at a time while the unit is below its line, has no duration to lengthen.
+    /// </summary>
+    internal static void Hold(World world, int i, int status, float magnitude, int ticks, int source)
     {
         StatusStore s = world.Units.Statuses;
         int before = s.Count[i];
@@ -169,6 +205,26 @@ public static class StatusSystem
             if (world.Data.Statuses[s.StatusId[head + k]].Kind == StatusKind.Frenzied && s.Magnitude[head + k] > frenzy) frenzy = s.Magnitude[head + k];
         if (frenzy <= 0f) return cooldownTicks;
         return Math.Max(1, (int)MathF.Round(cooldownTicks / (1f + frenzy), MidpointRounding.AwayFromZero));
+    }
+
+    /// <summary>
+    /// The factor unit slot <paramref name="i"/>'s own attacks are multiplied by (M7-4): <c>1 + </c> the largest
+    /// <see cref="StatusDef.DamageBonus"/> among its entries (only frenzied-kind statuses carry one), 1 with none. Read where
+    /// the hit's attack value and its tech bonus are read (the melee blow at the strike, a shot at its landing); never stored.
+    /// </summary>
+    internal static float DamageFactor(World world, int i)
+    {
+        StatusStore s = world.Units.Statuses;
+        int n = s.Count[i];
+        if (n == 0) return 1f;
+        float bonus = 0f;
+        int head = i * StatusStore.PerUnit;
+        for (int k = 0; k < n; k++)
+        {
+            float b = world.Data.Statuses[s.StatusId[head + k]].DamageBonus;
+            if (b > bonus) bonus = b;
+        }
+        return 1f + bonus;
     }
 
     /// <summary>One damage-over-time pulse on unit slot <paramref name="i"/>: <paramref name="perSecond"/> as an attack of <paramref name="damageType"/>, its armor techs applied.</summary>

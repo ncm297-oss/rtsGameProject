@@ -18,17 +18,19 @@ namespace Rts.Game.Tests;
 
 /// <summary>
 /// M7-V1 (docs/02 "Combat / Stats": the visual scale may be larger than the collision radius): each unit type is drawn at its
-/// data <c>scale</c> times today's capsule, and what is sized from the body follows it, but the hit test does not.
+/// data <c>scale</c> times today's capsule height, and what is sized from the body follows it, but the hit test does not.
+/// Since M7-V3c (BUG-1260) the width is the collision radius alone: <c>scale</c> is the height only, so the rings and the corpse
+/// disc are multiples of the radius.
 /// <list type="bullet">
-/// <item>Shipped data: every type's mesh is <c>radius x scale</c> by <c>BodyHeight(radius) x scale</c>, and every type at scale 1
+/// <item>Shipped data: every type's mesh is <c>radius</c> by <c>BodyHeight(radius) x scale</c>, and every type at scale 1
 /// is exactly today's capsule (<c>radius</c> by <c>2 radius + 1</c>).</item>
 /// <item>Forged data (a copy of <c>res://data</c> under <c>user://</c> with Heavy Infantry 1.5, Crossbowman 0.5, Sapper 3.0 and the
-/// catapult 1.5; Laborer stays 1.0, all four infantry radius 0.4): in a real <c>Match</c> each is drawn at its scale in every
-/// dimension beside a Laborer, feet on the ground; the selection ring, the target ring, the hp bar's length (never under
-/// <see cref="CombatViews.BarMinScale"/>) and height, and the corpse disc follow the scale; a click just outside the sim's pick
-/// radius but on the drawn body of the 1.5x catapult or the 3.0x Sapper selects nothing (a click inside it selects the unit),
-/// and a box over the drawn body but not the sim centre selects nothing; the per-frame view update of the mixed scales
-/// allocates nothing.</item>
+/// catapult 1.5; Laborer stays 1.0, all four infantry radius 0.4): in a real <c>Match</c> each is drawn at its scale in height
+/// and at its radius in width beside a Laborer, feet on the ground; the selection ring, the target ring and the corpse disc
+/// follow the radius, the hp bar's length (never under <see cref="CombatViews.BarMinScale"/>) and height the scale; a click
+/// just outside the sim's pick radius (beside the body: off it; above the centre of the 1.5x catapult or the 3.0x Sapper: on
+/// its drawn upper body) selects nothing (a click inside it selects the unit), and a box over the drawn upper body but not
+/// the sim centre selects nothing; the per-frame view update of the mixed scales allocates nothing.</item>
 /// <item>Shot heights (M7-V2, a second copy with the Desert Archer at 3.0): a 0.5 Crossbowman and a 3.0 Desert Archer shoot each
 /// other; the Crossbowman's bolt leaves at 0.6 m and its hit flash on the Archer is at 3.6 m, the Archer's arrow leaves at 3.6 m
 /// and its flash on the Crossbowman is at 0.6 m (<see cref="ProjectileViews.HeightFor"/>, 1.2 m x scale), and in between a shot
@@ -80,7 +82,7 @@ public partial class ScaleViewTest : Node
         SceneExit.Quit(this, _failures.Count == 0 ? 0 : 1);
     }
 
-    // Criterion 3: shipped data draws every type at radius x scale by BodyHeight(radius) x scale; a scale-1 type is today's capsule.
+    // Criterion 3: shipped data draws every type at radius by BodyHeight(radius) x scale (M7-V3c); a scale-1 type is today's capsule.
     private void ShippedRows(GameData data)
     {
         var views = new UnitViews();
@@ -96,8 +98,8 @@ public partial class ScaleViewTest : Node
                 _failures.Add($"shipped {def.Key}: no mesh");
                 continue;
             }
-            Check(mesh.Radius == def.Radius * def.Scale && mesh.Height == UnitViews.BodyHeight(def.Radius) * def.Scale,
-                $"shipped {def.Key} (scale {def.Scale}): mesh {mesh.Radius} x {mesh.Height}, want {def.Radius * def.Scale} x {UnitViews.BodyHeight(def.Radius) * def.Scale}");
+            Check(mesh.Radius == def.Radius && mesh.Height == UnitViews.BodyHeight(def.Radius) * def.Scale,
+                $"shipped {def.Key} (scale {def.Scale}): mesh {mesh.Radius} x {mesh.Height}, want {def.Radius} x {UnitViews.BodyHeight(def.Radius) * def.Scale}");
             if (def.Scale != 1f) continue;
             ones++;
             // Today's formula, written out: radius, and twice it plus the 1 m extra body.
@@ -184,7 +186,7 @@ public partial class ScaleViewTest : Node
         _camera.SetFocus(centre.X, centre.Y + 2f);
         await Frames(2);
 
-        // Criterion 1: every dimension at the scale, against the Laborer (same radius) beside it; feet on the ground.
+        // Criterion 1: the height at the scale and the width at the radius (M7-V3c), against the Laborer (same radius) beside it; feet on the ground.
         var reference = (CapsuleMesh)views.ViewOf(slots[0])!.Mesh;
         Check(reference.Radius == 0.4f && reference.Height == UnitViews.BodyHeight(0.4f), $"laborer capsule {reference.Radius} x {reference.Height}");
         for (int k = 0; k < row.Length; k++)
@@ -193,13 +195,13 @@ public partial class ScaleViewTest : Node
             UnitDef def = data.Units[row[k].Type];
             MeshInstance3D view = views.ViewOf(slot)!;
             var mesh = (CapsuleMesh)view.Mesh;
-            float wantR = def.Radius * def.Scale, wantH = UnitViews.BodyHeight(def.Radius) * def.Scale;
+            float wantR = def.Radius, wantH = UnitViews.BodyHeight(def.Radius) * def.Scale;
             GD.Print($"  {def.Key} scale {def.Scale.ToString(CultureInfo.InvariantCulture)}: capsule {mesh.Radius:0.###} x {mesh.Height:0.###} (radius {def.Radius})");
             Check(Mathf.Abs(mesh.Radius - wantR) < 1e-5f && Mathf.Abs(mesh.Height - wantH) < 1e-5f,
                 $"{def.Key}: capsule {mesh.Radius} x {mesh.Height}, want {wantR} x {wantH}");
             if (def.Radius == reference.Radius)
-                Check(Mathf.Abs(mesh.Radius / reference.Radius - def.Scale) < 1e-5f && Mathf.Abs(mesh.Height / reference.Height - def.Scale) < 1e-5f,
-                    $"{def.Key}: {mesh.Radius / reference.Radius}x as wide and {mesh.Height / reference.Height}x as tall as the laborer, want {def.Scale}x");
+                Check(Mathf.Abs(mesh.Radius / reference.Radius - 1f) < 1e-5f && Mathf.Abs(mesh.Height / reference.Height - def.Scale) < 1e-5f,
+                    $"{def.Key}: {mesh.Radius / reference.Radius}x as wide and {mesh.Height / reference.Height}x as tall as the laborer, want 1x and {def.Scale}x");
             Vector3 ground = UnitViews.GroundPoint(world, slot, (float)runner.Alpha);
             Check(Mathf.Abs(view.Position.Y - mesh.Height / 2f - ground.Y) < 1e-3f, $"{def.Key}: feet at {view.Position.Y - mesh.Height / 2f}, ground {ground.Y}");
         }
@@ -223,13 +225,13 @@ public partial class ScaleViewTest : Node
         for (int k = 0; k < slots.Length && k < rings.ShownCount; k++)
         {
             UnitDef def = data.Units[row[k].Type];
-            float want = def.Radius * def.Scale * SelectionRings.RadiusScale;
+            float want = def.Radius * SelectionRings.RadiusScale;
             Check(Mathf.Abs(rings.ShownRadius(k) - want) < 1e-5f, $"{def.Key}: selection ring {rings.ShownRadius(k)}, want {want}");
         }
         float targetR = target.Ring.Transform.Basis.X.Length();
         UnitDef sapperDef = data.Units[sapper];
-        Check(target.Shown && Mathf.Abs(targetR - sapperDef.Radius * 3f * TargetRing.UnitScale) < 1e-4f,
-            $"target ring on the 3.0 sapper: shown {target.Shown}, radius {targetR}, want {sapperDef.Radius * 3f * TargetRing.UnitScale}");
+        Check(target.Shown && Mathf.Abs(targetR - sapperDef.Radius * TargetRing.UnitScale) < 1e-4f,
+            $"target ring on the 3.0 sapper: shown {target.Shown}, radius {targetR}, want {sapperDef.Radius * TargetRing.UnitScale}");
         Check(combat.ShownBars == slots.Length, $"{combat.ShownBars} hp bars for {slots.Length} hurt units");
         for (int b = 0; b < combat.ShownBars; b++)
         {
@@ -248,7 +250,7 @@ public partial class ScaleViewTest : Node
             corpses++;
             UnitDef def = data.Units[combat.Markers.Type[m]];
             float r = combat.MarkerTransform(m).Basis.X.Length();
-            Check(Mathf.Abs(r - def.Radius * def.Scale) < 1e-5f, $"{def.Key}: corpse disc {r}, want {def.Radius * def.Scale}");
+            Check(Mathf.Abs(r - def.Radius) < 1e-5f, $"{def.Key}: corpse disc {r}, want {def.Radius}");
         }
         Check(corpses == deaths.Length, $"{corpses} corpses drawn for {deaths.Length} deaths");
 
@@ -271,8 +273,9 @@ public partial class ScaleViewTest : Node
         Check(bytes == 0, $"20 frames of mixed-scale views, rings, bars and target ring allocated {bytes} bytes");
 
         // Criterion 4: the hit test is the sim's radius. Outside it on the drawn body: nothing; inside: the unit.
-        // The catapult's drawn top is too close above its sim centre for the row above; the 3.0 Sapper's is far.
-        HitRows(world, slots[6], data.Units[row[6].Type], above: false);
+        // Since M7-V3c the body is as wide as the pick circle, so the drawn body outside it is above the centre: the 1.5 catapult's
+        // drawn top is close above its sim centre, the 3.0 Sapper's far; both rows above run.
+        HitRows(world, slots[6], data.Units[row[6].Type], above: true);
         HitRows(world, slots[5], data.Units[row[5].Type], above: true);
         match.QueueFree();
         await Frames(1);
@@ -354,13 +357,14 @@ public partial class ScaleViewTest : Node
         // Pixels per meter at the body centre, as the picker's Project() works it out.
         Vector3 c = UnitViews.GroundPoint(world, slot, 1f) + new Vector3(0f, UnitViews.BodyHeight(def.Radius) / 2f, 0f);
         float pxPerM = _camera.UnprojectPosition(c + Vector3.Right).X - _camera.UnprojectPosition(c).X;
-        float pickPx = Math.Max(def.Radius * pxPerM, ScreenPicker.MinPickRadiusPx), drawnPx = def.Radius * def.Scale * pxPerM;
+        float pickPx = Math.Max(def.Radius * pxPerM, ScreenPicker.MinPickRadiusPx), drawnPx = UnitViews.DrawnRadius(def) * pxPerM;
         float outside = pickPx + 3f;
         GD.Print($"  {def.Key} scale {def.Scale.ToString(CultureInfo.InvariantCulture)}: pick radius {pickPx:0.#} px, drawn radius {drawnPx:0.#} px, click at +{outside:0.#} px");
-        Check(outside < drawnPx - 2f, $"{def.Key}: the click at {outside} px is not on the drawn body ({drawnPx} px): the row proves nothing");
-        // How far the drawn body's top is above the sim centre on screen.
+        // M7-V3c: the drawn width is the sim's radius, so beside the centre the pick circle and the body end together.
+        Check(Mathf.Abs(drawnPx - def.Radius * pxPerM) < 1e-3f, $"{def.Key}: drawn radius {drawnPx} px is not the sim radius's {def.Radius * pxPerM} px");
+        // How far the drawn body's top (the centre of its upper cap) is above the sim centre on screen.
         Vector3 ground = UnitViews.GroundPoint(world, slot, 1f);
-        float topPx = at.Y - _camera.UnprojectPosition(ground + Vector3.Up * (UnitViews.DrawnHeight(def) - def.Radius * def.Scale)).Y;
+        float topPx = at.Y - _camera.UnprojectPosition(ground + Vector3.Up * (UnitViews.DrawnHeight(def) - UnitViews.DrawnRadius(def))).Y;
         var handle = new EntityHandle(slot, world.Units.Generation[slot]);
 
         // Beside the centre, then above it (a tall drawn body reaches far over the sim's).
@@ -373,14 +377,20 @@ public partial class ScaleViewTest : Node
             }
             _sel.SelectOnly(new EntityHandle(OtherSlot(world, slot), world.Units.Generation[OtherSlot(world, slot)]));
             Click(at + dir * outside);
-            Check(_sel.Selection.Count == 0, $"{def.Key}: a click {outside:0.#} px {(dir == Vector2.Right ? "right of" : "above")} the centre (outside the sim's {pickPx:0.#} px, on the drawn {drawnPx:0.#} px) selected {_sel.Selection.Count}");
+            Check(_sel.Selection.Count == 0, $"{def.Key}: a click {outside:0.#} px {(dir == Vector2.Right ? "right of" : "above")} the centre (outside the sim's {pickPx:0.#} px; drawn radius {drawnPx:0.#} px, top {topPx:0.#} px up) selected {_sel.Selection.Count}");
         }
         Click(at + Vector2.Right * (pickPx - 3f));
         Check(_sel.Selection.Count == 1 && _sel.Selection.Contains(handle), $"{def.Key}: a click {pickPx - 3f:0.#} px right of the centre selected {_sel.Selection.Count}, not the unit");
 
-        // A box over the drawn body's right side that leaves out the sim centre selects nothing; one over the centre the unit.
-        _sel.BoxSelect(at + new Vector2(outside, -drawnPx), at + new Vector2(drawnPx + 4f, drawnPx), add: false);
-        Check(_sel.Selection.Count == 0, $"{def.Key}: a box over the drawn body but not the centre selected {_sel.Selection.Count}");
+        // A box beside the centre past the pick circle, and (above) a box over the drawn upper body that leaves out the sim centre,
+        // select nothing; one over the centre the unit.
+        _sel.BoxSelect(at + new Vector2(outside, -drawnPx), at + new Vector2(outside + drawnPx + 4f, drawnPx), add: false);
+        Check(_sel.Selection.Count == 0, $"{def.Key}: a box beside the body, outside the pick circle, selected {_sel.Selection.Count}");
+        if (above && outside < topPx - 2f)
+        {
+            _sel.BoxSelect(at + new Vector2(-drawnPx, -topPx), at + new Vector2(drawnPx, -outside), add: false);
+            Check(_sel.Selection.Count == 0, $"{def.Key}: a box over the drawn upper body but not the centre selected {_sel.Selection.Count}");
+        }
         _sel.BoxSelect(at - new Vector2(4f, 4f), at + new Vector2(4f, 4f), add: false);
         Check(_sel.Selection.Count == 1 && _sel.Selection.Contains(handle), $"{def.Key}: a box round the centre selected {_sel.Selection.Count}, not the unit");
     }

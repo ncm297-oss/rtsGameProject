@@ -140,10 +140,13 @@ public static class ProjectileSystem
         bool fromBuilding = p.AttackerIsBuilding[k];
         AttackDef attack = CombatSystem.AttackOf(world, attackerType, fromBuilding);
         int attackBonus = CombatSystem.AttackBonus(world, owner, attackerType, fromBuilding);
+        // M7-4: the shooter's status damage bonus, read at the landing as the tech bonus is: a shot in flight when the
+        // shooter's Frenzy ends lands without it, and one whose shooter died lands without it. A tower has no statuses.
+        float factor = fromBuilding ? 1f : CombatSystem.AttackerFactor(world, p.Attacker[k]);
         Vector2 at = p.Target[k];
         if (pd.Kind == ProjectileKind.Lob)
         {
-            Splash(world, at, attack, attackBonus, owner, p.Attacker[k], fromBuilding, default, false, level);
+            Splash(world, at, attack, attackBonus, owner, p.Attacker[k], fromBuilding, default, false, level, factor);
             return true;
         }
         EntityHandle v = p.Victim[k];
@@ -152,7 +155,7 @@ public static class ProjectileSystem
         {
             // A building never moves: a shot at a live one always hits.
             if (!world.Buildings.IsAlive(v)) return false;
-            int damage = CombatSystem.DamageToBuilding(world, attack, attackBonus, v.Index);
+            int damage = CombatSystem.DamageToBuilding(world, attack, attackBonus, v.Index, factor);
             if (damage > 0) CombatSystem.HitBuilding(world, new PendingHit(p.Attacker[k], owner, v, true, damage, level, fromBuilding));
         }
         else
@@ -162,10 +165,10 @@ public static class ProjectileSystem
             float reach = u.Radius[v.Index] + pd.HitTolerance;
             if (!(Vector2.DistanceSquared(u.Position[v.Index], at) <= reach * reach)) return false;
             // M7-2: the aimed target of a unit's shot takes its onHit passive (a tower's carries none; nor does the splash below).
-            CombatSystem.HitUnit(world, new PendingHit(p.Attacker[k], owner, v, false, CombatSystem.DamageToUnit(world, attack, attackBonus, v.Index), level, fromBuilding),
+            CombatSystem.HitUnit(world, new PendingHit(p.Attacker[k], owner, v, false, CombatSystem.DamageToUnit(world, attack, attackBonus, v.Index, factor), level, fromBuilding),
                 fromBuilding ? -1 : attackerType);
         }
-        Splash(world, at, attack, attackBonus, owner, p.Attacker[k], fromBuilding, v, building, level);
+        Splash(world, at, attack, attackBonus, owner, p.Attacker[k], fromBuilding, v, building, level, factor);
         return true;
     }
 
@@ -179,10 +182,11 @@ public static class ProjectileSystem
     /// is <see cref="DamageCalc.Compute(DamageTable, AttackDef, int, int, int)"/> with its class and armor, times
     /// <see cref="Falloff"/>, rounded half up, at least 1. <paramref name="skip"/> (the direct target an aimed or melee
     /// hit already struck) is left out. Units in slot order, then buildings in slot order. <paramref name="attackerLevel"/>
-    /// is the level the blow came from (M4-3a: a hit from above reveals the attacker).
+    /// is the level the blow came from (M4-3a: a hit from above reveals the attacker). <paramref name="factor"/> is the
+    /// attacker's status damage factor (M7-4; 1 for none), in every victim's raw damage.
     /// </summary>
     internal static void Splash(World world, Vector2 at, AttackDef attack, int attackBonus, int owner, EntityHandle attacker, bool attackerIsBuilding,
-        EntityHandle skip, bool skipIsBuilding, int attackerLevel)
+        EntityHandle skip, bool skipIsBuilding, int attackerLevel, float factor = 1f)
     {
         GameData data = world.Data;
         float radius = attack.Splash;
@@ -199,10 +203,10 @@ public static class ProjectileSystem
             if (!(d <= radius)) continue;
             bool friend = world.AreAllied(owner, u.Owner[j]);
             if (friend && !attack.FriendlyFire) continue;
-            float factor = Falloff(d, radius) * (friend ? CombatConstants.FriendlyFireFactor : 1f);
+            float falloff = Falloff(d, radius) * (friend ? CombatConstants.FriendlyFireFactor : 1f);
             UnitDef vdef = data.Units[u.TypeId[j]];
             int armor = vdef.Armor + DamageCalc.Points(world.Techs.Bonus(u.Owner[j], u.TypeId[j], TechStat.Armor));
-            int damage = Scale(DamageCalc.Compute(data.DamageTable, attack, attackBonus, vdef.ArmorClass, armor), factor);
+            int damage = Scale(DamageCalc.Compute(data.DamageTable, attack, attackBonus, vdef.ArmorClass, armor, factor), falloff);
             CombatSystem.HitUnit(world, new PendingHit(attacker, owner, new EntityHandle(j, u.Generation[j]), false, damage, attackerLevel, attackerIsBuilding));
         }
         int structure = world.StructureClass;
@@ -215,7 +219,7 @@ public static class ProjectileSystem
             if (!b.Alive[j] || world.AreAllied(owner, b.Owner[j]) || (skipIsBuilding && skip.Index == j && skip.Generation == b.Generation[j])) continue;
             float d = MathF.Sqrt(CombatSystem.BuildingDistanceSquared(world, j, at));
             if (!(d <= radius)) continue;
-            int damage = Scale(DamageCalc.Compute(data.DamageTable, attack, attackBonus, structure, data.Buildings[b.TypeId[j]].Armor), Falloff(d, radius));
+            int damage = Scale(DamageCalc.Compute(data.DamageTable, attack, attackBonus, structure, data.Buildings[b.TypeId[j]].Armor, factor), Falloff(d, radius));
             CombatSystem.HitBuilding(world, new PendingHit(attacker, owner, b.HandleOf(j), true, damage, attackerLevel, attackerIsBuilding));
         }
     }

@@ -22,5 +22,7 @@ internal sealed partial class TechState
         r.ReadArray(_flags);
         r.ReadArray(_bonus);
         r.ReadArray(_buildingBonus);
+        // M7-4: the status-duration sums are whole ticks, derived from the flags (not saved: no format change).
+        for (int p = 0; p < _players; p++) RecomputeStatusBonus(p);
     }
 }

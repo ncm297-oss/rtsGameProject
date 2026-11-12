@@ -278,6 +278,7 @@ internal sealed class BuildingJson
     public double? Sight { get; set; }
     public AttackJson? Attack { get; set; }
     public double? Detector { get; set; }
+    public double? Scale { get; set; } // M7-4, optional
 }
 
 internal sealed class TechFileJson
@@ -309,6 +310,7 @@ internal sealed class TechEffectJson
     public string? Stat { get; set; }
     public double? Amount { get; set; }
     public AppliesToJson? AppliesTo { get; set; }
+    public List<string?>? Statuses { get; set; } // M7-4: a statusDuration effect's statuses
 }
 
 internal sealed class AppliesToJson
@@ -333,6 +335,16 @@ internal sealed class StatusJson
     public string? DamageType { get; set; }
     public double? Sight { get; set; }
     public double? Reach { get; set; }
+    public double? DamageBonus { get; set; } // M7-4, frenzied kind only
+    public StatusOnEndJson? OnEnd { get; set; } // M7-4, optional
+}
+
+/// <summary>M7-4: a status row's <c>onEnd</c>, the status applied when an entry of the row runs out.</summary>
+internal sealed class StatusOnEndJson
+{
+    public string? Status { get; set; }
+    public double? Magnitude { get; set; }
+    public double? Duration { get; set; }
 }
 
 internal sealed class AbilityFileJson

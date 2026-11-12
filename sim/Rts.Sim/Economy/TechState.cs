@@ -15,7 +15,9 @@ namespace Rts.Sim.Economy;
 /// </remarks>
 internal sealed partial class TechState
 {
-    private static readonly int StatCount = DataLimits.TechStatIds.Length;
+    // The unit stats (attack to abilityCooldown): M7-4's statusDuration is per status, not per unit type, and is kept out of
+    // the per-unit tables so their size (and the saved bonus array) is what it was before it existed.
+    private static readonly int StatCount = (int)TechStat.StatusDuration;
 
     private readonly int _players;
     private readonly int _techs;
@@ -32,6 +34,12 @@ internal sealed partial class TechState
     private readonly float[] _buildingTable;
     // player x buildings + building: the sum over the player's researched techs.
     private readonly float[] _buildingBonus;
+    private readonly int _statuses;
+    // M7-4: status x techs + tech: the ticks tech adds to that status's duration (its statusDuration effects).
+    private readonly int[] _statusTable;
+    // M7-4: player x statuses + status: the sum over the player's researched techs. Whole ticks, so the sum is exact in any
+    // order: derived, never saved or hashed, rebuilt from the flags on load.
+    private readonly int[] _statusBonus;
 
     /// <summary>No techs researched, for <paramref name="players"/> players of <paramref name="data"/>.</summary>
     public TechState(int players, GameData data)
@@ -48,6 +56,7 @@ internal sealed partial class TechState
         {
             foreach (TechEffect e in data.Techs[t].Effects)
             {
+                if ((int)e.Stat >= StatCount) continue; // M7-4: statusDuration is per status (below)
                 for (int u = 0; u < _units; u++)
                     if (Matches(data, e, data.Units[u])) _table[(u * StatCount + (int)e.Stat) * _techs + t] += e.Amount;
             }
@@ -59,6 +68,42 @@ internal sealed partial class TechState
             foreach (TechEffect e in data.Techs[t].Effects)
                 for (int b = 0; b < _buildings; b++)
                     if (MatchesBuilding(e, data.Buildings[b])) _buildingTable[b * _techs + t] += e.Amount;
+        _statuses = data.Statuses.Length;
+        _statusTable = new int[_statuses * _techs];
+        _statusBonus = new int[players * _statuses];
+        for (int t = 0; t < _techs; t++)
+            foreach (TechEffect e in data.Techs[t].Effects)
+            {
+                if (e.Stat != TechStat.StatusDuration || e.Statuses.IsDefault) continue;
+                foreach (int st in e.Statuses)
+                    if ((uint)st < (uint)_statuses) _statusTable[st * _techs + t] += (int)e.Amount;
+                AnyStatusDuration = true;
+            }
+    }
+
+    /// <summary>Whether any tech of the data has a <c>statusDuration</c> effect (M7-4), so an application skips the lookup when none.</summary>
+    public bool AnyStatusDuration { get; }
+
+    /// <summary>
+    /// The ticks <paramref name="player"/>'s researched techs add to the duration of status <paramref name="status"/> (M7-4,
+    /// <c>statusDuration</c>; negative shortens it); 0 for out-of-range ids.
+    /// </summary>
+    public int StatusDurationTicks(int player, int status)
+    {
+        if ((uint)player >= (uint)_players || (uint)status >= (uint)_statuses) return 0;
+        return _statusBonus[player * _statuses + status];
+    }
+
+    /// <summary>Re-sums <paramref name="player"/>'s status-duration bonuses from the flags (M7-4: on a flag change and on load).</summary>
+    private void RecomputeStatusBonus(int player)
+    {
+        for (int st = 0; st < _statuses; st++)
+        {
+            int sum = 0;
+            for (int t = 0; t < _techs; t++)
+                if (Has(player, t)) sum += _statusTable[st * _techs + t];
+            _statusBonus[player * _statuses + st] = sum;
+        }
     }
 
     /// <summary>
@@ -129,6 +174,7 @@ internal sealed partial class TechState
                 if (Has(player, t)) sum += _buildingTable[b * _techs + t];
             _buildingBonus[player * _buildings + b] = sum;
         }
+        RecomputeStatusBonus(player);
     }
 
     /// <summary>True if <paramref name="player"/> has researched anything.</summary>
