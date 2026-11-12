@@ -52,3 +52,12 @@ As above: 2 rows on a Whirlwind-shaped copy, 28 with the real Teblor roster (27 
   `TestDataDir.CopyOfShippedTwoFactions()`. The memory bound needs a Producer ruling (re-measure with the roster, or measure
   on the two-faction data); QA does not loosen it.
 - Two rows are QA's (`QA.PackQaTests`, `QA.FieldBuildFairnessQaTests`); the sim track may edit them under the same means.
+
+## Producer ruling (2026-11-11-1317 ACCEPT)
+- **This bug is the sim's next task (M7-5, a feature session before M7-4): D28 is accepted and held on its branch until it is fixed.**
+- **The memory bound** (`QA.FieldBuildFairnessQaTests+Serial.World_1024Map_CacheStays32_MemoryBounded`): the row keeps its bound
+  and its value on `TestSim.TwoFactionData` (it pins what it pinned), and a second row on the shipped data asserts the same
+  cache count (32) with a bound that is the two-faction figure plus a named allowance per extra collision-radius class
+  (131,072 bytes each on a 1024 map, the measured cost), the reason in a comment. Radius 0.75 for the six scaled Teblor units
+  is accepted (a Producer decision, the owner may revisit): a fourth radius class is growth from data, not a leak.
+- The fix is proven on a scratch clone with `studio/2026-11-11-1317-data` merged, and with a Whirlwind-shaped copy.

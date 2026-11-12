@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S4 |
-| Status | open |
+| Status | fixed (M7-H1, 1a49bbc, verified by QA and by the Producer at the 2026-11-11-1317 ACCEPT) |
 | Found | 2026-11-09-2226, task M7-1 |
 | System | save / load (`UnitStore.Save.cs`, `StatusStore.Save.cs`) |
-| Fixed by | |
+| Fixed by | M7-H1: `StatusStore.ReadRegenFrom(r, statuses)` checks each slot's regenerating count against its entries of a `regenerating` status and the total against the slots that count one; `UnitStore.ReadFrom(..., tick)` checks a live unit's `LastDamagedTick` is -1 or at most the save's tick and a free slot's is -1 with an accumulator of 0 (`World.ReadFrom` passes `TickNumber`). No format number changed. Proof: `RegenQaTests.AForgedRegenPart_IsRefused` 9 rows (future-tick, total-0 un-skipped; one-past-tick, total-2, slot-count-0, free-slot-tick / -accumulator / -count added; a last damage tick equal to the save's tick still loads), `Stress/RegenQaStressTests.FiftySeededMidMatchSaves_WithRegenState_ContinueHashIdentical`, `Save/RegenSaveProbeTests` (PROBE 8A918484AB1A7906 in 3 processes). Residual (not in the brief): the stealth counts keep the same unchecked shape |
 
 ## Repro
 1. `dotnet test sim/Rts.Sim.Tests --filter "FullyQualifiedName~RegenQaTests.AForgedRegenPart_IsRefused"` with the two

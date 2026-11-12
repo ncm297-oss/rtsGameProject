@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S4 |
-| Status | open |
+| Status | fixed (M7-H1, 1a49bbc, verified by QA and by the Producer at the 2026-11-11-1317 ACCEPT) |
 | Found | 2026-11-10-2116, task M7-3b |
 | System | tests (replay fixture, tech data QA) |
-| Fixed by | |
+| Fixed by | M7-H1: (1) new `sim/Rts.Sim.Tests/Seed21ResearchTests` asserts the recording holds Research (4348, 0) and (5556, 4), and that the click at 5556 is refused (`ResearchRefused`) and tech 4 never applies, so the dependency is explicit; (2) `TechDataQaTests.SeventyTechs_*`'s hash loop runs `t = 60 .. d.Techs.Length - 1` (ids 70 and 71 included), on a copy cut to the two shipped factions (BUG-1191) |
 
 ## Repro
 1. `sim/Rts.Sim.Tests/Replays/seed21_playable.replay`: `awk '$1=="c" && $5==15' seed21_playable.replay` shows two

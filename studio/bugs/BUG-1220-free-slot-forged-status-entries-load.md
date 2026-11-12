@@ -32,3 +32,4 @@ from it; no crash.
   `UnitStore.ReadFrom`'s free-slot branch, also require `Statuses.Count[i] == 0`, and check `_stealth` / `_blind` /
   `StealthedUnits` / `BlindedUnits` / `UnitsWithStatuses` against the entries as `ReadRegenFrom` now does.
 - Forged-save only; the save is a local file the player owns. S4.
+- Producer triage (2026-11-11-1317 ACCEPT): S4, not blocking; the sim's next hardening, together with the stealth / blind counts (the same unchecked shape, noted by the M7-H1 developer in docs/03).

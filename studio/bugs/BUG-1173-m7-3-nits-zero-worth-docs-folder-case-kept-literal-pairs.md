@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S4 |
-| Status | open |
+| Status | fixed (M7-H1, 1a49bbc, verified by QA and by the Producer at the 2026-11-11-1317 ACCEPT) |
 | Found | 2026-11-10-1236, task M7-3 (QA, full) |
 | System | docs/03 "Implementation (M7-3)"; `DataLoader.FactionOrder`; sim test helpers |
-| Fixed by | |
+| Fixed by | M7-H1: (1) docs/03 "Implementation (M7-3)" "A worth of 0"; (2) `DataLoader.FactionOrder`: an entry whose folder exists only in another case is one error at `order[i]` ("faction 'whirlwind': its folder is factions/Whirlwind/, not factions/whirlwind/ (a folder's name must be its id exactly, case included)"), no "has no folder" / "is not listed"; the folder's id check still fires (`FactionOrderTests.AFolderDifferingOnlyInCase_IsOneOrderErrorNamingBothSpellings`); (3) the ten ternaries in nine `foreach (... new[] { "malazan", "whirlwind" })` loops: the loops read `TestSim.ShippedFactions`, the ternaries `AiScenes.UnitKey(f, UnitSlot.Worker)` / `BuildingKey(f, BuildingSlot.House / InfantryHall)` |
 
 ## Repro
 1. **Zero-worth pack units.** `QA/FactionOrderQaTests.APackOfEight_WorthIsIntegerDivision(7, 0, 0, 0)` and
