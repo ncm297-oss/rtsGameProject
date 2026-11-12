@@ -14,4 +14,10 @@ public enum TechStat
     Hp = 3,
     /// <summary>Ability cooldown, ticks (seconds in the data; negative shortens it).</summary>
     AbilityCooldown = 4,
+    /// <summary>
+    /// M7-4: the duration of the statuses the effect names (<see cref="TechEffect.Statuses"/>), ticks (seconds in the data;
+    /// negative shortens it). Not a unit stat: its effects name no units and it has no per-unit bonus
+    /// (<c>World.TechBonus</c> is 0 for it); <c>TechState.StatusDurationTicks</c> reads it.
+    /// </summary>
+    StatusDuration = 5,
 }

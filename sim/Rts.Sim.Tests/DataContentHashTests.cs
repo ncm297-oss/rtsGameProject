@@ -45,6 +45,46 @@ public class DataContentHashTests
     }
 
     /// <summary>
+    /// M7-4: each new field written in the files moves the hash (the Blood-oil copy's four edits, one at a time); a building
+    /// <c>scale</c> written at its default 1 hashes as absent, so the shipped data's hash (the golden header) did not move.
+    /// </summary>
+    [Theory]
+    [InlineData("damageBonus")]
+    [InlineData("onEnd")]
+    [InlineData("statusDuration")]
+    [InlineData("scale")]
+    [InlineData("scale1")]
+    public void AnM74FieldInTheFiles_ChangesTheHash_ButABuildingScaleOfOneDoesNot(string field)
+    {
+        using TestDataDir dir = TestDataDir.CopyOfShipped();
+        JsonObject row = new() { ["id"] = "teblor_frenzied", ["displayName"] = "F", ["description"] = "T.", ["kind"] = "frenzied" };
+        dir.EditJson("common/statuses.json", r => r["statuses"]!.AsArray().Add(row));
+        DataLoadResult plain = DataLoader.LoadAll(dir.Path);
+        Assert.True(plain.Ok, string.Join("; ", plain.Errors));
+        switch (field)
+        {
+            case "damageBonus":
+                dir.EditJson("common/statuses.json", r => r["statuses"]![r["statuses"]!.AsArray().Count - 1]!["damageBonus"] = 0.2);
+                break;
+            case "onEnd":
+                dir.EditJson("common/statuses.json", r => r["statuses"]![r["statuses"]!.AsArray().Count - 1]!["onEnd"] =
+                    new JsonObject { ["status"] = "slowed", ["magnitude"] = 0.2, ["duration"] = 4 });
+                break;
+            case "statusDuration":
+                dir.EditJson("factions/teblor/techs.json", r => r["techs"]![0]!["effects"]!.AsArray().Add(
+                    new JsonObject { ["stat"] = "statusDuration", ["amount"] = 4, ["statuses"] = new JsonArray("teblor_frenzied") }));
+                break;
+            default:
+                dir.EditJson("factions/teblor/buildings.json", r => r["buildings"]![0]!["scale"] = field == "scale" ? 1.25 : 1);
+                break;
+        }
+        DataLoadResult load = DataLoader.LoadAll(dir.Path);
+        Assert.True(load.Ok, string.Join("; ", load.Errors));
+        if (field == "scale1") Assert.Equal(plain.Data!.ContentHash(), load.Data!.ContentHash());
+        else Assert.NotEqual(plain.Data!.ContentHash(), load.Data!.ContentHash());
+    }
+
+    /// <summary>
     /// M7-2 criterion 1 and the hash rule: a <c>spawnCount</c> of 3 moves the hash; an explicit 1 hashes as absent (so the golden's
     /// header data hash holds on shipped data); an <c>onHit</c> passive moves it.
     /// </summary>
@@ -168,6 +208,8 @@ public class DataContentHashTests
             ("Tags", e with { Tags = e.Tags.Add(0) }),
             ("Units", e with { Units = e.Units.Add(0) }),
             ("Siege", e with { Siege = e.Siege + 1 }),
+            ("Statuses", e with { Statuses = ImmutableArray.Create(0) }), // M7-4
+            ("Stat=StatusDuration", e with { Stat = TechStat.StatusDuration }),
         };
         foreach ((string field, TechEffect changed) in variants)
         {
@@ -175,7 +217,7 @@ public class DataContentHashTests
             typeof(TechDef).GetProperty(nameof(TechDef.Effects))!.SetValue(copy, tech.Effects.SetItem(0, changed));
             Assert.True(With(d, tech: copy, techSlot: tech.Id).ContentHash() != baseline, $"TechEffect.{field} is not in GameData.ContentHash");
         }
-        Assert.Equal(6, typeof(TechEffect).GetProperties().Length); // a new field must be added above and to ContentHash
+        Assert.Equal(7, typeof(TechEffect).GetProperties().Length); // a new field must be added above and to ContentHash
         TechDef fewer = Clone(tech);
         typeof(TechDef).GetProperty(nameof(TechDef.Effects))!.SetValue(fewer, tech.Effects.RemoveAt(1));
         Assert.NotEqual(baseline, With(d, tech: fewer, techSlot: tech.Id).ContentHash());
@@ -433,7 +475,8 @@ public class DataContentHashTests
             Check(b, x => With(d, building: x, buildingSlot: b.Id));
         foreach (string f in new[] { "Id", "Key", "Faction", "Slot", "DisplayName", "Description", "FootprintWidth", "FootprintHeight",
             "Hp", "Armor", "CostGold", "CostWood", "BuildTicks", "HalfPopProvided", "DropOff", "Requires", "RequiresTechs", "RequiresBuildings", "Sight",
-            "Detector" }) // M4-3b (the attack: TowerAttack_EveryField_AndItsPresence_ChangeTheHash)
+            "Detector", // M4-3b (the attack: TowerAttack_EveryField_AndItsPresence_ChangeTheHash)
+            "Scale" }) // M7-4
             Assert.Contains($"BuildingDef.{f}", checkedFields);
         // M3-5: every TechDef field, on each shipped tech (the effects' own fields: TechListLength_EffectCount_AndEveryEffectField_ChangeTheHash).
         foreach (TechDef t in d.Techs)
@@ -473,6 +516,8 @@ public class DataContentHashTests
         foreach (string f in new[] { "RegenPerTick", "RegenDelayTicks" })
             Assert.Contains($"FactionDef.{f}", checkedFields);
         Assert.Contains("StatusDef.StateHashId", checkedFields);
+        foreach (string f in new[] { "DamageBonus", "OnEndStatus", "OnEndMagnitude", "OnEndTicks" }) // M7-4
+            Assert.Contains($"StatusDef.{f}", checkedFields);
         // M5-3: rules.json ai and every faction's ai.json (the list elements' own fields: EveryAiStructField_ChangesTheHash).
         Check(d.AiRules, r => With(d, aiRules: r));
         foreach (string f in new[] { "GoldShare", "HouseHalfPopMargin", "PlacementSearchCells", "SpacingCells", "ExpandReachCells", "ScoutAfterTicks",

@@ -140,7 +140,7 @@ public static partial class DataLoader
         }
         unitFilesOk &= unitEntries == accepted.Count;
         string[] unitTags = UnitTagsOf(units);
-        var techs = new TechReader(c, folders, table, units, unitKeys, unitTags, buildings);
+        var techs = new TechReader(c, folders, table, units, unitKeys, unitTags, buildings, statuses);
         TechDef[] techDefs = techs.Build(buildingsClean && unitFilesOk);
         int[] ageTechs = Array.Empty<int>();
         if (buildingsClean && unitFilesOk && techs.FilesOk)
@@ -537,6 +537,13 @@ public static partial class DataLoader
             int halfPop = ToHalfPop(pop);
             if (halfPop < 0) c.Error(p + ".popProvided", $"pop {pop} is not a multiple of 0.5");
             if (b.DropOff == null) c.Error(p + ".dropOff", "missing required field");
+            // M7-4: the view's model scale, optional (1 when absent), the unit scale's range and rule (M7-1).
+            double scale = b.Scale ?? 1.0;
+            if (!(scale >= DataLimits.MinUnitScale && scale <= DataLimits.MaxUnitScale))
+            {
+                c.Error(p + ".scale", $"{b.Id}: scale {scale} is outside {DataLimits.MinUnitScale}-{DataLimits.MaxUnitScale}");
+                scale = 1.0;
+            }
             defs[id] = new BuildingDef
             {
                 Id = id,
@@ -562,6 +569,7 @@ public static partial class DataLoader
                 // M4-3b: optional; a building without them never shoots and detects nothing.
                 Attack = b.Attack == null ? null : BuildBuildingAttack(c, b.Attack, p + ".attack", b.Id!, table, projectiles),
                 Detector = b.Detector == null ? 0f : (float)c.Sight(b.Detector, p + ".detector", b.Id!, "detector"),
+                Scale = (float)scale,
             };
         }
         // BUG-0010: every faction fills the ten building template slots, one building each (docs/02 "Buildings").

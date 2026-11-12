@@ -273,7 +273,7 @@ public static class CombatSystem
             else HitUnit(world, in hit, attackerType); // M7-2: the direct melee hit carries its attacker's onHit passive
             if (splash)
                 ProjectileSystem.Splash(world, at, world.Data.Units[attackerType].Attack, AttackBonus(world, hit.AttackerOwner, attackerType, false),
-                    hit.AttackerOwner, hit.Attacker, false, hit.Victim, hit.IsBuilding, hit.AttackerLevel);
+                    hit.AttackerOwner, hit.Attacker, false, hit.Victim, hit.IsBuilding, hit.AttackerLevel, AttackerFactor(world, hit.Attacker));
         }
         world.HitCount = 0;
         // Then the projectiles that arrived this tick (M4-2b), slot order: hits and splash in the same phase, so a unit
@@ -1164,7 +1164,11 @@ public static class CombatSystem
         UnitStore u = world.Units;
         int type = u.TypeId[i], owner = u.Owner[i], j = u.Target[i].Index;
         bool building = u.TargetIsBuilding[i];
-        int damage = building ? DamageToBuilding(world, type, owner, j) : DamageToUnit(world, type, owner, j);
+        // M7-4: the striker's status damage bonus (Blood-oil Frenzy) is read here, with its attack value and tech bonus.
+        AttackDef attack = world.Data.Units[type].Attack;
+        int bonus = AttackBonus(world, owner, type, false);
+        float factor = u.Statuses.Count[i] == 0 ? 1f : StatusSystem.DamageFactor(world, i);
+        int damage = building ? DamageToBuilding(world, attack, bonus, j, factor) : DamageToUnit(world, attack, bonus, j, factor);
         if (damage <= 0) return; // data without a structure class: buildings take no damage
         world.Hits[world.HitCount++] = new PendingHit(new EntityHandle(i, u.Generation[i]), owner, u.Target[i], building, damage, world.Fog.LevelAt(u.Position[i]));
     }
@@ -1173,26 +1177,36 @@ public static class CombatSystem
     internal static int DamageToUnit(World world, int attackerType, int owner, int j) =>
         DamageToUnit(world, world.Data.Units[attackerType].Attack, AttackBonus(world, owner, attackerType, false), j);
 
-    /// <summary>One hit's damage by <paramref name="attack"/> with <paramref name="attackBonus"/> points of the attacker's techs on unit slot <paramref name="j"/>, the victim's armor techs applied.</summary>
-    internal static int DamageToUnit(World world, AttackDef attack, int attackBonus, int j)
+    /// <summary>One hit's damage by <paramref name="attack"/> with <paramref name="attackBonus"/> points of the attacker's techs (and, M7-4, its status damage <paramref name="factor"/>) on unit slot <paramref name="j"/>, the victim's armor techs applied.</summary>
+    internal static int DamageToUnit(World world, AttackDef attack, int attackBonus, int j, float factor = 1f)
     {
         UnitStore u = world.Units;
         UnitDef vdef = world.Data.Units[u.TypeId[j]];
         int armor = vdef.Armor + DamageCalc.Points(world.Techs.Bonus(u.Owner[j], u.TypeId[j], TechStat.Armor));
-        return DamageCalc.Compute(world.Data.DamageTable, attack, attackBonus, vdef.ArmorClass, armor);
+        return DamageCalc.Compute(world.Data.DamageTable, attack, attackBonus, vdef.ArmorClass, armor, factor);
     }
 
     /// <summary>One hit's damage by an attacker of unit type <paramref name="attackerType"/> owned by <paramref name="owner"/> on building slot <paramref name="j"/>, as structure; 0 when the data has no structure class.</summary>
     internal static int DamageToBuilding(World world, int attackerType, int owner, int j) =>
         DamageToBuilding(world, world.Data.Units[attackerType].Attack, AttackBonus(world, owner, attackerType, false), j);
 
-    /// <summary>One hit's damage by <paramref name="attack"/> with <paramref name="attackBonus"/> points of techs on building slot <paramref name="j"/>, as structure; 0 when the data has no structure class.</summary>
-    internal static int DamageToBuilding(World world, AttackDef attack, int attackBonus, int j)
+    /// <summary>One hit's damage by <paramref name="attack"/> with <paramref name="attackBonus"/> points of techs (and, M7-4, a status damage <paramref name="factor"/>) on building slot <paramref name="j"/>, as structure; 0 when the data has no structure class.</summary>
+    internal static int DamageToBuilding(World world, AttackDef attack, int attackBonus, int j, float factor = 1f)
     {
         int structure = world.StructureClass;
         if (structure < 0) return 0;
         BuildingDef bdef = world.Data.Buildings[world.Buildings.TypeId[j]];
-        return DamageCalc.Compute(world.Data.DamageTable, attack, attackBonus, structure, bdef.Armor);
+        return DamageCalc.Compute(world.Data.DamageTable, attack, attackBonus, structure, bdef.Armor, factor);
+    }
+
+    /// <summary>
+    /// M7-4: the status damage factor of the unit that struck (<see cref="StatusSystem.DamageFactor"/>), read with the tech
+    /// bonus where a splash or a landing shot reads it; 1 when that unit is dead (its statuses went with its slot).
+    /// </summary>
+    internal static float AttackerFactor(World world, EntityHandle attacker)
+    {
+        UnitStore u = world.Units;
+        return !u.IsAlive(attacker) || u.Statuses.Count[attacker.Index] == 0 ? 1f : StatusSystem.DamageFactor(world, attacker.Index);
     }
 
     /// <summary>The attack of unit type <paramref name="type"/>, or of building type <paramref name="type"/> with <paramref name="isBuilding"/> (M4-3b: a tower's, never null for a building that fired).</summary>

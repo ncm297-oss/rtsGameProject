@@ -14,6 +14,8 @@ public static partial class DataLoader
     /// <see cref="DataLimits.MaxSight"/>) required on a blind status and refused on any other kind. M4-5: at most one
     /// <c>revealed</c> status (the one an attack or cast from stealth applies), refused at the second; M4-H3 (BUG-0481): and
     /// exactly one when any status is <c>stealthed</c>, refused at <c>statuses</c> (else an attack from stealth never reveals).
+    /// M7-4: <c>damageBonus</c> (above 0, at most <see cref="DataLimits.MaxStatusDamageBonus"/>) on a frenzied status only, and
+    /// <c>onEnd</c> on any row (<see cref="ResolveOnEnds"/>).
     /// </summary>
     private static StatusDef[] BuildStatuses(Checker c, StatusFileJson j, DamageTable? table)
     {
@@ -49,6 +51,16 @@ public static partial class DataLoader
                 if (x.Sight != null) c.Error(p + ".sight", $"status '{x.Id}': only a blind status has a sight");
                 if (x.Reach != null) c.Error(p + ".reach", $"status '{x.Id}': only a blind status has a reach");
             }
+            // M7-4: the extra damage of a frenzied-kind status (Blood-oil Frenzy's +20 %), optional.
+            double damageBonus = 0;
+            if (x.DamageBonus is double bonus)
+            {
+                if (kind >= 0 && kind != (int)StatusKind.Frenzied)
+                    c.Error(p + ".damageBonus", $"status '{x.Id}': only a frenzied status has a damage bonus");
+                else if (!(bonus > 0 && bonus <= DataLimits.MaxStatusDamageBonus))
+                    c.Error(p + ".damageBonus", $"status '{x.Id}': damageBonus {bonus} is outside 0-{DataLimits.MaxStatusDamageBonus} (above 0; 0.2 = +20 % damage)");
+                else damageBonus = bonus;
+            }
             defs[id] = new StatusDef
             {
                 Id = id,
@@ -59,16 +71,55 @@ public static partial class DataLoader
                 DamageType = damageType,
                 Sight = (float)sight,
                 Reach = (float)reach,
+                DamageBonus = (float)damageBonus,
             };
         }
         if (stealthed != null && revealed == null)
             c.Error("statuses", $"status '{stealthed}' is stealthed but no status has kind 'revealed' (the one an attack or cast from stealth applies)");
+        ResolveOnEnds(c, list!, accepted, sorted, defs);
         // M7-1: the state hash's number of each status (StatusDef.StateHashId): the M4 kinds first, then the newer ones.
         int next = 0;
         for (int pass = 0; pass < 2; pass++)
             foreach (StatusDef? d in defs)
                 if (d != null && (d.Kind > StatusKind.Revealed ? 1 : 0) == pass) d.StateHashId = next++;
         return defs;
+    }
+
+    /// <summary>
+    /// M7-4: each row's optional <c>onEnd {status, magnitude, duration}</c>, once every row is read (it names another row).
+    /// Checked as an <c>applyStatus</c> entry for the named status's kind (<see cref="StatusEntry"/>), plus two rules, each one
+    /// error at <c>statuses[i].onEnd.status</c>: it may not name its own row, nor a row with an <c>onEnd</c> of its own (no
+    /// chains: one entry's end applies one status, which ends quietly).
+    /// </summary>
+    private static void ResolveOnEnds(Checker c, List<StatusJson?>? list, int[] accepted, string[] sorted, StatusDef[] defs)
+    {
+        var hasOnEnd = new bool[defs.Length];
+        foreach (int i in accepted)
+            if (list![i]!.OnEnd != null) hasOnEnd[Array.BinarySearch(sorted, list[i]!.Id!, StringComparer.Ordinal)] = true;
+        foreach (int i in accepted)
+        {
+            StatusJson x = list![i]!;
+            if (x.OnEnd == null) continue;
+            string q = $"statuses[{i}].onEnd";
+            StatusOnEndJson e = x.OnEnd;
+            if (e.Status == x.Id)
+            {
+                c.Error(q + ".status", $"status '{x.Id}': onEnd names the status itself (an entry's end would start it again for ever)");
+                continue;
+            }
+            int errors = c.Errors.Count;
+            StatusEntry(c, e.Status, e.Magnitude, e.Duration, q, defs, sorted, out int status, out float magnitude, out int ticks);
+            if (status >= 0 && hasOnEnd[status])
+            {
+                c.Error(q + ".status", $"status '{x.Id}': onEnd names '{e.Status}', which has an onEnd of its own (no chains)");
+                continue;
+            }
+            if (c.Errors.Count != errors || status < 0) continue;
+            StatusDef d = defs[Array.BinarySearch(sorted, x.Id!, StringComparer.Ordinal)];
+            d.OnEndStatus = status;
+            d.OnEndMagnitude = magnitude;
+            d.OnEndTicks = ticks;
+        }
     }
 
     /// <summary>

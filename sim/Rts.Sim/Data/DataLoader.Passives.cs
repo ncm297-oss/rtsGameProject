@@ -14,7 +14,8 @@ public static partial class DataLoader
     /// seconds (at least a tick; whole seconds for damage over time), <c>radius</c> above 0 and at most
     /// <see cref="DataLimits.MaxPassiveRadius"/>, <c>units</c> at least one own-faction unit id, no repeats. <c>status</c> and
     /// <c>magnitude</c> as an <c>applyStatus</c> effect's. M7-2: <c>onHit {status, magnitude, duration}</c>, an
-    /// <c>applyStatus</c> entry's rules. A field the trigger doesn't use is an error. When
+    /// <c>applyStatus</c> entry's rules. A field the trigger doesn't use is an error. M7-4: a <c>whenBelowHp</c> passive may
+    /// not name a status with an <c>onEnd</c> (one error at its <c>status</c>). When
     /// <paramref name="statuses"/> is null (its file failed) status ids aren't checked: that file's error says why.
     /// </summary>
     private static void ResolveUnitPassives(Checker c, string[] folders, UnitFileJson?[] unitFiles, List<(int Faction, int Index)> accepted,
@@ -58,7 +59,13 @@ public static partial class DataLoader
                         c.Error(q + ".hpFraction", $"{x.HpFraction.Value} is outside 0-1, exclusive (the fraction of the unit's maximum hit points)");
                     else fraction = x.HpFraction.Value;
                     StatusAndMagnitude(c, x.Status, x.Magnitude, q, statuses, statusKeys, out int status, out float magnitude);
-                    passive = new UnitPassive { Trigger = PassiveTrigger.WhenBelowHp, HpFraction = (float)fraction, Status = status, Magnitude = magnitude, Units = ImmutableArray<int>.Empty };
+                    // M7-4: a held entry is refreshed every phase 5 and never runs out, so its onEnd could never fire.
+                    if (status >= 0 && statuses![status].OnEndStatus >= 0)
+                    {
+                        c.Error(q + ".status", $"{u.Key}: status '{x.Status}' has an onEnd, and a whenBelowHp passive holds its entry (it never ends while held)");
+                        status = -1;
+                    }
+                    passive =new UnitPassive { Trigger = PassiveTrigger.WhenBelowHp, HpFraction = (float)fraction, Status = status, Magnitude = magnitude, Units = ImmutableArray<int>.Empty };
                 }
                 else if (trigger == (int)PassiveTrigger.OnHit)
                 {

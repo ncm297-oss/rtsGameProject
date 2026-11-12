@@ -1768,4 +1768,45 @@ public class StateHashTests
         foreach (FieldInfo f in typeof(World).GetFields(BindingFlags.NonPublic | BindingFlags.Instance))
             if (f.Name.Contains("detect", StringComparison.OrdinalIgnoreCase)) Assert.True(classified.Contains(f.Name), $"World.{f.Name} is not classified");
     }
+
+    /// <summary>
+    /// M7-4 criterion 6: Blood-oil Frenzy's aftermath is ordinary hashed status state. A Warrior whose Frenzy ran out and
+    /// left Slowed 0.2 for 80 ticks hashes exactly as a twin whose Frenzy was removed early and given the same Slow by hand
+    /// (same entry, same tick, same source); the Slow's ticks move the hash. The damage factor and the status-duration
+    /// bonus are derived (never hashed): no new hashed state.
+    /// </summary>
+    [Fact]
+    public void Hash_TheAftermath_IsAnOrdinaryStatusEntry_TheBonusesAreDerived()
+    {
+        Simulation Twin(bool natural)
+        {
+            Simulation sim = BloodOilScenes.Flat();
+            EntityHandle h = BloodOilScenes.Place(sim, 0, "teblor_warrior", CombatScenes.At(sim, 20, 20));
+            Abilities.StatusSystem.Apply(sim.World, h.Index, BloodOilScenes.Frenzy, 0.4f, 30, 0);
+            for (int t = 0; t < 29; t++) sim.Tick();
+            if (!natural) Abilities.StatusSystem.RemoveEntry(sim.World, h.Index, sim.World.Units.Statuses.IndexOf(h.Index, BloodOilScenes.Frenzy));
+            sim.Tick();
+            if (!natural) Abilities.StatusSystem.Apply(sim.World, h.Index, BloodOilScenes.Slowed, 0.2f, 80, 0);
+            return sim;
+        }
+        Simulation a = Twin(true), b = Twin(false);
+        Assert.Equal(80, BloodOilScenes.TicksOf(a.World, new EntityHandle(0, a.World.Units.Generation[0]), BloodOilScenes.Slowed));
+        Assert.Equal(a.StateHash(), b.StateHash());
+        int at = a.World.Units.Statuses.IndexOf(0, BloodOilScenes.Slowed);
+        a.World.Units.Statuses.TicksRemaining[at]--;
+        Assert.NotEqual(a.StateHash(), b.StateHash());
+        a.World.Units.Statuses.TicksRemaining[at]++;
+        for (int t = 0; t < 100; t++)
+        {
+            a.Tick();
+            b.Tick();
+            Assert.Equal(a.StateHash(), b.StateHash());
+        }
+        // The tech's per-status bonus is derived from the hashed flags: researched or not, the flag alone moves the hash.
+        ulong before = a.StateHash();
+        a.World.Techs.Set(0, BloodOilScenes.Anointing, true);
+        Assert.NotEqual(before, a.StateHash());
+        b.World.Techs.Set(0, BloodOilScenes.Anointing, true);
+        Assert.Equal(a.StateHash(), b.StateHash());
+    }
 }
