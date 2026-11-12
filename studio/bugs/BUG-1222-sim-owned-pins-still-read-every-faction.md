@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S3 |
-| Status | open |
+| Status | fixed (M7-5, 9a2cea3, session 2026-11-11-2256; verified by QA and on the Producer's three-way scratch clone) |
 | Found | 2026-11-11-1317, task M7-H1 (QA full) |
 | System | sim test suite (third-faction readiness, BUG-1191 follow-up) |
-| Fixed by | |
+| Fixed by | M7-5 (2026-11-11-2256, diff base b54dbeb): `OnHitPassiveTests.BiteAll` cuts its copy to the first two factions (`PackMatchTests`, `QA.PackQaTests.s_bite` and the Stress pack rows use it); `QA.PackQaTests.ExoticOnHitStatuses_*` cuts the same way; `PassiveLoaderTests.Shipped_Zealot_*`, `AttackTargetsLoaderTests.ShippedData_TheRamAttacksBuildingsOnly_*`, `DataConversionTests.Scale_AbsentIsOne_*` / `SpawnCount_AbsentIsOne_*` and `SelfAuraTests.TheTestAbilities_*` pin `TestSim.TwoFactionData`; `QA.FieldBuildFairnessQaTests+Serial.World_1024Map_CacheStays32_MemoryBounded` measures `TwoFactionData` (bound 232,539,984 unchanged) and the new `World_1024Map_ShippedData_CacheStays32_MemoryBounded` allows 131,072 B per radius class beyond 3. Proof: branch default loop 8,708 / 0 / 21 of 8,729; with the roster's files 8,904 / 0 / 21 of 8,925 (0 red anywhere) and the seven Stress pin classes 85 / 85; with a Whirlwind-shaped `mirage` copy 8,647 / 374 / 21 of 9,042, all red in `Content/**` (90) / `QA/Content/**` (282) but the two golden-header rows. Memory: 232,508,000 (branch) / 232,509,432 (roster) on two factions; shipped 232,501,400 (bound + 0) / 232,635,336 (bound + 131,072 = 232,671,056). |
 
 ## Repro
 1. **Whirlwind-shaped third faction** (QA focus item 1's hand-made copy): on a scratch clone of `studio/2026-11-11-1317-sim`

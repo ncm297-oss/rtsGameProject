@@ -51,7 +51,7 @@ public class AttackTargetsLoaderTests
     [Fact]
     public void ShippedData_TheRamAttacksBuildingsOnly_EveryOtherUnitAll()
     {
-        GameData d = TestSim.Data;
+        GameData d = TestSim.TwoFactionData; // M7-5 (BUG-1222): a pin about the two factions (an appended one may ship a ram)
         foreach (UnitDef u in d.Units)
             Assert.Equal(u.Key == "whirlwind_battering_ram" ? AttackTargets.Buildings : AttackTargets.All, u.Attack.Targets);
     }

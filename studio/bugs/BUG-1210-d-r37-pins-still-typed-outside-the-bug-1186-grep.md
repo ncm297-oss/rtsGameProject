@@ -3,7 +3,7 @@
 | Field | Value |
 | --- | --- |
 | Severity | S4 |
-| Status | fixed on the held D28 branch (`studio/2026-11-11-1317-data`, 7093dec, verified by QA); closes on `main` the session D28 lands |
+| Status | fixed (D28, 7093dec; on `main` since D28-L landed it, de29e6f, session 2026-11-11-2256; verified by QA) |
 | Found | 2026-11-10-2116, task D-R37 |
 | System | Tests: `sim/Rts.Sim.Tests/QA/Content/**` |
 | Fixed by | D28 (2026-11-11-1317, data track): `QA/Content/D22PresetTextQaTests.PageHighLine_MatchesTheShippedPresets` (rows from `ContentFactions.Theory`, the opening read from the line) and `PageHighLine_AnOpeningTheFileLacks_IsCaught`; `QA/Content/LineMountedBonusParityQaTests.TheFactionPagesLineUnitNote_StatesTheShippedBonusVsMounted` (rows from `ContentFactions.Theory`, the Line unit by `UnitSlot.Line`); `QA/Content/UnitRosterQaTests.EveryUnit_TrainsAtItsOwnFactionsHallForItsSlot` (`UniqueHall` through `ContentFactions.Typed`, plus a `teblor_war_dog` row) |

@@ -619,7 +619,10 @@ public class PackQaTests(ITestOutputHelper output)
     {
         GameData d = AiScenes.DataWith(dir =>
         {
-            foreach (string f in TestSim.ShippedFactions)
+            // M7-5 (BUG-1222): cut to the two factions first, as OnHitPassiveTests.BiteAll does: a unit holds one onHit at
+            // most, and an appended faction may ship one.
+            dir.CutToFirstFactions(2);
+            foreach (string f in TestSim.FirstTwoFactions)
                 dir.EditJson($"factions/{f}/units.json", root =>
                 {
                     foreach (JsonNode? unit in root["units"]!.AsArray())

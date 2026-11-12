@@ -46,9 +46,10 @@ public static class CrowdRows
     /// points, ticked until none moves or <paramref name="limit"/> ticks. <paramref name="everyTick"/>
     /// (optional) checks invariants after each tick and returns an error or null.
     /// </summary>
-    public static Result ToFourPoints(ulong seed, int units, int limit, bool onePlayerPerPoint, int players = 2, Func<World, string?>? everyTick = null, bool combat = true, bool flank = true)
+    public static Result ToFourPoints(ulong seed, int units, int limit, bool onePlayerPerPoint, int players = 2, Func<World, string?>? everyTick = null, bool combat = true, bool flank = true,
+        Rts.Sim.Data.GameData? data = null, int unitType = -1)
     {
-        Simulation sim = MoveScenario.Spawn(seed, units, units > 1000 ? 70f : 40f, out int goalCell, players: players, combat: combat);
+        Simulation sim = MoveScenario.Spawn(seed, units, units > 1000 ? 70f : 40f, out int goalCell, players: players, combat: combat, data: data, unitType: unitType);
         World w = sim.World;
         w.FlankRuleOn = flank; // pathing slice 2's test seam: the before / after rows
         Vector2[] goals = FourPoints(MoveScenario.Center(w.NavGrid, goalCell));
@@ -63,10 +64,12 @@ public static class CrowdRows
     /// BUG-0018). One player per goal: each player's units take every other goal, two units per goal.
     /// Otherwise <c>slot % 64</c>, which gives every goal one unit of each player. Both rows take <c>combat</c> false
     /// (<see cref="SimConfig.Combat"/>, BUG-0135) for the pre-M4 rows whose bounds are about movement, not fights.
+    /// Both rows pass <c>data</c> and <c>unitType</c> to <see cref="MoveScenario.Spawn"/> (M7-5: one fixture type on a copy).
     /// </summary>
-    public static Result MoreGoalsThanCacheSlots(ulong seed, bool onePlayerPerGoal = true, Func<World, string?>? everyTick = null, bool combat = true, bool flank = true)
+    public static Result MoreGoalsThanCacheSlots(ulong seed, bool onePlayerPerGoal = true, Func<World, string?>? everyTick = null, bool combat = true, bool flank = true,
+        Rts.Sim.Data.GameData? data = null, int unitType = -1)
     {
-        Simulation sim = MoveScenario.Spawn(seed, units: 128, maxCost: 15f, out int center, combat: combat);
+        Simulation sim = MoveScenario.Spawn(seed, units: 128, maxCost: 15f, out int center, combat: combat, data: data, unitType: unitType);
         sim.World.FlankRuleOn = flank;
         NavGrid g = sim.World.NavGrid;
         FlowField near = FlowField.Build(g, center);

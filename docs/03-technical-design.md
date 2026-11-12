@@ -2728,7 +2728,8 @@ damage over time>, "radius": <m, above 0, at most 64>, "units": [<own-faction un
 below 1 for a slow, none for a blind, above 0 for frenzied. Errors name `units[k].passives[j].<field>`. An ability's
 `"kind": "selfAura"` takes no `range`. Shipped: `common/statuses.json` `frenzied` ("Frenzied", a numberless description to
 pin and reword in D11); the Zealot's `whenBelowHp` 0.5 / `frenzied` 0.5 and `onDeath` `frenzied` 0.5 / 5 s / 6 m /
-`["whirlwind_zealot"]`. No `abilities.json` entry uses `selfAura` yet.
+`["whirlwind_zealot"]`. Neither Malazan's nor Whirlwind's `abilities.json` uses `selfAura` (`SelfAuraTests` adds two test-only
+ones to a copy); a faction appended after them may (docs/factions/teblor.md's Blood-oil Frenzy is one).
 
 **For the view (M4-V6d).** `StatusKind.Frenzied` is a new arm for the status markers (until it has a colour it falls to the
 default arm). `AbilityDef.Kind == AbilityKind.SelfAura` means the card needs no target click: the button casts, sending any
@@ -2863,8 +2864,8 @@ bar: switch the bar's maximum to `World.MaxHp`. (Done in M4-V7b, BUG-0450: see "
 ### Implementation (M7-1)
 
 M7's first two bullets (docs/05), the sim half: a per-unit visual scale in data and regeneration, both generic and both in the
-schema before any faction uses them (no shipped faction file sets `scale` or `regen`; the Teblor roster and the view's
-rendering of `scale` come next).
+schema before any faction uses them (neither Malazan's nor Whirlwind's files set `scale` or `regen`; a faction appended after
+them may, as docs/factions/teblor.md asks; the view renders `scale`).
 
 - **`units.json` `scale`** (optional, default 1, 0.5-3.0): `UnitDef.Scale`, in `GameData.ContentHash`. The sim never reads
   it: collision is `radius`. The view reads `UnitDef.Scale` as it reads `UnitDef.Radius` (no ViewApi accessor).
@@ -3265,7 +3266,8 @@ sim/Rts.Sim/ViewApi/RegenCue.cs      Healing(data, statuses, slot, faction, hp, 
 game/scripts/SelectionPanel.cs       RegenLabel: the cue under one unit's state
 game/scripts/Main.cs                 DataPath (tests: a forged data copy under user://)
 game/scripts/UiText.cs, SetupText.cs SecondsPhrase; setup.seconds_one / seconds_other; the stale IsTipFormat comment gone
-game/tests/ThirdFactionForge.cs      the forged copy: a third faction appended (the brief's recipe, names prefixed)
+game/tests/ThirdFactionForge.cs      the forged copy: a third faction appended (the brief's recipe, names prefixed);
+                                     since M7-V3b (BUG-1231) after the copy is cut to the order's first two factions
 game/tests/ThreeFactionTest, RegenCueTest; QaM6V11Test's oracle (friendly fire)
 ```
 
@@ -6902,7 +6904,9 @@ game/tests/QaM6V11Test (staged defeat), StatsScreenCheck, ReplayPlaybackTest, Fr
     is no upgrade; two building hits in one step upgrade once.
   - `ReplayPlaybackTest`: the shipped-data recordings' watched stats show the live match's lines; on a 3-opening fixture
     (a temp copy of `res://data`, never the shipped files) a Normal AI on a seed that picks opening 2, one that picks 0, and
-    four seats Easy / Normal / Hard: the live lines, then the watched replay's (its sim with no AI) equal them.
+    four seats Easy / Normal / Hard: the live lines, then the watched replay's (its sim with no AI) equal them. Since M7-V3b
+    (BUG-1231) the fixture is Malazan's and Whirlwind's only and the four seats are pinned to them (`--faction 3 malazan
+    --faction 4 whirlwind`, the two-faction defaults), so a later faction with one opening leaves it as it was.
   - `QaM6V11Test`: the staged defeat; three AI lines at 1280 x 720 inside the screen between the table and the graph
     (`StatsScreenCheck.Fits` holds the lines now), the watched replay's the same. `FreeForAllTest`: a line per AI seat.
   - `ShellTest`: `match_over.opening` required, and a format naming `{0}` and `{1}` (four bad formats, one error each).

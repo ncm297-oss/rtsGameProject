@@ -50,6 +50,9 @@ public partial class ReplayPlaybackTest : Node
     /// <summary>The checkpoint (d) alters.</summary>
     public const int AlteredTick = 300;
 
+    /// <summary>The factions the 3-opening fixture is written for (M7-V3b, BUG-1231: not every shipped faction).</summary>
+    private static readonly string[] FixtureFactions = { "malazan", "whirlwind" };
+
     private readonly List<string> _failures = new();
     private GameData _data = null!;
     private UiText _ui = null!;
@@ -722,6 +725,8 @@ public partial class ReplayPlaybackTest : Node
 
     // The shipped data with both factions' ai.json cut to three openings: the first shipped one, then copies "opening_1" /
     // "Opening 1" and "opening_2" / "Opening 2" (each its own description), loaded from a temp copy, never the shipped files.
+    // M7-V3b (BUG-1231): the fixture is Malazan's and Whirlwind's (FixtureFactions); any other shipped faction keeps its own
+    // openings, and the rows below seat only these two.
     private GameData ThreeOpenings()
     {
         string from = ProjectSettings.GlobalizePath("res://data");
@@ -732,7 +737,7 @@ public partial class ReplayPlaybackTest : Node
             Directory.CreateDirectory(Path.GetDirectoryName(dest)!);
             File.Copy(file, dest, true);
         }
-        foreach (string f in new[] { "malazan", "whirlwind" })
+        foreach (string f in FixtureFactions)
         {
             string ai = Path.Combine(to, "factions", f, "ai.json");
             var root = System.Text.Json.Nodes.JsonNode.Parse(File.ReadAllText(ai))!;
@@ -758,7 +763,8 @@ public partial class ReplayPlaybackTest : Node
     private async Task OpeningRows()
     {
         GameData three = ThreeOpenings();
-        Check(three.Ai.All(a => a.Openings.Length == 3), "the fixture holds not three openings per faction");
+        Check(FixtureFactions.All(f => three.FindFaction(f) >= 0 && three.Ai[three.FindFaction(f)].Openings.Length == 3),
+            $"the fixture holds not three openings for each of {string.Join(", ", FixtureFactions)}");
         // A Normal AI in seat 1 (slot 2) on a seed that picks opening 2, then one that picks opening 0.
         foreach (int target in new[] { 2, 0 })
         {
@@ -770,7 +776,8 @@ public partial class ReplayPlaybackTest : Node
         // Four seats, every difficulty (Easy, Normal, Hard in slots 2-4) on a seed where Normal and Hard both pick past the first.
         ulong s4 = 1;
         while (Rts.Sim.ViewApi.AiOpeningLookup.Pick(s4, 2, AiDifficulty.Normal, 3) == 0 || Rts.Sim.ViewApi.AiOpeningLookup.Pick(s4, 3, AiDifficulty.Hard, 3) == 0) s4++;
-        await OpeningRow(three, new[] { "--seed", s4.ToString(CultureInfo.InvariantCulture), "--players", "4", "--ai", "2", "easy", "--ai", "3", "normal", "--ai", "4", "hard", "--mute" },
+        await OpeningRow(three, new[] { "--seed", s4.ToString(CultureInfo.InvariantCulture), "--players", "4", "--ai", "2", "easy", "--ai", "3", "normal", "--ai", "4", "hard",
+            "--faction", "1", "malazan", "--faction", "2", "whirlwind", "--faction", "3", "malazan", "--faction", "4", "whirlwind", "--mute" },
             $"four-seats (seed {s4})", null);
     }
 

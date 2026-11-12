@@ -1,0 +1,8 @@
+{
+  "note": "M7-5 fixture for Stress/WideCrowdStressTests: the unit the crowd sweep's maps are walked with, and the fields set on it in a two-faction data copy. 0.75 m is the Teblor's scaled-unit collision radius (BUG-1222 ruling).",
+  "faction": "malazan",
+  "unit": "malazan_heavy_infantry",
+  "fields": {
+    "radius": 0.75
+  }
+}

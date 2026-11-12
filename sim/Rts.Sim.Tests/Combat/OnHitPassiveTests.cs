@@ -9,8 +9,8 @@ namespace Rts.Sim.Tests;
 
 /// <summary>
 /// M7-2 criterion 4: the <c>onHit</c> passive (docs/factions/teblor.md "Unit notes", Hamstring: "each bite Slows the target
-/// 20% for 2 s") on a test copy where every unit of both factions carries <c>{onHit, slowed, 0.2, 2 s}</c> (no shipped unit
-/// has one). A direct melee hit and a unit's projectile landing on its aimed target apply it to a surviving victim; a splash
+/// 20% for 2 s") on a test copy cut to Malazan and Whirlwind where every unit of both carries <c>{onHit, slowed, 0.2, 2 s}</c>
+/// (neither faction ships one). A direct melee hit and a unit's projectile landing on its aimed target apply it to a surviving victim; a splash
 /// neighbour, a damage-over-time pulse, a tower's shot and a killing blow do not (docs/03 "Implementation (M7-2)").
 /// </summary>
 [Collection(SerialCollection.Name)]
@@ -19,9 +19,15 @@ public class OnHitPassiveTests
     /// <summary>The copy: every unit bites (the Zealot keeps its two passives and gains the third).</summary>
     internal static readonly Lazy<GameData> s_bite = new(() => AiScenes.DataWith(BiteAll));
 
+    /// <summary>
+    /// Cuts <paramref name="dir"/> to the first two factions (<see cref="TestDataDir.CutToFirstFactions"/>) and gives every
+    /// unit of both a Hamstring. M7-5 (BUG-1222): the cut keeps "every unit" to units with no onHit of their own, since a
+    /// unit holds at most one passive per trigger and an appended faction may ship one (the Teblor War-dog).
+    /// </summary>
     internal static void BiteAll(TestDataDir dir)
     {
-        foreach (string f in TestSim.ShippedFactions)
+        dir.CutToFirstFactions(2);
+        foreach (string f in TestSim.FirstTwoFactions)
             dir.EditJson($"factions/{f}/units.json", root =>
             {
                 foreach (JsonNode? unit in root["units"]!.AsArray())
@@ -82,7 +88,7 @@ public class OnHitPassiveTests
             UnitPassive p = u.Passives[u.HitPassive];
             Assert.Equal((PassiveTrigger.OnHit, Slowed, 0.2f, 40), (p.Trigger, p.Status, p.Magnitude, p.DurationTicks));
         }
-        Assert.All(TestSim.Data.Units, u => Assert.Equal(-1, u.HitPassive));
+        Assert.All(TestSim.TwoFactionData.Units, u => Assert.Equal(-1, u.HitPassive)); // M7-5: the two factions the copy is cut to
     }
 
     /// <summary>A melee hit slows its victim 0.2 for 40 ticks; speed x 0.8 while it lasts, back to the type's after the 40th tick.</summary>

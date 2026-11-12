@@ -424,17 +424,44 @@ public class FieldBuildFairnessQaTests
             Assert.True(p99 < 8.0, $"p99 {p99:F2} ms (docs/03: p99 < 8 ms)");
         }
 
-        /// <summary>A 1024 x 1024 world keeps the 32-field floor and doesn't grow past M1-4b's 221 MB by more than the documented index (4.2 MB), fog (2.4 MB) and the itemised steps since.</summary>
+        /// <summary>The two-faction bound of <see cref="World_1024Map_CacheStays32_MemoryBounded"/>: the itemised history is there.</summary>
+        internal const long TwoFactionBound1024 = 232_539_984;
+
+        /// <summary>
+        /// M7-5 (BUG-1222 ruling): what one more collision-radius class costs a 1024-map world with 4,096 unit slots and two
+        /// players. <c>World</c> sizes four tables by the class count (<c>RadiusClassCount</c>): <c>PlugAnswers</c> (a long per
+        /// slot per player per class: 4,096 x 2 x 8 = 65,536), <c>FlankBlock</c> (a long per slot per class: 32,768),
+        /// <c>FlankFirst</c> and <c>FlankNext</c> (an int each: 2 x 16,384): 131,072 bytes a class, as QA measured.
+        /// </summary>
+        internal const long BytesPerExtraRadiusClass1024 = 131_072;
+
+        /// <summary>The radius classes of Malazan and Whirlwind (0.4, 0.7 and 0.9 m), which the two-faction bound includes.</summary>
+        internal const int TwoFactionRadiusClasses = 3;
+
+        /// <summary>Builds a 1024 x 1024 world on <paramref name="data"/> and returns the bytes its construction allocated.</summary>
+        private static long Measure1024World(Rts.Sim.Data.GameData data, out World world)
+        {
+            var p = MapGenParams.Default with { Width = 1024, Height = 1024 };
+            var config = new SimConfig(4950, 2, 4096, 64) { Data = data, Map = p };
+            World? built = null;
+            Action create = () => built = new World(config);
+            long bytes = AllocationProbe.Measure(create);
+            Assert.NotNull(built);
+            world = built!;
+            return bytes;
+        }
+
+        /// <summary>
+        /// A 1024 x 1024 world keeps the 32-field floor and doesn't grow past M1-4b's 221 MB by more than the documented index
+        /// (4.2 MB), fog (2.4 MB) and the itemised steps since. M7-5 (BUG-1222 ruling): measured on <see cref="TestSim.TwoFactionData"/>,
+        /// the data its figures were taken on; the shipped data's row is <see cref="World_1024Map_ShippedData_CacheStays32_MemoryBounded"/>.
+        /// </summary>
         [Fact]
         public void World_1024Map_CacheStays32_MemoryBounded()
         {
-            var p = MapGenParams.Default with { Width = 1024, Height = 1024 };
-            var config = TestSim.Config(4950, 2, 4096, 64) with { Map = p };
-            World? world = null;
-            Action create = () => world = new World(config);
-            long bytes = AllocationProbe.Measure(create);
-            Assert.NotNull(world);
-            Assert.Equal(32, world!.FlowFields.Capacity);
+            long bytes = Measure1024World(TestSim.TwoFactionData, out World world);
+            Assert.Equal(32, world.FlowFields.Capacity);
+            Assert.Equal(TwoFactionRadiusClasses, world.RadiusClassCount);
             _out.WriteLine($"1024 x 1024 world, 4096 unit slots: {bytes / 1e6:F1} MB ({bytes} bytes) allocated, cache {world.FlowFields.Capacity}");
             // M1-4b: 221 MB. M1-4c adds the 4-byte cell-to-slot index (4.2 MB here): 226 MB measured, bound 228 MB.
             // M4-3a (BUG-0214) re-baselines: before the fog 227,976,424 bytes were measured (dd5b5b9). The fog the design
@@ -500,7 +527,37 @@ public class FieldBuildFairnessQaTests
             // - World.RegenPerTickOf / RegenDelayOf (an int a player): 2 x (2 x 4 + 24) = 64 bytes.
             // 232,474,768 measured alone on the diff base d164a5f, 232,510,464-232,517,576 on M7-1's tree (+35.7 to +42.8 KB:
             // these 37,000 bytes and the probe's rounding); the bound moves by the same 37,000 bytes.
-            Assert.True(bytes < 232_539_984, $"{bytes / 1e6:F1} MB");
+            Assert.True(bytes < TwoFactionBound1024, $"{bytes / 1e6:F1} MB");
+        }
+
+        /// <summary>
+        /// M7-5 (BUG-1222 ruling): the same world on the shipped data, whatever factions it appends: the same 32-field floor, and
+        /// the two-faction bound plus <see cref="BytesPerExtraRadiusClass1024"/> for each collision-radius class beyond the three
+        /// the two factions use. A new radius in the data is a new class, and the per-slot plug and flank tables grow by one
+        /// class each: growth from data, not a leak (the Producer accepted the Teblor's 0.75 m, a fourth class). Every other
+        /// byte an appended faction adds (its rows of the load-time tables are outside this measure; the world's per-type
+        /// tables are a few ints a type) must fit the two-faction row's 72 KB margin. With two factions the allowance is 0.
+        /// </summary>
+        [Fact]
+        public void World_1024Map_ShippedData_CacheStays32_MemoryBounded()
+        {
+            long bytes = Measure1024World(TestSim.Data, out World world);
+            Assert.Equal(32, world.FlowFields.Capacity);
+            int classes = DistinctRadii(TestSim.Data);
+            Assert.Equal(classes, world.RadiusClassCount);
+            long allowance = BytesPerExtraRadiusClass1024 * Math.Max(0, classes - TwoFactionRadiusClasses);
+            _out.WriteLine($"shipped data ({TestSim.Data.Factions.Length} factions, {classes} radius classes): {bytes} bytes allocated, " +
+                           $"cache {world.FlowFields.Capacity}; bound {TwoFactionBound1024} + {allowance} = {TwoFactionBound1024 + allowance}");
+            Assert.True(bytes < TwoFactionBound1024 + allowance, $"{bytes / 1e6:F1} MB ({bytes} bytes, {classes} radius classes)");
+        }
+
+        /// <summary>Counts the distinct unit radii in <paramref name="data"/>, independently of <c>World</c>'s own count.</summary>
+        private static int DistinctRadii(Rts.Sim.Data.GameData data)
+        {
+            var radii = new List<float>();
+            foreach (Rts.Sim.Data.UnitDef u in data.Units)
+                if (!radii.Contains(u.Radius)) radii.Add(u.Radius);
+            return radii.Count;
         }
     }
 }

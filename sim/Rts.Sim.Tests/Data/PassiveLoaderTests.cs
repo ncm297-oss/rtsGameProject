@@ -46,7 +46,7 @@ public class PassiveLoaderTests
     [Fact]
     public void Shipped_Zealot_HasFrenzyOfTheApocalypse_AndMartyrdom_AndNoOtherUnitHasPassives()
     {
-        GameData d = TestSim.Data;
+        GameData d = TestSim.TwoFactionData; // M7-5 (BUG-1222): a pin about the two factions (an appended one may ship passives)
         UnitDef zealot = d.Units[d.FindUnit("whirlwind_zealot")];
         int frenzied = d.FindStatus("frenzied");
         Assert.Equal(2, zealot.Passives.Length);
