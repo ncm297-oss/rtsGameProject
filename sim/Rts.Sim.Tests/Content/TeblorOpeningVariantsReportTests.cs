@@ -14,8 +14,8 @@ namespace Rts.Sim.Tests.Content;
 /// replaced by a variant (<see cref="Variants"/>). Each row prints the tick Age II completes, the waves started, the
 /// Gatherers alive and the gold and wood in hand at 7:00 and 10:00; each variant and seed the count of rows with Age II by
 /// 10:00 and with a wave, against the target of 6 of 8. A measurement (rule 48): only its preconditions are asserted (the
-/// seat plays the Teblor, every row ran 12,000 ticks). The best variant (<c>Fixtures/teblor_standard_d29.json</c>, V4) is
-/// also played with the seats swapped beside the shipped one, and one failing row is printed minute by minute (BUG-1241's
+/// seat plays the Teblor, every row ran 12,000 ticks). The best variant at 10:00 (V4, <c>Fixtures/teblor_standard_d29_v4.json</c>;
+/// worse than V0 to 15:00, BUG-1300, so the hand-over is now <see cref="TeblorOpeningHorizonReportTests"/>'s) is also played with the seats swapped beside the shipped one, and one failing row is printed minute by minute (BUG-1241's
 /// table). The AI plays as in a match: the rows change data only, never the AI's state.
 /// </summary>
 [Trait("Category", "Stress")]
@@ -30,8 +30,12 @@ public class TeblorOpeningVariantsReportTests(ITestOutputHelper output)
     private static readonly string[] Opponents = { "malazan", "whirlwind" };
     private static readonly ulong[] Seeds = { 1, 2, 3 };
 
-    /// <summary>The best variant's opening, the file D29 hands over (the shipped <c>standard</c> replaced by it whole).</summary>
-    internal static string FixturePath => Path.Combine(TestDataDir.RepoRoot(), "sim", "Rts.Sim.Tests", "Content", "Fixtures", "teblor_standard_d29.json");
+    /// <summary>
+    /// V4's opening: D29's first hand-over, measured worse than the shipped one to 15:00 (BUG-1300), so no longer the hand-over
+    /// (that is <see cref="TeblorOpeningHorizonReportTests.HandOver"/>). Kept under its own name so QA's D29 suites, which read it
+    /// through <see cref="Fixture"/>, still measure V4.
+    /// </summary>
+    internal static string FixturePath => Path.Combine(TestDataDir.RepoRoot(), "sim", "Rts.Sim.Tests", "Content", "Fixtures", "teblor_standard_d29_v4.json");
 
     /// <summary>The shipped Teblor <c>standard</c> opening, parsed afresh (each variant edits its own copy).</summary>
     internal static JsonObject Shipped()
@@ -42,7 +46,7 @@ public class TeblorOpeningVariantsReportTests(ITestOutputHelper output)
         return JsonNode.Parse(opening.ToJsonString())!.AsObject();
     }
 
-    /// <summary>The fixture's opening.</summary>
+    /// <summary>V4's opening (<see cref="FixturePath"/>).</summary>
     internal static JsonObject Fixture() => JsonNode.Parse(File.ReadAllText(FixturePath))!.AsObject();
 
     /// <summary>A copy of the shipped data whose Teblor opening 0 is <paramref name="opening"/> (the loader's errors fail it).</summary>
@@ -69,7 +73,7 @@ public class TeblorOpeningVariantsReportTests(ITestOutputHelper output)
     /// <summary>
     /// The variants (the brief's): V0 shipped; V1 the eight Gatherers (step 19) after the Age II step in time (480: Age II's
     /// research is 60 s); V2 Armor I and the eight Gatherers after every other step (time 600 and last in the file, the
-    /// Producer's probe); V3 V2 with Age II due at 5:00 instead of 7:00; V4 the fixture: V3, plus the Javelin Ground (wood
+    /// Producer's probe); V3 V2 with Age II due at 5:00 instead of 7:00; V4 (<c>teblor_standard_d29_v4.json</c>): V3, plus the Javelin Ground (wood
     /// only) instead of the Bloodwood Carver as Age II's second kind (the Carver at 8:00, after Age II), the expansion and the
     /// Stables last at 10:00, 9 Gatherers at the start instead of 11, and the wave at 4 army pop / 300 instead of 8 / 600.
     /// Why the wave: the M5-4g reserve is held only while the army is at least one wave (<c>AiPlayer.MayReserve</c>), so the
@@ -264,7 +268,7 @@ public class TeblorOpeningVariantsReportTests(ITestOutputHelper output)
     private const string FailingOpponent = "malazan";
     private const ulong FailingSeed = 1;
 
-    /// <summary>The best variant (V4, the fixture) and the shipped one with the seats swapped (the Teblor on seat 1 against the Malazan, seat 0 against the Whirlwind), seeds 1-3.</summary>
+    /// <summary>V4 (best at 10:00) and the shipped one with the seats swapped (the Teblor on seat 1 against the Malazan, seat 0 against the Whirlwind), seeds 1-3.</summary>
     [Fact]
     public void BestVariantAndShipped_SeatsSwapped_Report()
     {
