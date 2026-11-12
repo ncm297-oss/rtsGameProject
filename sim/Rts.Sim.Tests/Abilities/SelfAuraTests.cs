@@ -72,7 +72,7 @@ public class SelfAuraTests
         AbilityDef rally = Data.Abilities[Data.FindAbility("zz_test_rally")];
         Assert.Equal((AbilityKind.SelfAura, 0f, 4f, 10, 200), (rally.Kind, rally.Range, rally.Radius, rally.CastTicks, rally.CooldownTicks));
         Assert.Equal(new[] { rally.Id, Data.FindAbility("zz_test_aura_zone") }, Data.Units[Infantry].Abilities.ToArray());
-        foreach (AbilityDef a in TestSim.Data.Abilities) Assert.Equal(AbilityKind.TargetGround, a.Kind); // none shipped
+        foreach (AbilityDef a in TestSim.TwoFactionData.Abilities) Assert.Equal(AbilityKind.TargetGround, a.Kind); // none in the two factions (M7-5: a third may ship one)
     }
 
     [Fact]

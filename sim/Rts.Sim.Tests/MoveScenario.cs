@@ -28,11 +28,14 @@ public static class MoveScenario
     /// <paramref name="map"/> (M3-1) sets the map params, e.g. forests and mines; default the M1 map.
     /// <paramref name="combat"/> false (<see cref="SimConfig.Combat"/>, BUG-0135) for the pre-M4 movement scenes whose
     /// two owners stand for "enemies are walls", not for a fight.
+    /// M7-5: <paramref name="data"/> (default the shipped data) and <paramref name="unitType"/> (default -1: cycle
+    /// <see cref="TestSim.ScenarioUnitTypes"/>) let a row spawn one fixture type on a data copy over the same maps and spawns.
     /// </summary>
-    public static Simulation Spawn(ulong seed, int units, float maxCost, out int goalCell, int capacity = 0, int players = 2, MapGenParams? map = null, bool combat = true)
+    public static Simulation Spawn(ulong seed, int units, float maxCost, out int goalCell, int capacity = 0, int players = 2, MapGenParams? map = null, bool combat = true,
+        Rts.Sim.Data.GameData? data = null, int unitType = -1)
     {
         var sim = new Simulation(TestSim.Config(Seed: seed, PlayerCount: 2,
-            UnitCapacity: Math.Max(units, capacity), CommandCapacity: 2 * Math.Max(units, capacity) + 8) with { Map = map ?? MapGenParams.Default, Combat = combat });
+            UnitCapacity: Math.Max(units, capacity), CommandCapacity: 2 * Math.Max(units, capacity) + 8) with { Map = map ?? MapGenParams.Default, Combat = combat, Data = data ?? TestSim.Data });
         NavGrid g = sim.World.NavGrid;
         goalCell = CentralCell(g);
         FlowField field = FlowField.Build(g, goalCell);
@@ -46,7 +49,7 @@ public static class MoveScenario
             // Stay 0.05 m inside the cell so float rounding can't put the spawn in a neighbor.
             var offset = new Vector2(0.05f + rng.NextFloat() * 1.9f, 0.05f + rng.NextFloat() * 1.9f);
             Vector2 corner = Center(g, cell) - new Vector2(MapConstants.CellSize / 2);
-            sim.Enqueue(Command.SpawnUnit(i % players, i % TestSim.ScenarioUnitTypes, corner + offset));
+            sim.Enqueue(Command.SpawnUnit(i % players, unitType >= 0 ? unitType : i % TestSim.ScenarioUnitTypes, corner + offset));
         }
         sim.Tick();
         sim.Tick();

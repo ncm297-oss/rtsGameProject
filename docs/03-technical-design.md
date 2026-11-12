@@ -2728,7 +2728,8 @@ damage over time>, "radius": <m, above 0, at most 64>, "units": [<own-faction un
 below 1 for a slow, none for a blind, above 0 for frenzied. Errors name `units[k].passives[j].<field>`. An ability's
 `"kind": "selfAura"` takes no `range`. Shipped: `common/statuses.json` `frenzied` ("Frenzied", a numberless description to
 pin and reword in D11); the Zealot's `whenBelowHp` 0.5 / `frenzied` 0.5 and `onDeath` `frenzied` 0.5 / 5 s / 6 m /
-`["whirlwind_zealot"]`. No `abilities.json` entry uses `selfAura` yet.
+`["whirlwind_zealot"]`. Neither Malazan's nor Whirlwind's `abilities.json` uses `selfAura` (`SelfAuraTests` adds two test-only
+ones to a copy); a faction appended after them may (docs/factions/teblor.md's Blood-oil Frenzy is one).
 
 **For the view (M4-V6d).** `StatusKind.Frenzied` is a new arm for the status markers (until it has a colour it falls to the
 default arm). `AbilityDef.Kind == AbilityKind.SelfAura` means the card needs no target click: the button casts, sending any
@@ -2863,8 +2864,8 @@ bar: switch the bar's maximum to `World.MaxHp`. (Done in M4-V7b, BUG-0450: see "
 ### Implementation (M7-1)
 
 M7's first two bullets (docs/05), the sim half: a per-unit visual scale in data and regeneration, both generic and both in the
-schema before any faction uses them (no shipped faction file sets `scale` or `regen`; the Teblor roster and the view's
-rendering of `scale` come next).
+schema before any faction uses them (neither Malazan's nor Whirlwind's files set `scale` or `regen`; a faction appended after
+them may, as docs/factions/teblor.md asks; the view renders `scale`).
 
 - **`units.json` `scale`** (optional, default 1, 0.5-3.0): `UnitDef.Scale`, in `GameData.ContentHash`. The sim never reads
   it: collision is `radius`. The view reads `UnitDef.Scale` as it reads `UnitDef.Radius` (no ViewApi accessor).
