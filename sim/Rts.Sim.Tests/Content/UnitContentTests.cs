@@ -57,6 +57,17 @@ public class UnitContentTests
             (UnitSlot.Siege, "whirlwind_battering_ram", "Battering Ram", 240, 6, "heavy", 60, "siege", 3.0, Melee, 0.0, 2.4, 10, 160, 120, 3, 36, "whirlwind_ram_yard"),
             (UnitSlot.Unique, "whirlwind_zealot", "Zealot", 63, 0, "light", 9, "melee", 1.0, Melee, 0.0, 4.4, 14, 30, 10, 1, 10, "whirlwind_raider_camp"),
         },
+        // D28: teblor.md "Units". The War-dog's cost and train time are the pack item's, its HP, attack and pop each dog's.
+        ["teblor"] = new[]
+        {
+            (UnitSlot.Worker, "teblor_gatherer", "Gatherer", 70, 0, "light", 6, "melee", 1.5, Melee, 0.0, 4.0, 14, 75, 0, 1, 16, "teblor_longhouse"),
+            (UnitSlot.Line, "teblor_warrior", "Warrior", 320, 2, "giant", 22, "melee", 1.8, Melee, 0.0, 3.4, 16, 120, 30, 2, 28, "teblor_war_lodge"),
+            (UnitSlot.Ranged, "teblor_javelin_thrower", "Javelin Thrower", 140, 1, "giant", 12, "pierce", 2.6, 11, 0.0, 3.4, 18, 70, 50, 2, 26, "teblor_javelin_ground"),
+            (UnitSlot.Shock, "teblor_destrier_rider", "Destrier Rider", 360, 2, "mounted", 24, "melee", 2.0, Melee, 0.0, 5.6, 16, 160, 60, 3, 36, "teblor_stables"),
+            (UnitSlot.Caster, "teblor_shaman", "Shaman", 130, 0, "giant", 10, "magic", 2.4, 10, 0.0, 3.4, 16, 130, 60, 2, 36, "teblor_shamans_circle"),
+            (UnitSlot.Siege, "teblor_breaker", "Breaker", 380, 3, "giant", 40, "siege", 3.0, Melee, 0.0, 3.0, 14, 180, 120, 3, 45, "teblor_breakers_hall"),
+            (UnitSlot.Unique, "teblor_war_dog", "War-dog", 70, 0, "mounted", 7, "melee", 1.0, Melee, 0.0, 6.4, 16, 120, 0, 1, 24, "teblor_stables"),
+        },
     };
 
     // docs/factions/<id>.md "Units" Targets column (D5; docs/02 "Combat: Stats" attack.targets): every unit "all" but
@@ -77,6 +88,14 @@ public class UnitContentTests
         ["whirlwind_priest"] = "all",
         ["whirlwind_battering_ram"] = "buildings",
         ["whirlwind_zealot"] = "all",
+        // teblor.md: "all" everywhere ("the Breaker hits units too").
+        ["teblor_gatherer"] = "all",
+        ["teblor_warrior"] = "all",
+        ["teblor_javelin_thrower"] = "all",
+        ["teblor_destrier_rider"] = "all",
+        ["teblor_shaman"] = "all",
+        ["teblor_breaker"] = "all",
+        ["teblor_war_dog"] = "all",
     };
 
     // Producer decision M1-2: the pages don't give these, so they are pinned as shipped. Radius by class
@@ -97,6 +116,15 @@ public class UnitContentTests
         ["whirlwind_priest"] = (0.4, 0.4),
         ["whirlwind_battering_ram"] = (0.9, 0.3),
         ["whirlwind_zealot"] = (0.4, 0.3),
+        // D28: teblor.md "Children of the Mountains" gives the giants' collision radius, 0.75 m (the War-dog, normal-sized,
+        // keeps the foot 0.4); windups by attack kind as the shipped factions' (melee 0.3, ranged and magic 0.4).
+        ["teblor_gatherer"] = (0.75, 0.3),
+        ["teblor_warrior"] = (0.75, 0.3),
+        ["teblor_javelin_thrower"] = (0.75, 0.4),
+        ["teblor_destrier_rider"] = (0.75, 0.3),
+        ["teblor_shaman"] = (0.75, 0.4),
+        ["teblor_breaker"] = (0.75, 0.3),
+        ["teblor_war_dog"] = (0.4, 0.3),
     };
 
     private static GameData Data => TestSim.Data;
@@ -161,24 +189,43 @@ public class UnitContentTests
         }
     }
 
+    /// <summary>
+    /// D28: every way <paramref name="data"/>'s loaded units of <paramref name="faction"/> differ from the typed roster
+    /// (<see cref="C_EveryNumber_MatchesThePage"/>'s loaded half, so a test can pass an edited copy); empty when they match.
+    /// </summary>
+    internal static List<string> LoadedRosterProblems(GameData data, string faction)
+    {
+        var problems = new List<string>();
+        DamageTable t = data.DamageTable;
+        foreach (var r in RosterOf(faction))
+        {
+            int i = data.FindUnit(r.Id);
+            if (i < 0) { problems.Add($"{r.Id}: missing unit"); continue; }
+            UnitDef u = data.Units[i];
+            AttackDef a = u.Attack;
+            void Check(bool same, string field) { if (!same) problems.Add($"{r.Id} {field}"); }
+            Check((r.Hp, r.Armor, r.Class) == (u.Hp, u.Armor, t.ArmorClassKeys[u.ArmorClass]), "hp/armor/class");
+            Check((r.Atk, r.Type, Ticks(r.Cd)) == (a.Value, t.DamageTypeKeys[a.DamageType], a.CooldownTicks), "attack");
+            Check(((float)r.Range, (float)r.MinRange) == (a.Range, a.MinRange), "range");
+            Check((float)(r.Speed / SimConstants.TicksPerSecond) == u.SpeedPerTick, "speed");
+            Check(r.Sight == u.Sight, "sight");
+            Check((r.Gold, r.Wood, r.Pop * 2) == (u.CostGold, u.CostWood, u.HalfPop), "cost/pop");
+            Check(Ticks(r.Train) == u.TrainTicks, "trainTime");
+            Check(r.TrainedAt == u.TrainedAt, "trainedAt");
+            Check(TargetOf(r.Id) == TargetsOf(u), $"attack.targets: page {TargetOf(r.Id)} vs data {TargetsOf(u)}");
+        }
+        return problems;
+    }
+
     [Fact]
     public void C_EveryNumber_MatchesThePage()
     {
-        DamageTable t = Data.DamageTable;
         foreach (string faction in Factions)
+        {
+            List<string> problems = LoadedRosterProblems(Data, faction);
+            Assert.True(problems.Count == 0, string.Join("\n", problems));
             foreach (var r in RosterOf(faction))
             {
-                UnitDef u = Unit(r.Id);
-                AttackDef a = u.Attack;
-                Assert.True((r.Hp, r.Armor, r.Class) == (u.Hp, u.Armor, t.ArmorClassKeys[u.ArmorClass]), $"{r.Id} hp/armor/class");
-                Assert.True((r.Atk, r.Type, Ticks(r.Cd)) == (a.Value, t.DamageTypeKeys[a.DamageType], a.CooldownTicks), $"{r.Id} attack");
-                Assert.True(((float)r.Range, (float)r.MinRange) == (a.Range, a.MinRange), $"{r.Id} range");
-                Assert.True((float)(r.Speed / SimConstants.TicksPerSecond) == u.SpeedPerTick, $"{r.Id} speed");
-                Assert.True(r.Sight == u.Sight, $"{r.Id} sight");
-                Assert.True((r.Gold, r.Wood, r.Pop * 2) == (u.CostGold, u.CostWood, u.HalfPop), $"{r.Id} cost/pop");
-                Assert.True(Ticks(r.Train) == u.TrainTicks, $"{r.Id} trainTime");
-                Assert.True(r.TrainedAt == u.TrainedAt, $"{r.Id} trainedAt");
-                Pin(r.Id, "attack.targets", TargetOf(r.Id), TargetsOf(u));
 
                 // The file holds seconds and m/s, not ticks.
                 JsonNode f = FileUnit(faction, r.Id);
@@ -191,6 +238,7 @@ public class UnitContentTests
                     ? $"{r.Id} file attack.targets: \"all\" written out although it is the default (style rule: write targets only when it is not \"all\")"
                     : $"{r.Id} file attack.targets: file {written ?? "(absent)"}, expected {expected ?? "(absent)"} (style rule: write targets only when it is not \"all\")");
             }
+        }
     }
 
     [Fact]
@@ -241,7 +289,7 @@ public class UnitContentTests
     }
 
     /// <summary>G for one page's lines (tests pass an edited copy): the "Units" table against the roster, columns by name.</summary>
-    private static void PinUnitsTable(string faction, string[] lines)
+    internal static void PinUnitsTable(string faction, string[] lines)
     {
         (string[] header, List<string[]> rows) = PageTables.NamedTable(lines, "Units", faction + ".md");
         int Col(string name) => Array.IndexOf(header, name);
@@ -354,11 +402,12 @@ public class UnitContentTests
     }
 
     // D12: docs/02 "Stealth and detection" ("Detectors: ... all casters (10 m)") and the "Caster" class row ("detector"),
-    // typed here: the two shipped casters detect at 10 m and no other unit has a detector.
+    // typed here: the shipped casters (one per faction) detect at 10 m and no other unit has a detector.
     private static readonly Dictionary<string, double> Detectors = new()
     {
         ["malazan_cadre_mage"] = 10,
         ["whirlwind_priest"] = 10,
+        ["teblor_shaman"] = 10,
     };
 
     /// <summary>"detector 10 m" / "detector (14 m)" in a unit note; the radius is absent when the note says only "detector".</summary>
@@ -442,7 +491,7 @@ public class UnitContentTests
     }
 
     [Fact]
-    public void I_OnlyTheTwoCasters_Detect_At10m()
+    public void I_OnlyTheCasters_Detect_At10m()
     {
         foreach (UnitDef u in Data.Units)
             Pin(u.Key, "detector", DetectorText(Detectors.GetValueOrDefault(u.Key)), DetectorText(u.Detector));

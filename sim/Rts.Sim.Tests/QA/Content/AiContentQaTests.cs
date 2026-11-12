@@ -340,10 +340,9 @@ public class AiContentQaTests
         int at = research - 1; // the step after the removed one moved up
         Assert.Contains($"{faction} {o.Id} step {at + 1} ({tech}): no step places a {slot}", ResearchProblems(d, faction, 0));
 
-        int player = f;
-        SeatController[] seats = { SeatController.Human, SeatController.Human };
-        seats[player] = SeatController.Ai;
-        Simulation sim = AiScenes.Flat(AiScenes.Seats(AiDifficulty.Normal, seats), d);
+        // D28: the faction's own seat (AiOpeningSeeds.SeatsFor), the default seats for the two shipped factions.
+        (PlayerSeat[] seats, int player) = Rts.Sim.Tests.Content.AiOpeningSeeds.SeatsFor(d, faction, AiDifficulty.Normal, SeatController.Ai, SeatController.Human);
+        Simulation sim = AiScenes.Flat(seats, d);
         Assert.Equal(0, sim.AiOpening(player));
         List<Command> log = AiScenes.Log(sim, player);
         // Reads AiPlayer internals Blackboard.StepDueTick and Blackboard.StepDone (no public-to-tests surface carries a step's state).

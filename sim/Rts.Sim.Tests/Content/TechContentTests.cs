@@ -27,6 +27,8 @@ public class TechContentTests
             new[] { ("abilityCooldown", -15.0, "malazan_sapper"), ("range", 4.0, "malazan_catapult") }),
         ["whirlwind"] = ("dryjhnas_prophecy", "Dryjhna's Prophecy", 200, 150, 45, new[] { "age_ii" },
             new[] { ("hp", 20.0, "whirlwind_zealot"), ("abilityCooldown", -15.0, "whirlwind_priest") }),
+        ["teblor"] = ("teblor_blood_oil_anointing", "Blood-oil Anointing", 200, 150, 45, new[] { "age_ii" },
+            new[] { ("armor", 2.0, "teblor_warrior"), ("armor", 2.0, "teblor_destrier_rider") }),
     };
 
     private static GameData Data => TestSim.Data;

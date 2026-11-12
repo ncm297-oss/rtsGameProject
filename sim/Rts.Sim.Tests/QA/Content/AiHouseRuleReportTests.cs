@@ -70,7 +70,7 @@ public class AiHouseRuleReportTests
         // Player p plays faction p mod 2 (AiScenes.Seats): the AI seat is the faction's, the other a human that does nothing.
         int player = TestSim.Data.FindFaction(faction);
         Simulation sim = AiScenes.Flat(AiScenes.Seats(AiDifficulty.Normal, AiSpendingReportTests.Controllers(player)));
-        Run(sim, player, ticks, $"{faction}, flat scene", _out.WriteLine);
+        Run(sim, player, player, ticks, $"{faction}, flat scene", _out.WriteLine);
     }
 
     /// <summary>
@@ -116,6 +116,7 @@ public class AiHouseRuleReportTests
     {
         ["malazan"] = (17, 81),
         ["whirlwind"] = (18, 79),
+        ["teblor"] = (16, 70), // teblor.md step 17: the 12th Hut, pop 70
     };
 
     /// <summary>The menu-map run for one faction's opening (deterministic; computed once per test process and shared with the pin row).</summary>
@@ -150,13 +151,13 @@ public class AiHouseRuleReportTests
 
     private static HouseRun MenuRun(string faction, int opening, ulong seed, GameData data, string what)
     {
-        int player = data.FindFaction(faction);
-        PlayerSeat[] seats = AiScenes.Seats(AiDifficulty.Normal, AiSpendingReportTests.Controllers(player));
+        // D28: the faction's own seat (AiOpeningSeeds.SeatsFor), the default seats for the two shipped factions.
+        (PlayerSeat[] seats, int player) = AiOpeningSeeds.SeatsFor(data, faction, AiDifficulty.Normal, SeatController.Ai, SeatController.Human);
         Simulation sim = AiSpendingReportTests.MenuMap(seats, seed, data);
         Assert.Equal(opening, sim.AiOpening(player)); // the pick this run measures
         var lines = new List<string>();
-        string name = AiOpeningSeeds.Name(data.Ai[player].Openings[opening]);
-        HouseRun r = Run(sim, player, MenuTicks, $"{faction} opening {opening + 1} {name}{what}, menu map seed {seed} (12 forests, 8 mines, combat on)", lines.Add)
+        string name = AiOpeningSeeds.Name(data.Ai[data.FindFaction(faction)].Openings[opening]);
+        HouseRun r = Run(sim, player, data.FindFaction(faction), MenuTicks, $"{faction} opening {opening + 1} {name}{what}, menu map seed {seed} (12 forests, 8 mines, combat on)", lines.Add)
             with { Faction = faction, Opening = opening, Seed = seed, Lines = lines };
         return r;
     }
@@ -203,12 +204,12 @@ public class AiHouseRuleReportTests
         int step = TwelfthHouse(r.Faction).Index + 1;
         return $"without the 12th {r.HouseName} step (step {step}) on the same seed, {cap}, and {r.HousesStanding} {r.HouseName}s stand at 20:00, {r.HousesPastCap} past the cap";
     }
-    private static HouseRun Run(Simulation sim, int player, int ticks, string label, Action<string> write)
+    private static HouseRun Run(Simulation sim, int player, int faction, int ticks, string label, Action<string> write)
     {
         GameData d = sim.World.Data;
         // Precondition, not a finding: the seat mapping above must give the AI seat this faction, or every row below
-        // reports the other faction's order under this one's name.
-        Assert.Equal(player, sim.World.FactionOf(player));
+        // reports the other faction's order under this one's name (D28: the faction id is passed, not read off the seat).
+        Assert.Equal(faction, sim.World.FactionOf(player));
         AiPlayer ai = sim.AiOf(player)!;
         Blackboard board = ai.Board; // reads StepDueTick, StepDone, StepPending, HousePending
         // The AI's own think interval and house type (BUG-0641): a change to how AiPlayer derives either moves the samples
@@ -216,7 +217,7 @@ public class AiHouseRuleReportTests
         int thinkTicks = ai.ThinkTicks;
         int house = ai.HouseType;
         BuildingDef houseDef = d.Buildings[house];
-        Assert.True(houseDef.Faction == player && houseDef.Slot == BuildingSlot.House, $"AiPlayer.HouseType {houseDef.Key} is not the House of {label}");
+        Assert.True(houseDef.Faction == faction && houseDef.Slot == BuildingSlot.House, $"AiPlayer.HouseType {houseDef.Key} is not the House of {label}");
         int rulesCap = d.Rules.HalfPopCap;
         var steps = ai.Opening.BuildOrder; // D21: the opening the seat picked (read from the AI, BUG-0641)
         int tree = d.FindResource("tree"), mine = d.FindResource("gold_mine");

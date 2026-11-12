@@ -89,8 +89,9 @@ public class BuildingKillTimeReportTests
                 if (to != null) t["multipliers"]!["structure"] = to.Value;
             }
         });
-        // Two-faction by design (D-R37, the Producer's ruling on BUG-1186): a report measures what exists; the pins cover every data faction.
-        foreach (string f in new[] { "malazan", "whirlwind" })
+        // D28: every data faction's buildings (D18 shipped the template's armor for each; the Teblor's are the template's too),
+        // so "before D19" is one rule for the whole copy. The report's attacker groups stay Malazan v Whirlwind.
+        foreach (string f in ContentFactions.Keys)
             dir.EditJson($"factions/{f}/buildings.json", root =>
             {
                 foreach (JsonNode? b in root["buildings"]!.AsArray()) b!["armor"] = ArmorBeforeD19((string)b["slot"]!);

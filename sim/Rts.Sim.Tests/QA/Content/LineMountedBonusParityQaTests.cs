@@ -31,17 +31,18 @@ public class LineMountedBonusParityQaTests
     {
         float template = Docs02Template();
         UnitDef[] line = Data.Units.Where(u => u.Slot == UnitSlot.Line).ToArray();
-        Assert.True(line.Length >= 2, $"expected a Line unit per shipped faction, found {line.Length}");
+        Assert.True(line.Length == Data.Factions.Length, $"expected a Line unit per shipped faction, found {line.Length}");
         foreach (UnitDef u in line)
             Assert.True(MountedBonus(u) == template, $"{u.Key}: bonusVs.mounted {MountedBonus(u)}, docs/02 template says ×{template}");
     }
 
+    /// <summary>D28 (BUG-1210): one row per data faction, its Line unit found by slot, not a typed pair of ids.</summary>
     [Theory]
-    [InlineData("malazan", "malazan_heavy_infantry")]
-    [InlineData("whirlwind", "whirlwind_raider")]
-    public void TheFactionPagesLineUnitNote_StatesTheShippedBonusVsMounted(string faction, string unitKey)
+    [MemberData(nameof(ContentFactions.Theory), MemberType = typeof(ContentFactions))]
+    public void TheFactionPagesLineUnitNote_StatesTheShippedBonusVsMounted(string faction)
     {
-        UnitDef u = Data.Units[Data.FindUnit(unitKey)];
+        int f = Data.FindFaction(faction);
+        UnitDef u = Data.Units.Single(x => x.Faction == f && x.Slot == UnitSlot.Line);
         string note = PageTables.FactionLines(faction).Single(l => l.StartsWith($"- **{u.DisplayName}:**", StringComparison.Ordinal));
         Match m = Regex.Match(note, @"×([0-9.]+) vs Mounted");
         Assert.True(m.Success, $"{faction}.md: the {u.DisplayName} note states no '×N vs Mounted': {note}");

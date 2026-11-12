@@ -61,29 +61,63 @@ public class D22PresetTextQaTests
     }
 
     /// <summary>
+    /// The opening the High line names: the first <c>`id`</c> after "Standard has no threshold" (the measured opening,
+    /// malazan.md's <c>cadre_rush</c>; teblor.md's <c>standard</c>), or null when the line names none there.
+    /// </summary>
+    internal static string? HighLineOpening(string line)
+    {
+        int at = line.IndexOf("Standard has no threshold", StringComparison.Ordinal);
+        if (at < 0) return null;
+        Match m = Regex.Match(line[at..], @"`([a-z][a-z0-9_]*)`", RegexOptions.CultureInvariant);
+        return m.Success ? m.Groups[1].Value : null;
+    }
+
+    /// <summary>
     /// Each page's High line (AI build order (Normal)) says Standard has no spend-down threshold and High's is
     /// <c>aiSpendAbove</c>: the shipped presets must agree, and the line must stay marked as unpinned measurement.
+    /// D28 (BUG-1210): one row per data faction (<see cref="ContentFactions.Keys"/>), the opening id read from the line itself
+    /// and required to be one of the faction's shipped openings, so a third faction's line is checked against its own file.
     /// </summary>
     [Theory]
-    [InlineData("malazan", "cadre_rush")]
-    [InlineData("whirlwind", "holy_war")]
-    public void PageHighLine_MatchesTheShippedPresets(string faction, string opening)
+    [MemberData(nameof(ContentFactions.Theory), MemberType = typeof(ContentFactions))]
+    public void PageHighLine_MatchesTheShippedPresets(string faction)
     {
         string line = FactionPage.Bullets(faction, AiContentTests.Section, 2)
             .Single(b => b.StartsWith("High starting resources ", StringComparison.Ordinal));
-        HighLineWording(line, opening);
+        string? problem = HighLineOpeningProblem(Data, faction, line);
+        Assert.True(problem == null, problem);
+        HighLineWording(line, HighLineOpening(line)!);
 
         StartingResourcesDef standard = Data.Rules.StartingResources[Data.Rules.FindStartingResources("standard")];
         StartingResourcesDef high = Data.Rules.StartingResources[Data.Rules.FindStartingResources("high")];
         Assert.Equal(0, standard.AiSpendAbove);
         Assert.True(high.AiSpendAbove > 0, "high has a spend-down threshold");
         Assert.True(high.AiSpendAbove < high.Gold + high.Wood, "high's start is above its own threshold");
-
-        // The opening the line names exists in this faction's ai.json.
-        Assert.Contains(Data.Ai[Data.FindFaction(faction)].Openings, o => o.Id == opening);
     }
 
-    /// <summary>The High line's wording (shared with <see cref="TeblorPageParseQaTests"/>, which reads a page ahead of its data).</summary>
+    /// <summary>Why the High line's opening is wrong for <paramref name="faction"/>'s shipped <c>ai.json</c>, or null when it names one of its openings.</summary>
+    internal static string? HighLineOpeningProblem(GameData d, string faction, string line)
+    {
+        string? opening = HighLineOpening(line);
+        if (opening == null) return $"{faction}.md High starting resources: names no opening by `id` after 'Standard has no threshold'";
+        return d.Ai[d.FindFaction(faction)].Openings.Any(o => o.Id == opening) ? null
+            : $"{faction}.md High starting resources names `{opening}`, not an opening of factions/{faction}/ai.json";
+    }
+
+    /// <summary>D28 (BUG-1210): the opening is read from the line, so a page naming an opening its file lacks reads red.</summary>
+    [Theory]
+    [InlineData("malazan", "`cadre_rush` held", "`cadre_push` held", "malazan.md High starting resources names `cadre_push`")]
+    [InlineData("teblor", "`standard` at High", "`war_band` at High", "teblor.md High starting resources names `war_band`")]
+    public void PageHighLine_AnOpeningTheFileLacks_IsCaught(string faction, string from, string to, string want)
+    {
+        string line = FactionPage.Bullets(faction, AiContentTests.Section, 2)
+            .Single(b => b.StartsWith("High starting resources ", StringComparison.Ordinal));
+        Assert.Contains(from, line);
+        Assert.Null(HighLineOpeningProblem(Data, faction, line));
+        Assert.StartsWith(want, HighLineOpeningProblem(Data, faction, line.Replace(from, to, StringComparison.Ordinal)) ?? "no failure");
+    }
+
+    /// <summary>The High line's wording.</summary>
     internal static void HighLineWording(string line, string opening)
     {
         Assert.Contains("`aiSpendAbove`", line);

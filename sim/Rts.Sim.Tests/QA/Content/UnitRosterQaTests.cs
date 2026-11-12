@@ -33,6 +33,28 @@ public class UnitRosterQaTests
         ("whirlwind_priest", "whirlwind", UnitSlot.Caster, "Priest of the Whirlwind", 54, 0, "light", 9, "magic", 44, 12, 0, 3.2, 16, 80, 40, 2, 600, "whirlwind_shrine", 1.5f, false, ""),
         ("whirlwind_battering_ram", "whirlwind", UnitSlot.Siege, "Battering Ram", 240, 6, "heavy", 60, "siege", 60, M, 0, 2.4, 10, 160, 120, 3, 720, "whirlwind_ram_yard", 0, false, ""),
         ("whirlwind_zealot", "whirlwind", UnitSlot.Unique, "Zealot", 63, 0, "light", 9, "melee", 20, M, 0, 4.4, 14, 30, 10, 1, 200, "whirlwind_raider_camp", 0, false, ""),
+        // D28: teblor.md "Units" and "Unit notes" (Warrior x1.5 vs Mounted, Destrier Rider x1.5 vs Light, Shaman splash 1.5 m).
+        // The War-dog's gold and train ticks are the pack item's (one queue item, three dogs), its pop each dog's.
+        ("teblor_gatherer", "teblor", UnitSlot.Worker, "Gatherer", 70, 0, "light", 6, "melee", 30, M, 0, 4.0, 14, 75, 0, 1, 320, "teblor_longhouse", 0, false, ""),
+        ("teblor_warrior", "teblor", UnitSlot.Line, "Warrior", 320, 2, "giant", 22, "melee", 36, M, 0, 3.4, 16, 120, 30, 2, 560, "teblor_war_lodge", 0, false, "mounted=1.5"),
+        ("teblor_javelin_thrower", "teblor", UnitSlot.Ranged, "Javelin Thrower", 140, 1, "giant", 12, "pierce", 52, 11, 0, 3.4, 18, 70, 50, 2, 520, "teblor_javelin_ground", 0, false, ""),
+        ("teblor_destrier_rider", "teblor", UnitSlot.Shock, "Destrier Rider", 360, 2, "mounted", 24, "melee", 40, M, 0, 5.6, 16, 160, 60, 3, 720, "teblor_stables", 0, false, "light=1.5"),
+        ("teblor_shaman", "teblor", UnitSlot.Caster, "Shaman", 130, 0, "giant", 10, "magic", 48, 10, 0, 3.4, 16, 130, 60, 2, 720, "teblor_shamans_circle", 1.5f, false, ""),
+        ("teblor_breaker", "teblor", UnitSlot.Siege, "Breaker", 380, 3, "giant", 40, "siege", 60, M, 0, 3.0, 14, 180, 120, 3, 900, "teblor_breakers_hall", 0, false, ""),
+        ("teblor_war_dog", "teblor", UnitSlot.Unique, "War-dog", 70, 0, "mounted", 7, "melee", 20, M, 0, 6.4, 16, 120, 0, 1, 480, "teblor_stables", 0, false, ""),
+    };
+
+    // D28: the Teblor's M7 columns, typed from teblor.md "Units" (Scale, Spawn) and "Children of the Mountains" / "Unit
+    // notes" (regen, Hamstring), checked independently of UnitContentTests: id, scale, spawn count, item half-pop.
+    private static readonly (string Id, float Scale, int Spawn, int ItemHalfPop)[] TeblorM7 =
+    {
+        ("teblor_gatherer", 1.5f, 1, 2),
+        ("teblor_warrior", 1.5f, 1, 4),
+        ("teblor_javelin_thrower", 1.5f, 1, 4),
+        ("teblor_destrier_rider", 1.5f, 1, 6),
+        ("teblor_shaman", 1.5f, 1, 4),
+        ("teblor_breaker", 1.5f, 1, 6),
+        ("teblor_war_dog", 1f, 3, 6),
     };
 
     // Where each slot trains (docs/02 "Buildings" Provides); the unique's hall is stated on its faction page.
@@ -40,6 +62,7 @@ public class UnitRosterQaTests
     {
         ["malazan_sapper"] = BuildingSlot.SiegeWorks,
         ["whirlwind_zealot"] = BuildingSlot.InfantryHall,
+        ["teblor_war_dog"] = BuildingSlot.ShockHall,
     };
 
     private static readonly Dictionary<UnitSlot, BuildingSlot> SlotHall = new()
@@ -104,9 +127,40 @@ public class UnitRosterQaTests
             int bi = d.FindBuilding(u.TrainedAt);
             Assert.True(bi >= 0, $"{u.Key}: trainedAt {u.TrainedAt} is not a building");
             BuildingDef b = d.Buildings[bi];
-            BuildingSlot want = u.Slot == UnitSlot.Unique ? UniqueHall[u.Key] : SlotHall[u.Slot];
+            // BUG-1210: a unique the table lacks fails by name, not with a bare KeyNotFoundException.
+            BuildingSlot want = u.Slot == UnitSlot.Unique ? ContentFactions.Typed(UniqueHall, u.Key, "UnitRosterQaTests.UniqueHall") : SlotHall[u.Slot];
             Assert.Equal((u.Key, u.Faction, want), (u.Key, b.Faction, b.Slot));
         }
+    }
+
+    /// <summary>
+    /// D28: the Teblor rows' M7 fields (scale, the War-dog pack, its Hamstring bite, the faction's regeneration), typed from
+    /// teblor.md and read through the loader, so the seconds-to-ticks and HP/s-to-fixed-point conversions are checked too.
+    /// </summary>
+    [Fact]
+    public void TheTeblorRoster_ScalePackHamstringAndRegen_MatchQaTable()
+    {
+        GameData d = TestSim.Data;
+        foreach (var e in TeblorM7)
+        {
+            int i = d.FindUnit(e.Id);
+            Assert.True(i >= 0, $"missing unit {e.Id}");
+            UnitDef u = d.Units[i];
+            Assert.Equal((e.Id, e.Scale, e.Spawn, e.ItemHalfPop), (e.Id, u.Scale, u.SpawnCount, u.ItemHalfPop));
+        }
+        // The pack's worth a dog: 120 / 0 over 3 is exactly 40 / 0 (docs/03 "Implementation (M7-3)").
+        UnitDef dog = d.Units[d.FindUnit("teblor_war_dog")];
+        Assert.Equal((40, 0), (dog.UnitCostGold, dog.UnitCostWood));
+        // Hamstring: { onHit, slowed, 0.2, 2 s = 40 ticks }, the only passive any Teblor unit carries.
+        Assert.True(dog.HitPassive >= 0, "teblor_war_dog has no onHit passive");
+        UnitPassive bite = dog.Passives[dog.HitPassive];
+        Assert.Equal(("slowed", 0.2f, 40), (d.Statuses[bite.Status].Key, bite.Magnitude, bite.DurationTicks));
+        Assert.Single(dog.Passives);
+        Assert.All(d.Units.Where(u => d.Factions[u.Faction].Key == "teblor" && u.Key != "teblor_war_dog"), u => Assert.Empty(u.Passives));
+        // Regen 1 HP/s after 6 s: 20 fixed-point units a tick (400 a hit point), 120 ticks.
+        FactionDef teblor = d.Factions[d.FindFaction("teblor")];
+        Assert.Equal((20, 120), (teblor.RegenPerTick, teblor.RegenDelayTicks));
+        Assert.All(d.Factions.Where(f => f.Key != "teblor"), f => Assert.Equal(0, f.RegenPerTick));
     }
 
     /// <summary>Within a faction a higher-tier unit never costs less than its line infantry (cost out of line with tier).</summary>

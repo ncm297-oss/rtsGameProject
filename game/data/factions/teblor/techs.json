@@ -1,0 +1,17 @@
+{
+  "techs": [
+    {
+      "id": "teblor_blood_oil_anointing",
+      "displayName": "Blood-oil Anointing",
+      "description": "Blood-oil rubbed into the skin before battle: Warriors and Destrier Riders gain +2 armor. Needs Age II.",
+      "researchedAt": "forge",
+      "cost": { "gold": 200, "wood": 150 },
+      "researchTime": 45,
+      "requires": ["age_ii"],
+      "effects": [
+        { "stat": "armor", "amount": 2, "appliesTo": { "units": ["teblor_warrior"] } },
+        { "stat": "armor", "amount": 2, "appliesTo": { "units": ["teblor_destrier_rider"] } }
+      ]
+    }
+  ]
+}

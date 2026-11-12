@@ -1,0 +1,77 @@
+{
+  "difficulties": {
+    "easy": {
+      "thinkInterval": 2,
+      "buildOrderSlack": 30,
+      "waveSizeMultiplier": 0.6,
+      "gatherBonus": 0,
+      "focusFire": false,
+      "pullBackWounded": false,
+      "useAbilities": true,
+      "expandAfter": 900,
+      "counterStrength": 0
+    },
+    "normal": {
+      "thinkInterval": 1,
+      "buildOrderSlack": 5,
+      "waveSizeMultiplier": 1,
+      "gatherBonus": 0,
+      "focusFire": false,
+      "pullBackWounded": false,
+      "useAbilities": true,
+      "expandAfter": 480,
+      "counterStrength": 0.5
+    },
+    "hard": {
+      "thinkInterval": 0.5,
+      "buildOrderSlack": 0,
+      "waveSizeMultiplier": 1.25,
+      "gatherBonus": 0.4,
+      "focusFire": true,
+      "pullBackWounded": true,
+      "useAbilities": true,
+      "expandAfter": 300,
+      "counterStrength": 1
+    }
+  },
+  "openings": [
+    {
+      "id": "standard",
+      "displayName": "War band",
+      "description": "War Lodge and Bloodwood Carver first; four Warriors raid at 8 army pop, then Javelin Throwers, Destrier Riders, Shamans, Breakers and War-dogs join in Age II.",
+      "buildOrder": [
+        { "at": { "time": 0 }, "do": "train", "id": "teblor_gatherer", "count": 11 },
+        { "at": { "pop": 6 }, "do": "build", "id": "teblor_hut" },
+        { "at": { "pop": 7 }, "do": "build", "id": "teblor_war_lodge" },
+        { "at": { "pop": 9 }, "do": "build", "id": "teblor_woodcutters_lodge" },
+        { "at": { "pop": 11 }, "do": "build", "id": "teblor_hut" },
+        { "at": { "pop": 15 }, "do": "build", "id": "teblor_bloodwood_carver" },
+        { "at": { "pop": 15 }, "do": "research", "id": "armor_1" },
+        { "at": { "pop": 16 }, "do": "build", "id": "teblor_hut" },
+        { "at": { "pop": 22 }, "do": "build", "id": "teblor_hut" },
+        { "at": { "pop": 28 }, "do": "build", "id": "teblor_hut" },
+        { "at": { "pop": 34 }, "do": "build", "id": "teblor_hut" },
+        { "at": { "pop": 40 }, "do": "build", "id": "teblor_hut" },
+        { "at": { "pop": 46 }, "do": "build", "id": "teblor_hut" },
+        { "at": { "pop": 52 }, "do": "build", "id": "teblor_hut" },
+        { "at": { "pop": 58 }, "do": "build", "id": "teblor_hut" },
+        { "at": { "pop": 64 }, "do": "build", "id": "teblor_hut" },
+        { "at": { "pop": 70 }, "do": "build", "id": "teblor_hut" },
+        { "at": { "time": 420 }, "do": "research", "id": "age_ii" },
+        { "at": { "time": 420 }, "do": "train", "id": "teblor_gatherer", "count": 8 },
+        { "at": { "time": 480 }, "do": "build", "id": "teblor_shamans_circle" },
+        { "at": { "time": 480 }, "do": "expand" },
+        { "at": { "time": 495 }, "do": "build", "id": "teblor_stables" },
+        { "at": { "time": 510 }, "do": "build", "id": "teblor_javelin_ground" },
+        { "at": { "time": 540 }, "do": "build", "id": "teblor_breakers_hall" },
+        { "at": { "time": 570 }, "do": "research", "id": "teblor_blood_oil_anointing" }
+      ],
+      "compositions": [
+        { "age": 1, "units": { "teblor_warrior": 45 } },
+        { "age": 2, "units": { "teblor_warrior": 45, "teblor_javelin_thrower": 15, "teblor_destrier_rider": 15, "teblor_shaman": 10, "teblor_breaker": 10, "teblor_war_dog": 5 } }
+      ],
+      "attack": { "minArmyPop": 8, "minArmyCost": 600 }
+    }
+  ],
+  "retreat": { "hpFraction": 0.4, "lossFraction": 0.5 }
+}

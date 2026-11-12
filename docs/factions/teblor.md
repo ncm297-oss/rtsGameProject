@@ -2,10 +2,10 @@
 
 **Faction id:** `teblor` · **Milestone:** M7 · **Role:** giants
 
-This page is written ahead of the roster (D-R36, 2026-11-10): every section and column the content pins read on
-malazan.md is here, with the ids, numbers and player-facing words the Teblor files will carry (D28 copies them). Until
-the files land no test compares it to data; `Content/PagePinReadinessTests` checks that the sections are here and parse.
-Where the design asks for something the data format can't hold yet, the page says so next to it ("not in the data").
+This page was written ahead of the roster (D-R36, 2026-11-10) and the files under `game/data/factions/teblor/` were
+copied from it in D28 (2026-11-11): the content pins compare every table, note and player-facing word here with the files,
+both ways, as for the other factions. Where the design asks for something the data format can't hold yet, the page says
+so next to it ("not in the data").
 
 ## Lore hook
 
@@ -121,7 +121,7 @@ build time, footprint, sight and the Watch Tower's attack and detector (the rows
 the Teblor names, in the slot order of the file). Models are 1.25× scale visually but keep template footprints (a
 building has no `scale` field; the view's call).
 
-`Content/BuildingContentTests` and `UnitContentTests` pin this page to the data once the files land.
+`Content/BuildingContentTests` and `UnitContentTests` pin this page to the data.
 
 ## Techs
 
@@ -146,7 +146,7 @@ and the "Faction upgrade" line above to the data.
 ## AI build order (Normal)
 
 The AI opponent's `game/data/factions/teblor/ai.json` (docs/03 "For the data track (M5-1)" and "Implementation
-(M5-8a)") will hold one **opening**, read the same way as malazan.md "AI build order (Normal)" (steps run side by side,
+(M5-8a)") holds one **opening**, read the same way as malazan.md "AI build order (Normal)" (steps run side by side,
 one command per step per think, in this order; **Count** is the `train` commands the step queues over its life). Easy,
 Normal and Hard all play it, since there is one. The name and description below are what the player may read. The
 Teblor keep few workers (16 in Age I, 24 in Age II): each Gatherer costs half as much again as a template worker. The AI
@@ -168,12 +168,13 @@ sketch: the composition lists Javelin Throwers, so a step must place their hall.
   back to regenerate). The 40% is the sketch's; the 50% is the other pages' loss share (the data track's proposal).
 - **Later waves:** one wave at a time; a new one starts when none is out, at least `ai.waveCooldown` after the last
   began, at the opening's threshold, and never while the base is defended.
-- **High starting resources** (proposed for D28; docs/02 "Game flow" 2, docs/03 "Implementation (M6-S6)"): the AI
+- **High starting resources** (docs/02 "Game flow" 2, docs/03 "Implementation (M6-S6)"): the AI
   plays the same opening as at Standard, but while it holds more gold + wood than the preset's spend-down threshold
   (`rules.json` `startingResources` `high` `aiSpendAbove`) it brings its next timed step forward, trains at every
   producer and leans its gatherers toward the kind it holds less of; Standard has no threshold, so it plays exactly as
-  before. Not measured for the Teblor yet (not pinned): `standard` at High is measured once the files land (D28).
-- **Defense** (proposed for D28, the shared rule in Teblor names; docs/02 "AI opponent", docs/03 "Implementation
+  before. Not measured for the Teblor yet (not pinned): `standard` at High (the other pages' figures come from the sim
+  track's M6-S6 QA report, which runs the two older factions).
+- **Defense** (the shared rule in Teblor names; docs/02 "AI opponent", docs/03 "Implementation
   (M5-4b)" and "(M5-4f)", as re-worded in D20, 2026-10-17): a threat starts when an own building (a site too) within
   the defend radius of the Longhouse is hit, or an enemy soldier (not a worker) is seen within it (`rules.json`
   `ai.defendRadius` 48 m; the threat holds `ai.defendFor` 20 s after the last sign). The AI answers with defenders
@@ -220,7 +221,7 @@ bullets to `ai.json`, `rules.json` and `buildings.json`, both ways.
   lodge, is the limit (the Malazan pattern, not yet measured for the Teblor). An enemy Line army seen in Age I shifts
   nothing, since no opening's Age I mix lists a Shaman or a Breaker.
 
-"What answers what" is the shared rule applied to the Teblor units, so it is what the files will play. The data track's
+"What answers what" is the shared rule applied to the Teblor units, so it is what the files play. The data track's
 proposal for a Teblor-only answer (War-dogs against Ranged) is under "Owner review" at the end of this page.
 
 ### Opening 1: `standard` (War band)
@@ -274,6 +275,23 @@ against its share is the sim's (docs/03 "Implementation (M7-2)", BUG-1168).
 - **Attack waves:** first at 8 army pop and 600 gold + wood (`attack`; the cost of 8 pop of the Age I mix: four
   Warriors at 75 a pop). Shamans cast Blood-oil Frenzy at engagement.
 
+**Houses at the cap (D28, 2026-11-11, measured on the shipped files; `QA/Content/AiHouseRuleReportTests.MenuMapNormal_HouseSources_Report` and `MenuMapNormal_TwelfthHouse_Report`).**
+Since M5-4f the executor skips a house step once the population cap is the hard cap (100): the step is done with no
+command sent and no Hut placed. On the menu's map (20 minutes, the other seat idle): Normal, seed 1: the cap reaches 100
+at 1079 s; the last Hut step (step 17) is done at a cap of 100; skipped at the hard cap: step 17; 11 Huts stand at
+20:00, 0 past the cap. As on the other pages, the 12th Hut step measured taken out: without the 12th Hut step (step 17)
+on the same seed, the cap reaches 100 at 1079 s, and 11 Huts stand at 20:00, 0 past the cap. The step stays: at the hard
+cap it costs nothing.
+
+**Spending on the menu's map (D28, 2026-11-11, gathering gold 0.85 / wood 0.75 a second; `Content/AiSpendingReportTests.GeneratedNormal_Spending_Report`).**
+Against an idle seat, 12 forests and 8 mines (the menu's), 20 minutes. Normal, seed 1 (the smallest seed in 1-50 whose
+Normal pick is this opening): the idle base falls at 566 s; in hand at 5 min 95 gold / 305 wood; the first wave at 416
+s; Age II in at 513 s. Easy, seed 1 (Easy always plays the first opening): the idle base falls at 608 s; in hand at 5
+min 25 gold / 295 wood, at 10 min 65 / 185; the first wave at 430 s; Age II in at 548 s. Against an active opponent the
+opening does worse: on the same map and seed a Normal Teblor seat sends no wave and is beaten before Age II by a Normal
+Whirlwind (at 649 s) and a Normal Malazan (at 818 s) (`QA/Content/TeblorOpeningQaTests`, BUG-1240, for the balance pass
+after M7-4).
+
 ## Difficulty
 
 The `difficulties` block of the same `game/data/factions/teblor/ai.json` (docs/02 "AI opponent", docs/03 "For the data
@@ -311,12 +329,13 @@ stated numbers to the file (K).
 | Blood-oil Frenzy / Blood-oil Anointing | Rage-oil Frenzy / Rage-oil Anointing |
 | Gatherer, Javelin Thrower, Destrier Rider, Shaman, Breaker, War-dog, all buildings | Keep (generic) |
 
-## Owner review (D-R36, proposed)
+## Owner review (D-R36; copied into the files in D28)
 
-The words the Teblor files will carry, for the owner to read before D28 copies them (codenames, as the other
-factions' files; the release names are the table above). Each description is one or two short sentences of at most
-160 characters, names only Teblor things, and says "needs X" exactly for a building's requirements (the content pins'
-rules for the shipped factions).
+The words the Teblor files carry, for the owner to read (codenames, as the other factions' files; the release names
+are the table above). D28 copied them as written, since no answer on the names had come; `Content/TeblorRosterPinTests`
+pins every row to the files character for character, both ways. Each description is one or two short sentences of at
+most 160 characters, names only Teblor things, and says "needs X" exactly for a building's requirements (the content
+pins' rules for every faction).
 
 | File | Id | Name (`displayName`) | Description (`description`) |
 | --- | --- | --- | --- |

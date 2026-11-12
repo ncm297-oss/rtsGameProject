@@ -24,7 +24,7 @@ public class AiContentTests
     /// D21: how many openings each file holds, typed from its page's openings table (three on the two shipped pages; a page
     /// written ahead of its data may plan fewer, teblor.md one).
     /// </summary>
-    private static readonly Dictionary<string, int> OpeningCounts = new() { ["malazan"] = 3, ["whirlwind"] = 3 };
+    private static readonly Dictionary<string, int> OpeningCounts = new() { ["malazan"] = 3, ["whirlwind"] = 3, ["teblor"] = 1 };
 
     /// <summary>The shared "Retreat:" bullet's wording: the wave's loss share, then the wounded line.</summary>
     internal const string RetreatPattern = @"lost (\d+)% falls back; a unit under (\d+)% hp";

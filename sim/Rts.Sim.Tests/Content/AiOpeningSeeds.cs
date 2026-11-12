@@ -24,20 +24,31 @@ internal static class AiOpeningSeeds
     }
 
     /// <summary>
+    /// The two seats a per-faction run uses (D28): <see cref="AiScenes.Seats"/>' (player p plays faction p mod 2) with
+    /// <paramref name="faction"/>'s seat, player (faction id mod 2), playing that faction. For the two shipped factions these
+    /// are exactly the default seats, so their runs and pins are unchanged; a third faction (teblor, id 2) takes player 0
+    /// against the Whirlwind. <paramref name="own"/> and <paramref name="other"/> are the two seats' controllers.
+    /// </summary>
+    public static (PlayerSeat[] Seats, int Player) SeatsFor(GameData data, string faction, AiDifficulty difficulty, SeatController own, SeatController other)
+    {
+        int f = data.FindFaction(faction);
+        Assert.True(f >= 0, $"'{faction}' is not a faction of the data");
+        int player = f % 2;
+        var controllers = new SeatController[2];
+        controllers[player] = own;
+        controllers[1 - player] = other;
+        PlayerSeat[] seats = AiScenes.Seats(difficulty, controllers);
+        seats[player] = seats[player] with { Faction = f };
+        return (seats, player);
+    }
+
+    /// <summary>
     /// The opening <paramref name="faction"/>'s AI picks on <paramref name="seed"/> at <paramref name="difficulty"/>, seated as
-    /// player (faction id mod 2) against another faction, both seats AI (D-R36). For the two shipped factions this is the
-    /// seat <see cref="AiScenes.Seats"/> gives them (player p plays faction p mod 2); a third faction gets its own seat
-    /// instead of another faction's.
+    /// <see cref="SeatsFor"/> seats it, both seats AI (D-R36; D28: the other seat is the default seat's faction).
     /// </summary>
     public static int PickFor(ulong seed, string faction, AiDifficulty difficulty)
     {
-        int f = TestSim.Data.FindFaction(faction);
-        Assert.True(f >= 0, $"'{faction}' is not a faction of the shipped data");
-        int player = f % 2;
-        int other = TestSim.Data.FindFaction(ContentFactions.Other(faction));
-        var seats = new PlayerSeat[2];
-        seats[player] = new PlayerSeat(f, SeatController.Ai, difficulty);
-        seats[1 - player] = new PlayerSeat(other, SeatController.Ai, difficulty);
+        (PlayerSeat[] seats, int player) = SeatsFor(TestSim.Data, faction, difficulty, SeatController.Ai, SeatController.Ai);
         Simulation sim = AiScenes.Flat(seats, seed: seed, workers: 0);
         return sim.AiOpening(player);
     }
@@ -45,9 +56,8 @@ internal static class AiOpeningSeeds
     /// <summary>The smallest seed in 1-<see cref="MaxReportSeed"/> whose <paramref name="difficulty"/> pick for <paramref name="faction"/>'s seat is <paramref name="opening"/>.</summary>
     public static ulong Smallest(string faction, int opening, AiDifficulty difficulty)
     {
-        int player = TestSim.Data.FindFaction(faction); // AiScenes.Seats: player p plays faction p mod 2
         for (ulong seed = 1; seed <= MaxReportSeed; seed++)
-            if (Pick(seed, player, difficulty) == opening) return seed;
+            if (PickFor(seed, faction, difficulty) == opening) return seed;
         Assert.Fail($"{faction}: no seed in 1-{MaxReportSeed} picks opening {opening} on {difficulty}");
         return 0;
     }

@@ -767,36 +767,35 @@ public class AbilityContentTests
         Assert.Contains(cusser.Effects, e => e.Kind == AbilityEffectKind.Damage && e.Buildings && e.FriendlyFire > 0);
     }
 
-    // ---- D-R36: the self / aura shape (teblor.md's Blood-oil Frenzy), pinned before any shipped ability has it ----
+    // ---- D-R36: the self / aura shape (teblor.md's Blood-oil Frenzy); since D28 the shipped Teblor ability itself ----
 
     /// <summary>
-    /// Telas Fire's slot remade in memory as teblor.md's Blood-oil Frenzy (<c>selfAura</c>, no range, 8 m, 0.5 s, 40 s,
-    /// own units, <c>applyStatus frenzied</c> <paramref name="magnitude"/> for <paramref name="seconds"/>), and malazan.md with
-    /// the Telas Fire row replaced by teblor.md's row (its Unit cell the Cadre Mage, who lists the ability): the Frenzy
-    /// row's shape on a shipped faction, since no Teblor ability is loaded yet.
+    /// D28: the shipped <c>blood_oil_frenzy</c> (<c>selfAura</c>, no range, 8 m, 0.5 s, 40 s, own units,
+    /// <c>applyStatus frenzied</c>) against teblor.md's row, with <paramref name="editRow"/> applied to the page row and the
+    /// loaded ability's range, affects and status magnitude / seconds replaced in memory by the arguments (their defaults are
+    /// the page's), so one page cell or one data value changed alone reads red. Until D28 this ran on Telas Fire's slot,
+    /// remade in memory, since no Teblor ability was loaded.
     /// </summary>
     private static Result CompareFrenzy(Func<string, string>? editRow = null, float magnitude = 0.4f, double seconds = 10, float range = 0,
         AbilityAffects affects = AbilityAffects.OwnUnits)
     {
-        string[] teblor = PageTables.FactionLines("teblor");
-        string frenzyRow = teblor.Single(l => l.StartsWith("| Blood-oil Frenzy |", StringComparison.Ordinal)).Replace("| Shaman |", "| Cadre Mage |", StringComparison.Ordinal);
-        if (editRow != null) frenzyRow = editRow(frenzyRow);
-        string[] lines = PageTables.FactionLines("malazan");
-        int row = Array.FindIndex(lines, l => l.StartsWith("| Telas Fire |", StringComparison.Ordinal));
-        lines[row] = frenzyRow;
+        string[] lines = PageTables.FactionLines("teblor");
+        int row = Array.FindIndex(lines, l => l.StartsWith("| Blood-oil Frenzy |", StringComparison.Ordinal));
+        Assert.True(row >= 0, "teblor.md has no Blood-oil Frenzy row");
+        if (editRow != null) lines[row] = editRow(lines[row]);
         int t = SimConstants.TicksPerSecond;
-        ImmutableArray<AbilityDef> abilities = With("Telas Fire", a => new AbilityDef
+        ImmutableArray<AbilityDef> abilities = With("Blood-oil Frenzy", a => new AbilityDef
         {
-            Id = a.Id, Key = "blood_oil_frenzy", Faction = a.Faction, DisplayName = "Blood-oil Frenzy", Description = a.Description,
-            Kind = AbilityKind.SelfAura, Range = range, Radius = 8, CastTicks = t / 2, CooldownTicks = 40 * t, DurationTicks = 0,
-            Affects = affects,
+            Id = a.Id, Key = a.Key, Faction = a.Faction, DisplayName = a.DisplayName, Description = a.Description,
+            Kind = a.Kind, Range = range, Radius = a.Radius, CastTicks = a.CastTicks, CooldownTicks = a.CooldownTicks,
+            DurationTicks = a.DurationTicks, Affects = affects,
             Effects = ImmutableArray.Create(new AbilityEffect
             {
                 Kind = AbilityEffectKind.ApplyStatus, Status = Data.Statuses.Single(x => x.Key == "frenzied").Id,
                 Magnitude = magnitude, DurationTicks = (int)Math.Round(seconds * t),
             }),
         });
-        return Compare(Data, abilities, "malazan", lines);
+        return Compare(Data, abilities, "teblor", lines);
     }
 
     [Fact]

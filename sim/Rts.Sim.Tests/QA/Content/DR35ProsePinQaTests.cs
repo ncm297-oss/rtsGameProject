@@ -61,7 +61,7 @@ public class DR35ProsePinQaTests
     }
 
     /// <summary>The word each page's far-expansion bullet uses for its town hall (D-R37: typed, failing naming a faction it lacks).</summary>
-    private static readonly Dictionary<string, string> HallWord = new() { ["malazan"] = "keep", ["whirlwind"] = "camp" };
+    private static readonly Dictionary<string, string> HallWord = new() { ["malazan"] = "keep", ["whirlwind"] = "camp", ["teblor"] = "hall" };
 
     /// <summary>BUG-1181: both pages say the reach holds for every mine, a start's included.</summary>
     [Theory]
@@ -80,7 +80,7 @@ public class DR35ProsePinQaTests
     [MemberData(nameof(ContentFactions.Theory), MemberType = typeof(ContentFactions))]
     public void TheIntro_CountsTheBullets(string faction) => IntroCounts(PageTables.FactionLines(faction));
 
-    /// <summary>The intro check on one page's lines (shared with <see cref="TeblorPageParseQaTests"/>).</summary>
+    /// <summary>The intro check on one page's lines.</summary>
     internal static void IntroCounts(string[] lines)
     {
         int h = Array.IndexOf(lines, AiAdaptsContentTests.Heading);
