@@ -1,0 +1,37 @@
+{
+  "id": "standard",
+  "displayName": "War band",
+  "description": "War Lodge and Javelin Ground first, then Age II; two Warriors raid at 4 army pop, then Javelin Throwers, Shamans, Breakers, Destrier Riders and War-dogs join in Age II.",
+  "buildOrder": [
+    { "at": { "time": 0 }, "do": "train", "id": "teblor_gatherer", "count": 9 },
+    { "at": { "pop": 6 }, "do": "build", "id": "teblor_hut" },
+    { "at": { "pop": 7 }, "do": "build", "id": "teblor_war_lodge" },
+    { "at": { "pop": 9 }, "do": "build", "id": "teblor_woodcutters_lodge" },
+    { "at": { "pop": 9 }, "do": "build", "id": "teblor_javelin_ground" },
+    { "at": { "pop": 11 }, "do": "build", "id": "teblor_hut" },
+    { "at": { "pop": 16 }, "do": "build", "id": "teblor_hut" },
+    { "at": { "pop": 22 }, "do": "build", "id": "teblor_hut" },
+    { "at": { "pop": 28 }, "do": "build", "id": "teblor_hut" },
+    { "at": { "pop": 34 }, "do": "build", "id": "teblor_hut" },
+    { "at": { "pop": 40 }, "do": "build", "id": "teblor_hut" },
+    { "at": { "pop": 46 }, "do": "build", "id": "teblor_hut" },
+    { "at": { "pop": 52 }, "do": "build", "id": "teblor_hut" },
+    { "at": { "pop": 58 }, "do": "build", "id": "teblor_hut" },
+    { "at": { "pop": 64 }, "do": "build", "id": "teblor_hut" },
+    { "at": { "pop": 70 }, "do": "build", "id": "teblor_hut" },
+    { "at": { "time": 300 }, "do": "research", "id": "age_ii" },
+    { "at": { "time": 480 }, "do": "build", "id": "teblor_bloodwood_carver" },
+    { "at": { "time": 480 }, "do": "build", "id": "teblor_shamans_circle" },
+    { "at": { "time": 540 }, "do": "build", "id": "teblor_breakers_hall" },
+    { "at": { "time": 570 }, "do": "research", "id": "teblor_blood_oil_anointing" },
+    { "at": { "time": 600 }, "do": "research", "id": "armor_1" },
+    { "at": { "time": 600 }, "do": "train", "id": "teblor_gatherer", "count": 8 },
+    { "at": { "time": 600 }, "do": "expand" },
+    { "at": { "time": 600 }, "do": "build", "id": "teblor_stables" }
+  ],
+  "compositions": [
+    { "age": 1, "units": { "teblor_warrior": 45 } },
+    { "age": 2, "units": { "teblor_warrior": 45, "teblor_javelin_thrower": 15, "teblor_destrier_rider": 15, "teblor_shaman": 10, "teblor_breaker": 10, "teblor_war_dog": 5 } }
+  ],
+  "attack": { "minArmyPop": 4, "minArmyCost": 300 }
+}
