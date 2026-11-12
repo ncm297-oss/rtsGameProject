@@ -12,7 +12,7 @@ namespace Rts.Game;
 /// <remarks>
 /// One pooled torus node, made in <see cref="_Ready"/> and reused by every order (no cursor art before M6). The mark itself
 /// (target and time left) is a <see cref="TargetMark"/>; each frame the ring follows a unit target's interpolated position
-/// (radius <see cref="UnitScale"/> x its drawn radius, M7-V1: <see cref="UnitViews.DrawnRadius(World, int)"/>, outside the green selection ring) or sits round a building's footprint,
+/// (radius <see cref="UnitScale"/> x its drawn radius, M7-V3c: <see cref="UnitViews.DrawnRadius(World, int)"/>, the collision radius, outside the green selection ring) or sits round a building's footprint,
 /// and hides when the time is up or the target is dead or recycled. Moving a node allocates nothing, so a frame is 0 bytes.
 /// With <see cref="Fog"/> set (M4-V4) the ring is not drawn while the fog hides its target (its time keeps running); a
 /// building target the fog draws as a ghost (M4-V5) gets the ring on its remembered footprint, even once it is gone.

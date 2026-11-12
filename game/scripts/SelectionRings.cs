@@ -8,7 +8,7 @@ namespace Rts.Game;
 /// <summary>Flat rings under the selected units: one <see cref="MultiMesh"/> instance per selected unit, one draw call.</summary>
 public partial class SelectionRings : MultiMeshInstance3D
 {
-    /// <summary>Ring radius as a multiple of the unit's drawn radius (M7-V1: <see cref="UnitViews.DrawnRadius(World, int)"/>, its radius times its data scale).</summary>
+    /// <summary>Ring radius as a multiple of the unit's drawn radius (M7-V3c: <see cref="UnitViews.DrawnRadius(World, int)"/>, its collision radius; data scale is the height only).</summary>
     public const float RadiusScale = 1.35f;
 
     /// <summary>Height above the ground so the ring doesn't z-fight the terrain, in meters.</summary>

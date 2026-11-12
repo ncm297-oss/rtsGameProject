@@ -3088,17 +3088,18 @@ state hash, digest or golden `k` line; and the two pack bugs its war-dog row and
 M7's first bullet, the view half ("1.5× visuals"): each unit type is drawn at its data `scale`. View code only; no sim or
 ViewApi change, no data file changed (shipped units are all at 1.0, so the game draws exactly as before).
 
-- **The formula:** a type's placeholder capsule is `UnitViews.DrawnRadius(def)` = `radius x scale` wide and
-  `UnitViews.DrawnHeight(def)` = `BodyHeight(radius) x scale` = `(2 radius + 1) x scale` tall, so 1.5 is 1.5x in every
-  dimension and 0.5 half. The scale is applied once per type when `UnitViews.Bind` builds the shared `CapsuleMesh`; the
+- **The formula** (since M7-V3c, BUG-1260; M7-V1 drew the width at `radius x scale`): a type's placeholder capsule is
+  `UnitViews.DrawnRadius(def)` = `radius` (the collision radius alone) wide and `UnitViews.DrawnHeight(def)` =
+  `BodyHeight(radius) x scale` = `(2 radius + 1) x scale` tall, so `scale` is the height only: a body is never wider than
+  the room the sim gives it, and a 1.5 unit is 1.5x as tall. The scale is applied once per type when `UnitViews.Bind` builds the shared `CapsuleMesh`; the
   per-frame path reads nothing new for the body (it already placed the node at half the mesh's height, so feet stay on the
   ground). The view reads `UnitDef.Scale` from `GameData` as it reads `UnitDef.Radius`; nothing else from the sim.
-- **What follows the drawn body:** the selection ring (`1.35 x radius x scale`) and the attack-order target ring
-  (`1.7 x radius x scale`), both through `UnitViews.DrawnRadius(world, slot)` (the slot's radius times its type's scale,
-  three array reads a ring, no allocation); the hp bar sits over the drawn top and its length is
+- **What follows the drawn body:** the selection ring (`1.35 x radius`) and the attack-order target ring
+  (`1.7 x radius`), both through `UnitViews.DrawnRadius(world, slot)` (the slot's radius, one array read a ring, no
+  allocation; `radius x scale` until M7-V3c); the hp bar sits over the drawn top and its length is
   `1.2 m x max(scale, 0.75)` (`CombatViews.BarScaleFor`, per type at `Bind`: a 0.5 unit's bar stays readable at 0.9 m, a
   3.0 unit's is 3.6 m); its thickness doesn't scale, so the cast bar and status markers stacked above it keep their
-  spacing (they too sit over the drawn top, `AbilityViews`); the corpse disc and its rim (`radius x scale`, rim x1.2); the
+  spacing (they too sit over the drawn top, `AbilityViews`); the corpse disc and its rim (`radius`, rim x1.2); the
   refused-cast cue disc round a caster (drawn radius + 0.9 m). Units have no death fade (the body goes the frame the death
   is shown), so there is nothing else to scale. **Since M7-V2** the aimed shots follow it too: a shot leaves its shooter at
   `ProjectileViews.HeightFor(scale)` = `1.2 m x scale` and its hit flash sits at its victim's (see "Implementation (M7-V2)"). **Not scaled:** the minimap dot (one size), the cargo cube (it sits over the
@@ -3107,9 +3108,10 @@ ViewApi change, no data file changed (shipped units are all at 1.0, so the game 
   round the scale-1 body centre (`ScreenPicker.PickClick`, floor 12 px) and a box by that centre, exactly as before; a
   bigger body is not easier to click, and a 3.0 unit's drawn head above its sim body selects nothing. The scale changes
   only how a unit looks: never what it hits, blocks or is hit by (docs/02 "Combat / Stats").
-- **Known look:** a 3.0 body (3.6 m wide at radius 0.6) overlaps its neighbours and can overlap a building's mesh beside it;
-  collision is still the radius, so that is drawing only.
-- **Tests:** `game/tests/ScaleViewTest` (shipped data: every type today's capsule; a forged data copy with Heavy Infantry
+- **Known look (until M7-V3c):** a 3.0 body (3.6 m wide at radius 0.6) overlapped its neighbours and could overlap a
+  building's mesh beside it. Since M7-V3c the width is the radius, so bodies overlap only where the sim's soft separation
+  lets two units closer than their radii.
+- **Tests:** `game/tests/ScaleViewTest` (shipped data: every type's capsule the formula; a forged data copy with Heavy Infantry
   1.5, Crossbowman 0.5, Sapper 3.0 and the catapult 1.5 in a real match: mesh sizes against the Laborer beside them, feet on
   the ground, both rings, the bar lengths, the corpse discs, the click / box rows for the 1.5 catapult and the 3.0 Sapper,
   0 bytes over 20 frames of the mixed scales; windowed with `-- --shots <dir>` it saves the row), `UnitViewsTest` (every
@@ -3312,6 +3314,33 @@ game/tests/ThreeFactionTest, RegenCueTest; QaM6V11Test's oracle (friendly fire)
   hit + 120, gone on the next hit's frame, gone at full; 60 steady frames 0 bytes in `SelectionPanel.Sync`; grid and
   building no cue; layout); `ThreeFactionTest`; `QaM6V11Test`; `DifficultyTipTest` (the BUG-1200 rows on forged
   intervals), `QaM7Vh1Test`, `QaM5V2Test`, `QaM5V2bTest` (their expected tips built with the phrase).
+
+### Implementation (M7-V3c)
+
+BUG-1260: a Teblor giant (radius 0.75, scale 1.5) was drawn at `radius x scale` = 1.125 m, so giants standing at the
+1.5 m the sim keeps between them were drawn 0.75 m inside each other; the scale was counted twice in the width (once in
+the data's giant radius, once by the view). View code only; no sim, ViewApi or data file changed.
+
+- **The rule** (Producer default, owner may revisit): the drawn width is the collision radius,
+  `UnitViews.DrawnRadius(def)` = `radius` and `DrawnRadius(world, slot)` = the slot's `Radius`; `scale` is the height only
+  (`DrawnHeight` unchanged). Every reader follows with no other edit: the capsule, the selection ring (1.35x), the target
+  ring (1.7x), the corpse disc and rim (1x, 1.2x), the refused-cast cue disc (radius + 0.9 m). Unchanged: the hp bar's
+  length and height, the cast and status markers over the drawn top, the shot heights, the hit test (the sim's radius).
+  A Warrior is now 1.5 m wide and 3.75 m tall beside a Heavy Infantry's 0.8 m x 1.8 m (1.875x as wide, 2.08x as tall).
+- **Scale-1 units draw exactly as before** (every Malazan and Whirlwind type): `CombatViewTest`'s seed-1 brawl shot is
+  pixel-identical before and after. When real models arrive the model's width replaces the capsule's; the rings keep the
+  collision radius.
+- **BUG-1260 item 2 (the white first frame):** not a colour bug. A unit first seen below its maximum hp flashes white once
+  (the M4-V2 hit flash, BUG-0160); QA's scratch scene hurt its Warriors before their first frame. A normal Teblor match
+  start draws every unit in its player's colour on every frame, with no flash.
+- **Tests:** `game/tests/TeblorViewTest` (shipped data, real Teblor: the roster's widths, heights and the old formula for
+  the two scale-1 factions; rings, target ring, corpse disc and rim per type in a match; the setup's third row set to Teblor
+  and Start; the Gatherers of both Teblor bases at tick 30 and a packed group of Warriors and Gatherers drawn apart wherever
+  the sim keeps them apart; the Warrior / Heavy Infantry sizes; "Regenerating" on a Warrior hurt by real archer hits; the
+  War-dog's "W×3" in the Stables & Kennels queue after Age II; the white first frame, both ways; windowed with
+  `-- --shots <dir>` it saves five pictures), `ScaleViewTest`, `UnitViewsTest`, `ShellTest` (their width pins moved to the
+  rule; `ScaleViewTest`'s click / box rows prove the hit test above the centre, where the drawn body now reaches past the
+  sim's pick circle).
 
 ## Vision, detection, fog
 

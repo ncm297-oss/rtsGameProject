@@ -1379,9 +1379,9 @@ public partial class ShellTest : Node
             seen++;
             Color c = UnitViews.ColorFromRgb(want[u.Owner[i]]);
             if (units.ViewOf(i)?.MaterialOverride is not StandardMaterial3D m || !m.AlbedoColor.IsEqualApprox(c)) wrongBody++;
-            // M7-V1: each body is its type's capsule at its data scale (shipped: every type 1.0, today's capsule).
+            // M7-V1: each body is its type's capsule, its data scale tall; M7-V3c: its radius wide.
             UnitDef def = _data.Units[u.TypeId[i]];
-            if (units.ViewOf(i)?.Mesh is not CapsuleMesh cap || cap.Radius != def.Radius * def.Scale || cap.Height != UnitViews.BodyHeight(def.Radius) * def.Scale) wrongSize++;
+            if (units.ViewOf(i)?.Mesh is not CapsuleMesh cap || cap.Radius != def.Radius || cap.Height != UnitViews.BodyHeight(def.Radius) * def.Scale) wrongSize++;
             if (u.Owner[i] == SelectionController.LocalPlayer && mini.Raster!.TryPixelOf(u.Position[i], out int x, out int y))
             {
                 Color got = mini.DotsImage.GetPixel(x, y);
