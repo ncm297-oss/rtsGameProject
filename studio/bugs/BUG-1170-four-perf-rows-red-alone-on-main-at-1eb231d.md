@@ -74,3 +74,5 @@ the slowdown may outlast the load). The developer measured 203 / 0 Perf earlier 
   speed and fail when it runs slow, with no load to blame: a power or thermal state, not code and not the owner's apps alone.
   No re-bound. M7-H1 runs Perf once first: green means close this as machine state with the two runs as the record; red at
   base and head alike means record the numbers and move on (an owner item is in STATE's Wanted, item 8).
+
+- QA M7-H1 (2026-11-11, 21:31-21:36, the sim branch at 1a49bbc on a scratch clone): `Category=Perf` alone, started after every test host and Godot (all tracks) had ended, CPU 3-5 % in the seconds before: **203 / 0 / 3 of 206 in 4 m 44 s**; `ASweepRetarget` 15.81 us (bound 50; the recorded speed), every-start variant 34.65 us. The developer's 191 / 12 / 3 the same evening (~18:45, idle, 85.5 us) and this green run on the same code bracket the pattern: the PC's slow state, not the code. QA agrees with closing it as machine state.
