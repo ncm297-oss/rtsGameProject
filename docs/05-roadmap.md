@@ -14,7 +14,7 @@ Status legend: **Next** = start here, **Planned** = not started, **Done** = acce
 | M4 | Combat, fog, abilities | **Done** (2026-10-11, Producer sign-off in session 2026-10-10-2334 after every track's end-of-M4 hardening (M4-H3, M4-VH3, D-H3); the data track's D12 is accepted and held on its branch, landing at the next session's data merge; 10 / 10 criteria, in progress since 2026-10-07-2315; retro below) | Malazan vs. Whirlwind armies fight with abilities and fog |
 | M5 | AI opponent | **In progress** (since 2026-10-11; 8 / 9 criteria (1, 2, 3, 4, 5, 7, 8, 9), three owner-requested criteria added 2026-10-14; left: criterion 6, the owner's playtest) | Lose to a Whirlwind AI |
 | M6 | Game shell & real art | **Started ahead** (view track since 2026-10-11; 5 / 10 criteria (1, 2, 3, 4, 7); criterion 7 ticked 2026-11-06-0326 when M6-S8's two maps landed) | A friend can play it |
-| M7 | Teblor | **Started** (2026-11-09-2226, while M5 waits on the owner's playtest and M6 on the owner's items; 0 / 4 criteria; the roster written and held one session, 2026-11-11-1317) | Third faction: scale and population systems proven |
+| M7 | Teblor | **Started** (2026-11-09-2226, while M5 waits on the owner's playtest and M6 on the owner's items; 1 / 4 criteria; the Teblor roster on `main` since 2026-11-11-2256) | Third faction: scale and population systems proven |
 | M8 | Shadow | Planned | Fourth faction: stealth polish, summons |
 | M9 | Tiste Andii | Planned | Fifth faction: darkness, flying, elite balance |
 
@@ -895,12 +895,18 @@ open S1 / S2. Retro below; open S3 / S4 listed there.)_
       exact, `PopText` "9.5", the AI's `pop` trigger and `minArmyPop`, a 2,000-tick `HalfPop` invariant). **M7-V1, 2026-11-10-0146:
       the view half is done**: each unit type's capsule, selection / target ring, hp bar and corpse disc are drawn at
       `radius × scale` / `BodyHeight × scale` (`UnitViews.DrawnRadius` / `DrawnHeight`), the hit test keeps the sim's radius, the
-      minimap dot is unscaled; shipped data renders pixel-identical. Left: a Teblor unit at `scale` 1.5 / 2-3 pop in shipped data.)
-- [ ] Giant armor class in play; regeneration. (M7-1, 2026-11-09-2226: **regeneration is built**: `faction.json`
+      minimap dot is unscaled; shipped data renders pixel-identical. **2026-11-11-2256:** the Teblor roster is on `main` (D28-L): six
+      units at `scale` 1.5 and 2-3 pop ship. **Not ticked:** the first screenshots show giants drawn `radius × scale` = 1.125 m wide on
+      0.75 m of collision room, standing inside each other (BUG-1260, the view's M7-V3c: width from the collision radius, `scale`
+      the height; Producer default, owner may revisit).)
+- [x] Giant armor class in play; regeneration. (M7-1, 2026-11-09-2226: **regeneration is built**: `faction.json`
       `regen {hpPerSecond, delay}` (fixed-point, 400 units = 1 HP, the faction rate after `delay` seconds without damage), the
       `regenerating` status (heals through the delay, stacks), `RegenSystem` in phase 5 with an O(1) skip, save format 10 (`REGN`;
       every older save refused), QA's fuzz / 50 mid-match saves / cross-process digest; the shipped `giant` row proven by
-      `DamageCalcTests.TheGiantRow_*` (×1.25 pierce / magic, ×0.75 siege). Left: a shipped faction using either (the Teblor roster, data).)
+      `DamageCalcTests.TheGiantRow_*` (×1.25 pierce / magic, ×0.75 siege). **Ticked 2026-11-11-2256:** the Teblor roster is on `main`
+      (D28-L): four shipped units are `giant`, `faction.json` ships `regen` 1 HP/s after 6 s; `QA/Content/TeblorRosterQaTests`
+      (`AGiant_TakesTimesOneAndAQuarter_*`, `ATeblorWarrior_Regenerates1HpPerSecond_*`) prove both in combat scenes on the shipped
+      data; the view shows "Regenerating" (M7-V3a).)
 - [ ] War-dog packs (multi-spawn queue item, Hamstring), Blood-oil Frenzy with aftermath slow. (M7-2: **the pack's sim
       half is built**: `units.json` `spawnCount` (1-8; one queue item, the item's cost and train time, every unit's pop
       reserved at the start, all N spawned on the N free cells nearest the rally or none that tick; no save-format change)
@@ -910,8 +916,9 @@ open S1 / S2. Retro below; open S3 / S4 listed there.)_
       one-entry-per-id merge, docs/03 M4-4b-3a "Known limits" (1)). **M7-3, 2026-11-10-1236:** the pack's AI riders: a
       pack unit's worth is the item's cost / `spawnCount` (`UnitDef.UnitWorth`, every AI and stats sum; BUG-1168), the AI's
       census counts a queued pack as its units, an item above `rules.popCap` is a load error (BUG-1167). **M7-V2,
-      2026-11-10-1236:** the queue strip's square reads "H×3" for a pack, shots leave and land at `1.2 m × scale`. Left: the
-      Teblor war-dog row (data, D28), the aftermath (M7-4).)
+      2026-11-10-1236:** the queue strip's square reads "H×3" for a pack, shots leave and land at `1.2 m × scale`. **2026-11-11-2256:**
+      the War-dog ships (D28-L: three a pack, the bite's Slowed 20% for 2 s) and Blood-oil Frenzy ships as a self-cast aura
+      (+40% attack speed). Left: Frenzy's +20% damage and aftermath slow (M7-4).)
 - [ ] Teblor AI build order; models and animations; balance pass vs. Malazan and Whirlwind. (M7-3, 2026-11-10-1236: **the
       sim has room for a third faction**: `game/data/common/factions.json` `order` (append-only) fixes the faction ids and
       the unit / building type ids faction by faction, so a `teblor` folder appended moves no Malazan v Whirlwind digest
@@ -924,7 +931,10 @@ open S1 / S2. Retro below; open S3 / S4 listed there.)_
       "War band" opening, pinned to the page both ways) and **held on `studio/2026-11-11-1317-data`**: the merged tree has 28
       sim-owned test rows red (BUG-1222, the sim's M7-5). M7-H1 made the sim-owned tests third-faction-ready; M7-V3a proved the
       setup, a match, a save and a recording on a forged third faction and added the "Regenerating" cue. No criterion is ticked
-      until the roster is on `main`. Open for the balance pass: BUG-1241 (the Normal Teblor AI is gold-starved).)
+      until the roster is on `main`. Open for the balance pass: BUG-1241 (the Normal Teblor AI is gold-starved). **2026-11-11-2256:**
+      the sim's M7-5 (BUG-1222) and the view's M7-V3b (BUG-1231) fixed the rows and scenes the roster broke, and **D28-L landed
+      the roster on `main` unchanged** (the `standard` "War band" build order included; golden header 67269D955D18D885). Left:
+      models and animations (the owner's art call first), the balance pass (BUG-1241; D29 its opening half).)
 
 ## M8 — Shadow
 
