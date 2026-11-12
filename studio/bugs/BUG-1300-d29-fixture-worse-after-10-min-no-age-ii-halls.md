@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S2 (criterion 4: the opening named "to land" and what the player reads; the Producer's QA focus "worse anywhere / expand, every hall, Anointing by 15:00") |
-| Status | open |
+| Status | fixed (re-checked 2026-11-12-0546, fix round 1) |
 | Found | 2026-11-12-0546, task D29 (QA) |
 | System | data: the D29 fixture `sim/Rts.Sim.Tests/Content/Fixtures/teblor_standard_d29.json` (the proposed Teblor `standard` opening); AI opening play |
-| Fixed by | |
+| Fixed by | D29 fix round 1 (48206a4): the hand-over is now V24, measured to 15:00 (`Content/TeblorOpeningHorizonReportTests`); QA regression `QA/Content/D29FixtureQaTests` (repointed) and `D29OpeningQaStressTests.HandOverShippedAndV14_Seeds1To5_To15Minutes_Report` |
 
 ## Repro
 1. `dotnet test sim/Rts.Sim.Tests --filter "FullyQualifiedName~D29OpeningQaStressTests.ShippedAndFixture_Seeds1_4_5_To15Minutes_Report|FullyQualifiedName~D29OpeningQaStressTests.Fixture_Seed1_VatharVMalazan" --logger "console;verbosity=detailed"`
@@ -61,3 +61,21 @@ at 10:00).
   sooner once Age II is in. A variant that brings the eight Gatherers back right after Age II completes (a `time` step
   just after the Age II step, e.g. 420) was not measured by D29.
 - Not a sim defect: the opening is data; nothing shipped changed this session.
+
+## Re-check (2026-11-12-0546, fix round 1)
+Fixed as a report: the hand-over is now honest on both horizons. QA re-ran the developer's three reports and its own
+harness (`D29OpeningQaStressTests.HandOverShippedAndV14_Seeds1To5_To15Minutes_Report`); every tally reproduces exactly.
+- The fixture is V24 (V4 with Age II due at 6:00, the shipped 8 / 600 wave, the expansion at 8:00); asserted step for step
+  by `TeblorOpeningFixtureTests.D29Fixture_IsTheMeasuredVariant`.
+- QA's seats, seeds 1-5 (of 40), V24 vs V0: Age II by 10:00 21 vs 7, a wave 34 vs 15, target met on 1 of 5 seeds vs 0;
+  by 15:00 expanded 3 vs 4, every kind 0 vs 3, Breakers Hall 0 vs 3, Stables 14 vs 22, Anointing 2 vs 5, defeated 5 vs 17
+  (3 pairings worse, 15 better). Seats swapped: Age II 19 vs 5, wave 38 vs 24, defeated 9 vs 25 (2 worse, 18 better). No
+  pairing loses Age II or a wave by 10:00 against V0 on either seat order.
+- The report now says where V24 is worse (halls, Stables, Anointing, army pop) and concludes "the file alone is not enough",
+  which the 960-match table supports: no variant meets the target on all 5 seeds (best 4 of 5: V4, V13, V14, V18, V21, all
+  defeated 18-22 of 40).
+- The description ("... four Warriors raid at 8 army pop, with Javelin Throwers beside them") holds: the wave is four
+  Warriors' pop and the Age I composition is Warriors only (`D29FixtureQaTests.HandOverDescription_FourWarriorsAtEightPop_MatchesTheData`);
+  Javelin Throwers are fielded in 21 of 40, i.e. in every match that reaches Age II by 15:00. It no longer names Breakers,
+  Destrier Riders or War-dogs (fielded 0 of 40).
+- Residual, not this bug: one figure in the conclusion is off (V25 finishes 4 Breakers Halls, not 0): BUG-1302 (S4).

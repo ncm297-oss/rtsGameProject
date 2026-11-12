@@ -11,7 +11,9 @@ namespace Rts.Sim.Tests.QA.Content;
 /// through it gives the shipped content hash), the fixture copy differs from the shipped data only in the Teblor's opening 0
 /// (every other faction's AI, the Teblor difficulties and retreat, the rules unchanged), and the loaded openings differ in
 /// exactly the steps and thresholds the D29 report names. And the fixture still has a step for every building kind, research
-/// and expansion the shipped opening has (nothing dropped while reordering).
+/// and expansion the shipped opening has (nothing dropped while reordering). Re-check (fix round 1): repointed from V4 (now
+/// <c>teblor_standard_d29_v4.json</c>) to the hand-over (<see cref="TeblorOpeningHorizonReportTests.HandOver"/>, V24), and the
+/// description's "four Warriors raid at 8 army pop" is checked against the data.
 /// </summary>
 public class D29FixtureQaTests(ITestOutputHelper output)
 {
@@ -26,7 +28,7 @@ public class D29FixtureQaTests(ITestOutputHelper output)
     public void FixtureCopy_DiffersFromShipped_OnlyInTheTeblorOpening()
     {
         GameData shipped = TestSim.Data;
-        GameData v4 = TeblorOpeningVariantsReportTests.DataWith(TeblorOpeningVariantsReportTests.Fixture());
+        GameData v4 = TeblorOpeningVariantsReportTests.DataWith(TeblorOpeningHorizonReportTests.HandOver()); // the hand-over (V24 since fix round 1)
         Assert.NotEqual(shipped.ContentHash(), v4.ContentHash());
 
         // Put the shipped opening's loaded fields back by hand is not possible (init-only), so compare the rest field by field.
@@ -55,11 +57,29 @@ public class D29FixtureQaTests(ITestOutputHelper output)
         output.WriteLine($"shipped: {Describe(s)}");
         output.WriteLine($"fixture: {Describe(n)}");
         output.WriteLine($"attack: {s.AttackMinHalfPop / 2.0} pop / {s.AttackMinCost} -> {n.AttackMinHalfPop / 2.0} pop / {n.AttackMinCost}");
-        // The report's named changes: wave 8 / 600 -> 4 / 300 (half-pop 16 -> 8).
+        // Fix round 1 (BUG-1300): the hand-over keeps the shipped 8 pop / 600 wave (half-pop 16); V4's 4 / 300 was dropped.
         Assert.Equal(16, s.AttackMinHalfPop);
         Assert.Equal(600, s.AttackMinCost);
-        Assert.Equal(8, n.AttackMinHalfPop);
-        Assert.Equal(300, n.AttackMinCost);
+        Assert.Equal(s.AttackMinHalfPop, n.AttackMinHalfPop);
+        Assert.Equal(s.AttackMinCost, n.AttackMinCost);
+    }
+
+    /// <summary>
+    /// The hand-over's description says "four Warriors raid at 8 army pop": the wave threshold is four Warriors' pop, and the
+    /// Age I composition is Warriors only (so the first wave is Warriors). Javelin Throwers are in the Age II composition.
+    /// </summary>
+    [Fact]
+    public void HandOverDescription_FourWarriorsAtEightPop_MatchesTheData()
+    {
+        GameData d = TeblorOpeningVariantsReportTests.DataWith(TeblorOpeningHorizonReportTests.HandOver());
+        int teblor = d.FindFaction("teblor");
+        AiOpening n = d.Ai[teblor].Openings[0];
+        Assert.Contains("four Warriors raid at 8 army pop", n.Description);
+        Assert.Equal(4 * d.Units[d.FindUnit("teblor_warrior")].HalfPop, n.AttackMinHalfPop);
+        Assert.Equal(16, n.AttackMinHalfPop);
+        AiComposition ageOne = n.Compositions.Single(c => c.Age == 1);
+        Assert.Equal(new[] { d.FindUnit("teblor_warrior") }, ageOne.Units.ToArray());
+        Assert.Contains(d.FindUnit("teblor_javelin_thrower"), n.Compositions.Single(c => c.Age == 2).Units);
     }
 
     /// <summary>Every building kind, research and expand the shipped opening has, the fixture has (as many build steps of each kind).</summary>
@@ -68,7 +88,7 @@ public class D29FixtureQaTests(ITestOutputHelper output)
     {
         int teblor = TestSim.Data.FindFaction("teblor");
         AiOpening s = TestSim.Data.Ai[teblor].Openings[0];
-        AiOpening n = TeblorOpeningVariantsReportTests.DataWith(TeblorOpeningVariantsReportTests.Fixture()).Ai[teblor].Openings[0];
+        AiOpening n = TeblorOpeningVariantsReportTests.DataWith(TeblorOpeningHorizonReportTests.HandOver()).Ai[teblor].Openings[0];
         Assert.Equal(Tally(s), Tally(n));
         int Gatherers(AiOpening o) => o.BuildOrder.Where(x => x.Action == AiStepAction.Train).Sum(x => x.Count);
         output.WriteLine($"gatherers trained by steps: shipped {Gatherers(s)}, fixture {Gatherers(n)}");

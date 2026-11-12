@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S3 (report accuracy; the request's "measured reason", criterion 4) |
-| Status | open |
+| Status | fixed (re-checked 2026-11-12-0546, fix round 1) |
 | Found | 2026-11-12-0546, task D29 (QA) |
 | System | D29 report / sim request (`AiPlayer.MayReserve`, `rules.json` `ai.reserveArmyShare`) |
-| Fixed by | |
+| Fixed by | D29 fix round 1 (48206a4): request restated with proxy figures, `TeblorOpeningHorizonReportTests.ReserveShareProxy_ShippedAndHandOver_To15Minutes_Report` |
 
 ## Repro
 1. `dotnet test sim/Rts.Sim.Tests --filter "FullyQualifiedName~D29OpeningQaStressTests.ReserveShareHalf" --logger "console;verbosity=detailed"`
@@ -41,3 +41,16 @@ pairing nor on Raraku v Malazan; with share 1 the same opening waves 7 / 7 / 7).
   hall kinds are finished (`ResearchableSomewhere`); train steps earlier in the file than the reserved step and every
   build step are not held. One small inaccuracy: the reserve is not the only brake on army spending; the production
   manager trains only into an empty queue unless spending down (`ProductionManager` line 33).
+
+## Re-check (2026-11-12-0546, fix round 1)
+Fixed: the request now carries measured figures from the global field, labelled as a proxy that moves the opponent's gate
+too. QA re-ran `TeblorOpeningHorizonReportTests.ReserveShareProxy_ShippedAndHandOver_To15Minutes_Report`; the table
+reproduces exactly (hand-over, of 40: share 1: 1 of 5 seeds, Age II 21, wave 34, every kind 0, Anointing 2, defeated 5;
+0.75: 2 of 5, 26, 37, 2, 10, 11; 0.5: 3 of 5, 29, 38, 8, 13, 6; at 0.5 seeds 2 and 5 miss with Age II 5 of 8; V0 at 0.5:
+0 of 5 seeds). The ProductionManager correction is in the report.
+- Correction to this file's own wording: "an upper-bound proxy" (Actual, above) is not proven. Lowering the opponent's
+  gate also changes the opponent's tech and army timing, and the direction of that effect on the Teblor is unknown
+  (hand-over share 0.5 vs share 1: 3 pairings newly defeated, 2 newly saved). The developer repeated the phrase; read it
+  as "a proxy" only.
+- Of note for the Producer: on the shipped opening the global share does more for the 15:00 horizon than for 10:00
+  (V0 share 0.5: every kind 13 vs 3, Breakers Hall 15 vs 3, Anointing 10 vs 5, defeated 13 vs 17; Age II by 10:00 17 vs 7).

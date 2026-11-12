@@ -17,6 +17,9 @@ namespace Rts.Sim.Tests.QA.Content;
 /// <item>the developer's missing-rule claim checked by measurement: the shipped <c>rules.json</c> <c>ai.reserveArmyShare</c>
 /// (1) set to 0.5 on a data copy (both seats, so the opponent moves too), on V4 with the shipped 8 / 600 wave put back.</item>
 /// </list>
+/// Since fix round 1, "the fixture" in the first three reports is V4 (<c>teblor_standard_d29_v4.json</c>, kept as BUG-1300's
+/// evidence); the hand-over is V24 (<see cref="TeblorOpeningHorizonReportTests.HandOver"/>), cross-checked by
+/// <see cref="HandOverShippedAndV14_Seeds1To5_To15Minutes_Report"/>.
 /// </summary>
 [Trait("Category", "Stress")]
 public class D29OpeningQaStressTests(ITestOutputHelper output)
@@ -195,6 +198,57 @@ public class D29OpeningQaStressTests(ITestOutputHelper output)
             reserved.Clear();
         }
         Assert.Equal(Fifteen, sim.TickNumber);
+    }
+
+    /// <summary>
+    /// Re-check (fix round 1): the new hand-over (V24, read from its fixture file), the shipped opening and the developer's
+    /// alternative V14 (V4 with Age II due at 6:00, built here independently of the developer's variant list) on seeds 1-5 to
+    /// 15:00 through QA's own harness, to cross-check the fix report's tallies. Also prints pairing differences against V0.
+    /// </summary>
+    [Fact]
+    public void HandOverShippedAndV14_Seeds1To5_To15Minutes_Report()
+    {
+        JsonObject v14 = TeblorOpeningVariantsReportTests.Fixture(); // V4
+        foreach (JsonNode? s in v14["buildOrder"]!.AsArray())
+            if ((string)s!["do"]! == "research" && (string?)s["id"] == "age_ii") s["at"] = new JsonObject { ["time"] = 360 };
+        var configs = new (string Name, GameData Data)[]
+        {
+            ("V0", TeblorOpeningVariantsReportTests.DataWith(TeblorOpeningVariantsReportTests.Shipped())),
+            ("hand-over", TeblorOpeningVariantsReportTests.DataWith(TeblorOpeningHorizonReportTests.HandOver())),
+            ("V14", TeblorOpeningVariantsReportTests.DataWith(v14)),
+        };
+        var jobs = new List<(string, GameData, string, string, ulong)>();
+        foreach (var c in configs)
+            foreach (ulong seed in new ulong[] { 1, 2, 3, 4, 5 })
+                foreach (string m in Maps)
+                    foreach (string o in Opponents) jobs.Add((c.Name, c.Data, m, o, seed));
+        List<Row> rows = PlayAll(jobs, Fifteen);
+        Tally(rows.OrderBy(r => r.Variant, StringComparer.Ordinal).ThenBy(r => r.Seed).ToList());
+        output.WriteLine("");
+        output.WriteLine("| variant | Age II 10:00 | wave 10:00 | seeds met | Age II 15:00 | expanded | every kind | Anointing | defeated |");
+        output.WriteLine("| --- | --- | --- | --- | --- | --- | --- | --- | --- |");
+        foreach (var c in configs)
+        {
+            List<Row> g = rows.Where(r => r.Variant == c.Name).ToList();
+            int met = g.GroupBy(r => r.Seed).Count(s => s.Count(r => r.Age10) >= 6 && s.Count(r => r.Wave10) >= 6);
+            output.WriteLine($"| {c.Name} | {g.Count(r => r.Age10)} | {g.Count(r => r.Wave10)} | {met} of 5 | {g.Count(r => r.AgeTwoAt >= 0)} | {g.Count(r => r.ExpandedAt >= 0)} | "
+                + $"{g.Count(r => r.NeverBuilt == "-")} | {g.Count(r => r.AnointedAt >= 0)} | {g.Count(r => r.DefeatedAt >= 0)} |");
+        }
+        output.WriteLine("");
+        foreach (string v in new[] { "hand-over", "V14" })
+        {
+            int lostAge = 0, lostWave = 0, worse = 0, better = 0;
+            foreach (Row a in rows.Where(r => r.Variant == "V0"))
+            {
+                Row b = rows.Single(r => r.Variant == v && r.Seed == a.Seed && r.Map == a.Map && r.Opponent == a.Opponent);
+                if (a.Age10 && !b.Age10) lostAge++;
+                if (a.Wave10 && !b.Wave10) lostWave++;
+                if (a.DefeatedAt < 0 && b.DefeatedAt >= 0) worse++;
+                if (a.DefeatedAt >= 0 && b.DefeatedAt < 0) better++;
+            }
+            output.WriteLine($"- {v} vs V0: Age II by 10:00 lost {lostAge}, wave by 10:00 lost {lostWave}, defeated on {v} only {worse}, on V0 only {better}");
+        }
+        Assert.Equal(120, rows.Count);
     }
 
     /// <summary>The developer's request (a per-opening reserve share) checked with the existing global field on a data copy.</summary>
