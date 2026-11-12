@@ -68,11 +68,11 @@ public class DataConversionTests
         Assert.Equal(3, data.Units[data.FindUnit("malazan_cadre_mage")].HalfPop);
     }
 
-    /// <summary>M7-1 criterion 1: <c>scale</c> is optional: absent it is 1 (every shipped unit), and 1.5 loads as 1.5.</summary>
+    /// <summary>M7-1 criterion 1: <c>scale</c> is optional: absent it is 1 (every Malazan and Whirlwind unit), and 1.5 loads as 1.5.</summary>
     [Fact]
     public void Scale_AbsentIsOne_AndOneAndAHalfLoads()
     {
-        Assert.All(TestSim.Data.Units, u => Assert.Equal(1f, u.Scale));
+        Assert.All(TestSim.TwoFactionData.Units, u => Assert.Equal(1f, u.Scale)); // M7-5 (BUG-1222): the two factions'; a third may scale
         using TestDataDir dir = TestDataDir.CopyOfShipped();
         dir.SetUnitField("malazan", "malazan_heavy_infantry", "scale", "1.5");
         dir.SetUnitField("malazan", "malazan_laborer", "scale", "0.5");
@@ -85,11 +85,11 @@ public class DataConversionTests
         Assert.Equal(TestSim.Data.Units[data.FindUnit("malazan_heavy_infantry")].Radius, data.Units[data.FindUnit("malazan_heavy_infantry")].Radius); // collision unchanged
     }
 
-    /// <summary>M7-2 criterion 1: <c>spawnCount</c> is optional: absent it is 1 (every shipped unit), 3 loads as 3, 8 (the maximum) as 8; cost, train time and pop stay the type's.</summary>
+    /// <summary>M7-2 criterion 1: <c>spawnCount</c> is optional: absent it is 1 (every Malazan and Whirlwind unit), 3 loads as 3, 8 (the maximum) as 8; cost, train time and pop stay the type's.</summary>
     [Fact]
     public void SpawnCount_AbsentIsOne_ThreeLoadsAsThree()
     {
-        Assert.All(TestSim.Data.Units, u => Assert.Equal((1, u.HalfPop), (u.SpawnCount, u.ItemHalfPop)));
+        Assert.All(TestSim.TwoFactionData.Units, u => Assert.Equal((1, u.HalfPop), (u.SpawnCount, u.ItemHalfPop))); // M7-5: the two factions'
         using TestDataDir dir = TestDataDir.CopyOfShipped();
         dir.SetUnitField("malazan", "malazan_heavy_infantry", "spawnCount", "3");
         dir.SetUnitField("malazan", "malazan_laborer", "spawnCount", "8");
