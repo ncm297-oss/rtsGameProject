@@ -295,13 +295,13 @@ public class AiOpeningsQaTests
     /// </summary>
     private static readonly Lazy<GameData> s_mixed = new(() => AiScenes.DataWith(dir =>
     {
-        foreach (string f in new[] { "malazan", "whirlwind" })
+        foreach (string f in TestSim.ShippedFactions) // M7-H1 (BUG-1173 item 3): every faction, its own ids by slot
             dir.EditJson($"factions/{f}/ai.json", root =>
             {
                 JsonArray openings = FirstOnly(root);
                 JsonNode standard = openings[0]!;
-                string worker = f == "malazan" ? "malazan_laborer" : "whirlwind_camp_follower";
-                string barracks = f == "malazan" ? "malazan_barracks" : "whirlwind_raider_camp";
+                string worker = AiScenes.UnitKey(f, UnitSlot.Worker);
+                string barracks = AiScenes.BuildingKey(f, BuildingSlot.InfantryHall);
                 JsonNode rush = CopyOf(root, "rush");
                 rush["buildOrder"] = AiScenes.BuildOrder(("time", 0, "build", barracks, 0));
                 rush["attack"] = new JsonObject { ["minArmyPop"] = 1, ["minArmyCost"] = 0 };

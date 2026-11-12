@@ -31,6 +31,7 @@ public static partial class DataLoader
         if (order.Count > DataLimits.MaxFactions)
             c.Error("order", $"{order.Count} factions is above the maximum {DataLimits.MaxFactions}");
         var result = new List<string>(); // load-time only
+        var caseOnly = new List<string>(); // M7-H1 (BUG-1173 item 2): folders matched to an entry by case only
         for (int i = 0; i < order.Count; i++)
         {
             string id = c.Id(order[i], $"order[{i}]");
@@ -38,18 +39,35 @@ public static partial class DataLoader
             int first = result.IndexOf(id);
             if (first >= 0)
                 c.Error($"order[{i}]", $"faction '{id}' is listed twice");
-            else if (Array.IndexOf(folders, id) < 0)
-                c.Error($"order[{i}]", $"faction '{id}' has no folder factions/{id}/");
-            else
+            else if (Array.IndexOf(folders, id) >= 0)
                 result.Add(id);
+            else if (FolderByCase(folders, id) is { } folder && !result.Contains(folder))
+            {
+                // On Windows the folder exists case-insensitively, so "has no folder" was false and "not listed" followed:
+                // one error naming both spellings instead; the folder is still read in its place, so its faction.json's
+                // id check reports the mismatch too, as it did.
+                c.Error($"order[{i}]", $"faction '{id}': its folder is factions/{folder}/, not factions/{id}/ (a folder's name must be its id exactly, case included)");
+                caseOnly.Add(folder);
+                result.Add(folder);
+            }
+            else
+                c.Error($"order[{i}]", $"faction '{id}' has no folder factions/{id}/");
         }
         foreach (string folder in folders)
         {
-            if (result.Contains(folder)) continue;
+            if (result.Contains(folder) || caseOnly.Contains(folder)) continue;
             c.Error("order", $"folder factions/{folder}/ is not listed (a new faction appends its id to the order)");
             result.Add(folder);
         }
         return result.ToArray();
+    }
+
+    /// <summary>The folder whose name equals <paramref name="id"/> ignoring case (and not exactly), or null (load time only).</summary>
+    private static string? FolderByCase(string[] folders, string id)
+    {
+        foreach (string folder in folders)
+            if (!string.Equals(folder, id, StringComparison.Ordinal) && string.Equals(folder, id, StringComparison.OrdinalIgnoreCase)) return folder;
+        return null;
     }
 
     /// <summary>

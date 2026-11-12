@@ -327,7 +327,7 @@ public class SimCoreQaTests
         {
             int p = rng.NextInt(0, players);
             issued[p]++;
-            sim.Enqueue(Command.SpawnUnit(p, typeId: i % TestSim.UnitTypeCount, new Vector2(p, issued[p])));
+            sim.Enqueue(Command.SpawnUnit(p, typeId: i % TestSim.ScenarioUnitTypes, new Vector2(p, issued[p])));
         }
         sim.Tick();
         sim.Tick();
@@ -354,7 +354,7 @@ public class SimCoreQaTests
         {
             int before = sim.World.Units.Count;
             for (int k = 0; k < 5; k++)
-                sim.Enqueue(Command.SpawnUnit(k % 3, typeId: t % TestSim.UnitTypeCount, new Vector2(t, k)));
+                sim.Enqueue(Command.SpawnUnit(k % 3, typeId: t % TestSim.ScenarioUnitTypes, new Vector2(t, k)));
             sim.Tick();
             // Commands enqueued before this tick apply on the following tick, not this one.
             Assert.Equal(t == 0 ? 0 : before + 5, sim.World.Units.Count);
@@ -369,7 +369,7 @@ public class SimCoreQaTests
     {
         var sim = new Simulation(TestSim.Config(9, PlayerCount: 2, UnitCapacity: 64, CommandCapacity: 64));
         for (int i = 0; i < 20; i++)
-            sim.Enqueue(Command.SpawnUnit(i % 2, i % TestSim.UnitTypeCount, new Vector2(i * 1.5f, -i)));
+            sim.Enqueue(Command.SpawnUnit(i % 2, i % TestSim.ScenarioUnitTypes, new Vector2(i * 1.5f, -i)));
         sim.Tick();
         sim.Tick();
         ulong h0 = sim.StateHash();

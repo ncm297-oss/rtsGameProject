@@ -88,9 +88,11 @@ public sealed partial class UnitStore
     /// Reads what <see cref="WriteTo"/> wrote into this store of the same capacity (M6-S2). Checks the structure the next
     /// tick indexes by: the free count, every live slot's owner below <paramref name="players"/> and type below
     /// <paramref name="unitTypes"/>, the free list's slots, the queue counts, the enum values and every status id (below
-    /// <paramref name="statuses"/>).
+    /// <paramref name="statuses"/>' length). BUG-1165: the regeneration part against the entries and the save's
+    /// <paramref name="tick"/> (a live unit's last damage tick is -1 or at most <paramref name="tick"/>; a free slot's is -1
+    /// with an empty accumulator; the regenerating counts equal the entries).
     /// </summary>
-    internal void ReadFrom(SaveReader r, int players, int unitTypes, int statuses)
+    internal void ReadFrom(SaveReader r, int players, int unitTypes, System.Collections.Immutable.ImmutableArray<Data.StatusDef> statuses, int tick)
     {
         if (!r.Expect(SaveFormat.TagUnits) || !r.Check(r.ReadInt32() == Capacity)) return;
         r.ReadArray(Position);
@@ -154,22 +156,27 @@ public sealed partial class UnitStore
         CasterCount = r.ReadInt32In(0, Capacity);
         BelowHpUnits = r.ReadInt32In(0, Capacity);
         SummonedUnits = r.ReadInt32In(0, Capacity);
-        Statuses.ReadFrom(r, statuses);
-        if (!r.Expect(SaveFormat.TagRegen)) return;
+        Statuses.ReadFrom(r, statuses.Length);
+        if (r.Failed || !r.Expect(SaveFormat.TagRegen)) return;
         r.ReadArray(LastDamagedTick);
         r.ReadArray(RegenAccum);
-        Statuses.ReadRegenFrom(r);
+        Statuses.ReadRegenFrom(r, statuses);
         if (r.Failed) return;
 
         int live = 0;
         for (int i = 0; i < Capacity; i++)
         {
             if (!r.Check(QueueCount[i] >= 0 && QueueCount[i] <= OrderConstants.QueueCapacity)) return;
-            if (!Alive[i]) continue;
+            if (!Alive[i])
+            {
+                // BUG-1165: freeing a slot clears both (UnitStore.Free), so a free slot carrying either is forged.
+                if (!r.Check(LastDamagedTick[i] == -1 && RegenAccum[i] == 0)) return;
+                continue;
+            }
             live++;
             if (!r.Check((uint)Owner[i] < (uint)players && (uint)TypeId[i] < (uint)unitTypes)) return;
-            // M7-1: a fraction of a hit point, and a tick that has been.
-            if (!r.Check(RegenAccum[i] >= 0 && RegenAccum[i] < Combat.CombatConstants.RegenFixedOne && LastDamagedTick[i] >= -1)) return;
+            // M7-1: a fraction of a hit point, and (BUG-1165) a tick that has been: none, or at most the save's own.
+            if (!r.Check(RegenAccum[i] >= 0 && RegenAccum[i] < Combat.CombatConstants.RegenFixedOne && LastDamagedTick[i] >= -1 && LastDamagedTick[i] <= tick)) return;
         }
         if (!r.Check(live == Capacity - _freeCount)) return;
         for (int k = 0; k < _freeCount; k++)

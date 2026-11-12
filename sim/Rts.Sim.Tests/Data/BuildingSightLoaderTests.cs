@@ -39,7 +39,7 @@ public class BuildingSightLoaderTests
     [Fact]
     public void Shipped_BothTowersSee24m_EveryOtherBuildingTheRulesDefaultOf12m()
     {
-        GameData d = TestSim.Data;
+        GameData d = TestSim.TwoFactionData; // M7-H1 (BUG-1191): a pin about the two shipped factions' buildings
         Assert.Equal(12f, d.Rules.BuildingSight);
         foreach (BuildingDef b in d.Buildings)
         {

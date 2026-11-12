@@ -24,7 +24,7 @@ public class EveryUnitFightsTests
     [Fact]
     public void CanFight_IsTrueForEveryShippedUnit()
     {
-        Assert.Equal(14, TestSim.Data.Units.Length);
+        Assert.Equal(14, TestSim.TwoFactionData.Units.Length); // M7-H1 (BUG-1191): the two shipped factions' count; every unit is checked
         foreach (UnitDef d in TestSim.Data.Units)
             Assert.True(CombatSystem.CanFight(d), d.Key);
     }

@@ -65,11 +65,22 @@ public class FactionOrderTests
     public void TheShippedIds_AreBitIdenticalTo0416dcc_AndTheTechsAndAbilitiesToM73b()
     {
         GameData d = TestSim.Data;
-        Assert.Equal(new[] { "malazan", "whirlwind" }, TestSim.ShippedFactions); // the pin is about these two
-        Assert.Equal(Units0416, d.Units.Select(u => (u.Key, u.Id)));
-        Assert.Equal(Buildings0416, d.Buildings.Select(b => (b.Key, b.Id)));
-        Assert.Equal(TechsM73b, d.Techs.Select(t => (t.Key, t.Id, t.Faction)));
-        Assert.Equal(AbilitiesM73b, d.Abilities.Select(a => (a.Key, a.Id, a.Faction)));
+        // M7-H1 (BUG-1191): the pin is about the first two factions, so it pins the tables' prefix (a faction appended to the
+        // order adds its ids after these and moves none of them; the whole tables are pinned on the two-faction cut).
+        Assert.Equal(new[] { "malazan", "whirlwind" }, TestSim.ShippedFactions.Take(2));
+        Assert.Equal(Units0416, d.Units.Take(Units0416.Length).Select(u => (u.Key, u.Id)));
+        Assert.Equal(Buildings0416, d.Buildings.Take(Buildings0416.Length).Select(b => (b.Key, b.Id)));
+        Assert.Equal(TechsM73b, d.Techs.Take(TechsM73b.Length).Select(t => (t.Key, t.Id, t.Faction)));
+        Assert.Equal(AbilitiesM73b, d.Abilities.Take(AbilitiesM73b.Length).Select(a => (a.Key, a.Id, a.Faction)));
+        GameData two = TestSim.TwoFactionData;
+        Assert.Equal(Units0416, two.Units.Select(u => (u.Key, u.Id)));
+        Assert.Equal(Buildings0416, two.Buildings.Select(b => (b.Key, b.Id)));
+        Assert.Equal(TechsM73b, two.Techs.Select(t => (t.Key, t.Id, t.Faction)));
+        Assert.Equal(AbilitiesM73b, two.Abilities.Select(a => (a.Key, a.Id, a.Faction)));
+        Assert.All(d.Units.Skip(Units0416.Length), u => Assert.True(u.Faction >= 2));
+        Assert.All(d.Buildings.Skip(Buildings0416.Length), b => Assert.True(b.Faction >= 2));
+        Assert.All(d.Techs.Skip(TechsM73b.Length), t => Assert.True(t.Faction >= 2));
+        Assert.All(d.Abilities.Skip(AbilitiesM73b.Length), a => Assert.True(a.Faction >= 2));
         foreach ((string key, int id) in Units0416) Assert.Equal(id, d.FindUnit(key));
         foreach ((string key, int id) in Buildings0416) Assert.Equal(id, d.FindBuilding(key));
         foreach ((string key, int id, _) in TechsM73b) Assert.Equal(id, d.FindTech(key));
@@ -118,13 +129,35 @@ public class FactionOrderTests
     [InlineData("{\"order\": [\"malazan\", \"whirlwind\"], \"extra\": 1}", "$", "")]
     public void ABrokenOrder_IsOneErrorAtItsEntry(string json, string path, string message)
     {
-        using TestDataDir dir = TestDataDir.CopyOfShipped();
+        using TestDataDir dir = TestDataDir.CopyOfShippedTwoFactions(); // M7-H1 (BUG-1191): the rows are written for exactly two folders
         WriteOrder(dir, json);
         DataError e = OneError(dir);
         _out.WriteLine(e.ToString());
         Assert.Equal(OrderFile, e.File);
         Assert.StartsWith(path, e.Path);
         Assert.Contains(message, e.Message);
+    }
+
+    /// <summary>
+    /// M7-H1 (BUG-1173 item 2): a folder whose name differs from its listed id only in case (<c>factions/Whirlwind/</c>
+    /// listed as <c>whirlwind</c>) is one order error naming both spellings, not "has no folder" (false on Windows, where
+    /// the folder opens case-insensitively) plus "is not listed"; the folder's own id check still reports the mismatch.
+    /// </summary>
+    [Fact]
+    public void AFolderDifferingOnlyInCase_IsOneOrderErrorNamingBothSpellings()
+    {
+        using TestDataDir dir = TestDataDir.CopyOfShippedTwoFactions();
+        string from = dir.FullPath("factions/whirlwind"), temp = dir.FullPath("factions/ww_tmp"), to = dir.FullPath("factions/Whirlwind");
+        Directory.Move(from, temp); // a case-only rename needs a step through another name on Windows
+        Directory.Move(temp, to);
+        DataLoadResult r = DataLoader.LoadAll(dir.Path);
+        foreach (DataError e in r.Errors) _out.WriteLine(e.ToString());
+        Assert.False(r.Ok);
+        DataError order = Assert.Single(r.Errors, e => e.File == OrderFile);
+        Assert.Equal("order[1]", order.Path);
+        Assert.Contains("factions/Whirlwind/, not factions/whirlwind/", order.Message);
+        Assert.DoesNotContain(r.Errors, e => e.Message.Contains("has no folder") || e.Message.Contains("is not listed"));
+        Assert.Contains(r.Errors, e => e.File == "factions/Whirlwind/faction.json" && e.Message.Contains("does not match its folder name 'Whirlwind'"));
     }
 
     [Fact]
@@ -154,7 +187,7 @@ public class FactionOrderTests
     [Fact]
     public void ASwappedOrder_SwapsTheIds()
     {
-        using TestDataDir dir = TestDataDir.CopyOfShipped();
+        using TestDataDir dir = TestDataDir.CopyOfShippedTwoFactions(); // M7-H1 (BUG-1191): the two factions' swap
         WriteOrder(dir, "{\"order\": [\"whirlwind\", \"malazan\"]}");
         DataLoadResult r = DataLoader.LoadAll(dir.Path);
         Assert.True(r.Ok, string.Join(Environment.NewLine, r.Errors));
@@ -164,7 +197,7 @@ public class FactionOrderTests
         Assert.Equal(("malazan_cadre_mage", 7), (d.Units[7].Key, d.Units[7].Id));
         Assert.Equal("whirlwind_archer_camp", d.Buildings[0].Key);
         Assert.Equal("malazan_armory", d.Buildings[10].Key);
-        Assert.NotEqual(TestSim.Data.ContentHash(), d.ContentHash());
+        Assert.NotEqual(TestSim.TwoFactionData.ContentHash(), d.ContentHash());
         // Every reference still resolves to the same key (trainedAt, the AI's ids): the swap is a renumbering only.
         foreach (UnitDef u in d.Units) Assert.Equal(TestSim.Data.Units[TestSim.Data.FindUnit(u.Key)].TrainedAt, u.TrainedAt);
         foreach (UnitDef u in d.Units) Assert.Equal(u.TrainedAt, d.Buildings[u.TrainedAtTypeId].Key);
@@ -179,9 +212,13 @@ public class FactionOrderTests
     /// or <paramref name="first"/>. Why a whole copy and not a minimal folder: the loader requires every faction's
     /// <c>ai.json</c> and <c>techs.json</c> and every template slot filled (BUG-0010). M7-3b: before it, natural names like
     /// these renumbered the shipped techs and abilities (BUG-1171), so the copy had no abilities and a tech sorting last.
+    /// M7-H1 (BUG-1191): the copy is first cut to the first two factions of its order (<see cref="TestDataDir.CutToFirstFactions"/>),
+    /// so the fixture is "Malazan, Whirlwind and a Malazan copy named teblor" whatever the shipped data appends (a real
+    /// <c>factions/teblor/</c> is replaced, never written over), and every pin measured on it keeps its value.
     /// </summary>
     internal static void AddTeblor(TestDataDir dir, bool first = false)
     {
+        dir.CutToFirstFactions(2);
         string from = dir.FullPath("factions/malazan"), to = dir.FullPath("factions/teblor");
         Directory.CreateDirectory(to);
         foreach (string file in Directory.GetFiles(from))
@@ -234,7 +271,7 @@ public class FactionOrderTests
         // blood_oil_frenzy sorts before every shipped ability, yet its id comes after theirs (BUG-1171's symptom gone).
         Assert.Equal(new[] { ("blood_oil_frenzy", 3, 2), ("teblor_cusser", 4, 2) }, d.Abilities.Skip(AbilitiesM73b.Length).Select(a => (a.Key, a.Id, a.Faction)));
         Assert.Equal(new[] { d.FindAbility("blood_oil_frenzy") }, d.Units[d.FindUnit("teblor_cadre_mage")].Abilities);
-        Assert.NotEqual(TestSim.Data.ContentHash(), d.ContentHash()); // new keys
+        Assert.NotEqual(TestSim.TwoFactionData.ContentHash(), d.ContentHash()); // new keys (M7-H1: against the two factions it adds to)
     }
 
     [Fact]
@@ -248,7 +285,7 @@ public class FactionOrderTests
         Assert.Equal(TechsM73b.Take(7), d.Techs.Take(7).Select(t => (t.Key, t.Id, t.Faction)));
         Assert.Equal((7, 8, 9), (d.FindTech("teblor_blood_oil_anointing"), d.FindTech("moranth_supply"), d.FindTech("dryjhnas_prophecy")));
         Assert.Equal(new[] { "blood_oil_frenzy", "teblor_cusser", "cusser", "telas_fire", "sandstorm" }, d.Abilities.Select(a => a.Key));
-        Assert.NotEqual(TestSim.Data.ContentHash(), d.ContentHash());
+        Assert.NotEqual(TestSim.TwoFactionData.ContentHash(), d.ContentHash()); // M7-H1: against the two factions it adds to
         Assert.NotEqual(s_appended.Value.ContentHash(), d.ContentHash());
     }
 

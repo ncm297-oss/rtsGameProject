@@ -96,7 +96,7 @@ public sealed class CrossMapQaScenario
             if ((g.FlagsAt(cell % g.Width, cell / g.Width) & NavFlags.Ramp) != 0) rampSpawns++;
             var offset = new Vector2(0.05f + rng.NextFloat() * 1.9f, 0.05f + rng.NextFloat() * 1.9f);
             Vector2 corner = MoveScenario.Center(g, cell) - new Vector2(MapConstants.CellSize / 2);
-            sim.Enqueue(Command.SpawnUnit(i % players, i % TestSim.UnitTypeCount, corner + offset));
+            sim.Enqueue(Command.SpawnUnit(i % players, i % TestSim.ScenarioUnitTypes, corner + offset));
         }
         sim.Tick();
         sim.Tick();

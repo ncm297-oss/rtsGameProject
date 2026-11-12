@@ -85,7 +85,7 @@ public class HardeningQaTests
                     {
                         int x = side == 0 ? 1 + k % 8 : 31 + k % 8;
                         int y = 1 + k / 8 * 3 + p;
-                        sim.Enqueue(Command.SpawnUnit(p, rng.NextInt(0, TestSim.UnitTypeCount), g.CellCenter(x, y) + new Vector2(rng.NextFloat() - 0.5f, rng.NextFloat() - 0.5f)));
+                        sim.Enqueue(Command.SpawnUnit(p, rng.NextInt(0, TestSim.ScenarioUnitTypes), g.CellCenter(x, y) + new Vector2(rng.NextFloat() - 0.5f, rng.NextFloat() - 0.5f)));
                     }
             ApplyPending(sim);
             return sim;
@@ -190,7 +190,7 @@ public class HardeningQaTests
             {
                 bool west = k % 2 == 0;
                 Vector2 at = g.CellCenter(west ? 4 + k / 2 % 16 : 44 + k / 2 % 16, 8 + k / 32 * 6 % 48) + new Vector2(rng.NextFloat() - 0.5f, rng.NextFloat() - 0.5f);
-                sim.Enqueue(Command.SpawnUnit(k / 2 % 2, rng.NextInt(0, TestSim.UnitTypeCount), at));
+                sim.Enqueue(Command.SpawnUnit(k / 2 % 2, rng.NextInt(0, TestSim.ScenarioUnitTypes), at));
             }
             ApplyPending(sim);
             Assert.Equal(holders * (ring + 1) + walkers, sim.World.Units.Count);
@@ -300,7 +300,7 @@ public class HardeningQaTests
             }
             var rng = new SimRng(seed, 4471);
             for (int k = 0; k < 2 * crowd; k++)
-                sim.Enqueue(Command.SpawnUnit(k % 2, rng.NextInt(0, TestSim.UnitTypeCount), g.CellCenter(1 + k / 2 % 4, 1 + k / 8 % (5 + width)) + new Vector2(rng.NextFloat() - 0.5f, rng.NextFloat() - 0.5f)));
+                sim.Enqueue(Command.SpawnUnit(k % 2, rng.NextInt(0, TestSim.ScenarioUnitTypes), g.CellCenter(1 + k / 2 % 4, 1 + k / 8 % (5 + width)) + new Vector2(rng.NextFloat() - 0.5f, rng.NextFloat() - 0.5f)));
             ApplyPending(sim);
             return sim;
         }
@@ -395,7 +395,7 @@ public class HardeningQaTests
             for (int m = 0; m < members && spawned < 560; m++, spawned++)
             {
                 float a = rng.NextFloat() * MathF.PI * 2f, d = MathF.Sqrt(m) * (0.7f + 0.6f * rng.NextFloat());
-                sim.Enqueue(Command.SpawnUnit(rng.NextInt(0, players), rng.NextInt(0, TestSim.UnitTypeCount), c + new Vector2(MathF.Cos(a), MathF.Sin(a)) * d));
+                sim.Enqueue(Command.SpawnUnit(rng.NextInt(0, players), rng.NextInt(0, TestSim.ScenarioUnitTypes), c + new Vector2(MathF.Cos(a), MathF.Sin(a)) * d));
             }
         }
         ApplyPending(sim);

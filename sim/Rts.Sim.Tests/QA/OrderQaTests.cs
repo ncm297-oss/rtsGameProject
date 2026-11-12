@@ -66,7 +66,7 @@ public class OrderQaTests
             sim.Enqueue(Command.SpawnUnit(0, LocalMovementTests.TypeWithRadius(0.4f), stand + new Vector2(MathF.Cos(a), MathF.Sin(a)) * 0.85f));
         }
         for (int k = 0; k < walkers; k++)
-            sim.Enqueue(Command.SpawnUnit(0, k % TestSim.UnitTypeCount, g.CellCenter(4 + k % 20, 18 + k / 20 * 2 % 28) + new Vector2(0.3f * (k % 3), 0.2f * (k % 2))));
+            sim.Enqueue(Command.SpawnUnit(0, k % TestSim.ScenarioUnitTypes, g.CellCenter(4 + k % 20, 18 + k / 20 * 2 % 28) + new Vector2(0.3f * (k % 3), 0.2f * (k % 2))));
         ApplyPending(sim);
         UnitStore u = sim.World.Units;
         Assert.Equal(walkers + ring + 1, u.Count);
@@ -192,7 +192,7 @@ public class OrderQaTests
         int k = 0;
         for (int y = 1; y <= 7 && k < walkers; y++)
             for (int x = 1; x <= 8 && k < walkers; x++, k++)
-                sim.Enqueue(Command.SpawnUnit(walkerPlayer, k % TestSim.UnitTypeCount, g.CellCenter(x, y)));
+                sim.Enqueue(Command.SpawnUnit(walkerPlayer, k % TestSim.ScenarioUnitTypes, g.CellCenter(x, y)));
         ApplyPending(sim);
         UnitStore u = sim.World.Units;
         sim.Enqueue(hold ? Command.HoldPosition(0, H(sim, 0)) : Command.Stop(0, H(sim, 0)));

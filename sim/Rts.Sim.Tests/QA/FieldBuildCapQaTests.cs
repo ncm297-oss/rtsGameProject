@@ -33,7 +33,7 @@ public class FieldBuildCapQaTests
             int c = passable[rng.NextInt(0, passable.Count)];
             Vector2 corner = MoveScenario.Center(g, c) - new Vector2(MapConstants.CellSize / 2);
             var off = new Vector2(0.05f + rng.NextFloat() * 1.9f, 0.05f + rng.NextFloat() * 1.9f);
-            sim.Enqueue(Command.SpawnUnit(i % players, i % TestSim.UnitTypeCount, corner + off));
+            sim.Enqueue(Command.SpawnUnit(i % players, i % TestSim.ScenarioUnitTypes, corner + off));
         }
         sim.Tick();
         sim.Tick();

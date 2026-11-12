@@ -36,11 +36,11 @@ public class FarExpandTests
     /// </summary>
     private static GameData FarData(double? reach = null) => AiScenes.DataWith(dir =>
     {
-        foreach (string f in new[] { "malazan", "whirlwind" })
+        foreach (string f in TestSim.ShippedFactions) // M7-H1 (BUG-1173 item 3): every faction, its own ids by slot
             dir.EditJson($"factions/{f}/ai.json", root =>
             {
                 foreach (JsonNode? o in root["openings"]!.AsArray())
-                    o!["buildOrder"] = AiScenes.BuildOrder(("time", 3600, "build", f == "malazan" ? "malazan_billet" : "whirlwind_tent", 0));
+                    o!["buildOrder"] = AiScenes.BuildOrder(("time", 3600, "build", AiScenes.BuildingKey(f, BuildingSlot.House), 0));
             });
         dir.EditJson("common/rules.json", r =>
         {

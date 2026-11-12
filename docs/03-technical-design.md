@@ -2875,7 +2875,13 @@ rendering of `scale` come next).
   `EconomyConstants.RepairFixedOne`, a named rule of the format): a rate in HP per second becomes
   `round(hpPerSecond x 400 / 20)` units a tick (`DataLoader.RegenPerTick`, half away from zero): 1 HP/s = 20, 1.5 HP/s =
   30, 2 HP/s = 40; the step is 0.05 HP/s, and a rate that rounds to 0 is a load error. The accumulator carries every fraction,
-  so 1.5 HP/s is exactly 3 HP every 40 ticks for ever (no drift).
+  so 1.5 HP/s is exactly 3 HP every 40 ticks for ever (no drift). **Since M7-H1 (BUG-1166, refused as `pop` refuses a
+  value off its 0.5 step):** a rate that is not a whole number of steps is a load error at both places, `regen.hpPerSecond`
+  and a `regenerating` status's `magnitude` ("0.07 HP/s is not a multiple of 0.05 HP/s (the regeneration step)";
+  `DataLoader.IsOnRegenStep`, a 1e-9 tolerance in steps for the decimal-to-binary error of a written value). Before it an
+  off-step rate was rounded silently, and at the half-steps a status magnitude (a float) converted one unit lower than the
+  same faction rate (a double); on the step both convert alike, so one written rate is one rate a tick wherever it is
+  written. Every designed rate (1, 1.5, 2.5, the Teblor's 1) is on the step.
 - **The status kind:** `StatusKind.Regenerating` (`regenerating`, appended: value 6); its magnitude is HP per second (above
   0, at most 100, at least the step), no damage type, sight or reach. Shipped: one entry in `common/statuses.json`, id
   `regenerating`, its name and text in data. Nothing applies it in shipped data; a `createZone` / `applyStatus` / passive
@@ -2909,6 +2915,11 @@ rendering of `scale` come next).
 - **Save format 10** (see "Save format (M6-S2)"): every save is format 10 and every older one is refused
   `FormatVersionMismatch` (the unit store's `REGN` part: tag, `LastDamagedTick`, `RegenAccum`, the regenerating counts and
   their total; the map id always written; `HUNT` / `CTRM` with an AI seat). Every save made before M7-1 no longer loads.
+  **Since M7-H1 (BUG-1165)** the reader checks the part against the rest (`SaveError.Malformed` otherwise; no format number
+  changed): a live unit's `LastDamagedTick` is -1 or at most the save's own tick, a free slot's is -1 with an accumulator of
+  0, each slot's regenerating count equals its entries whose status is `regenerating`, and the total equals the slots with
+  one (a forged total made `RegenSystem`'s O(1) skip fire, a forged count underflowed its byte on expiry). The stealth
+  counts (`_stealth`, `StealthedUnits`, M4-5) have the same unchecked shape and are not checked yet.
   The replay format stays 9 (a replay holds no unit state); the golden's header data hash was regenerated once, its `k`
   lines identical. The test fixtures' byte-for-byte proofs (`PreMapFixtures`) take the new parts out
   (`PreMapFixtures.WithoutRegen`) and still match the saves recorded before map files.
@@ -3053,6 +3064,12 @@ state hash, digest or golden `k` line; and the two pack bugs its war-dog row and
   `SpawnCount` units (`Queued[type] += SpawnCount`, per think), so `ProductionManager`'s composition share sees the dogs
   coming; a build-order `train` step's `count` counts items (accepted Trains), unchanged and now documented. For a unit
   that is not a pack every number is what it was, so no shipped number, pin or digest moved.
+  **A worth of 0** (M7-H1, BUG-1173 item 1): an item cheaper in a resource than its `spawnCount` gives each unit 0 of that
+  resource (a pack of 8 at 7 / 0 is 0 / 0 a unit). Such units add nothing toward `attack.minArmyCost` (the AI never waves
+  with them alone unless `minArmyCost` is 0), nothing to an intruders' worth (the defense then answers with
+  `ai.defendMinValue`), and `DefenseManager.Pick` takes every one of them (its "first always" rule holds while the picked
+  worth stays 0), so a home army of them answers any threat. Nothing breaks (`QA/FactionOrderQaTests`' zero-worth rows).
+  Write a pack's cost as a multiple of its `spawnCount` in each resource; the shipped war-dog row, 120 / 0 over 3 = 40 / 0, is.
 - **The hard-cap check** (BUG-1167). A unit row whose item population is above the hard cap, `HalfPop x SpawnCount >
   rules.HalfPopCap`, is one load error, at `units[i].spawnCount` (or at `.pop` when `spawnCount` is absent), naming both
   numbers ("spawnCount 8 x pop 13 = 104 pop, above rules.popCap 100: it could never start"). Before it such an item loaded,
@@ -3188,6 +3205,53 @@ game/data/common/ui.json             setup.difficulty_easy_tip / _hard_tip: "eve
   the inference row); `QaVh5Test` / `QaVh6Test` under the ruling (QaVh6's blank-line count a check at 0, edge rows for the
   three shapes); `DifficultyTipTest` (the shipped tips; a data copy with Easy / Normal / Hard 7 / 2 / 0.333 and 3 / 1 /
   1.5: "7", "0.35", "3", "1.5" by faction); `QaM5V2Test`'s load-rule rows for `{1}`, `QaM5V2bTest` with the interval.
+
+### Implementation (M7-H1)
+
+The sim's hardening before the Teblor roster lands: the sim-owned tests made third-faction-ready (BUG-1191), the forged
+`REGN` part refused (BUG-1165), off-step regen rates refused (BUG-1166), BUG-1190 and BUG-1173. No save or replay format
+number, no state hash, digest, outcome tick or golden line moved.
+
+- **A third faction on a scratch clone** (`tools/qa/third-faction-copy.ps1 -Repo <clone> [-Id <id>]`): copies
+  `factions/malazan/*` to `factions/<id>/` with `malazan_` → `<id>_`, `moranth_supply` → `<id>_upgrade`, `"telas_fire"` →
+  `"<id>_fire"`, `"cusser"` → `"<id>_cusser"`, the faction's `id` and `displayName` set, and `<id>` appended to
+  `common/factions.json`. It refuses a path under `.claude\worktrees`, a linked worktree, the main checkout (a repo that
+  hosts worktrees) and an id already on disk or in the order: it is for scratch clones only.
+- **How a sim-owned test stays true under an appended faction** (the means, in order of preference):
+  - a pin about the two shipped factions pins them, not the whole data: the tables' prefix (`Take(n)`), or
+    `TestSim.TwoFactionData`, the shipped data cut to the first two factions of the order
+    (`TestDataDir.CopyOfShippedTwoFactions` / `CutToFirstFactions`; `TestSim.Data` itself while it has two). Appended
+    factions move no id (M7-3 / M7-3b), so its ids, `ContentHash` and digests are the two-faction tree's;
+  - a row that means Malazan v Whirlwind says so with explicit seats (`TestSim.TwoFactionSeats(n)`, `TeamTests.Seats` and
+    `AiScenes.Seats` are `p mod 2`): explicit default seats hash the same as the defaults, so no pinned value moves; a row
+    about the default rule itself computes `p mod factions`;
+  - a fixture that needs "a faction the data lacks" (`FactionOrderTests.AddTeblor`, `FactionOrderQaTests.AddFullTeblor`)
+    first cuts its copy to the first two factions, so it is "Malazan, Whirlwind and a Malazan copy named teblor" whatever
+    `game/data` appends (a real `factions/teblor/` is replaced, never written over), and every hash measured on it holds;
+    one that needs exactly two factions (an order-file error count, a byte-for-byte save fixture: `PreMapFixtures`'
+    saves hold tables sized by the data's types) builds on the cut copy; a fixture that needs an id no data has picks one
+    no faction would take (`no_such_faction`, not `andii`);
+  - the movement, crowd and cross-map scenarios that spawn `i mod types` cycle `TestSim.ScenarioUnitTypes`, the two
+    factions' types (the prefix of the id table), so the golden replay's scenario and every crowd hash stay as recorded;
+    a row about the valid id range (and the CLI's own `k mod types` mirror) keeps `TestSim.UnitTypeCount`, the data's;
+  - a count reads the data (one hall per faction, one error per shooter or caster, every unit) and keeps the two-faction
+    literal as a pin on `TwoFactionData`; a helper that edits every faction's `ai.json` names each faction's own unit or
+    building by slot (`AiScenes.UnitKey` / `BuildingKey`, BUG-1173 item 3; was a Malazan / Whirlwind ternary).
+- **The kill counter with a third faction** (BUG-1191's scene finding, `KillCounterOracleTests`, Stress): four seats on a
+  128 map (an idle human, AI Hard / Normal / Hard, faction `p mod factions`), 21,600 ticks, seeds 11-13, on the two factions
+  and with a Malazan copy appended: the stats' unit and building kills and losses equal an oracle that reads
+  `World.Deaths` every tick and counts a kill only when the killer is another player (M6-S5: a friendly-fire death is the
+  victim's loss and nobody's kill). See the M7-H1 report for the friendly-fire counts per seat.
+- **Order-file case** (BUG-1173 item 2): an entry whose folder exists only in another case (`factions/Teblor/` listed as
+  `teblor`) is one error at `order[i]` naming both spellings; the "has no folder" (false on Windows) and "is not listed"
+  pair is gone; the folder is still read in its place, so its `faction.json` id check reports the mismatch as before.
+- **BUG-1190:** `Seed21ResearchTests` asserts the recording's Research at tick 5556 (tech 4, `melee_weapons_1` when
+  recorded, `melee_weapons_2` since M7-3b) is refused and never applies, so the dependency `GatherWedgeQaTests` rests on is
+  explicit; `TechDataQaTests`' seventy-techs hash loop runs to the top id.
+- **Tests:** the readiness itself (the default loop and the Stress category on a scratch clone with the copy applied), the
+  `RegenQaTests` forged-part rows (un-skipped, plus the edges) and step rows (both places), `DataValidationTests` /
+  `StatusLoaderTests` off-step rows, `KillCounterOracleTests`, `Seed21ResearchTests`,
+  `FactionOrderTests.AFolderDifferingOnlyInCase_IsOneOrderErrorNamingBothSpellings`.
 
 ## Vision, detection, fog
 

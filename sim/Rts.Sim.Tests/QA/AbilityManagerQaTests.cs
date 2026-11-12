@@ -20,10 +20,10 @@ public class AbilityManagerQaTests
 {
     internal static GameData Data(int castMinTargets = 2, Action<TestDataDir>? more = null) => AiScenes.DataWith(dir =>
     {
-        foreach (string f in new[] { "malazan", "whirlwind" })
+        foreach (string f in TestSim.ShippedFactions) // M7-H1 (BUG-1173 item 3): every faction, its own ids by slot
             dir.EditJson($"factions/{f}/ai.json", root =>
             {
-                AiScenes.Opening(root)["buildOrder"] = AiScenes.BuildOrder(("time", 3600, "train", f == "malazan" ? "malazan_laborer" : "whirlwind_camp_follower", 1));
+                AiScenes.Opening(root)["buildOrder"] = AiScenes.BuildOrder(("time", 3600, "train", AiScenes.UnitKey(f, UnitSlot.Worker), 1));
                 AiScenes.Opening(root)["attack"] = new JsonObject { ["minArmyPop"] = 100, ["minArmyCost"] = 0 };
             });
         dir.EditJson("common/rules.json", r =>

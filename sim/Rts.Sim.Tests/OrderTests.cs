@@ -199,7 +199,7 @@ public class OrderTests
         int k = 0;
         for (int y = 1; y <= 7 && k < walkers; y++)
             for (int x = 1; x <= 8 && k < walkers; x++, k++)
-                sim.Enqueue(Command.SpawnUnit(0, k % TestSim.UnitTypeCount, g.CellCenter(x, y)));
+                sim.Enqueue(Command.SpawnUnit(0, k % TestSim.ScenarioUnitTypes, g.CellCenter(x, y)));
         sim.Tick();
         sim.Tick();
         UnitStore u = sim.World.Units;

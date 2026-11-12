@@ -43,7 +43,7 @@ public class FieldBuildFairnessQaTests
         for (int i = 0; i < units; i++)
         {
             List<int> cells = bases[i % 2];
-            sim.Enqueue(Command.SpawnUnit(i % 2, i % TestSim.UnitTypeCount, MoveScenario.Center(g, cells[rng.NextInt(0, cells.Count)])));
+            sim.Enqueue(Command.SpawnUnit(i % 2, i % TestSim.ScenarioUnitTypes, MoveScenario.Center(g, cells[rng.NextInt(0, cells.Count)])));
         }
         sim.Tick();
         sim.Tick();
@@ -58,7 +58,7 @@ public class FieldBuildFairnessQaTests
         List<int> open = FlowFieldOracle.PassableCells(g);
         var rng = new SimRng(seed, 951);
         for (int i = 0; i < units; i++)
-            sim.Enqueue(Command.SpawnUnit(i % 2, i % TestSim.UnitTypeCount, MoveScenario.Center(g, open[rng.NextInt(0, open.Count)])));
+            sim.Enqueue(Command.SpawnUnit(i % 2, i % TestSim.ScenarioUnitTypes, MoveScenario.Center(g, open[rng.NextInt(0, open.Count)])));
         sim.Tick();
         sim.Tick();
         Assert.Equal(units, sim.World.Units.Count);

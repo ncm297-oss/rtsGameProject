@@ -29,6 +29,17 @@ internal static class AiScenes
         _ => (30, 52),
     };
 
+    /// <summary>
+    /// M7-H1 (BUG-1173 item 3): the key of <paramref name="faction"/>'s unit in <paramref name="slot"/>, read from the shipped
+    /// data, so a helper that edits every faction's <c>ai.json</c> names each faction's own unit (was a Malazan / Whirlwind ternary).
+    /// </summary>
+    internal static string UnitKey(string faction, UnitSlot slot) =>
+        TestSim.Data.Units[StartBase.UnitOfSlot(TestSim.Data, TestSim.Data.FindFaction(faction), slot)].Key;
+
+    /// <summary>M7-H1 (BUG-1173 item 3): the key of <paramref name="faction"/>'s building in <paramref name="slot"/>, read from the shipped data.</summary>
+    internal static string BuildingKey(string faction, BuildingSlot slot) =>
+        TestSim.Data.Buildings[StartBase.BuildingOfSlot(TestSim.Data, TestSim.Data.FindFaction(faction), slot)].Key;
+
     /// <summary>Seats: player p plays faction p mod 2, the given controllers and difficulty.</summary>
     internal static PlayerSeat[] Seats(AiDifficulty difficulty, params SeatController[] controllers) =>
         controllers.Select((c, p) => new PlayerSeat(p % 2, c, difficulty)).ToArray();

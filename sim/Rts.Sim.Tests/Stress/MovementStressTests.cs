@@ -29,7 +29,7 @@ public class MovementStressTests
             int c = passable[rng.NextInt(0, passable.Count)];
             Vector2 corner = MoveScenario.Center(g, c) - new Vector2(MapConstants.CellSize / 2);
             var off = new Vector2(0.01f + rng.NextFloat() * 1.98f, 0.01f + rng.NextFloat() * 1.98f);
-            sim.Enqueue(Command.SpawnUnit(i % players, i % TestSim.UnitTypeCount, corner + off));
+            sim.Enqueue(Command.SpawnUnit(i % players, i % TestSim.ScenarioUnitTypes, corner + off));
         }
         sim.Tick();
         sim.Tick();
@@ -151,7 +151,7 @@ public class MovementStressTests
                     if (op < 4)
                     {
                         int c = passable[rng.NextInt(0, passable.Count) % passable.Count];
-                        sim.Enqueue(Command.SpawnUnit(p, rng.NextInt(0, TestSim.UnitTypeCount), MoveScenario.Center(g, c)));
+                        sim.Enqueue(Command.SpawnUnit(p, rng.NextInt(0, TestSim.ScenarioUnitTypes), MoveScenario.Center(g, c)));
                     }
                     else if (op < 9)
                     {

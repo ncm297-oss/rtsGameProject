@@ -99,8 +99,11 @@ public class ProjectileLoaderQaTests
     {
         DataLoadResult r = LoadWith(dir => WriteRaw(dir, "{ \"projectiles\": [ ] }"));
         Assert.False(r.Ok);
-        // Six units and, since M4-3b, the two watch towers name a projectile.
-        Assert.Equal(8, r.Errors.Count(e => e.Path.EndsWith(".attack.projectile", StringComparison.Ordinal)));
+        // Six units and, since M4-3b, the two watch towers name a projectile. M7-H1 (BUG-1191): 8 is the two shipped factions'
+        // count; the errors are one per shooter the data has (an appended faction's too).
+        static int Shooters(GameData d) => d.Units.Count(u => u.Attack.ProjectileTypeId >= 0) + d.Buildings.Count(b => b.Attack?.ProjectileTypeId >= 0);
+        Assert.Equal(8, Shooters(TestSim.TwoFactionData));
+        Assert.Equal(Shooters(TestSim.Data), r.Errors.Count(e => e.Path.EndsWith(".attack.projectile", StringComparison.Ordinal)));
     }
 
     [Fact]

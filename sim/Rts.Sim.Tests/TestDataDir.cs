@@ -49,6 +49,44 @@ public sealed class TestDataDir : IDisposable
         return dir;
     }
 
+    /// <summary>
+    /// M7-H1 (BUG-1191): <see cref="CopyOfShipped"/> cut to the first two factions of <c>common/factions.json</c>'s order
+    /// (<see cref="CutToFirstFactions"/>): for a pin that needs exactly the two factions it was measured on (an error count over
+    /// every faction's files, a byte-for-byte save). Appended factions move no id (M7-3 / M7-3b), so this copy's ids, content
+    /// hash and digests are the two-faction tree's whatever the shipped data appends.
+    /// </summary>
+    public static TestDataDir CopyOfShippedTwoFactions()
+    {
+        TestDataDir dir = CopyOfShipped();
+        dir.CutToFirstFactions(2);
+        return dir;
+    }
+
+    /// <summary>
+    /// M7-H1 (BUG-1191): keeps the first <paramref name="count"/> factions of this copy's order: deletes every later faction's
+    /// folder and rewrites <c>common/factions.json</c> with the kept ids. A copy with that many or fewer is left as it is.
+    /// </summary>
+    public void CutToFirstFactions(int count)
+    {
+        string orderFile = FullPath("common/factions.json");
+        JsonArray order = JsonNode.Parse(RetryOnce(() => System.IO.File.ReadAllText(orderFile)))!["order"]!.AsArray();
+        if (order.Count <= count) return;
+        var kept = new JsonArray();
+        for (int i = 0; i < order.Count; i++)
+        {
+            string id = (string)order[i]!;
+            if (i < count)
+            {
+                kept.Add(id);
+                continue;
+            }
+            string folder = FullPath("factions/" + id);
+            if (Directory.Exists(folder)) Directory.Delete(folder, recursive: true);
+        }
+        string text = new JsonObject { ["order"] = kept }.ToJsonString();
+        RetryOnce(() => System.IO.File.WriteAllText(orderFile, text));
+    }
+
     /// <summary>Full path of a file given relative to the data root with forward slashes.</summary>
     public string FullPath(string rel) => System.IO.Path.Combine(Path, rel.Replace('/', System.IO.Path.DirectorySeparatorChar));
 

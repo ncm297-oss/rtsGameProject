@@ -210,7 +210,7 @@ public class LocalMovementStressTests
             for (int i = 0; i < 60; i++)
             {
                 var at = new Vector2(2.1f + rng.NextFloat() * 34f, 2.1f + rng.NextFloat() * 43.8f);
-                sim.Enqueue(Command.SpawnUnit(i % 2, rng.NextInt(0, TestSim.UnitTypeCount), at));
+                sim.Enqueue(Command.SpawnUnit(i % 2, rng.NextInt(0, TestSim.ScenarioUnitTypes), at));
             }
             sim.Tick();
             sim.Tick();
@@ -306,7 +306,7 @@ public class LocalMovementStressTests
                 {
                     int slot = rng.NextInt(0, u.Capacity);
                     int op = rng.NextInt(0, 10);
-                    if (op < 3) sim.Enqueue(Command.SpawnUnit(rng.NextInt(0, 2), rng.NextInt(0, TestSim.UnitTypeCount), c + new Vector2(rng.NextFloat() * 4f - 2f, rng.NextFloat() * 4f - 2f)));
+                    if (op < 3) sim.Enqueue(Command.SpawnUnit(rng.NextInt(0, 2), rng.NextInt(0, TestSim.ScenarioUnitTypes), c + new Vector2(rng.NextFloat() * 4f - 2f, rng.NextFloat() * 4f - 2f)));
                     else if (op < 9 && u.Alive[slot]) sim.Enqueue(Command.Move(u.Owner[slot], MoveScenario.Handle(sim, slot), c + new Vector2(rng.NextInt(-2, 3) * 3f, rng.NextInt(-2, 3) * 3f)));
                     else if (u.Alive[slot] && t % 5 == 0) u.Free(MoveScenario.Handle(sim, slot));
                 }

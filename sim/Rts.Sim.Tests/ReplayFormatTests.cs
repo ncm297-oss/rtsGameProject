@@ -413,7 +413,7 @@ public class ReplayFormatTests
         NavGrid g = sim.World.NavGrid;
         int center = MoveScenario.CentralCell(g);
         var cells = OrderMix.Cells(g, 14f);
-        for (int i = 0; i < 40; i++) sim.Enqueue(Commands.Command.SpawnUnit(i % 2, i % TestSim.UnitTypeCount, MoveScenario.Center(g, cells[i * 7 % cells.Count])));
+        for (int i = 0; i < 40; i++) sim.Enqueue(Commands.Command.SpawnUnit(i % 2, i % TestSim.ScenarioUnitTypes, MoveScenario.Center(g, cells[i * 7 % cells.Count])));
         for (int t = 0; t < 200; t++)
         {
             if (t == 2) MoveScenario.MoveAll(sim, MoveScenario.Center(g, center));

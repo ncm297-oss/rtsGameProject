@@ -169,7 +169,7 @@ public sealed partial class World
         NavGrid.ReadFrom(r);
         Resources.ReadFrom(r, cells);
         Buildings.ReadFrom(r, Config.PlayerCount, cells);
-        Units.ReadFrom(r, Config.PlayerCount, Data.Units.Length, Data.Statuses.Length);
+        Units.ReadFrom(r, Config.PlayerCount, Data.Units.Length, Data.Statuses, TickNumber);
         // BUG-0960 item 2: a live unit's goal cell is -1 (none) or on the map; a forged one made the flow field cache throw.
         // M6-SH1 (its last throw): a Moving unit has a goal (movement fetches its field every tick; the sim never moves one
         // without), so -1 there is forged too.

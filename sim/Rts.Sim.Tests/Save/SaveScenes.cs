@@ -80,7 +80,7 @@ internal static class SaveScenes
     // ---------- generated maps ----------
 
     /// <summary>The menu's match (SimRunner's capacities, the skirmish map: 128, 12 forests, 8 mines, 2 start locations), two human seats.</summary>
-    internal static SaveScene Menu(ulong seed) => Generated($"menu_seed{seed}", seed, 2, 128, forests: 12, mines: 8);
+    internal static SaveScene Menu(ulong seed, GameData? data = null) => Generated($"menu_seed{seed}", seed, 2, 128, forests: 12, mines: 8, data);
 
     /// <summary>A 4-seat human-only match on a 256 map.</summary>
     internal static SaveScene FourSeats256() => Generated("four_seats_256", 7, 4, 256, forests: 24, mines: 16);
@@ -88,16 +88,16 @@ internal static class SaveScenes
     /// <summary>
     /// A generated map with each player's start base placed by commands from <see cref="StartBase.Plan"/> (hall and five
     /// workers, as Match.cs does), plus a small start army per player (four line units, two ranged, a caster) beside it, and
-    /// <see cref="MatchScript"/> driving every seat.
+    /// <see cref="MatchScript"/> driving every seat. M7-H1: on <paramref name="data"/> (default the shipped data).
     /// </summary>
-    internal static SaveScene Generated(string name, ulong seed, int players, int size, int forests, int mines)
+    internal static SaveScene Generated(string name, ulong seed, int players, int size, int forests, int mines, GameData? data = null)
     {
         var script = new MatchScript(players);
         return new SaveScene(name, () =>
         {
             var seats = Enumerable.Range(0, players).Select(p => new PlayerSeat(p % 2, SeatController.Human, AiDifficulty.Normal)).ToImmutableArray();
             var map = MapGenParams.Default with { Width = size, Height = size, Forests = forests, GoldMines = mines, StartLocations = players };
-            var sim = new Simulation(new SimConfig(seed, players, 2000, 4096) { Data = TestSim.Data, Map = map, Seats = seats });
+            var sim = new Simulation(new SimConfig(seed, players, 2000, 4096) { Data = data ?? TestSim.Data, Map = map, Seats = seats });
             PlaceBases(sim, army: true);
             return sim;
         }, script.Run);
@@ -138,8 +138,10 @@ internal static class SaveScenes
     private const int FlatSize = 64;
 
     /// <summary>A sim of <paramref name="data"/> on a flat 64 map, every cell explored (so any spot may be built on).</summary>
+    // M7-H1 (BUG-1191): the flat scenes are Malazan v Whirlwind (p mod 2) with explicit seats, which hash and save as the
+    // defaults did with two factions, so a faction appended to the data doesn't seat a third one in defeated_seat's seat 2.
     private static Simulation Flat(GameData data, int players, bool combat = true, int units = 256) =>
-        TestSim.Explored(new Simulation(new SimConfig(11, players, units, 1024) { Data = data, Combat = combat }, LocalMovementTests.Flat(FlatSize)));
+        TestSim.Explored(new Simulation(new SimConfig(11, players, units, 1024) { Data = data, Combat = combat, Seats = TestSim.TwoFactionSeats(players) }, LocalMovementTests.Flat(FlatSize)));
 
     private static Vector2 M(float x, float y) => new(x, y);
 

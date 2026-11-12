@@ -250,7 +250,9 @@ public class RegenTests
     [Fact]
     public void ShippedData_NoFactionRegenerates()
     {
-        Assert.All(TestSim.Data.Factions, f => Assert.Equal((0, 0), (f.RegenPerTick, f.RegenDelayTicks)));
+        // M7-H1 (BUG-1191): the two shipped factions (a later one may regenerate: the Teblor page's 1 HP/s after 6 s); the
+        // scene seats those two, so its pass still returns at once.
+        Assert.All(TestSim.TwoFactionData.Factions, f => Assert.Equal((0, 0), (f.RegenPerTick, f.RegenDelayTicks)));
         Simulation sim = Scene(TestSim.Data);
         Assert.False(sim.World.AnyFactionRegen);
         Assert.Equal(0, sim.World.Units.Statuses.RegeneratingUnits);

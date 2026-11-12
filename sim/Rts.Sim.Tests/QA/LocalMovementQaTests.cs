@@ -90,7 +90,7 @@ public class LocalMovementQaTests
         Simulation sim = LocalMovementTests.SimOn(LocalMovementTests.Flat(32), 50);
         Vector2 p = new(31f, 31f);
         var units = new (int, Vector2)[50];
-        for (int i = 0; i < units.Length; i++) units[i] = (i % TestSim.UnitTypeCount, p);
+        for (int i = 0; i < units.Length; i++) units[i] = (i % TestSim.ScenarioUnitTypes, p);
         SpawnAll(sim, units);
         MoveScenario.MoveAll(sim, p);
         sim.Tick();
@@ -116,7 +116,7 @@ public class LocalMovementQaTests
         Simulation sim = LocalMovementTests.SimOn(LocalMovementTests.Flat(32), 50);
         Vector2 p = new(15f, 15f), goal = new(45f, 45f);
         var units = new (int, Vector2)[50];
-        for (int i = 0; i < units.Length; i++) units[i] = (i % TestSim.UnitTypeCount, p);
+        for (int i = 0; i < units.Length; i++) units[i] = (i % TestSim.ScenarioUnitTypes, p);
         SpawnAll(sim, units);
         MoveScenario.MoveAll(sim, goal);
         sim.Tick();
@@ -229,7 +229,7 @@ public class LocalMovementQaTests
     [InlineData(3)]
     public void LoneUnit_RandomReachableGoals_AlwaysArrives_NeverGivesUp(int typeIndex)
     {
-        int type = typeIndex % TestSim.UnitTypeCount;
+        int type = typeIndex % TestSim.ScenarioUnitTypes;
         int falseGiveUps = 0, runs = 0, worstStuck = 0;
         string? firstFail = null;
         for (ulong seed = 1; seed <= 6; seed++)

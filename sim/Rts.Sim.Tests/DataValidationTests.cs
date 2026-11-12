@@ -207,7 +207,13 @@ public class DataValidationTests
     [InlineData("{\"hpPerSecond\": -1, \"delay\": 6}", "regen.hpPerSecond", "must be positive")]
     [InlineData("{\"delay\": 6}", "regen.hpPerSecond", "missing required field")]
     [InlineData("{\"hpPerSecond\": 100.5, \"delay\": 6}", "regen.hpPerSecond", "above the maximum 100")]
-    [InlineData("{\"hpPerSecond\": 0.02, \"delay\": 6}", "regen.hpPerSecond", "rounds to 0")]
+    // M7-H1 (BUG-1166): off the 0.05 HP/s step is refused, naming the value and the step (0.02 was "rounds to 0").
+    [InlineData("{\"hpPerSecond\": 0.02, \"delay\": 6}", "regen.hpPerSecond", "0.02 HP/s is not a multiple of 0.05 HP/s")]
+    [InlineData("{\"hpPerSecond\": 0.07, \"delay\": 6}", "regen.hpPerSecond", "0.07 HP/s is not a multiple of 0.05 HP/s")]
+    [InlineData("{\"hpPerSecond\": 0.049999, \"delay\": 6}", "regen.hpPerSecond", "not a multiple of 0.05 HP/s")]
+    [InlineData("{\"hpPerSecond\": 0.100000001, \"delay\": 6}", "regen.hpPerSecond", "not a multiple of 0.05 HP/s")]
+    [InlineData("{\"hpPerSecond\": 1e300, \"delay\": 6}", "regen.hpPerSecond", "above the maximum 100")]
+    [InlineData("{\"hpPerSecond\": -0.05, \"delay\": 6}", "regen.hpPerSecond", "must be positive")]
     [InlineData("{\"hpPerSecond\": 1}", "regen.delay", "missing required field")]
     [InlineData("{\"hpPerSecond\": 1, \"delay\": -1}", "regen.delay", "must not be negative")]
     [InlineData("{\"hpPerSecond\": 1, \"delay\": 3601}", "regen.delay", "above the maximum 3600")]
@@ -919,18 +925,24 @@ public class DataValidationTests
             Assert.Equal(BuildingSlot.TownHall, data.Buildings[data.FindBuilding((string)first["id"]!)].Slot);
         }
         BuildingDef[] townHalls = data.Buildings.Where(b => b.Slot == BuildingSlot.TownHall).ToArray();
-        Assert.Equal(new[] { "malazan_garrison_keep", "whirlwind_holy_camp" }, townHalls.Select(b => b.Key));
+        // M7-H1 (BUG-1191): one hall per faction in faction order, read from the data; the two shipped factions' by name.
+        Assert.Equal(data.Factions.Select(f => f.Id), townHalls.Select(b => b.Faction));
+        Assert.Equal(new[] { "malazan_garrison_keep", "whirlwind_holy_camp" }, townHalls.Take(2).Select(b => b.Key));
         foreach (BuildingDef b in townHalls)
         {
             Assert.Equal(BuildingSlot.TownHall, b.Slot);
-            Assert.Equal((4, 4), (b.FootprintWidth, b.FootprintHeight));
-            Assert.Equal((2400, 2), (b.Hp, b.Armor));
-            Assert.Equal((275, 275), (b.CostGold, b.CostWood));
-            Assert.Equal(90 * SimConstants.TicksPerSecond, b.BuildTicks);
-            Assert.Equal(20, b.HalfPopProvided); // +10 pop
             Assert.True(b.DropOff);
+            if (b.Faction < 2)
+            {
+                // The template numbers docs/02 gives the two shipped factions' halls (a later faction's page sets its own).
+                Assert.Equal((4, 4), (b.FootprintWidth, b.FootprintHeight));
+                Assert.Equal((2400, 2), (b.Hp, b.Armor));
+                Assert.Equal((275, 275), (b.CostGold, b.CostWood));
+                Assert.Equal(90 * SimConstants.TicksPerSecond, b.BuildTicks);
+                Assert.Equal(20, b.HalfPopProvided); // +10 pop
+            }
             Assert.False(string.IsNullOrWhiteSpace(b.DisplayName) || string.IsNullOrWhiteSpace(b.Description));
-            Assert.Equal(b.Key.Split('_')[0], data.Factions[b.Faction].Key);
+            Assert.StartsWith(data.Factions[b.Faction].Key + "_", b.Key); // M7-H1: a faction id may hold an underscore itself
             // The faction's worker is trained here (docs/factions: trainedAt names the Town Hall).
             Assert.Contains(data.Factions[b.Faction].Units, id => data.Units[id].Slot == UnitSlot.Worker && data.Units[id].TrainedAt == b.Key);
         }
@@ -1013,7 +1025,8 @@ public class DataValidationTests
     public void ShippedData_TrainedAt_ResolvesForAll14Units()
     {
         GameData data = Load(TestDataDir.Shipped);
-        Assert.Equal(14, data.Units.Length);
+        // M7-H1 (BUG-1191): 14 is the two shipped factions' count; every unit the data has is checked.
+        Assert.Equal(14, TestSim.TwoFactionData.Units.Length);
         foreach (UnitDef u in data.Units)
         {
             int b = data.FindBuilding(u.TrainedAt);

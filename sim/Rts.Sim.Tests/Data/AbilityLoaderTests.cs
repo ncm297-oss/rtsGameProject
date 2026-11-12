@@ -49,7 +49,7 @@ public class AbilityLoaderTests
     [Fact]
     public void Shipped_TelasFire_MatchesTheFactionPage_AndTheCadreMageHasIt()
     {
-        GameData d = TestSim.Data;
+        GameData d = TestSim.TwoFactionData; // M7-H1 (BUG-1191): a pin about the two shipped factions' abilities
         Assert.Equal(3, d.Abilities.Length); // telas_fire, cusser (M4-4b-1), sandstorm (M4-4b-2)
         AbilityDef a = d.Abilities[d.FindAbility("telas_fire")];
         Assert.Equal(d.FindFaction("malazan"), a.Faction);
@@ -76,7 +76,7 @@ public class AbilityLoaderTests
     [Fact]
     public void AFactionWithoutAbilitiesJson_LoadsEmpty()
     {
-        using TestDataDir dir = TestDataDir.CopyOfShipped();
+        using TestDataDir dir = TestDataDir.CopyOfShippedTwoFactions(); // M7-H1 (BUG-1191): "no abilities" is about the two factions it edits
         File.Delete(dir.FullPath(Abilities));
         File.Delete(dir.FullPath(Whirlwind)); // M4-4b-2: both factions ship one now
         dir.EditJson("factions/whirlwind/units.json", root => root["units"]![UnitIndex("whirlwind", "whirlwind_priest")]!.AsObject().Remove("abilities"));

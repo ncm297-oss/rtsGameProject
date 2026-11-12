@@ -24,10 +24,13 @@ public class FactionOrderQaTests(ITestOutputHelper output)
     /// <summary>
     /// Adds <c>teblor</c> as a full copy of Malazan: every file (abilities.json too), ids renamed. Its abilities are renamed
     /// <c>zteblor_*</c> so they sort after every shipped ability (BUG-1171: a <c>teblor_*</c> ability would renumber
-    /// <c>telas_fire</c>), its tech <c>teblor_supply</c>. <paramref name="order"/> is the whole order list.
+    /// <c>telas_fire</c>), its tech <c>teblor_supply</c>. <paramref name="order"/> is the whole order list. M7-H1 (BUG-1191): the
+    /// copy is first cut to the first two factions (a real <c>factions/teblor/</c> is replaced), so every row here is
+    /// "Malazan, Whirlwind and this Teblor copy" whatever the shipped data appends.
     /// </summary>
     internal static void AddFullTeblor(TestDataDir dir, string[] order, string abilityPrefix = "zteblor_", string tech = "teblor_supply")
     {
+        dir.CutToFirstFactions(2);
         string from = dir.FullPath("factions/malazan"), to = dir.FullPath("factions/teblor");
         Directory.CreateDirectory(to);
         foreach (string file in Directory.GetFiles(from))
@@ -55,7 +58,7 @@ public class FactionOrderQaTests(ITestOutputHelper output)
 
     private static GameData LoadWith(string[] order, bool teblor, string abilityPrefix = "zteblor_", string tech = "teblor_supply")
     {
-        using TestDataDir dir = TestDataDir.CopyOfShipped();
+        using TestDataDir dir = TestDataDir.CopyOfShippedTwoFactions(); // M7-H1 (BUG-1191): the orders here list the two factions (and the copy)
         if (teblor) AddFullTeblor(dir, order, abilityPrefix, tech);
         else WriteOrder(dir, order);
         return Load(dir);
@@ -121,7 +124,7 @@ public class FactionOrderQaTests(ITestOutputHelper output)
         }
         CheckGrouped(d.Techs.Select(t => (t.Key, t.Faction, t.Id)).ToArray(), "tech");
         CheckGrouped(d.Abilities.Select(a => (a.Key, a.Faction, a.Id)).ToArray(), "ability");
-        GameData s = TestSim.Data;
+        GameData s = TestSim.TwoFactionData; // M7-H1 (BUG-1191): the two factions these orders are made of
         foreach (TechDef t in d.Techs)
         {
             Assert.Equal(t.Id, d.FindTech(t.Key));
@@ -166,7 +169,7 @@ public class FactionOrderQaTests(ITestOutputHelper output)
     public void ATeblorInTheMiddle_KeepsMalazanAndMovesWhirlwind()
     {
         GameData d = LoadWith(new[] { "malazan", "teblor", "whirlwind" }, teblor: true);
-        GameData s = TestSim.Data;
+        GameData s = TestSim.TwoFactionData; // M7-H1 (BUG-1191): the two factions these orders are made of
         int teblorUnits = d.Factions[1].Units.Length, teblorBuildings = d.Buildings.Count(b => b.Faction == 1);
         foreach (UnitDef u in s.Units)
             Assert.Equal(u.Id + (u.Faction == 0 ? 0 : teblorUnits), d.FindUnit(u.Key));
@@ -189,7 +192,7 @@ public class FactionOrderQaTests(ITestOutputHelper output)
     [InlineData("{\"order\": [\"malazan\", \"whirlwind\"], \"order\": [\"whirlwind\", \"malazan\"]}", 1, "")] // duplicate key: whatever the reader does, never silently a second order
     public void AnOrderFileShape_IsItsErrorCount_AllInTheOrderFile(string json, int errors, string pathStart)
     {
-        using TestDataDir dir = TestDataDir.CopyOfShipped();
+        using TestDataDir dir = TestDataDir.CopyOfShippedTwoFactions(); // M7-H1 (BUG-1191): the counts are for exactly two folders
         File.WriteAllText(dir.FullPath(OrderFile), json);
         DataLoadResult r = DataLoader.LoadAll(dir.Path);
         foreach (DataError e in r.Errors) output.WriteLine(e.ToString());
@@ -209,7 +212,7 @@ public class FactionOrderQaTests(ITestOutputHelper output)
     [Fact]
     public void AnUnlistedFolder_AndAnUnknownEntry_AreTwoErrors()
     {
-        using TestDataDir dir = TestDataDir.CopyOfShipped();
+        using TestDataDir dir = TestDataDir.CopyOfShippedTwoFactions(); // M7-H1 (BUG-1191)
         AddFullTeblor(dir, new[] { "malazan", "whirlwind", "andii" });
         DataLoadResult r = DataLoader.LoadAll(dir.Path);
         foreach (DataError e in r.Errors) output.WriteLine(e.ToString());
@@ -222,7 +225,7 @@ public class FactionOrderQaTests(ITestOutputHelper output)
     [Fact]
     public void EightRealFactions_Load_AndTheShippedIdsHold()
     {
-        using TestDataDir dir = TestDataDir.CopyOfShipped();
+        using TestDataDir dir = TestDataDir.CopyOfShippedTwoFactions(); // M7-H1 (BUG-1191): two plus six copies make the eight
         var order = new List<string> { "malazan", "whirlwind" };
         for (int k = 0; k < DataLimits.MaxFactions - 2; k++)
         {
@@ -241,8 +244,8 @@ public class FactionOrderQaTests(ITestOutputHelper output)
         WriteOrder(dir, order.ToArray());
         GameData d = Load(dir);
         Assert.Equal(DataLimits.MaxFactions, d.Factions.Length);
-        foreach (UnitDef u in TestSim.Data.Units) Assert.Equal(u.Id, d.FindUnit(u.Key));
-        foreach (BuildingDef b in TestSim.Data.Buildings) Assert.Equal(b.Id, d.FindBuilding(b.Key));
+        foreach (UnitDef u in TestSim.TwoFactionData.Units) Assert.Equal(u.Id, d.FindUnit(u.Key));
+        foreach (BuildingDef b in TestSim.TwoFactionData.Buildings) Assert.Equal(b.Id, d.FindBuilding(b.Key));
         // A ninth real folder is refused at "order" (the limit), whatever else.
         Directory.CreateDirectory(dir.FullPath("factions/copy9"));
         foreach (string file in Directory.GetFiles(dir.FullPath("factions/copy0")))
@@ -267,11 +270,12 @@ public class FactionOrderQaTests(ITestOutputHelper output)
         using TestDataDir dir = TestDataDir.CopyOfShipped();
         AddFullTeblor(dir, new[] { "malazan", "whirlwind", "teblor" }, abilityPrefix: "teblor_");
         GameData d = Load(dir);
-        int shipped = TestSim.Data.FindAbility("telas_fire");
+        GameData two = TestSim.TwoFactionData; // M7-H1 (BUG-1191): the two factions the copy is added to
+        int shipped = two.FindAbility("telas_fire");
         Assert.Equal(shipped, d.FindAbility("telas_fire"));
-        foreach (AbilityDef a in TestSim.Data.Abilities) Assert.Equal(a.Id, d.FindAbility(a.Key));
+        foreach (AbilityDef a in two.Abilities) Assert.Equal(a.Id, d.FindAbility(a.Key));
         Assert.Equal(shipped, s_full.Value.FindAbility("telas_fire"));
-        Assert.Equal(TestSim.Data.FindAbility("cusser"), s_full.Value.FindAbility("cusser"));
+        Assert.Equal(two.FindAbility("cusser"), s_full.Value.FindAbility("cusser"));
     }
 
     // ------------------------------------------------------------------ a Teblor AI seat plays
@@ -499,7 +503,7 @@ public class FactionOrderQaTests(ITestOutputHelper output)
     [InlineData(100, "0.5", "8", true)]
     public void TheCapCheck_ReadsRulesPopCap(int popCap, string pop, string? spawnCount, bool ok)
     {
-        using TestDataDir dir = TestDataDir.CopyOfShipped();
+        using TestDataDir dir = TestDataDir.CopyOfShippedTwoFactions(); // M7-H1 (BUG-1191): one error, on the two factions' units
         dir.EditJson("common/rules.json", r => r["popCap"] = popCap);
         dir.SetUnitField("malazan", "malazan_crossbowman", "pop", pop);
         if (spawnCount != null) dir.SetUnitField("malazan", "malazan_crossbowman", "spawnCount", spawnCount);
@@ -518,9 +522,9 @@ public class FactionOrderQaTests(ITestOutputHelper output)
     [Fact]
     public void ATinyPopCap_IsOneErrorPerUnitAboveIt()
     {
-        using TestDataDir dir = TestDataDir.CopyOfShipped();
+        using TestDataDir dir = TestDataDir.CopyOfShippedTwoFactions(); // M7-H1 (BUG-1191): the counts below are the two factions'
         dir.EditJson("common/rules.json", r => r["popCap"] = 1);
-        int above = TestSim.Data.Units.Count(u => u.HalfPop * u.SpawnCount > 2);
+        int above = TestSim.TwoFactionData.Units.Count(u => u.HalfPop * u.SpawnCount > 2);
         DataLoadResult r = DataLoader.LoadAll(dir.Path);
         foreach (DataError e in r.Errors) output.WriteLine(e.ToString());
         Assert.Equal(above, r.Errors.Count(e => e.Message.Contains("could never start")));
@@ -532,7 +536,7 @@ public class FactionOrderQaTests(ITestOutputHelper output)
     [Fact]
     public void ABrokenPopCap_IsReportedOnce_NotAtEveryUnit()
     {
-        using TestDataDir dir = TestDataDir.CopyOfShipped();
+        using TestDataDir dir = TestDataDir.CopyOfShippedTwoFactions(); // M7-H1 (BUG-1191)
         dir.EditJson("common/rules.json", r => r["popCap"] = -5);
         DataLoadResult r = DataLoader.LoadAll(dir.Path);
         foreach (DataError e in r.Errors) output.WriteLine(e.ToString());

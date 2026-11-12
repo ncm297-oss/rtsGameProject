@@ -43,7 +43,7 @@ public static class OrderMix
         for (int i = 0; i < units; i++)
         {
             Vector2 corner = MoveScenario.Center(g, cells[rng.NextInt(0, cells.Count)]) - new Vector2(MapConstants.CellSize / 2);
-            sim.Enqueue(Command.SpawnUnit(i % 2, i % TestSim.UnitTypeCount, corner + new Vector2(0.05f + rng.NextFloat() * 1.9f, 0.05f + rng.NextFloat() * 1.9f)));
+            sim.Enqueue(Command.SpawnUnit(i % 2, i % TestSim.ScenarioUnitTypes, corner + new Vector2(0.05f + rng.NextFloat() * 1.9f, 0.05f + rng.NextFloat() * 1.9f)));
         }
     }
 

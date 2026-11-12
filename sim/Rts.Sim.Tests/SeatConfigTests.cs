@@ -22,7 +22,8 @@ public class SeatConfigTests
         var w = new World(c);
         for (int p = 0; p < 5; p++)
         {
-            Assert.Equal(new PlayerSeat(p % 2, SeatController.Human, AiDifficulty.Normal), c.SeatOf(p));
+            // M7-H1 (BUG-1191): the default rule itself, p mod factions (was p % 2 with two factions).
+            Assert.Equal(new PlayerSeat(p % TestSim.Data.Factions.Length, SeatController.Human, AiDifficulty.Normal), c.SeatOf(p));
             Assert.Equal(p % TestSim.Data.Factions.Length, w.FactionOf(p));
         }
         Assert.Equal(-1, w.FactionOf(5));
@@ -64,7 +65,8 @@ public class SeatConfigTests
         var human = new PlayerSeat(0, SeatController.Human, AiDifficulty.Normal);
         Assert.Throws<ArgumentException>(() => Config(2, human).Validate()); // one seat for two players
         Assert.Throws<ArgumentException>(() => Config(1, human, human).Validate());
-        Assert.Throws<ArgumentOutOfRangeException>(() => Config(1, human with { Faction = 2 }).Validate());
+        // M7-H1 (BUG-1191): the first faction id past the data's (2 while it had two factions).
+        Assert.Throws<ArgumentOutOfRangeException>(() => Config(1, human with { Faction = TestSim.Data.Factions.Length }).Validate());
         Assert.Throws<ArgumentOutOfRangeException>(() => Config(1, human with { Faction = -1 }).Validate());
         Assert.Throws<ArgumentOutOfRangeException>(() => Config(1, human with { Controller = (SeatController)2 }).Validate());
         Assert.Throws<ArgumentOutOfRangeException>(() => Config(1, human with { Difficulty = (AiDifficulty)3 }).Validate());

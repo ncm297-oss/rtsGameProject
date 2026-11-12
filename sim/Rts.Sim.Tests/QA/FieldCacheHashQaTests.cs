@@ -373,7 +373,7 @@ public class FieldCacheHashQaTests
         List<int> open = FlowFieldOracle.PassableCells(g);
         var rng = new SimRng(seed, 961);
         for (int i = 0; i < 48; i++)
-            sim.Enqueue(Command.SpawnUnit(i % 2, i % TestSim.UnitTypeCount, MoveScenario.Center(g, open[rng.NextInt(0, open.Count)])));
+            sim.Enqueue(Command.SpawnUnit(i % 2, i % TestSim.ScenarioUnitTypes, MoveScenario.Center(g, open[rng.NextInt(0, open.Count)])));
         sim.Tick();
         sim.Tick();
         Assert.Equal(32, sim.World.FlowFields.Capacity);

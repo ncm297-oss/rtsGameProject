@@ -1,3 +1,4 @@
+using System.Collections.Immutable;
 using System.Text.Json.Nodes;
 using Rts.Sim.Data;
 
@@ -60,8 +61,50 @@ public static class TestSim
     /// </summary>
     public static IReadOnlyList<string> ShippedFactions => s_factions.Value;
 
+    private static readonly Lazy<GameData> s_twoFactions = new(() =>
+    {
+        if (Data.Factions.Length <= 2) return Data;
+        using TestDataDir dir = TestDataDir.CopyOfShippedTwoFactions();
+        DataLoadResult result = DataLoader.LoadAll(dir.Path);
+        Assert.True(result.Ok, string.Join(Environment.NewLine, result.Errors));
+        return result.Data!;
+    });
+
+    /// <summary>
+    /// M7-H1 (BUG-1191): the shipped data cut to the first two factions of the order (<see cref="TestDataDir.CopyOfShippedTwoFactions"/>;
+    /// <see cref="Data"/> itself while it has two): for a pin measured on Malazan v Whirlwind that reads every faction's
+    /// tables (a save's bytes, a count over every unit). Ids, content hash and digests equal the two-faction tree's.
+    /// </summary>
+    public static GameData TwoFactionData => s_twoFactions.Value;
+
+    /// <summary>M7-H1 (BUG-1191): the first two factions' ids (Malazan, Whirlwind), for a pin about the two shipped factions.</summary>
+    public static IReadOnlyList<string> FirstTwoFactions => s_firstTwo.Value;
+
+    private static readonly Lazy<string[]> s_firstTwo = new(() => new[] { Data.Factions[0].Key, Data.Factions[1].Key });
+
+    /// <summary>
+    /// M7-H1 (BUG-1191): the explicit default seats for <paramref name="players"/> players on <see cref="Data"/> as it was
+    /// measured with two factions: player p plays faction <c>p mod 2</c>, Human, Normal, team -1 (<see cref="SimConfig.SeatOf"/>'s
+    /// rule with two factions). docs/03: explicit default seats hash the same as the defaults, so a row about Malazan v
+    /// Whirlwind that passes these keeps its pinned values whatever the data appends.
+    /// </summary>
+    public static ImmutableArray<PlayerSeat> TwoFactionSeats(int players)
+    {
+        var seats = new PlayerSeat[players];
+        for (int p = 0; p < players; p++) seats[p] = new PlayerSeat(p % 2, SeatController.Human, AiDifficulty.Normal);
+        return seats.ToImmutableArray();
+    }
+
     /// <summary>Number of unit types in the shipped data; valid type ids are 0 to this minus 1.</summary>
     public static int UnitTypeCount => Data.Units.Length;
+
+    /// <summary>
+    /// M7-H1 (BUG-1191): the unit types the movement, crowd and cross-map scenarios cycle through (<c>i % ScenarioUnitTypes</c>):
+    /// the two shipped factions' (<see cref="TwoFactionData"/>; their ids are the prefix of <see cref="Data"/>'s), so a faction
+    /// appended to the data doesn't change which units those scenes spawn, nor any hash pinned on them. A test about the
+    /// valid id range uses <see cref="UnitTypeCount"/>.
+    /// </summary>
+    public static int ScenarioUnitTypes => TwoFactionData.Units.Length;
 
     /// <summary>A <see cref="SimConfig"/> carrying the shipped data.</summary>
     public static SimConfig Config(ulong Seed, int PlayerCount, int UnitCapacity, int CommandCapacity) =>

@@ -53,14 +53,18 @@ internal static class PreMapFixtures
         ("replay_ai_ffa_standard", 6),
     };
 
-    /// <summary>The sim of save scene <paramref name="name"/>, ticked to <see cref="Ticks"/>.</summary>
+    /// <summary>
+    /// The sim of save scene <paramref name="name"/>, ticked to <see cref="Ticks"/>. M7-H1 (BUG-1191): on
+    /// <see cref="TestSim.TwoFactionData"/>: a save holds tables sized by the data's types (a third faction made save_ai_seed2
+    /// 560 bytes longer), and these fixtures are the two-faction build's bytes.
+    /// </summary>
     internal static Simulation SaveScene(string name)
     {
         switch (name)
         {
             case "save_menu_seed1":
             {
-                SaveScene scene = SaveScenes.Menu(1);
+                SaveScene scene = SaveScenes.Menu(1, TestSim.TwoFactionData);
                 Simulation sim = scene.Build();
                 Run(sim, scene.Script, Ticks);
                 return sim;
@@ -68,7 +72,7 @@ internal static class PreMapFixtures
             case "save_ai_seed2":
             {
                 PlayerSeat[] seats = { new(0, SeatController.Ai, AiDifficulty.Normal), new(1, SeatController.Ai, AiDifficulty.Normal) };
-                Simulation sim = Rts.Sim.Tests.AiScenes.Generated(seats, 2, record: false, out _);
+                Simulation sim = Rts.Sim.Tests.AiScenes.Generated(seats, 2, record: false, out _, data: TestSim.TwoFactionData);
                 for (int t = 0; t < Ticks; t++) sim.Tick();
                 return sim;
             }

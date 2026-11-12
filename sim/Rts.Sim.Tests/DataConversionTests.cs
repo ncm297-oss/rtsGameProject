@@ -126,7 +126,8 @@ public class DataConversionTests
     public void Regen_ConvertsToFixedPointPerTick_AndDelayTicks(double hpPerSecond, double delay, int perTick, int delayTicks)
     {
         Assert.Equal(400, Rts.Sim.Combat.CombatConstants.RegenFixedOne);
-        Assert.All(TestSim.Data.Factions, f => Assert.Equal((0, 0), (f.RegenPerTick, f.RegenDelayTicks)));
+        // M7-H1 (BUG-1191): the two shipped factions have no regen (a third may: the Teblor page's 1 HP/s after 6 s).
+        Assert.All(TestSim.TwoFactionData.Factions, f => Assert.Equal((0, 0), (f.RegenPerTick, f.RegenDelayTicks)));
         using TestDataDir dir = TestDataDir.CopyOfShipped();
         dir.EditJson("factions/malazan/faction.json", r => r["regen"] = new System.Text.Json.Nodes.JsonObject { ["hpPerSecond"] = hpPerSecond, ["delay"] = delay });
         GameData data = Load(dir.Path);
@@ -139,12 +140,16 @@ public class DataConversionTests
     public void Ids_AreDenseAndOrdinalSorted()
     {
         GameData data = Load(TestDataDir.Shipped);
-        Assert.Equal(14, data.Units.Length);
+        // M7-H1 (BUG-1191): 14 is the two shipped factions' count. Since M7-3 the ids go faction by faction in the order
+        // file's order, ordinal within a faction (a faction appended after Whirlwind may sort before it: teblor_ < whirlwind_).
+        Assert.Equal(14, TestSim.TwoFactionData.Units.Length);
         for (int i = 0; i < data.Units.Length; i++)
         {
             Assert.Equal(i, data.Units[i].Id);
             Assert.Equal(i, data.FindUnit(data.Units[i].Key));
-            if (i > 0) Assert.True(string.CompareOrdinal(data.Units[i - 1].Key, data.Units[i].Key) < 0);
+            if (i == 0) continue;
+            if (data.Units[i - 1].Faction == data.Units[i].Faction) Assert.True(string.CompareOrdinal(data.Units[i - 1].Key, data.Units[i].Key) < 0);
+            else Assert.True(data.Units[i - 1].Faction < data.Units[i].Faction);
         }
         for (int i = 0; i < data.Factions.Length; i++)
         {
@@ -153,7 +158,7 @@ public class DataConversionTests
         }
         Assert.Equal(new[] { "giant", "heavy", "light", "mounted", "structure" }, data.DamageTable.ArmorClassKeys);
         Assert.Equal(-1, data.FindUnit("malazan_dragon"));
-        Assert.Equal(-1, data.FindFaction("andii"));
+        Assert.Equal(-1, data.FindFaction("no_such_faction")); // M7-H1 (BUG-1191): was "andii", a faction a later data set may add
     }
 
     [Fact]

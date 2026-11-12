@@ -26,7 +26,7 @@ public class TechLoaderTests
     [Fact]
     public void ShippedData_HoldsNineTechs_SevenCommonAndOnePerFaction_CommonFirstThenByFaction()
     {
-        Assert.Equal(9, D.Techs.Length);
+        Assert.Equal(9, TestSim.TwoFactionData.Techs.Length); // M7-H1 (BUG-1191): the two shipped factions' count; the order rule below runs over every tech
         Assert.Equal(7, D.Techs.Count(t => t.Faction == -1));
         Assert.Equal(D.FindFaction("malazan"), Tech("moranth_supply").Faction);
         Assert.Equal(D.FindFaction("whirlwind"), Tech("dryjhnas_prophecy").Faction);
@@ -112,8 +112,10 @@ public class TechLoaderTests
         Assert.Equal(new[] { D.FindTech("age_ii") }, D.TechsResearchableAt(D.FindBuilding("whirlwind_holy_camp")).ToArray());
         Assert.Equal(forgeCommon.Append(D.FindTech("moranth_supply")).Order().ToArray(), D.TechsResearchableAt(D.FindBuilding("malazan_armory")).ToArray());
         Assert.Equal(forgeCommon.Append(D.FindTech("dryjhnas_prophecy")).Order().ToArray(), D.TechsResearchableAt(D.FindBuilding("whirlwind_smithy")).ToArray());
+        // M7-H1 (BUG-1191): the count is the two shipped factions' (two halls, two forges of seven), on their tables.
+        GameData two = TestSim.TwoFactionData;
         int listed = 0;
-        for (int b = 0; b < D.Buildings.Length; b++) listed += D.TechsResearchableAt(b).Length;
+        for (int b = 0; b < two.Buildings.Length; b++) listed += two.TechsResearchableAt(b).Length;
         Assert.Equal(2 * 1 + 2 * 7, listed);
         Assert.True(D.TechsResearchableAt(D.FindBuilding("malazan_barracks")).IsEmpty);
         Assert.True(D.TechsResearchableAt(-1).IsEmpty);
@@ -283,9 +285,11 @@ public class TechLoaderTests
     public void TheAgeTechMissing_IsOneError()
     {
         // age_ii renamed and every reference to it moved along: only the age rule (DataLimits.AgeTechIds) is left broken.
+        // M7-H1 (BUG-1191): in every faction's files, so an appended faction's references move along too.
         using TestDataDir dir = TestDataDir.CopyOfShipped();
-        foreach (string file in new[] { Common, MalazanTechs, "factions/whirlwind/techs.json", MalazanUnits, "factions/whirlwind/units.json",
-            MalazanBuildings, "factions/whirlwind/buildings.json" })
+        var files = new List<string> { Common };
+        foreach (string f in TestSim.ShippedFactions) files.AddRange(new[] { $"factions/{f}/techs.json", $"factions/{f}/units.json", $"factions/{f}/buildings.json" });
+        foreach (string file in files)
             File.WriteAllText(dir.FullPath(file), File.ReadAllText(dir.FullPath(file)).Replace("\"age_ii\"", "\"age_two\""));
         DataError e = OneError(dir);
         Assert.Equal((Common, "techs"), (e.File, e.Path));

@@ -382,7 +382,7 @@ public class CrowdRoutingQaTests
                 {
                     int x = side == 0 ? 1 + k % 4 : 27 + k % 4, y = 1 + (k / 4) * 2 % 5;
                     var at = g.CellCenter(x, y) + new Vector2((rng.NextFloat() - 0.5f) * 0.4f, (rng.NextFloat() - 0.5f) * 0.4f);
-                    sim.Enqueue(Command.SpawnUnit(players == 2 ? side : 0, k % TestSim.UnitTypeCount, at));
+                    sim.Enqueue(Command.SpawnUnit(players == 2 ? side : 0, k % TestSim.ScenarioUnitTypes, at));
                 }
             sim.Tick();
             sim.Tick();
@@ -436,7 +436,7 @@ public class CrowdRoutingQaTests
                 {
                     int x = side == 0 ? 6 + k % 8 : 26 + k % 8, y = 6 + (k / 8) % 12;
                     var at = g.CellCenter(x, y) + new Vector2((rng.NextFloat() - 0.5f) * 0.6f, (rng.NextFloat() - 0.5f) * 0.6f);
-                    sim.Enqueue(Command.SpawnUnit(players == 2 ? side : 0, k % TestSim.UnitTypeCount, at));
+                    sim.Enqueue(Command.SpawnUnit(players == 2 ? side : 0, k % TestSim.ScenarioUnitTypes, at));
                 }
             sim.Tick();
             sim.Tick();
@@ -533,11 +533,11 @@ public class CrowdRoutingQaTests
             var sim = new Simulation(TestSim.Config(Seed: seed, PlayerCount: 1, UnitCapacity: cap, CommandCapacity: 16 * cap), CorridorWithRooms());
             NavGrid g = sim.World.NavGrid;
             var rng = new SimRng(seed, 4440);
-            for (int k = 0; k < parked; k++) sim.Enqueue(Command.SpawnUnit(0, rng.NextInt(0, TestSim.UnitTypeCount), g.CellCenter(8 + 4 * k, 3)));
+            for (int k = 0; k < parked; k++) sim.Enqueue(Command.SpawnUnit(0, rng.NextInt(0, TestSim.ScenarioUnitTypes), g.CellCenter(8 + 4 * k, 3)));
             for (int k = 0; k < waves * perWave; k++)
             {
-                sim.Enqueue(Command.SpawnUnit(0, rng.NextInt(0, TestSim.UnitTypeCount), g.CellCenter(1 + k % 4, 1 + k / 4 % 5)));
-                sim.Enqueue(Command.SpawnUnit(0, rng.NextInt(0, TestSim.UnitTypeCount), g.CellCenter(27 + k % 4, 1 + k / 4 % 5)));
+                sim.Enqueue(Command.SpawnUnit(0, rng.NextInt(0, TestSim.ScenarioUnitTypes), g.CellCenter(1 + k % 4, 1 + k / 4 % 5)));
+                sim.Enqueue(Command.SpawnUnit(0, rng.NextInt(0, TestSim.ScenarioUnitTypes), g.CellCenter(27 + k % 4, 1 + k / 4 % 5)));
             }
             sim.Tick();
             sim.Tick();
@@ -585,7 +585,7 @@ public class CrowdRoutingQaTests
             var rng = new SimRng(seed, 4450);
             int wide = LocalMovementTests.TypeWithRadius(0.9f), small = LocalMovementTests.TypeWithRadius(0.4f);
             for (int k = 0; k < line; k++) sim.Enqueue(Command.SpawnUnit(0, k % 2 == 0 ? small : wide, g.CellCenter(15 - k, 3) + new Vector2(0.3f, 0f)));
-            for (int k = 0; k < crowd; k++) sim.Enqueue(Command.SpawnUnit(0, rng.NextInt(0, TestSim.UnitTypeCount), g.CellCenter(1 + k % 4, 1 + k / 4 % 5)));
+            for (int k = 0; k < crowd; k++) sim.Enqueue(Command.SpawnUnit(0, rng.NextInt(0, TestSim.ScenarioUnitTypes), g.CellCenter(1 + k % 4, 1 + k / 4 % 5)));
             sim.Enqueue(Command.SpawnUnit(1, wide, g.CellCenter(16, 3)));
             sim.Tick();
             sim.Tick();
@@ -665,7 +665,7 @@ public class CrowdRoutingQaTests
             for (int row = 0; row < width; row++)
                 for (int k = 0; k < 4; k++)
                     sim.Enqueue(Command.SpawnUnit(0, (k + row) % 2 == 0 ? small : wide, g.CellCenter(15 - k, 3 + row) + new Vector2(0.3f, 0f)));
-            for (int k = 0; k < crowd; k++) sim.Enqueue(Command.SpawnUnit(0, rng.NextInt(0, TestSim.UnitTypeCount), g.CellCenter(1 + k % 4, 1 + k / 4 % (5 + width))));
+            for (int k = 0; k < crowd; k++) sim.Enqueue(Command.SpawnUnit(0, rng.NextInt(0, TestSim.ScenarioUnitTypes), g.CellCenter(1 + k % 4, 1 + k / 4 % (5 + width))));
             for (int row = 0; row < width; row++) sim.Enqueue(Command.SpawnUnit(1, wide, g.CellCenter(16, 3 + row)));
             sim.Tick();
             sim.Tick();
@@ -734,7 +734,7 @@ public class CrowdRoutingQaTests
             NavGrid g = sim.World.NavGrid;
             var rng = new SimRng(seed, 4470);
             foreach (var a in ahead) sim.Enqueue(Command.SpawnUnit(0, a.Type, a.At));
-            for (int k = 0; k < crowd; k++) sim.Enqueue(Command.SpawnUnit(0, rng.NextInt(0, TestSim.UnitTypeCount), crowdAt(g, k)));
+            for (int k = 0; k < crowd; k++) sim.Enqueue(Command.SpawnUnit(0, rng.NextInt(0, TestSim.ScenarioUnitTypes), crowdAt(g, k)));
             foreach (var e in enemies) sim.Enqueue(Command.SpawnUnit(1, e.Type, e.At));
             sim.Tick();
             sim.Tick();

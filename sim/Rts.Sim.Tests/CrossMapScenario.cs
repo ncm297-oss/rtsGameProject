@@ -102,8 +102,8 @@ public sealed class CrossMapScenario
     public int StartLevel => Sim.World.NavGrid.LevelAt(StartCell % Sim.World.NavGrid.Width, StartCell / Sim.World.NavGrid.Width);
 
     /// <summary>
-    /// Builds the scenario: <paramref name="units"/> units, type <c>i % UnitTypeCount</c> (every shipped
-    /// type), owned by player 0, or alternating 0/1 when <paramref name="players"/> is 2.
+    /// Builds the scenario: <paramref name="units"/> units, type <c>i % ScenarioUnitTypes</c> (every type of the two shipped factions, M7-H1;
+    /// see TestSim.ScenarioUnitTypes), owned by player 0, or alternating 0/1 when <paramref name="players"/> is 2.
     /// <paramref name="onCreated"/> sees the new sim before any command (e.g. to attach a replay recorder).
     /// </summary>
     public static CrossMapScenario Create(ulong seed, int units, float startRadius, int players = 1, Action<Simulation>? onCreated = null, bool combat = true)
@@ -137,7 +137,7 @@ public sealed class CrossMapScenario
             // Stay 0.05 m inside the cell so float rounding can't put the spawn in a neighbor.
             var offset = new Vector2(0.05f + rng.NextFloat() * 1.9f, 0.05f + rng.NextFloat() * 1.9f);
             Vector2 corner = MoveScenario.Center(g, cell) - new Vector2(MapConstants.CellSize / 2);
-            sim.Enqueue(Command.SpawnUnit(players == 1 ? 0 : i % players, i % TestSim.UnitTypeCount, corner + offset));
+            sim.Enqueue(Command.SpawnUnit(players == 1 ? 0 : i % players, i % TestSim.ScenarioUnitTypes, corner + offset));
         }
         sim.Tick();
         sim.Tick();

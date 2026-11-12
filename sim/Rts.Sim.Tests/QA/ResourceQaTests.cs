@@ -125,7 +125,7 @@ public class ResourceQaTests
         NavGrid g = a.World.NavGrid;
         var cells = OrderMix.Cells(g, 14f);
         foreach (Simulation s in new[] { a, b })
-            for (int i = 0; i < 64; i++) s.Enqueue(Command.SpawnUnit(i % 2, i % TestSim.UnitTypeCount, MoveScenario.Center(g, cells[i * 5 % cells.Count])));
+            for (int i = 0; i < 64; i++) s.Enqueue(Command.SpawnUnit(i % 2, i % TestSim.ScenarioUnitTypes, MoveScenario.Center(g, cells[i * 5 % cells.Count])));
         var rng = new SimRng(31, 9);
         ResourceStore ra = a.World.Resources, rb = b.World.Resources;
         for (int t = 0; t < 600; t++)
@@ -240,7 +240,7 @@ public class ResourceQaTests
         NavGrid g = sim.World.NavGrid;
         var line = new EntityHandle[20];
         for (int y = 1; y <= 20; y++) line[y - 1] = Spawn(sim.World, Tree, 12, y, TreeWood);
-        for (int i = 0; i < 30; i++) sim.Enqueue(Command.SpawnUnit(0, i % TestSim.UnitTypeCount, g.CellCenter(3 + i % 5, 5 + i / 5)));
+        for (int i = 0; i < 30; i++) sim.Enqueue(Command.SpawnUnit(0, i % TestSim.ScenarioUnitTypes, g.CellCenter(3 + i % 5, 5 + i / 5)));
         sim.Tick();
         sim.Tick();
         Assert.Equal(30, sim.World.Units.Count);

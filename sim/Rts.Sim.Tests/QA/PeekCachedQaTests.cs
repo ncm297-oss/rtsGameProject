@@ -23,7 +23,7 @@ public class PeekCachedQaTests
         float maxRadius = TestSim.Data.Units.Max(u => u.Radius);
         Vector2[] block = StartLayout.Block(sim.World.NavGrid, units, west: true, maxRadius);
         for (int k = 0; k < block.Length; k++)
-            sim.Enqueue(Command.SpawnUnit(0, k % TestSim.UnitTypeCount, block[k]));
+            sim.Enqueue(Command.SpawnUnit(0, k % TestSim.ScenarioUnitTypes, block[k]));
         sim.Tick();
         sim.Tick();
         return sim;

@@ -182,7 +182,7 @@ public class ReplayQaTests
         NavGrid g = sim.World.NavGrid;
         Vector2 c = MoveScenario.Center(g, MoveScenario.CentralCell(g));
         var rng = new SimRng(11, 5);
-        for (int i = 0; i < 20; i++) sim.Enqueue(Command.SpawnUnit(rng.NextInt(0, 2), i % TestSim.UnitTypeCount, c + new Vector2(rng.NextFloat() * 4f, rng.NextFloat() * 4f)));
+        for (int i = 0; i < 20; i++) sim.Enqueue(Command.SpawnUnit(rng.NextInt(0, 2), i % TestSim.ScenarioUnitTypes, c + new Vector2(rng.NextFloat() * 4f, rng.NextFloat() * 4f)));
         for (int t = 0; t < 200; t++)
         {
             // Irregular interleaving: p1 p0 p0 p1 p1 p1 p0 ... within the same tick.
