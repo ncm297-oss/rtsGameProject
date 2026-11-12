@@ -452,9 +452,15 @@ public static partial class DataLoader
                     c.Error(q + ".magnitude", $"{magnitude} HP/s is above the maximum {DataLimits.MaxRegenPerSecond} HP/s (regenerating '{key}')");
                     magnitude = 0;
                 }
+                else if (sk == StatusKind.Regenerating && !IsOnRegenStep(magnitude))
+                {
+                    // M7-H1 (BUG-1166): off the step a float magnitude rounded unlike the same faction rate; refused as there.
+                    c.Error(q + ".magnitude", $"{OffRegenStep(magnitude)} (regenerating '{key}')");
+                    magnitude = 0;
+                }
                 else if (sk == StatusKind.Regenerating && RegenPerTick(magnitude) < 1)
                 {
-                    c.Error(q + ".magnitude", $"{magnitude} HP/s rounds to 0 (regenerating '{key}'; the step is {1.0 * SimConstants.TicksPerSecond / Combat.CombatConstants.RegenFixedOne} HP/s)");
+                    c.Error(q + ".magnitude", $"{magnitude} HP/s rounds to 0 (regenerating '{key}'; the step is {RegenStep} HP/s)");
                     magnitude = 0;
                 }
                 // M4-4b-3a: a frenzied magnitude is any fraction above 0 (the attack-speed increase; 0.5 = +50 %).

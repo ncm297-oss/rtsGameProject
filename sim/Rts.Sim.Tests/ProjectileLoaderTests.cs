@@ -84,8 +84,10 @@ public class ProjectileLoaderTests
                 if ((string?)list[k]!["id"] == "magic_bolt") list.RemoveAt(k);
         }));
         Assert.False(r.Ok);
-        // Both casters fire it.
-        Assert.Equal(2, r.Errors.Count(e => e.Path.EndsWith("attack.projectile") && e.Message.Contains("'magic_bolt'")));
+        // Both casters fire it. M7-H1 (BUG-1191): 2 on the two shipped factions; one error per unit the data has that fires it.
+        static int Casters(GameData d) => d.Units.Count(u => u.Attack.ProjectileTypeId == d.FindProjectile("magic_bolt"));
+        Assert.Equal(2, Casters(TestSim.TwoFactionData));
+        Assert.Equal(Casters(TestSim.Data), r.Errors.Count(e => e.Path.EndsWith("attack.projectile") && e.Message.Contains("'magic_bolt'")));
     }
 
     [Theory]

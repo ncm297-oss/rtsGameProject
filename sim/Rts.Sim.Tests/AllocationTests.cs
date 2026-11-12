@@ -37,7 +37,7 @@ public class AllocationTests
         Action queue = () =>
         {
             for (int i = 0; i < 100; i++)
-                sim.Enqueue(Command.SpawnUnit(1 - (i % 2), typeId: i % TestSim.UnitTypeCount, new Vector2(i, i)));
+                sim.Enqueue(Command.SpawnUnit(1 - (i % 2), typeId: i % TestSim.ScenarioUnitTypes, new Vector2(i, i)));
         };
 
         // Two ticks: the first sorts the unsorted batch, the second applies it.

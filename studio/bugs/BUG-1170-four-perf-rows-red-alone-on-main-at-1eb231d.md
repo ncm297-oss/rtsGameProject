@@ -3,7 +3,7 @@
 | Field | Value |
 | --- | --- |
 | Severity | S3 (Perf gates red on `main` on the studio's own machine; no gameplay effect) |
-| Status | open (machine state; not a code regression; no bound changed) |
+| Status | closed (machine state, not code: the same code ran Perf alone 191 / 12 / 3 at ~18:45 and 203 / 0 / 3 at 21:31 on 2026-11-11, both idle; no bound changed; handoff rule 42 and its watch-out stay) |
 | Found | 2026-11-10-0146, task M7-2 (QA's Perf run on a clean clone of 1eb231d, twice, and on the branch) |
 | System | Perf tests: `Ai/AiPerfTests`, `Vision/VisionGatePerfTests`, `QA/PassiveScaleQaTests`, `QA/EndGameH6Round2QaTests` |
 | Fixed by | |
@@ -74,3 +74,7 @@ the slowdown may outlast the load). The developer measured 203 / 0 Perf earlier 
   speed and fail when it runs slow, with no load to blame: a power or thermal state, not code and not the owner's apps alone.
   No re-bound. M7-H1 runs Perf once first: green means close this as machine state with the two runs as the record; red at
   base and head alike means record the numbers and move on (an owner item is in STATE's Wanted, item 8).
+
+- QA M7-H1 (2026-11-11, 21:31-21:36, the sim branch at 1a49bbc on a scratch clone): `Category=Perf` alone, started after every test host and Godot (all tracks) had ended, CPU 3-5 % in the seconds before: **203 / 0 / 3 of 206 in 4 m 44 s**; `ASweepRetarget` 15.81 us (bound 50; the recorded speed), every-start variant 34.65 us. The developer's 191 / 12 / 3 the same evening (~18:45, idle, 85.5 us) and this green run on the same code bracket the pattern: the PC's slow state, not the code. QA agrees with closing it as machine state.
+- M7-H1 (2026-11-11, ~18:45, game-dev, the branch at 972ff63 + M7-H1; applied by the Producer from the developer's patch): `Category=Perf` alone, no `testhost`, `dotnet` or Godot at the start or the end, CPU 2 % before and 0 % after. **191 / 12 / 3 of 206 in 8 m 42 s**; `ASweepRetarget` 85.5 us (bound 50; 16.4 us when recorded): the slow state. No bound changed, no profiling.
+- **Closed by the Producer (2026-11-11-1317 ACCEPT):** two idle runs of the same code the same evening, one red (slow state) and one green (recorded speed), are the record that this is the PC, not the code. A Perf run is evidence only when `ASweepRetarget` reads near 16 us (handoff watch-out). Reopen only if Perf is red alone with `ASweepRetarget` at its recorded speed.

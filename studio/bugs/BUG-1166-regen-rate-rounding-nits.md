@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S4 |
-| Status | open |
+| Status | fixed (M7-H1, 1a49bbc, verified by QA and by the Producer at the 2026-11-11-1317 ACCEPT) |
 | Found | 2026-11-09-2226, task M7-1 |
 | System | data loader / regeneration (`DataLoader.RegenPerTick`, `RegenSystem.StatusRate`) |
-| Fixed by | |
+| Fixed by | M7-H1 (Producer ruling: refuse, as `pop` does): `DataLoader.IsOnRegenStep` / `OffRegenStep`; `regen.hpPerSecond` and a `regenerating` `applyStatus` magnitude off the 0.05 HP/s step are one load error each, naming the value and the step ("0.07 HP/s is not a multiple of 0.05 HP/s (the regeneration step)"). docs/03 "Implementation (M7-1)". Proof: `RegenQaTests.AStatusMagnitude_ConvertsAsTheSameFactionRate` 5 rows (0.175 / 1.525 un-skipped: refused at both places; 1.5 / 7.7 / 0.05 load and convert alike), `DataValidationTests.BrokenFactionRegen_YieldsExactlyOneError` (0.02, 0.07, 0.049999, 0.100000001, 1e300, -0.05), `StatusLoaderTests.ARegeneratingApplication_NeedsAMagnitudeAbove0` (0.02, 0.175, 0.049999, 0.1 + 1e-9) |
 
 ## Repro
 1. `dotnet test sim/Rts.Sim.Tests --filter "FullyQualifiedName~RegenQaTests.AStatusMagnitude_ConvertsAsTheSameFactionRate"`

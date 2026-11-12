@@ -198,7 +198,7 @@ public class SimCoreStressTests
             Action queue = () =>
             {
                 for (int i = 0; i < n; i++)
-                    sim.Enqueue(Command.SpawnUnit(players - 1 - (i % players), i % TestSim.UnitTypeCount, new Vector2(i, 0)));
+                    sim.Enqueue(Command.SpawnUnit(players - 1 - (i % players), i % TestSim.ScenarioUnitTypes, new Vector2(i, 0)));
             };
             // Two ticks: the first sorts the batch, the second applies it. A re-run (BUG-0017) queues
             // and applies a second batch; the store has room for both.

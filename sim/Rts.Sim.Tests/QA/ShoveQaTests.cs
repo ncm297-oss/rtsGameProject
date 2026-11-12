@@ -218,7 +218,7 @@ public class ShoveQaTests
         for (int k = 0; k < count; k++)
         {
             Vector2 corner = MoveScenario.Center(g, cells[rng.NextInt(0, cells.Count)]) - new Vector2(MapConstants.CellSize / 2);
-            sim.Enqueue(Command.SpawnUnit(ownerOf(k), k % TestSim.UnitTypeCount, corner + new Vector2(0.05f + rng.NextFloat() * 1.9f, 0.05f + rng.NextFloat() * 1.9f)));
+            sim.Enqueue(Command.SpawnUnit(ownerOf(k), k % TestSim.ScenarioUnitTypes, corner + new Vector2(0.05f + rng.NextFloat() * 1.9f, 0.05f + rng.NextFloat() * 1.9f)));
         }
     }
 
@@ -347,7 +347,7 @@ public class ShoveQaTests
         {
             int c = passable[spawnRng.NextInt(0, passable.Count)];
             Vector2 corner = MoveScenario.Center(g, c) - new Vector2(MapConstants.CellSize / 2);
-            sim.Enqueue(Command.SpawnUnit(i % players, i % TestSim.UnitTypeCount, corner + new Vector2(0.05f + spawnRng.NextFloat() * 1.9f, 0.05f + spawnRng.NextFloat() * 1.9f)));
+            sim.Enqueue(Command.SpawnUnit(i % players, i % TestSim.ScenarioUnitTypes, corner + new Vector2(0.05f + spawnRng.NextFloat() * 1.9f, 0.05f + spawnRng.NextFloat() * 1.9f)));
         }
         sim.Tick();
         sim.Tick();
@@ -506,7 +506,7 @@ public class ShoveQaTests
         for (int k = 0; k < 120; k++)
         {
             Vector2 c = k < 60 ? a : bPoint;
-            sim.Enqueue(Command.SpawnUnit(players == 1 ? 0 : k % 2, k % TestSim.UnitTypeCount, c + new Vector2(rng.NextFloat() * 8f - 4f, rng.NextFloat() * 8f - 4f)));
+            sim.Enqueue(Command.SpawnUnit(players == 1 ? 0 : k % 2, k % TestSim.ScenarioUnitTypes, c + new Vector2(rng.NextFloat() * 8f - 4f, rng.NextFloat() * 8f - 4f)));
         }
         sim.Tick();
         sim.Tick();
@@ -763,7 +763,7 @@ public class ShoveQaTests
                 {
                     int slot = rng.NextInt(0, u.Capacity);
                     int op = rng.NextInt(0, 10);
-                    if (op < 2) sim.Enqueue(Command.SpawnUnit(0, rng.NextInt(0, TestSim.UnitTypeCount), c + new Vector2(rng.NextFloat() * 6f - 3f, rng.NextFloat() * 6f - 3f)));
+                    if (op < 2) sim.Enqueue(Command.SpawnUnit(0, rng.NextInt(0, TestSim.ScenarioUnitTypes), c + new Vector2(rng.NextFloat() * 6f - 3f, rng.NextFloat() * 6f - 3f)));
                     else if (op < 9 && u.Alive[slot]) sim.Enqueue(Command.Move(u.Owner[slot], MoveScenario.Handle(sim, slot), c + new Vector2(rng.NextInt(-3, 4) * 3f, rng.NextInt(-3, 4) * 3f)));
                     else if (u.Alive[slot] && t % 3 == 0) u.Free(MoveScenario.Handle(sim, slot));
                 }
@@ -836,7 +836,7 @@ public class ShoveQaTests
             for (int s = 0; s < n; s++)
             {
                 int k = reversed ? n - 1 - s : s;
-                sim.Enqueue(Command.SpawnUnit(0, k % TestSim.UnitTypeCount, spawns[k]));
+                sim.Enqueue(Command.SpawnUnit(0, k % TestSim.ScenarioUnitTypes, spawns[k]));
             }
             sim.Tick();
             sim.Tick();

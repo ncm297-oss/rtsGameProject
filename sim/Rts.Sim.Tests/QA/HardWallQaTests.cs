@@ -254,7 +254,7 @@ public class HardWallQaTests
         NavGrid g = sim.World.NavGrid;
         var rng = new SimRng(seed, 351);
         for (int i = 0; i < crowd; i++)
-            sim.Enqueue(Command.SpawnUnit(0, i % TestSim.UnitTypeCount, new Vector2(24.1f + rng.NextFloat() * 13.8f, 12.1f + rng.NextFloat() * 21.8f)));
+            sim.Enqueue(Command.SpawnUnit(0, i % TestSim.ScenarioUnitTypes, new Vector2(24.1f + rng.NextFloat() * 13.8f, 12.1f + rng.NextFloat() * 21.8f)));
         int plugType = LocalMovementTests.TypeWithRadius(plugRadius);
         for (int y = lo; y <= hi; y++)
         {
@@ -359,7 +359,7 @@ public class HardWallQaTests
         int wide = LocalMovementTests.TypeWithRadius(0.9f);
         for (int p = 0; p < 2; p++)
         {
-            for (int i = 0; i < perPlayer; i++) sim.Enqueue(Command.SpawnUnit(p, i % TestSim.UnitTypeCount, RandomPassable(ref rng)));
+            for (int i = 0; i < perPlayer; i++) sim.Enqueue(Command.SpawnUnit(p, i % TestSim.ScenarioUnitTypes, RandomPassable(ref rng)));
             for (int c = 0; c < clusters; c++)
             {
                 // Two or three wide units in a row, 2 m apart (0.2 m slits), standing for good.
@@ -476,7 +476,7 @@ public class HardWallQaTests
         for (int i = 0; i < parked; i++)
             sim.Enqueue(Command.SpawnUnit(0, small, new Vector2(36.6f + (i % 3) * 1.2f, 19.0f + (i / 3) * 1.2f)));
         for (int i = 0; i < crowd; i++)
-            sim.Enqueue(Command.SpawnUnit(0, i % TestSim.UnitTypeCount, new Vector2(16.1f + rng.NextFloat() * 18f, 12.1f + rng.NextFloat() * 21.8f)));
+            sim.Enqueue(Command.SpawnUnit(0, i % TestSim.ScenarioUnitTypes, new Vector2(16.1f + rng.NextFloat() * 18f, 12.1f + rng.NextFloat() * 21.8f)));
         int wide = LocalMovementTests.TypeWithRadius(0.9f);
         for (int y = 10; y <= 12; y++) sim.Enqueue(Command.SpawnUnit(1, wide, g.CellCenter(20, y)));
         sim.Tick();
@@ -554,7 +554,7 @@ public class HardWallQaTests
             NavGrid g = sim.World.NavGrid;
             var rng = new SimRng(9, 354);
             for (int i = 0; i < 60; i++)
-                sim.Enqueue(Command.SpawnUnit(0, i % TestSim.UnitTypeCount, new Vector2(24.1f + rng.NextFloat() * 13.8f, 12.1f + rng.NextFloat() * 21.8f)));
+                sim.Enqueue(Command.SpawnUnit(0, i % TestSim.ScenarioUnitTypes, new Vector2(24.1f + rng.NextFloat() * 13.8f, 12.1f + rng.NextFloat() * 21.8f)));
             for (int y = 10; y <= 12; y++) sim.Enqueue(Command.SpawnUnit(1, LocalMovementTests.TypeWithRadius(0.9f), g.CellCenter(20, y)));
             sim.Tick();
             sim.Tick();

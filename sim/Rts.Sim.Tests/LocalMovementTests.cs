@@ -332,7 +332,7 @@ public class LocalMovementTests
             {
                 // Cells x 12..18, y 6..16: a compact crowd just west of the gap.
                 var at = new Vector2(24.1f + rng.NextFloat() * 13.8f, 12.1f + rng.NextFloat() * 21.8f);
-                sim.Enqueue(Command.SpawnUnit(0, i % TestSim.UnitTypeCount, at));
+                sim.Enqueue(Command.SpawnUnit(0, i % TestSim.ScenarioUnitTypes, at));
             }
             sim.Tick();
             sim.Tick();
@@ -383,7 +383,7 @@ public class LocalMovementTests
         NavGrid g = sim.World.NavGrid;
         var rng = new Determinism.SimRng(seed, 35);
         for (int i = 0; i < crowd; i++)
-            sim.Enqueue(Command.SpawnUnit(0, i % TestSim.UnitTypeCount, new Vector2(26.1f + rng.NextFloat() * 11.8f, 14.1f + rng.NextFloat() * 15.8f)));
+            sim.Enqueue(Command.SpawnUnit(0, i % TestSim.ScenarioUnitTypes, new Vector2(26.1f + rng.NextFloat() * 11.8f, 14.1f + rng.NextFloat() * 15.8f)));
         int wide = TypeWithRadius(0.9f);
         Vector2 e0 = g.CellCenter(20, 10), e1 = g.CellCenter(20, 11);
         sim.Enqueue(Command.SpawnUnit(1, wide, e0));
@@ -460,7 +460,7 @@ public class LocalMovementTests
         NavGrid g = sim.World.NavGrid;
         var rng = new Determinism.SimRng(seed, 36);
         for (int i = 0; i < crowd; i++)
-            sim.Enqueue(Command.SpawnUnit(0, i % TestSim.UnitTypeCount, new Vector2(24.1f + rng.NextFloat() * 13.8f, 12.1f + rng.NextFloat() * 21.8f)));
+            sim.Enqueue(Command.SpawnUnit(0, i % TestSim.ScenarioUnitTypes, new Vector2(24.1f + rng.NextFloat() * 13.8f, 12.1f + rng.NextFloat() * 21.8f)));
         sim.Enqueue(Command.SpawnUnit(1, TypeWithRadius(0.9f), g.CellCenter(20, 11)));
         sim.Tick();
         sim.Tick();
@@ -1233,7 +1233,7 @@ public class LocalMovementTests
             for (int k = 0; k < 200; k++)
             {
                 Vector2 corner = MoveScenario.Center(g, west[rng.NextInt(0, west.Count)]) - new Vector2(MapConstants.CellSize / 2);
-                sim.Enqueue(Command.SpawnUnit(k % 2, k % TestSim.UnitTypeCount, corner + new Vector2(0.05f + rng.NextFloat() * 1.9f, 0.05f + rng.NextFloat() * 1.9f)));
+                sim.Enqueue(Command.SpawnUnit(k % 2, k % TestSim.ScenarioUnitTypes, corner + new Vector2(0.05f + rng.NextFloat() * 1.9f, 0.05f + rng.NextFloat() * 1.9f)));
             }
             sim.Tick();
             sim.Tick();

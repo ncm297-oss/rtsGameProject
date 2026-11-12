@@ -186,7 +186,9 @@ public class StatusLoaderTests
             Assert.Equal((float)m, ok.Data!.Abilities[ok.Data.FindAbility("telas_fire")].Effects[0].Magnitude);
         }
         foreach ((JsonNode? m, string text) in new (JsonNode?, string)[] { (0, "must be positive"), (-1, "must be positive"), (null, "missing"),
-            (100.5, "above the maximum 100"), (0.02, "rounds to 0") })
+            // M7-H1 (BUG-1166): 0.02 is off the 0.05 step, refused as such (it was "rounds to 0"); so are a half step and a hair off one.
+            (100.5, "above the maximum 100"), (0.02, "is not a multiple of 0.05 HP/s"), (0.175, "is not a multiple of 0.05 HP/s"),
+            (0.049999, "is not a multiple of 0.05 HP/s"), (0.1 + 1e-9, "is not a multiple of 0.05 HP/s") })
         {
             DataLoadResult bad = WithTelasFireStatus("regenerating", m);
             DataError e = Assert.Single(bad.Errors);

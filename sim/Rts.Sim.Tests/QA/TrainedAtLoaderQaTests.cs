@@ -34,7 +34,9 @@ public class TrainedAtLoaderQaTests
     public void ShippedData_EveryUnitTrainsAtAnOwnFactionBuilding_AndTheTableIsItsInverse()
     {
         GameData d = TestSim.Data;
-        Assert.Equal(14, d.Units.Length);
+        // M7-H1 (BUG-1191): 14 is the two shipped factions' count; the rows below run over every unit the data has.
+        Assert.Equal(14, TestSim.TwoFactionData.Units.Length);
+        Assert.Equal(d.Factions.Sum(f => f.Units.Length), d.Units.Length);
         for (int id = 0; id < d.Units.Length; id++)
         {
             UnitDef u = d.Units[id];

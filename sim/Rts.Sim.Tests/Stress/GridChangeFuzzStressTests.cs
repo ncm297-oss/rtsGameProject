@@ -46,7 +46,7 @@ public class GridChangeFuzzStressTests
             if (g.IsPassable(c % g.Width, c / g.Width)) open.Add(g.CellCenter(c % g.Width, c / g.Width));
         var rng = new SimRng(seed, 501);
         for (int k = 0; k < 80; k++)
-            sim.Enqueue(Command.SpawnUnit(k % 2, k % TestSim.UnitTypeCount, open[rng.NextInt(0, open.Count)]));
+            sim.Enqueue(Command.SpawnUnit(k % 2, k % TestSim.ScenarioUnitTypes, open[rng.NextInt(0, open.Count)]));
         sim.Tick();
         sim.Tick();
         // A fixed pool of goal points (two of them anywhere, so maybe blocked or off the passable ground): at
@@ -85,7 +85,7 @@ public class GridChangeFuzzStressTests
                 // (Only onto open ground: since M3-H1 an interior tree's cell stays blocked as a pocket, BUG-0093.)
                 if (rng.NextInt(0, 4) == 0 && u.Count < u.Capacity - 4 && g.IsPassable(cell % g.Width, cell / g.Width))
                 {
-                    sim.Enqueue(Command.SpawnUnit(0, rng.NextInt(0, TestSim.UnitTypeCount), g.CellCenter(cell % g.Width, cell / g.Width) + new Vector2(rng.NextFloat() - 0.5f, rng.NextFloat() - 0.5f)));
+                    sim.Enqueue(Command.SpawnUnit(0, rng.NextInt(0, TestSim.ScenarioUnitTypes), g.CellCenter(cell % g.Width, cell / g.Width) + new Vector2(rng.NextFloat() - 0.5f, rng.NextFloat() - 0.5f)));
                     strandSpawns++;
                 }
             }

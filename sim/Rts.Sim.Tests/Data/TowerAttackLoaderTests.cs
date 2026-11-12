@@ -40,7 +40,7 @@ public class TowerAttackLoaderTests
     [Fact]
     public void Shipped_BothTowersShoot10PierceEvery2s_Range18_Detector16_NoOtherBuildingShoots()
     {
-        GameData d = TestSim.Data;
+        GameData d = TestSim.TwoFactionData; // M7-H1 (BUG-1191): a pin about the two shipped factions' buildings
         int pierce = d.DamageTable.DamageTypeKeys.IndexOf("pierce");
         int towers = 0;
         foreach (BuildingDef b in d.Buildings)

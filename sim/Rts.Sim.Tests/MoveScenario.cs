@@ -46,7 +46,7 @@ public static class MoveScenario
             // Stay 0.05 m inside the cell so float rounding can't put the spawn in a neighbor.
             var offset = new Vector2(0.05f + rng.NextFloat() * 1.9f, 0.05f + rng.NextFloat() * 1.9f);
             Vector2 corner = Center(g, cell) - new Vector2(MapConstants.CellSize / 2);
-            sim.Enqueue(Command.SpawnUnit(i % players, i % TestSim.UnitTypeCount, corner + offset));
+            sim.Enqueue(Command.SpawnUnit(i % players, i % TestSim.ScenarioUnitTypes, corner + offset));
         }
         sim.Tick();
         sim.Tick();

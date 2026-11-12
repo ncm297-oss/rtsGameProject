@@ -70,7 +70,7 @@ public class ScenarioTests
         // A cross-map order, not a stroll: the path is at least half the map's width.
         Assert.True(s.PathMeters >= 0.5f * s.Sim.World.NavGrid.Width * Map.MapConstants.CellSize, $"path {s.PathMeters} m");
         UnitStore u = s.Sim.World.Units;
-        var types = new bool[TestSim.UnitTypeCount];
+        var types = new bool[TestSim.ScenarioUnitTypes]; // M7-H1 (BUG-1191): the types the scenario cycles (the two shipped factions')
         for (int i = 0; i < Army; i++)
         {
             types[u.TypeId[i]] = true;

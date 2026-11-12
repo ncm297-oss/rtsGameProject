@@ -624,10 +624,34 @@ public static partial class DataLoader
             c.Error(path, $"{v} HP/s is above the maximum {DataLimits.MaxRegenPerSecond} HP/s");
             return 0;
         }
+        if (!IsOnRegenStep(v))
+        {
+            c.Error(path, OffRegenStep(v));
+            return 0;
+        }
         int perTick = RegenPerTick(v);
-        if (perTick < 1) c.Error(path, $"{v} HP/s rounds to 0 (the step is {1.0 * SimConstants.TicksPerSecond / Combat.CombatConstants.RegenFixedOne} HP/s)");
+        if (perTick < 1) c.Error(path, $"{v} HP/s rounds to 0 (the step is {RegenStep} HP/s)");
         return perTick;
     }
+
+    /// <summary>M7-H1 (BUG-1166): the regeneration step in HP per second, one fixed-point unit a tick (0.05 HP/s).</summary>
+    internal static double RegenStep => 1.0 * SimConstants.TicksPerSecond / Combat.CombatConstants.RegenFixedOne;
+
+    /// <summary>
+    /// M7-H1 (BUG-1166, Producer ruling: refuse, as <c>pop</c> does): whether <paramref name="hpPerSecond"/> is a whole number of
+    /// <see cref="RegenStep"/>s. Off the step a rate was rounded silently, and a status magnitude (a float) rounded differently
+    /// from the same faction rate (a double) at the half-steps; on it both convert alike. The tolerance only absorbs the
+    /// decimal-to-binary error of a written step value (7.7 x 20 is 154.00000000000003), far below any written difference.
+    /// </summary>
+    internal static bool IsOnRegenStep(double hpPerSecond)
+    {
+        double units = hpPerSecond * Combat.CombatConstants.RegenFixedOne / SimConstants.TicksPerSecond;
+        return Math.Abs(units - Math.Round(units)) < 1e-9;
+    }
+
+    /// <summary>The load error for a rate off <see cref="RegenStep"/>, naming the value and the step.</summary>
+    internal static string OffRegenStep(double hpPerSecond) =>
+        $"{hpPerSecond} HP/s is not a multiple of {RegenStep} HP/s (the regeneration step)";
 
     /// <summary>
     /// M7-1: HP per second as regeneration units a tick, <c>round(hpPerSecond x RegenFixedOne / TicksPerSecond)</c> (half away

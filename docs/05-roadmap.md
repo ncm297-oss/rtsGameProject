@@ -14,7 +14,7 @@ Status legend: **Next** = start here, **Planned** = not started, **Done** = acce
 | M4 | Combat, fog, abilities | **Done** (2026-10-11, Producer sign-off in session 2026-10-10-2334 after every track's end-of-M4 hardening (M4-H3, M4-VH3, D-H3); the data track's D12 is accepted and held on its branch, landing at the next session's data merge; 10 / 10 criteria, in progress since 2026-10-07-2315; retro below) | Malazan vs. Whirlwind armies fight with abilities and fog |
 | M5 | AI opponent | **In progress** (since 2026-10-11; 8 / 9 criteria (1, 2, 3, 4, 5, 7, 8, 9), three owner-requested criteria added 2026-10-14; left: criterion 6, the owner's playtest) | Lose to a Whirlwind AI |
 | M6 | Game shell & real art | **Started ahead** (view track since 2026-10-11; 5 / 10 criteria (1, 2, 3, 4, 7); criterion 7 ticked 2026-11-06-0326 when M6-S8's two maps landed) | A friend can play it |
-| M7 | Teblor | **Started** (2026-11-09-2226, while M5 waits on the owner's playtest and M6 on the owner's items; 0 / 4 criteria) | Third faction: scale and population systems proven |
+| M7 | Teblor | **Started** (2026-11-09-2226, while M5 waits on the owner's playtest and M6 on the owner's items; 0 / 4 criteria; the roster written and held one session, 2026-11-11-1317) | Third faction: scale and population systems proven |
 | M8 | Shadow | Planned | Fourth faction: stealth polish, summons |
 | M9 | Tiste Andii | Planned | Fifth faction: darkness, flying, elite balance |
 
@@ -919,7 +919,12 @@ open S1 / S2. Retro below; open S3 / S4 listed there.)_
       roster:** D28 the roster + `ai.json` (the page is pin-ready since D-R36), models, the balance pass. **M7-3b,
       2026-11-10-2116:** tech and ability ids under the same order too (common techs first; BUG-1171) with one golden regen
       and pin sweep, outcomes unchanged; the loader's key lookups through a sorted index (BUG-1172); every earlier save and
-      recording is refused `DataMismatch`. A Teblor `blood_oil_frenzy` now moves no shipped id.)
+      recording is refused `DataMismatch`. A Teblor `blood_oil_frenzy` now moves no shipped id. **2026-11-11-1317:** the
+      roster is written and accepted (D28: 7 units, 10 buildings, `teblor_blood_oil_anointing`, `blood_oil_frenzy`, the `standard`
+      "War band" opening, pinned to the page both ways) and **held on `studio/2026-11-11-1317-data`**: the merged tree has 28
+      sim-owned test rows red (BUG-1222, the sim's M7-5). M7-H1 made the sim-owned tests third-faction-ready; M7-V3a proved the
+      setup, a match, a save and a recording on a forged third faction and added the "Regenerating" cue. No criterion is ticked
+      until the roster is on `main`. Open for the balance pass: BUG-1241 (the Normal Teblor AI is gold-starved).)
 
 ## M8 — Shadow
 

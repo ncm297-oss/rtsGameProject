@@ -1001,7 +1001,8 @@ public class StateHashTests
         ulong h0 = baseSim.StateHash();
         var seen = new HashSet<ulong> { h0 };
         int techs = TestSim.Data.Techs.Length;
-        Assert.Equal(9, techs);
+        Assert.Equal(9, TestSim.TwoFactionData.Techs.Length); // M7-H1 (BUG-1191): the two shipped factions' count; the loop covers every tech the data has
+        Assert.True(techs >= 9);
         for (int p = 0; p < 2; p++)
         {
             for (int t = 0; t < techs; t++)

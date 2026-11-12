@@ -10,6 +10,9 @@ namespace Rts.Sim.Tests.QA;
 /// <c>common/factions.json</c> order; abilities faction by faction; ordinal within each file) at its edges, and the claim
 /// behind the one regeneration: renumbering the id tables changes no outcome. <see cref="OutcomeFingerprint"/> (id-free)
 /// is compared tick for tick between the shipped data and copies whose every unit, building, tech and ability id moved.
+/// M7-H1 (BUG-1191): every copy here starts from the shipped data cut to its first two factions
+/// (<see cref="TestDataDir.CopyOfShippedTwoFactions"/>) and "the shipped data" is <see cref="TestSim.TwoFactionData"/>, so the
+/// orders written below (two factions and the Teblor copy) stay whole whatever <c>game/data</c> appends.
 /// </summary>
 [Collection(SerialCollection.Name)]
 public class TechAbilityIdRuleQaTests(ITestOutputHelper output)
@@ -46,7 +49,7 @@ public class TechAbilityIdRuleQaTests(ITestOutputHelper output)
     [Fact]
     public void AFactionWithoutAnAbilitiesFile_InTheMiddle_LeavesNoGap()
     {
-        using TestDataDir dir = TestDataDir.CopyOfShipped();
+        using TestDataDir dir = TestDataDir.CopyOfShippedTwoFactions();
         FactionOrderTests.AddTeblor(dir);
         NoAbilities(dir, "teblor");
         Order(dir, "malazan", "teblor", "whirlwind");
@@ -63,7 +66,7 @@ public class TechAbilityIdRuleQaTests(ITestOutputHelper output)
     [Fact]
     public void AFirstFactionWithNoTechs_LeavesNoGap()
     {
-        using TestDataDir dir = TestDataDir.CopyOfShipped();
+        using TestDataDir dir = TestDataDir.CopyOfShippedTwoFactions();
         FactionOrderTests.AddTeblor(dir, first: true);
         File.WriteAllText(dir.FullPath("factions/teblor/techs.json"), "{\"techs\": []}");
         dir.EditJson("factions/teblor/ai.json", root => StripResearch(root, "teblor_blood_oil_anointing"));
@@ -95,7 +98,7 @@ public class TechAbilityIdRuleQaTests(ITestOutputHelper output)
     [Fact]
     public void FactionTechsSortingBeforeAgeII_RequiringEachOther_ResolveByKey()
     {
-        using TestDataDir dir = TestDataDir.CopyOfShipped();
+        using TestDataDir dir = TestDataDir.CopyOfShippedTwoFactions();
         FactionOrderTests.AddTeblor(dir, first: true);
         dir.EditJson("factions/teblor/techs.json", root =>
         {
@@ -131,7 +134,7 @@ public class TechAbilityIdRuleQaTests(ITestOutputHelper output)
     [Fact]
     public void ARepeatedTechOrAbilityId_IsOneErrorAtTheLaterFile()
     {
-        using TestDataDir dir = TestDataDir.CopyOfShipped();
+        using TestDataDir dir = TestDataDir.CopyOfShippedTwoFactions();
         FactionOrderTests.AddTeblor(dir, first: true);
         string techs = File.ReadAllText(dir.FullPath("factions/teblor/techs.json")).Replace("\"teblor_blood_oil_anointing\"", "\"armor_1\"");
         File.WriteAllText(dir.FullPath("factions/teblor/techs.json"), techs);
@@ -142,7 +145,7 @@ public class TechAbilityIdRuleQaTests(ITestOutputHelper output)
         Assert.Equal(("factions/teblor/techs.json", "techs[0].id"), (e.File, e.Path));
         Assert.Contains("first defined in common/techs.json", e.Message);
 
-        using TestDataDir dir2 = TestDataDir.CopyOfShipped();
+        using TestDataDir dir2 = TestDataDir.CopyOfShippedTwoFactions();
         FactionOrderTests.AddTeblor(dir2, first: true);
         string abil = File.ReadAllText(dir2.FullPath("factions/teblor/abilities.json")).Replace("\"teblor_cusser\"", "\"sandstorm\"");
         File.WriteAllText(dir2.FullPath("factions/teblor/abilities.json"), abil);
@@ -157,7 +160,7 @@ public class TechAbilityIdRuleQaTests(ITestOutputHelper output)
     [Fact]
     public void AnUnknownTech_InAiOrRequires_IsOneError()
     {
-        using (TestDataDir dir = TestDataDir.CopyOfShipped())
+        using (TestDataDir dir = TestDataDir.CopyOfShippedTwoFactions())
         {
             string ai = File.ReadAllText(dir.FullPath("factions/malazan/ai.json"));
             int at = ai.IndexOf("\"moranth_supply\"", StringComparison.Ordinal);
@@ -167,7 +170,7 @@ public class TechAbilityIdRuleQaTests(ITestOutputHelper output)
             DataError e = Assert.Single(r.Errors);
             Assert.Equal(("factions/malazan/ai.json", "unknown tech 'aaa_nothing' (not in any techs.json)"), (e.File, e.Message));
         }
-        using (TestDataDir dir = TestDataDir.CopyOfShipped())
+        using (TestDataDir dir = TestDataDir.CopyOfShippedTwoFactions())
         {
             dir.EditJson("factions/whirlwind/techs.json", root => root["techs"]![0]!["requires"] = new JsonArray("age_ii", "zzz_nothing"));
             DataLoadResult r = TryLoad(dir);
@@ -217,23 +220,23 @@ public class TechAbilityIdRuleQaTests(ITestOutputHelper output)
     public void ACastingMatch_PlaysTheSameOutcome_UnderEveryRenumbering()
     {
         const int ticks = 3000;
-        ulong[] shipped = Fingerprints(TestSim.Data, ticks, 2, out ulong shippedHash);
+        ulong[] shipped = Fingerprints(TestSim.TwoFactionData, ticks, 2, out ulong shippedHash);
         Assert.True(shipped.Distinct().Count() > ticks / 2, "the match stood still");
-        using (TestDataDir dir = TestDataDir.CopyOfShipped())
+        using (TestDataDir dir = TestDataDir.CopyOfShippedTwoFactions())
         {
             Order(dir, "whirlwind", "malazan");
             AssertSame(shipped, Fingerprints(Load(dir), ticks, 2), "whirlwind,malazan");
         }
-        using (TestDataDir dir = TestDataDir.CopyOfShipped())
+        using (TestDataDir dir = TestDataDir.CopyOfShippedTwoFactions())
         {
             FactionOrderTests.AddTeblor(dir, first: true);
             GameData d = Load(dir);
-            Assert.NotEqual(TestSim.Data.FindAbility("cusser"), d.FindAbility("cusser"));
-            Assert.NotEqual(TestSim.Data.FindTech("moranth_supply"), d.FindTech("moranth_supply"));
+            Assert.NotEqual(TestSim.TwoFactionData.FindAbility("cusser"), d.FindAbility("cusser"));
+            Assert.NotEqual(TestSim.TwoFactionData.FindTech("moranth_supply"), d.FindTech("moranth_supply"));
             AssertSame(shipped, Fingerprints(d, ticks, 2, out ulong firstHash), "teblor,malazan,whirlwind");
             Assert.NotEqual(shippedHash, firstHash); // the ids, and so the state hash, did move
         }
-        using (TestDataDir dir = TestDataDir.CopyOfShipped())
+        using (TestDataDir dir = TestDataDir.CopyOfShippedTwoFactions())
         {
             FactionOrderTests.AddTeblor(dir);
             AssertSame(shipped, Fingerprints(Load(dir), ticks, 2), "malazan,whirlwind,teblor");
@@ -251,7 +254,7 @@ public class TechAbilityIdRuleQaTests(ITestOutputHelper output)
     [Trait("Category", "Stress")]
     public void ATeblorSeat_InAnFfa_CastsItsAbilities_AndIsDeterministic()
     {
-        using TestDataDir dir = TestDataDir.CopyOfShipped();
+        using TestDataDir dir = TestDataDir.CopyOfShippedTwoFactions();
         FactionOrderTests.AddTeblor(dir);
         GameData d = Load(dir);
         (ulong[] a, bool castA, string infoA) = Ffa(d, 6000);
@@ -308,7 +311,7 @@ public class TechAbilityIdRuleQaTests(ITestOutputHelper output)
     [Trait("Category", "Stress")]
     public void ATeblorSeat_ResearchesItsOwnTech_ByKey_AsAMalazanSeatDoes()
     {
-        using TestDataDir dir = TestDataDir.CopyOfShipped();
+        using TestDataDir dir = TestDataDir.CopyOfShippedTwoFactions();
         FactionOrderTests.AddTeblor(dir);
         GameData d = Load(dir);
         Assert.Equal(9, d.FindTech("teblor_blood_oil_anointing"));

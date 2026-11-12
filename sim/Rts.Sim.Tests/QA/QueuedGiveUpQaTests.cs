@@ -90,7 +90,7 @@ public class QueuedGiveUpQaTests
         for (int i = 0; i < crowd; i++)
         {
             var at = new Vector2(24.1f + rng.NextFloat() * 13.8f, 12.1f + rng.NextFloat() * 21.8f);
-            sim.Enqueue(Command.SpawnUnit(0, i % TestSim.UnitTypeCount, at));
+            sim.Enqueue(Command.SpawnUnit(0, i % TestSim.ScenarioUnitTypes, at));
         }
         int wide = LocalMovementTests.TypeWithRadius(0.9f);
         for (int y = lo; y <= hi; y++) sim.Enqueue(Command.SpawnUnit(1, wide, g.CellCenter(20, y)));

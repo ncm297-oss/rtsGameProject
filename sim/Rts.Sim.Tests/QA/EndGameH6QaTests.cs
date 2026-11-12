@@ -447,11 +447,11 @@ public class EndGameH6QaTests
 
     private static readonly Lazy<GameData> s_far = new(() => AiScenes.DataWith(dir =>
     {
-        foreach (string f in new[] { "malazan", "whirlwind" })
+        foreach (string f in TestSim.ShippedFactions) // M7-H1 (BUG-1173 item 3): every faction, its own ids by slot
             dir.EditJson($"factions/{f}/ai.json", root =>
             {
                 foreach (JsonNode? o in root["openings"]!.AsArray())
-                    o!["buildOrder"] = AiScenes.BuildOrder(("time", 3600, "build", f == "malazan" ? "malazan_billet" : "whirlwind_tent", 0));
+                    o!["buildOrder"] = AiScenes.BuildOrder(("time", 3600, "build", AiScenes.BuildingKey(f, BuildingSlot.House), 0));
             });
         dir.EditJson("common/rules.json", r => r["ai"]!["starvedWaveAfter"] = 0);
     }));
@@ -674,11 +674,11 @@ public class EndGameH6QaTests
         Assert.True(Vector2.Distance(hall, s3) > reach, "the scene: start 3 must be outside the reach too");
         GameData data = AiScenes.DataWith(dir =>
         {
-            foreach (string f in new[] { "malazan", "whirlwind" })
+            foreach (string f in TestSim.ShippedFactions) // M7-H1 (BUG-1173 item 3): every faction, its own ids by slot
                 dir.EditJson($"factions/{f}/ai.json", root =>
                 {
                     foreach (JsonNode? o in root["openings"]!.AsArray())
-                        o!["buildOrder"] = AiScenes.BuildOrder(("time", 3600, "build", f == "malazan" ? "malazan_billet" : "whirlwind_tent", 0));
+                        o!["buildOrder"] = AiScenes.BuildOrder(("time", 3600, "build", AiScenes.BuildingKey(f, BuildingSlot.House), 0));
                 });
             dir.EditJson("common/rules.json", r => { r["ai"]!["starvedWaveAfter"] = 0; r["ai"]!["farExpandReach"] = Math.Round(reach, 1); });
         });

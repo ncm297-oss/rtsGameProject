@@ -167,8 +167,9 @@ public class RequirementQaTests
     [Fact]
     public void AnEnemyOfTheSameFaction_WithEveryRequirementMet_OpensNothingForThePlayer()
     {
-        // Players 0 and 2 are both Malazan (faction = player % factions).
-        Simulation sim = NewSim(Fixture, players: 3);
+        // Players 0 and 2 are both Malazan (faction = player % 2: M7-H1, BUG-1191, explicit seats, so a faction appended to
+        // the data doesn't put a third faction on seat 2).
+        Simulation sim = TestSim.Explored(new(new SimConfig(5, 3, 64, 512) { Data = Fixture ?? TestSim.Data, Seats = TestSim.TwoFactionSeats(3) }, ResourceMaps.Flat(48, 32)));
         World w = sim.World;
         Assert.Equal(w.FactionOf(0), w.FactionOf(2));
         int keep = Building(sim, 4, 4).Index;

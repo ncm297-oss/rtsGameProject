@@ -229,7 +229,7 @@ public class LocalMovementRecheckQaTests
                 sim = LocalMovementTests.SimOn(LocalMovementTests.Flat(32), 50);
                 goal = new Vector2(31f, 31f);
                 var units = new (int, Vector2)[50];
-                for (int i = 0; i < 50; i++) units[i] = (i % TestSim.UnitTypeCount, goal);
+                for (int i = 0; i < 50; i++) units[i] = (i % TestSim.ScenarioUnitTypes, goal);
                 SpawnAll(sim, units);
                 break;
             }
@@ -256,7 +256,7 @@ public class LocalMovementRecheckQaTests
                 var rng = new SimRng(5, 9);
                 var units = new (int, Vector2)[300];
                 for (int i = 0; i < 300; i++)
-                    units[i] = (rng.NextInt(0, TestSim.UnitTypeCount), new Vector2(4f + rng.NextFloat() * 30f, 4f + rng.NextFloat() * 30f));
+                    units[i] = (rng.NextInt(0, TestSim.ScenarioUnitTypes), new Vector2(4f + rng.NextFloat() * 30f, 4f + rng.NextFloat() * 30f));
                 SpawnAll(sim, units);
                 break;
             }
@@ -290,7 +290,7 @@ public class LocalMovementRecheckQaTests
                 var rng = new SimRng(8, 2);
                 var units = new (int, Vector2)[150];
                 for (int i = 0; i < 150; i++)
-                    units[i] = (rng.NextInt(0, TestSim.UnitTypeCount), new Vector2(2.5f + rng.NextFloat() * 34f, 2.5f + rng.NextFloat() * 42f));
+                    units[i] = (rng.NextInt(0, TestSim.ScenarioUnitTypes), new Vector2(2.5f + rng.NextFloat() * 34f, 2.5f + rng.NextFloat() * 42f));
                 SpawnAll(sim, units);
                 break;
             }

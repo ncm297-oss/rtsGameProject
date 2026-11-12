@@ -237,7 +237,7 @@ public class TechDataQaTests
     [Fact]
     public void AnEmptyFactionTechsList_Loads_TheFactionSimplyHasNoUpgrade()
     {
-        using TestDataDir dir = TestDataDir.CopyOfShipped();
+        using TestDataDir dir = TestDataDir.CopyOfShippedTwoFactions(); // M7-H1 (BUG-1191): the 8 below is the two factions' count
         var removed = new List<string>();
         dir.EditJson(MalazanTechs, root =>
         {
@@ -266,7 +266,8 @@ public class TechDataQaTests
         // 63 extra common techs at the Forge (+1 hp each on every unit): 72 in all, so tech ids 64-71 live in word 1. M7-3b:
         // the common techs come first (ids 0-69), then the two faction techs (70, 71), so ids 64-69 are six common extras
         // (before M7-3b, 61 extras made 70 techs sorted globally, and 64-69 were the last six extras).
-        using TestDataDir dir = TestDataDir.CopyOfShipped();
+        // M7-H1 (BUG-1191): on the two factions (72 is their count); BUG-1190 item 2: the hash loop runs to the top id (71).
+        using TestDataDir dir = TestDataDir.CopyOfShippedTwoFactions();
         dir.EditJson(Common, root =>
         {
             JsonArray list = root["techs"]!.AsArray();
@@ -280,7 +281,7 @@ public class TechDataQaTests
         var sim = new Simulation(new SimConfig(5, 2, 16, 512) { Data = d }, ResourceMaps.Flat(32, 32));
         Assert.Equal(2, sim.World.Techs.WordsPerPlayer);
         var seen = new HashSet<ulong> { sim.StateHash() };
-        for (int t = 60; t < 70; t++)
+        for (int t = 60; t < d.Techs.Length; t++)
         {
             ulong h0 = sim.StateHash();
             sim.World.Techs.Set(1, t, true);

@@ -19,9 +19,12 @@ namespace Rts.Sim.Tests;
 /// </summary>
 public class TeamTests
 {
-    /// <summary>Seats of the given teams: player p plays faction p mod 2, human, Normal.</summary>
+    /// <summary>
+    /// Seats of the given teams: player p plays faction p mod 2 (Malazan, Whirlwind), human, Normal. M7-H1 (BUG-1191): mod 2,
+    /// not mod the data's faction count, so these Malazan v Whirlwind rows keep their seats when a faction is appended.
+    /// </summary>
     internal static ImmutableArray<PlayerSeat> Seats(params int[] teams) =>
-        teams.Select((t, p) => new PlayerSeat(p % TestSim.Data.Factions.Length, SeatController.Human, AiDifficulty.Normal, t)).ToImmutableArray();
+        teams.Select((t, p) => new PlayerSeat(p % 2, SeatController.Human, AiDifficulty.Normal, t)).ToImmutableArray();
 
     /// <summary>A sim on a flat <paramref name="size"/> map whose seats have these teams.</summary>
     private static Simulation Flat(int size, bool combat, params int[] teams) =>

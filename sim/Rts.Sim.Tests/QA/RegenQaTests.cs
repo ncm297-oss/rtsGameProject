@@ -291,25 +291,62 @@ public class RegenQaTests(Xunit.Abstractions.ITestOutputHelper output)
     /// <summary>
     /// The same written rate is the same rate a tick whether a faction's (read as a double) or a status magnitude's (stored as
     /// a float and converted each tick): on the 0.05 HP/s grid it is; at the midpoints between grid steps it is not.
+    /// M7-H1 (BUG-1166, Producer ruling: refuse, as <c>pop</c> does): a rate off the grid is no longer loadable at either
+    /// place, so the midpoint rows (0.175: 4 units as a double, 3 as a float; 1.525: 31 v 30) now assert the refusal at both,
+    /// and every loadable rate converts alike.
     /// </summary>
     [Theory]
     [InlineData(1.5)]
     [InlineData(7.7)]
     [InlineData(0.05)]
-    [InlineData(0.175, Skip = "BUG-1166: 0.175 is 4 units a tick as a faction rate, 3 as a status magnitude")]
-    [InlineData(1.525, Skip = "BUG-1166: 31 vs 30")]
-    public void AStatusMagnitude_ConvertsAsTheSameFactionRate(double rate) =>
-        Assert.Equal(DataLoader.RegenPerTick(rate), DataLoader.RegenPerTick((float)rate));
+    [InlineData(0.175)]
+    [InlineData(1.525)]
+    public void AStatusMagnitude_ConvertsAsTheSameFactionRate(double rate)
+    {
+        bool onStep = DataLoader.IsOnRegenStep(rate);
+        Assert.Equal(rate is not (0.175 or 1.525), onStep);
+        if (onStep) Assert.Equal(DataLoader.RegenPerTick(rate), DataLoader.RegenPerTick((float)rate));
+        // Both places: the faction's regen and a regenerating status's magnitude load exactly when the rate is on the step.
+        using TestDataDir dir = TestDataDir.CopyOfShipped();
+        dir.EditJson("factions/malazan/faction.json", r => r["regen"] = new JsonObject { ["hpPerSecond"] = rate, ["delay"] = 6 });
+        dir.EditJson("factions/malazan/abilities.json", root =>
+        {
+            // As StatusLoaderTests.WithTelasFireStatus: Telas Fire's status application, made a regenerating one.
+            JsonObject e = root["abilities"]![0]!["effects"]![0]!.AsObject();
+            e["status"] = "regenerating";
+            e["magnitude"] = rate;
+        });
+        DataLoadResult r = DataLoader.LoadAll(dir.Path);
+        if (onStep)
+        {
+            Assert.True(r.Ok, string.Join("; ", r.Errors));
+            GameData d = r.Data!;
+            Assert.Equal(d.Factions[d.FindFaction("malazan")].RegenPerTick, DataLoader.RegenPerTick(d.Abilities[d.FindAbility("telas_fire")].Effects[0].Magnitude));
+            return;
+        }
+        Assert.Equal(2, r.Errors.Count);
+        Assert.Contains(r.Errors, e => e.File == "factions/malazan/faction.json" && e.Path == "regen.hpPerSecond" && e.Message.Contains("not a multiple of 0.05"));
+        Assert.Contains(r.Errors, e => e.File == "factions/malazan/abilities.json" && e.Path.EndsWith(".magnitude") && e.Message.Contains("not a multiple of 0.05"));
+    }
 
     /// <summary>
     /// Forged <c>REGN</c> parts (checksum recomputed) that no build writes: a last damage tick after the save's own tick (the
     /// reader's comment says "a tick that has been", its check is only <c>&gt;= -1</c>), and a regenerating total of 0 beside
-    /// a slot that counts an entry. Both should be refused <c>Malformed</c>, as an accumulator of 400 is.
+    /// a slot that counts an entry. Both should be refused <c>Malformed</c>, as an accumulator of 400 is. M7-H1 (BUG-1165
+    /// fixed): un-skipped, plus one past the tick, a total one too many, a slot's count of 0 beside its entry, and a free slot
+    /// carrying a last damage tick, a fraction or a count; a last damage tick equal to the save's tick still loads.
     /// </summary>
     [Theory]
-    [InlineData("future-tick", Skip = "BUG-1165: REGN last damage tick not checked against the save tick")]
-    [InlineData("total-0", Skip = "BUG-1165: REGN regenerating total not cross-checked")]
+    [InlineData("future-tick")]
+    [InlineData("total-0")]
     [InlineData("accumulator-400")]
+    // M7-H1 (BUG-1165's fix): the edges either side.
+    [InlineData("one-past-tick")]
+    [InlineData("total-2")]
+    [InlineData("slot-count-0")]
+    [InlineData("free-slot-tick")]
+    [InlineData("free-slot-accumulator")]
+    [InlineData("free-slot-count")]
     public void AForgedRegenPart_IsRefused(string forge)
     {
         GameData d = RegenTests.s_regen.Value;
@@ -330,13 +367,25 @@ public class RegenQaTests(Xunit.Abstractions.ITestOutputHelper output)
         Assert.Equal(1, System.Buffers.Binary.BinaryPrimitives.ReadInt32LittleEndian(bytes.AsSpan(total)));
         Assert.Equal(Rts.Sim.Save.SaveError.None, Save.SaveTestRun.TryLoad(d, bytes));
         byte[] bad = (byte[])bytes.Clone();
+        int free = h.Index + 1; // never used in this scene
+        Assert.False(sim.World.Units.Alive[free]);
         switch (forge)
         {
             case "future-tick": System.Buffers.Binary.BinaryPrimitives.WriteInt32LittleEndian(bad.AsSpan(ldt + 4 * h.Index), sim.TickNumber + 5_000); break;
+            case "one-past-tick": System.Buffers.Binary.BinaryPrimitives.WriteInt32LittleEndian(bad.AsSpan(ldt + 4 * h.Index), sim.TickNumber + 1); break;
             case "total-0": System.Buffers.Binary.BinaryPrimitives.WriteInt32LittleEndian(bad.AsSpan(total), 0); break;
+            case "total-2": System.Buffers.Binary.BinaryPrimitives.WriteInt32LittleEndian(bad.AsSpan(total), 2); break;
+            case "slot-count-0": bad[counts + h.Index] = 0; break;
+            case "free-slot-tick": System.Buffers.Binary.BinaryPrimitives.WriteInt32LittleEndian(bad.AsSpan(ldt + 4 * free), 0); break;
+            case "free-slot-accumulator": System.Buffers.Binary.BinaryPrimitives.WriteInt32LittleEndian(bad.AsSpan(acc + 4 * free), 1); break;
+            case "free-slot-count": bad[counts + free] = 1; break;
             default: System.Buffers.Binary.BinaryPrimitives.WriteInt32LittleEndian(bad.AsSpan(acc + 4 * h.Index), CombatConstants.RegenFixedOne); break;
         }
         Assert.Equal(Rts.Sim.Save.SaveError.Malformed, Save.SaveTestRun.TryLoad(d, Save.SaveBytes.Rechecksum(bad)));
+        // M7-H1: the edge that is honest: a last damage tick equal to the save's own tick (a hit in the tick just run) loads.
+        byte[] edge = (byte[])bytes.Clone();
+        System.Buffers.Binary.BinaryPrimitives.WriteInt32LittleEndian(edge.AsSpan(ldt + 4 * h.Index), sim.TickNumber);
+        Assert.Equal(Rts.Sim.Save.SaveError.None, Save.SaveTestRun.TryLoad(d, Save.SaveBytes.Rechecksum(edge)));
         return;
 
         static int NextRegn(byte[] b, int from)
