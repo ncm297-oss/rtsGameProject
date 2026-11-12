@@ -49,3 +49,15 @@ Gatherers between 8:00 and 9:00 (Whirlwind raid) while holding 395-515 wood. The
   (`AiPlayer.MayReserve`, M5-4g), but only while the army is at least one wave and the base is not defended, and only
   from train steps after it in file order: the likely missing rule. D29 (this session) measures the variants and lands
   no shipped file.
+
+## D29 (2026-11-12-0546): measured, not fixed
+- 25 openings over 40 pairings (four maps, v Malazan on seat 0 and v Whirlwind on seat 1, seeds 1-5) to 15:00
+  (`Content/TeblorOpeningHorizonReportTests`, 960 matches). **`ai.json` alone is not enough:** no opening gives "Age II
+  and a wave by 10:00 in 6 of 8" on every seed without being worse than the shipped one by 15:00.
+- Of 40 (QA's count): shipped V0 Age II by 10:00 in 7, a wave in 15, defeated 17; the hand-over V24
+  (`Content/Fixtures/teblor_standard_d29.json`) 21 / 34 / 5; V25 21 / 34 / 5 (every building kind in 4, no expansion);
+  V14 (a two-Warrior wave) 28 / 40 / 18. The table is in `studio/sessions/2026-11-12-0546.md`.
+- The missing rule: a per-opening reserve share (Request 52). Through the global `rules.json` `ai.reserveArmyShare` as a
+  stand-in at 0.5 the hand-over meets the target on 3 of 5 seeds with 6 defeats.
+- Nothing shipped moved. The opening lands with the Frenzy rows (D31) after Request 52; this bug closes there or goes to
+  the balance pass with what is left.
