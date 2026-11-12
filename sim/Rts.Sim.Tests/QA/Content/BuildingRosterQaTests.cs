@@ -34,6 +34,17 @@ public class BuildingRosterQaTests
         ("whirlwind_shrine", "whirlwind", BuildingSlot.CasterHall, "Shrine of the Whirlwind", 1200, 2, 150, 150, 50, 3, 0, false),
         ("whirlwind_ram_yard", "whirlwind", BuildingSlot.SiegeWorks, "Ram Yard", 1400, 2, 150, 200, 55, 3, 0, false),
         ("whirlwind_lookout_tower", "whirlwind", BuildingSlot.WatchTower, "Lookout Tower", 800, 2, 50, 125, 35, 2, 0, false),
+        // D28: teblor.md "Buildings", the template's numbers under the Teblor names.
+        ("teblor_longhouse", "teblor", BuildingSlot.TownHall, "Longhouse", 2400, 2, 275, 275, 90, 4, 10, true),
+        ("teblor_hut", "teblor", BuildingSlot.House, "Hut", 500, 1, 0, 50, 20, 2, 8, false),
+        ("teblor_woodcutters_lodge", "teblor", BuildingSlot.Camp, "Woodcutters' Lodge", 600, 1, 0, 75, 25, 2, 0, true),
+        ("teblor_war_lodge", "teblor", BuildingSlot.InfantryHall, "War Lodge", 1200, 2, 0, 150, 40, 3, 0, false),
+        ("teblor_javelin_ground", "teblor", BuildingSlot.RangedHall, "Javelin Ground", 1200, 2, 0, 150, 40, 3, 0, false),
+        ("teblor_stables", "teblor", BuildingSlot.ShockHall, "Stables & Kennels", 1200, 2, 75, 150, 45, 3, 0, false),
+        ("teblor_bloodwood_carver", "teblor", BuildingSlot.Forge, "Bloodwood Carver", 1000, 2, 100, 100, 40, 3, 0, false),
+        ("teblor_shamans_circle", "teblor", BuildingSlot.CasterHall, "Shaman's Circle", 1200, 2, 150, 150, 50, 3, 0, false),
+        ("teblor_breakers_hall", "teblor", BuildingSlot.SiegeWorks, "Breaker's Hall", 1400, 2, 150, 200, 55, 3, 0, false),
+        ("teblor_stone_cairn", "teblor", BuildingSlot.WatchTower, "Stone Cairn", 800, 2, 50, 125, 35, 2, 0, false),
     };
 
     [Fact]

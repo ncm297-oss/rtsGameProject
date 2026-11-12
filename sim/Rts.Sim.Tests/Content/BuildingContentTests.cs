@@ -48,6 +48,19 @@ public class BuildingContentTests
             (BuildingSlot.SiegeWorks, "whirlwind_ram_yard", "Ram Yard"),
             (BuildingSlot.WatchTower, "whirlwind_lookout_tower", "Lookout Tower"),
         },
+        ["teblor"] = new[]
+        {
+            (BuildingSlot.TownHall, "teblor_longhouse", "Longhouse"),
+            (BuildingSlot.House, "teblor_hut", "Hut"),
+            (BuildingSlot.Camp, "teblor_woodcutters_lodge", "Woodcutters' Lodge"),
+            (BuildingSlot.InfantryHall, "teblor_war_lodge", "War Lodge"),
+            (BuildingSlot.RangedHall, "teblor_javelin_ground", "Javelin Ground"),
+            (BuildingSlot.ShockHall, "teblor_stables", "Stables & Kennels"),
+            (BuildingSlot.Forge, "teblor_bloodwood_carver", "Bloodwood Carver"),
+            (BuildingSlot.CasterHall, "teblor_shamans_circle", "Shaman's Circle"),
+            (BuildingSlot.SiegeWorks, "teblor_breakers_hall", "Breaker's Hall"),
+            (BuildingSlot.WatchTower, "teblor_stone_cairn", "Stone Cairn"),
+        },
     };
 
     // docs/02 "Buildings" table plus "Economy" (pop, drop-off). Same for every faction.
@@ -81,6 +94,7 @@ public class BuildingContentTests
     {
         ["malazan_sapper"] = BuildingSlot.SiegeWorks,
         ["whirlwind_zealot"] = BuildingSlot.InfantryHall,
+        ["teblor_war_dog"] = BuildingSlot.ShockHall,
     };
 
     private static GameData Data => TestSim.Data;

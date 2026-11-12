@@ -1,0 +1,15 @@
+{
+  "id": "teblor",
+  "displayName": "Teblor",
+  "description": "Mountain clans of giants who live by raiding and feud. Few, huge and hard to kill, they heal between fights.",
+  "bonus": {
+    "displayName": "Children of the Mountains",
+    "description": "Units heal 1 HP a second once they have gone 6 seconds without taking damage. Giants train slowly."
+  },
+  "regen": { "hpPerSecond": 1, "delay": 6 },
+  "resources": {
+    "gold": { "displayName": "Gold" },
+    "wood": { "displayName": "Wood" }
+  },
+  "palette": { "primary": "#5C4030", "secondary": "#E6DDC8", "accent": "#7A2A1A" }
+}

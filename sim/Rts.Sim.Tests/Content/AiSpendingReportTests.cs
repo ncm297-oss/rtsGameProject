@@ -78,7 +78,7 @@ public class AiSpendingReportTests
         int player = TestSim.Data.FindFaction(faction);
         Simulation sim = AiScenes.Flat(AiScenes.Seats(AiDifficulty.Normal, Controllers(player)));
         _out.WriteLine($"{faction}, flat scene, Normal, {Ticks} ticks ({Ticks / Tps / 60} min), combat off, the other seat idle");
-        Assert.Equal(-1, Report(sim, player, -1, _out.WriteLine).IdleDefeatedAt); // combat off: nobody falls, so every mark counts
+        Assert.Equal(-1, Report(sim, player, player, -1, _out.WriteLine).IdleDefeatedAt); // combat off: nobody falls, so every mark counts
     }
 
     /// <summary>
@@ -100,8 +100,8 @@ public class AiSpendingReportTests
             Assert.Equal(before, r.Marks);
             Assert.Equal(Ticks / MarkEvery, r.AllMarks);
         }
-        // Every opening of both factions measured once on Normal, opening 0 once more on Easy.
-        foreach (string faction in new[] { "malazan", "whirlwind" })
+        // Every opening of every data faction measured once on Normal, opening 0 once more on Easy.
+        foreach (string faction in ContentFactions.Keys)
         {
             int n = TestSim.Data.Ai[TestSim.Data.FindFaction(faction)].Openings.Length;
             Assert.Equal(Enumerable.Range(0, n), run.Seats.Where(s => s.Faction == faction && s.Difficulty == AiDifficulty.Normal).Select(s => s.Opening));
@@ -123,7 +123,7 @@ public class AiSpendingReportTests
         GeneratedRun run = Generated.Value;
         string verdictLine = $"Across both factions {run.WoodBound} of those {run.Marks} marks had wood under {WoodShort} with gold at {GoldPiled} or more";
         string verdictQuote = $"the report reads \"{run.Verdict}\"";
-        foreach (string faction in new[] { "malazan", "whirlwind" })
+        foreach (string faction in ContentFactions.Keys)
         {
             AiDef ai = TestSim.Data.Ai[TestSim.Data.FindFaction(faction)];
             string[] lines = PageTables.FactionLines(faction);
@@ -131,7 +131,7 @@ public class AiSpendingReportTests
             {
                 string where = $"{faction}.md opening {k + 1} ({ai.Openings[k].Id})";
                 string page = BoldParagraph(AiContentTests.OpeningLines(lines, faction, k, ai.Openings[k]), "**Spending on the menu's map", where);
-                var wants = new List<string> { "(D21, 2026-10-18", Sentence(run.Seat(faction, k, AiDifficulty.Normal)) };
+                var wants = new List<string> { ReportDate(faction), Sentence(run.Seat(faction, k, AiDifficulty.Normal)) };
                 if (k == 0) wants.Add(Sentence(run.Seat(faction, 0, AiDifficulty.Easy)));
                 foreach (string want in wants)
                     Assert.True(page.Contains(want, StringComparison.Ordinal), $"{where} 'Spending on the menu's map' lacks the report's \"{want}\"; it reads: {page}");
@@ -140,10 +140,19 @@ public class AiSpendingReportTests
 
         string docs03 = BoldParagraph(PageTables.Lines(Path.Combine("docs", "03-technical-design.md")), "- **Spending per opening (D21, 2026-10-18", "docs/03");
         var all = new List<string> { verdictLine, verdictQuote };
-        foreach (SeatRun s in run.Seats) all.Add(Short(s));
+        foreach (SeatRun s in run.Seats.Where(s => Docs03Factions.Contains(s.Faction))) all.Add(Short(s));
         foreach (string want in all)
             Assert.True(docs03.Contains(want, StringComparison.Ordinal), $"docs/03's D21 spending bullet lacks the report's \"{want}\"; it reads: {docs03}");
     }
+
+    /// <summary>
+    /// The factions docs/03's D21 spending bullet covers (its verdict and run list; docs/03 is not the data track's file). A
+    /// faction added later is measured and quoted on its own page (D28: the Teblor), and its marks stay out of the verdict.
+    /// </summary>
+    internal static readonly string[] Docs03Factions = { "malazan", "whirlwind" };
+
+    /// <summary>The date marker each page's spending and house paragraphs carry: D21's re-print, D28's for the Teblor.</summary>
+    internal static string ReportDate(string faction) => Docs03Factions.Contains(faction) ? "(D21, 2026-10-18" : "(D28, 2026-11-11";
 
     /// <summary>
     /// A run as its opening's page paragraph says it: "Normal, seed 2 (the smallest seed in 1-50 whose Normal pick is this
@@ -205,23 +214,25 @@ public class AiSpendingReportTests
         var lines = new List<string>();
         var seats = new List<SeatRun>();
         int bound = 0, marks = 0, cut = 0;
-        foreach (string faction in new[] { "malazan", "whirlwind" })
+        foreach (string faction in ContentFactions.Keys)
         {
             AiDef def = TestSim.Data.Ai[TestSim.Data.FindFaction(faction)];
             var runs = Enumerable.Range(0, def.Openings.Length).Select(k => (k, AiDifficulty.Normal)).Append((0, AiDifficulty.Easy));
             foreach ((int k, AiDifficulty difficulty) in runs)
             {
                 ulong seed = AiOpeningSeeds.Smallest(faction, k, difficulty);
-                int player = TestSim.Data.FindFaction(faction);
-                Simulation sim = MenuMap(AiScenes.Seats(difficulty, Controllers(player)), seed);
+                // D28: the faction's own seat (AiOpeningSeeds.SeatsFor), the default seats for the two shipped factions.
+                (PlayerSeat[] seatsFor, int player) = AiOpeningSeeds.SeatsFor(TestSim.Data, faction, difficulty, SeatController.Ai, SeatController.Human);
+                Simulation sim = MenuMap(seatsFor, seed);
                 Assert.Equal(MenuMines, Count(sim, "gold_mine"));
                 Assert.Equal(k, sim.AiOpening(player)); // the pick this run measures
                 lines.Add("");
                 lines.Add($"== {faction} opening {k + 1} {AiOpeningSeeds.Name(def.Openings[k])}, {difficulty}, generated 128 map seed {seed} ({MenuForests} forests, {MenuMines} mines), {Ticks} ticks, combat on, the other seat idle");
-                ReportResult r = Report(sim, player, sim.World.StartLocations[player].Cell, lines.Add);
+                ReportResult r = Report(sim, player, TestSim.Data.FindFaction(faction), sim.World.StartLocations[player].Cell, lines.Add);
                 var seat = new SeatRun(faction, k, def.Openings[k].Id, difficulty, seed, r.IdleDefeatedAt, r.Gold, r.Wood, r.FirstWaveAt, r.AgeTwoAt, r.WoodBound, r.Marks, r.AllMarks);
                 lines.Add("page: " + Sentence(seat));
                 seats.Add(seat);
+                if (!Docs03Factions.Contains(faction)) continue; // the verdict is docs/03's, over the factions it covers
                 bound += r.WoodBound;
                 marks += r.Marks;
                 cut += r.AllMarks - r.Marks;
@@ -230,7 +241,7 @@ public class AiSpendingReportTests
         lines.Add("");
         string verdict = 2 * bound >= marks ? "wood is still the limit" : bound > 0 ? "wood binds at some marks only, not the limit overall" : "wood is not the limit";
         lines.Add($"Conclusion (2026-10-18, shipped data: D21's openings): {verdict} on the menu's generated map: {bound} of {marks} marks before the idle seat's defeat had wood in hand < {WoodShort} with gold >= {GoldPiled} ({cut} marks after a defeat not counted).");
-        lines.Add("docs/03: " + string.Join(", ", seats.Select(Short)));
+        lines.Add("docs/03: " + string.Join(", ", seats.Where(s => Docs03Factions.Contains(s.Faction)).Select(Short)));
         return new GeneratedRun(seats.ToArray(), lines, bound, marks, verdict);
     }
 
@@ -283,19 +294,20 @@ public class AiSpendingReportTests
     /// <summary>What <see cref="Report"/> measured: the wood-bound marks and the marks before the idle seat's defeat, all the marks, the defeat tick (-1: it stood), gold and wood at each mark, the first wave's tick and the tick Age II was in (-1: none).</summary>
     private sealed record ReportResult(int WoodBound, int Marks, int AllMarks, int IdleDefeatedAt, int[] Gold, int[] Wood, int FirstWaveAt, int AgeTwoAt);
 
-    private static ReportResult Report(Simulation sim, int player, int startCell, Action<string> write)
+    private static ReportResult Report(Simulation sim, int player, int faction, int startCell, Action<string> write)
     {
         World w = sim.World;
         GameData d = w.Data;
-        // Preconditions, not findings: the AI seat plays this faction, or every row reports the other faction's AI.
+        // Preconditions, not findings: the AI seat plays this faction, or every row reports the other faction's AI
+        // (D28: the faction id is passed, not read off the seat).
         AiPlayer? ai = sim.AiOf(player);
         Assert.NotNull(ai);
-        Assert.Equal(player, w.FactionOf(player));
-        Assert.Equal(player, ai!.Faction);
+        Assert.Equal(faction, w.FactionOf(player));
+        Assert.Equal(faction, ai!.Faction);
 
         var producesAt = new bool[d.Buildings.Length];
         foreach (UnitDef u in d.Units)
-            if (u.Faction == player && u.TrainedAtTypeId >= 0) producesAt[u.TrainedAtTypeId] = true;
+            if (u.Faction == faction && u.TrainedAtTypeId >= 0) producesAt[u.TrainedAtTypeId] = true;
 
         var b = w.Buildings;
         var finishedTicks = new int[b.Capacity];

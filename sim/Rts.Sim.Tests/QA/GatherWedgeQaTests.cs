@@ -56,6 +56,11 @@ public class GatherWedgeQaTests
     // 3A04D4E370C643DA. The golden's game researches nothing and casts nothing, so its k lines are byte for byte as
     // before (header data-hash and checksum only). seed21_playable.replay holds two Research commands by id (ticks 4348
     // and 5556); its checkpoints still hold to CheckpointPrefixTicks on the M7-3b tree (this row passes unchanged).
+    // D28 (data track, rule 51, BUG-0750's rule): regenerated once more, 3A04D4E370C643DA -> 67269D955D18D885, because the
+    // Teblor roster shipped: common/factions.json appends "teblor" and game/data/factions/teblor/ adds 7 units, 10 buildings,
+    // the tech teblor_blood_oil_anointing (id 9) and the ability blood_oil_frenzy (id 3), all appended after every shipped
+    // id, so GameData.ContentHash moved through the new keys. The golden's one seat is a Malazan human seat, so its k lines
+    // are byte for byte as before (header data-hash and checksum only).
 
     /// <summary>
     /// Ticks the replay must still match its recorded checkpoints: all of them (M4-H1, BUG-0211; before the re-recording

@@ -39,7 +39,7 @@ public class D20PinQaTests
     [MemberData(nameof(ContentFactions.Theory), MemberType = typeof(ContentFactions))]
     public void DefenseLine_QuotesTheRulesJsonKnobs(string faction) => QuotesTheKnobs(faction, DefenseLine(faction));
 
-    /// <summary>The knob check on one Defense line (shared with <see cref="TeblorPageParseQaTests"/>, which reads a page ahead of its data).</summary>
+    /// <summary>The knob check on one Defense line.</summary>
     internal static void QuotesTheKnobs(string faction, string line)
     {
         JsonObject ai = RulesAi();
@@ -104,7 +104,7 @@ public class D20PinQaTests
             AiHouseRuleReportTests.HouseRun r = AiHouseRuleReportTests.MenuMapRun(faction, k);
             Assert.True(r.Steps.All(s => s.SendsAtCap == 0), $"{faction} {ai.Openings[k].Id} seed {r.Seed}: a house Build was sent at the hard cap (D15 C says none)");
             string note = Note(AiContentTests.OpeningLines(lines, faction, k, ai.Openings[k]), $"{faction}.md opening {k + 1}");
-            var wants = new List<string> { "(D21, 2026-10-18", AiHouseRuleReportTests.NoteSentence(r) };
+            var wants = new List<string> { Rts.Sim.Tests.Content.AiSpendingReportTests.ReportDate(faction), AiHouseRuleReportTests.NoteSentence(r) };
             if (k == 0)
             {
                 AiHouseRuleReportTests.HouseRun twelfth = AiHouseRuleReportTests.TwelfthHouseRun(faction);

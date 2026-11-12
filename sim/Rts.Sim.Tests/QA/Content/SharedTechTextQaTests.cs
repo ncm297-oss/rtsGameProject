@@ -41,7 +41,7 @@ public class SharedTechTextQaTests
     public void EveryTech_DescriptionNeeds_MatchRequires_AndAnyOfMatchesItsCount()
     {
         string[] countWords = { "zero", "one", "two", "three", "four" };
-        Assert.Equal(9, Data.Techs.Length);
+        Assert.Equal(10, Data.Techs.Length); // seven common, one per faction (D28: teblor_blood_oil_anointing, the 10th)
         foreach (TechDef t in Data.Techs)
         {
             RequiresText.AssertMatches(Data, t.Key, t.Description, t.Requires);

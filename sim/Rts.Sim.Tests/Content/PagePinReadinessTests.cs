@@ -7,7 +7,8 @@ namespace Rts.Sim.Tests.Content;
 
 /// <summary>
 /// D-R36: every faction page has the sections and columns the content pins read, in a shape they can parse, for every
-/// faction of the data and every page written ahead of its data (<see cref="ContentFactions.PagesAhead"/>: teblor.md).
+/// faction of the data and every page written ahead of its data (<see cref="ContentFactions.PagesAhead"/>; none since D28
+/// shipped teblor.md's roster, whose page the edit rows below still use).
 /// The pins themselves compare values; this checks only that there is something to compare, so a faction whose files land
 /// is pinned the same session, and a page missing a section fails here naming the page, the section and the pin that
 /// reads it, not as a bare index or key error deep in a pin.
@@ -337,10 +338,10 @@ public class PagePinReadinessTests
     [InlineData("first at 8 army pop and 600 gold + wood", "first at 8 army pop", "teblor.md opening 1 `standard`: no 'Attack waves:")]
     [InlineData("a unit under 40% hp", "a unit below 40% hp", "teblor.md AI build order: no 'Retreat:")]
     [InlineData("| Siege Works | Breaker's Hall |", "| Siege Works | Breaker's Hall | `x` |", "teblor.md Buildings row Breaker's Hall: 12 cells")]
-    [InlineData("- **Defense** (proposed", "- **Defence** (proposed", "teblor.md AI build order: no 'Defense' bullet")]
+    [InlineData("- **Defense** (the shared", "- **Defence** (the shared", "teblor.md AI build order: no 'Defense' bullet")]
     [InlineData("e.g. two Javelin Throwers from home", "e.g. a few Javelin Throwers from home", "teblor.md Defense: no 'One X (N gold + wood)")]
     [InlineData("`ai.recallHallHp` 0.5 of its", "`ai.recallHallHp` of its", "teblor.md Defense: does not quote `ai.recallHallHp`")]
-    [InlineData("- **High starting resources** (proposed", "- **High start** (proposed", "teblor.md AI build order: no 'High starting resources' bullet")]
+    [InlineData("- **High starting resources** (docs/02", "- **High start** (docs/02", "teblor.md AI build order: no 'High starting resources' bullet")]
     [InlineData("Standard has no threshold", "Standard has none", "teblor.md High starting resources: no 'Standard has no threshold'")]
     [InlineData("(not pinned)", "(not yet)", "teblor.md High starting resources: no 'not pinned'")]
     [InlineData("`standard` at High", "the opening at High", "teblor.md High starting resources: names none of the page's openings")]

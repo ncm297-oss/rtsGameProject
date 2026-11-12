@@ -23,7 +23,7 @@ public class D21OpeningsQaTests
     private static string[] Factions => ContentFactions.Keys; // D-R37: the data's factions, not a typed pair
 
     /// <summary>D21's opening count per faction, typed from its page; a faction the data adds fails naming this table.</summary>
-    private static readonly Dictionary<string, int> OpeningCounts = new() { ["malazan"] = 3, ["whirlwind"] = 3 };
+    private static readonly Dictionary<string, int> OpeningCounts = new() { ["malazan"] = 3, ["whirlwind"] = 3, ["teblor"] = 1 };
 
     public static TheoryData<string, int> AllOpenings()
     {

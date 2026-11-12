@@ -1,0 +1,17 @@
+{
+  "abilities": [
+    {
+      "id": "blood_oil_frenzy",
+      "displayName": "Blood-oil Frenzy",
+      "description": "Drives nearby warriors into a frenzy: own units within 8 m attack 40% faster for 10 seconds.",
+      "kind": "selfAura",
+      "radius": 8,
+      "castTime": 0.5,
+      "cooldown": 40,
+      "affects": "own_units",
+      "effects": [
+        { "kind": "applyStatus", "status": "frenzied", "magnitude": 0.4, "duration": 10 }
+      ]
+    }
+  ]
+}
