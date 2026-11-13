@@ -3211,7 +3211,11 @@ ViewApi change, no data file changed (shipped units are all at 1.0, so the game 
 - **The formula** (since M7-V3c, BUG-1260; M7-V1 drew the width at `radius x scale`): a type's placeholder capsule is
   `UnitViews.DrawnRadius(def)` = `radius` (the collision radius alone) wide and `UnitViews.DrawnHeight(def)` =
   `BodyHeight(radius) x scale` = `(2 radius + 1) x scale` tall, so `scale` is the height only: a body is never wider than
-  the room the sim gives it, and a 1.5 unit is 1.5x as tall. The scale is applied once per type when `UnitViews.Bind` builds the shared `CapsuleMesh`; the
+  the room the sim gives it, and a 1.5 unit is 1.5x as tall. **Since M6-V20 (BUG-1290)** the height is never under
+  `2 x radius`: Godot's `CapsuleMesh` clamps its radius to half its height, so a wide type at a small scale
+  (`scale < 2 radius / (2 radius + 1)`, e.g. radius 0.9 at 0.5) was drawn narrower than its collision radius; it is now
+  drawn as a ball `2 radius` tall, and the hp bar and markers (which read `DrawnHeight`) follow. No shipped type is that
+  small. The scale is applied once per type when `UnitViews.Bind` builds the shared `CapsuleMesh`; the
   per-frame path reads nothing new for the body (it already placed the node at half the mesh's height, so feet stay on the
   ground). The view reads `UnitDef.Scale` from `GameData` as it reads `UnitDef.Radius`; nothing else from the sim.
 - **What follows the drawn body:** the selection ring (`1.35 x radius`) and the attack-order target ring
@@ -3461,6 +3465,66 @@ the data's giant radius, once by the view). View code only; no sim, ViewApi or d
   `-- --shots <dir>` it saves five pictures), `ScaleViewTest`, `UnitViewsTest`, `ShellTest` (their width pins moved to the
   rule; `ScaleViewTest`'s click / box rows prove the hit test above the centre, where the drawn body now reaches past the
   sim's pick circle).
+
+### Implementation (M6-V20)
+
+The art pass's first slice: the Laborer and the Crossbowman are drawn as animated, team-coloured models; every other type
+keeps its capsule. View code and generated assets only; no sim, ViewApi or data file changed. The import tooling is in
+docs/04 "Import process" ("Unit models, as built").
+
+- **Which types.** `UnitViews.Bind` makes a `UnitModels`: per type, the file `res://assets/models/<model>/<id>.glb`
+  (`UnitDef.Model` is the stem, `<id>` its last segment); no unit id is named in code. A type draws its model when that
+  file loads and has a `team` material; otherwise its capsule. **Fallbacks, never an `ERROR` line:** the source file is
+  read before `GD.Load` (BUG-0860's lesson: a failed import prints engine errors), so a Git LFS pointer (`version
+  https://git-lfs...`) or a non-glTF file gives one warning line per file per run; files that are simply missing (today 19
+  types) are one summary warning per run; a model without a `team` surface one warning; a missing library one warning (the
+  models then stand in their bind pose). Results are cached per path for the run.
+- **The switch.** `UnitViews.UseModels` (static, read at `Bind`): on, unless the command line holds `--placeholder-art`
+  (any scene: the menu's match, `--skirmish`, a test), which draws every type as its capsule exactly as before M6-V20
+  (`CombatViewTest`'s fixed-camera `combat-seed1-brawl.png` is byte-identical to M7-V3c's).
+- **One view node per slot (rule 7).** The slot's `MeshInstance3D` stays where the capsule's centre is (so the cargo
+  marker, a child of it, is unchanged) and draws no mesh; its child `Model` is the imported scene (`Armature` with the
+  180° yaw fix, `Skeleton3D`, one skinned `MeshInstance3D`), placed `-DrawnHeight / 2` so the feet are on the ground, plus
+  an `AnimationPlayer` on the shared library. 6 nodes a model unit (1 a capsule), no physics body. A type with a data
+  `scale` other than 1 draws its model at that scale uniformly (no shipped model type has one; `ModelViewTest` forges 1.5).
+- **Per frame** (allocation-free once a slot has its model: `ModelViewTest`'s 200-a-side row, 0 bytes): the owner's team
+  material on the `team` surface (`SetSurfaceOverrideMaterial`, only when the owner changes; one `ShaderMaterial` per
+  model type and player, `team_colour.gdshader`, made at `Bind`); the flash and worker-tint overlays on the model's mesh
+  (only when they change); the clip from `UnitViews.ClipFor(world, slot)`, played only when it changes, started at a
+  phase from the slot (`slot x 0.37 s` mod the clip) so a crowd doesn't move in step, 0.15 s blend. State to clip:
+  `Moving` walk, `Attacking` attack, `Building` build, `Gathering` gather_wood or gather_gold by the gathered node's
+  resource (the carried kind once the node is gone), `Idle` / `Returning` / `Casting` idle; a clip the library lacks
+  plays idle. The view holds no gameplay state: everything is read from the unit store each frame.
+- **Slot reuse.** A slot whose new unit is of another type: a capsule type frees the model and shows the capsule; a model
+  type keeps the instance when the scene is the same, else frees it and instantiates the new one; the owner material,
+  overlay and clip are set again. Death or fog hides the slot's node and stops its `AnimationPlayer` (a dead slot may wait
+  long for its next unit); showing it starts it again.
+- **Unchanged numbers:** the selection and target rings, the hp bar's height (`DrawnHeight`), the click and box hit test
+  (the sim's radius), the corpse disc, the cargo marker's place. Death animation and bodies as corpses are a later slice.
+- **Cost, measured (rule 48; 1600 x 900, vsync off, default zoom, 400 units 200 a side moving then fighting,
+  `game/tests/ModelShots.tscn -- --bench 30`, two other tracks' test hosts running):** models 15.7 ms average (64 FPS),
+  worst 1 % 30.1 ms, 3,290 draw calls a frame; `--placeholder-art` 0.96 ms (1,045 FPS), worst 1 % 3.0 ms, 56 draw calls.
+  A second pair with one other test host running: models 14.5 ms (69 FPS), worst 1 % 26.6 ms; capsules 1.97 ms, worst 1 %
+  5.4 ms. (About two thirds of the units are dead by the end of the 30 s.)
+  The split: with every `AnimationPlayer` stopped 6.5 ms; without the models' shadows 14.7 ms (1,221 draw calls); both
+  5.2 ms. So the animation (400 players x 65 bone tracks, 40 of them fingers) is about 9 ms of the 15.7; draw calls and
+  shadows about 1 ms. Not optimised here (out of scope); docs/04's 60 FPS for 400 units holds on average only.
+- **Scenes that turn models off** (`UnitViews.UseModels = false` in their `_Ready`, because they pin capsule geometry or
+  pixels): `EconomyViewTest` (the worker tint as the slot node's overlay), `QaM6V3Test` (each body's colour as the slot
+  node's material override), `QaM7V3cTest` (capsule geometry, its forged Crossbowman's too), `ScaleViewTest` (capsule
+  geometry, the Laborer its reference body), `ShellTest` (capsule size and colour of the menu's match's bodies). No pin
+  value changed. Every other scene runs with models on (`CombatViewTest`, `UnitViewsTest`, `TeblorViewTest` and the
+  playables among them; their pins don't read a Laborer's or Crossbowman's node).
+- **Tests:** `game/tests/ModelViewTest` (headless, in the scene loop): exactly the manifest's types draw a model, at the
+  path their data names; per model the triangles (2,597 / 2,727, cap 3,000), textures (512² at most), height (1.82 / 1.87 m),
+  feet at the origin, toes toward -Z, 65 bones and one `team` surface; the library's six clips, each looping; two players'
+  team colours; a standing, a moving and an attacking Crossbowman play idle, walk and attack (from real sim states, the
+  head upright over the feet), a Laborer's build, gather_wood and gather_gold; the build tint, the hit flash and the cargo
+  marker on a model; one slot reused model, capsule, model, capsule; a data copy whose Laborer `model` points nowhere and a
+  scratch model root of LFS pointer files (capsules); a forged `scale` 1.5 drawn uniformly with the feet on the ground;
+  `UseModels` off; 0 bytes over 120 syncs of 400 animated models. `game/tests/ModelShots.tscn` (windowed, not in the loop):
+  `--look <dir>` (the 40 m, 60 m and grey pictures), `--skirmish <dir>` (a skirmish start with the workers sent to gold and
+  wood), `--bench <s> [--vsync off] [--no-anim] [--no-model-shadows]` (the cost run above).
 
 ## Vision, detection, fog
 

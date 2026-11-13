@@ -29,6 +29,8 @@ public partial class QaM6V3Test : Node
 
     public override async void _Ready()
     {
+        // M6-V20: this scene pins each body's colour as the capsule's material override; a model's is ModelViewTest's.
+        UnitViews.UseModels = false;
         ProcessMode = ProcessModeEnum.Always;
         try
         {

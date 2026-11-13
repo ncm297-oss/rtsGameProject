@@ -42,6 +42,8 @@ public partial class EconomyViewTest : Node
 
     public override async void _Ready()
     {
+        // M6-V20: this scene pins the tint overlay on the slot's own (capsule) node; models are ModelViewTest's.
+        UnitViews.UseModels = false;
         try
         {
             await Run();

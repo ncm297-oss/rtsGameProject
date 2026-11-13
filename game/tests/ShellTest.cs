@@ -60,6 +60,8 @@ public partial class ShellTest : Node
 
     public override async void _Ready()
     {
+        // M6-V20: this scene pins the bodies' capsule size and capsule colour; the menu's match with models is ModelViewTest's.
+        UnitViews.UseModels = false;
         // The shell pauses the tree; the test must keep running through it.
         ProcessMode = ProcessModeEnum.Always;
         try
