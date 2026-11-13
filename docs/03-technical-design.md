@@ -3154,7 +3154,9 @@ the loaders in `DataLoader.Abilities.cs` (`ResolveOnEnds`), `DataLoader.Techs.cs
   `statusDuration`. `TechState.AnyStatusDuration` (from the data) skips the lookup when no tech has one.
 - **`buildings.json` `scale`** (Request 47; optional, default 1, `DataLimits.MinUnitScale`-`MaxUnitScale` = 0.5-3.0, one
   error at `buildings[i].scale` outside it): `BuildingDef.Scale`. Presentation only, the unit's M7-1 rule: the sim never
-  reads it (the footprint is the building's room); the view reads it as it reads `UnitDef.Scale`.
+  reads it (the footprint is the building's room). **Nothing draws it yet** (M7-6, BUG-1281): the view reads
+  `UnitDef.Scale` only, so a building's `scale` is drawn at 1.0 until the view's own task (the view half of Request 47)
+  reads `BuildingDef.Scale`.
 - **What is hashed.** `GameData.ContentHash` adds every new field **only away from its default** (as M7-2's
   `spawnCount`): a status's `DamageBonus` when not 0, its three `onEnd` fields when any is set, a tech effect's `Statuses`
   on a `statusDuration` effect (or when set), a building's `Scale` when not 1. So the shipped data's hash, and with it the
@@ -3180,7 +3182,7 @@ the loaders in `DataLoader.Abilities.cs` (`ResolveOnEnds`), `DataLoader.Techs.cs
   Hash_TheAftermath_IsAnOrdinaryStatusEntry_TheBonusesAreDerived`, `Stress/FrenzyAftermathFuzzStressTests` (3 seeds x
   2,000 ticks, three players, the Anointing researched by command, twins, invariants, a save and load in an aftermath, a
   replay round trip), the allocation row, `Abilities/PassivePerfTests` (the brawl, before and after, below).
-  The shared test copy is `Abilities/BloodOilScenes`.
+  The shared test copy is `Abilities/BloodOilScenes` (idempotent since M7-6, see "Implementation (M7-6)").
 
 **For the data track (M7-4).** All four fields are in the schema; nothing ships them. Docs/factions/teblor.md's numbers:
 
@@ -3202,6 +3204,65 @@ the loaders in `DataLoader.Abilities.cs` (`ResolveOnEnds`), `DataLoader.Techs.cs
 Before writing numbers into the Frenzy row's `description` ("20% more damage", "Slowed 20% for 4 s"), check the content
 tests' description-number reading (D-H2, "For the data track" under M4-4a): it knows the `applyStatus` fields, not
 `damageBonus` or `onEnd`, so such a text needs a pin taught about them, added with the rows.
+
+### Implementation (M7-6)
+
+Two things before the Teblor's rows can land: the sim's own M7-4 test copy made tolerant of them (BUG-1280), and a
+per-opening reserve gate (Request 52; D29 found that `ai.json` alone could not make the Teblor save for Age II, and the
+only knob, `rules.json` `ai.reserveArmyShare`, moves every seat). BUG-1281 folded. Code: `AiOpening.ReserveArmyShare`,
+`AiAttackJson` / `RawValue` (`DataJson.cs`), `DataLoader.OptionalFraction`, `GameData.AddOpening`, `AiPlayer.MayReserve`;
+tests `Abilities/BloodOilScenes` / `BloodOilScenesTests`.
+
+- **BUG-1280: the test copy is idempotent.** `BloodOilScenes.Edit` takes out a `teblor_frenzied` row and any
+  `statusDuration` effect on Blood-oil Anointing already in the files, then appends its own, so the copy has exactly one
+  of each, always last in its list (the layout every M7-4 pin was taken on) whether or not the data ships them; the
+  ability's status and the Longhouse's `scale` are set, not added. The indices the loader rows read
+  (`BloodOilScenes.RowIndex` / `EffectIndex`) follow from the shipped files instead of a literal, and
+  `DataContentHashTests.AnM74FieldInTheFiles_*` first strips the four (a bare Frenzy row, no `statusDuration`, no
+  building `scale`) before adding each one. Two `FrenzyRulesLoaderTests` statements about "every shipped row" now leave
+  the data track's own rows out (the Frenzy row; the Teblor buildings' `scale`). Proof: docs/03 "For the data track
+  (M7-4)" applied to a scratch copy of the shipped data (four files), BUG-1280's filter passes whole (428 / 428; 367 / 427
+  on the base); on the shipped data too.
+- **BUG-1281.** `CombatSystem.DamageToUnit` / `DamageToBuilding`'s `(attackerType, owner)` short forms are removed (no
+  caller; they left out the status damage factor); the two forms left take `factor`
+  (`FrenzyDamageTests.EveryDamageHelper_TakesTheStatusDamageFactor`). The M7-4 `buildings.json scale` bullet now says
+  nothing draws it yet.
+- **`ai.json` `openings[i].attack.reserveArmyShare`** (optional; a fraction 0-1 inclusive, checked as `rules.json`
+  `ai.reserveArmyShare` is: below 0, above 1 or beyond a double is "outside 0-1"; a string, a list, true and a JSON
+  `null` are each one error at `openings[i].attack.reserveArmyShare`: leaving the field out, not `null`, is how a file
+  says "the rules' value"; the field is read raw (`RawValue`) so the null is seen). To `AiOpening.ReserveArmyShare`
+  (`float?`, null when absent).
+- **The rule.** `AiPlayer.MayReserve` (M5-4g's gate) uses `Opening.ReserveArmyShare ?? Rules.ReserveArmyShare`, times
+  the difficulty's `waveSizeMultiplier` as before, so a seat reads **its own opening's** share and no other seat's gate
+  moves; nothing else changed (the fog-filtered view is untouched, nothing new is stored). A share equal to the rules'
+  plays bit-identical to the field left out (the same float; a full literal match proves it, below). No allocation (the
+  think's `AllocationTests` / `ReserveTests` rows unchanged).
+- **Hash and formats.** `GameData.ContentHash` adds the share (a marker then the value) only when the file carries it,
+  so the shipped data's hash (`67269D955D18D885`, computed on the base 6fb79b0 and on this tree) and the golden's header
+  did not move; a file carrying it, at any value, hashes differently. Not in the state hash (data); no save or replay
+  format change (`SaveFormat.CurrentVersion` 10): the seat's opening index is saved already and the share is read from
+  the data each think.
+- **Tests.** `Data/AiLoaderTests.AnOpeningsReserveArmyShare_Loads` (absent, 0, 0.5, 1) and
+  `ABrokenReserveArmyShare_IsOneErrorAtIt`; `DataContentHashTests.AnOpeningsReserveShare_InTheFiles_ChangesTheHash_AbsentDoesNot`
+  and the opening's reflection row; `Ai/OpeningReserveShareTests`: (a) a Hard Malazan seat at half its wave names Age II
+  as its reserved step with its opening at 0.5 and not without; (b) a Malazan and a Whirlwind AI seat each open their
+  gate at half their wave exactly when their own faction's openings carry 0.5; (c) every opening carrying the rules'
+  value plays MatchCriterionTests' literal row (Vathar Crossing seed 1, Normal v Normal) to the same per-tick hash fold,
+  end hash, end tick and winner as the shipped data; a two-seat AI match with every opening at 0.5 saved at ticks 137 and
+  1,000 loads and runs 2,000 ticks hash-identical, reserves named on the way; `Abilities/BloodOilScenesTests` (the
+  helper on a copy that already carries the rows; applied twice hashes as once).
+
+**For the data track (M7-6).** No shipped opening carries the field, so no match moved. To give one opening its own
+gate (D31: the opening and the value are the data track's; the Producer's provisional pick is "save once the army is
+half a raid"), add the field to that opening's `attack` object in `factions/<id>/ai.json`, leaving `minArmyPop` /
+`minArmyCost` as they are:
+
+```json
+"attack": { "minArmyPop": <as shipped>, "minArmyCost": <as shipped>, "reserveArmyShare": 0.5 }
+```
+
+It moves the data hash once (land it with the Frenzy rows and the buildings' `scale`, so old saves and recordings refuse once, not twice). Leave
+the field out on every other opening (they keep `rules.json`'s `ai.reserveArmyShare` 1); do not write `null`.
 
 ### Implementation (M7-V1)
 
@@ -7789,7 +7850,8 @@ fields are refused: see "Implementation (M5-8a)". Shape as of M5-1:
   after Age I); `units` a non-empty map of the faction's unit ids to weights above 0. A missing age, a second entry for an
   age and an age past the last are errors.
 - `attack`: `minArmyPop` (pop, 0 or more, a multiple of 0.5) and `minArmyCost` (gold + wood, a whole number, 0 or more), the
-  army an AI gathers before a wave, scaled per difficulty by `waveSizeMultiplier`. `retreat`: `hpFraction` (a unit below it
+  army an AI gathers before a wave, scaled per difficulty by `waveSizeMultiplier`; (M7-6) an optional `reserveArmyShare`
+  (a fraction 0-1, the opening's own reserve gate; see "Implementation (M7-6)"). `retreat`: `hpFraction` (a unit below it
   is wounded: read by Hard's `pullBackWounded` since M5-4c slice 2) and `lossFraction` (a wave that lost this much falls
   back), each 0-1.
 - Every fault is one error at its field (`buildOrder[3].id`, `difficulties.hard.thinkInterval`,
@@ -9498,7 +9560,8 @@ BUG-0981 (four of six openings never reached Age II against an active opponent):
   defense manager earlier in the same think) and the army (the census' live non-worker units, `AiPlayer.ArmySize`) is at
   least `ai.reserveArmyShare` of the opening's wave in both of the wave's measures: its half-pop against
   `attack.minArmyPop` and its gold + wood against `attack.minArmyCost`, each x the difficulty's `waveSizeMultiplier`
-  (`AiPlayer.MayReserve`). Otherwise army production spends first, as before M5-4g. Fix round 1 also opened the gate for
+  (`AiPlayer.MayReserve`; since M7-6 the seat's opening's own `attack.reserveArmyShare` replaces `ai.reserveArmyShare`
+  when its file carries one, "Implementation (M7-6)"). Otherwise army production spends first, as before M5-4g. Fix round 1 also opened the gate for
   good once a wave had been sent; that held the reserve through later defenses for 3-8 minutes and cut Malazan's waves
   from 79 to 55 (BUG-1025), so round 2 dropped it: the gate is re-judged every think from the census. **The census
   counts the whole army, the units away on a wave included** (BUG-1026, QA re-check 2: 77 % of reserve thinks on the 27

@@ -25,20 +25,58 @@ internal static class BloodOilScenes
         ["onEnd"] = new JsonObject { ["status"] = "slowed", ["magnitude"] = 0.2, ["duration"] = 4 },
     };
 
-    /// <summary>Applies the four M7-4 edits to a copy of the shipped data.</summary>
+    /// <summary>
+    /// Applies the four M7-4 edits to a copy of the data, idempotently (M7-6, BUG-1280): a <see cref="Status"/> row and any
+    /// <c>statusDuration</c> effect on the Anointing already in the files (the data track's docs/03 rows) are taken out and
+    /// the test's own appended, so the copy has exactly one of each, always last in its list (the layout every M7-4 pin was
+    /// taken on), whether or not the data ships them; the ability's status and the Longhouse's scale are set, not added.
+    /// </summary>
     public static void Edit(TestDataDir dir)
     {
-        dir.EditJson("common/statuses.json", r => r["statuses"]!.AsArray().Add(StatusRow()));
-        dir.EditJson("factions/teblor/abilities.json", r => r["abilities"]![0]!["effects"]![0]!["status"] = Status);
-        dir.EditJson("factions/teblor/techs.json", r => r["techs"]![0]!["effects"]!.AsArray().Add(new JsonObject
+        dir.EditJson("common/statuses.json", r =>
         {
-            ["stat"] = "statusDuration", ["amount"] = 4, ["statuses"] = new JsonArray(Status),
-        }));
+            JsonArray list = r["statuses"]!.AsArray();
+            RemoveWhere(list, n => (string?)n!["id"] == Status);
+            list.Add(StatusRow());
+        });
+        dir.EditJson("factions/teblor/abilities.json", r => r["abilities"]![0]!["effects"]![0]!["status"] = Status);
+        dir.EditJson("factions/teblor/techs.json", r =>
+        {
+            JsonArray effects = r["techs"]![0]!["effects"]!.AsArray();
+            RemoveWhere(effects, IsStatusDuration);
+            effects.Add(new JsonObject { ["stat"] = "statusDuration", ["amount"] = 4, ["statuses"] = new JsonArray(Status) });
+        });
         dir.EditJson("factions/teblor/buildings.json", r =>
         {
             foreach (JsonNode? b in r["buildings"]!.AsArray())
                 if ((string)b!["id"]! == "teblor_longhouse") b["scale"] = 1.25;
         });
+    }
+
+    /// <summary>Whether a tech effect is a <c>statusDuration</c> one.</summary>
+    public static bool IsStatusDuration(JsonNode? effect) => (string?)effect!["stat"] == "statusDuration";
+
+    /// <summary>Removes every element of <paramref name="list"/> matching <paramref name="match"/>.</summary>
+    public static void RemoveWhere(JsonArray list, Func<JsonNode?, bool> match)
+    {
+        for (int i = list.Count - 1; i >= 0; i--)
+            if (match(list[i])) list.RemoveAt(i);
+    }
+
+    /// <summary>The Frenzy row's index in the copy <see cref="Edit"/> makes: the last of the statuses, whatever the files ship.</summary>
+    public static int RowIndex => Shipped("common/statuses.json", r => r["statuses"]!.AsArray(), n => (string?)n!["id"] == Status);
+
+    /// <summary>The Anointing's <c>statusDuration</c> effect's index in the copy <see cref="Edit"/> makes: the last of its effects.</summary>
+    public static int EffectIndex => Shipped("factions/teblor/techs.json", r => r["techs"]![0]!["effects"]!.AsArray(), IsStatusDuration);
+
+    // The shipped list's length less its entries Edit takes out: where Edit's appended entry lands.
+    private static int Shipped(string rel, Func<JsonNode, JsonArray> list, Func<JsonNode?, bool> taken)
+    {
+        JsonArray a = list(JsonNode.Parse(File.ReadAllText(Path.Combine(TestDataDir.Shipped, rel)))!);
+        int n = a.Count;
+        foreach (JsonNode? e in a)
+            if (taken(e)) n--;
+        return n;
     }
 
     private static readonly Lazy<GameData> s_data = new(() => AiScenes.DataWith(Edit));

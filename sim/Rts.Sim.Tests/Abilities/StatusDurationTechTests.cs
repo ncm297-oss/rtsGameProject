@@ -108,7 +108,7 @@ public class StatusDurationTechTests
     private static GameData With(Action<JsonObject> editEffect) => AiScenes.DataWith(dir =>
     {
         BloodOilScenes.Edit(dir);
-        dir.EditJson("factions/teblor/techs.json", r => editEffect(r["techs"]![0]!["effects"]![2]!.AsObject()));
+        dir.EditJson("factions/teblor/techs.json", r => editEffect(r["techs"]![0]!["effects"]![BloodOilScenes.EffectIndex]!.AsObject())); // BUG-1280: not a literal 2
     });
 
     private static readonly Lazy<GameData> s_shortening = new(() => With(e => e["amount"] = -20));

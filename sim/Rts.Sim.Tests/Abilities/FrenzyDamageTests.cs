@@ -184,4 +184,18 @@ public class FrenzyDamageTests
         Assert.Single(hits);
         Assert.Equal(1, hits[0].Damage);
     }
+
+    /// <summary>
+    /// M7-6 (BUG-1281): every <c>DamageToUnit</c> / <c>DamageToBuilding</c> form takes the status damage factor: the
+    /// (attackerType, owner) short forms, which had no caller and left the factor out, are gone, so no later caller can miss
+    /// the Frenzy's bonus by picking one.
+    /// </summary>
+    [Fact]
+    public void EveryDamageHelper_TakesTheStatusDamageFactor()
+    {
+        var forms = typeof(CombatSystem).GetMethods(System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic)
+            .Where(m => m.Name is "DamageToUnit" or "DamageToBuilding").ToArray();
+        Assert.Equal(2, forms.Length);
+        Assert.All(forms, m => Assert.Contains(m.GetParameters(), p => p.Name == "factor" && p.ParameterType == typeof(float)));
+    }
 }

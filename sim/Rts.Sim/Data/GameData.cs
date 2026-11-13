@@ -487,6 +487,12 @@ public sealed class GameData
             }
         h.Add(o.AttackMinHalfPop);
         h.Add(o.AttackMinCost);
+        // M7-6: only when the file carries it, so data without it hashes as before (the golden's header holds).
+        if (o.ReserveArmyShare is float share)
+        {
+            h.Add(1);
+            h.Add(share);
+        }
     }
 
     /// <summary>Every field of an attack (a unit's, or since M4-3b a building's).</summary>

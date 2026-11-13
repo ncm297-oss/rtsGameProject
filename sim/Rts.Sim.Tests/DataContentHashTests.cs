@@ -57,8 +57,20 @@ public class DataContentHashTests
     public void AnM74FieldInTheFiles_ChangesTheHash_ButABuildingScaleOfOneDoesNot(string field)
     {
         using TestDataDir dir = TestDataDir.CopyOfShipped();
-        JsonObject row = new() { ["id"] = "teblor_frenzied", ["displayName"] = "F", ["description"] = "T.", ["kind"] = "frenzied" };
-        dir.EditJson("common/statuses.json", r => r["statuses"]!.AsArray().Add(row));
+        // M7-6 (BUG-1280): the plain copy has none of the four, whether or not the data ships them: a shipped Frenzy row is
+        // replaced by the bare one, a shipped statusDuration effect and every Teblor building scale are taken out.
+        JsonObject row = new() { ["id"] = BloodOilScenes.Status, ["displayName"] = "F", ["description"] = "T.", ["kind"] = "frenzied" };
+        dir.EditJson("common/statuses.json", r =>
+        {
+            JsonArray list = r["statuses"]!.AsArray();
+            BloodOilScenes.RemoveWhere(list, n => (string?)n!["id"] == BloodOilScenes.Status);
+            list.Add(row);
+        });
+        dir.EditJson("factions/teblor/techs.json", r => BloodOilScenes.RemoveWhere(r["techs"]![0]!["effects"]!.AsArray(), BloodOilScenes.IsStatusDuration));
+        dir.EditJson("factions/teblor/buildings.json", r =>
+        {
+            foreach (JsonNode? b in r["buildings"]!.AsArray()) b!.AsObject().Remove("scale");
+        });
         DataLoadResult plain = DataLoader.LoadAll(dir.Path);
         Assert.True(plain.Ok, string.Join("; ", plain.Errors));
         switch (field)
@@ -72,7 +84,7 @@ public class DataContentHashTests
                 break;
             case "statusDuration":
                 dir.EditJson("factions/teblor/techs.json", r => r["techs"]![0]!["effects"]!.AsArray().Add(
-                    new JsonObject { ["stat"] = "statusDuration", ["amount"] = 4, ["statuses"] = new JsonArray("teblor_frenzied") }));
+                    new JsonObject { ["stat"] = "statusDuration", ["amount"] = 4, ["statuses"] = new JsonArray(BloodOilScenes.Status) }));
                 break;
             default:
                 dir.EditJson("factions/teblor/buildings.json", r => r["buildings"]![0]!["scale"] = field == "scale" ? 1.25 : 1);
@@ -82,6 +94,33 @@ public class DataContentHashTests
         Assert.True(load.Ok, string.Join("; ", load.Errors));
         if (field == "scale1") Assert.Equal(plain.Data!.ContentHash(), load.Data!.ContentHash());
         else Assert.NotEqual(plain.Data!.ContentHash(), load.Data!.ContentHash());
+    }
+
+    /// <summary>
+    /// M7-6 (Request 52): an opening's <c>attack.reserveArmyShare</c> is hashed only when a file carries it. Absent (the
+    /// shipped files: written back unchanged) hashes as the shipped data; carried, at any value (the rules' own included,
+    /// since the file says something else), moves the hash; two values differ.
+    /// </summary>
+    [Fact]
+    public void AnOpeningsReserveShare_InTheFiles_ChangesTheHash_AbsentDoesNot()
+    {
+        ulong Hash(double? share)
+        {
+            using TestDataDir dir = TestDataDir.CopyOfShipped();
+            dir.EditJson("factions/whirlwind/ai.json", r =>
+            {
+                if (share != null) AiScenes.Opening(r)["attack"]!["reserveArmyShare"] = share.Value;
+            });
+            DataLoadResult load = DataLoader.LoadAll(dir.Path);
+            Assert.True(load.Ok, string.Join("; ", load.Errors));
+            return load.Data!.ContentHash();
+        }
+        ulong shipped = TestSim.Data.ContentHash();
+        Assert.Equal(shipped, Hash(null));
+        ulong half = Hash(0.5), same = Hash(TestSim.Data.AiRules.ReserveArmyShare);
+        Assert.NotEqual(shipped, half);
+        Assert.NotEqual(shipped, same);
+        Assert.NotEqual(half, same);
     }
 
     /// <summary>
@@ -118,6 +157,7 @@ public class DataContentHashTests
         if (t == typeof(int)) return (int)value! + 1;
         if (t == typeof(uint)) return (uint)value! + 1;
         if (t == typeof(float)) return (float)value! + 0.5f;
+        if (t == typeof(float?)) return value is float f && f == 0.5f ? 0.25f : 0.5f; // M7-6: an opening's reserveArmyShare (absent -> set)
         if (t == typeof(bool)) return !(bool)value!;
         if (t == typeof(string)) return (string?)value + "x";
         if (t.IsEnum) return Enum.ToObject(t, Convert.ToInt32(value) + 1);
@@ -537,7 +577,8 @@ public class DataContentHashTests
             AiDef ai = d.Ai[slot];
             Check(ai.Openings[0], o => With(d, ai: WithOpenings(ai, ai.Openings.SetItem(0, o)), aiSlot: slot));
         }
-        foreach (string f in new[] { "Id", "DisplayName", "Description", "BuildOrder", "Compositions", "AttackMinHalfPop", "AttackMinCost" })
+        foreach (string f in new[] { "Id", "DisplayName", "Description", "BuildOrder", "Compositions", "AttackMinHalfPop", "AttackMinCost",
+            "ReserveArmyShare" }) // M7-6
             Assert.Contains($"AiOpening.{f}", checkedFields);
         Assert.True(checkedFields.Count >= 60, $"only {checkedFields.Count} fields checked");
     }
