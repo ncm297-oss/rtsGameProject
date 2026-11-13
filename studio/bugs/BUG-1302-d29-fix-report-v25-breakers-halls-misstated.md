@@ -3,7 +3,7 @@
 | Field | Value |
 | --- | --- |
 | Severity | S4 (report accuracy; the Producer's V24 / V14 choice rests on the conclusion's figures) |
-| Status | open |
+| Status | closed (answered at the 2026-11-12-0546 ACCEPT: V25 is named beside V24 in the session log's table and in the hand-over; no code or data to change. Set at the 2026-11-13-1118 PLAN) |
 | Found | 2026-11-12-0546, task D29 re-check (fix round 1, QA) |
 | System | D29 fix-round-1 report (conclusion); `Content/TeblorOpeningHorizonReportTests.Variants_Seeds1To5_To15Minutes_Report` |
 | Fixed by | |

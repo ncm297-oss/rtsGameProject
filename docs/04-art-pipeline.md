@@ -94,6 +94,16 @@ M6 look test still happens at the start of M6 (not earlier), now to confirm the 
 stack at RTS zoom and settle palettes, with MPFB2 (MakeHuman for Blender, CC0 output) as the
 step up if it still reads too soft.
 
+**The art call: "look: go" (owner decision 2026-11-12).** After the look test (below) the owner keeps the Quaternius
+stack and adds outfits and team colour: the art pass (M6 criterion 5's second half) builds on it, starting with the import
+tooling and the units the outfits on disk cover. **Inventory finding (Producer, 2026-11-13):** the Modular Character
+Outfits – Fantasy edition in `asset-sources/` (Standard and Source) holds **two outfits, Peasant and Ranger** (male and
+female, as whole outfits and as modular parts: arms, body, legs, feet, the Ranger's hood and pauldron), and no animal
+pack is on disk. Producer default until the owner says otherwise: workers wear the Peasant, ranged units the Ranger,
+and the other slots are those two outfits recoloured to the faction palette with weapons, shields and props kit-bashed
+in Blender for the silhouette; horses, dogs and siege engines stay placeholders until a source is chosen (the owner's
+download or an AI-generated model, "Coverage plan" below).
+
 | Pack | Source | Use |
 | --- | --- | --- |
 | Quaternius – Universal Animation Library 1 and 2 | <https://quaternius.com/packs/universalanimationlibrary.html> | 250+ animations on the Universal rig: locomotion, melee and armed combos, deaths, work actions |

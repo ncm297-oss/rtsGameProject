@@ -855,7 +855,7 @@ open S1 / S2. Retro below; open S3 / S4 listed there.)_
       puts a Quaternius Universal Base Character playing a UAL1 clip beside an Ultimate Fantasy RTS building (the stylized stand-in; the
       pack has no characters) and today's capsule under the real camera; screenshots `docs/images/look-test-2026-10-17[-far].png`;
       docs/04 "Look test (M6-V10)" and the first three licensing rows (Quaternius, CC0). Left: the owner's art call, then the real
-      models and animations through the manifest / import script.)
+      models and animations through the manifest / import script. **2026-11-13:** the owner's art call is made ("look: go": the Quaternius stack with outfits and team colour); the art pass starts with M6-V20 (the import tooling and two Malazan units).)
 - [ ] Real SFX and placeholder music; alerts with sound. (M6-V12, 2026-10-17-2344: **real SFX and the alerts are in**: 16 clips cut from
       the owner's Sonniss GDC 2026 bundle (`tools/audio/trim-wav.ps1` + `sfx-manifest.json`, LFS, docs/04 licensing rows) for 12 events
       (`SfxEvent`); world sounds only for what the local player sees on screen, at most 4 per 100 ms; attack alerts (`ViewApi/AttackAlerts`

@@ -9,10 +9,14 @@ Commit and push after editing, from either machine (or ask Claude to).
 
 ## New
 
+## Processed
+
 - 2026-11-12 · **The art call (owner): look: go.** Keep the Quaternius stack; add outfits + team colour (per the
   Producer's recommendation under STATE's "The art call"). Unblocks the art pass (M6 criterion 5's second half).
-
-## Processed
+  → Recorded at the 2026-11-13-1118 PLAN: docs/04 ("Humanoid base") and docs/01's change log carry the decision;
+  the art pass starts this session (view task M6-V20: the import tooling and the first two Malazan units, the Laborer
+  and the Crossbowman, with team colour). One finding for you: the outfit pack on disk holds two outfits only (Peasant,
+  Ranger), and there is no horse or dog pack; STATE's Waiting on you lists what that leaves and my default.
 
 - 2026-10-14 · **Producer's take wanted (owner), one-off session.** Before planning, please read the note below
   (Review answers + first playtest) and put a plain-language assessment at the top of STATE's "For your review":
