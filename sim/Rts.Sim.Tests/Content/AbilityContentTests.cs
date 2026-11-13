@@ -327,10 +327,11 @@ public class AbilityContentTests
     /// The loaded abilities and statuses with <paramref name="text"/> replaced by <paramref name="mutant"/> in the description
     /// of the ability or status <paramref name="key"/> (which must contain it).
     /// </summary>
-    public static (ImmutableArray<AbilityDef> Abilities, ImmutableArray<StatusDef> Statuses) WithDescription(string key, string text, string mutant)
+    public static (ImmutableArray<AbilityDef> Abilities, ImmutableArray<StatusDef> Statuses) WithDescription(string key, string text, string mutant,
+        GameData? data = null)
     {
-        ImmutableArray<AbilityDef> abilities = Data.Abilities;
-        ImmutableArray<StatusDef> statuses = Data.Statuses;
+        ImmutableArray<AbilityDef> abilities = (data ?? Data).Abilities;
+        ImmutableArray<StatusDef> statuses = (data ?? Data).Statuses;
         StatusDef? s = statuses.SingleOrDefault(x => x.Key == key);
         if (s != null)
         {
@@ -356,6 +357,8 @@ public class AbilityContentTests
     private static StatusDef CopyStatus(StatusDef s, string description) => new()
     {
         Id = s.Id, Key = s.Key, DisplayName = s.DisplayName, Description = description, Kind = s.Kind, DamageType = s.DamageType, Sight = s.Sight, Reach = s.Reach,
+        DamageBonus = s.DamageBonus, OnEndStatus = s.OnEndStatus, OnEndMagnitude = s.OnEndMagnitude, OnEndTicks = s.OnEndTicks,
+        StateHashId = s.StateHashId,
     };
 
     /// <summary>D10c: the description pin can fail, by name, for a stale number in an ability or a status tooltip.</summary>
@@ -635,6 +638,8 @@ public class AbilityContentTests
             Dictionary<Role, List<double>> roles = NoRoles();
             if (s.Sight > 0) roles[Role.Distance].Add(s.Sight);
             if (s.Reach > 0) roles[Role.Distance].Add(s.Reach);
+            // D30 (M7-4): a frenzied row's damage bonus and its aftermath are the row's own numbers.
+            AddRowNumbers(roles, statuses, s);
             var found = new List<string>();
             RoleProblems(s.Key, s.Description, roles, found);
             if (!PendingStatuses.Contains(s.DisplayName)) problems.AddRange(found);
@@ -660,9 +665,13 @@ public class AbilityContentTests
         _ => "damage per second",
     };
 
-    /// <summary>An applied (or zone) status's magnitude and duration, filed under the roles its kind's text would use.</summary>
+    /// <summary>
+    /// An applied (or zone) status's magnitude and duration, filed under the roles its kind's text would use, and (D30) the
+    /// status row's own numbers (<see cref="AddRowNumbers"/>), so an ability's text may state its status's damage bonus and
+    /// aftermath ("20% more damage, then Slowed 20% for 4 s").
+    /// </summary>
     private static void AddStatusNumbers(Dictionary<Role, List<double>> roles, IReadOnlyList<StatusDef> statuses, int status, float magnitude,
-        int durationTicks, Role durationRole)
+        int durationTicks, Role durationRole, bool withRow = true)
     {
         roles[durationRole].Add(Seconds(durationTicks));
         // A damage over time's magnitude is damage per second; any other magnitude (a slow's fraction) reads as a percentage.
@@ -671,6 +680,18 @@ public class AbilityContentTests
         bool dot = known && statuses[status].Kind == StatusKind.DamageOverTime;
         if (!known || dot) roles[Role.DamageRate].Add(magnitude);
         if ((!known || !dot) && magnitude > 0) roles[Role.Percent].Add(magnitude * 100.0);
+        if (known && withRow) AddRowNumbers(roles, statuses, statuses[status]);
+    }
+
+    /// <summary>
+    /// D30 (M7-4): a status row's own numbers beyond a blind's: its <c>damageBonus</c> x 100 as a percentage, and its
+    /// <c>onEnd</c> application read as an applied status (magnitude by that status's kind, duration a duration). The loader
+    /// refuses an <c>onEnd</c> naming a row with one of its own, so the aftermath's own row is not read again.
+    /// </summary>
+    private static void AddRowNumbers(Dictionary<Role, List<double>> roles, IReadOnlyList<StatusDef> statuses, StatusDef s)
+    {
+        if (s.DamageBonus > 0) roles[Role.Percent].Add(Math.Round(s.DamageBonus * 100.0, 3));
+        if (s.OnEndStatus >= 0) AddStatusNumbers(roles, statuses, s.OnEndStatus, s.OnEndMagnitude, s.OnEndTicks, Role.Duration, withRow: false);
     }
 
     /// <summary>
@@ -774,7 +795,8 @@ public class AbilityContentTests
     /// <c>applyStatus frenzied</c>) against teblor.md's row, with <paramref name="editRow"/> applied to the page row and the
     /// loaded ability's range, affects and status magnitude / seconds replaced in memory by the arguments (their defaults are
     /// the page's), so one page cell or one data value changed alone reads red. Until D28 this ran on Telas Fire's slot,
-    /// remade in memory, since no Teblor ability was loaded.
+    /// remade in memory, since no Teblor ability was loaded. D30: the status is the one the shipped ability applies (the
+    /// Zealot's <c>frenzied</c> until D31, <c>teblor_frenzied</c> after), so the pin holds on either side of the landing.
     /// </summary>
     private static Result CompareFrenzy(Func<string, string>? editRow = null, float magnitude = 0.4f, double seconds = 10, float range = 0,
         AbilityAffects affects = AbilityAffects.OwnUnits)
@@ -791,7 +813,7 @@ public class AbilityContentTests
             DurationTicks = a.DurationTicks, Affects = affects,
             Effects = ImmutableArray.Create(new AbilityEffect
             {
-                Kind = AbilityEffectKind.ApplyStatus, Status = Data.Statuses.Single(x => x.Key == "frenzied").Id,
+                Kind = AbilityEffectKind.ApplyStatus, Status = a.Effects.Single(x => x.Kind == AbilityEffectKind.ApplyStatus).Status,
                 Magnitude = magnitude, DurationTicks = (int)Math.Round(seconds * t),
             }),
         });
@@ -812,10 +834,10 @@ public class AbilityContentTests
     [InlineData("| 8 m |", "| 6 m |", "'Blood-oil Frenzy' Radius:")]
     [InlineData("| 0.5 s |", "| 1 s |", "'Blood-oil Frenzy' Cast:")]
     [InlineData("| 40 s | — |", "| 40 s | 10 s |", "'Blood-oil Frenzy' Duration:")]
-    [InlineData("(+40% attack speed)", "(+50% attack speed)", "'Blood-oil Frenzy' Effect:")]
+    [InlineData("(+40% attack speed", "(+50% attack speed", "'Blood-oil Frenzy' Effect:")]
     [InlineData("for 10 s", "for 14 s", "'Blood-oil Frenzy' Effect:")]
     [InlineData("Own units", "Allied units", "'Blood-oil Frenzy' Effect affects:")]
-    [InlineData("are Frenzied (+40% attack speed) for 10 s.", "are Frenzied (+40% attack speed) for 10 s, then Slowed 20%.", "'Blood-oil Frenzy' Effect status:")]
+    [InlineData("for 10 s", "for 10 s, then Blinded", "'Blood-oil Frenzy' Effect status:")]
     public void AMutatedFrenzyCell_FailsNamingTheColumn(string cell, string mutant, string want)
     {
         Result r = CompareFrenzy(row =>
@@ -991,6 +1013,7 @@ public class AbilityContentTests
                 StatusKind.Revealed => RevealedEffect,
                 _ => "",
             };
+            effect += RowRuleSuffix(data, statuses, s);
             if (row[1] != effect) sink.Add($"status '{s.Key}' Effect: docs/02 '{row[1]}', data {s.Kind} -> '{effect}'");
             // D12: a stealth status's description states its docs/02 rule in words (its numbers are rules.json's, not its own).
             foreach ((StatusKind kind, string claim, Regex says) in StealthClaims)
@@ -1019,6 +1042,19 @@ public class AbilityContentTests
                 sink.Add($"status '{name}' Typical source '{row[2]}' does not list '{a.DisplayName}', which applies it");
             }
         return r;
+    }
+
+    /// <summary>
+    /// D30 (M7-4): what docs/02's Effect cell adds after its kind's rule for a status row's own fields, in this order:
+    /// "; its own attacks deal +20% damage" (<c>damageBonus</c>) and "; when it ends: Slowed 20% for 4 s" (<c>onEnd</c>, the
+    /// aftermath as an ability's Effect cell writes an applied status). Empty for a row without them (every shipped row).
+    /// </summary>
+    public static string RowRuleSuffix(GameData data, IReadOnlyList<StatusDef> statuses, StatusDef s)
+    {
+        string suffix = "";
+        if (s.DamageBonus > 0) suffix += $"; its own attacks deal +{FactionPage.Text(Math.Round(s.DamageBonus * 100.0, 3))}% damage";
+        if (s.OnEndStatus >= 0) suffix += "; when it ends: " + AppliedText(data, statuses, s.OnEndStatus, s.OnEndMagnitude, s.OnEndTicks);
+        return suffix;
     }
 
     /// <summary>The status ids <paramref name="a"/> puts on units: its applyStatus effects' and its zones' statuses.</summary>
@@ -1486,6 +1522,12 @@ public class AbilityContentTests
             if (e.Kind == AbilityEffectKind.Damage || e.Kind == AbilityEffectKind.CreateZone) continue;
             string want = e.Kind == AbilityEffectKind.ApplyStatus ? StatusText(data, statuses, e) : e.Kind.ToString();
             if (!effect.Contains(want, StringComparison.Ordinal)) yield return ("Effect", $"'{effect}' does not say '{want}' ({e.Kind})");
+            // D30 (M7-4): an applied status with an aftermath says it, as an applied status reads ("Slowed 20% for 4 s").
+            if (e.Kind != AbilityEffectKind.ApplyStatus || statuses[e.Status].OnEndStatus < 0) continue;
+            StatusDef s = statuses[e.Status];
+            string after = AppliedText(data, statuses, s.OnEndStatus, s.OnEndMagnitude, s.OnEndTicks);
+            if (!effect.Contains(after, StringComparison.Ordinal))
+                yield return ("Effect onEnd", $"'{effect}' does not say '{after}' (data '{s.Key}' onEnd {statuses[s.OnEndStatus].Key} {FactionPage.Text(Math.Round(s.OnEndMagnitude, 4))} for {FactionPage.Text(Seconds(s.OnEndTicks))} s)");
         }
 
         // Zones (D10c): the statuses a createZone effect applies, by name and magnitude, and whether it hides its inside.
@@ -1508,6 +1550,9 @@ public class AbilityContentTests
 
         // The reverse: a status the cell names that no effect applies is a promise the data doesn't keep.
         var applied = AppliedStatuses(a).ToHashSet();
+        // D30: an applied status's aftermath is applied too (by the status row, when it ends).
+        foreach (int id in applied.ToArray())
+            if (id >= 0 && id < statuses.Count && statuses[id].OnEndStatus >= 0) applied.Add(statuses[id].OnEndStatus);
         foreach (StatusDef s in statuses)
             if (!applied.Contains(s.Id) && SaysStatus(effect, s.DisplayName))
                 yield return ("Effect status", $"'{effect}' names '{s.DisplayName}', which no data effect applies");
@@ -1558,11 +1603,26 @@ public class AbilityContentTests
             StatusKind.DamageOverTime =>
                 $"{s.DisplayName}: {FactionPage.Text(e.Magnitude)} {data.DamageTable.DamageTypeKeys[s.DamageType]} damage/s for {FactionPage.Text(Seconds(e.DurationTicks))} s",
             StatusKind.Slow => $"{s.DisplayName} {FactionPage.Text(Math.Round(e.Magnitude * 100.0, 3))}%",
-            // D-R36 (Blood-oil Frenzy, the first ability to apply it): the attack-speed share and how long it lasts.
+            // D-R36 (Blood-oil Frenzy, the first ability to apply it): the attack-speed share and how long it lasts; D30
+            // (M7-4): a row's damage bonus after the share, "(+40% attack speed, +20% damage)".
             StatusKind.Frenzied =>
-                $"{s.DisplayName} (+{FactionPage.Text(Math.Round(e.Magnitude * 100.0, 3))}% attack speed) for {FactionPage.Text(Seconds(e.DurationTicks))} s",
+                $"{s.DisplayName} (+{FactionPage.Text(Math.Round(e.Magnitude * 100.0, 3))}% attack speed"
+                + (s.DamageBonus > 0 ? $", +{FactionPage.Text(Math.Round(s.DamageBonus * 100.0, 3))}% damage" : "")
+                + $") for {FactionPage.Text(Seconds(e.DurationTicks))} s",
             _ => s.DisplayName,
         };
+    }
+
+    /// <summary>
+    /// D30 (M7-4): one application of <paramref name="status"/> as a page states it, with its duration: "Slowed 20% for 4 s",
+    /// "Burning: 10 magic damage/s for 4 s", a frenzied "Frenzied (+40% attack speed) for 4 s", any other kind its name and
+    /// "for N s". A status row's <c>onEnd</c> reads this way in an ability's Effect cell and in docs/02.
+    /// </summary>
+    public static string AppliedText(GameData data, IReadOnlyList<StatusDef> statuses, int status, float magnitude, int ticks)
+    {
+        StatusDef s = statuses[status];
+        string text = StatusText(data, statuses, new AbilityEffect { Kind = AbilityEffectKind.ApplyStatus, Status = status, Magnitude = magnitude, DurationTicks = ticks, DamageType = -1 });
+        return s.Kind is StatusKind.DamageOverTime or StatusKind.Frenzied ? text : $"{text} for {FactionPage.Text(Seconds(ticks))} s";
     }
 
     private static string? NumberProblem(string text, string suffix, double value)

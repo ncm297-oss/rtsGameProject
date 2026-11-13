@@ -31,10 +31,21 @@ public class TechContentTests
             new[] { ("armor", 2.0, "teblor_warrior"), ("armor", 2.0, "teblor_destrier_rider") }),
     };
 
-    private static GameData Data => TestSim.Data;
+    /// <summary>
+    /// D30: effects the page states whose rows land later (the page marks them "the row lands with D31";
+    /// <see cref="RuleRowClaims"/> holds that note to the data both ways). A accepts the faction's tech with all of them
+    /// appended to <see cref="Upgrade"/>'s effects, or with none; at the landing they move into <see cref="Upgrade"/>.
+    /// </summary>
+    private static readonly Dictionary<string, (string Stat, double Amount, string Target)[]> Landing = new()
+    {
+        ["teblor"] = new[] { ("statusDuration", 4.0, "teblor_frenzied") },
+    };
+
+    /// <summary>The shipped data, or a <see cref="ContentScope"/>'s copy (D30).</summary>
+    private static GameData Data => ContentScope.Data;
 
     private static JsonArray FileList(string faction) =>
-        JsonNode.Parse(File.ReadAllText(Path.Combine(TestDataDir.Shipped, "factions", faction, "techs.json")))!["techs"]!.AsArray();
+        JsonNode.Parse(ContentScope.ReadDataFile($"factions/{faction}/techs.json"))!["techs"]!.AsArray();
 
     private static TechDef[] FactionTechs(string faction)
     {
@@ -61,12 +72,16 @@ public class TechContentTests
         return (row[0], FactionPage.Num(row[6][..^2]));
     }
 
-    /// <summary>How the pages write one effect, without the unit: "Cusser cooldown 45 → 30 s", "range +4 m", "+20 HP".</summary>
+    /// <summary>
+    /// How the pages write one effect, without the unit: "Cusser cooldown 45 → 30 s", "range +4 m", "+20 HP", and (D30) a
+    /// <c>statusDuration</c> "duration +4 s" after the status's name.
+    /// </summary>
     private static string PagePhrase(string faction, TechEffect e, string unitName, out string ability)
     {
         ability = "";
         switch (e.Stat)
         {
+            case TechStat.StatusDuration: return $"duration {Signed(e.Amount / SimConstants.TicksPerSecond)} s";
             case TechStat.AbilityCooldown:
                 (ability, double cd) = Ability(faction, unitName);
                 return $"{ability} cooldown {Num(cd)} → {Num(cd + e.Amount / SimConstants.TicksPerSecond)} s";
@@ -77,11 +92,14 @@ public class TechContentTests
         }
     }
 
-    /// <summary>How a description states one effect's number: "from 45 to 30 s", "+4 m", "+20 HP".</summary>
+    /// <summary>How a description states one effect's number: "from 45 to 30 s", "+4 m", "+20 HP", (D30) "4 s longer".</summary>
     private static string DescriptionPhrase(string faction, TechEffect e, string unitName)
     {
         switch (e.Stat)
         {
+            case TechStat.StatusDuration:
+                double s = e.Amount / SimConstants.TicksPerSecond;
+                return $"{Num(Math.Abs(s))} s {(s > 0 ? "longer" : "shorter")}";
             case TechStat.AbilityCooldown:
                 double cd = Ability(faction, unitName).Cooldown;
                 return $"from {Num(cd)} to {Num(cd + e.Amount / SimConstants.TicksPerSecond)} s";
@@ -92,11 +110,25 @@ public class TechContentTests
         }
     }
 
+    /// <summary>
+    /// The one thing an effect changes, by its player-facing name: its unit, or (D30) for a <c>statusDuration</c> its status
+    /// (the pages and descriptions name the status, "Blood-oil Frenzy duration +4 s").
+    /// </summary>
     private static string UnitName(TechEffect e)
     {
+        if (e.Stat == TechStat.StatusDuration)
+        {
+            Assert.Single(e.Statuses);
+            return Data.Statuses[e.Statuses[0]].DisplayName;
+        }
         Assert.Single(e.Units);
         return Data.Units[e.Units[0]].DisplayName;
     }
+
+    /// <summary>The keys an effect targets: its units', or a <c>statusDuration</c>'s statuses'.</summary>
+    private static string Targets(TechEffect e) => e.Stat == TechStat.StatusDuration
+        ? string.Join(", ", e.Statuses.Select(x => Data.Statuses[x].Key))
+        : string.Join(", ", e.Units.Select(x => Data.Units[x].Key));
 
     /// <summary>
     /// One field of a pin: fails naming the tech (<paramref name="where"/>), the field and both values, "page X vs data Y"
@@ -130,22 +162,26 @@ public class TechContentTests
             Pin(where, "cost", Inv($"{u.Gold} / {u.Wood}"), Inv($"{t.CostGold} / {t.CostWood}"));
             Pin(where, "time", Inv($"{u.Seconds} s"), Seconds(t.ResearchTicks));
             Pin(where, "requires", Join(u.Requires), Join(t.Requires));
-            Pin(where, "effect count", u.Effects.Length, t.Effects.Length);
-            for (int i = 0; i < u.Effects.Length; i++)
+            // D30: the effects whose rows land later are all in the data or none (RuleRowClaims says which the page allows).
+            var effects = u.Effects;
+            if (Landing.TryGetValue(faction, out var later) && t.Effects.Length == u.Effects.Length + later.Length) effects = u.Effects.Concat(later).ToArray();
+            Pin(where, "effect count", effects.Length, t.Effects.Length);
+            for (int i = 0; i < effects.Length; i++)
             {
-                (string stat, double amount, string unit) = u.Effects[i];
+                (string stat, double amount, string unit) = effects[i];
                 TechEffect e = t.Effects[i];
-                double sim = stat == "abilityCooldown" ? amount * SimConstants.TicksPerSecond : amount;
+                double sim = stat is "abilityCooldown" or "statusDuration" ? amount * SimConstants.TicksPerSecond : amount;
                 Pin(where, $"effect {i}", $"{stat} {Num(sim)}", $"{DataLimits.TechStatIds[(int)e.Stat]} {Num(e.Amount)}");
-                Pin(where, $"effect {i} units", unit, string.Join(", ", e.Units.Select(x => Data.Units[x].Key)));
+                Pin(where, $"effect {i} {(stat == "statusDuration" ? "statuses" : "units")}", unit, Targets(e));
                 Pin(where, $"effect {i} filters", "attackType -1, siege -1, tags 0", Inv($"attackType {e.AttackType}, siege {e.Siege}, tags {e.Tags.Length}"));
+                if (stat != "statusDuration") Pin(where, $"effect {i} statuses", 0, e.Statuses.IsDefault ? 0 : e.Statuses.Length);
             }
 
             // The file holds seconds and the slot id, not ticks.
             JsonNode f = FileList(faction)[0]!;
             Pin(where, "file researchedAt", "forge", (string)f["researchedAt"]!);
             Pin(where, "file researchTime", (double)u.Seconds, (double)f["researchTime"]!);
-            Pin(where, "file effect amounts", string.Join(", ", u.Effects.Select(e => Num(e.Amount))),
+            Pin(where, "file effect amounts", string.Join(", ", effects.Select(e => Num(e.Amount))),
                 string.Join(", ", f["effects"]!.AsArray().Select(n => Num((double)n!["amount"]!))));
         }
     }

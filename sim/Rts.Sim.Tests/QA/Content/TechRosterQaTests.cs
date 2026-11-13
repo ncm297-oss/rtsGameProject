@@ -82,6 +82,16 @@ public class TechRosterQaTests
         {
             foreach (TechEffect e in t.Effects)
             {
+                // D30 (M7-4): a statusDuration effect names statuses, not units: each one an own ability puts on units.
+                if (e.Stat == TechStat.StatusDuration)
+                {
+                    Assert.NotEmpty(e.Statuses);
+                    int[] own = Data.Abilities.Where(a => a.Faction == t.Faction).SelectMany(a => a.Effects)
+                        .Where(x => x.Kind == AbilityEffectKind.ApplyStatus).Select(x => x.Status).ToArray();
+                    foreach (int s in e.Statuses)
+                        Assert.True(own.Contains(s), $"{t.Key} lengthens {Data.Statuses[s].Key}, which no own ability applies");
+                    continue;
+                }
                 Assert.NotEmpty(e.Units);
                 foreach (int u in e.Units)
                     Assert.True(Data.Units[u].Faction == t.Faction, $"{t.Key} affects another faction's {Data.Units[u].Key}");

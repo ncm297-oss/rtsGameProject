@@ -7,8 +7,12 @@ namespace Rts.Sim.Tests.Content;
 /// </summary>
 internal static class PageTables
 {
-    /// <summary>The lines of a markdown file under the repo root (<c>docs/02-game-design.md</c>).</summary>
-    public static string[] Lines(string relativePath) => File.ReadAllLines(Path.Combine(TestDataDir.RepoRoot(), relativePath));
+    /// <summary>
+    /// The lines of a markdown file under the repo root (<c>docs/02-game-design.md</c>); inside a <see cref="ContentScope"/>
+    /// that carries the doc (D30), the scope's lines.
+    /// </summary>
+    public static string[] Lines(string relativePath) =>
+        ContentScope.DocLines(relativePath) ?? File.ReadAllLines(Path.Combine(TestDataDir.RepoRoot(), relativePath));
 
     /// <summary>The lines of <c>docs/factions/&lt;faction&gt;.md</c>.</summary>
     public static string[] FactionLines(string faction) => Lines(FactionPath(faction));

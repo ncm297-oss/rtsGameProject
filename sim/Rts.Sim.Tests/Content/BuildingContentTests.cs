@@ -19,6 +19,16 @@ public class BuildingContentTests
     public static readonly string[] BuildingColumns =
         { "Slot", "Name", "Id", "HP", "Armor", "Cost (G/W)", "Build (s)", "Footprint", "Sight", "Provides", "Requires" };
 
+    /// <summary>
+    /// D30 (M7-4): the optional last column, a building's drawn size (<c>buildings.json</c> <c>scale</c>, as the Units table's
+    /// Scale). A page with a building whose scale is not 1 carries it (<see cref="ScaleProblems"/>); one without has none.
+    /// </summary>
+    public const string ScaleColumn = "Scale";
+
+    /// <summary>Whether <paramref name="header"/> is the Buildings header, with or without the <see cref="ScaleColumn"/>.</summary>
+    public static bool IsBuildingHeader(string[] header) =>
+        header.SequenceEqual(BuildingColumns) || header.SequenceEqual(BuildingColumns.Append(ScaleColumn));
+
     // docs/factions/<id>.md "Buildings": (slot, id, displayName), in DataLimits.BuildingSlotIds order.
     private static readonly Dictionary<string, (BuildingSlot Slot, string Id, string Name)[]> Roster = new()
     {
@@ -97,7 +107,8 @@ public class BuildingContentTests
         ["teblor_war_dog"] = BuildingSlot.ShockHall,
     };
 
-    private static GameData Data => TestSim.Data;
+    /// <summary>The shipped data, or a <see cref="ContentScope"/>'s copy (D30).</summary>
+    private static GameData Data => ContentScope.Data;
 
     /// <summary>The typed roster of <paramref name="faction"/>, failing by name when the data has a faction it lacks.</summary>
     private static (BuildingSlot Slot, string Id, string Name)[] RosterOf(string faction) =>
@@ -107,7 +118,7 @@ public class BuildingContentTests
         Data.Buildings.Where(b => Data.Factions[b.Faction].Key == faction).ToArray();
 
     private static JsonArray FileList(string faction) =>
-        JsonNode.Parse(File.ReadAllText(Path.Combine(TestDataDir.Shipped, "factions", faction, "buildings.json")))!["buildings"]!.AsArray();
+        JsonNode.Parse(ContentScope.ReadDataFile($"factions/{faction}/buildings.json"))!["buildings"]!.AsArray();
 
     [Fact]
     public void A_EachFaction_HasTenBuildings_OnePerSlot_InSlotOrder_TownHallFirst()
@@ -224,15 +235,15 @@ public class BuildingContentTests
         foreach (string faction in Factions)
         {
             (string[] header, _) = PageTables.NamedTable(PageTables.FactionLines(faction), "Buildings", faction + ".md");
-            Assert.True(header.SequenceEqual(BuildingColumns),
-                $"{faction}.md Buildings header: page '{string.Join(" | ", header)}' vs '{string.Join(" | ", BuildingColumns)}'");
+            Assert.True(IsBuildingHeader(header),
+                $"{faction}.md Buildings header: page '{string.Join(" | ", header)}' vs '{string.Join(" | ", BuildingColumns)}' (and optionally ' | {ScaleColumn}')");
             string[][] rows = FactionPage.Table(faction, "Buildings");
             Assert.Equal(RosterOf(faction).Length, rows.Length);
             for (int i = 0; i < rows.Length; i++)
             {
                 // Slot | Name | Id | HP | Armor | Cost (G/W) | Build (s) | Footprint | Sight | Provides | Requires (Sight: J)
                 string[] c = rows[i];
-                Assert.Equal(BuildingColumns.Length, c.Length);
+                Assert.Equal(header.Length, c.Length);
                 (BuildingSlot slot, string id, string name) = RosterOf(faction)[i];
                 var t = Template[slot];
                 string where = $"{faction}.md Buildings row {name}";
@@ -364,6 +375,42 @@ public class BuildingContentTests
     }
 
     private static string[][] PageTable(string faction) => FactionPage.Table(faction, "Buildings");
+
+    /// <summary>
+    /// D30 (M7-4): <paramref name="faction"/>'s Buildings table in <paramref name="lines"/> against each building's
+    /// <see cref="BuildingDef.Scale"/>, both ways: with a <see cref="ScaleColumn"/>, every row's cell is its building's
+    /// scale; without one, every building of the faction is at 1. Each problem names the page, the row and the field.
+    /// </summary>
+    public static List<string> ScaleProblems(GameData data, string faction, string[] lines)
+    {
+        var problems = new List<string>();
+        (string[] header, List<string[]> rows) = PageTables.NamedTable(lines, "Buildings", faction + ".md");
+        int col = Array.IndexOf(header, ScaleColumn);
+        int f = data.FindFaction(faction);
+        foreach (BuildingDef b in data.Buildings.Where(x => x.Faction == f))
+        {
+            string inData = FactionPage.Text(Math.Round(b.Scale, 4));
+            string[]? row = rows.FirstOrDefault(r => r.Length > 2 && r[2] == b.Key);
+            if (col < 0)
+            {
+                if (b.Scale != 1f) problems.Add($"{faction}.md Buildings row {b.DisplayName} scale: the page has no {ScaleColumn} column, data {inData}");
+                continue;
+            }
+            if (row == null) { problems.Add($"{faction}.md Buildings {b.Key} scale: data {inData}, no page row"); continue; }
+            if (row.Length <= col || row[col] != inData) problems.Add($"{faction}.md Buildings row {b.DisplayName} scale: page {(row.Length > col ? row[col] : "none")} vs data {inData}");
+        }
+        return problems;
+    }
+
+    [Fact]
+    public void L_ThePagesScaleColumn_IsBuildingDefScale_BothWays()
+    {
+        foreach (string faction in Factions)
+        {
+            List<string> problems = ScaleProblems(Data, faction, PageTables.FactionLines(faction));
+            Assert.True(problems.Count == 0, string.Join("\n", problems));
+        }
+    }
 
     [Fact]
     public void J_PageSight_IsBuildingDefSight_ForAll20Buildings_BothWays()

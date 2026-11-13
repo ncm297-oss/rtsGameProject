@@ -146,16 +146,20 @@ public class PagePinReadinessTests
             string want = Header(BuildingContentTests.BuildingColumns);
             BuildingSlot[] slots = Enum.GetValues<BuildingSlot>().OrderBy(s => DataLimits.BuildingSlotIds.IndexOf(SlotId(s))).ToArray();
             if (t == null) problems.Add($"{page}: no table under '## Buildings' (BuildingContentTests G)");
-            else if (Header(t.Value.Header) != want) problems.Add($"{page} Buildings header: '{Header(t.Value.Header)}' vs '{want}' (BuildingContentTests G)");
+            // D30: the optional Scale column last (BuildingContentTests L).
+            else if (!BuildingContentTests.IsBuildingHeader(t.Value.Header))
+                problems.Add($"{page} Buildings header: '{Header(t.Value.Header)}' vs '{want}' (and optionally ' | {BuildingContentTests.ScaleColumn}') (BuildingContentTests G)");
             else
             {
                 List<string[]> rows = t.Value.Rows;
+                int width = t.Value.Header.Length;
                 if (rows.Count != slots.Length) problems.Add($"{page} Buildings: {rows.Count} rows, expected {slots.Length} (one per slot)");
                 for (int k = 0; k < Math.Min(rows.Count, slots.Length); k++)
                 {
                     string[] r = rows[k];
                     string where = $"{page} Buildings row {r[1]}";
-                    if (r.Length != BuildingContentTests.BuildingColumns.Length) { problems.Add($"{where}: {r.Length} cells"); continue; }
+                    if (r.Length != width) { problems.Add($"{where}: {r.Length - width:+0;-0} cells against the header ({r.Length} for {width})"); continue; }
+                    if (width > BuildingContentTests.BuildingColumns.Length && !IsNum(r[^1])) problems.Add($"{where} {BuildingContentTests.ScaleColumn}: '{r[^1]}' is not a number");
                     if (r[0].Replace(" ", "") != slots[k].ToString()) problems.Add($"{where} Slot: '{r[0]}', expected {slots[k]} (the file's slot order)");
                     if (!Regex.IsMatch(r[2], @"^[a-z][a-z0-9_]*$", Opts)) problems.Add($"{where} Id: '{r[2]}' is not a snake_case id");
                     foreach (int c in new[] { 3, 4, 6, 8 })
@@ -337,7 +341,7 @@ public class PagePinReadinessTests
     [InlineData("| Hard | 0.5 |", "| Insane | 0.5 |", "teblor.md Difficulty rows: 'Easy, Normal, Insane'")]
     [InlineData("first at 8 army pop and 600 gold + wood", "first at 8 army pop", "teblor.md opening 1 `standard`: no 'Attack waves:")]
     [InlineData("a unit under 40% hp", "a unit below 40% hp", "teblor.md AI build order: no 'Retreat:")]
-    [InlineData("| Siege Works | Breaker's Hall |", "| Siege Works | Breaker's Hall | `x` |", "teblor.md Buildings row Breaker's Hall: 12 cells")]
+    [InlineData("| Siege Works | Breaker's Hall |", "| Siege Works | Breaker's Hall | `x` |", "teblor.md Buildings row Breaker's Hall: +1 cells against the header")]
     [InlineData("- **Defense** (the shared", "- **Defence** (the shared", "teblor.md AI build order: no 'Defense' bullet")]
     [InlineData("e.g. two Javelin Throwers from home", "e.g. a few Javelin Throwers from home", "teblor.md Defense: no 'One X (N gold + wood)")]
     [InlineData("`ai.recallHallHp` 0.5 of its", "`ai.recallHallHp` of its", "teblor.md Defense: does not quote `ai.recallHallHp`")]

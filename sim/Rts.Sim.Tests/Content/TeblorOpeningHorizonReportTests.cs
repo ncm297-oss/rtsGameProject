@@ -46,6 +46,12 @@ public class TeblorOpeningHorizonReportTests(ITestOutputHelper output)
         int ExpandedAt, string NeverBuilt, bool Breakers, bool Shamans, bool Stables, int AnointedAt, bool[] Fielded, int DefeatedAt, int OtherDefeatedAt,
         int Gatherers10, int Gatherers15, int Army10, int Army15)
     {
+        /// <summary>D30: the Teblor AI's <c>UseAbility</c> commands sent (every one a Shaman's Blood-oil Frenzy: the faction's one ability).</summary>
+        public int CastsSent { get; init; }
+
+        /// <summary>D30: the casts that landed (a Shaman's ability ready tick moved), counted at each second's scan.</summary>
+        public int CastsLanded { get; init; }
+
         public bool Age10 => AgeTwoAt >= 0 && AgeTwoAt <= Ten;
         public bool Age15 => AgeTwoAt >= 0;
         public bool Wave10 => Waves10 > 0;
@@ -230,7 +236,10 @@ public class TeblorOpeningHorizonReportTests(ITestOutputHelper output)
         var fielded = new bool[ageTwoUnits.Length];
         int gatherer = data.FindUnit("teblor_gatherer");
         int anoint = data.FindTech("teblor_blood_oil_anointing");
-        int ageAt = -1, waves10 = 0, expanded = -1, fell = -1, otherFell = -1, g10 = 0, a10 = 0;
+        int ageAt = -1, waves10 = 0, expanded = -1, fell = -1, otherFell = -1, g10 = 0, a10 = 0, landed = 0;
+        int shaman = data.FindUnit("teblor_shaman");
+        var readyWas = new int[w.Units.Capacity];
+        var generationWas = new int[w.Units.Capacity];
         while (sim.TickNumber < Fifteen)
         {
             sim.Tick();
@@ -250,11 +259,23 @@ public class TeblorOpeningHorizonReportTests(ITestOutputHelper output)
             }
             if (expanded < 0 && halls >= 2) expanded = now;
             for (int k = 0; k < ageTwoUnits.Length; k++) if (!fielded[k] && Count(w, p, ageTwoUnits[k]) > 0) fielded[k] = true;
+            // D30: a Shaman's ability ready tick is 0 from its spawn and moves to now + cooldown at each cast (40 s, so a 1 s
+            // scan sees each); a new unit in a reused slot (another generation) starts the mark again.
+            var us = w.Units;
+            for (int s = 0; s < us.Capacity; s++)
+            {
+                if (!us.Alive[s] || us.Owner[s] != p || us.TypeId[s] != shaman) continue;
+                if (us.Generation[s] != generationWas[s]) (generationWas[s], readyWas[s]) = (us.Generation[s], 0);
+                int ready = us.AbilityReadyTick[s * DataLimits.MaxUnitAbilities];
+                if (ready > readyWas[s]) landed++;
+                readyWas[s] = ready;
+            }
         }
         Assert.Equal(Fifteen, sim.TickNumber);
         string never = string.Join(",", kinds.Where(k => !built[k]).Select(k => data.Buildings[k].Key.Replace("teblor_", "")));
         return new Row(variant, seed, map, opponent, p, ageAt, waves10, ai.Board.WavesStarted, expanded, never == "" ? "-" : never,
-            built[breakers], built[shamans], built[stables], w.TechResearchedTick(p, anoint), fielded, fell, otherFell, g10, Count(w, p, gatherer), a10, Army(w, p));
+            built[breakers], built[shamans], built[stables], w.TechResearchedTick(p, anoint), fielded, fell, otherFell, g10, Count(w, p, gatherer), a10, Army(w, p))
+        { CastsSent = ai.Board.CastsSent, CastsLanded = landed };
     }
 
     private static int Count(World w, int player, int type)
@@ -274,7 +295,7 @@ public class TeblorOpeningHorizonReportTests(ITestOutputHelper output)
         return half;
     }
 
-    private static List<Row> PlayAll(List<(string V, GameData D, string M, string O, ulong S, bool X)> jobs)
+    internal static List<Row> PlayAll(List<(string V, GameData D, string M, string O, ulong S, bool X)> jobs)
     {
         var rows = new Row[jobs.Count];
         var errors = new ConcurrentQueue<string>();
@@ -288,7 +309,7 @@ public class TeblorOpeningHorizonReportTests(ITestOutputHelper output)
         return rows.ToList();
     }
 
-    private static string T(int tick) => tick < 0 ? "never" : $"{tick / Tps / 60}:{tick / Tps % 60:00}";
+    internal static string T(int tick) => tick < 0 ? "never" : $"{tick / Tps / 60}:{tick / Tps % 60:00}";
 
     // ---------- print ----------
 

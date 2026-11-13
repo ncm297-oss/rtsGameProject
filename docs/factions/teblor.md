@@ -5,7 +5,8 @@
 This page was written ahead of the roster (D-R36, 2026-11-10) and the files under `game/data/factions/teblor/` were
 copied from it in D28 (2026-11-11): the content pins compare every table, note and player-facing word here with the files,
 both ways, as for the other factions. Where the design asks for something the data format can't hold yet, the page says
-so next to it ("not in the data").
+so next to it ("not in the data"); where the rule exists but the faction's row has not landed, it says when the row lands
+("the rows land with D31"), and `Content/RuleRowClaimTests` holds such a note to the data both ways.
 
 ## Lore hook
 
@@ -24,8 +25,9 @@ They lose to kiting, focus fire, and magic.
 
 ## Faction bonus: Children of the Mountains
 
-- Every unit but the War-dog is drawn at **1.5× scale** (`units.json` `scale` 1.5; the War-dog 1, normal-sized). Visual
-  only: collision radius 0.75 m, still under the half-cell cap.
+- Every unit but the War-dog is drawn **1.5× as tall** (`units.json` `scale` 1.5; the War-dog 1, normal-sized). A unit
+  is drawn as wide as its room, its collision radius (0.75 m for the giants, still under the half-cell cap), and `scale`
+  is its height (docs/03 "Implementation (M7-V3c)"). Visual only.
 - Combat units cost **2-3 population** (the War-dog 1 a dog); workers cost 1.
 - All units **regenerate 1 HP/s** after 6 s without taking damage (`faction.json` `regen`
   `{ "hpPerSecond": 1, "delay": 6 }`, docs/03 "Implementation (M7-1)").
@@ -37,7 +39,7 @@ They lose to kiting, focus fire, and magic.
 ## Faction upgrade: Blood-oil Anointing
 
 Age II, at the Bloodwood Carver, 200 G / 150 W, 45 s. Warriors and Destrier Riders gain **+2 armor**; Blood-oil Frenzy
-**duration +4 s** (not in the data: no tech stat lengthens a status, a request to the sim track).
+**duration +4 s** (the rule exists (M7-4); the row lands with D31).
 
 ## Units
 
@@ -87,10 +89,10 @@ In `abilities.json`: `kind` `selfAura` (no range), `radius` 8, `castTime` 0.5, `
 effect `{ "kind": "applyStatus", "status": "frenzied", "magnitude": 0.4, "duration": 10 }`. The 10 s is the status's,
 so the Duration column (the ability's own, a zone's life) is "—", as for Telas Fire.
 
-Two parts of the design are **not in the data** until the sim has them: **+20% damage** while Frenzied (the `frenzied`
-status has one magnitude, attack speed; a damage share is a request to the sim track), and the **aftermath**: when the
-Frenzy ends the units are Slowed 20% for 4 s (M7-4, not in the data until then). The aftermath slow is the trade-off:
-Frenzy wins fights, but a Frenzied army can't chase or escape right afterward.
+Two parts of the design wait for their rows: **+20% damage** while Frenzied, and the **aftermath**, Slowed 20% for 4 s
+when the Frenzy ends (the rules exist (M7-4: a status's `damageBonus` and `onEnd`, on a Teblor status of its own beside
+the Zealot's `frenzied`); the rows land with D31). The aftermath slow is the trade-off: Frenzy wins fights, but a
+Frenzied army can't chase or escape right afterward.
 
 ## Ranged unit or pure melee? (decided 2026-10-02: Javelin Thrower)
 
@@ -118,8 +120,8 @@ Kept for the record, in case playtests reopen it.
 
 Building stats are the template's in [02-game-design.md](../02-game-design.md#buildings), unchanged: HP, armor, cost,
 build time, footprint, sight and the Watch Tower's attack and detector (the rows above are the template's numbers with
-the Teblor names, in the slot order of the file). Models are 1.25× scale visually but keep template footprints (a
-building has no `scale` field; the view's call).
+the Teblor names, in the slot order of the file). Models are 1.25× scale visually but keep template footprints
+(`buildings.json` `scale`, the view's model size; the rule exists (M7-4); the row lands with D31).
 
 `Content/BuildingContentTests` and `UnitContentTests` pin this page to the data.
 
@@ -130,7 +132,8 @@ building has no `scale` field; the view's call).
 | `teblor_blood_oil_anointing` | Blood-oil Anointing | Bloodwood Carver | 200 / 150 | 45 | Age II | Warrior +2 armor; Destrier Rider +2 armor |
 
 The faction upgrade is the only faction-specific tech: two `armor` effects, one per unit (`appliesTo` `units`
-`["teblor_warrior"]`, then `["teblor_destrier_rider"]`). Its Frenzy duration +4 s is not in the data (above). The
+`["teblor_warrior"]`, then `["teblor_destrier_rider"]`). Its Frenzy duration +4 s is a third effect, a `statusDuration`
+on the Frenzy's status (the rule exists (M7-4); the row lands with D31). The
 common techs are the same as for every faction: Age II at the Longhouse, and the six shared Forge upgrades (Melee
 Weapons, Ranged Weapons, Armor, each with a level II in Age II) at the Bloodwood Carver, in
 [02-game-design.md "Forge upgrades"](../02-game-design.md#forge-upgrades). `Content/TechContentTests` pins this table
