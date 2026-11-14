@@ -19,7 +19,9 @@ namespace Rts.Game.Tests;
 /// Cost: <c>... -- --bench 30 [--vsync off]</c> stages 200 units a side (Laborers and Crossbowmen alternating), sends each
 /// side at the other (moving, then fighting) under the default zoom, and prints the frame times (average, 99th percentile,
 /// the worst 1 % averaged), draw calls, and nodes and materials per unit; with <c>--placeholder-art</c> the same run on
-/// capsules. Prints "MODEL SHOTS DONE" and quits.
+/// capsules; <c>--per-side N</c> stages N a side (M6-VH7). <c>--skirmish &lt;dir&gt;</c> also saves <c>models-gather-20m.png</c> /
+/// <c>-40m.png</c> on a gatherer; <c>--crowd-look &lt;dir&gt;</c> saves <c>models-crowd-20m.png</c> / <c>-40m.png</c>, two
+/// groups walking at each other until they fight (M6-VH7: the crowd animation's look). Prints "MODEL SHOTS DONE" and quits.
 /// </remarks>
 public partial class ModelShots : Node
 {
@@ -34,6 +36,7 @@ public partial class ModelShots : Node
         string? look = Arg(args, "--look");
         string? bench = Arg(args, "--bench");
         string? skirmish = Arg(args, "--skirmish");
+        string? crowd = Arg(args, "--crowd-look");
         try
         {
             DataLoadResult loaded = DataLoader.LoadAll(ProjectSettings.GlobalizePath("res://data"));
@@ -55,6 +58,7 @@ public partial class ModelShots : Node
             if (look != null) await Look(data, look);
             if (bench != null) await Bench(data, double.Parse(bench, CultureInfo.InvariantCulture));
             if (skirmish != null) await Skirmish(data, skirmish);
+            if (crowd != null) await CrowdLook(data, crowd);
         }
         catch (Exception ex)
         {
@@ -109,7 +113,9 @@ public partial class ModelShots : Node
     {
         int[] types = { data.FindUnit("malazan_laborer"), data.FindUnit("malazan_crossbowman") };
         NVector2 c = Centre();
-        const int perSide = 200, columns = 20;
+        // --per-side N (M6-VH7): 500 gives BUG-1321's 1,000-unit run.
+        int perSide = int.Parse(Arg(OS.GetCmdlineUserArgs(), "--per-side") ?? "200", CultureInfo.InvariantCulture);
+        const int columns = 20;
         for (int p = 0; p < 2; p++)
             for (int k = 0; k < perSide; k++)
             {
@@ -140,6 +146,9 @@ public partial class ModelShots : Node
         }
         if (noAnim || noShadows) GD.Print($"bench: split{(noAnim ? " --no-anim" : "")}{(noShadows ? " --no-model-shadows" : "")}");
         var stats = new FrameTimeStats();
+        // M6-VH7: the whole run's average falls as the units die (two thirds by the end); the full-crowd figure is the
+        // frames while at least 90 % of them live.
+        var full = new FrameTimeStats();
         ulong last = Time.GetTicksUsec(), end = last + (ulong)(seconds * 1e6);
         long drawCalls = 0, objects = 0, frames = 0;
         int attacking = 0;
@@ -148,6 +157,7 @@ public partial class ModelShots : Node
             await Frames(1);
             ulong now = Time.GetTicksUsec();
             stats.Add((now - last) / 1000.0);
+            if (u.Count * 10 >= alive * 9) full.Add((now - last) / 1000.0);
             last = now;
             drawCalls += (long)RenderingServer.GetRenderingInfo(RenderingServer.RenderingInfo.TotalDrawCallsInFrame);
             objects += (long)RenderingServer.GetRenderingInfo(RenderingServer.RenderingInfo.TotalObjectsInFrame);
@@ -169,9 +179,13 @@ public partial class ModelShots : Node
         for (int i = 0; i < u.Capacity; i++) if (u.Alive[i]) still++;
         GD.Print($"bench: models {(UnitViews.UseModels ? "on" : "off (--placeholder-art)")}, {alive} units ({still} alive at the end), {frames} frames in {seconds} s, first attack at frame {attacking}");
         GD.Print($"bench: frame ms average {stats.Average:F2} ({1000.0 / Math.Max(stats.Average, 1e-3):F0} FPS), p99 {stats.Percentile(0.99):F2}, worst 1% {worst1:F2}, worst {stats.Worst:F2}");
+        double fullWorst1 = 0;
+        for (int k = 0; k < 10; k++) fullWorst1 += full.Percentile(0.99 + k * 0.001);
+        GD.Print($"bench: while >= 90% alive ({full.Count} frames): frame ms average {full.Average:F2} ({1000.0 / Math.Max(full.Average, 1e-3):F0} FPS), worst 1% {fullWorst1 / 10:F2}");
         GD.Print($"bench: draw calls / frame {drawCalls / Math.Max(frames, 1)}, objects / frame {objects / Math.Max(frames, 1)}");
         if (model >= 0) GD.Print($"bench: a model unit has {Nodes(_views.ViewOf(model)!)} nodes, {_views.ModelMeshOf(model)!.Mesh.GetSurfaceCount()} surfaces (materials), skeleton bones 65");
         if (capsule >= 0) GD.Print($"bench: a capsule unit has {Nodes(_views.ViewOf(capsule)!)} nodes, 1 surface");
+        GD.Print($"bench: crowd animation (M6-VH7) last frame: {_views.Crowd.AdvancedLastFrame} of {_views.Crowd.EligibleLastFrame} shown players advanced ({CrowdAnimator.FullRateCount} nearest every frame, the rest 1 frame in {CrowdAnimator.StaggerFrames})");
         GD.Print($"bench: unit views {_views.NodeCount} slot nodes, {_views.ModelNodeCount} model instances, team materials {_views.Models?.TeamMaterialCount ?? 0}");
     }
 
@@ -207,6 +221,57 @@ public partial class ModelShots : Node
         Image img = GetViewport().GetTexture().GetImage();
         img.SavePng(System.IO.Path.Combine(dir, "models-skirmish.png"));
         GD.Print("saved models-skirmish.png");
+        // M6-VH7: the gatherers close up, at 20 m and 40 m, under the crowd animation schedule.
+        for (int i = 0; i < u.Capacity; i++)
+        {
+            if (!u.Alive[i] || u.Owner[i] != player || u.State[i] != UnitState.Gathering) continue;
+            _camera.SetFocus(u.Position[i].X, u.Position[i].Y);
+            break;
+        }
+        await Shots(dir, "models-gather");
+    }
+
+    // M6-VH7: walking and attacking figures at 20 m and 40 m (the crowd animation's look): 20 Laborers and 20 Crossbowmen a
+    // side (80: more than the 48 animated every frame), 26 m apart, attack-moved at each other; the pictures once the first fights have started.
+    private async Task CrowdLook(GameData data, string dir)
+    {
+        int[] types = { data.FindUnit("malazan_laborer"), data.FindUnit("malazan_crossbowman") };
+        NVector2 c = Centre();
+        for (int p = 0; p < 2; p++)
+            for (int k = 0; k < 40; k++)
+                Spawn(p, types[k % 2], c + new NVector2((p == 0 ? -1f : 1f) * (13f + (k / 8) * 1.4f), (k % 8 - 4) * 1.4f));
+        long at = _sim.TickNumber;
+        while (_sim.TickNumber < at + 4) await Frames(1);
+        UnitStore u = _sim.World.Units;
+        for (int i = 0; i < u.Capacity; i++)
+            if (u.Alive[i]) _sim.Enqueue(Command.AttackMove(u.Owner[i], new EntityHandle(i, u.Generation[i]), c + new NVector2(u.Owner[i] == 0 ? 20f : -20f, 0f)));
+        int attacking = 0;
+        for (int t = 0; t < 20 * 20 && attacking < 4; t++)
+        {
+            long now = _sim.TickNumber;
+            while (_sim.TickNumber == now) await Frames(1);
+            attacking = 0;
+            for (int i = 0; i < u.Capacity; i++) if (u.Alive[i] && u.State[i] == UnitState.Attacking) attacking++;
+        }
+        var states = new int[8];
+        for (int i = 0; i < u.Capacity; i++) if (u.Alive[i]) states[(int)u.State[i]]++;
+        GD.Print($"crowd look: moving {states[(int)UnitState.Moving]} attacking {states[(int)UnitState.Attacking]} idle {states[(int)UnitState.Idle]}");
+        _camera.SetFocus(c.X, c.Y);
+        await Shots(dir, "models-crowd");
+    }
+
+    // One picture at 20 m and one at 40 m; the sim keeps running between them (the figures move on).
+    private async Task Shots(string dir, string stem)
+    {
+        foreach (float zoom in new[] { CameraLimits.MinZoom, CameraLimits.DefaultZoom })
+        {
+            _camera.SetZoom(zoom);
+            await Frames(8);
+            Image img = GetViewport().GetTexture().GetImage();
+            string name = $"{stem}-{zoom:0}m.png";
+            img.SavePng(System.IO.Path.Combine(dir, name));
+            GD.Print($"saved {name}; crowd animation: {_views.Crowd.AdvancedLastFrame} of {_views.Crowd.EligibleLastFrame} shown players advanced in the last frame");
+        }
     }
 
     private static int Nodes(Node n)

@@ -735,7 +735,39 @@ public static partial class DataLoader
             Detector = u.Detector == null ? 0f : (float)c.Sight(u.Detector, p + ".detector", u.Id!, "detector"),
             Scale = (float)scale,
             SpawnCount = spawnCount,
+            Carry = OptionalCarry(c, u.Carry, p + ".carry", slot == (int)UnitSlot.Worker, u.Id),
         };
+    }
+
+    /// <summary>
+    /// M7-7 (Request 48): a worker's own load a trip, optional: a whole number 1 to <see cref="DataLimits.MaxInteger"/> (the
+    /// range of <c>rules.json</c> <c>workerCarry</c>); 0 (none: the rules' value) when absent or refused. A JSON null, a string, a fraction, a value
+    /// outside the range, or the field on a unit that is not a worker (only workers gather) is one error at <paramref name="path"/>.
+    /// </summary>
+    private static int OptionalCarry(Checker c, RawValue? raw, string path, bool worker, string? id)
+    {
+        if (raw == null) return 0;
+        if (raw.Token == System.Text.Json.JsonTokenType.Null)
+        {
+            c.Error(path, "null is not a carry (leave the field out to use rules.workerCarry)");
+            return 0;
+        }
+        if (raw.Number is not double value)
+        {
+            c.Error(path, $"wrong type of value: expected a whole number 1-{DataLimits.MaxInteger}");
+            return 0;
+        }
+        if (!(value >= 1 && value <= DataLimits.MaxInteger && value == Math.Floor(value)))
+        {
+            c.Error(path, $"{id}: carry {value.ToString(CultureInfo.InvariantCulture)} is not a whole number 1-{DataLimits.MaxInteger}");
+            return 0;
+        }
+        if (!worker)
+        {
+            c.Error(path, $"{id}: only a worker carries resources (its slot is not 'worker')");
+            return 0;
+        }
+        return (int)value;
     }
 
     private static AttackDef BuildAttack(Checker c, AttackJson? a, string p, DamageTable? table, ProjectileDef[]? projectiles)

@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S4 |
-| Status | open |
+| Status | open (items 2 and 3 fixed in D-H8; item 1 is the view's) |
 | Found | 2026-11-13-1118, task D30 |
 | System | `docs/factions/teblor.md`, `Content/TeblorLanding`, `Content/TeblorLandingWriteTests` |
-| Fixed by | |
+| Fixed by | items 2-3: D-H8 (2026-11-13-2306). Item 2: `TeblorLanding.FrenzyDescription` states 40% faster, 20% more damage, Slowed 20% for 4 seconds, pinned both ways (`TeblorLandingPinTests.TheFrenzyTooltip_*`); the landing page's Owner review table gains the `statuses.json` `teblor_frenzied` row (`TeblorRosterPinTests.TheLandingsStatusRow_IsHeldBothWays`). Item 3: the write helper edits the files' text (`TeblorLanding.EditText`, `DocText`; `TeblorLandingTextEditTests`): ten one-field edits are ten added lines, line endings kept, idempotent. Item 1 open (view) |
 
 ## Repro
 1. Read `docs/factions/teblor.md` "Buildings" prose (line 123-124) and `grep -rn "\.Scale" game/scripts` (only `UnitDef.Scale`

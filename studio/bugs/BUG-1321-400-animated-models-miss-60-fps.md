@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S3 (the brief scoped optimisation out of M6-V20: "measure only". By the table this is "perf budget blown" (S2); the Producer decides) |
-| Status | open |
+| Status | fixed for the 400-figure target (rule 60 lifted); 1,000 figures are still over a frame, see Fixed by |
 | Found | 2026-11-13-1118, task M6-V20 (QA) |
 | System | unit views (models, animation) |
-| Fixed by | |
+| Fixed by | M6-VH7 (2026-11-13-2306, view 4b8f1b6): the 40 finger bone tracks dropped at import (library 509,800 to 234,948 bytes) and `CrowdAnimator` (the 48 figures nearest the camera advance every frame, the rest one frame in 3 by the time waited). **The Producer alone at ACCEPT (no other test process, the merged tree, 1600x900, vsync off, 30 s, three runs):** 400 models 7.26-7.29 ms over the whole run, **10.05 / 10.05 / 10.11 ms while 90%+ are alive**, worst 1% 15.6-15.9 ms; 400 capsules 0.75 ms; 1,000 models 23.2 ms (26.5 ms while 90%+ alive, worst 1% 34.4 ms), 1,000 capsules 1.14 ms. 1,000 animated figures are still about 10,500 draw calls: a later task (a shared skeleton, baked animation or merged surfaces) before a full roster of models meets a 1,000-unit fight; kept in the view's debt list, no new bug id until a brief sets that target |
 
 ## Repro
 1. `& $env:GODOT --path game --resolution 1600x900 res://tests/ModelShots.tscn -- --bench 30 --vsync off` (400 units,

@@ -24,6 +24,10 @@ namespace Rts.Game.Tests;
 /// reused capsule, model, capsule, model; a forged data copy whose <c>model</c> points nowhere and an LFS pointer in a
 /// model's place (both capsules); a forged <c>scale</c> 1.5 drawn uniformly; <see cref="UnitViews.UseModels"/> off; and a
 /// steady frame of 200 animated models allocating nothing in the view's code.
+/// M6-VH7: a model shows no worker state tint, its team surface draws the owner's colour while gathering and returning
+/// (BUG-1320); a reused slot's model child is named <c>Model</c> and a team-less model warns once over three binds
+/// (BUG-1322); the crowd schedule (<see cref="CrowdAnimator"/>) under a camera over 400 models (the nearest every frame,
+/// every shown one within the stagger period, none hidden); the steady row runs the schedule too.
 /// </remarks>
 public partial class ModelViewTest : Node
 {
@@ -71,6 +75,8 @@ public partial class ModelViewTest : Node
         views.QueueFree();
         await MenuRow(data);
         ForgedRows(dataDir, data);
+        WarningRow(data);
+        await StaggerRow(data);
         await SteadyRow(data);
     }
 
@@ -195,12 +201,21 @@ public partial class ModelViewTest : Node
         u.State[lab] = UnitState.Building;
         views.Sync(w, 1f);
         CheckClip(views, lab, "build", "a building laborer");
-        Check(views.ModelMeshOf(lab)?.MaterialOverlay == views.TintOf(UnitState.Building), "the build tint is not on the model's mesh");
+        // M6-VH7, BUG-1320: no worker state tint over a model (it hid the outfit and the team colour); the state is still
+        // recorded, and a capsule keeps its tint (EconomyViewTest).
+        Check(views.ModelMeshOf(lab)?.MaterialOverlay == null && views.ShownTint(lab) == UnitState.Building,
+            $"a building laborer model: overlay {views.ModelMeshOf(lab)?.MaterialOverlay} (want none), shown tint {views.ShownTint(lab)}");
         u.State[lab] = UnitState.Gathering;
         u.GatherNode[lab] = default;
         u.CargoKind[lab] = ResourceKind.Wood;
         views.Sync(w, 1f);
         CheckClip(views, lab, "gather_wood", "a laborer gathering wood");
+        TeamSurfaceRow(views, lab, laborer, UnitViews.ColorFromRgb(rgb[0]), "a gathering laborer");
+        u.State[lab] = UnitState.Returning;
+        views.Sync(w, 1f);
+        TeamSurfaceRow(views, lab, laborer, UnitViews.ColorFromRgb(rgb[0]), "a returning laborer");
+        u.State[lab] = UnitState.Gathering;
+        views.Sync(w, 1f);
         u.CargoKind[lab] = ResourceKind.Gold;
         u.Cargo[lab] = 5;
         views.Sync(w, 1f);
@@ -229,7 +244,9 @@ public partial class ModelViewTest : Node
             Check(views.ViewOf(a)!.Visible, $"reused slot {a} ({data.Units[kind].Key}) hidden");
             Check(model ? views.ViewOf(a)!.Mesh == null && views.ModelOf(a) != null : views.ViewOf(a)!.Mesh == views.MeshOf(kind) && views.ModelOf(a) == null,
                 $"reused slot {a} as {data.Units[kind].Key}: mesh {views.ViewOf(a)!.Mesh}, model {views.ModelOf(a)}");
-            if (model) Check(views.ModelOf(a) != first && (views.ModelMeshOf(a)?.GetSurfaceOverrideMaterial(views.Models.TeamSurface(kind)) as ShaderMaterial)?.GetShaderParameter("team_colour").AsColor() == UnitViews.ColorFromRgb(rgb[1]),
+            if (model) Check(views.ModelOf(a)?.Name == "Model" && views.ViewOf(a)!.GetNodeOrNull("Model") == views.ModelOf(a),
+                $"reused slot {a} as {data.Units[kind].Key}: the model child is named '{views.ModelOf(a)?.Name}', want 'Model' (BUG-1322)");
+            if (model) Check(views.ModelOf(a) != first &&(views.ModelMeshOf(a)?.GetSurfaceOverrideMaterial(views.Models.TeamSurface(kind)) as ShaderMaterial)?.GetShaderParameter("team_colour").AsColor() == UnitViews.ColorFromRgb(rgb[1]),
                 $"reused slot {a} as player 1's {data.Units[kind].Key}: not a new model in player 1's colour");
             else Check(views.ViewOf(a)!.MaterialOverride == views.PlayerMaterial(1), $"reused slot {a} as a capsule: not player 1's material");
             u.Free(new EntityHandle(a, u.Generation[a]));
@@ -355,15 +372,19 @@ public partial class ModelViewTest : Node
         AddChild(views);
         views.Bind(data, 2 * perSide, new uint[] { 0xC03030, 0x3060D0 });
         views.Sync(w, 0.5f);
+        // M6-VH7: each frame also runs the crowd animation schedule under a camera (the sort, the advances).
+        Vector3 eye = views.ViewOf(0)!.GlobalPosition + new Vector3(0.3f, 30f, 10f);
+        views.AdvanceAnimations(1.0 / 60.0, eye);
         await Frames(3);
         long bytes = 0;
         for (int f = 0; f < 120; f++)
         {
             long start = GC.GetAllocatedBytesForCurrentThread();
             views.Sync(w, (f % 10) / 10f, 1f / 60f);
+            views.AdvanceAnimations(1.0 / 60.0, eye);
             bytes += GC.GetAllocatedBytesForCurrentThread() - start;
         }
-        GD.Print($"steady: {views.ModelNodeCount} models, 120 syncs allocated {bytes} bytes");
+        GD.Print($"steady: {views.ModelNodeCount} models, 120 syncs and crowd frames allocated {bytes} bytes ({views.Crowd.AdvancedLastFrame} players advanced in the last)");
         Check(views.ModelNodeCount == 2 * perSide, $"{views.ModelNodeCount} model instances for {2 * perSide} units");
         Check(bytes == 0, $"120 steady syncs of {2 * perSide} models allocated {bytes} bytes");
         views.QueueFree();
@@ -384,6 +405,137 @@ public partial class ModelViewTest : Node
         GD.Print($"{clip}: head at ({head.X:F2}, {head.Y:F2}, {head.Z:F2}) over the feet, toes {toes.Normalized().Dot(forward):F2} along forward");
         Check(head.Y > 1.4f && head.Y < 1.8f && new Vector2(head.X, head.Z).Length() < 0.35f, $"{clip}: head at {head} from the feet, want upright about 1.6 m up");
         Check(toes.Normalized().Dot(forward) > 0.5f, $"{clip}: toes {toes} against forward {forward}");
+    }
+
+    // M6-VH7, BUG-1320: the material Godot draws on a worker model's team surface is its owner's team material, and nothing
+    // is drawn over the figure (no overlay, no override).
+    private void TeamSurfaceRow(UnitViews views, int slot, int type, Color want, string who)
+    {
+        MeshInstance3D? mesh = views.ModelMeshOf(slot);
+        int surface = views.Models!.TeamSurface(type);
+        var drawn = mesh?.GetActiveMaterial(surface) as ShaderMaterial;
+        Color got = drawn?.GetShaderParameter("team_colour").AsColor() ?? default;
+        GD.Print($"{who}: team surface {surface} draws {drawn?.Shader?.ResourcePath} in {got}, overlay {mesh?.MaterialOverlay?.ToString() ?? "none"}");
+        Check(drawn != null && got == want && mesh!.MaterialOverlay == null && mesh.MaterialOverride == null,
+            $"{who}: team surface draws {drawn} in {got} (want {want}), overlay {mesh?.MaterialOverlay}, override {mesh?.MaterialOverride}");
+    }
+
+    // M6-VH7, BUG-1322: a model without a 'team' material warns once per file per run, not at every Bind. The scene is
+    // seeded into the loader's cache (as QaM6V20Test row 1 does) under a stem only this row uses.
+    private void WarningRow(GameData shipped)
+    {
+        const string stem = "malazan/model_view_noteam";
+        var root = new Node3D { Name = "Root" };
+        var body = new MeshInstance3D { Name = "Body", Mesh = new BoxMesh { Material = new StandardMaterial3D { ResourceName = "outfit" } } };
+        root.AddChild(body);
+        body.Owner = root;
+        var scene = new PackedScene();
+        scene.Pack(root);
+        root.Free();
+        var cache = (Dictionary<string, PackedScene?>)typeof(UnitModels).GetField("Loaded", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)!.GetValue(null)!;
+        cache[UnitModels.PathFor(stem)] = scene;
+        string dataDir = ProjectSettings.GlobalizePath("res://data");
+        string forgedDir = Path.Combine(_scratch, "noteam-data");
+        foreach (string dir in Directory.GetDirectories(dataDir, "*", SearchOption.AllDirectories))
+            Directory.CreateDirectory(Path.Combine(forgedDir, Path.GetRelativePath(dataDir, dir)));
+        foreach (string file in Directory.GetFiles(dataDir, "*", SearchOption.AllDirectories))
+            File.Copy(file, Path.Combine(forgedDir, Path.GetRelativePath(dataDir, file)), true);
+        string path = Path.Combine(forgedDir, "factions", "malazan", "units.json");
+        JsonNode units = JsonNode.Parse(File.ReadAllText(path))!;
+        foreach (JsonNode? unit in units["units"]!.AsArray())
+            if ((string?)unit!["id"] == "malazan_laborer") unit["model"] = stem;
+        File.WriteAllText(path, units.ToJsonString());
+        GameData forged = DataLoader.LoadAll(forgedDir).Data ?? throw new InvalidOperationException("no-team data failed to load");
+        int before = UnitModels.NoTeamWarnings;
+        for (int bind = 0; bind < 3; bind++)
+        {
+            var views = new UnitViews();
+            AddChild(views);
+            views.Bind(forged, 4, new uint[] { 0xC03030, 0x3060D0 });
+            Check(!views.DrawsModel(forged.FindUnit("malazan_laborer")), "a team-less laborer model is drawn as a model");
+            views.Free();
+        }
+        GD.Print($"team-less model: {UnitModels.NoTeamWarnings - before} warning(s) over 3 binds");
+        Check(UnitModels.NoTeamWarnings - before == 1, $"a team-less model warned {UnitModels.NoTeamWarnings - before} times over 3 binds, want once per file per run");
+        cache.Remove(UnitModels.PathFor(stem));
+    }
+
+    // M6-VH7 (BUG-1321): the crowd schedule under a camera. 400 models, a Camera3D over one end: over StaggerFrames frames
+    // every shown player advanced at least once; in every frame the FullRateCount nearest advanced, and they are the nearest;
+    // a near figure's clip moves every frame, a far one's moves too (by its waiting time), within the period.
+    private async Task StaggerRow(GameData data)
+    {
+        const int perSide = 200;
+        var sim = new Simulation(new SimConfig(5, 2, 2 * perSide, 4096) { Data = data });
+        World w = sim.World;
+        int[] types = { data.FindUnit("malazan_laborer"), data.FindUnit("malazan_crossbowman") };
+        NVector2[] west = StartLayout.Block(w.NavGrid, perSide, true, 1f), east = StartLayout.Block(w.NavGrid, perSide, false, 1f);
+        for (int i = 0; i < perSide; i++)
+        {
+            sim.Enqueue(Command.SpawnUnit(0, types[i % 2], west[i]));
+            sim.Enqueue(Command.SpawnUnit(1, types[i % 2], east[i]));
+        }
+        sim.Tick();
+        sim.Tick();
+        var views = new UnitViews();
+        AddChild(views);
+        views.Bind(data, 2 * perSide, new uint[] { 0xC03030, 0x3060D0 });
+        views.Sync(w, 1f);
+        // The eye 30 m over the first west unit (as the match camera would be): the west block is near, the east far.
+        UnitStore u = w.Units;
+        int anchor = Slot(u, 0, types[0]);
+        Vector3 eye = views.ViewOf(anchor)!.GlobalPosition + new Vector3(0f, 30f, 10f);
+        CrowdAnimator crowd = views.Crowd;
+        int n = 2 * perSide, bad = 0, nearWrong = 0;
+        var dist = new float[n];
+        for (int i = 0; i < n; i++) dist[i] = views.ViewOf(i) is MeshInstance3D v ? v.GlobalPosition.DistanceSquaredTo(eye) : float.MaxValue;
+        var sorted = (float[])dist.Clone();
+        Array.Sort(sorted);
+        int farSlot = Array.IndexOf(dist, sorted[n - 1]), nearSlot = Array.IndexOf(dist, sorted[0]);
+        long start = crowd.Frame;
+        double nearPos = views.AnimatorOf(nearSlot)!.CurrentAnimationPosition, farPos = views.AnimatorOf(farSlot)!.CurrentAnimationPosition;
+        int nearMoves = 0;
+        for (int f = 0; f < 3 * CrowdAnimator.StaggerFrames; f++)
+        {
+            views.AdvanceAnimations(1.0 / 60.0, eye);
+            Check(crowd.EligibleLastFrame == n, $"stagger frame {f}: {crowd.EligibleLastFrame} eligible players, want {n}");
+            // The full-rate set: exactly FullRateCount players, none farther than any other player (ties either way).
+            int fullCount = 0;
+            float farthestFull = 0f, nearestOther = float.MaxValue;
+            for (int i = 0; i < n; i++)
+            {
+                if (crowd.WasFullRate(i))
+                {
+                    fullCount++;
+                    farthestFull = Math.Max(farthestFull, dist[i]);
+                    if (crowd.LastAdvanced(i) != crowd.Frame - 1) bad++;
+                }
+                else nearestOther = Math.Min(nearestOther, dist[i]);
+            }
+            if (fullCount != CrowdAnimator.FullRateCount || farthestFull > nearestOther) nearWrong++;
+            double p = views.AnimatorOf(nearSlot)!.CurrentAnimationPosition;
+            if (p != nearPos) nearMoves++;
+            nearPos = p;
+            if (f >= CrowdAnimator.StaggerFrames - 1)
+                for (int i = 0; i < n; i++)
+                    if (crowd.Frame - 1 - crowd.LastAdvanced(i) >= CrowdAnimator.StaggerFrames) bad++;
+        }
+        GD.Print($"stagger: {n} players, {crowd.AdvancedLastFrame} advanced in the last frame, {CrowdAnimator.FullRateCount} nearest every frame, the rest 1 in {CrowdAnimator.StaggerFrames}; near clip moved {nearMoves} of {3 * CrowdAnimator.StaggerFrames} frames");
+        Check(bad == 0, $"stagger: {bad} (slot, frame) pairs where a shown player had not advanced within {CrowdAnimator.StaggerFrames} frames or a nearest one missed a frame");
+        Check(nearWrong == 0, $"stagger: in {nearWrong} frames the full-rate set was not the {CrowdAnimator.FullRateCount} nearest");
+        Check(nearMoves == 3 * CrowdAnimator.StaggerFrames, $"stagger: the nearest figure's clip moved in {nearMoves} of {3 * CrowdAnimator.StaggerFrames} frames, want every frame");
+        Check(views.AnimatorOf(farSlot)!.CurrentAnimationPosition != farPos, "stagger: the farthest figure's clip never moved");
+        int expect = CrowdAnimator.FullRateCount + (n - CrowdAnimator.FullRateCount) / CrowdAnimator.StaggerFrames;
+        Check(Math.Abs(crowd.AdvancedLastFrame - expect) <= 2 + n / 50, $"stagger: {crowd.AdvancedLastFrame} players advanced a frame, want about {expect}");
+        // Hidden players are not advanced, and with no eye every shown player advances every frame.
+        views.AdvanceAnimations(1.0 / 60.0, null);
+        Check(crowd.AdvancedLastFrame == n, $"stagger: with no camera {crowd.AdvancedLastFrame} of {n} advanced, want all");
+        u.Free(new EntityHandle(nearSlot, u.Generation[nearSlot]));
+        views.Sync(w, 1f);
+        views.AdvanceAnimations(1.0 / 60.0, eye);
+        Check(crowd.EligibleLastFrame == n - 1 && crowd.LastAdvanced(nearSlot) < crowd.Frame - 1, "stagger: a hidden (dead) figure is still advanced");
+        views.QueueFree();
+        await Frames(1);
     }
 
     private void CheckClip(UnitViews views, int slot, string clip, string who)

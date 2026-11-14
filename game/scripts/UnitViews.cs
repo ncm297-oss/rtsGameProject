@@ -12,9 +12,10 @@ namespace Rts.Game;
 /// Models (M6-V20): with <see cref="UseModels"/> on, a type whose model file loads (<see cref="UnitModels"/>, the path from
 /// <c>UnitDef.Model</c>) is drawn as that model: the slot's node keeps its place at the capsule's centre (the cargo marker's
 /// frame) and draws no mesh; a child "Model" (the imported scene, feet on the ground, at the type's data <c>scale</c>) holds
-/// the skinned mesh, whose <c>team</c> surface is overridden by the owner's team material and which takes the flash and
-/// worker-tint overlays, and an <see cref="AnimationPlayer"/> on the shared library playing <see cref="ClipFor"/> the unit's
-/// sim state each frame (only a change of clip touches it). A slot reused by a type of another model or by a capsule type
+/// the skinned mesh, whose <c>team</c> surface is overridden by the owner's team material and which takes the flash
+/// overlay (not the worker tint, M6-VH7), and an <see cref="AnimationPlayer"/> on the shared library playing
+/// <see cref="ClipFor"/> the unit's sim state each frame (only a change of clip touches it), advanced by the
+/// <see cref="CrowdAnimator"/> schedule (M6-VH7). A slot reused by a type of another model or by a capsule type
 /// frees its model; a hidden slot's player stops. Every other type is the capsule below.
 /// A slot's node is created the first time the slot holds a live unit and hidden while it is dead,
 /// so a unit respawned into the slot reuses it. Meshes (one per unit type, radius from data, M7-V1: height times the
@@ -23,7 +24,7 @@ namespace Rts.Game;
 /// on a slot's node as its material override when the slot's owner changes) are all made in <see cref="Bind"/>. Views
 /// hold no gameplay state; they only read the unit store.
 /// Worker feedback (M3-V1): a standing worker's <see cref="UnitState"/> (<c>Gathering</c>, <c>Returning</c>,
-/// <c>Building</c>) tints its body through a shared overlay material, and while <c>Cargo</c> &gt; 0 a small marker
+/// <c>Building</c>) tints its capsule through a shared overlay material (a model shows no tint, BUG-1320), and while <c>Cargo</c> &gt; 0 a small marker
 /// floats above it, gold-coloured or wood-brown by <c>CargoKind</c>. A slot's marker node is made the first time it
 /// carries and then reused; overlay and marker are only touched when what they show changes, so a steady frame
 /// allocates nothing.
@@ -113,6 +114,7 @@ public partial class UnitViews : Node3D
     private MeshInstance3D?[] _modelMesh = Array.Empty<MeshInstance3D?>();
     private AnimationPlayer?[] _anim = Array.Empty<AnimationPlayer?>();
     private int[] _shownClip = Array.Empty<int>();
+    private CrowdAnimator _crowd = new(0);
 
     /// <summary>The models of the last <see cref="Bind"/>, or null when <see cref="UseModels"/> was off.</summary>
     public UnitModels? Models => _models;
@@ -234,6 +236,7 @@ public partial class UnitViews : Node3D
         _anim = new AnimationPlayer?[unitCapacity];
         _shownClip = new int[unitCapacity];
         Array.Fill(_shownClip, -1);
+        _crowd = new CrowdAnimator(unitCapacity);
     }
 
     /// <summary>The state whose tint slot <paramref name="slot"/> shows (<see cref="UnitState.Idle"/>: none).</summary>
@@ -261,7 +264,20 @@ public partial class UnitViews : Node3D
     {
         if (Camera != null && Camera.Zoom != _cargoZoom) SetCargoZoom(Camera.Zoom);
         if (Runner?.Simulation is Simulation sim) Sync(sim.World, (float)Runner.Alpha, (float)delta);
+        // M6-VH7: the models' players are manual; the crowd schedule advances them (also in tests that call Sync directly).
+        Camera3D? eye = GetViewport()?.GetCamera3D();
+        AdvanceAnimations(delta, eye?.GlobalPosition);
     }
+
+    /// <summary>The models' animation schedule (M6-VH7): which players advanced when.</summary>
+    public CrowdAnimator Crowd => _crowd;
+
+    /// <summary>
+    /// One frame of the models' animation (M6-VH7, <see cref="CrowdAnimator"/>): the shown figures nearest
+    /// <paramref name="eye"/> advance by <paramref name="delta"/>, the rest staggered; a null eye advances every shown figure.
+    /// Called by <see cref="_Process"/> with the viewport's camera; allocation-free.
+    /// </summary>
+    public void AdvanceAnimations(double delta, Vector3? eye) => _crowd.Advance(_anim, _shown, _views, eye, delta);
 
     /// <summary>Sizes the shared cargo meshes for camera zoom <paramref name="zoom"/> (one write per kind, only when the zoom changed).</summary>
     public void SetCargoZoom(float zoom)
@@ -324,8 +340,11 @@ public partial class UnitViews : Node3D
             bool lit = Flash.IsLit(i);
             if (tint != _shownTint[i] || lit != _shownLit[i])
             {
-                // On a model the overlay goes on its mesh: the slot's own node draws nothing then.
-                (model ?? view).MaterialOverlay = lit ? _flashMat : _tints[(int)tint];
+                // On a model the overlay goes on its mesh (the slot's own node draws nothing then), and only the hit flash:
+                // a worker's state tint over the whole figure hid its outfit and team colour (M6-VH7, BUG-1320). Its
+                // clip and cargo marker say what it is doing. A capsule keeps its tint.
+                if (model != null) model.MaterialOverlay = lit ? _flashMat : null;
+                else view.MaterialOverlay = lit ? _flashMat : _tints[(int)tint];
                 _shownTint[i] = tint;
                 _shownLit[i] = lit;
             }
@@ -471,6 +490,9 @@ public partial class UnitViews : Node3D
         bool sameScene = model && old >= 0 && _model[slot] != null && _modelPath[old] == _modelPath[type];
         if (_model[slot] != null && !sameScene)
         {
+            // Out of the slot's node before it is freed (at the frame's end): otherwise it still holds the name "Model"
+            // and a new model added this frame got an auto name (BUG-1322).
+            view.RemoveChild(_model[slot]);
             _model[slot]!.QueueFree();
             _model[slot] = null;
             _modelMesh[slot] = null;
@@ -491,6 +513,7 @@ public partial class UnitViews : Node3D
             _model[slot] = root;
             _modelMesh[slot] = mesh;
             _anim[slot] = anim;
+            _crowd.Reset(slot);
             ModelNodeCount++;
         }
         // The slot's node sits at the capsule's centre (the cargo marker's frame); the model's feet go to the ground. A data

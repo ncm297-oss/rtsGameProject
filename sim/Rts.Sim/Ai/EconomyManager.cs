@@ -251,8 +251,8 @@ internal static class EconomyManager
     /// <summary>Whether own worker <paramref name="slot"/> carries a full load of <paramref name="kind"/> (1 gold, 2 wood).</summary>
     private static bool FullLoad(AiPlayer ai, int slot, byte kind)
     {
-        if (!ai.View.TryGetCargo(slot, out int amount, out ResourceKind carried)) return false;
-        return amount >= ai.Data.Rules.WorkerCarry && carried == (kind == Gold ? ResourceKind.Gold : ResourceKind.Wood);
+        if (!ai.View.TryGetCargo(slot, out int amount, out ResourceKind carried) || !ai.View.TryGetUnit(slot, out SeenUnit u)) return false;
+        return amount >= ai.Data.CarryOf(u.TypeId) && carried == (kind == Gold ? ResourceKind.Gold : ResourceKind.Wood);
     }
 
     /// <summary>

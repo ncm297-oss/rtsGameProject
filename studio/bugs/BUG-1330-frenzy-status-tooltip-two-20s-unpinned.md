@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S3 |
-| Status | open |
+| Status | fixed |
 | Found | 2026-11-13-1118, task D30 |
 | System | content pins (`Content/AbilityContentTests` description-number rule, D-H2) |
-| Fixed by | |
+| Fixed by | D-H8 (2026-11-13-2306): the description-number rule reads a status row's `damageBonus` from "N% more damage" and its `onEnd` from "<onEnd status> N% for N seconds", each in a role of its own, and requires every such row number to be stated (also in an ability applying the status); regression test `Rts.Sim.Tests.QA.Content.D30LandingQaTests.Mutant_OneOfTheTwo20s_Moved_TheStatusTooltipIsNamed` (un-skipped, 3 / 3) |
 
 ## Repro
 1. In `sim/Rts.Sim.Tests/QA/Content/D30LandingQaTests.cs`, remove the `Skip` from

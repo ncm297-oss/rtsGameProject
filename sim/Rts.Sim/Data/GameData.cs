@@ -33,6 +33,9 @@ public sealed class GameData
     /// <remarks>Derived from the units' <see cref="UnitDef.TrainedAtTypeId"/>, which <see cref="ContentHash"/> covers.</remarks>
     public ImmutableArray<ImmutableArray<int>> Trains { get; init; } = ImmutableArray<ImmutableArray<int>>.Empty;
 
+    /// <summary>M7-7 (Request 48): the load unit type <paramref name="unitType"/> carries a trip: its own <c>carry</c>, else <c>rules.json</c> <c>workerCarry</c>.</summary>
+    public int CarryOf(int unitType) => Units[unitType].Carry > 0 ? Units[unitType].Carry : Rules.WorkerCarry;
+
     /// <summary>The unit type ids building type <paramref name="buildingTypeId"/> trains, ascending (locked ones included: <c>World.CanTrain</c> says which can be queued now); empty for an unknown type.</summary>
     public ImmutableArray<int> UnitsTrainedAt(int buildingTypeId) =>
         (uint)buildingTypeId < (uint)Trains.Length ? Trains[buildingTypeId] : ImmutableArray<int>.Empty;
@@ -195,6 +198,12 @@ public sealed class GameData
             // header data hash holds). The onHit entry itself is hashed with the passives above.
             if (u.SpawnCount != 1) h.Add(u.SpawnCount);
             if (u.HitPassive >= 0) h.Add(u.HitPassive);
+            // M7-7 (Request 48): only when the file carries it (a marker, then the value), so data without it hashes as before.
+            if (u.Carry > 0)
+            {
+                h.Add(1);
+                h.Add(u.Carry);
+            }
         }
 
         h.Add(Resources.Length);

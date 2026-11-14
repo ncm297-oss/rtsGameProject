@@ -12,7 +12,9 @@
     "UAL2": "Universal Animation Library 2[Standard]/Universal Animation Library 2[Standard]/Unreal-Godot/UAL2_Standard.glb"
   },
   "library": {
-    "destination": "game/assets/animations/universal_humanoid.glb"
+    "destination": "game/assets/animations/universal_humanoid.glb",
+    "dropBonePrefixes": ["thumb_", "index_", "middle_", "ring_", "pinky_"],
+    "dropBoneCount": 40
   },
   "models": [
     {

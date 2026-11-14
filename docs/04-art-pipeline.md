@@ -47,6 +47,9 @@ made at `UnitViews.Bind`). The rest of the outfit keeps its own texture, tinted 
 Producer default for the first two units (owner may revisit): the Laborer's tunic (the Peasant's body part); the
 Crossbowman's hood, pauldron **and jerkin** (the Ranger's body part). The jerkin was added after the first screenshot: the hood
 and pauldron alone were 2-3 px of colour at the default zoom and the two players' Crossbowmen did not read apart.
+Nothing is drawn over a model's team surface but the hit flash (M6-VH7, BUG-1320, Producer default, owner may revisit): the
+worker's gathering / returning / building tint, a 45 % overlay over the whole figure, hid the outfit and the player colour,
+so a model doesn't take it (its clip and the cargo marker show what it does); capsules keep it.
 
 ### Faction palettes and silhouettes
 
@@ -262,14 +265,15 @@ tools/
   node (glTF faces +Z; the bone tracks stay untouched), and exports one `.glb` without animations; it fails over
   `maxTriangles` or without a `team` material. The library: the union of the clip maps from the non-root-motion
   UAL1 / UAL2 `.glb` files, renamed `<name>_loop` (Godot's import rule for a looping clip; the suffix is dropped), on one
-  armature with a one-triangle skin (so the tracks import as `Skeleton3D` bone tracks), one NLA track per clip.
+  armature with a one-triangle skin (so the tracks import as `Skeleton3D` bone tracks), one NLA track per clip, without
+  the bones the manifest's `library.dropBonePrefixes` names (the 40 finger bones, M6-VH7; "Animation setup" below).
 - **Godot import settings** (written by the script; each `.import` keeps its uid, so a re-run gives the same files): a model
   `.glb` imports with no animations and no tangents, its textures extracted beside it (`<id>_<role>.png`), each set to VRAM
   compressed with mipmaps; the library `.glb` imports as an `AnimationLibrary` (`importer="animation_library"`).
 - **The run prints** each model's triangles, height, feet, materials and texture sizes, every generated file with its size,
   the library's clip map, and `IMPORT ASSETS PASS`. Two runs give byte-identical files (M6-V20's check).
 - **Budget as built:** Laborer 2,597 triangles, Crossbowman 2,727 (the crossbow 48), four 512² textures each, library 6 clips;
-  all generated binaries about 4.5 MB.
+  all generated binaries about 4.5 MB (about 4.2 MB since M6-VH7 dropped the finger tracks from the library).
 - The view: `UnitViews` draws a type whose file loads as its model, any other type as its capsule (docs/03 "Implementation
   (M6-V20)").
 
@@ -361,6 +365,17 @@ which also renames to snake_case. Findings:
   per-weapon `attack_<weapon>` clip lands), `gather_gold` (UAL2 `Farm_Harvest`: no pick swing in either library),
   `gather_wood` (UAL2 `TreeChopping_Loop`), `build` (UAL1 `Fixing_Kneeling`). `cast`, `hit` and `death` come with the slices
   that need them.
+- **No finger tracks (M6-VH7, BUG-1321).** The library carries 25 of the rig's 65 bones: the import deletes the 40 finger
+  bones (`thumb_`, `index_`, `middle_`, `ring_`, `pinky_`, 01-03 and the `_04_leaf` ends, both hands; the manifest's
+  `library.dropBonePrefixes`, checked against `dropBoneCount` 40) and their curves before export, so each clip has 75 tracks
+  instead of 195. The models keep all 65 bones (their skins are bound to them); with no track the fingers stay at the rest
+  pose, which a 1.8 m figure seen from 20-60 m doesn't show. The library went from 509,800 to 234,948 bytes. A future clip
+  that needs a hand pose (a grip) would add those bones back for that rig only.
+- **Animation rate (M6-VH7, view constants in `CrowdAnimator`).** Godot doesn't step the models' players itself (manual
+  callback mode): each frame the 48 shown figures nearest the camera advance by the frame's time, every other shown figure
+  advances once in 3 frames by all the time it waited (20 Hz at 60 FPS; spread over the frames by slot), hidden ones not at
+  all. Clips keep their true speed; far figures move in coarser steps, which at 40-60 m doesn't read. Clips stay authored
+  at the library's 30 fps.
 
 ## Licensing log
 

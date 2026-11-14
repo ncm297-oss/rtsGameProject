@@ -9,7 +9,8 @@
 # textures only, cut to the manifest's size and tinted toward the faction palette, the manifest's props built from boxes
 # and bound to their bone, the yaw fix on the armature node (glTF faces +Z, docs/04 wants -Z), exported as one .glb with
 # no animations. The library: the clips every model's clip map names, renamed to docs/04's names, on one armature with a
-# one-triangle skin (so Godot imports the tracks as Skeleton3D bone tracks), exported as one .glb.
+# one-triangle skin (so Godot imports the tracks as Skeleton3D bone tracks), the bones the manifest's "dropBonePrefixes"
+# name (the 40 finger bones, BUG-1321) deleted with their curves so no clip carries their tracks, exported as one .glb.
 # Prints one "RESULT {json}" line the PowerShell script reads; exits 1 with a "FAIL <why>" line on any problem.
 import bmesh
 import bpy
@@ -348,6 +349,44 @@ def library_clips(manifest):
     return clips
 
 
+def action_fcurve_bags(action):
+    """Every fcurve collection of `action`: the slotted layers' channel bags (Blender 4.4+), or the legacy list."""
+    bags = []
+    for layer in getattr(action, "layers", []):
+        for strip in layer.strips:
+            bags.extend(getattr(strip, "channelbags", []))
+    if not bags and hasattr(action, "fcurves"):
+        bags.append(action)
+    return bags
+
+
+def drop_bones(arm, actions, prefixes):
+    """Deletes the armature's bones whose names start with one of `prefixes`, and their curves in `actions`.
+    BUG-1321: the 40 finger bones were 40 of each clip's 65 bone tracks, the larger part of the crowd's animation cost;
+    a figure 1.8 m tall seen from 20-60 m shows no finger. The models keep the bones (their skins are bound to them):
+    with no track, Godot leaves them at their rest pose. Returns the dropped names, sorted."""
+    names = sorted(b.name for b in arm.data.bones if any(b.name.startswith(p) for p in prefixes))
+    if not names:
+        return names
+    bpy.context.view_layer.objects.active = arm
+    bpy.ops.object.mode_set(mode='EDIT')
+    if arm.mode != 'EDIT':
+        fail("library: the armature did not enter edit mode to drop bones")
+    for name in names:
+        arm.data.edit_bones.remove(arm.data.edit_bones[name])
+    bpy.ops.object.mode_set(mode='OBJECT')
+    gone = set(names)
+
+    def bone_of(path):  # 'pose.bones["index_01_l"].rotation_quaternion' -> 'index_01_l'
+        return path.split('"')[1] if path.startswith('pose.bones["') else None
+
+    for action in actions:
+        for bag in action_fcurve_bags(action):
+            for fc in [fc for fc in bag.fcurves if bone_of(fc.data_path) in gone]:
+                bag.fcurves.remove(fc)
+    return names
+
+
 def build_library(manifest, src_root, repo, work):
     reset()
     clips = library_clips(manifest)
@@ -373,6 +412,10 @@ def build_library(manifest, src_root, repo, work):
             bpy.data.actions.remove(a)
     arm.name = "Armature"
     arm.data.name = "Armature"
+    dropped = drop_bones(arm, list(found.values()), manifest["library"].get("dropBonePrefixes", []))
+    want = manifest["library"].get("dropBoneCount")
+    if want is not None and len(dropped) != int(want):
+        fail(f"library: {len(dropped)} bones match dropBonePrefixes, the manifest expects {want}")
     # One triangle bound to the root: the skin that makes Godot import the bones as a Skeleton3D (bone tracks).
     me = bpy.data.meshes.new("skin_anchor")
     me.from_pydata([(0, 0, 0), (0.01, 0, 0), (0, 0, 0.01)], [], [(0, 1, 2)])
@@ -405,6 +448,7 @@ def build_library(manifest, src_root, repo, work):
                               export_cameras=False, export_lights=False)
     return {"destination": manifest["library"]["destination"],
             "clips": {n: f"{clips[n][0]}/{clips[n][1]}" for n in sorted(found)},
+            "bones": len(arm.data.bones), "dropped": len(dropped),
             "seconds": {n: round((found[n].frame_range[1] - found[n].frame_range[0]) / FPS, 2) for n in sorted(found)}}
 
 

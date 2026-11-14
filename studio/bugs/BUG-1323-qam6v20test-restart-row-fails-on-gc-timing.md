@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S3 (a test defect in a QA regression scene; the product does not leak) |
-| Status | open |
+| Status | fixed |
 | Found | 2026-11-13-1118, task M6-V20 (the Producer's verification at ACCEPT, on the three-way tree sim 3f67a6f + view 19cdacf + data 302c225) |
 | System | view tests (`game/tests/QaM6V20Test.cs`, `FourPlayersAndRestarts`) |
-| Fixed by | |
+| Fixed by | M6-VH7 (2026-11-13-2306, view 4b8f1b6): each restart sample follows `GC.Collect`, `WaitForPendingFinalizers`, `GC.Collect` and two frames. Developer: 10 of 10 alone, objects flat at 3,251; QA: 20 runs under load, 80 of 80 samples flat. One of those 20 logged an unrelated ERROR line: BUG-1350 |
 
 ## Repro
 1. A clone of the merged tree, built and imported (`tools/qa/smoke.ps1`).

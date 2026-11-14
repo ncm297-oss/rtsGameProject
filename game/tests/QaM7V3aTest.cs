@@ -187,6 +187,11 @@ public partial class QaM7V3aTest : Node
             _notes.Add($"40-char name in the slot list: text {textW:0} px, list {r} (screen {screen.Size}); other lists {setup.FactionOptions[1].GetGlobalRect()}");
             // Readability: the list must stay on screen and not run into the next column's controls.
             Check(screen.Encloses(r), $"the slot list with the long name leaves the screen: {r}");
+            // BUG-1230 (fixed in M6-VH7): the long name is cut, so its list is no wider than the others and every slot's Team
+            // list stays on screen.
+            Check(r.Size.X <= setup.FactionOptions[1].GetGlobalRect().Size.X + 0.5f, $"BUG-1230: the long name widens its list to {r.Size.X} px");
+            for (int slot = 0; slot < setup.SlotCount; slot++)
+                Check(screen.Encloses(setup.TeamOptions[slot].GetGlobalRect()), $"BUG-1230: slot {slot}'s Team list leaves the screen: {setup.TeamOptions[slot].GetGlobalRect()}");
             await Shot("qa-eight-factions-setup");
             if (_shots != null && DisplayServer.GetName() != "headless")
             {
@@ -253,6 +258,11 @@ public partial class QaM7V3aTest : Node
                 Check(stats.FactionName(p) == _data.Factions[w.FactionOf(p)].DisplayName, $"stats row {p}: '{stats.FactionName(p)}'");
             if (stats.RowCount > 0)
                 _notes.Add($"stats long name '{stats.FactionName(0)}': cell 0 '{stats.Cell(0, 0)}'");
+            // BUG-1230 (fixed in M6-VH7): the long name is cut, so every column heading stays on screen.
+            await Frames(2);
+            Rect2 statsScreen = GetViewport().GetVisibleRect();
+            foreach (Label h in stats.Headings)
+                Check(statsScreen.Encloses(h.GetGlobalRect()), $"BUG-1230: stats heading '{h.Text}' leaves the screen: {h.GetGlobalRect()}");
             await Shot("qa-four-factions-stats");
             main.CloseStats();
             main.QuitToMenu();
