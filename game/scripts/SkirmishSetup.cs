@@ -589,6 +589,11 @@ public partial class SkirmishSetup : CanvasLayer
             SlotLabels[slot] = ShellUi.Text(ui.Setup(slot == 0 ? SetupText.SlotHuman : SetupText.SlotAi));
             FactionOptions[slot] = List($"Faction{slot}");
             foreach (FactionDef faction in data.Factions) FactionOptions[slot].AddItem(faction.DisplayName);
+            // BUG-1230: a long displayName is cut with an ellipsis at the list's 240 px, not widening the whole column (it
+            // pushed the Team column off a 1152 px window); the open list shows the full name.
+            FactionOptions[slot].FitToLongestItem = false;
+            FactionOptions[slot].ClipText = true;
+            FactionOptions[slot].TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis;
             // The defaults are the match's own seats: player p plays faction p mod factions.
             if (data.Factions.Length > 0) FactionOptions[slot].Select(slot % data.Factions.Length);
             ColourOptions[slot] = List($"Colour{slot}");

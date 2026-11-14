@@ -183,6 +183,9 @@ public partial class MatchStats : CanvasLayer
     /// <summary>Width of every data column, in pixels: ten of them and two seat columns fit 1280 px (headings wrap).</summary>
     public const float ColumnWidth = 74f;
 
+    /// <summary>Widest a player's faction name is drawn, in pixels (BUG-1230: about 18 characters at 17 px; a longer one ends in an ellipsis).</summary>
+    public const float NameWidth = 170f;
+
     /// <summary>Builds the screen's fixed controls; hidden until <see cref="ShowFor"/>.</summary>
     public void Build(UiText ui, GameData data)
     {
@@ -269,6 +272,16 @@ public partial class MatchStats : CanvasLayer
             who.AddChild(swatch);
             int faction = w.FactionOf(p);
             Label name = ShellUi.Text(faction >= 0 && faction < _data.Factions.Length ? _data.Factions[faction].DisplayName : "", 17);
+            // BUG-1230: a long faction name is cut with an ellipsis at NameWidth (its full text as the tooltip) instead of
+            // widening the table past a 1152 px window; today's names fit untouched.
+            if (name.GetMinimumSize().X > NameWidth)
+            {
+                name.ClipText = true;
+                name.TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis;
+                name.CustomMinimumSize = new Vector2(NameWidth, 0f);
+                name.TooltipText = name.Text;
+                name.MouseFilter = Control.MouseFilterEnum.Stop; // a Label ignores the mouse by default: no tooltip without this
+            }
             who.AddChild(name);
             Label seat = ShellUi.Text(SeatText(p, p < seats.Length ? seats[p] : default), 17);
             var row = new Label[Columns.Length];

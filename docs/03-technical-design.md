@@ -3586,6 +3586,69 @@ docs/04 "Import process" ("Unit models, as built").
   `UseModels` off; 0 bytes over 120 syncs of 400 animated models. `game/tests/ModelShots.tscn` (windowed, not in the loop):
   `--look <dir>` (the 40 m, 60 m and grey pictures), `--skirmish <dir>` (a skirmish start with the workers sent to gold and
   wood), `--bench <s> [--vsync off] [--no-anim] [--no-model-shadows]` (the cost run above).
+- Changed by M6-VH7 (below): the worker tint no longer goes on a model, the players are advanced by `CrowdAnimator`, and the
+  library has no finger tracks.
+
+### Implementation (M6-VH7)
+
+Fixes after M6-V20: the cost of 400 animated models (BUG-1321), the worker tint over a model (BUG-1320), two nits
+(BUG-1322) and the red restart row (BUG-1323). View code, view tests and the import tooling only.
+
+- **No finger tracks (BUG-1321 a).** `tools/art/build_unit.py` deletes the 40 finger bones from the library's armature and
+  their curves before export (`tools/asset-manifest.json` `library.dropBonePrefixes` / `dropBoneCount`): each clip has 75
+  bone tracks, not 195; the library is 234,948 bytes, not 509,800. The models keep their 65 bones (fingers at rest). docs/04
+  "Animation setup".
+- **Crowd animation (BUG-1321 b).** Every model's `AnimationPlayer` is in manual callback mode (`UnitModels.Instantiate`).
+  `UnitViews._Process`, after `Sync`, calls `AdvanceAnimations(delta, eye)` with the viewport camera's position;
+  `CrowdAnimator` (one per `Bind`, sized to the slots) takes the shown slots whose player is active, sorts them by distance
+  to the eye (preallocated `float[]` / `int[]`, `Array.Sort`, no allocation), advances the `FullRateCount` (48) nearest by the
+  frame's delta, and every other one on the frames where `(frame + slot) % StaggerFrames` (3) is 0, by all the time it
+  waited (so a clip keeps its speed; the work is spread evenly over the frames). Hidden slots are skipped and their wait
+  dropped; a new model instance starts with none. Without a camera (headless tests) every shown player advances every
+  frame, as before. View constants, not data; the schedule reads only the slot nodes' positions and holds no gameplay
+  state. `PlayClip`'s `Seek(..., update: true)` still poses a figure the frame its clip changes.
+- **Shadows past a zoom (BUG-1321 c): not done.** The target was met after (a) and (b) (below), and the models' shadows
+  cost about 2 ms with every unit alive.
+- **The worker tint (BUG-1320, Producer default, owner may revisit).** On a model only the hit flash goes on the mesh's
+  overlay; the gathering / returning / building tint is recorded (`ShownTint`) but not drawn, so the `team` surface shows
+  the player colour while a worker works. Capsules are unchanged (`EconomyViewTest`).
+- **Nits (BUG-1322).** A slot switching model scenes takes the old model out of the slot node (`RemoveChild`) before
+  `QueueFree`, so the new child is named `Model`. The team-less model warning is printed once per file per run
+  (`UnitModels.NoTeamWarnings` counts them for the test).
+- **Restart row (BUG-1323).** `QaM6V20Test` row 8 runs `GC.Collect()`, `GC.WaitForPendingFinalizers()`, `GC.Collect()` and
+  two frames before each sample; the object count is then exactly flat (3,251 in each of four cycles, every run).
+- **Cost, measured (1600 x 900, vsync off, default zoom, `ModelShots --bench 30`, RTX 4070; other tracks' `testhost` /
+  Godot processes running in brackets).** The numbers wander by 2-3 ms between runs, so compare within a window.
+
+  | Run | Average | Worst 1 % | Draw calls |
+  | --- | --- | --- | --- |
+  | 400 models, base (0 others) | 11.58 ms | 19.80 ms | 3,373 |
+  | 400 capsules, base (0 others) | 0.74 ms | 2.00 ms | 56 |
+  | 400 models after (a) (1 other) | 10.99 ms | 23.69 ms | 3,206 |
+  | 400 models after (a) + (b) (1 other) | 10.17 ms | 18.85 ms | 3,382 |
+  | 400 models, final (2 others) | 7.50 ms; 10.11 ms while 90 % live | 13.37 ms; 17.71 ms | 3,448 |
+  | 400 capsules, final (2 others) | 0.75 ms | 2.05 ms | 56 |
+  | 1,000 models, final (2 others) | 23.23 ms; 26.52 ms while 90 % live | 31.78 ms | 10,515 |
+  | 1,000 capsules, final (2 others) | 1.18 ms | 4.61 ms | 68 |
+
+  The 30 s average falls as the units die (about two thirds of 400 by the end), so `--bench` also prints the frames while
+  at least 90 % live. A 5 s split with every unit alive (1 other): 14.2 ms with the schedule, 19.6 ms advancing every
+  player each frame, 9.2 ms with no player advanced: about 27 µs per advance, linear in the advances. The rest of a frame
+  is drawing (about 3,400 draw calls for 400 models with shadows; the models' shadows about 2 ms). 1,000 models stay
+  under 60 FPS: past this, a shared-skeleton or baked-animation approach (not started) would be next. `--per-side <n>`
+  sets the units a side (500: 1,000 units); the bench prints how many players advanced in its last frame.
+- **Tests:** `ModelViewTest`: a building, gathering and returning Laborer model has no overlay and its `team` surface draws
+  the owner's team material in the player colour (`GetActiveMaterial`); the reused slot's child is `Model`; a team-less
+  model warns once over three binds; the stagger row (400 models, a camera over the west block: each frame exactly the 48
+  nearest advance, every shown player advances within 3 frames, the nearest clip moves every frame, a dead slot is skipped,
+  no camera advances all); the steady row's 120 frames now run `Sync` and the schedule, 0 bytes. `QaM6V20Test` rows 4
+  (the name), 5 (flash over no tint) and 8 (forced collection).
+- **Long faction names (BUG-1230).** The setup's faction lists clip their text with an ellipsis at their 240 px
+  (`ClipText`, `FitToLongestItem` off; the open list shows the full name), so a long `displayName` no longer widens the
+  column and pushes the Team column off a 1152 px window. The stats screen draws a faction name wider than
+  `MatchStats.NameWidth` (170 px) cut with an ellipsis, its full text as the tooltip; shorter names are untouched.
+  `QaM7V3aTest` (40-character name) checks the long list is no wider than the others, every Team list and every stats
+  heading on screen.
 
 ## Vision, detection, fog
 

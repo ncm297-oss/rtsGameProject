@@ -152,7 +152,7 @@ foreach ($r in $results) {
     }
 }
 if ($library) {
-    Write-Host "library: $($library.destination)"
+    Write-Host "library: $($library.destination) ($($library.bones) bones animated, $($library.dropped) finger bones dropped)"
     foreach ($c in $library.clips.PSObject.Properties) { Write-Host ("    {0,-12} <- {1} ({2} s)" -f $c.Name, $c.Value, $library.seconds.($c.Name)) }
     $lib = Get-Item (Join-Path $root $library.destination)
     $total += $lib.Length

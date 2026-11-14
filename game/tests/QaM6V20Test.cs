@@ -24,12 +24,13 @@ namespace Rts.Game.Tests;
 /// (2) a library missing <c>attack</c> / <c>walk</c> plays <c>idle</c> for them; no library at all: the model stands, no ERROR;
 /// (3) the faction-colour fallback (no per-player colours) on a model;
 /// (4) a slot reused capsule -> model -> capsule, model -> other model, and the same model type respawned for another owner
-///     (the team colour follows; the freed models are really freed);
-/// (5) the hit flash fading back to the worker's tint on a model's mesh;
+///     (the team colour follows; the freed models are really freed; the new child is named "Model", BUG-1322);
+/// (5) the hit flash on a model's mesh fading back to no overlay (a model takes no worker state tint, BUG-1320);
 /// (6) fog: a walking enemy model hidden and shown mid-animation (paused while hidden, moving again when seen);
 /// (7) a four-player Malazan skirmish through the shell: every player's models in that player's colour, all four distinct and
 ///     equal to the capsule colour of the same player;
-/// (8) the shell's match started and quit four times: node, resource and object counts flat after the second;
+/// (8) the shell's match started and quit four times: node, resource and object counts flat after the second (each sample
+///     after a forced garbage collection, BUG-1323);
 /// (9) a save loaded and the recording watched with models on: every model slot shown as a model, its clip the one its sim
 ///     state names.
 /// </remarks>
@@ -239,12 +240,13 @@ public partial class QaM6V20Test : Node
                 Check(view.MaterialOverride == null, $"{what}: the capsule's material override left on the slot node");
                 Check(TeamColour(views, s, type) == UnitViews.ColorFromRgb(rgb[owner]), $"{what}: team colour {TeamColour(views, s, type)}, want {UnitViews.ColorFromRgb(rgb[owner])}");
                 Check(views.AnimatorOf(s)?.Active == true && views.AnimatorOf(s)?.CurrentAnimation == "idle", $"{what}: player not active on idle ({views.AnimatorOf(s)?.CurrentAnimation})");
-                // A model child is a Node3D holding an AnimationPlayer (a reused slot's new one may not be named "Model": the
-                // freed one still holds the name until the end of the frame).
+                // A model child is a Node3D holding an AnimationPlayer, named "Model" also in a reused slot (BUG-1322: the
+                // freed one leaves the slot node before it is freed, so it no longer holds the name).
                 int children = 0;
                 foreach (Node c in view.GetChildren())
                     if (c is Node3D && c.GetNodeOrNull<AnimationPlayer>("AnimationPlayer") != null && !c.IsQueuedForDeletion()) children++;
                 Check(children == 1, $"{what}: {children} live model children under the slot node");
+                Check(model?.Name == "Model" && view.GetNodeOrNull("Model") == model, $"{what}: the model child is named '{model?.Name}', want 'Model'");
                 if (model != null && !freed.Contains(model)) freed.Add(model);
             }
             else
@@ -352,7 +354,8 @@ public partial class QaM6V20Test : Node
         GD.Print($"reuse fuzz: {steps} steps, {modelsSeen} model slot checks, {bad} bad");
     }
 
-    // (5) The hit flash on a model fades back to the worker's state tint, on the model's mesh.
+    // (5) The hit flash on a model's mesh fades back to no overlay: a model shows no worker state tint (M6-VH7, BUG-1320),
+    // while the view still records the state (ShownTint).
     private void FlashRow()
     {
         var views = new UnitViews();
@@ -369,13 +372,14 @@ public partial class QaM6V20Test : Node
         u.State[s] = UnitState.Building;
         views.Sync(sim.World, 1f, 0.01f);
         MeshInstance3D? mesh = views.ModelMeshOf(s);
-        Check(mesh?.MaterialOverlay == views.TintOf(UnitState.Building), "(5) no build tint on the model");
+        Check(mesh != null && mesh.MaterialOverlay == null && views.ShownTint(s) == UnitState.Building,
+            $"(5) building: overlay {mesh?.MaterialOverlay} on the model (want none, BUG-1320), shown tint {views.ShownTint(s)}");
         u.Hp[s] -= 1;
         views.Sync(sim.World, 1f, 0.01f);
         Check(mesh?.MaterialOverlay == views.FlashMaterial, "(5) no flash on the model");
         Check(views.ViewOf(s)!.MaterialOverlay == null, "(5) an overlay on the model slot's own (meshless) node");
         for (int i = 0; i < 60; i++) views.Sync(sim.World, 1f, 0.05f);
-        Check(mesh?.MaterialOverlay == views.TintOf(UnitState.Building), $"(5) after the flash: overlay {mesh?.MaterialOverlay}, want the build tint");
+        Check(mesh?.MaterialOverlay == null && !views.ShownLit(s), $"(5) after the flash: overlay {mesh?.MaterialOverlay}, want none (no state tint on a model)");
         u.State[s] = UnitState.Idle;
         views.Sync(sim.World, 1f, 0.05f);
         Check(mesh?.MaterialOverlay == null, "(5) idle: an overlay left on the model");
@@ -458,6 +462,13 @@ public partial class QaM6V20Test : Node
                 if (cycle == 0) FourColours(match, sim);
                 main.QuitToMenu();
                 await Frames(6);
+                // BUG-1323: the object count holds C# wrappers waiting for the collector, so without a forced collection it
+                // sawed with GC timing (rising four samples in a row whenever no collection fell inside them). Collect, run
+                // the finalizers (they release the engine objects), collect what they freed, then let two frames settle.
+                GC.Collect();
+                GC.WaitForPendingFinalizers();
+                GC.Collect();
+                await Frames(2);
                 counts.Add((Performance.GetMonitor(Performance.Monitor.ObjectNodeCount), Performance.GetMonitor(Performance.Monitor.ObjectResourceCount),
                     Performance.GetMonitor(Performance.Monitor.ObjectCount), Performance.GetMonitor(Performance.Monitor.ObjectOrphanNodeCount)));
                 GD.Print($"restart {cycle}: nodes {counts[^1].Nodes}, resources {counts[^1].Resources}, objects {counts[^1].Objects}, orphans {counts[^1].Orphans}");

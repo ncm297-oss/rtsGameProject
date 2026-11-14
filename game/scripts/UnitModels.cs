@@ -115,7 +115,8 @@ public sealed class UnitModels
         root.Name = "Model";
         mesh = root.GetNode<MeshInstance3D>(_meshPath[type]!);
         mesh.CastShadow = GeometryInstance3D.ShadowCastingSetting.On;
-        player = new AnimationPlayer { Name = "AnimationPlayer", PlaybackDefaultBlendTime = 0.15 };
+        // Manual: UnitViews' crowd schedule advances it (M6-VH7, CrowdAnimator), never Godot's own process step.
+        player = new AnimationPlayer { Name = "AnimationPlayer", PlaybackDefaultBlendTime = 0.15, CallbackModeProcess = AnimationMixer.AnimationCallbackModeProcess.Manual };
         root.AddChild(player);
         if (_library != null) player.AddAnimationLibrary("", _library);
         return root;
@@ -177,9 +178,19 @@ public sealed class UnitModels
             if (surface >= 0) break;
         }
         probe.Free();
-        if (surface < 0) GD.PushWarning($"Unit model {path} has no '{TeamMaterialName}' material: drawing the placeholder capsule.");
+        // Once per file per run, like the loader's other warnings: FindTeam runs at every Bind (BUG-1322).
+        if (surface < 0 && NoTeamWarned.Add(path))
+        {
+            NoTeamWarnings++;
+            GD.PushWarning($"Unit model {path} has no '{TeamMaterialName}' material: drawing the placeholder capsule.");
+        }
         return surface >= 0;
     }
+
+    private static readonly HashSet<string> NoTeamWarned = new();
+
+    /// <summary>"No team material" warnings printed since the program started (a test counter: one per file per run, BUG-1322).</summary>
+    public static int NoTeamWarnings { get; private set; }
 
     private static void LoadLibrary()
     {
