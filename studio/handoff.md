@@ -170,6 +170,74 @@ criterion's test name again.)
 
 ## Sim track
 
+### Current session plan (2026-11-13-2306, session 2 / 8 of 2026-11-13): M7-7, feature, QA full
+
+**Goal.** Request 53: the Normal Teblor AI casts Blood-oil Frenzy 0.02-0.16 times a match before 15:00. Measure why,
+then (only if the cast rule is the cause) give the AI a cast rule for a buff aura on its own fighters, behind a data
+knob that no shipped file carries yet, so nothing shipped moves until D31 lands it with the one golden header move.
+
+**Producer correction to the last hand-over (rule 48):** it asked for a knob "required, hashed" in `rules.json` and
+also put `game/data/**` and the golden out of scope; both cannot hold. Ruling: the knob is **optional** (absent = today's
+rule), hashed only when present, exactly like M7-4's fields and Request 52. No `game/data/**` byte this session.
+
+**Scope.**
+- Part A (always): a Stress-category report (no bound) on `Abilities/BloodOilScenes`' copy: Normal Teblor AI against
+  Normal Malazan and Normal Whirlwind, both seat orders, seeds 1-8, to 15:00 (32 matches). Per match and summed: the
+  tick of the first Shaman, Shamans alive at 5 / 10 / 15 min, the thinks at which a free Shaman had Frenzy ready, and of
+  those: with 2+ seen enemies within 8 m (today's condition), with N own army units within 8 m, with N own army units
+  within 8 m that are attacking, the Shaman's distance to the army's centroid; casts sent and landed. Also once with the
+  data track's landing opening if it can be read without editing `Content/**` (read-only for the sim).
+- Part B (only if A points at the cast rule): in `AbilityManager.Target`, a self-aura that affects own units, applies a
+  status and deals no damage is cast when at least `ai.castMinOwnFighting` own army units (workers and the caster not
+  counted) within its radius are attacking, instead of the enemy count. `rules.json` `ai.castMinOwnFighting`: optional
+  integer 1-64 (limits in `DataLimits`), absent = the enemy-count rule as today; in the content hash only when present.
+  Generic by kind / affects / effects; no ability, unit or faction id in C#. Own units only (the AI's own view; no fog
+  question); no allocation in the think. Re-run Part A's report with the knob at 2, 3 and 4 and recommend one value.
+- If A points elsewhere: Shaman not with the army = report it with the numbers and a proposed generic rule, build
+  nothing; too few Shamans = a note for the data track (composition is `ai.json`'s). Then, and only then, Request 48's
+  schema rides along: `units.json` optional `carry` (a worker's own carry amount; absent = `rules.json`'s; validated;
+  hashed only when present; test data only).
+- OUT of scope: any `game/data/**` byte, the golden, every pin's literal, save / replay formats, `Content/**` and
+  `QA/Content/**` (the data track's), `sim/Rts.Sim/ViewApi/**`, Requests 46 / 51, Soak runs.
+
+**Acceptance criteria.**
+1. Part A's report exists as a Stress test, prints the table above, and the developer's report names the cause in one
+   sentence with the three candidate causes' figures side by side. Measure and report; no pass / fail figure.
+2. (B) `AiLoaderTests` / `DataValidationTests` rows: absent loads (rule off); 1, 2, 64 load; 0, 65, -1, 1.5, a string and
+   `null` are each one error at `ai.castMinOwnFighting`.
+3. (B) `AbilityManagerTests` scenes on the test copy: knob present, N own fighters attacking within the radius and no
+   enemy within it → cast; N - 1 → no cast; N own units idle beside the caster → no cast; workers and the caster not
+   counted; knob absent → today's rule exactly. A damage self-aura and a ground ability are untouched by the knob.
+4. (B) The shipped content hash is unchanged (computed on base and head, no literal, rule 49); a `rules.json` carrying
+   the knob hashes differently; `git diff 06277d6...HEAD -- game/` is empty.
+5. (B) With the knob absent a full Teblor AI match on the test copy is hash-identical tick by tick to the base (one
+   literal row, Teblor v Malazan); every existing pin class green with no literal edited (rules 43 / 45: no shipped
+   match may move; if one does, stop and report, do not re-pin).
+6. (B) Part A's report re-run at 2 / 3 / 4: casts a match before 15:00 and the outcome columns (defeated by 15:00,
+   army pop at 15:00, wins) beside the knob-absent row. Measure and report; the value is picked at D31.
+7. (B) `AllocationTests`' think rows green; a save taken mid-match with the knob present loads and runs 2,000 ticks
+   hash-identical (no new saved state, or the brief is wrong: stop and report).
+8. Build 0 / 0, the default loop green, docs/03 "Implementation (M7-7)" with a "For the data track (M7-7)" paragraph
+   (the JSON for `rules.json`, the recommended value, "lands with D31") and docs/02's AI section if a rule was built.
+
+**Design references.** docs/03 "Implementation (M5-4c)" (the cast rules), "Implementation (M7-4)", "Implementation
+(M7-6)" (the optional-field pattern: `RawValue`, hash only when present); docs/02 AI section; `docs/factions/teblor.md`
+"Blood-oil Frenzy"; STATE Requests 53 and 48.
+
+**Constraints.** Rule 41: the data track re-measures V24 this session on `main` without this rule; your figures and
+theirs are not comparable and both reports say so. Rule 58 / 59: a test that forges the knob or the Frenzy rows must
+pass on a copy that already carries them (D31 will); run your new tests on such a copy before reporting. Rule 52: end
+every test process you started. Fog-filtered view only; no Dictionary iteration; no allocation per think. Bug ids 1340+.
+Size: about 800 lines of production + developer tests.
+
+**QA focus (full, rule 53: default loop with Stress, Perf alone under rule 42, no Soak).** The knob's boundary (N / N - 1,
+a fighter exactly on the radius, a fighter that dies the tick of the think, a Shaman that is a wave member owed its
+Move home, two Shamans beside one fight: do both cast and waste one?); the cooldown / MaxTries judging with a cast that
+has no point; Easy (which casts since D19) and Hard on the knob; a 2v2 where the fighters within the radius are an
+ally's (must not count); determinism: same seed twice, save / load mid-Frenzy, cross-process digest; knob absent =
+bit-identical on three shipped-pin matches; D31's rows applied on a scratch clone with the knob written into
+`rules.json` (rule 58): which default-loop rows go red beyond the 24 already known.
+
 ### Where we are
 M7-6 on `main`. Counter **3 / 4** (one more feature session, then the hardening). Fixed: BUG-1280, BUG-1281, and
 BUG-1310 / 1311 / 1312 inside the session. Debt: BUG-1220 / 1221 S4, BUG-1161's three alias names S4, BUG-1149 / 1151 /
@@ -200,6 +268,64 @@ BUG-1310 / 1311 / 1312 inside the session. Debt: BUG-1220 / 1221 S4, BUG-1161's 
 ---
 
 ## View track
+
+### Current session plan (2026-11-13-2306): M6-VH7, the view's hardening (counter 4 / 4), QA standard
+
+**Goal.** Get the scene loop back to all green (BUG-1323), then make animated figures cheap enough that the art pass
+can widen (BUG-1321, rule 60), and stop the worker's state colour hiding the figure (BUG-1320).
+
+**Scope, in this order.**
+1. **BUG-1323 (first, a few lines):** `QaM6V20Test`'s restart row forces a collection before each sample
+   (`GC.Collect`, `GC.WaitForPendingFinalizers`, `GC.Collect`, two frames) or samples 12+ cycles and compares the halves'
+   minimums. The exact checks on nodes, resources and orphans stay.
+2. **BUG-1321:** take the baseline bench in your first minutes, before the other tracks' suites start
+   (`ModelShots --bench 30 --vsync off`, models and `--placeholder-art`), and write beside every figure how many
+   `testhost` / Godot processes were running. Then, in order, measuring after each: (a) drop the 40 finger bone tracks
+   from the animation library at import (`tools/art/build_unit.py`); (b) crowd animation at a lower, staggered rate
+   (players in manual mode, N slots advanced a frame, nearest the camera first; the rate and N are view constants or
+   settings, not gameplay data); (c) no shadow casting for models past a zoom. Stop when the target is met. If (a) + (b)
+   do not reach it, stop and report what a shared-skeleton or baked-animation approach would cost; do not start it.
+3. **BUG-1320 (Producer default, owner may revisit):** on a model the gathering / returning / building tint is not
+   drawn over the body; the hit flash stays; capsules keep their tints. A skirmish-start picture before and after.
+4. **BUG-1322** items 1-2 (the old model child renamed or removed before it is freed; the team-less warning once per
+   file per run). Item 3 is the owner's (never touch `C:\Dev\rtsGameProject` outside your worktree).
+5. **BUG-1230** (long faction names in the setup lists) only if the above is done and the size allows.
+- Files: `game/**` except `game/data/**`; `tools/asset-manifest.json`, `tools/import-assets.ps1`, `tools/art/**`;
+  docs/03 / docs/04. OUT: `sim/**` (no ViewApi change is needed), `game/data/**`, any new unit model type (rule 60),
+  the buildings' drawn `scale`, a shared-skeleton or baked-animation rewrite.
+
+**Acceptance criteria.**
+1. `QaM6V20Test` green ten runs of ten alone; the scene loop all green (101 of 101 plus any scene this task adds; no red row
+   on purpose).
+2. 400 models (`ModelShots --bench`) under 16.7 ms average with no other studio test process running, the worst 1%
+   reported; 1,000 models and the capsule baseline in the same window as a report. If no quiet window exists, report
+   the loaded figures with the capsule figure from the same window; the Producer measures alone at ACCEPT and that
+   figure decides.
+3. Animation still reads: pictures at 20 m and 40 m of walking, attacking and gathering figures after (b), looked at;
+   the nearest figures to the camera animate every frame; no figure is frozen for longer than the stagger period
+   (a scene row checks every visible player advanced within it).
+4. Re-import: `tools/import-assets.ps1` twice gives byte-identical outputs; the committed `.glb` sizes before / after;
+   total LFS under 12 MB; `git status` clean after a re-run.
+5. BUG-1320: a gathering Laborer model's team surface shows the player colour (a scene row reads the material; the
+   picture); `EconomyViewTest`'s capsule tints unchanged; the hit flash on a model still pinned.
+6. BUG-1322 items 1-2 each with a scene row (the reused slot's child is named `Model`; one warning per file per run).
+7. `--placeholder-art` pictures pixel-identical to the base; 0 bytes allocated over 120 syncs of 400 models still holds.
+8. Build 0 / 0, smoke PASS, docs/03 "Implementation (M6-VH7)" and docs/04 (the finger tracks, the animation rate) in
+   the commit.
+
+**Design references.** docs/03 "Target hardware" and "Implementation (M6-V20)"; docs/04 "Style guide", "Team color",
+"Animation setup"; BUG-1320 / 1321 / 1322 / 1323 / 1230.
+
+**Constraints.** Dumb views (rule 7): the animation scheduler holds no gameplay state and reads only snapshots. Five
+scenes pin capsules with `UseModels` false; a new scene that reads a slot's mesh does the same or reads `ModelMeshOf`.
+Never kill another track's `testhost` or Godot; end your own (rule 52). Scratch scenes write under the scratchpad, not
+`user://`. Bug ids 1350+.
+
+**QA focus (standard: default loop, the scene loop, no Stress beyond what the task touches).** Re-measure the bench on a
+fresh clone and say what else ran; the stagger under slot reuse, a restart, a replay seek, pause (does a paused match
+freeze every figure on the same pose, and does un-pausing jump?), game speed 2x, zooming in on a far crowd (do figures
+pop?), an attack clip shorter than the stagger period (is a blow ever skipped whole?); a death during a skipped frame;
+the re-import on a fresh clone; `QaM6V20Test` twenty runs.
 
 ### Where we are
 M6-V20 on `main`. Counter **4 / 4: the next session is the view's hardening.** 101 scenes, `QaM6V20Test` red on
@@ -238,6 +364,57 @@ owner's taste), BUG-1115 item 4.
 ---
 
 ## Data track
+
+### Current session plan (2026-11-13-2306): D-H8, the data's hardening (counter 4 / 4), QA standard; no shipped file
+
+**Goal.** Close the two gaps D30's QA found in the landing's checks and settle the one number D31 still rests on
+(the Teblor opening's own reserve share), so D31 next session is a copy-and-verify landing.
+
+**Scope.**
+- **BUG-1330:** the description-number rule reads a status row's `damageBonus` and its `onEnd` magnitude as two claims,
+  each tied to its own words ("20% more damage"; "Slowed 20%"), and a row number the description never states is a
+  problem. Un-skip `D30LandingQaTests.Mutant_OneOfTheTwo20s_Moved_TheStatusTooltipIsNamed`.
+- **BUG-1331 item 2:** in `Content/TeblorLanding`, the Frenzy ability's own description says what the status does (the
+  40% faster attacks, the 20% more damage, Slowed 20% for 4 seconds afterwards), pinned to the numbers both ways; the
+  Owner review table on the page gains a row for the new status's name and description. Quote the new text in your
+  report (it is the owner's to approve at D31).
+- **BUG-1331 item 3:** `TeblorLandingWriteTests` keeps each file's formatting and line endings: ten one-field edits
+  show as ten changed lines, the docs keep LF.
+- **V24 re-measured with the share on its own opening** (Request 52 is on `main`): `attack.reserveArmyShare` on the
+  Teblor opening only, the opponent at `rules.json`'s 1; values 0.25, 0.5, 0.75; seeds 1-8, 64 matches a row, D30's
+  columns, beside D30's global-share 0.5 row and the share-1 row. Stress category, a report with no bound.
+- Files: `sim/Rts.Sim.Tests/Content/**`, `sim/Rts.Sim.Tests/QA/Content/**`, `docs/factions/teblor.md`.
+  OUT: every `game/data/**` byte, `docs/02`, any other C#, the golden, the sim's pin classes. BUG-1331 item 1 is the
+  view's (next session). BUG-1241 stays open until D31.
+
+**Acceptance criteria.**
+1. The un-skipped theory is green: moving `damageBonus` alone, `onEnd.magnitude` alone, or dropping `damageBonus` on
+   the landing copy each names `teblor_frenzied description`; the unmoved copy has no problem; shipped data has none.
+2. The rule change costs no existing row: Content + QA/Content all green on shipped data and on the landing copy
+   (1,684 or more, the count reported).
+3. The ability description on the landing copy states all three numbers and a mutant of each is named; the page's
+   Owner review table carries the status row and `RuleRowClaimTests` / the page pins hold it both ways.
+4. `D30_WRITE_LANDING=1` on a scratch clone (outside `.claude/worktrees`): `git diff --stat` shows only the lines the
+   landing changes, no line-ending warning; applying it twice changes nothing more.
+5. The share table (four rows + D30's two) is in the report with a one-line reading of the curve. Measure and report
+   (rule 48); the Producer picks at D31.
+6. `git diff 06277d6...HEAD --stat` holds only the three paths above (+ nothing under `studio/**`: bug updates come as
+   a patch in the scratchpad).
+
+**Design references.** `docs/factions/teblor.md` (Abilities, Status effects, AI, Owner review table); docs/02 "Status
+effects"; docs/03 "For the data track (M7-4)" and "(M7-6)"; BUG-1330, BUG-1331; D30's tables in
+`studio/sessions/2026-11-13-1118.md`.
+
+**Constraints.** Rule 41: the sim builds an AI cast rule for Frenzy this session behind a knob no shipped file carries;
+your matches run on `main`'s rules without it, and the report says so. D31 re-runs the one chosen row on the tree it
+lands on. Player-facing text only in data (here: the landing copy and the page). Rule 52. Bug ids 1360+.
+
+**QA focus (standard: the task's filters, the default loop, the Stress report rows this task adds; never the full
+suite).** Mutants of the new rule beyond the three (a description that states the right number with the wrong words,
+both numbers moved to the same new value, an `onEnd` status that is not a slow, a status with `damageBonus` and no
+`onEnd`); does the stricter "every row number is stated" rule now flag any shipped Malazan / Whirlwind row (it must
+not, or the finding is the rule's); the write helper on a file with CRLF and one with a trailing newline missing; the
+0.5 row re-run by QA's own harness equal in every column.
 
 ### Where we are
 D30 on `main` as tests and page prose; nothing shipped moved. Counter **4 / 4: the next session is the data's
