@@ -10,12 +10,21 @@ namespace Rts.Sim.Tests;
 /// </summary>
 public class BloodOilScenesTests
 {
-    /// <summary>docs/03 "For the data track (M7-4)" exactly as written: the four files the data track will change.</summary>
+    /// <summary>
+    /// docs/03 "For the data track (M7-4)" exactly as written: the four files the data track will change. Idempotent
+    /// (BUG-1310): a <c>teblor_frenzied</c> row or Anointing <c>statusDuration</c> effect the files already carry is taken out
+    /// before the docs/03 one is appended, so on data that ships the rows the copy still has exactly one of each.
+    /// </summary>
     internal static void DataTrackRows(TestDataDir dir)
     {
-        dir.EditJson("common/statuses.json", r => r["statuses"]!.AsArray().Add(JsonNode.Parse("""
-            { "id": "teblor_frenzied", "displayName": "Blood-oil Frenzy", "description": "...", "kind": "frenzied", "damageBonus": 0.2, "onEnd": { "status": "slowed", "magnitude": 0.2, "duration": 4 } }
-            """)));
+        dir.EditJson("common/statuses.json", r =>
+        {
+            JsonArray list = r["statuses"]!.AsArray();
+            BloodOilScenes.RemoveWhere(list, n => (string?)n!["id"] == BloodOilScenes.Status);
+            list.Add(JsonNode.Parse("""
+                { "id": "teblor_frenzied", "displayName": "Blood-oil Frenzy", "description": "...", "kind": "frenzied", "damageBonus": 0.2, "onEnd": { "status": "slowed", "magnitude": 0.2, "duration": 4 } }
+                """));
+        });
         dir.EditJson("factions/teblor/abilities.json", r =>
         {
             foreach (JsonNode? a in r["abilities"]!.AsArray())
@@ -26,7 +35,11 @@ public class BloodOilScenesTests
         {
             foreach (JsonNode? t in r["techs"]!.AsArray())
                 if ((string)t!["id"]! == "teblor_blood_oil_anointing")
-                    t["effects"]!.AsArray().Add(JsonNode.Parse("""{ "stat": "statusDuration", "amount": 4, "statuses": ["teblor_frenzied"] }"""));
+                {
+                    JsonArray effects = t["effects"]!.AsArray();
+                    BloodOilScenes.RemoveWhere(effects, BloodOilScenes.IsStatusDuration);
+                    effects.Add(JsonNode.Parse("""{ "stat": "statusDuration", "amount": 4, "statuses": ["teblor_frenzied"] }"""));
+                }
         });
         dir.EditJson("factions/teblor/buildings.json", r =>
         {

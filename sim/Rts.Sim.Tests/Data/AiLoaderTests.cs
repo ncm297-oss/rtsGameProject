@@ -280,7 +280,9 @@ public class AiLoaderTests
 
     /// <summary>
     /// M7-6 (Request 52): an opening's optional <c>attack.reserveArmyShare</c> loads absent (null: the rules' value), at 0, 0.5
-    /// and 1, on the opening that carries it only (the faction's other openings and the other faction's stay null).
+    /// and 1, on the opening that carries it only: every other opening (this faction's and the others') loads as shipped.
+    /// BUG-1311: "as shipped", not null, so the data track's docs/03 row (Teblor <c>standard</c> at 0.5) keeps this green;
+    /// the absent row takes the field out rather than leaving whatever the file ships.
     /// </summary>
     [Theory]
     [InlineData(null)]
@@ -291,13 +293,22 @@ public class AiLoaderTests
     {
         GameData d = LoadWith(root =>
         {
-            if (rawJson != null) AiScenes.Opening(root)["attack"]!["reserveArmyShare"] = JsonNode.Parse(rawJson);
+            JsonObject attack = AiScenes.Opening(root)["attack"]!.AsObject();
+            attack.Remove("reserveArmyShare");
+            if (rawJson != null) attack["reserveArmyShare"] = JsonNode.Parse(rawJson);
         });
-        AiDef ai = d.Ai[d.FindFaction("malazan")];
+        int malazan = d.FindFaction("malazan");
+        AiDef ai = d.Ai[malazan];
         Assert.Equal(rawJson == null ? null : float.Parse(rawJson, System.Globalization.CultureInfo.InvariantCulture), ai.Openings[0].ReserveArmyShare);
-        for (int o = 1; o < ai.Openings.Length; o++) Assert.Null(ai.Openings[o].ReserveArmyShare);
-        Assert.All(d.Ai.Where(a => a.Faction != ai.Faction).SelectMany(a => a.Openings), o => Assert.Null(o.ReserveArmyShare));
-        Assert.All(TestSim.Data.Ai.SelectMany(a => a.Openings), o => Assert.Null(o.ReserveArmyShare)); // no shipped opening carries it
+        Assert.Equal(TestSim.Data.Ai.Length, d.Ai.Length);
+        for (int f = 0; f < d.Ai.Length; f++)
+        {
+            AiDef shipped = TestSim.Data.Ai[f];
+            Assert.Equal(shipped.Faction, d.Ai[f].Faction);
+            Assert.Equal(shipped.Openings.Length, d.Ai[f].Openings.Length);
+            for (int o = f == malazan ? 1 : 0; o < shipped.Openings.Length; o++)
+                Assert.Equal(shipped.Openings[o].ReserveArmyShare, d.Ai[f].Openings[o].ReserveArmyShare);
+        }
     }
 
     /// <summary>

@@ -352,7 +352,7 @@ public class OpeningReserveShareQaTests
     /// must still load (one <c>teblor_frenzied</c> row), or <c>BloodOilScenesTests</c>' premise goes red on the data track's
     /// session.
     /// </summary>
-    [Fact(Skip = "BUG-1310 (open, S2): DataTrackRows appends the rows blindly; a copy that already carries them gets a duplicate teblor_frenzied")]
+    [Fact]
     public void DataTrackRows_OnACopyThatAlreadyCarriesThem_StillLoads()
     {
         using TestDataDir dir = TestDataDir.CopyOfShipped();
