@@ -147,10 +147,10 @@
       "buildTime": 35,
       "popProvided": 0,
       "dropOff": false,
+      "scale": 1.25,
       "requires": ["age_ii"],
       "sight": 24,
       "attack": { "value": 10, "type": "pierce", "cooldown": 2, "range": 18, "windup": 0.4, "projectile": "arrow", "targets": "units" },
-      "scale": 1.25,
       "detector": 16
     }
   ]

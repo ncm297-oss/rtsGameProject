@@ -10,7 +10,7 @@ namespace Rts.Sim.Tests.Content;
 /// the Gatherer's <c>carry</c> 15 all in the shipped files. Three rows in D-H8's harness
 /// (<see cref="TeblorOpeningHorizonReportTests.Play"/>, Normal against Normal to 15:00, the Teblor on seat 0 against the
 /// Malazan and seat 1 against the Whirlwind, four maps, seeds 1-8, 64 matches a row): the shipped data as it is (V24, own
-/// share 0.25); V24 with its own share 0.5 (<see cref="TeblorReserveShareReportTests.Make"/> on the shipped data); and the
+/// share 0.25; since D32 the shipped row plays D32's opening, <see cref="D32TeblorOpeningReportTests.ShippedVariant"/>); V24 with its own share 0.5 (<see cref="TeblorReserveShareReportTests.Make"/> on the shipped data); and the
 /// shipped data with one line changed, the Age II composition's <c>teblor_shaman</c> weight (scope item 4), with the two
 /// Shaman columns (matches that field a Shaman before 15:00, casts landed). D-H8's own-share rows (without the carry) are
 /// printed beside them as literals. A measurement (rule 48): only preconditions are asserted; the share's rule (6 of 8
@@ -47,7 +47,7 @@ public class TeblorLandedShareReportTests(ITestOutputHelper output)
     {
         var all = new (string, string, Func<GameData>)[]
         {
-            ("shipped", "shipped: V24, own share 0.25, carry 15", () => AiScenes.DataWith(_ => { })),
+            ("shipped", "shipped: the files as they are (since D32 the opening X7, own share 0.25, carry 15)", () => AiScenes.DataWith(_ => { })),
             ("own05", "V24, own share 0.5, carry 15", () => TeblorReserveShareReportTests.Make(0.5, null)),
             ("shamans", $"shipped, Age II Shaman weight {ShamanWeight}", MoreShamans),
         };
@@ -57,7 +57,7 @@ public class TeblorLandedShareReportTests(ITestOutputHelper output)
         return all.Where(c => keep.Contains(c.Item1)).ToArray();
     }
 
-    /// <summary>The preconditions: the shipped data is the landing (status row, carry 15 on the Gatherer, V24 at 0.25), and each row differs from it only where it says.</summary>
+    /// <summary>The preconditions: the shipped data is the landing (status row, carry 15 on the Gatherer, its opening at 0.25), and each row differs from it only where it says.</summary>
     [Fact]
     public void TheRows_AreTheTreeThatShips_PlusTheirOneChange()
     {

@@ -157,7 +157,7 @@ table, composition table and wave line, and the retreat line below to the file, 
 
 | # | Id | Name (shown to the player) | Description (shown to the player) |
 | --- | --- | --- | --- |
-| 1 | `standard` | War band | War Lodge and Javelin Ground first, then Age II; four Warriors raid at 8 army pop, with Javelin Throwers beside them. |
+| 1 | `standard` | War band | War Lodge and Javelin Ground first, then Age II; four Warriors raid at 8 army pop, then Javelin Throwers and Shamans join them and a second Longhouse goes up. |
 
 Not in the file, because the schema has no field for it (requests to the sim track): the sketch's later waves "whenever
 army pop ≥ 24" (an opening has one wave threshold, used for every wave), its expansion condition "when army ≥ 16 pop"
@@ -228,10 +228,14 @@ proposal for a Teblor-only answer (War-dogs against Ranged) is under "Owner revi
 
 ### Opening 1: `standard` (War band)
 
-D29's measured variant V24 (BUG-1241, landed in D31): a War Lodge and the Javelin Ground first, the two building kinds
-Age II needs, Age II at 6:00, then the Bloodwood Carver, the Age II halls and the faction upgrade, and from 10:00 Armor,
-eight more Gatherers and the Stables. The sketch's Carver and Armor in Age I moved after Age II so the AI saves for the
-age first; the 11 Gatherers at the start became 9.
+D32's measured variant X7 (on D29's V24, which D31 landed for BUG-1241): a War Lodge and the Javelin Ground first, the two
+building kinds Age II needs, and Age II at 6:00; from 8:00 a second Longhouse, from 9:00 the Shamans' Circle and two
+Shamans, and from 10:00 the Bloodwood Carver, the Breakers Hall, eight more Gatherers and the Stables, then the faction
+upgrade (11:30) and Armor (12:00). The sketch's Carver and Armor in Age I moved after Age II so the AI saves for the age
+first; the 11 Gatherers at the start became 9. D32 put the expansion first among the Age II steps and moved the Carver,
+the Breakers Hall and the two researches after it, since nothing else may be due beside it if the bank is ever to hold a
+Longhouse's cost (below), and added the Shaman step, since the mix's Shaman weight alone fielded a Shaman in 4 of 64
+matches.
 
 | # | At | Do | Id | Count | Why |
 | --- | --- | --- | --- | --- | --- |
@@ -252,14 +256,15 @@ age first; the 11 Gatherers at the start became 9.
 | 15 | pop 64 | build | `teblor_hut` | 1 | |
 | 16 | pop 70 | build | `teblor_hut` | 1 | The 12th Hut: Longhouse 10 + 12 × 8 = 106, past the 100 cap |
 | 17 | time 360 | research | `age_ii` | 1 | Age II at 6:00 (needs two kinds: the War Lodge and the Javelin Ground) |
-| 18 | time 480 | build | `teblor_bloodwood_carver` | 1 | The Forge, 8:00, when Age II (60 s) is in |
-| 19 | time 480 | build | `teblor_shamans_circle` | 1 | Shamans |
-| 20 | time 540 | build | `teblor_breakers_hall` | 1 | Breakers |
-| 21 | time 570 | research | `teblor_blood_oil_anointing` | 1 | The faction upgrade, at the Bloodwood Carver |
-| 22 | time 600 | research | `armor_1` | 1 | The Carver's first upgrade, Armor |
-| 23 | time 600 | train | `teblor_gatherer` | 8 | Workers to 22 in Age II, at 10:00 |
-| 24 | time 480 | expand | — | 1 | 2nd Longhouse near the nearest free gold mine, at Normal's `expandAfter` (480 s) |
-| 25 | time 600 | build | `teblor_stables` | 1 | Destrier Riders and War-dogs (needs the War Lodge) |
+| 18 | time 480 | expand | — | 1 | 2nd Longhouse near the nearest free gold mine, at Normal's `expandAfter` (480 s); the first Age II step, so it holds the reserve |
+| 19 | time 600 | build | `teblor_bloodwood_carver` | 1 | The Forge, at 10:00, after the expansion |
+| 20 | time 540 | build | `teblor_shamans_circle` | 1 | Shamans, at 9:00 |
+| 21 | time 540 | train | `teblor_shaman` | 2 | Two Shamans once the Circle stands (the mix's weight alone fielded almost none) |
+| 22 | time 600 | build | `teblor_breakers_hall` | 1 | Breakers, at 10:00 |
+| 23 | time 690 | research | `teblor_blood_oil_anointing` | 1 | The faction upgrade, at the Bloodwood Carver |
+| 24 | time 720 | research | `armor_1` | 1 | The Carver's first upgrade, Armor |
+| 25 | time 600 | train | `teblor_gatherer` | 8 | Workers to 22 in Age II, at 10:00 |
+| 26 | time 600 | build | `teblor_stables` | 1 | Destrier Riders and War-dogs (needs the War Lodge) |
 
 **Army composition (`compositions`), weights by pop.** Age I lists only the Warrior (the one unit the Age I steps can
 train), so its weights sum to 45. The War-dog's weight is by pop like the rest (1 a dog); how the AI counts a pack item
@@ -287,20 +292,44 @@ Normal against Normal to 15:00, the Teblor on seat 0 against a Malazan and on se
 generated map, Raraku, Pale Hills and Vathar Crossing, seeds 1-8: 64 matches a row. The target (BUG-1241) is Age II and
 a wave by 10:00 in 6 of a seed's 8 matches. Own share 0.25 with the Gatherer's carry 15 (shipped): the target on 8 of 8
 seeds; of the 64, Age II by 10:00 in 55, a wave by 10:00 in 62, every building kind of the opening in 18, the Anointing
-in 35, defeated by 15:00 in 14, army pop 42 at 15:00, no second Longhouse finished by 15:00. Own share 0.5 with the
-carry: 8 of 8; 55, 62, 1, 26, 14, 64. Before the carry (D-H8, 2026-11-13): 0.25 on 6 of 8 (46, 55, 8, 11, 17, 56) and
-0.5 on 6 of 8 (44, 55, 0, 11, 16, 36). The rule fixed before the measurement was "0.25 if it meets 6 of 8, else 0.5",
-so 0.25 ships.
+in 35, defeated by 15:00 in 14, no second Longhouse finished by 15:00, and an army of 42 pop at 15:00 summed over the
+64 matches (0.7 pop a match: most seats had just lost their army). Own share 0.5 with the carry: 8 of 8; 55, 62, 1, 26,
+14, 64. Before the carry (D-H8, 2026-11-13): 0.25 on 6 of 8 (46, 55, 8, 11, 17, 56) and 0.5 on 6 of 8 (44, 55, 0, 11,
+16, 36). In those lists the last figure is the army pop at 15:00 summed over the 64 matches, not one match's army. The
+rule fixed before the measurement was "0.25 if it meets 6 of 8, else 0.5", so 0.25 ships.
 
-**Houses at the cap (D31, 2026-11-14, measured on the shipped files; `QA/Content/AiHouseRuleReportTests.MenuMapNormal_HouseSources_Report` and `MenuMapNormal_TwelfthHouse_Report`).**
+**The opening, measured (D32, 2026-11-14, on the files that ship; `Content/TeblorLandedShareReportTests` row `shipped`,
+the variants in `Content/D32TeblorOpeningReportTests`).** The same 64 matches (Normal against Normal to 15:00, four maps,
+seeds 1-8). The target (Age II and a wave by 10:00 in 6 of a seed's 8) on 8 of 8 seeds; of the 64, Age II by 10:00 in 55,
+a wave by 10:00 in 62, a second Longhouse finished by 15:00 in 18, every building kind of the opening in 18, the
+Anointing in 20, defeated by 15:00 in 10; a Shaman fielded in 27, with 22 Blood-oil Frenzy casts landed in 18 of them;
+Javelin Throwers fielded in 51 and no Breaker, Destrier Rider or War-dog in any by 15:00 (the description names only the
+Javelin Throwers and Shamans for that reason); an army of 106 pop at 15:00 summed over the 64 matches (1.7 a match). D31's
+opening on the same row: 8 of 8 seeds; 55, 62, no second Longhouse, 18, 35, 14 defeated; a Shaman in 4 (4 casts). The
+brief's rule: at least 6 of 8 seeds, at most 14 defeats, more than 4 matches with a Shaman and more than 0 with a second
+Longhouse; of the 19 variants measured beside D31's, six meet all four (E2, C3, X2, X7, X8, X9), and this one (X7) also
+keeps D31's every-kind count: E2 and C3 (own share 0) lose the wave by 10:00 in 12 matches, and X2, X8 and X9 finish every
+kind in 5, 6 and 6 and the Anointing in 15, 11 and 6.
+
+**Why the expansion waited (D32, `Content/D32TeblorOpeningReportTests.Expansion_ThinkByThink_Report`).** Gold, not the
+step's place in the list or a missing mine: at the Teblor thinks from 8:00 until the step was sent, on D31's opening (64
+matches, 22,926 thinks), a free gold mine was known in 19,022, but the bank held a Longhouse's 275 gold and 275 wood in
+36. The base was defended in 14,088 of them (no reserve at all then), and otherwise the reserve went to the earlier Age
+II steps (the Breakers Hall 3,952 thinks, the Shamans' Circle 1,785) and to the expansion in 1,021. Moving the step first
+alone gave it the reserve in 7,284 thinks, and the bank still held its cost in 34, since a building or research step after
+the reserved one is not held back by the reserve (docs/02 "AI opponent"). So in the shipped opening nothing else is due
+beside it at 8:00: the Carver and the Breakers Hall wait until 10:00, the Anointing until 11:30 and Armor until 12:00.
+Where the step was sent before D32, on Raraku against the Whirlwind at 8:35, the site was razed and never placed again
+(an expansion is not rebuilt, docs/02).
+
+**Houses at the cap (D32, 2026-11-14, measured on the shipped files; `QA/Content/AiHouseRuleReportTests.MenuMapNormal_HouseSources_Report` and `MenuMapNormal_TwelfthHouse_Report`).**
 Since M5-4f the executor skips a house step once the population cap is the hard cap (100): the step is done with no
-command sent and no Hut placed. On the menu's map (20 minutes, the other seat idle): Normal, seed 1: the cap stays below
-100 (92 at 20:00); the last Hut step (step 16) is never done; skipped at the hard cap: none; 11 Huts stand at 20:00, 0
-past the cap. As on the other pages, the 12th Hut step measured taken out: without the 12th Hut step (step 16) on the
-same seed, the cap stays below 100, and 11 Huts stand at 20:00, 0 past the cap. The step stays: it is not reached in 20
-minutes on this seed (V24 keeps fewer Gatherers, so the population grows slower), and it costs nothing until it is.
+command sent and no Hut placed. On the menu's map (20 minutes, the other seat idle): Normal, seed 1: the cap reaches 100 at 1146 s; the last Hut step (step 16) is never done; skipped at the hard cap: step 15; 10 Huts stand at 20:00, 0 past the cap. As on the other pages, the 12th Hut step measured taken out: without the 12th Hut step (step 16) on the same seed, the cap reaches 100 at 1146 s, and 10 Huts stand at 20:00, 0 past the cap. The step stays: the
+second Longhouse (+10 pop, D32's expansion) brings the cap to 100 with 10 Huts, so the 11th Hut step (step 15) is
+skipped and the 12th is never reached on this seed; a seat that loses or never builds the second Longhouse needs both,
+and they cost nothing until they are reached.
 
-**Spending on the menu's map (D31, 2026-11-14, gathering gold 0.85 / wood 0.75 a second; `Content/AiSpendingReportTests.GeneratedNormal_Spending_Report`).**
+**Spending on the menu's map (D32, 2026-11-14, gathering gold 0.85 / wood 0.75 a second; `Content/AiSpendingReportTests.GeneratedNormal_Spending_Report`).**
 Against an idle seat, 12 forests and 8 mines (the menu's), 20 minutes. Normal, seed 1 (the smallest seed in 1-50 whose
 Normal pick is this opening): the idle base falls at 491 s; in hand at 5 min 80 gold / 230 wood; the first wave at 342
 s; Age II in at 489 s. Easy, seed 1 (Easy always plays the first opening): the idle base falls at 523 s; in hand at 5
@@ -379,7 +408,7 @@ pins' rules for every faction).
 | `techs.json` | `teblor_blood_oil_anointing` | Blood-oil Anointing | Blood-oil rubbed into the skin before battle: Warriors and Destrier Riders gain +2 armor, and Blood-oil Frenzy lasts 4 s longer. Needs Age II. |
 | `abilities.json` | `blood_oil_frenzy` | Blood-oil Frenzy | Drives nearby warriors into a frenzy: own units within 8 m attack 40% faster and deal 20% more damage for 10 seconds, then are Slowed 20% for 4 seconds. |
 | `statuses.json` | `teblor_frenzied` | Blood-oil Frenzy | Attacks faster and deals 20% more damage. When it ends, the unit is Slowed 20% for 4 seconds. |
-| `ai.json` opening | `standard` | War band | War Lodge and Javelin Ground first, then Age II; four Warriors raid at 8 army pop, with Javelin Throwers beside them. |
+| `ai.json` opening | `standard` | War band | War Lodge and Javelin Ground first, then Age II; four Warriors raid at 8 army pop, then Javelin Throwers and Shamans join them and a second Longhouse goes up. |
 
 **Counter answers (the data track's proposal, the owner's call).** `rules.json` `ai.counters` is one rule by slot for
 every faction, so the Teblor answers in "How the AI adapts" are that rule in Teblor units. The proposal differs in one

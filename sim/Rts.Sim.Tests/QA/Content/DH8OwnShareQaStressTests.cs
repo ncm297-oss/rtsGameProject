@@ -29,25 +29,25 @@ public class DH8OwnShareQaStressTests(ITestOutputHelper output)
         int DefeatedAt, int Army15Half, int FrenzyStarts, int FirstFrenzy);
 
     /// <summary>docs/03's four rows, typed from the doc (QA's own copy).</summary>
-    private static JsonArray Strip(JsonArray list, Func<JsonNode?, bool> match)
-    {
-        for (int i = list.Count - 1; i >= 0; i--)
-            if (match(list[i])) list.RemoveAt(i);
-        return list;
-    }
-
     private static void Rows(TestDataDir dir)
     {
         // D31: the rows ship now, so a row or effect already in the files is taken out first (one of each, as before).
-        dir.EditJson("common/statuses.json", root => Strip(root["statuses"]!.AsArray(), n => (string?)n!["id"] == "teblor_frenzied").Add(JsonNode.Parse(
-            """{ "id": "teblor_frenzied", "displayName": "Blood-oil Frenzy", "description": "QA", "kind": "frenzied", "damageBonus": 0.2, "onEnd": { "status": "slowed", "magnitude": 0.2, "duration": 4 } }""")));
+        dir.EditJson("common/statuses.json", root =>
+        {
+            JsonArray statuses = root["statuses"]!.AsArray();
+            BloodOilScenes.RemoveWhere(statuses, n => (string?)n!["id"] == "teblor_frenzied");
+            statuses.Add(JsonNode.Parse(
+                """{ "id": "teblor_frenzied", "displayName": "Blood-oil Frenzy", "description": "QA", "kind": "frenzied", "damageBonus": 0.2, "onEnd": { "status": "slowed", "magnitude": 0.2, "duration": 4 } }"""));
+        });
         dir.EditJson("factions/teblor/abilities.json", root =>
             root["abilities"]!.AsArray().Single(a => (string)a!["id"]! == "blood_oil_frenzy")!["effects"] =
                 JsonNode.Parse("""[{ "kind": "applyStatus", "status": "teblor_frenzied", "magnitude": 0.4, "duration": 10 }]"""));
         dir.EditJson("factions/teblor/techs.json", root =>
-            Strip(root["techs"]!.AsArray().Single(t => (string)t!["id"]! == "teblor_blood_oil_anointing")!["effects"]!.AsArray(),
-                    n => (string?)n!["stat"] == "statusDuration")
-                .Add(JsonNode.Parse("""{ "stat": "statusDuration", "amount": 4, "statuses": ["teblor_frenzied"] }""")));
+        {
+            JsonArray effects = root["techs"]!.AsArray().Single(t => (string)t!["id"]! == "teblor_blood_oil_anointing")!["effects"]!.AsArray();
+            BloodOilScenes.RemoveWhere(effects, n => (string?)n!["stat"] == "statusDuration");
+            effects.Add(JsonNode.Parse("""{ "stat": "statusDuration", "amount": 4, "statuses": ["teblor_frenzied"] }"""));
+        });
         dir.EditJson("factions/teblor/buildings.json", root => { foreach (JsonNode? b in root["buildings"]!.AsArray()) b!["scale"] = 1.25; });
     }
 

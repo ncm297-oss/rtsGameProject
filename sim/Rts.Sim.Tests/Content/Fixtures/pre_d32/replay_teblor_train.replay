@@ -1,0 +1,60 @@
+rts-replay 6
+sim-version 0.0.1
+data-hash 27036D3A2F2BA1CB
+seed 1
+players 2
+seat 0 teblor human normal
+seat 1 malazan human normal
+unit-capacity 400
+command-capacity 1024
+resource-capacity 4096
+checkpoint-interval 100
+ticks 400
+combat 1
+map.width 128
+map.height 128
+map.edge-margin 6
+map.level1-plateaus 5
+map.level1-min-size 16
+map.level1-max-size 34
+map.level2-plateaus 2
+map.level2-min-size 7
+map.level2-max-size 14
+map.level2-inset 2
+map.ramp-width 3
+map.ramp-length 4
+map.ramps-per-plateau 2
+map.ramp-tries 32
+map.min-passable-fraction 3F000000
+map.max-attempts 8
+map.forests 8
+map.forest-min-trees 12
+map.forest-max-trees 40
+map.gold-mines 6
+map.mine-spacing 41C00000
+map.start-locations 2
+map.start-clear-radius 8
+map.start-edge-margin 10
+map.start-mine-distance 41900000
+map.start-forest-distance 41C00000
+commands 13
+c 1 0 0 6 24 423C0000 43370000 0 0 0 0 0 0
+c 1 0 1 1 16 423C0000 43350000 0 0 0 0 0 0
+c 1 0 2 1 16 42440000 43350000 0 0 0 0 0 0
+c 1 0 3 1 16 42340000 43350000 0 0 0 0 0 0
+c 1 0 4 1 16 424C0000 43350000 0 0 0 0 0 0
+c 1 0 5 1 16 42540000 43350000 0 0 0 0 0 0
+c 1 1 0 6 7 43490000 42820000 0 0 0 0 0 0
+c 1 1 1 1 4 43470000 42920000 0 0 0 0 0 0
+c 1 1 2 1 4 43470000 428E0000 0 0 0 0 0 0
+c 1 1 3 1 4 43470000 428A0000 0 0 0 0 0 0
+c 1 1 4 1 4 43470000 42860000 0 0 0 0 0 0
+c 1 1 5 1 4 43490000 42920000 0 0 0 0 0 0
+c 3 0 6 11 16 42480000 433A0000 0 0 0 0 0 0
+checkpoints 4
+k 100 A08C3458432311F4
+k 200 EE79FAB2B4B51B9C
+k 300 053EF5EDE61454D1
+k 400 9D114ADAC6F590D5
+end
+checksum EC6680E079015525

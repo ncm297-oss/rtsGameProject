@@ -67,6 +67,12 @@ public class GatherWedgeQaTests
     // Teblor buildings, the Gatherer's carry 15, and V24 as the Teblor standard opening with its own reserveArmyShare 0.25
     // (all in GameData.ContentHash). The golden's one seat is a Malazan human seat, so its k lines are byte for byte as
     // before (header data-hash and checksum only).
+    // D32 (data track, rule 51, BUG-0750's rule): regenerated once more, 27036D3A2F2BA1CB -> 5353DF8A1473FC6D, because the
+    // Teblor standard opening changed in one move: its description (BUG-1390), the expand step first of the Age II steps,
+    // the Shamans' Circle at 9:00 with a train step for two Shamans, the Carver and Breakers Hall at 10:00, the Anointing
+    // at 11:30 and Armor at 12:00 (AI openings, words included, are in GameData.ContentHash; the Stone Cairn's scale field
+    // moved in buildings.json, which loads the same). The golden's one seat is a Malazan human seat, so its k lines are
+    // byte for byte as before (header data-hash and checksum only).
 
     /// <summary>
     /// Ticks the replay must still match its recorded checkpoints: all of them (M4-H1, BUG-0211; before the re-recording

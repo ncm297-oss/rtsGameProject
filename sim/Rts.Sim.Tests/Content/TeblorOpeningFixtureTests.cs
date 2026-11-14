@@ -70,36 +70,57 @@ public class TeblorOpeningFixtureTests
     }
 
     /// <summary>
-    /// D31: the shipped <c>standard</c> opening is the hand-over (V24) field for field, its description included, plus its own
-    /// <c>attack.reserveArmyShare</c> 0.25 (the share D31's measurement picked) and nothing else; a wrong share, no share, or a
-    /// step moved each fail by name (a share on a second opening: <see cref="CarryAndReserveShareContentTests"/>).
+    /// D32: the shipped <c>standard</c> opening is <c>Fixtures/teblor_standard_d32.json</c> field for field (its description
+    /// included, BUG-1390's), so a one-sided edit of either fails by name: a description, a step moved, a share or a wave.
+    /// D31's pin (the shipped opening is the hand-over V24 plus its own share 0.25) is now
+    /// <see cref="TheD31Record_IsTheHandOver_PlusItsOwnShare025"/> on the record of what D31 shipped.
     /// </summary>
     [Fact]
-    public void TheShippedOpening_IsTheHandOver_PlusItsOwnShare025()
+    public void TheShippedOpening_IsTheD32Fixture()
     {
-        Assert.Empty(ShippedVersusHandOver(TeblorOpeningVariantsReportTests.Shipped()));
-        JsonObject wrong = TeblorOpeningVariantsReportTests.Shipped();
-        wrong["attack"]!["reserveArmyShare"] = 0.5;
-        Assert.Contains("attack.reserveArmyShare: shipped 0.5 vs 0.25", ShippedVersusHandOver(wrong));
+        Assert.Empty(ShippedVersusD32(TeblorOpeningVariantsReportTests.Shipped()));
+        JsonObject words = TeblorOpeningVariantsReportTests.Shipped();
+        words["description"] = (string)words["description"]! + " ";
+        Assert.Contains("description differs from the D32 fixture", ShippedVersusD32(words));
         JsonObject moved = TeblorOpeningVariantsReportTests.Shipped();
         moved["buildOrder"]![16]!["at"] = new JsonObject { ["time"] = 420 };
-        Assert.Contains("buildOrder differs from the hand-over", ShippedVersusHandOver(moved));
-        JsonObject none = TeblorOpeningVariantsReportTests.Shipped();
-        none["attack"]!.AsObject().Remove("reserveArmyShare");
-        Assert.Contains("attack.reserveArmyShare: shipped none vs 0.25", ShippedVersusHandOver(none));
+        Assert.Contains("buildOrder differs from the D32 fixture", ShippedVersusD32(moved));
+        JsonObject share = TeblorOpeningVariantsReportTests.Shipped();
+        share["attack"]!["reserveArmyShare"] = 0.5;
+        Assert.Contains("attack differs from the D32 fixture", ShippedVersusD32(share));
     }
 
-    private static List<string> ShippedVersusHandOver(JsonObject shipped)
+    /// <summary>The D32 fixture is the variant <see cref="D32TeblorOpeningReportTests.ShippedVariant"/> measured (build order, compositions, wave and share), with BUG-1390's description.</summary>
+    [Fact]
+    public void TheD32Fixture_IsTheMeasuredVariant_WithBug1390sDescription()
+    {
+        JsonObject fixture = D32TeblorOpeningReportTests.D32();
+        JsonObject measured = D32TeblorOpeningReportTests.AllVariants().Single(v => v.Name == D32TeblorOpeningReportTests.ShippedVariant).Opening;
+        foreach (string field in new[] { "id", "displayName", "buildOrder", "compositions", "attack" })
+            Assert.True(JsonNode.DeepEquals(measured[field], fixture[field]), $"{field} differs from {D32TeblorOpeningReportTests.ShippedVariant}");
+        Assert.Equal(D32TeblorOpeningReportTests.Description, (string)fixture["description"]!);
+    }
+
+    /// <summary>D31's pin, kept on its record (<c>Fixtures/teblor_standard_d31.json</c>): what D31 shipped is the hand-over V24 field for field plus its own share 0.25.</summary>
+    [Fact]
+    public void TheD31Record_IsTheHandOver_PlusItsOwnShare025()
+    {
+        JsonObject d31 = D32TeblorOpeningReportTests.D31(), handOver = TeblorOpeningHorizonReportTests.HandOver();
+        foreach (string field in new[] { "id", "displayName", "description", "buildOrder", "compositions" })
+            Assert.True(JsonNode.DeepEquals(d31[field], handOver[field]), $"{field} differs from the hand-over");
+        JsonObject attack = JsonNode.Parse(d31["attack"]!.ToJsonString())!.AsObject();
+        Assert.Equal(0.25, (double)attack["reserveArmyShare"]!);
+        attack.Remove("reserveArmyShare");
+        Assert.True(JsonNode.DeepEquals(attack, handOver["attack"]));
+    }
+
+    private static List<string> ShippedVersusD32(JsonObject shipped)
     {
         var problems = new List<string>();
-        JsonObject handOver = TeblorOpeningHorizonReportTests.HandOver();
-        foreach (string field in new[] { "id", "displayName", "description", "buildOrder", "compositions" })
-            if (!JsonNode.DeepEquals(shipped[field], handOver[field])) problems.Add($"{field} differs from the hand-over");
-        JsonObject attack = JsonNode.Parse(shipped["attack"]!.ToJsonString())!.AsObject();
-        string share = attack["reserveArmyShare"] is JsonNode s ? ((double)s).ToString(System.Globalization.CultureInfo.InvariantCulture) : "none";
-        if (share != "0.25") problems.Add($"attack.reserveArmyShare: shipped {share} vs 0.25");
-        attack.Remove("reserveArmyShare");
-        if (!JsonNode.DeepEquals(attack, handOver["attack"])) problems.Add("attack (wave) differs from the hand-over");
+        JsonObject d32 = D32TeblorOpeningReportTests.D32();
+        foreach (string field in new[] { "id", "displayName", "description", "buildOrder", "compositions", "attack" })
+            if (!JsonNode.DeepEquals(shipped[field], d32[field])) problems.Add($"{field} differs from the D32 fixture");
+        if (shipped.Count != d32.Count) problems.Add($"the shipped opening has {shipped.Count} fields, the D32 fixture {d32.Count}");
         return problems;
     }
 

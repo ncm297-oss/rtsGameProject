@@ -155,7 +155,7 @@ public class AiSpendingReportTests
     /// The date marker each page's spending and house paragraphs carry: D21's re-print, and for the Teblor D31's (the landed
     /// opening re-measured; D28's "(D28, 2026-11-11" before).
     /// </summary>
-    internal static string ReportDate(string faction) => Docs03Factions.Contains(faction) ? "(D21, 2026-10-18" : "(D31, 2026-11-14";
+    internal static string ReportDate(string faction) => Docs03Factions.Contains(faction) ? "(D21, 2026-10-18" : "(D32, 2026-11-14";
 
     /// <summary>
     /// A run as its opening's page paragraph says it: "Normal, seed 2 (the smallest seed in 1-50 whose Normal pick is this
