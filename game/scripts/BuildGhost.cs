@@ -41,6 +41,8 @@ public partial class BuildGhost : Node3D
     public const float ReasonPixelPerZoom = 0.00088f;
 
     private float _labelZoom = float.NaN;
+    // The drawn height of the ghost's type (BuildingViews.DrawnHeight), so the reason label clears its top.
+    private float _boxHeight = BuildingViews.BoxHeight;
 
     private SimRunner? _runner;
     private RtsCamera _camera = null!;
@@ -132,9 +134,11 @@ public partial class BuildGhost : Node3D
     {
         if ((uint)typeId >= (uint)_meshes.Length) return;
         BuildingDef def = _data.Buildings[typeId];
-        _meshes[typeId] ??= new BoxMesh { Size = new Vector3(def.FootprintWidth * MapConstants.CellSize, BuildingViews.BoxHeight, def.FootprintHeight * MapConstants.CellSize) };
+        _boxHeight = BuildingViews.DrawnHeight(def); // M7-V4: the finished building's drawn height, on the same footprint
+        _meshes[typeId] ??= new BoxMesh { Size = new Vector3(def.FootprintWidth * MapConstants.CellSize, _boxHeight, def.FootprintHeight * MapConstants.CellSize) };
         _box.Mesh = _meshes[typeId];
-        _box.Position = new Vector3(0f, BuildingViews.BoxHeight / 2f, 0f);
+        _box.Position = new Vector3(0f, _boxHeight / 2f, 0f);
+        _labelZoom = float.NaN; // the label sits over this type's top: placed again on the next Sync
         Active = true;
         TypeId = typeId;
         Anchor = -1;
@@ -267,7 +271,7 @@ public partial class BuildGhost : Node3D
         _labelZoom = zoom;
         float px = ReasonPixelPerZoom * zoom;
         _label.PixelSize = px;
-        _label.Position = new Vector3(0f, BuildingViews.BoxHeight + 0.4f + 0.6f * ReasonFontSize * px, 0f);
+        _label.Position = new Vector3(0f, _boxHeight + 0.4f + 0.6f * ReasonFontSize * px, 0f);
     }
 
     private void HideBox()

@@ -31,7 +31,12 @@ public partial class FogOfWar : Node
         PropShaderPath = "res://shaders/prop_fog.gdshader",
         MarkerShaderPath = "res://shaders/marker_fog.gdshader";
 
-    private Shader? _terrainShader, _propShader, _markerShader;
+    // BUG-1350 (BUG-1093's family): held for the process, not per match. Per instance, each quit left the shaders' wrappers
+    // to the collector while the old materials released them over the next two or three collections, so the next match's
+    // GD.Load found the cached shader still alive behind a dying wrapper and could swap its GC handle while the finalizer
+    // thread freed it ("Handle is not initialized"). Held statically, the wrappers are never finalized and a match start
+    // never calls GD.Load for them.
+    private static Shader? _terrainShader, _propShader, _markerShader;
     private Vector2 _worldSize;
     // The tick whose amounts SeenResources holds (M6-V8): amounts move only on a tick, so one pass per tick.
     private int _amountTick = -1;

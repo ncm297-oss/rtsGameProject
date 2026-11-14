@@ -3154,9 +3154,9 @@ the loaders in `DataLoader.Abilities.cs` (`ResolveOnEnds`), `DataLoader.Techs.cs
   `statusDuration`. `TechState.AnyStatusDuration` (from the data) skips the lookup when no tech has one.
 - **`buildings.json` `scale`** (Request 47; optional, default 1, `DataLimits.MinUnitScale`-`MaxUnitScale` = 0.5-3.0, one
   error at `buildings[i].scale` outside it): `BuildingDef.Scale`. Presentation only, the unit's M7-1 rule: the sim never
-  reads it (the footprint is the building's room). **Nothing draws it yet** (M7-6, BUG-1281): the view reads
-  `UnitDef.Scale` only, so a building's `scale` is drawn at 1.0 until the view's own task (the view half of Request 47)
-  reads `BuildingDef.Scale`.
+  reads it (the footprint is the building's room). **The view draws it since M7-V4** (the view half of Request 47; until
+  then nothing read it, M7-6, BUG-1281): the view reads `BuildingDef.Scale` as it reads `UnitDef.Scale`, as the height of
+  the building's placeholder box (`BuildingViews.DrawnHeight`), never its width; see "Implementation (M7-V4)".
 - **What is hashed.** `GameData.ContentHash` adds every new field **only away from its default** (as M7-2's
   `spawnCount`): a status's `DamageBonus` when not 0, its three `onEnd` fields when any is set, a tech effect's `Statuses`
   on a `statusDuration` effect (or when set), a building's `Scale` when not 1. So the shipped data's hash, and with it the
@@ -3617,6 +3617,57 @@ the data's giant radius, once by the view). View code only; no sim, ViewApi or d
   rule; `ScaleViewTest`'s click / box rows prove the hit test above the centre, where the drawn body now reaches past the
   sim's pick circle).
 
+### Implementation (M7-V4)
+
+The view half of Request 47 (docs/factions/teblor.md "Buildings": "1.25× scale visually"): a building's data `scale` is
+drawn, and BUG-1350 (a rare GC-handle `ERROR` in `QaM6V20Test`). View code and view tests only; no sim, ViewApi or data
+file changed.
+
+- **The rule** (Producer default, owner may revisit): a building's `scale` multiplies its drawn **height** only.
+  `BuildingViews.DrawnHeight(def)` = `BoxHeight (3 m) x scale`; the box keeps the footprint's width and depth (cells x
+  2 m), as a unit's body keeps its collision radius since M7-V3c (BUG-1260): a box drawn wider than its footprint would
+  stand inside its neighbours and inside the units walking past. The alternative (scaled about the footprint's centre in
+  all three axes) is one inbox note away once real building models exist. The height is applied once per type when
+  `Bind` builds the shared `BoxMesh`; `Place` keeps the slot's drawn height and bar height (two `float[]` written once per
+  building), so the per-frame path reads nothing new and allocates nothing.
+- **What follows the height:** the finished box (base on the ground, top at `3 m x scale`); a construction site, which
+  rises from `SiteMinHeight` (15 %) of the drawn height to all of it; the placement ghost (`BuildGhost.Begin`: the same box,
+  its reason label over the drawn top); the remembered-building ghost (full height, or a remembered site's foundation at
+  15 % of it); the bar back and fill (`BuildingViews.BarHeightOf(def)` = `BarHeight + (DrawnHeight - BoxHeight)`, so the
+  bar's centre is always 0.6 m over the drawn top, as at scale 1). At scale 1 every number is the old one exactly
+  (`3 x 1 = 3`, `3.6 + 0 = 3.6`).
+- **What does not:** the footprint, the outline, the selection and target rings, the rally point and its line, the
+  minimap, the rubble, the hit test. **The hit test keeps the 3 m box** (`BuildingPicker.PickRay` with `BoxHeight`, as the
+  unit's keeps the sim radius): for the owner, a click on the upper part of a taller building (above 3 m) selects what it
+  selected before M7-V4, which is whatever the 3 m box behind the click gives, often nothing, so a tall building is
+  clicked on its lower 3 m.
+- **Scale-1 buildings draw exactly as before:** `EconomyViewTest`'s six `--placeholder-art` pictures (the Malazan bases of
+  seeds 1, 6 and 31, hauling, the site, cargo at 60 m), taken at 43ab896 and with this change in one tree, are
+  byte-identical for three (seeds 1 and 6, hauling); the other three differ only in the HUD's frames-per-second number, a
+  wall-clock reading (136, 243 and 1,020 pixels, all inside the top-left text line).
+- **BUG-1350 (the cause: game code, made likelier by the test's collection).** `FogOfWar` cached its three fog shaders per
+  instance, so each match loaded `terrain_fog.gdshader` (and the prop and marker shaders) afresh and each quit left the old
+  wrappers to the collector. The old match's meshes and materials release the shader over successive collections, so a
+  probe shows the old terrain shader still alive after `QaM6V20Test`'s `Collect / WaitForPendingFinalizers / Collect` plus
+  eight frames, freed only by the third collection; the next match's `GD.Load` then finds the cached shader behind a wrapper
+  that is collectable and swaps its GC handle weak-to-strong (`ScriptManagerBridge.SwapGCHandleForType`), which fails with
+  "Handle is not initialized" when the finalizer thread disposes that wrapper at the same moment (the shape of BUG-1093).
+  The fix removes the ingredients: the three fog shaders and `UnitModels`' team shader are held in statics for the
+  process (as `GroundDisc`'s and `Main.MatchScene`), so their wrappers are never finalized and no match start calls
+  `GD.Load` for them. The test's own collection was left as it is. Not changed (same family, never seen failing): `Sfx`
+  loads its clip variants per match with `ResourceLoader.Load`.
+- **Tests:** `game/tests/BuildingScaleViewTest` (headless, in the loop): shipped data, every type's drawn height and bar;
+  a forged copy (Billet 1.25, Barracks 2.0, Keep 1.0), both seats Malazan, fog on: each finished box is the footprint by
+  `3 m x scale` with its base on the ground and its bar 0.6 m over the top; a 2.0 Barracks site rises from 0.9 m to 6 m with
+  its progress bar over 6 m on every sampled frame, 0 bytes over 20 syncs of the rise; the placement ghost of each type
+  and its reason label; a click 3.1 m up the 2.0 box (outside the 3 m box) selects what `PickBuilding` gives there (nothing)
+  and one 1 m up selects the Barracks; hit-point bars on the three hurt by real crossbow bolts; an enemy Billet and Barracks
+  scouted and left drawn as ghosts of their height, 0 bytes over 20 syncs; a Teblor base (Longhouse, Hut, War Lodge)
+  beside a Malazan one at each type's height. Windowed with `-- --shots <dir> --placeholder-art` it saves
+  `building-scale-row.png` and `teblor-beside-malazan.png`. `QaM6V20Test` row 8 (BUG-1350): every match draws with the
+  same fog shader of each kind, and the shaders are still alive after four more collections once every match is gone (red
+  before the fix).
+
 ### Implementation (M6-V20)
 
 The art pass's first slice: the Laborer and the Crossbowman are drawn as animated, team-coloured models; every other type
@@ -4058,7 +4109,7 @@ consumes it.
 | `rules.json` | docs/02 Economy table: `startingResources` (M6-S6, replacing `startingGold` / `startingWood`: a list of presets in the setup's order, each `{id, displayName, description?, gold, wood, aiSpendAbove?}`; ids unique snake_case of at most 64 characters, a `standard` entry required, gold and wood 0 to 1,000,000, at most 16 presets; shipped `standard` 200 / 200 and `high` 1000 / 1000, Producer default; `aiSpendAbove` (M6-S6 fix round 1, BUG-1050) optional, 0 to 1,000,000, 0 or left out = off: the AI's spend-down threshold in gold + wood, shipped `high` 200, `standard` none; every field, the count and the order in `ContentHash`), `startingWorkers`, `popCap`, `workerCarry`, `gatherRate {gold, wood}` (per second), `startMines` / `expansionMines {count, gold}`, `treeWood`, `nodeSearchRadius`, `repair {rateFactor, costFactor}` (M3-3), `buildingSight` (M4-3a: meters, above 0 and at most 64, the sight of a building whose entry gives none; shipped 12, a Producer default: docs/02 gives sight only for the Watch Tower), `stealth {proximity, revealSeconds}` (M4-5: meters and seconds, above 0; shipped 3 and 3, docs/02 "Stealth and detection"). Pop provided by buildings comes with `buildings.json` (M3); the Age II cost with `techs.json` (M3-5) |
 | `common/factions.json` | M7-3: `{ "order": ["malazan", "whirlwind"] }`, the faction order: faction id = index in `order`, and unit and building type ids go faction by faction in this order (ordinal within a faction). Every folder under `factions/` must be listed and every entry must have a folder; a repeat, an entry that isn't a snake_case id (or a string) and more than 8 entries (`DataLimits.MaxFactions`) are errors, one each at `order[i]` (a folder not listed: at `order`, naming the folder). Append-only: a new faction adds its id at the end. Not hashed (the keys in id order are). See "Implementation (M7-3)" |
 | `faction.json` | `id` (must equal the folder name), `displayName`, `description`, `bonus {displayName, description}`, `resources {gold, wood: {displayName}}`, `palette {primary, secondary, accent}` as `#RRGGBB`; `regen` (M7-1, optional: absent = no regeneration) `{hpPerSecond, delay}`, both required when the object is there: `hpPerSecond` above 0 and at most 100 (`DataLimits.MaxRegenPerSecond`) and at least 0.05 (one fixed-point unit a tick), to `FactionDef.RegenPerTick` (`round(hpPerSecond x 400 / 20)`: 1 → 20); `delay` seconds, 0 or more, at most 3600, to `FactionDef.RegenDelayTicks` (6 → 120); an unknown key is an error. No shipped faction has one yet (Teblor, Andii: M7 / M9). See "Implementation (M7-1)" |
-| `buildings.json` | `{ "buildings": [ ... ] }`, each `{id, displayName, description, slot, footprint {width, height}, hp, armor, cost {gold, wood}, buildTime, popProvided, dropOff}`: `slot` is one of the ten template slots (`DataLimits.BuildingSlotIds`), footprint sides 1-4 cells, `buildTime` in seconds (to ticks), `popProvided` a multiple of 0.5 (to half-pop), `dropOff` a required bool, `requires` an optional list of tech / building ids (M3-5; resolved and gating placement since M3-6), `sight` optional meters (M4-3a: above 0 and at most 64, default `rules.json` `buildingSight`; shipped 24 on both watch towers, docs/02), `attack` optional (M4-3b: the unit `attack` object; value at least 1, range above 0, an aimed `projectile` required, `targets` not `buildings`; shipped on both watch towers), `detector` optional meters (M4-3b: above 0 and at most 64; shipped 16 on both watch towers; unused until M4-5), `scale` optional (M7-4: the view's model size, 0.5-3.0, default 1; the sim never reads it). Ids unique across factions (M3-2, see "Economy implementation"); exactly one building per slot per faction (M3-6, BUG-0010) |
+| `buildings.json` | `{ "buildings": [ ... ] }`, each `{id, displayName, description, slot, footprint {width, height}, hp, armor, cost {gold, wood}, buildTime, popProvided, dropOff}`: `slot` is one of the ten template slots (`DataLimits.BuildingSlotIds`), footprint sides 1-4 cells, `buildTime` in seconds (to ticks), `popProvided` a multiple of 0.5 (to half-pop), `dropOff` a required bool, `requires` an optional list of tech / building ids (M3-5; resolved and gating placement since M3-6), `sight` optional meters (M4-3a: above 0 and at most 64, default `rules.json` `buildingSight`; shipped 24 on both watch towers, docs/02), `attack` optional (M4-3b: the unit `attack` object; value at least 1, range above 0, an aimed `projectile` required, `targets` not `buildings`; shipped on both watch towers), `detector` optional meters (M4-3b: above 0 and at most 64; shipped 16 on both watch towers; unused until M4-5), `scale` optional (M7-4: the view's model size, 0.5-3.0, default 1; the sim never reads it; since M7-V4 the placeholder box's height, `3 m x scale`, on the footprint's width and depth: "Implementation (M7-V4)"). Ids unique across factions (M3-2, see "Economy implementation"); exactly one building per slot per faction (M3-6, BUG-0010) |
 | `techs.json` | `{ "techs": [ ... ] }` in `common/` (shared by every faction) and in each faction folder (its own), each `{id, displayName, description, researchedAt, cost {gold, wood}, researchTime, requires?, requiresAnyOf?, effects: [{stat, amount, appliesTo {attackType?, tags?, units?, siege?}}]}`: `researchedAt` is a building slot id (a common tech resolves to each faction's building of it; a faction without one is an error), `researchTime` in seconds (to ticks), `requires` tech / building ids (resolved and gating research since M3-6), `requiresAnyOf` `{count, of: [slot ids, or in a faction file its own building ids]}`: met when `count` of the distinct listed slots hold an own finished building (M3-6; shipped on `age_ii` only), `effects` may be empty. `stat` is one of `attack`, `armor`, `range`, `hp`, `abilityCooldown`, `statusDuration` (M7-4) (`DataLimits.TechStatIds`); `amount` is non-zero, whole for attack / armor / hp, meters for range, seconds for ability cooldown and status duration (to ticks, negative shortens it). A `statusDuration` effect takes `statuses` (statuses.json ids, at least one) and no `appliesTo`; no other stat takes `statuses` (see "Implementation (M7-4)"). `appliesTo` is required (`{}` = every unit) except on `statusDuration`; each filter it sets must match: `attackType` a damage type, `tags` any one of the unit's tags (each must be a tag some unit has), `units` unit ids (a faction tech's must be its own), `siege` true / false for the `siege` slot; a `tags` or `units` list set to `[]` is an error (M3-6, BUG-0098). Tech ids are unique across all techs files and may not equal a building id (M3-6); they number the common file's techs first, then each faction's in `common/factions.json` order, ordinal within each file (M7-3b), so a new faction's techs move no shipped id; `DataLimits.AgeTechIds` (`age_ii`) must be a common tech (M3-5, see "Implementation (M3-5)") |
 | `projectiles.json` | `{ "projectiles": [ ... ] }`, each `{id, kind, speed, hitTolerance?, leadSpeed?}`: `kind` `aimed` or `lob`, `speed` m/s (at least 1), `hitTolerance` m (aimed only, 0-2, default 0.3; an error on a lob), `leadSpeed` m/s (aimed only, not negative, default 0 = never leads; an error on a lob). Ids unique; every unit's `attack.projectile` must name one (M4-2b, see "Implementation (M4-2b)") |
 | `units.json` | `{ "units": [ ... ] }`, entries as in the example. `attack` also takes optional `minRange`, `splash` (m), and `friendlyFire` (docs/02 "Combat / Stats"); they default to 0 / false. Melee range is written as `0.5` (edge to edge). `abilities` (M4-4a, optional): ability ids of the unit's own faction, at most 4 (`DataLimits.MaxUnitAbilities`), no repeats; resolved to `UnitDef.Abilities`; shipped on the Cadre Mage (`telas_fire`), the Sapper (`cusser`) and the Priest of the Whirlwind (`sandstorm`). `passives` (M4-4b-3a, optional): at most 2 (`DataLimits.MaxUnitPassives`), one per `trigger` (`DataLimits.PassiveTriggerIds`): `{trigger: whenBelowHp, hpFraction, status, magnitude}` or `{trigger: onDeath, status, magnitude, duration, radius, units}` (see "Implementation (M4-4b-3a)"); resolved to `UnitDef.Passives`; shipped on the Zealot only. `detector` (M4-5, optional): meters, above 0, at most 64 (`UnitDef.Detector`; see "Implementation (M4-5)"). `scale` (M7-1, optional, default 1): the view's model size, 0.5-3.0 (`DataLimits.MinUnitScale` / `MaxUnitScale`), to `UnitDef.Scale`; presentation only, collision stays `radius` (docs/02 "Combat / Stats"); no shipped unit sets it yet. `spawnCount` (M7-2, optional, default 1): units one queue item spawns, a whole number 1-8 (`DataLimits.MaxSpawnCount`), to `UnitDef.SpawnCount`; `cost` and `trainTime` are the item's, `pop` each unit's (see "Implementation (M7-2)"); no shipped unit sets it yet. `passives` also takes (M7-2) `{trigger: onHit, status, magnitude, duration}`, so at most 3, still one per trigger. `carry` (M7-7, Request 48, optional, a worker only): resources the worker carries a trip, a whole number 1 to 1,000,000, to `UnitDef.Carry`; absent = `rules.json` `workerCarry` (`GameData.CarryOf`; see "Implementation (M7-7)"); no shipped unit sets it yet |
@@ -4798,7 +4849,7 @@ Match.tscn  (new nodes)
   changes the grid after the start, which a hall placed on tick 1 now does).
 - **Building views** (`BuildingViews`): polled each frame from `Buildings.Alive` / `Generation` like the props (no
   sim events yet). A slot's nodes (box, bar back, bar fill) are made the first time it holds a building and hidden
-  while it is free. The box is the footprint (cells x 2 m) by 3 m, in the owner's faction colour; a construction
+  while it is free. The box is the footprint (cells x 2 m) by 3 m (since M7-V4 `3 m x` the type's data `scale`), in the owner's faction colour; a construction
   site is a dusty mauve (`BuildingViews.SiteColor`, a hue far from both factions' building colours;
   it was a slate lighter than the Malazan grey, BUG-0107) and rises from 15% to full height with its progress. The bar over it
   comes from the pure `ViewApi.BuildingBars.Of(buildings, defs, slot, out fill)`: `Progress` (`Work / WorkNeeded`,
@@ -6307,7 +6358,7 @@ game/tests/ShellTest.tscn      the headless flow test
   With the pause's `SceneTree.Paused` line removed the test fails 11 rows. Windowed with `-- --shots <dir>` it saves
   `shell-menu.png`, `shell-setup.png`, `shell-match.png`, `shell-pause.png`.
 - **Remembered sites (BUG-0275 item 1).** A ghost whose `BuildingGhost.Site` is set (it was a construction site when last
-  seen) draws as a foundation: its type's box scaled to `BuildingViews.SiteMinHeight` (0.45 m of the 3 m box; the entry
+  seen) draws as a foundation: its type's box scaled to `BuildingViews.SiteMinHeight` (0.45 m of a scale-1 3 m box; since M7-V4 that share of the type's drawn height; the entry
   keeps no progress, so the lowest a site can be), standing on the ground, in the site colour darkened by
   `FogView.ExploredBrightness` (`GhostSiteMaterial`, one for every owner, as live sites share one). It is re-placed when
   the entry's generation, anchor or site flag changes. Picking matches the drawing: `BuildingPicker.PickGhostRay` has an

@@ -13,7 +13,8 @@ namespace Rts.Game;
 /// Polled each frame from <see cref="BuildingStore.Alive"/> / <see cref="BuildingStore.Generation"/> (the props
 /// precedent; there are no sim events yet). A slot's nodes are created the first time it holds a building and hidden
 /// while it is free, so a later building in the slot reuses them. The box is the footprint (cells x
-/// <see cref="MapConstants.CellSize"/>) by <see cref="BoxHeight"/>, in the owner's faction colour; a construction site is
+/// <see cref="MapConstants.CellSize"/>) by <see cref="DrawnHeight"/> (<see cref="BoxHeight"/> x the type's data <c>scale</c>, M7-V4:
+/// the scale is the height only, the footprint stays the box's width and depth), in the owner's faction colour; a construction site is
 /// a dusty mauve (<see cref="SiteColor"/>) and rises with its progress. The bar's kind and fill come from the pure <see cref="BuildingBars"/>; its
 /// transform is only written when they change. Meshes (one per building type, plus one bar) and materials (one per
 /// player, site, and the bar colours) are made in <see cref="Bind"/>, so a steady frame allocates nothing. Views hold no
@@ -31,14 +32,23 @@ namespace Rts.Game;
 /// </remarks>
 public partial class BuildingViews : Node3D
 {
-    /// <summary>Height of a finished building's placeholder box, in meters.</summary>
+    /// <summary>Height of a finished scale-1 building's placeholder box, in meters (a type's own is <see cref="DrawnHeight"/>).</summary>
     public const float BoxHeight = 3f;
 
-    /// <summary>Share of <see cref="BoxHeight"/> a site's box has at no progress (it rises to the full height at completion).</summary>
+    /// <summary>Share of its drawn height (<see cref="DrawnHeight"/>) a site's box has at no progress (it rises to the full height at completion).</summary>
     public const float SiteMinHeight = 0.15f;
 
-    /// <summary>Bar centre height above the ground, in meters.</summary>
+    /// <summary>Bar centre height above the ground of a scale-1 building, in meters (a type's own is <see cref="BarHeightOf"/>).</summary>
     public const float BarHeight = BoxHeight + 0.6f;
+
+    /// <summary>
+    /// The drawn height of a finished building of type <paramref name="def"/>: <see cref="BoxHeight"/> x its data <c>scale</c>
+    /// (M7-V4, the unit rule of M7-V3c: the scale is the height only; the box keeps the footprint's width and depth).
+    /// </summary>
+    public static float DrawnHeight(BuildingDef def) => BoxHeight * def.Scale;
+
+    /// <summary>The bar centre's height above the ground for type <paramref name="def"/>: <see cref="BarHeight"/> - <see cref="BoxHeight"/> over its drawn top.</summary>
+    public static float BarHeightOf(BuildingDef def) => BarHeight + (DrawnHeight(def) - BoxHeight);
 
     /// <summary>Bar length as a share of the footprint's width, and its thickness in meters.</summary>
     public const float BarLengthShare = 0.9f, BarThickness = 0.3f;
@@ -77,6 +87,9 @@ public partial class BuildingViews : Node3D
     private BuildingBarKind[] _shownBar = Array.Empty<BuildingBarKind>();
     private float[] _shownFill = Array.Empty<float>();
     private float[] _barLength = Array.Empty<float>();
+    // The drawn height of each slot's type (its finished box) and its bar's centre height, set when the building is placed.
+    private float[] _boxHeight = Array.Empty<float>();
+    private float[] _barY = Array.Empty<float>();
     private StandardMaterial3D[] _ghostMats = Array.Empty<StandardMaterial3D>();
     private MeshInstance3D?[] _ghostBoxes = Array.Empty<MeshInstance3D?>();
     // What each slot's ghost box shows now: the remembered generation (0: hidden) and anchor.
@@ -99,7 +112,7 @@ public partial class BuildingViews : Node3D
         for (int t = 0; t < _meshes.Length; t++)
         {
             BuildingDef def = data.Buildings[t];
-            _meshes[t] = new BoxMesh { Size = new Vector3(def.FootprintWidth * MapConstants.CellSize, BoxHeight, def.FootprintHeight * MapConstants.CellSize) };
+            _meshes[t] = new BoxMesh { Size = new Vector3(def.FootprintWidth * MapConstants.CellSize, DrawnHeight(def), def.FootprintHeight * MapConstants.CellSize) };
         }
         _playerMats = new StandardMaterial3D[playerRgb.Length];
         for (int p = 0; p < playerRgb.Length; p++)
@@ -130,6 +143,8 @@ public partial class BuildingViews : Node3D
         _shownBar = new BuildingBarKind[capacity];
         _shownFill = new float[capacity];
         _barLength = new float[capacity];
+        _boxHeight = new float[capacity];
+        _barY = new float[capacity];
         _ghostBoxes = new MeshInstance3D?[capacity];
         _ghostGen = new int[capacity];
         _ghostCell = new int[capacity];
@@ -172,7 +187,7 @@ public partial class BuildingViews : Node3D
             if (rise != _shownRise[i])
             {
                 // The box stands on the ground and grows upward.
-                _boxes[i].Transform = new Transform3D(Basis.FromScale(new Vector3(1f, rise, 1f)), new Vector3(0f, BoxHeight * rise / 2f, 0f));
+                _boxes[i].Transform = new Transform3D(Basis.FromScale(new Vector3(1f, rise, 1f)), new Vector3(0f, _boxHeight[i] * rise / 2f, 0f));
                 _shownRise[i] = rise;
             }
             if (bar != _shownBar[i] || fill != _shownFill[i]) ShowBar(i, bar, fill);
@@ -228,7 +243,7 @@ public partial class BuildingViews : Node3D
             // A remembered site stands as a foundation, the box at its lowest, growing upward from the ground as a live site's.
             float rise = g.Site ? SiteMinHeight : 1f;
             box.Transform = new Transform3D(Basis.FromScale(new Vector3(1f, rise, 1f)),
-                new Vector3(c.X, TerrainHeight.At(world.Heightmap, c.X, c.Y) + BoxHeight * rise / 2f, c.Y));
+                new Vector3(c.X, TerrainHeight.At(world.Heightmap, c.X, c.Y) + DrawnHeight(def) * rise / 2f, c.Y));
             box.Mesh = _meshes[g.TypeId];
             box.MaterialOverride = g.Site ? _ghostSiteMat : _ghostMats[Math.Clamp(g.Owner, 0, _ghostMats.Length - 1)];
             box.Visible = true;
@@ -287,7 +302,9 @@ public partial class BuildingViews : Node3D
         root.Position = new Vector3(c.X, TerrainHeight.At(world.Heightmap, c.X, c.Y), c.Y);
         _boxes[i].Mesh = _meshes[b.TypeId[i]];
         _barLength[i] = def.FootprintWidth * MapConstants.CellSize * BarLengthShare;
-        _backs[i].Transform = new Transform3D(Basis.FromScale(new Vector3(_barLength[i], BarThickness * 0.8f, BarThickness * 0.8f)), new Vector3(0f, BarHeight, 0f));
+        _boxHeight[i] = DrawnHeight(def);
+        _barY[i] = BarHeightOf(def);
+        _backs[i].Transform = new Transform3D(Basis.FromScale(new Vector3(_barLength[i], BarThickness * 0.8f, BarThickness * 0.8f)), new Vector3(0f, _barY[i], 0f));
         bool site = b.UnderConstruction[i];
         _boxes[i].MaterialOverride = site ? _siteMat : _playerMats[Math.Clamp(b.Owner[i], 0, _playerMats.Length - 1)];
         _shownSite[i] = site;
@@ -313,7 +330,7 @@ public partial class BuildingViews : Node3D
         float len = _barLength[i], filled = len * fill;
         _fills[i].MaterialOverride = bar == BuildingBarKind.Progress ? _progressMat : _hpMat;
         _fills[i].Transform = new Transform3D(Basis.FromScale(new Vector3(Math.Max(filled, 1e-3f), BarThickness, BarThickness)),
-            new Vector3(-len / 2f + filled / 2f, BarHeight, 0f));
+            new Vector3(-len / 2f + filled / 2f, _barY[i], 0f));
     }
 
     private Node3D CreateView(int slot)

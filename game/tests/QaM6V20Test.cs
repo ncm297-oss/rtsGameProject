@@ -449,6 +449,7 @@ public partial class QaM6V20Test : Node
         AddChild(main);
         await Frames(2);
         var counts = new List<(double Nodes, double Resources, double Objects, double Orphans)>();
+        var shaderIds = new List<(ulong Terrain, ulong Prop, ulong Marker)>();
         try
         {
             for (int cycle = 0; cycle < 4; cycle++)
@@ -460,6 +461,7 @@ public partial class QaM6V20Test : Node
                 for (int i = 0; i < 600 && sim.World.Units.Count == 0; i++) await Frames(1);
                 await Frames(10);
                 if (cycle == 0) FourColours(match, sim);
+                shaderIds.Add(FogShaderIds(match));
                 main.QuitToMenu();
                 await Frames(6);
                 // BUG-1323: the object count holds C# wrappers waiting for the collector, so without a forced collection it
@@ -480,6 +482,17 @@ public partial class QaM6V20Test : Node
             main.QueueFree();
             await Frames(2);
         }
+        // BUG-1350: the fog shaders outlive every match (held for the process), so no match start finds one behind a dying
+        // wrapper. Per match, the last match's terrain shader was freed by the third or fourth collection after its quit.
+        for (int k = 0; k < 4; k++)
+        {
+            GC.Collect();
+            GC.WaitForPendingFinalizers();
+            await Frames(1);
+        }
+        if (shaderIds.Count > 0)
+            Check(GodotObject.IsInstanceIdValid(shaderIds[^1].Terrain) && GodotObject.IsInstanceIdValid(shaderIds[^1].Prop)
+                && GodotObject.IsInstanceIdValid(shaderIds[^1].Marker), "(8) BUG-1350: a fog shader was freed after the matches (not held for the process)");
         // Nodes, resources and orphans exactly flat; the object count (GC-collected wrappers) wanders by a few dozen, so it
         // must not climb on every restart and stays within 200 of the first.
         bool climbing = counts.Count > 2;
@@ -491,6 +504,22 @@ public partial class QaM6V20Test : Node
             if (counts[c].Objects <= counts[c - 1].Objects) climbing = false;
         }
         Check(!climbing, $"(8) the object count climbs on every restart: {string.Join(", ", counts.Select(x => x.Objects))}");
+        // BUG-1350: every match draws with the one fog shader of each kind.
+        for (int c = 1; c < shaderIds.Count; c++)
+            Check(shaderIds[c] == shaderIds[0] && shaderIds[c].Terrain != 0 && shaderIds[c].Prop != 0 && shaderIds[c].Marker != 0,
+                $"(8) BUG-1350: match {c} fog shaders {shaderIds[c]}, match 0 {shaderIds[0]}");
+    }
+
+    // The fog shaders' instance ids in a match (terrain, a tree's prop material, the corpse marker), read without keeping a wrapper.
+    private static (ulong Terrain, ulong Prop, ulong Marker) FogShaderIds(Match match)
+    {
+        ulong Id(Material? m) => m is ShaderMaterial sm && sm.Shader != null ? sm.Shader.GetInstanceId() : 0;
+        Mesh? terrain = match.GetNode<MeshInstance3D>("World3D/TerrainView").Mesh;
+        Material? prop = null;
+        foreach (Node n in match.GetNode("World3D/PropsView").GetChildren())
+            if (n is MultiMeshInstance3D mm && mm.Multimesh?.Mesh is Mesh pm && pm.GetSurfaceCount() > 0) { prop = pm.SurfaceGetMaterial(pm.GetSurfaceCount() - 1); break; }
+        FogOfWar fog = match.GetNode<FogOfWar>("World3D/FogOfWar");
+        return (Id(terrain?.SurfaceGetMaterial(0)), Id(prop), Id(fog.MarkerMaterial()));
     }
 
     private void FourColours(Match match, Simulation sim)
