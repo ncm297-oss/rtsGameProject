@@ -175,6 +175,95 @@ criterion's test name again.)
 
 ## Sim track
 
+### Current session plan (2026-11-14-1246, session 2 / 8): M8-1, forest stealth as a faction bonus, on test data only (feature, QA full)
+
+**Goal.** M8's first sim slice. Build the Shadow page's "Children of Shadow" as a generic faction bonus: units of a
+faction whose data carries the bonus are Stealthed while they stand beside a standing tree and have gone the bonus's
+delay without landing an attack or losing hit points. Schema first, on forged test data only: no shipped file changes,
+so the data hash 27036D3A2F2BA1CB, the golden, every pin and every save stay byte for byte. Three small M7 leftovers
+first. Producer readings of the page are in docs/01's change log row "2026-11-14 (d)".
+
+**Scope.**
+- A. Leftovers, first: (1) **BUG-1370**: `Stress/FrenzyCastReportTests` "landed" reads the ready tick at the Frenzy's
+  own slot in the Shaman's ability list; a regression row that failed first (a forged Shaman with a second ability
+  listed before the Frenzy). (2) docs/03 "Implementation (M7-7)": re-print the table and its sentences from the report
+  run on this branch (the shipped opening is V24 at share 0.25 now). (3) BUG-1391 item 3: the two stale docs/03 lines
+  ("nothing ships them", `carry`'s "no shipped unit sets it yet").
+- B. Schema (sim-owned): `faction.json` optional block
+  `"forestStealth": { "status": "stealthed", "delay": 3, "exceptSlots": ["siege"] }`. `status` must name a status of
+  kind `stealthed`; `delay` in seconds, at least one tick, with an upper limit in `DataLimits`; `exceptSlots` known unit
+  slot names, no duplicates. Loader validation with one named error each, `DataValidationTests` rows. The block enters
+  `ContentHash` only when present.
+- C. Rule: a live unit whose owner's faction has the block, whose slot is not excepted and which is not summoned
+  qualifies when (i) its own cell or one of the 8 cells round it holds a standing tree, (ii) at least `delay` has passed
+  since its last attack landed or cast resolved (never = qualifies), (iii) at least `delay` since it last lost hit
+  points (any source). While it qualifies it is Stealthed through the existing status store and the one predicate
+  (`World.IsStealthed` / `HiddenFrom`), so detection, Revealed, targeting, the fog and the AI's `PlayerView` work as in
+  M4-5 with no second path. The tick it stops qualifying that stealth ends (no linger). A timed Stealthed from another
+  source (an ability) is never shortened or removed by this rule. Runs in phase 5 before `StealthSystem.Run`.
+- D. State: the new timers are hashed and saved only when the loaded data has a faction with the block (a save part
+  written exactly then, as `HUNT` is with an AI seat; a save whose part disagrees with the data is refused, not
+  crashed). `SaveFormat.CurrentVersion` stays 10. `LastDamagedTick`'s gate (regen factions only) may widen to factions
+  with the block.
+- **Out of scope:** any file under `game/` (no Shadow roster, no `rules.json` / `statuses.json` edit); the Shadow
+  Archer's stand-still stealth and its +50% first shot (M8-2); any view or ViewApi change; any AI rule or behaviour
+  (rules 41 / 43: the data track measures the Teblor opening beside this); Hounds, Shadow-step, Wraiths; re-pinning any
+  digest. Size: about 800 changed lines (QA's suites don't count).
+
+**Acceptance criteria.**
+1. BUG-1370 fixed with its regression row; docs/03 M7-7's table equals the report's printed lines on this branch (the
+   lines pasted in the report); the two stale lines corrected.
+2. Schema: the block loads; every validation error has a named loader test; with the block absent `ContentHash` is
+   unchanged (the existing hash pins green, no new literal: rule 49); with it present the hash moves, and moves again
+   for each field changed.
+3. Rule, each a named test on forged data (rule 58): (a) a never-hit unit stepping beside a tree is Stealthed that
+   tick; (b) it is not the tick it is no longer beside one; (c) its attack landing from stealth gives Revealed, and it
+   is hidden again only when Revealed has ended and `delay` has passed (shown with `delay` 3 s and 5 s); (d) a unit that
+   attacked in the open and walks to a tree inside `delay` waits it out; (e) hp loss while hidden (a melee hit, a
+   projectile, a splash, a zone's tick) ends the stealth that tick and it returns after `delay`; (f) an excepted slot, a
+   summoned unit and another faction's unit beside the same tree never; (g) the tree felled ends it that tick; (h) an
+   ability's timed Stealthed on the same unit keeps its own duration in and out of the forest; (i) proximity, a unit
+   detector and a tower detect it as in M4-5; no scan acquires it, an explicit Attack on it is dropped, the enemy AI's
+   `PlayerView` does not hold it.
+4. Determinism and saves: two runs of a 3,000-tick forged match with a forest-stealth faction are hash-equal every
+   tick; saved while units are hidden and mid-wait, loaded and continued, it matches the unsaved run for 1,000 ticks;
+   its recording replays; changing a timer changes the state hash when the block is in the data; a forged save (part
+   present without the block, absent with it) is refused with a `SaveError`.
+5. Nothing shipped moves: `git diff <base> -- game/ sim/Rts.Sim.Tests/Replays sim/Rts.Sim.Tests/Content
+   sim/Rts.Sim.Tests/QA/Content` is empty; no pinned digest literal is edited in the diff; `CurrentVersion` is 10; the
+   shipped-data memory row (`World_1024Map_CacheStays32_MemoryBounded`) is green without a new bound.
+6. Cost: 0 bytes a tick on a forged 500-unit brawl with 250 forest-stealth units among trees; a match whose data has no
+   block does no per-unit work for the rule (one early return). Measure and report, alone (rule 42): that brawl's ms a
+   tick, `EmptyTick(2500)` and the M4 stealth brawl row against their figures on the base. Tree adjacency is 9 cell
+   reads a unit, no spatial query.
+7. Docs in the same commit: docs/02 "Stealth and detection" gains readings (a)-(c) of docs/01's "2026-11-14 (d)" row;
+   docs/03 "Implementation (M8-1)" (schema, phase, state / hash / save, known limits, **"For the data track (M8-1)"**
+   with the exact block the Shadow `faction.json` will carry, **"For the view (M8-1)"** saying what a view reads to draw
+   its own hidden units, or that nothing new is needed).
+8. `dotnet build RtsGame.sln --no-incremental` 0 / 0 and the full default loop green after the last edit (rules 62 /
+   64); every test process the developer started is ended (rule 52).
+
+**Design references.** `docs/factions/shadow.md` "Faction bonus" and "Balance risk"; docs/02 "Stealth and detection",
+status table rows Stealthed / Revealed; docs/03 "Implementation (M4-5)" (the predicate, detection, the one hook, Reveal,
+state and hashing, cost, memory), "Implementation (M7-1)" (`faction.json` `regen`, `LastDamagedTick`, `REGN`).
+
+**Tests required.** Loader and validation rows; the scene rows of criterion 3; the twin-run, save / load, replay and
+hash rows of criterion 4; the allocation row; the regression row for BUG-1370. Golden replay tests re-run, unchanged.
+
+**Constraints.** No Godot in `Rts.Sim`; no hard-coded stat (the delay, the status and the excepted slots are data); no
+allocation in per-tick code; no dictionary iteration; no wall clock. Bug ids 1400+. Scratch folders named `m81-...`
+(rule 63). If the status store's 8-entry cap or the one-entry-per-id merge gets in the way, say so in the report's
+first lines rather than widening the store.
+
+**QA focus (full; rule 53: default loop with Stress, then Perf alone; no Soak).** Off-by-one at every boundary (the
+tick the delay ends, the tick Revealed ends, the tick a tree falls); phase order (stealthed in phase 5, scanned in
+the same tick); a unit walking a ragged forest edge (stealth flickering every tick: stale detection bits, target
+keep / drop churn); a unit already holding 8 statuses; a dormant Stealthed under Revealed; the unit inside an enemy
+sandstorm, below a cliff, seen by an ally of the enemy (shared vision); own workers felling the tree it hides by;
+forged saves both ways; a 4-seat 9,000-tick forged match with two forest-stealth factions twice (hash-equal), and the
+shipped pins on three maps unmoved; 2,000 hidden units' tick cost; the AI seat's view (no leak, and its own hidden
+units still obey orders).
+
 ### Where we are
 M7-H2 on `main` (the hardening): BUG-1340 / 1341 / 1220 / 1221 fixed, the report reads an opening from a file, lookups
 by id. Counter **0 / 4**. The sim's M7 part is done until the data fields Shamans (Request 53's second half).
@@ -207,6 +296,72 @@ Debt: **BUG-1370 S4** (new), BUG-1391 item 3 (docs/03, from the data's QA), BUG-
 
 ## View track
 
+### Current session plan (2026-11-14-1246, session 2 / 8): M6-V21, the art pass's second slice (feature, QA standard)
+
+**Goal.** Four more unit types become animated, team-coloured figures from the two outfits on disk (the owner's
+default: recolour, props shaped as boxes): the Malazan Heavy Infantry and the Whirlwind Camp Follower, Raider and
+Desert Archer. With them: melee and bow attack clips, and figures that follow the game speed. Six model types after
+this; rule 61's crowd bench reported.
+
+**Scope.**
+- `tools/asset-manifest.json` (four new `models` entries; new clips in `library`), `tools/import-assets.ps1` and
+  `tools/art/**` only as the entries need (these three are the view track's; the rest of `tools/**` is not). Run the
+  import with Blender 5.2 against the main checkout's `asset-sources/`; commit its outputs under
+  `game/assets/models/<faction>/<id>/` and `game/assets/animations/` (Git LFS, already in `.gitattributes`).
+- Heavy Infantry: an outfit recoloured to the Malazan palette (steel grey, oxblood), a big rectangular shield and a
+  short sword as props. Camp Follower: the Peasant in the Whirlwind palette (ochre, sand, bleached white) with the
+  worker clips. Raider: Whirlwind palette, a curved blade. Desert Archer: the Ranger in the Whirlwind palette, a bow.
+  Team colour on the `team` surface of each, as the first two.
+- Attack clips: a one-handed melee swing for the Heavy Infantry and the Raider and a bow draw for the Archer, chosen
+  from UAL1 / UAL2 (list the candidates considered in the report; if the libraries hold no credible bow clip keep
+  `Pistol_Shoot` and say so). The library keeps its bone trimming.
+- Figures follow the game speed: `CrowdAnimator`'s advance is the frame's delta times the runner's game speed; a
+  paused match advances nothing (Producer decision, docs/01 "2026-11-14 (d)" (f)).
+- Scenes: any scene that reads one of these four types' slot mesh or material either sets `UnitViews.UseModels =
+  false` (as the five listed in docs/03 "Implementation (M6-V20)") or reads `ModelMeshOf`; no pin value changes.
+- **Out of scope:** any other unit type (horses, siege, mages, the Zealot, the Sapper, the Teblor); Mixamo retargeting;
+  death animations and bodies; building models; merged surfaces, a shared skeleton or baked animation (report what the
+  bench says they would be worth, do not build them); `game/data/**`; the sim outside read-only `ViewApi`; the "models:
+  bigger" question (the owner's).
+
+**Acceptance criteria.**
+1. Exactly six types draw a model on the shipped data, each at the path its `model` field names; the other types
+   draw their capsule with no `ERROR` line (`ModelViewTest`, extended per type: at most 3,000 triangles, textures at
+   most 512 x 512, 65 bones, one `team` surface, feet at the origin, facing -Z, height within 5% of 1.8 m x the type's
+   `scale`).
+2. A fighting Heavy Infantry and Raider play their melee clip and a shooting Desert Archer its clip, from real sim
+   states; a Camp Follower plays build, gather_wood and gather_gold; a clip the library lacks still falls back to idle.
+3. Game speed: at 2x a walking figure's clip advances twice the 1x amount over the same frames, at 0.75x three
+   quarters, paused nothing (a headless row in `ModelViewTest`); 0 bytes over 120 syncs of 400 mixed models.
+4. A re-run of `tools/import-assets.ps1` reproduces every committed output byte for byte (state it with the hashes).
+5. Bench, alone (rules 42 / 61), 1600 x 900, vsync off, default zoom, mixed evenly over the six types, with the
+   capsule figure from the same window: **400 figures at most 16.7 ms a frame while 90%+ are alive** (pass / fail);
+   1,000 figures: measure and report, with what merged surfaces or a shared skeleton would be worth.
+6. Pictures (rule 56, on the shipped data, windowed): each new type at the default zoom and close up, in two player
+   colours, beside the Laborer and a capsule type; a Malazan line fighting a Whirlwind line. Saved under a scratch
+   folder `m6v21-shots/` and listed in the report (the Producer copies them to `studio/review/`); the developer has
+   looked at each and says what reads badly.
+7. docs/04 ("Unit models, as built", the licensing log if any new source file is used) and docs/03 "Implementation
+   (M6-V21)" (the entries, the clips chosen, the game-speed rule, the bench table, the scenes that turn models off).
+8. `dotnet build RtsGame.sln --no-incremental` 0 / 0; the default loop green; `tools/qa/smoke.ps1` PASS; the scene
+   loop green, every scene (rules 62 / 64); every Godot and test process the developer started is ended (rule 52).
+
+**Design references.** docs/04 "Style guide" (scale, team colour, faction palettes and silhouettes), "Coverage plan",
+"Import process" / "Unit models, as built", "Animation setup", "Licensing log"; docs/03 "Implementation (M6-V20)" and
+"(M6-VH7)" (the fallbacks, `CrowdAnimator`, the bench method and its "while 90% live" column).
+
+**Tests required.** `ModelViewTest` rows per criterion 1-3; the scene loop; the bench runs of criterion 5.
+
+**Constraints.** Rule 7 (one view node per slot, no gameplay state in the view); no unit id named in C#; no
+player-facing text in C#; never commit anything from `asset-sources/`; the model files are LFS. Bug ids 1410+. Scratch
+folders named `m6v21-...` (rule 63); never touch another agent's folder or processes.
+
+**QA focus (standard: default loop + scene loop).** The four types in every scene that used their capsules (pins
+silently reading a hidden mesh); slot reuse across model and capsule types; an LFS-pointer clone and a missing file per
+new model (capsule, one warning, no `ERROR`); game speed changed mid-clip and pause / resume (no jump, no drift between
+the 48 nearest and the staggered rest); the prop sitting in the hand through walk and attack on the pictures; team
+colour legible on both palettes for all eight player colours; the bench re-measured alone.
+
 ### Where we are
 M7-V4 on `main`. Counter **1 / 4**. 104 scenes, all green. Fixed: BUG-1350 (by cause), BUG-1331 item 1, BUG-1380 (in
 the round). New: **BUG-1381 S4** items 1-2 (scale limits no building ships). Older: BUG-1177 item 2 (the owner's
@@ -227,6 +382,74 @@ a unit inside an impassable cell without a check (a test trap, QA's `QaBuildReac
 ---
 
 ## Data track
+
+### Current session plan (2026-11-14-1246, session 2 / 8): D32, the Teblor AI's second pass, one hash move (feature, QA standard)
+
+**Goal.** The shipped Teblor AI plays thin: it almost never trains a Shaman (4 of 64 matches), never builds a second
+Longhouse by 15:00 (0 of 64) and its opening's tooltip misdescribes its first raid (BUG-1390). Fix the tooltip, and
+get Shamans and the expansion into the opening through `ai.json` alone, measured before anything ships. One data hash
+move for the whole task.
+
+**Scope (files).** `game/data/factions/teblor/ai.json`; `game/data/factions/teblor/buildings.json` (the Stone Cairn's
+`scale` field order only); `docs/factions/teblor.md`; `sim/Rts.Sim.Tests/Content/**` and `QA/Content/**`; and, handed
+over by name for the hash move (rule 51): the golden replays' header and checksum, the two sim-owned hash pins
+(`FactionOrderTests.TheShippedContentHash_IsTheGoldenHeaders`, `QA/PackQaTests.TheShippedDataHash_IsTheGoldenHeaders`)
+and the hash list and comment in `QA/GatherWedgeQaTests` (old hash, new hash, why). No other file.
+- **BUG-1390 first.** The `standard` opening's `description` becomes: "War Lodge and Javelin Ground first, then Age
+  II; four Warriors raid at 8 army pop, then Javelin Throwers, Destrier Riders, Shamans, Breakers and War-dogs join in
+  Age II." If the opening you ship changes what that sentence says, change the sentence to match and quote it in the
+  report. The fixture and the two page rows that quote it move with it.
+- **Shamans fielded.** The composition weight alone does nothing (10 → 25 played 64 matches identically). Try the
+  Shamans' Circle earlier and / or a `train` step for one or two Shamans after it. Measure read-only with
+  `FRENZY_REPORT_OPENING=<file>` on `Stress/FrenzyCastReportTests` and with the 64-match row
+  (`Content/TeblorLandedShareReportTests`).
+- **The expansion.** The `expand` step (`time: 480`) sits after two `time: 600` steps in the list; find out whether
+  list order, gold or the reserve share holds it back, and fix it in `ai.json` only.
+- BUG-1391 items 1, 2 and 4 (the misplaced `<summary>` twice and the duplicated `Strip`; the Cairn's field order;
+  "army pop 42" said as a 64-match sum on the page).
+- **Out of scope:** any unit, building, tech, ability or status number; `game/data/common/**`; other factions' files;
+  any C# outside the two content test folders and the named pins; the balance pass against Malazan and Whirlwind; a new
+  AI rule (if `ai.json` cannot express what is needed, write it as a Request for the sim track in the report).
+
+**Acceptance criteria.**
+1. BUG-1390: the shipped description is the sentence above (or its matching variant), equal in `ai.json`, the fixture
+   and both page rows; the pins catch a one-sided edit (show one mutant red).
+2. The shipped opening, on the 64-match row: "Age II and a wave by 10:00 in 6 of 8" on at least 6 of 8 seeds;
+   defeated by 15:00 in at most 14 of 64; more than 4 matches with a Shaman; more than 0 with a second Longhouse by
+   15:00. **Terminal rule:** if no variant measured meets all four, ship the description fix alone (plus BUG-1391),
+   report the best variant's row beside today's, and say what `ai.json` cannot express.
+3. Measure and report, not pass / fail (the cast rule is the sim's): Frenzy casts landed and matches with a cast for
+   the shipped opening, from the report run with `FRENZY_REPORT_OPENING`.
+4. The variants table in the report: every variant tried, one row each, with the four figures of criterion 2 and what
+   was changed; the cause of the missing expansion stated in one sentence with the evidence.
+5. The hash moves once: the golden's header and checksum only (its `k` lines identical), the two hash pins and the
+   `GatherWedgeQaTests` list and comment updated; the Stress pin classes run and no other digest moved (list them with
+   their counts); a save and a recording from before are refused `DataMismatch` (fixtures as `pre_d31`'s pattern).
+6. `docs/factions/teblor.md` says what the shipped opening does and carries the re-measured rows (per-match figures
+   named as such); every content pin both ways green; `DataValidationTests` green.
+7. The For-your-review table in the report: each changed step or field (which, old → new, one-line why), the new
+   description quoted, and the sentence that saves and recordings from before this session stop loading.
+8. `dotnet build RtsGame.sln --no-incremental` 0 / 0 and the full default loop green after the last edit (rules 62 /
+   64); test processes ended (rule 52).
+
+**Design references.** `docs/factions/teblor.md` ("AI build order", the openings table, "The reserve share,
+measured", the Owner review rows); docs/02 "AI" (the build-order steps, `expand`, the difficulty table, compositions,
+the reserve); docs/03 "Implementation (M7-6)" (an opening's own reserve share) and "(M7-7)" (the Frenzy report; its
+table is being re-printed by the sim this session, so read the report's own output, not the doc).
+
+**Tests required.** The fixture and page pins for the shipped opening; the 64-match report row re-run on the shipped
+file; the pre-D32 refusal fixtures; one mutant per new pin.
+
+**Constraints.** Data only; schemas are the sim's. The sim's M8-1 beside this touches no AI rule and no shipped file
+(rule 41), so measurements on `main` hold. Batch everything into the one hash move. Bug ids 1420+. Scratch folders
+named `d32-...` (rule 63). The 64-match rows are long: run them alone where you can, never beside your own second
+test host.
+
+**QA focus (standard: default loop + the Stress pin classes + the task's report rows).** Re-run the shipped row in
+QA's own harness column for column; the opening on Easy and Hard and against each of the three factions (a Shaman
+`train` step that starves the first wave, an earlier Circle that delays Age II); the expansion on all four maps
+(Raraku has little room); the description against what the opening measurably does; mutants on every new pin; the
+refusal text for an old save; the hash pins and that no Stress digest moved.
 
 ### Where we are
 D31 on `main`: the landing. Counter **1 / 4**. Fixed: BUG-1241. New: **BUG-1390 S3** (the opening's tooltip),
