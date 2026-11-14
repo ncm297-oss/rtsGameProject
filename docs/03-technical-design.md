@@ -6361,9 +6361,12 @@ game/tests/ShellTest.tscn      the headless flow test
   seen) draws as a foundation: its type's box scaled to `BuildingViews.SiteMinHeight` (0.45 m of a scale-1 3 m box; since M7-V4 that share of the type's drawn height; the entry
   keeps no progress, so the lowest a site can be), standing on the ground, in the site colour darkened by
   `FogView.ExploredBrightness` (`GhostSiteMaterial`, one for every owner, as live sites share one). It is re-placed when
-  the entry's generation, anchor or site flag changes. Picking matches the drawing: `BuildingPicker.PickGhostRay` has an
-  overload with a `siteShare` that makes a site ghost's box that share of `boxHeight` tall (the old overload, full height
-  for every ghost, is kept for its callers), and `SelectionController` passes `SiteMinHeight`. Tests: xUnit
+  the entry's generation, anchor or site flag changes. Picking keeps the foundation's share but not the type's scale:
+  `BuildingPicker.PickGhostRay` has an overload with a `siteShare` that makes a site ghost's box that share of `boxHeight`
+  tall (the old overload, full height for every ghost, is kept for its callers), and `SelectionController` passes
+  `BoxHeight` and `SiteMinHeight`, so a remembered site is picked on a 0.45 m box whatever its type's scale. That matches
+  the drawing at scale 1 only (a 3.0 type's foundation is drawn 1.35 m tall, the Teblor's 1.25 0.56 m); like the live hit
+  test (see "Implementation (M7-V4)"), picking stays on the 3 m box by the Producer's M7-V4 decision. Tests: xUnit
   `FogViewTests.GhostPick_ARememberedSite_IsPickedAsAFoundation` (a ray 1 m up meets the remembered box, misses it once the
   entry is a site, still meets the foundation 0.2 m up; the old overload unchanged); headless `FogViewTest` adds, per seed,
   that the House seen as a site is drawn as a foundation (flag, material, scale, base on the ground) and the finished

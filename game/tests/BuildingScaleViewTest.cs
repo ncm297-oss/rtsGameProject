@@ -167,7 +167,7 @@ public partial class BuildingScaleViewTest : Node
 
         // Criterion 2: a Barracks site rises to 6 m; criterion 3: its progress bar over the drawn top on every frame;
         // criterion 6: 20 frames of the rise allocate nothing.
-        await SiteRise(data, barracks, laborer, west + new System.Numerics.Vector2(-36f, 0f));
+        SiteRise(data, barracks, laborer, west + new System.Numerics.Vector2(-36f, 0f));
 
         // Criterion 2: the placement ghost.
         PlacementGhost(data, new[] { keep, billet, barracks }, keepSlot);
@@ -180,7 +180,7 @@ public partial class BuildingScaleViewTest : Node
         await HurtBars(crossbow, new[] { keepSlot, billetSlot, barracksSlot });
 
         // Criterion 2: the remembered ghosts of an enemy Billet and Barracks.
-        await RememberedGhosts(data, billet, barracks, laborer, west);
+        RememberedGhosts(data, billet, barracks, laborer, west);
 
         if (_shots != null && DisplayServer.GetName() != "headless")
         {
@@ -215,7 +215,7 @@ public partial class BuildingScaleViewTest : Node
             $"{what} {def.Key}: bar back {barY} m, drawn top {want} m, want {BuildingViews.BarHeight - BuildingViews.BoxHeight} m over it");
     }
 
-    private async Task SiteRise(GameData data, int type, int laborer, System.Numerics.Vector2 near)
+    private void SiteRise(GameData data, int type, int laborer, System.Numerics.Vector2 near)
     {
         BuildingDef def = data.Buildings[type];
         float h = BuildingViews.DrawnHeight(def);
@@ -417,7 +417,7 @@ public partial class BuildingScaleViewTest : Node
         }
     }
 
-    private async Task RememberedGhosts(GameData data, int billet, int barracks, int laborer, System.Numerics.Vector2 west)
+    private void RememberedGhosts(GameData data, int billet, int barracks, int laborer, System.Numerics.Vector2 west)
     {
         System.Numerics.Vector2 far = west + new System.Numerics.Vector2(50f, 0f);
         int eBillet = Spawn(1, billet, far);
