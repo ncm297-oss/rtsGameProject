@@ -913,7 +913,7 @@ open S1 / S2. Retro below; open S3 / S4 listed there.)_
       (D28-L): four shipped units are `giant`, `faction.json` ships `regen` 1 HP/s after 6 s; `QA/Content/TeblorRosterQaTests`
       (`AGiant_TakesTimesOneAndAQuarter_*`, `ATeblorWarrior_Regenerates1HpPerSecond_*`) prove both in combat scenes on the shipped
       data; the view shows "Regenerating" (M7-V3a).)
-- [ ] War-dog packs (multi-spawn queue item, Hamstring), Blood-oil Frenzy with aftermath slow. (M7-2: **the pack's sim
+- [x] War-dog packs (multi-spawn queue item, Hamstring), Blood-oil Frenzy with aftermath slow. (M7-2: **the pack's sim
       half is built**: `units.json` `spawnCount` (1-8; one queue item, the item's cost and train time, every unit's pop
       reserved at the start, all N spawned on the N free cells nearest the rally or none that tick; no save-format change)
       and the `onHit` passive (`{onHit, status, magnitude, duration}` on a surviving victim of a melee hit or an aimed
@@ -930,7 +930,13 @@ open S1 / S2. Retro below; open S3 / S4 listed there.)_
       phase-5 pass when an entry runs out; not on death, a refresh or an early removal), the tech stat `statusDuration`, a
       building `scale`; the shipped data hash, the golden and every pin unchanged, no save format. **Not ticked:** the shipped
       Frenzy carries none of it until the data track's Teblor rows land (docs/03 "For the data track (M7-4)"), after BUG-1280
-      (the sim's shared test copy must tolerate those rows).)
+      (the sim's shared test copy must tolerate those rows). **Ticked 2026-11-14-0616 (D31):** the rows shipped in one data
+      hash move (67269D955D18D885 -> 27036D3A2F2BA1CB): `common/statuses.json` `teblor_frenzied` (`damageBonus` 0.2, `onEnd`
+      Slowed 0.2 for 4 s), `blood_oil_frenzy` applying it, Blood-oil Anointing's `statusDuration` +4 s.
+      `Content/TeblorFrenzyShippedSceneTests` proves it on the shipped data (a Warrior inside 8 m strikes 40% faster and 20%
+      harder for 10 s, 14 s with the Anointing, then is Slowed 20% for 4 s; a unit outside is untouched), QA's
+      `QA/Content/D31LandingQaTests` the edges (a second cast refreshes and the aftermath fires once; death leaves none; the
+      aftermath and a War-dog's bite are one Slowed entry). Saves and recordings from before are refused `DataMismatch`.)
 - [ ] Teblor AI build order; models and animations; balance pass vs. Malazan and Whirlwind. (M7-3, 2026-11-10-1236: **the
       sim has room for a third faction**: `game/data/common/factions.json` `order` (append-only) fixes the faction ids and
       the unit / building type ids faction by faction, so a `teblor` folder appended moves no Malazan v Whirlwind digest
@@ -950,7 +956,12 @@ open S1 / S2. Retro below; open S3 / S4 listed there.)_
       2026-11-12-0546:** 25 openings measured over 40 pairings to 15:00 (`Content/TeblorOpeningHorizonReportTests`): `ai.json`
       alone cannot reach "Age II and a wave by 10:00 in 6 of 8" without playing worse later; the hand-over
       (`Content/Fixtures/teblor_standard_d29.json`, V24) is not landed; next the sim's per-opening reserve share (Request 52),
-      then one landing with the Frenzy rows. The owner's art call ("look: go") arrived 2026-11-12.)
+      then one landing with the Frenzy rows. The owner's art call ("look: go") arrived 2026-11-12. **D31, 2026-11-14-0616:
+      the build order landed**: V24 is the shipped `standard` opening with its own `attack.reserveArmyShare` 0.25 and the
+      Gatherer carries 15 (BUG-1241 fixed: Age II and a wave by 10:00 in 6 of 8 on 8 of 8 seeds, 64 matches); the ten
+      buildings carry `scale` 1.25 and the view draws it as height (M7-V4). **Not ticked; left:** the balance pass (no second
+      Longhouse by 15:00 in 64 matches, defeated by 15:00 in 14, a Shaman in 4: the data's D32 first), the opening's tooltip
+      (BUG-1390), models and animations (the art pass, unit by unit).)
 
 ## M8 — Shadow
 

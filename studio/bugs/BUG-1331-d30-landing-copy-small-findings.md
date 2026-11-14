@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S4 |
-| Status | open (items 2 and 3 fixed in D-H8; item 1 is the view's) |
+| Status | fixed (items 2 and 3 in D-H8; item 1 in M7-V4) |
 | Found | 2026-11-13-1118, task D30 |
 | System | `docs/factions/teblor.md`, `Content/TeblorLanding`, `Content/TeblorLandingWriteTests` |
-| Fixed by | items 2-3: D-H8 (2026-11-13-2306). Item 2: `TeblorLanding.FrenzyDescription` states 40% faster, 20% more damage, Slowed 20% for 4 seconds, pinned both ways (`TeblorLandingPinTests.TheFrenzyTooltip_*`); the landing page's Owner review table gains the `statuses.json` `teblor_frenzied` row (`TeblorRosterPinTests.TheLandingsStatusRow_IsHeldBothWays`). Item 3: the write helper edits the files' text (`TeblorLanding.EditText`, `DocText`; `TeblorLandingTextEditTests`): ten one-field edits are ten added lines, line endings kept, idempotent. Item 1 open (view) |
+| Fixed by | item 1: M7-V4 (view, 2026-11-14-0616): `BuildingViews.DrawnHeight(def)` = 3 m x `BuildingDef.Scale` is the placeholder box's height (the site, the placement ghost, the remembered ghost and the bar follow; the footprint and the hit test do not), so the page's "the view's model size" is true; docs/03 "Implementation (M7-V4)", `BuildingScaleViewTest`. Items 2-3: D-H8 (2026-11-13-2306). Item 2: `TeblorLanding.FrenzyDescription` states 40% faster, 20% more damage, Slowed 20% for 4 seconds, pinned both ways (`TeblorLandingPinTests.TheFrenzyTooltip_*`); the landing page's Owner review table gains the `statuses.json` `teblor_frenzied` row (`TeblorRosterPinTests.TheLandingsStatusRow_IsHeldBothWays`). Item 3: the write helper edits the files' text (`TeblorLanding.EditText`, `DocText`; `TeblorLandingTextEditTests`): ten one-field edits are ten added lines, line endings kept, idempotent. |
 
 ## Repro
 1. Read `docs/factions/teblor.md` "Buildings" prose (line 123-124) and `grep -rn "\.Scale" game/scripts` (only `UnitDef.Scale`
