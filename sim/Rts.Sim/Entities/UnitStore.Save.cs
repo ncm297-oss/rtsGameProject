@@ -90,7 +90,8 @@ public sealed partial class UnitStore
     /// <paramref name="unitTypes"/>, the free list's slots, the queue counts, the enum values and every status id (below
     /// <paramref name="statuses"/>' length). BUG-1165: the regeneration part against the entries and the save's
     /// <paramref name="tick"/> (a live unit's last damage tick is -1 or at most <paramref name="tick"/>; a free slot's is -1
-    /// with an empty accumulator; the regenerating counts equal the entries).
+    /// with an empty accumulator; the regenerating counts equal the entries). BUG-1220: a free slot holds no status entry,
+    /// and the stealth / blind counts and their totals equal the entries (<see cref="StatusStore.ReadFrom"/>).
     /// </summary>
     internal void ReadFrom(SaveReader r, int players, int unitTypes, System.Collections.Immutable.ImmutableArray<Data.StatusDef> statuses, int tick)
     {
@@ -156,7 +157,7 @@ public sealed partial class UnitStore
         CasterCount = r.ReadInt32In(0, Capacity);
         BelowHpUnits = r.ReadInt32In(0, Capacity);
         SummonedUnits = r.ReadInt32In(0, Capacity);
-        Statuses.ReadFrom(r, statuses.Length);
+        Statuses.ReadFrom(r, statuses);
         if (r.Failed || !r.Expect(SaveFormat.TagRegen)) return;
         r.ReadArray(LastDamagedTick);
         r.ReadArray(RegenAccum);
@@ -169,8 +170,9 @@ public sealed partial class UnitStore
             if (!r.Check(QueueCount[i] >= 0 && QueueCount[i] <= OrderConstants.QueueCapacity)) return;
             if (!Alive[i])
             {
-                // BUG-1165: freeing a slot clears both (UnitStore.Free), so a free slot carrying either is forged.
-                if (!r.Check(LastDamagedTick[i] == -1 && RegenAccum[i] == 0)) return;
+                // BUG-1165: freeing a slot clears both (UnitStore.Free), so a free slot carrying either is forged. BUG-1220:
+                // and its statuses (StatusStore.Clear), so a free slot holding an entry is forged too.
+                if (!r.Check(LastDamagedTick[i] == -1 && RegenAccum[i] == 0 && Statuses.Count[i] == 0)) return;
                 continue;
             }
             live++;

@@ -1,4 +1,5 @@
 using System.Numerics;
+using Rts.Sim.Ai;
 using Rts.Sim.Commands;
 using Rts.Sim.Data;
 using Rts.Sim.Entities;
@@ -79,20 +80,87 @@ public class WorkerCarryTests(ITestOutputHelper output)
     [Fact]
     public void AGatherOrder_ToAWorkerHoldingItsOwnFullLoad_ReturnsIt()
     {
-        (Simulation sim, EntityHandle worker, _) = KeepAndMine(s_fifteen.Value);
+        GameData data = s_fifteen.Value;
+        (Simulation sim, EntityHandle worker, _) = KeepAndMine(data);
         UnitStore u = sim.World.Units;
+        // M7-H2 (BUG-1341 item 2): the load is picked around the loaded rules' value (was a literal 12 that assumed
+        // workerCarry below it): one above the rules' full load, below the type's own carry, so not full.
+        int rules = data.Rules.WorkerCarry, own = data.CarryOf(u.TypeId[worker.Index]), held = rules + 1;
+        Assert.True(held < own, $"precondition: the rules' workerCarry {rules} leaves no load above it below the copy's carry {own}");
         GatherMaps.Run(sim, 2);
-        u.Cargo[worker.Index] = 12; // above the rules' 10, below its own 15: not full
+        u.Cargo[worker.Index] = held;
         u.CargoKind[worker.Index] = ResourceKind.Gold;
         sim.Enqueue(Command.Gather(0, worker, GatherMaps.At(sim, MineX + 1, MineY)));
         GatherMaps.Run(sim, 2);
         Assert.NotEqual(UnitState.Returning, u.State[worker.Index]);
-        Assert.True(u.Cargo[worker.Index] >= 12 && u.Cargo[worker.Index] <= 15);
-        u.Cargo[worker.Index] = 15;
+        Assert.True(u.Cargo[worker.Index] >= held && u.Cargo[worker.Index] <= own);
+        u.Cargo[worker.Index] = own;
         sim.Enqueue(Command.Gather(0, worker, GatherMaps.At(sim, MineX + 1, MineY)));
         int gold = sim.World.Gold[0];
         for (int t = 0; t < 600 && sim.World.Gold[0] == gold; t++) sim.Tick();
-        Assert.Equal(gold + 15, sim.World.Gold[0]);
+        Assert.Equal(gold + own, sim.World.Gold[0]);
+    }
+
+    /// <summary>
+    /// The Teblor's worker at its own carry (set, not added: a copy whose data already carries the Gatherer's 15 is the same
+    /// copy) and every Teblor opening quiet for an hour, so a flat scene's commands are the economy's.
+    /// </summary>
+    private static readonly Lazy<GameData> s_teblorQuiet = new(() => AiScenes.DataWith(dir =>
+    {
+        string gatherer = AiScenes.UnitKey("teblor", UnitSlot.Worker);
+        UnitCarryLoaderTests.StripCarry(dir);
+        dir.SetUnitField("teblor", gatherer, "carry", "15");
+        dir.EditJson("factions/teblor/ai.json", root =>
+        {
+            foreach (System.Text.Json.Nodes.JsonNode? o in root["openings"]!.AsArray())
+                o!["buildOrder"] = AiScenes.BuildOrder(("time", 3600, "train", gatherer, 1));
+        });
+    }));
+
+    /// <summary>
+    /// M7-H2 (BUG-1341 item 3): the AI's full-load test (<c>EconomyManager.FullLoad</c>, reached only through
+    /// <c>NoteDroppedGather</c>) reads the worker's own carry. An idle Teblor worker (carry 15) whose last AI Gather went to a
+    /// gold mine out of its seat's sight: holding the rules' full load (10, below its own 15) it is not full, so the Gather is
+    /// judged dropped and the mine marked; holding 15 it is full, so the Gather is read as one that went home to deposit
+    /// first, and the mine is not marked. On the rules' value alone both loads would be full.
+    /// </summary>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void TheAisFullLoadTest_ReadsTheWorkersOwnCarry(bool ownFullLoad)
+    {
+        GameData d = s_teblorQuiet.Value;
+        PlayerSeat[] seats = { new(d.FindFaction("teblor"), SeatController.Ai, AiDifficulty.Hard), new(d.FindFaction("malazan"), SeatController.Human, AiDifficulty.Hard) };
+        Simulation sim = AiScenes.Flat(seats, d);
+        World w = sim.World;
+        AiPlayer ai = sim.AiOf(0)!;
+        sim.Tick(); // tick 0: the first think
+        int gold = -1, s = -1;
+        while (ai.View.NextResource(ref s, out SeenResource n))
+            if (n.Remaining < 0 && d.Resources[n.TypeId].Resource == ResourceKind.Gold) { gold = s; break; }
+        Assert.True(gold >= 0, "precondition: a gold mine out of the seat's sight");
+        UnitStore u = w.Units;
+        int worker = -1;
+        for (int i = 0; i < u.Capacity && worker < 0; i++)
+            if (u.Alive[i] && u.Owner[i] == 0 && d.Units[u.TypeId[i]].Slot == UnitSlot.Worker && !ai.IsScout(i, u.Generation[i])) worker = i;
+        Assert.True(worker >= 0, "precondition: a worker that is not the scout");
+        int rules = d.Rules.WorkerCarry, own = d.CarryOf(u.TypeId[worker]);
+        Assert.True(rules < own, $"precondition: the rules' workerCarry {rules} is below the Gatherer's own {own}");
+        GatherMaps.Run(sim, 1); // the first think's orders apply
+        sim.Enqueue(Command.Stop(0, new EntityHandle(worker, u.Generation[worker])));
+        while (u.State[worker] != UnitState.Idle && sim.TickNumber < ai.ThinkTicks - 1) sim.Tick();
+        output.WriteLine($"stopped by tick {sim.TickNumber}; thinks every {ai.ThinkTicks}");
+        Assert.Equal(UnitState.Idle, u.State[worker]);
+        Assert.True(sim.TickNumber < ai.ThinkTicks, "precondition: the second think is still to come");
+        // As if the AI's last order to it were a Gather of that mine (MarkOrdered), now applied; the load is set.
+        ai.Board.UnitGeneration[worker] = u.Generation[worker];
+        ai.Board.GatherKind[worker] = EconomyManager.Gold;
+        ai.Board.GatherNode[worker] = new EntityHandle(gold, w.Resources.Generation[gold]);
+        u.Cargo[worker] = ownFullLoad ? own : rules;
+        u.CargoKind[worker] = ResourceKind.Gold;
+        while (sim.TickNumber <= ai.ThinkTicks) sim.Tick(); // the second think
+        output.WriteLine($"holding {u.Cargo[worker]} of {own} (rules {rules}): mine marked {ai.Board.NodeDropped[gold] != 0}");
+        Assert.Equal(ownFullLoad ? 0 : w.Resources.Generation[gold], ai.Board.NodeDropped[gold]);
     }
 
     private static Simulation Match(GameData data, ulong seed)

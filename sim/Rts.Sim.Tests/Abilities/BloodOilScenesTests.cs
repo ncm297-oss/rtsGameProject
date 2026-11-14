@@ -64,7 +64,11 @@ public class BloodOilScenesTests
         GameData d = Load(dir);
         Assert.Single(d.Statuses, s => s.Key == BloodOilScenes.Status);
         int frenzy = d.FindStatus(BloodOilScenes.Status);
-        Assert.Equal(BloodOilScenes.RowIndex, frenzy); // last, where every M7-4 pin expects it
+        // Last in the file, where every M7-4 pin expects it. M7-H2: the file's index, read from the copy (was compared with the
+        // loaded id, which is the ids' sorted order: the same only while no row sorts after the Frenzy's).
+        JsonArray statuses = JsonNode.Parse(File.ReadAllText(dir.FullPath("common/statuses.json")))!["statuses"]!.AsArray();
+        Assert.Equal(statuses.Count - 1, BloodOilScenes.RowIndex);
+        Assert.Equal(BloodOilScenes.Status, (string?)statuses[BloodOilScenes.RowIndex]!["id"]);
         TechDef anointing = d.Techs[d.FindTech("teblor_blood_oil_anointing")];
         TechEffect e = Assert.Single(anointing.Effects, x => x.Stat == TechStat.StatusDuration);
         Assert.Equal((80f, frenzy), (e.Amount, Assert.Single(e.Statuses))); // 4 s, not 8
@@ -73,7 +77,7 @@ public class BloodOilScenesTests
         GameData once = BloodOilScenes.Data;
         Assert.Equal(once.Statuses[BloodOilScenes.Frenzy].DamageBonus, d.Statuses[frenzy].DamageBonus);
         Assert.Equal(once.Statuses[BloodOilScenes.Frenzy].OnEndTicks, d.Statuses[frenzy].OnEndTicks);
-        Assert.Equal(BloodOilScenes.FrenzyTicks, d.Abilities[d.FindAbility("blood_oil_frenzy")].Effects[0].DurationTicks);
+        Assert.Contains(d.Abilities[d.FindAbility(BloodOilScenes.FrenzyAbility)].Effects, x => x.Status == frenzy && x.DurationTicks == BloodOilScenes.FrenzyTicks);
     }
 
     [Fact]

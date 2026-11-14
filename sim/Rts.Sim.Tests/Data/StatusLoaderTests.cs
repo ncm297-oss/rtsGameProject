@@ -18,6 +18,24 @@ public class StatusLoaderTests
     private static JsonObject Entry(JsonObject root, string id) =>
         root["statuses"]!.AsArray().Select(n => n!.AsObject()).Single(s => (string)s["id"]! == id);
 
+    /// <summary>
+    /// M7-H2: the error path of status <paramref name="id"/>'s <paramref name="field"/>, its row found by id in the shipped
+    /// file (was a literal <c>statuses[0]</c> etc.), so a row the data track writes in front of it moves no row here.
+    /// </summary>
+    private static string At(string id, string field) => $"statuses[{ShippedIndex(id)}].{field}";
+
+    private static int ShippedIndex(string id) => IndexById(ShippedList(), id);
+
+    private static JsonArray ShippedList() =>
+        JsonNode.Parse(File.ReadAllText(Path.Combine(TestDataDir.Shipped, StatusFile)))!["statuses"]!.AsArray();
+
+    private static int IndexById(JsonArray list, string id)
+    {
+        for (int i = 0; i < list.Count; i++)
+            if ((string?)list[i]!["id"] == id) return i;
+        throw new InvalidOperationException($"no row '{id}'");
+    }
+
     private static void AssertErrorAt(DataLoadResult r, string file, string path, string? text = null)
     {
         Assert.False(r.Ok);
@@ -47,22 +65,22 @@ public class StatusLoaderTests
     [Fact]
     public void UnknownKind_IsAnError()
     {
-        AssertErrorAt(LoadWith(r => Entry(r, "slowed")["kind"] = "frenzy"), StatusFile, "statuses[1].kind", "unknown");
+        AssertErrorAt(LoadWith(r => Entry(r, "slowed")["kind"] = "frenzy"), StatusFile, At("slowed", "kind"), "unknown");
     }
 
     [Fact]
     public void DamageOverTime_NeedsAKnownDamageType_AndASlowHasNone()
     {
-        AssertErrorAt(LoadWith(r => Entry(r, "burning").Remove("damageType")), StatusFile, "statuses[0].damageType", "missing");
-        AssertErrorAt(LoadWith(r => Entry(r, "burning")["damageType"] = "fire"), StatusFile, "statuses[0].damageType", "unknown damage type");
-        AssertErrorAt(LoadWith(r => Entry(r, "slowed")["damageType"] = "magic"), StatusFile, "statuses[1].damageType", "only a damageOverTime");
+        AssertErrorAt(LoadWith(r => Entry(r, "burning").Remove("damageType")), StatusFile, At("burning", "damageType"), "missing");
+        AssertErrorAt(LoadWith(r => Entry(r, "burning")["damageType"] = "fire"), StatusFile, At("burning", "damageType"), "unknown damage type");
+        AssertErrorAt(LoadWith(r => Entry(r, "slowed")["damageType"] = "magic"), StatusFile, At("slowed", "damageType"), "only a damageOverTime");
     }
 
     [Fact]
     public void DuplicateId_MissingText_AndUnknownField_AreErrors()
     {
-        AssertErrorAt(LoadWith(r => Entry(r, "slowed")["id"] = "burning"), StatusFile, "statuses[1].id", "duplicate");
-        AssertErrorAt(LoadWith(r => Entry(r, "burning").Remove("displayName")), StatusFile, "statuses[0].displayName");
+        AssertErrorAt(LoadWith(r => Entry(r, "slowed")["id"] = "burning"), StatusFile, At("slowed", "id"), "duplicate");
+        AssertErrorAt(LoadWith(r => Entry(r, "burning").Remove("displayName")), StatusFile, At("burning", "displayName"));
         Assert.False(LoadWith(r => Entry(r, "burning")["magnitude"] = 3).Ok);
     }
 
@@ -84,14 +102,14 @@ public class StatusLoaderTests
     [Fact]
     public void ABlind_NeedsSightAndReach_AndNoOtherKindHasThem()
     {
-        AssertErrorAt(LoadWith(r => Entry(r, "blinded").Remove("sight")), StatusFile, "statuses[2].sight", "missing");
-        AssertErrorAt(LoadWith(r => Entry(r, "blinded").Remove("reach")), StatusFile, "statuses[2].reach", "missing");
-        AssertErrorAt(LoadWith(r => Entry(r, "blinded")["sight"] = 0), StatusFile, "statuses[2].sight", "must be positive");
-        AssertErrorAt(LoadWith(r => Entry(r, "blinded")["reach"] = -1), StatusFile, "statuses[2].reach", "must be positive");
-        AssertErrorAt(LoadWith(r => Entry(r, "blinded")["reach"] = DataLimits.MaxSight + 1), StatusFile, "statuses[2].reach", "above the maximum");
-        AssertErrorAt(LoadWith(r => Entry(r, "slowed")["sight"] = 2), StatusFile, "statuses[1].sight", "only a blind");
-        AssertErrorAt(LoadWith(r => Entry(r, "burning")["reach"] = 3), StatusFile, "statuses[0].reach", "only a blind");
-        AssertErrorAt(LoadWith(r => Entry(r, "blinded")["damageType"] = "magic"), StatusFile, "statuses[2].damageType", "only a damageOverTime");
+        AssertErrorAt(LoadWith(r => Entry(r, "blinded").Remove("sight")), StatusFile, At("blinded", "sight"), "missing");
+        AssertErrorAt(LoadWith(r => Entry(r, "blinded").Remove("reach")), StatusFile, At("blinded", "reach"), "missing");
+        AssertErrorAt(LoadWith(r => Entry(r, "blinded")["sight"] = 0), StatusFile, At("blinded", "sight"), "must be positive");
+        AssertErrorAt(LoadWith(r => Entry(r, "blinded")["reach"] = -1), StatusFile, At("blinded", "reach"), "must be positive");
+        AssertErrorAt(LoadWith(r => Entry(r, "blinded")["reach"] = DataLimits.MaxSight + 1), StatusFile, At("blinded", "reach"), "above the maximum");
+        AssertErrorAt(LoadWith(r => Entry(r, "slowed")["sight"] = 2), StatusFile, At("slowed", "sight"), "only a blind");
+        AssertErrorAt(LoadWith(r => Entry(r, "burning")["reach"] = 3), StatusFile, At("burning", "reach"), "only a blind");
+        AssertErrorAt(LoadWith(r => Entry(r, "blinded")["damageType"] = "magic"), StatusFile, At("blinded", "damageType"), "only a damageOverTime");
     }
 
     /// <summary>
@@ -110,18 +128,19 @@ public class StatusLoaderTests
         Assert.Equal((-1, 0f, 0f), (frenzied.DamageType, frenzied.Sight, frenzied.Reach));
         Assert.Equal((0, 1, 2, 3), ((int)StatusKind.DamageOverTime, (int)StatusKind.Slow, (int)StatusKind.Blind, (int)StatusKind.Frenzied));
         Assert.Equal(new[] { "damageOverTime", "slow", "blind", "frenzied", "stealthed", "revealed", "regenerating" }, DataLimits.StatusKindIds.ToArray()); // M4-5 appended two, M7-1 one
-        // The entry follows blinded (appended after it; M4-5's stealthed and revealed come after it).
-        JsonArray list = JsonNode.Parse(File.ReadAllText(Path.Combine(TestDataDir.Shipped, "common", "statuses.json")))!["statuses"]!.AsArray();
-        Assert.Equal("frenzied", (string)list[3]!["id"]!);
+        // The entry follows blinded (appended after it; M4-5's stealthed and revealed come after it). M7-H2: by id, not at a
+        // literal list[3], so a row written in front of both moves neither.
+        JsonArray list = ShippedList();
+        Assert.Equal(IndexById(list, "blinded") + 1, IndexById(list, "frenzied"));
     }
 
     /// <summary>M4-4b-3a criterion 1: a frenzied status refuses <c>sight</c>, <c>reach</c> and <c>damageType</c>, each at its path.</summary>
     [Fact]
     public void AFrenzied_RefusesSightReachAndDamageType()
     {
-        AssertErrorAt(LoadWith(r => Entry(r, "frenzied")["sight"] = 2), StatusFile, "statuses[3].sight", "only a blind");
-        AssertErrorAt(LoadWith(r => Entry(r, "frenzied")["reach"] = 3), StatusFile, "statuses[3].reach", "only a blind");
-        AssertErrorAt(LoadWith(r => Entry(r, "frenzied")["damageType"] = "magic"), StatusFile, "statuses[3].damageType", "only a damageOverTime");
+        AssertErrorAt(LoadWith(r => Entry(r, "frenzied")["sight"] = 2), StatusFile, At("frenzied", "sight"), "only a blind");
+        AssertErrorAt(LoadWith(r => Entry(r, "frenzied")["reach"] = 3), StatusFile, At("frenzied", "reach"), "only a blind");
+        AssertErrorAt(LoadWith(r => Entry(r, "frenzied")["damageType"] = "magic"), StatusFile, At("frenzied", "damageType"), "only a damageOverTime");
         Assert.False(LoadWith(r => Entry(r, "frenzied")["magnitude"] = 0.5).Ok); // the magnitude is the applying effect's
     }
 
@@ -161,16 +180,29 @@ public class StatusLoaderTests
     private static readonly string[] M7Statuses = { "blinded", "burning", "frenzied", "regenerating", "revealed", "slowed", "stealthed" };
 
     // The number of rows the shipped statuses.json carries.
-    private static int ShippedRowCount() =>
-        JsonNode.Parse(File.ReadAllText(Path.Combine(TestDataDir.Shipped, StatusFile)))!["statuses"]!.AsArray().Count;
+    private static int ShippedRowCount() => ShippedList().Count;
+
+    // M7-H2: Telas Fire's row and its applyStatus effect in the Malazan abilities.json, found by id and kind (was abilities[0]
+    // and effects[0]), so an ability written in front of it moves nothing here.
+    private const string TelasFire = "telas_fire", MalazanAbilities = "factions/malazan/abilities.json";
+
+    private static (int Ability, int Effect) TelasFireAt()
+    {
+        JsonArray abilities = JsonNode.Parse(File.ReadAllText(Path.Combine(TestDataDir.Shipped, MalazanAbilities)))!["abilities"]!.AsArray();
+        int a = IndexById(abilities, TelasFire);
+        JsonArray effects = abilities[a]!["effects"]!.AsArray();
+        for (int e = 0; e < effects.Count; e++)
+            if ((string?)effects[e]!["kind"] == "applyStatus") return (a, e);
+        throw new InvalidOperationException("telas_fire has no applyStatus effect");
+    }
 
     /// <summary>M7-1 criterion 5: a regenerating status refuses a damage type (the kind rule), a sight and a reach, each at its path.</summary>
     [Fact]
     public void ARegenerating_RefusesDamageTypeSightAndReach()
     {
-        AssertErrorAt(LoadWith(r => Entry(r, "regenerating")["damageType"] = "magic"), StatusFile, "statuses[6].damageType", "only a damageOverTime");
-        AssertErrorAt(LoadWith(r => Entry(r, "regenerating")["sight"] = 2), StatusFile, "statuses[6].sight", "only a blind");
-        AssertErrorAt(LoadWith(r => Entry(r, "regenerating")["reach"] = 3), StatusFile, "statuses[6].reach", "only a blind");
+        AssertErrorAt(LoadWith(r => Entry(r, "regenerating")["damageType"] = "magic"), StatusFile, At("regenerating", "damageType"), "only a damageOverTime");
+        AssertErrorAt(LoadWith(r => Entry(r, "regenerating")["sight"] = 2), StatusFile, At("regenerating", "sight"), "only a blind");
+        AssertErrorAt(LoadWith(r => Entry(r, "regenerating")["reach"] = 3), StatusFile, At("regenerating", "reach"), "only a blind");
         DataLoadResult one = LoadWith(r => Entry(r, "regenerating")["damageType"] = "magic");
         Assert.Single(one.Errors);
     }
@@ -178,9 +210,10 @@ public class StatusLoaderTests
     private static DataLoadResult WithTelasFireStatus(string status, JsonNode? magnitude)
     {
         using TestDataDir dir = TestDataDir.CopyOfShipped();
-        dir.EditJson("factions/malazan/abilities.json", root =>
+        (int ability, int effect) = TelasFireAt();
+        dir.EditJson(MalazanAbilities, root =>
         {
-            JsonObject e = root["abilities"]![0]!["effects"]![0]!.AsObject();
+            JsonObject e = root["abilities"]![ability]!["effects"]![effect]!.AsObject();
             e["status"] = status;
             if (magnitude == null) e.Remove("magnitude");
             else e["magnitude"] = magnitude;
@@ -195,12 +228,13 @@ public class StatusLoaderTests
     [Fact]
     public void ARegeneratingApplication_NeedsAMagnitudeAbove0()
     {
-        const string File = "factions/malazan/abilities.json", Path = "abilities[0].effects[0].magnitude";
+        (int ability, int effect) = TelasFireAt();
+        string File = MalazanAbilities, Path = $"abilities[{ability}].effects[{effect}].magnitude";
         foreach (double m in new[] { 2.0, 0.5, 1.5, 100 })
         {
             DataLoadResult ok = WithTelasFireStatus("regenerating", m);
             Assert.True(ok.Ok, string.Join("\n", ok.Errors));
-            Assert.Equal((float)m, ok.Data!.Abilities[ok.Data.FindAbility("telas_fire")].Effects[0].Magnitude);
+            Assert.Equal((float)m, ok.Data!.Abilities[ok.Data.FindAbility(TelasFire)].Effects[effect].Magnitude);
         }
         foreach ((JsonNode? m, string text) in new (JsonNode?, string)[] { (0, "must be positive"), (-1, "must be positive"), (null, "missing"),
             // M7-H1 (BUG-1166): 0.02 is off the 0.05 step, refused as such (it was "rounds to 0"); so are a half step and a hair off one.

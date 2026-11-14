@@ -2920,8 +2920,12 @@ them may, as docs/factions/teblor.md asks; the view renders `scale`).
   **Since M7-H1 (BUG-1165)** the reader checks the part against the rest (`SaveError.Malformed` otherwise; no format number
   changed): a live unit's `LastDamagedTick` is -1 or at most the save's own tick, a free slot's is -1 with an accumulator of
   0, each slot's regenerating count equals its entries whose status is `regenerating`, and the total equals the slots with
-  one (a forged total made `RegenSystem`'s O(1) skip fire, a forged count underflowed its byte on expiry). The stealth
-  counts (`_stealth`, `StealthedUnits`, M4-5) have the same unchecked shape and are not checked yet.
+  one (a forged total made `RegenSystem`'s O(1) skip fire, a forged count underflowed its byte on expiry). **Since M7-H2
+  (BUG-1220)** the status part is held to its entries the same way, at load only (no format change; every honest save
+  loads): a free slot holds no entry (freeing clears them), each slot's stealth count equals its stealthed-kind entries, its
+  stored blind is the one `StatusSystem.BlindInForce` picks from them (the rule `RecomputeBlind` writes it by, shared), and
+  `UnitsWithStatuses` / `BlindedUnits` / `StealthedUnits` equal the slots with an entry / a blind / a stealth count
+  (`Save/StatusCountSaveTests`, `QA/M7H1QaTests.AFreeSlot_CarryingAConsistentForgedRegeneratingStatus_IsRefused`).
   The replay format stays 9 (a replay holds no unit state); the golden's header data hash was regenerated once, its `k`
   lines identical. The test fixtures' byte-for-byte proofs (`PreMapFixtures`) take the new parts out
   (`PreMapFixtures.WithoutRegen`) and still match the saves recorded before map files.
@@ -3277,43 +3281,53 @@ was built and no `ai.castMinOwnFighting` knob exists**: the brief built one only
   generated map, to 15:00 (32 matches a configuration). At the end of every Teblor think (`AiPlayer.ThoughtForTests`) it
   takes the Shamans the ability manager considered: free by `AbilityManager.Casters`' own test (or sent a `UseAbility` that
   think, seen through `SentForTests`), the Frenzy ready by the tick the command applies in. For those thinks: at least
-  `ai.castMinTargets` (2) enemies seen within the ability's radius (8 m: today's rule); own army units (not the caster, not
-  workers) within it, and of them `Attacking`; the Shaman's distance to its army's centroid. Per match: Age II, the
-  Shamans' Circle, the first Shaman, Shamans alive at 5 / 10 / 15 min, casts sent (`Blackboard.CastsSent`) and landed (the
-  ready tick moved), defeat, army pop at 15:00, a win. Configurations: the shipped opening; the landing opening (D29's
-  hand-over V24, read read-only from `Content/Fixtures/teblor_standard_d29.json`, with D31's per-opening
-  `reserveArmyShare` 0.5); and a **diagnostic** (the shipped opening with two Shamans spawned at 0:00, not a design number:
-  what today's rule does when Shamans exist). Summed (2026-11-13, this branch; 96 matches in about 30 s):
+  `ai.castMinTargets` (2) enemies seen within the ability's radius (8 m: today's rule); **the army** = own army units that
+  are not workers and not of the caster's type (since M7-H2, BUG-1340: the first version counted the other Shaman as the
+  army), how many stand within the radius and of them `Attacking`, and the Shaman's distance to the army's centroid; the
+  thinks with no such unit at all. Every think figure is also printed **by phase**: before the seat's first non-Shaman
+  army unit, and after it. Per match: Age II, the Shamans' Circle, the first Shaman, the first army unit, Shamans alive at
+  5 / 10 / 15 min, casts sent (`Blackboard.CastsSent`) and landed (the ready tick moved), defeat, army pop at 15:00, a
+  win. Configurations: the shipped opening; the landing opening (D29's hand-over V24, read read-only from
+  `Content/Fixtures/teblor_standard_d29.json`, at the shipped `standard` opening's own `reserveArmyShare` once it carries
+  one, else D31's provisional 0.5: `FrenzyCastReportTests.LandingShare`, so the column follows the landing); a
+  **diagnostic** (the shipped opening with two Shamans spawned at 0:00, not a design number: what today's rule does when
+  Shamans exist); and, when the environment variable `FRENZY_REPORT_OPENING` names a file, that opening (below, "For the
+  data track (M7-7)"). Summed (2026-11-14, M7-H2 on this branch; the shipped data carries no share, so the landing column
+  is at 0.5; 96 matches in about 2 minutes beside other runs):
 
   | | shipped opening | landing opening | diagnostic: 2 Shamans at 0:00 |
   | --- | --- | --- | --- |
   | Age II / Shamans' Circle by 15:00 | 4 / 3 of 32 | 21 / 8 of 32 | 7 / 5 of 32 |
-  | matches with a Shaman (first one) | 3 of 32 (13:09, 13:51, 14:44) | 0 of 32 | 32 of 32 |
+  | matches with a Shaman (first one) | 3 of 32 (13:09, 13:51, 14:44) | 0 of 32 | 32 of 32 (0:00) |
   | Shamans alive at 5 / 10 / 15 min (sum) | 0 / 0 / 2 | 0 / 0 / 0 | 64 / 4 / 2 |
+  | first non-Shaman army unit (median; matches with one) | 5:47 (32 of 32) | 4:45 (32 of 32) | 5:42 (31 of 32) |
   | thinks with a free Shaman, Frenzy ready | 73 | 0 | 14,852 |
-  | of them, own army within 8 m: 1+ / 2+ / 3+ / 4+ | 47 / 47 / 32 / 16 | - | 10,918 / 1,912 / 141 / 0 |
-  | Shaman to army centroid, mean / median | 21.1 / 17.6 m | - | 10.1 / 2.0 m |
+  | of them before the first army unit | 0 | - | 10,777 |
+  | of them with no army at all | 9 | - | 11,125 |
+  | army within 8 m: 1+ / 2+ / 3+ / 4+ | 47 / 47 / 32 / 16 | - | 2,599 / 239 / 0 / 0 |
+  | Shaman to army centroid, mean / median (thinks with an army) | 21.1 / 17.6 m | - | 25.9 / 6.6 m |
   | today's rule: 2+ enemies seen within 8 m | 2 | - | 53 |
-  | own army attacking within 8 m: 1+ / 2+ / 3+ / 4+ | 4 / 2 / 0 / 0 | - | 207 / 31 / 0 / 0 |
+  | army attacking within 8 m: 1+ / 2+ / 3+ / 4+ | 4 / 2 / 0 / 0 | - | 45 / 0 / 0 / 0 |
   | casts sent / landed (a match) | 2 / 2 (0.06) | 0 / 0 (0.00) | 65 / 65 (2.03) |
   | defeated by 15:00 / army pop 15:00 (sum) / wins | 24 / 40 / 0 | 19 / 8 / 0 | 13 / 54 / 0 |
 
+  The diagnostic after its first army unit: 4,075 ready thinks, 348 of them with that army gone again; army within 8 m
+  2,599 / 239 / 0 / 0; attacking 45 / 0 / 0 / 0; 47 of the 53 thinks of today's rule. The shipped column has no Shaman
+  before its first army unit, so it is the same as before the fix. QA's independent re-measure
+  (`Stress/FrenzyCastReportQaStressTests`, the same matches) reads 2+ army units within 8 m in 250 of 14,996 ready thinks
+  and 2+ attacking in 0. It counts every ready, non-casting Shaman, not only the free ones the ability manager would send,
+  so it has 144 more ready thinks (and 11 more at 2+). It reads enemies from the world rather than the fogged view, and it
+  splits at 5:00 rather than at the first army unit. The army it counts is the same.
 - **The cause: too few Shamans.** The AI almost never has one: the Teblor reaches Age II by 15:00 in 4 of 32 matches
   (shipped) and is defeated in 24, so 3 of 32 field a Shaman, the first at 13:09; with the landing opening 21 reach Age II
   and 8 build the Circle, but none trains a Shaman before 15:00 (its 10 % composition share loses to the Warriors at a small
-  army). The other two candidates are not it: when Shamans exist (the diagnostic) they stand with the army (median 2.0 m
-  from its centroid, an own unit within 8 m in 74 % of the ready thinks), and the proposed own-fighting rule would fire
-  **less** than today's (2+ own attacking within 8 m in 31 ready thinks against 53 for 2+ enemies; 3+ or 4+ never). An own
-  unit counts as attacking only in the `Attacking` state (standing in reach); a melee unit chasing is `Moving`, which is
-  why the count is low.
-- **Correction at ACCEPT (BUG-1340, open: the report itself is fixed in the sim's hardening).** The diagnostic column's
-  "own army" rows and its centroid distance count the other spawned Shaman as the army, so "they stand with the army
-  (median 2.0 m ...)" above is not supported. QA's re-measure with Shamans left out of the army count
-  (`Stress/FrenzyCastReportQaStressTests`): before 5:00, 9,549 of 9,568 ready thinks have no army at all; a Shaman has
-  2+ army units within 8 m in 250 of 14,996 ready thinks, and 2+ of them attacking in 0 (not 31). "Too few Shamans" stands
-  (the shipped and landing columns reproduce exactly); **whether a fielded Shaman keeps up with the army is not measured
-  yet** and is measured once an opening trains Shamans. The "about two Frenzies a match" below is the diagnostic's figure
-  for two Shamans standing at home from 0:00, not a forecast.
+  army). **Whether a fielded Shaman stands with the army is not measured by this copy.** In the diagnostic, two
+  Shamans standing at home from 0:00 have no army at all in 11,125 of their 14,852 ready thinks (all 10,777 before the
+  first army unit, which comes at a median 5:42). After it, 2+ army units stand within 8 m of a ready Shaman in 239
+  ready thinks and 4+ never. That describes Shamans spawned before the army, not Shamans trained into it; the opening
+  has to field them before the question can be measured. The proposed own-fighting rule would fire **less** than today's: 2+ army units attacking within
+  8 m in no ready think, against 53 for 2+ enemies. An army unit counts as attacking only in the `Attacking` state
+  (standing in reach); a melee unit chasing is `Moving`, so the count is low.
 - **Rule 41.** These figures are this branch's, on the sim's test copy and one generated map; the data track's V24
   re-measure on `main` is another harness (four maps, its own seat layout) and not comparable with them.
 - **`units.json` `carry`** (Request 48; optional, a worker only): resources a worker of the type carries a trip, a whole
@@ -3331,11 +3345,15 @@ was built and no `ai.castMinOwnFighting` knob exists**: the brief built one only
   file carrying it, at any value (the rules' own too), hashes differently. Not in the state hash (data; the load is the
   unit's `Cargo`, hashed as before); no save or replay format change (`SaveFormat.CurrentVersion` 10): a mid-match save on a
   carry-15 copy loads and runs 2,000 ticks hash-identical. No allocation (`WorkerCarryTests.GatherTicks_WithAWorkerCarry_
-  AllocateNothing`); the cost is two array reads per gather step (`Carry` is a plain `int`).
+  AllocateNothing`); the cost is `GameData.CarryOf`'s two array reads and a compare per gather step (`Carry` is a plain
+  `int`, 0 when absent; M7-H2, BUG-1341 item 1).
 - **Tests.** `Data/UnitCarryLoaderTests` (absent, 1, 2, 15, 1,000,000 load; ten broken values and a Warrior's carry, one
   error each; the hash present / absent), `DataContentHashTests.ChangingAnyFieldOfAnyDef_ChangesTheHash` (the reflection row
   names `UnitDef.Carry`: 0 to set), `Economy/WorkerCarryTests` (a Laborer at 15 fills to 15 and deposits 15; without the field,
-  or at the rules' value, 10; a Gather order to a worker holding 12 of 15 does not send it home, at 15 it does; the
+  or at the rules' value, 10; a Gather order to a worker holding one more than the rules' value of its 15 does not send it
+  home, at 15 it does (the load picked from `Rules.WorkerCarry` since M7-H2); the AI's full-load test through
+  `NoteDroppedGather`, `TheAisFullLoadTest_ReadsTheWorkersOwnCarry` (M7-H2: an AI Teblor worker at carry 15 holding the
+  rules' 10 is not full, so its dropped Gather marks the mine; holding 15 it is, and nothing is marked); the
   hash-identical match; a carry-15 match carries loads of 15 and moves; the save; the allocation). Rules 58 / 59: every copy
   strips `carry` first and sets its own; the new tests and the report pass on a scratch tree whose data already carries the
   four Frenzy rows, the landing opening and a Gatherer `carry` 15.
@@ -3345,9 +3363,26 @@ was built and no `ai.castMinOwnFighting` knob exists**: the brief built one only
 - **Shamans.** The Teblor AI casts Frenzy only if it fields Shamans, which is `ai.json`'s (the opening's Age II timing and
   its composition): today it has none before 13:09 in the shipped opening and none by 15:00 with the landing opening. If
   the balance pass wants the Frenzy seen before 15:00, the opening has to reach Age II, build the Shamans' Circle and train
-  Shamans earlier (a larger `teblor_shaman` share once in Age II, or a `train` step for one or two). Re-measure with
-  `Stress/FrenzyCastReportTests` (a new configuration is one line). Today's cast rule then casts about two Frenzies a match
-  with two Shamans in the army; no new rule is proposed until a measurement with Shamans fielded by the opening says otherwise.
+  Shamans earlier (a larger `teblor_shaman` share once in Age II, or a `train` step for one or two). The diagnostic's
+  2.03 casts a match is two Shamans standing at home from 0:00, not a forecast for trained ones. No new rule is proposed
+  until a measurement with Shamans fielded by the opening says otherwise.
+- **Measuring an opening without a sim edit (M7-H2).** Write the opening (one JSON object, exactly an `ai.json`
+  `openings[]` entry) to a file and name it in `FRENZY_REPORT_OPENING`: an absolute path, or one relative to
+  `sim/Rts.Sim.Tests` or the repo root. The report then measures it as a fourth configuration, put in as the Teblor's
+  `standard` (its `id` set to `standard`) on the same copy. It prints the same columns, by phase too, and the "by phase"
+  rows after the first army unit answer "does a fielded Shaman stand with the army". Unset, the report runs its three
+  configurations as before. A missing file, a file that is not one JSON object, and an opening the loader refuses each
+  fail the run with a message naming the path (and the loader's errors). Nothing is written. For example, from the repo
+  root in PowerShell:
+
+  ```powershell
+  $env:FRENZY_REPORT_OPENING = 'Content/Fixtures/teblor_standard_d29.json'
+  dotnet test sim/Rts.Sim.Tests --filter "FullyQualifiedName~FrenzyCastReportTests" --logger "console;verbosity=detailed"
+  Remove-Item Env:FRENZY_REPORT_OPENING
+  ```
+
+  On this branch that file (V24 without a share) reads Age II / Circle 11 / 3 of 32 and no Shaman by 15:00 (12 defeated).
+  The landing column, V24 at 0.5, reads 21 / 8, so the share is what moves Age II there.
 - **The Gatherer's 15.** The schema exists; teblor.md's "not in the data: `rules.json` `workerCarry` is one number for
   every faction" is no longer true of the schema (the row itself is not in the data). The row, in
   `factions/teblor/units.json` on `teblor_gatherer`: `"carry": 15`. It moves the data hash once (land it with D31's rows
@@ -3530,6 +3565,36 @@ number, no state hash, digest, outcome tick or golden line moved.
   `RegenQaTests` forged-part rows (un-skipped, plus the edges) and step rows (both places), `DataValidationTests` /
   `StatusLoaderTests` off-step rows, `KillCounterOracleTests`, `Seed21ResearchTests`,
   `FactionOrderTests.AFolderDifferingOnlyInCase_IsOneOrderErrorNamingBothSpellings`.
+
+### Implementation (M7-H2)
+
+The sim's debts around the Teblor landing (D31). No AI rule, save or replay format, state hash, data hash
+(`67269D955D18D885`) or golden line moved; no shipped file changed.
+
+- **The Frenzy report (BUG-1340)** counts no unit of the caster's type as army, prints its think figures by phase
+  (before / after the seat's first non-Shaman army unit), and measures one more opening from a file named in
+  `FRENZY_REPORT_OPENING`. Its landing column reads the shipped `standard` opening's own share. See "Implementation
+  (M7-7)" (the table and the cause, rewritten on the fixed numbers) and "For the data track (M7-7)".
+- **BUG-1341:** the M7-7 cost sentence; `WorkerCarryTests`' Gather-order row picks its load from `Rules.WorkerCarry`; a
+  focused row for the AI's `EconomyManager.FullLoad` through `NoteDroppedGather` (see M7-7's tests bullet).
+- **BUG-1220:** the status part's derived counts are checked against the entries at load, and a free slot must hold none
+  (see M7-1's "Save format 10" bullet). `StatusSystem.BlindInForce` is `RecomputeBlind`'s pick, factored out unchanged so
+  the load check and the tick use one rule.
+- **BUG-1221:** a case-only folder listed twice reads "is listed twice" for the second entry. The duplicate check also
+  looks at the entries matched to a folder by case, as listed: the result list holds the folder's spelling.
+- **Position lookups:** `StatusLoaderTests` finds each status row's error path by id (`At(id, field)`), and Telas Fire's
+  ability and effect by id and kind. `Abilities/BloodOilScenes` finds the Frenzy ability, its `applyStatus` effect and
+  Blood-oil Anointing by id (`FrenzyRow`, `FrenzyEffect`, `AnointingRow`); `BloodOilScenesTests` compared the Frenzy
+  row's file index (`RowIndex`) with its loaded id, which is the ids' sorted order, and now reads the copy's file. All
+  pass on a scratch clone with a status row (`zz_forged`, sorting last), a Teblor tech, a Teblor ability and a Malazan
+  ability written in front of the shipped ones (9 of the 14 fail there on the base). Other classes still index
+  `techs[0]` / `abilities[0]` (`FrenzyRulesLoaderTests`, `StatusDurationTechTests`, `DataContentHashTests`, QA's); out of
+  this task's scope.
+- **`Stress/RebuildLookMatchQaStressTests.PaleHillsSeed2_*`:** the child process's limit is 1,200 s (was 600 s), as the
+  other four-seat Pale Hills twins. A longer limit and still a child process, so the row still proves two processes agree.
+- **Tests:** `Save/StatusCountSaveTests` (12 forged stealth / blind / total rows refused, the honest save loads),
+  `QA/M7H1QaTests`' two BUG-1220 / 1221 rows un-skipped, `Ai/FrenzyReportOpeningTests` (the file configuration, its
+  three failures, the landing share), `WorkerCarryTests.TheAisFullLoadTest_ReadsTheWorkersOwnCarry`.
 
 ### Implementation (M7-V3a)
 
