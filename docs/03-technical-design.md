@@ -2920,8 +2920,12 @@ them may, as docs/factions/teblor.md asks; the view renders `scale`).
   **Since M7-H1 (BUG-1165)** the reader checks the part against the rest (`SaveError.Malformed` otherwise; no format number
   changed): a live unit's `LastDamagedTick` is -1 or at most the save's own tick, a free slot's is -1 with an accumulator of
   0, each slot's regenerating count equals its entries whose status is `regenerating`, and the total equals the slots with
-  one (a forged total made `RegenSystem`'s O(1) skip fire, a forged count underflowed its byte on expiry). The stealth
-  counts (`_stealth`, `StealthedUnits`, M4-5) have the same unchecked shape and are not checked yet.
+  one (a forged total made `RegenSystem`'s O(1) skip fire, a forged count underflowed its byte on expiry). **Since M7-H2
+  (BUG-1220)** the status part is held to its entries the same way, at load only (no format change; every honest save
+  loads): a free slot holds no entry (freeing clears them), each slot's stealth count equals its stealthed-kind entries, its
+  stored blind is the one `StatusSystem.BlindInForce` picks from them (the rule `RecomputeBlind` writes it by, shared), and
+  `UnitsWithStatuses` / `BlindedUnits` / `StealthedUnits` equal the slots with an entry / a blind / a stealth count
+  (`Save/StatusCountSaveTests`, `QA/M7H1QaTests.AFreeSlot_CarryingAConsistentForgedRegeneratingStatus_IsRefused`).
   The replay format stays 9 (a replay holds no unit state); the golden's header data hash was regenerated once, its `k`
   lines identical. The test fixtures' byte-for-byte proofs (`PreMapFixtures`) take the new parts out
   (`PreMapFixtures.WithoutRegen`) and still match the saves recorded before map files.
@@ -3154,9 +3158,9 @@ the loaders in `DataLoader.Abilities.cs` (`ResolveOnEnds`), `DataLoader.Techs.cs
   `statusDuration`. `TechState.AnyStatusDuration` (from the data) skips the lookup when no tech has one.
 - **`buildings.json` `scale`** (Request 47; optional, default 1, `DataLimits.MinUnitScale`-`MaxUnitScale` = 0.5-3.0, one
   error at `buildings[i].scale` outside it): `BuildingDef.Scale`. Presentation only, the unit's M7-1 rule: the sim never
-  reads it (the footprint is the building's room). **Nothing draws it yet** (M7-6, BUG-1281): the view reads
-  `UnitDef.Scale` only, so a building's `scale` is drawn at 1.0 until the view's own task (the view half of Request 47)
-  reads `BuildingDef.Scale`.
+  reads it (the footprint is the building's room). **The view draws it since M7-V4** (the view half of Request 47; until
+  then nothing read it, M7-6, BUG-1281): the view reads `BuildingDef.Scale` as it reads `UnitDef.Scale`, as the height of
+  the building's placeholder box (`BuildingViews.DrawnHeight`), never its width; see "Implementation (M7-V4)".
 - **What is hashed.** `GameData.ContentHash` adds every new field **only away from its default** (as M7-2's
   `spawnCount`): a status's `DamageBonus` when not 0, its three `onEnd` fields when any is set, a tech effect's `Statuses`
   on a `statusDuration` effect (or when set), a building's `Scale` when not 1. So the shipped data's hash, and with it the
@@ -3277,43 +3281,53 @@ was built and no `ai.castMinOwnFighting` knob exists**: the brief built one only
   generated map, to 15:00 (32 matches a configuration). At the end of every Teblor think (`AiPlayer.ThoughtForTests`) it
   takes the Shamans the ability manager considered: free by `AbilityManager.Casters`' own test (or sent a `UseAbility` that
   think, seen through `SentForTests`), the Frenzy ready by the tick the command applies in. For those thinks: at least
-  `ai.castMinTargets` (2) enemies seen within the ability's radius (8 m: today's rule); own army units (not the caster, not
-  workers) within it, and of them `Attacking`; the Shaman's distance to its army's centroid. Per match: Age II, the
-  Shamans' Circle, the first Shaman, Shamans alive at 5 / 10 / 15 min, casts sent (`Blackboard.CastsSent`) and landed (the
-  ready tick moved), defeat, army pop at 15:00, a win. Configurations: the shipped opening; the landing opening (D29's
-  hand-over V24, read read-only from `Content/Fixtures/teblor_standard_d29.json`, with D31's per-opening
-  `reserveArmyShare` 0.5); and a **diagnostic** (the shipped opening with two Shamans spawned at 0:00, not a design number:
-  what today's rule does when Shamans exist). Summed (2026-11-13, this branch; 96 matches in about 30 s):
+  `ai.castMinTargets` (2) enemies seen within the ability's radius (8 m: today's rule); **the army** = own army units that
+  are not workers and not of the caster's type (since M7-H2, BUG-1340: the first version counted the other Shaman as the
+  army), how many stand within the radius and of them `Attacking`, and the Shaman's distance to the army's centroid; the
+  thinks with no such unit at all. Every think figure is also printed **by phase**: before the seat's first non-Shaman
+  army unit, and after it. Per match: Age II, the Shamans' Circle, the first Shaman, the first army unit, Shamans alive at
+  5 / 10 / 15 min, casts sent (`Blackboard.CastsSent`) and landed (the ready tick moved), defeat, army pop at 15:00, a
+  win. Configurations: the shipped opening; the landing opening (D29's hand-over V24, read read-only from
+  `Content/Fixtures/teblor_standard_d29.json`, at the shipped `standard` opening's own `reserveArmyShare` once it carries
+  one, else D31's provisional 0.5: `FrenzyCastReportTests.LandingShare`, so the column follows the landing); a
+  **diagnostic** (the shipped opening with two Shamans spawned at 0:00, not a design number: what today's rule does when
+  Shamans exist); and, when the environment variable `FRENZY_REPORT_OPENING` names a file, that opening (below, "For the
+  data track (M7-7)"). Summed (2026-11-14, M7-H2 on this branch; the shipped data carries no share, so the landing column
+  is at 0.5; 96 matches in about 2 minutes beside other runs):
 
   | | shipped opening | landing opening | diagnostic: 2 Shamans at 0:00 |
   | --- | --- | --- | --- |
   | Age II / Shamans' Circle by 15:00 | 4 / 3 of 32 | 21 / 8 of 32 | 7 / 5 of 32 |
-  | matches with a Shaman (first one) | 3 of 32 (13:09, 13:51, 14:44) | 0 of 32 | 32 of 32 |
+  | matches with a Shaman (first one) | 3 of 32 (13:09, 13:51, 14:44) | 0 of 32 | 32 of 32 (0:00) |
   | Shamans alive at 5 / 10 / 15 min (sum) | 0 / 0 / 2 | 0 / 0 / 0 | 64 / 4 / 2 |
+  | first non-Shaman army unit (median; matches with one) | 5:47 (32 of 32) | 4:45 (32 of 32) | 5:42 (31 of 32) |
   | thinks with a free Shaman, Frenzy ready | 73 | 0 | 14,852 |
-  | of them, own army within 8 m: 1+ / 2+ / 3+ / 4+ | 47 / 47 / 32 / 16 | - | 10,918 / 1,912 / 141 / 0 |
-  | Shaman to army centroid, mean / median | 21.1 / 17.6 m | - | 10.1 / 2.0 m |
+  | of them before the first army unit | 0 | - | 10,777 |
+  | of them with no army at all | 9 | - | 11,125 |
+  | army within 8 m: 1+ / 2+ / 3+ / 4+ | 47 / 47 / 32 / 16 | - | 2,599 / 239 / 0 / 0 |
+  | Shaman to army centroid, mean / median (thinks with an army) | 21.1 / 17.6 m | - | 25.9 / 6.6 m |
   | today's rule: 2+ enemies seen within 8 m | 2 | - | 53 |
-  | own army attacking within 8 m: 1+ / 2+ / 3+ / 4+ | 4 / 2 / 0 / 0 | - | 207 / 31 / 0 / 0 |
+  | army attacking within 8 m: 1+ / 2+ / 3+ / 4+ | 4 / 2 / 0 / 0 | - | 45 / 0 / 0 / 0 |
   | casts sent / landed (a match) | 2 / 2 (0.06) | 0 / 0 (0.00) | 65 / 65 (2.03) |
   | defeated by 15:00 / army pop 15:00 (sum) / wins | 24 / 40 / 0 | 19 / 8 / 0 | 13 / 54 / 0 |
 
+  The diagnostic after its first army unit: 4,075 ready thinks, 348 of them with that army gone again; army within 8 m
+  2,599 / 239 / 0 / 0; attacking 45 / 0 / 0 / 0; 47 of the 53 thinks of today's rule. The shipped column has no Shaman
+  before its first army unit, so it is the same as before the fix. QA's independent re-measure
+  (`Stress/FrenzyCastReportQaStressTests`, the same matches) reads 2+ army units within 8 m in 250 of 14,996 ready thinks
+  and 2+ attacking in 0. It counts every ready, non-casting Shaman, not only the free ones the ability manager would send,
+  so it has 144 more ready thinks (and 11 more at 2+). It reads enemies from the world rather than the fogged view, and it
+  splits at 5:00 rather than at the first army unit. The army it counts is the same.
 - **The cause: too few Shamans.** The AI almost never has one: the Teblor reaches Age II by 15:00 in 4 of 32 matches
   (shipped) and is defeated in 24, so 3 of 32 field a Shaman, the first at 13:09; with the landing opening 21 reach Age II
   and 8 build the Circle, but none trains a Shaman before 15:00 (its 10 % composition share loses to the Warriors at a small
-  army). The other two candidates are not it: when Shamans exist (the diagnostic) they stand with the army (median 2.0 m
-  from its centroid, an own unit within 8 m in 74 % of the ready thinks), and the proposed own-fighting rule would fire
-  **less** than today's (2+ own attacking within 8 m in 31 ready thinks against 53 for 2+ enemies; 3+ or 4+ never). An own
-  unit counts as attacking only in the `Attacking` state (standing in reach); a melee unit chasing is `Moving`, which is
-  why the count is low.
-- **Correction at ACCEPT (BUG-1340, open: the report itself is fixed in the sim's hardening).** The diagnostic column's
-  "own army" rows and its centroid distance count the other spawned Shaman as the army, so "they stand with the army
-  (median 2.0 m ...)" above is not supported. QA's re-measure with Shamans left out of the army count
-  (`Stress/FrenzyCastReportQaStressTests`): before 5:00, 9,549 of 9,568 ready thinks have no army at all; a Shaman has
-  2+ army units within 8 m in 250 of 14,996 ready thinks, and 2+ of them attacking in 0 (not 31). "Too few Shamans" stands
-  (the shipped and landing columns reproduce exactly); **whether a fielded Shaman keeps up with the army is not measured
-  yet** and is measured once an opening trains Shamans. The "about two Frenzies a match" below is the diagnostic's figure
-  for two Shamans standing at home from 0:00, not a forecast.
+  army). **Whether a fielded Shaman stands with the army is not measured by this copy.** In the diagnostic, two
+  Shamans standing at home from 0:00 have no army at all in 11,125 of their 14,852 ready thinks (all 10,777 before the
+  first army unit, which comes at a median 5:42). After it, 2+ army units stand within 8 m of a ready Shaman in 239
+  ready thinks and 4+ never. That describes Shamans spawned before the army, not Shamans trained into it; the opening
+  has to field them before the question can be measured. The proposed own-fighting rule would fire **less** than today's: 2+ army units attacking within
+  8 m in no ready think, against 53 for 2+ enemies. An army unit counts as attacking only in the `Attacking` state
+  (standing in reach); a melee unit chasing is `Moving`, so the count is low.
 - **Rule 41.** These figures are this branch's, on the sim's test copy and one generated map; the data track's V24
   re-measure on `main` is another harness (four maps, its own seat layout) and not comparable with them.
 - **`units.json` `carry`** (Request 48; optional, a worker only): resources a worker of the type carries a trip, a whole
@@ -3331,11 +3345,15 @@ was built and no `ai.castMinOwnFighting` knob exists**: the brief built one only
   file carrying it, at any value (the rules' own too), hashes differently. Not in the state hash (data; the load is the
   unit's `Cargo`, hashed as before); no save or replay format change (`SaveFormat.CurrentVersion` 10): a mid-match save on a
   carry-15 copy loads and runs 2,000 ticks hash-identical. No allocation (`WorkerCarryTests.GatherTicks_WithAWorkerCarry_
-  AllocateNothing`); the cost is two array reads per gather step (`Carry` is a plain `int`).
+  AllocateNothing`); the cost is `GameData.CarryOf`'s two array reads and a compare per gather step (`Carry` is a plain
+  `int`, 0 when absent; M7-H2, BUG-1341 item 1).
 - **Tests.** `Data/UnitCarryLoaderTests` (absent, 1, 2, 15, 1,000,000 load; ten broken values and a Warrior's carry, one
   error each; the hash present / absent), `DataContentHashTests.ChangingAnyFieldOfAnyDef_ChangesTheHash` (the reflection row
   names `UnitDef.Carry`: 0 to set), `Economy/WorkerCarryTests` (a Laborer at 15 fills to 15 and deposits 15; without the field,
-  or at the rules' value, 10; a Gather order to a worker holding 12 of 15 does not send it home, at 15 it does; the
+  or at the rules' value, 10; a Gather order to a worker holding one more than the rules' value of its 15 does not send it
+  home, at 15 it does (the load picked from `Rules.WorkerCarry` since M7-H2); the AI's full-load test through
+  `NoteDroppedGather`, `TheAisFullLoadTest_ReadsTheWorkersOwnCarry` (M7-H2: an AI Teblor worker at carry 15 holding the
+  rules' 10 is not full, so its dropped Gather marks the mine; holding 15 it is, and nothing is marked); the
   hash-identical match; a carry-15 match carries loads of 15 and moves; the save; the allocation). Rules 58 / 59: every copy
   strips `carry` first and sets its own; the new tests and the report pass on a scratch tree whose data already carries the
   four Frenzy rows, the landing opening and a Gatherer `carry` 15.
@@ -3345,9 +3363,26 @@ was built and no `ai.castMinOwnFighting` knob exists**: the brief built one only
 - **Shamans.** The Teblor AI casts Frenzy only if it fields Shamans, which is `ai.json`'s (the opening's Age II timing and
   its composition): today it has none before 13:09 in the shipped opening and none by 15:00 with the landing opening. If
   the balance pass wants the Frenzy seen before 15:00, the opening has to reach Age II, build the Shamans' Circle and train
-  Shamans earlier (a larger `teblor_shaman` share once in Age II, or a `train` step for one or two). Re-measure with
-  `Stress/FrenzyCastReportTests` (a new configuration is one line). Today's cast rule then casts about two Frenzies a match
-  with two Shamans in the army; no new rule is proposed until a measurement with Shamans fielded by the opening says otherwise.
+  Shamans earlier (a larger `teblor_shaman` share once in Age II, or a `train` step for one or two). The diagnostic's
+  2.03 casts a match is two Shamans standing at home from 0:00, not a forecast for trained ones. No new rule is proposed
+  until a measurement with Shamans fielded by the opening says otherwise.
+- **Measuring an opening without a sim edit (M7-H2).** Write the opening (one JSON object, exactly an `ai.json`
+  `openings[]` entry) to a file and name it in `FRENZY_REPORT_OPENING`: an absolute path, or one relative to
+  `sim/Rts.Sim.Tests` or the repo root. The report then measures it as a fourth configuration, put in as the Teblor's
+  `standard` (its `id` set to `standard`) on the same copy. It prints the same columns, by phase too, and the "by phase"
+  rows after the first army unit answer "does a fielded Shaman stand with the army". Unset, the report runs its three
+  configurations as before. A missing file, a file that is not one JSON object, and an opening the loader refuses each
+  fail the run with a message naming the path (and the loader's errors). Nothing is written. For example, from the repo
+  root in PowerShell:
+
+  ```powershell
+  $env:FRENZY_REPORT_OPENING = 'Content/Fixtures/teblor_standard_d29.json'
+  dotnet test sim/Rts.Sim.Tests --filter "FullyQualifiedName~FrenzyCastReportTests" --logger "console;verbosity=detailed"
+  Remove-Item Env:FRENZY_REPORT_OPENING
+  ```
+
+  On this branch that file (V24 without a share) reads Age II / Circle 11 / 3 of 32 and no Shaman by 15:00 (12 defeated).
+  The landing column, V24 at 0.5, reads 21 / 8, so the share is what moves Age II there.
 - **The Gatherer's 15.** The schema exists; teblor.md's "not in the data: `rules.json` `workerCarry` is one number for
   every faction" is no longer true of the schema (the row itself is not in the data). The row, in
   `factions/teblor/units.json` on `teblor_gatherer`: `"carry": 15`. It moves the data hash once (land it with D31's rows
@@ -3531,6 +3566,36 @@ number, no state hash, digest, outcome tick or golden line moved.
   `StatusLoaderTests` off-step rows, `KillCounterOracleTests`, `Seed21ResearchTests`,
   `FactionOrderTests.AFolderDifferingOnlyInCase_IsOneOrderErrorNamingBothSpellings`.
 
+### Implementation (M7-H2)
+
+The sim's debts around the Teblor landing (D31). No AI rule, save or replay format, state hash, data hash
+(`67269D955D18D885`) or golden line moved; no shipped file changed.
+
+- **The Frenzy report (BUG-1340)** counts no unit of the caster's type as army, prints its think figures by phase
+  (before / after the seat's first non-Shaman army unit), and measures one more opening from a file named in
+  `FRENZY_REPORT_OPENING`. Its landing column reads the shipped `standard` opening's own share. See "Implementation
+  (M7-7)" (the table and the cause, rewritten on the fixed numbers) and "For the data track (M7-7)".
+- **BUG-1341:** the M7-7 cost sentence; `WorkerCarryTests`' Gather-order row picks its load from `Rules.WorkerCarry`; a
+  focused row for the AI's `EconomyManager.FullLoad` through `NoteDroppedGather` (see M7-7's tests bullet).
+- **BUG-1220:** the status part's derived counts are checked against the entries at load, and a free slot must hold none
+  (see M7-1's "Save format 10" bullet). `StatusSystem.BlindInForce` is `RecomputeBlind`'s pick, factored out unchanged so
+  the load check and the tick use one rule.
+- **BUG-1221:** a case-only folder listed twice reads "is listed twice" for the second entry. The duplicate check also
+  looks at the entries matched to a folder by case, as listed: the result list holds the folder's spelling.
+- **Position lookups:** `StatusLoaderTests` finds each status row's error path by id (`At(id, field)`), and Telas Fire's
+  ability and effect by id and kind. `Abilities/BloodOilScenes` finds the Frenzy ability, its `applyStatus` effect and
+  Blood-oil Anointing by id (`FrenzyRow`, `FrenzyEffect`, `AnointingRow`); `BloodOilScenesTests` compared the Frenzy
+  row's file index (`RowIndex`) with its loaded id, which is the ids' sorted order, and now reads the copy's file. All
+  pass on a scratch clone with a status row (`zz_forged`, sorting last), a Teblor tech, a Teblor ability and a Malazan
+  ability written in front of the shipped ones (9 of the 14 fail there on the base). Other classes still index
+  `techs[0]` / `abilities[0]` (`FrenzyRulesLoaderTests`, `StatusDurationTechTests`, `DataContentHashTests`, QA's); out of
+  this task's scope.
+- **`Stress/RebuildLookMatchQaStressTests.PaleHillsSeed2_*`:** the child process's limit is 1,200 s (was 600 s), as the
+  other four-seat Pale Hills twins. A longer limit and still a child process, so the row still proves two processes agree.
+- **Tests:** `Save/StatusCountSaveTests` (12 forged stealth / blind / total rows refused, the honest save loads),
+  `QA/M7H1QaTests`' two BUG-1220 / 1221 rows un-skipped, `Ai/FrenzyReportOpeningTests` (the file configuration, its
+  three failures, the landing share), `WorkerCarryTests.TheAisFullLoadTest_ReadsTheWorkersOwnCarry`.
+
 ### Implementation (M7-V3a)
 
 The view ready for a third faction, proven on a forged copy of the data before the real one (D28) lands; the
@@ -3616,6 +3681,57 @@ the data's giant radius, once by the view). View code only; no sim, ViewApi or d
   `-- --shots <dir>` it saves five pictures), `ScaleViewTest`, `UnitViewsTest`, `ShellTest` (their width pins moved to the
   rule; `ScaleViewTest`'s click / box rows prove the hit test above the centre, where the drawn body now reaches past the
   sim's pick circle).
+
+### Implementation (M7-V4)
+
+The view half of Request 47 (docs/factions/teblor.md "Buildings": "1.25× scale visually"): a building's data `scale` is
+drawn, and BUG-1350 (a rare GC-handle `ERROR` in `QaM6V20Test`). View code and view tests only; no sim, ViewApi or data
+file changed.
+
+- **The rule** (Producer default, owner may revisit): a building's `scale` multiplies its drawn **height** only.
+  `BuildingViews.DrawnHeight(def)` = `BoxHeight (3 m) x scale`; the box keeps the footprint's width and depth (cells x
+  2 m), as a unit's body keeps its collision radius since M7-V3c (BUG-1260): a box drawn wider than its footprint would
+  stand inside its neighbours and inside the units walking past. The alternative (scaled about the footprint's centre in
+  all three axes) is one inbox note away once real building models exist. The height is applied once per type when
+  `Bind` builds the shared `BoxMesh`; `Place` keeps the slot's drawn height and bar height (two `float[]` written once per
+  building), so the per-frame path reads nothing new and allocates nothing.
+- **What follows the height:** the finished box (base on the ground, top at `3 m x scale`); a construction site, which
+  rises from `SiteMinHeight` (15 %) of the drawn height to all of it; the placement ghost (`BuildGhost.Begin`: the same box,
+  its reason label over the drawn top); the remembered-building ghost (full height, or a remembered site's foundation at
+  15 % of it); the bar back and fill (`BuildingViews.BarHeightOf(def)` = `BarHeight + (DrawnHeight - BoxHeight)`, so the
+  bar's centre is always 0.6 m over the drawn top, as at scale 1). At scale 1 every number is the old one exactly
+  (`3 x 1 = 3`, `3.6 + 0 = 3.6`).
+- **What does not:** the footprint, the outline, the selection and target rings, the rally point and its line, the
+  minimap, the rubble, the hit test. **The hit test keeps the 3 m box** (`BuildingPicker.PickRay` with `BoxHeight`, as the
+  unit's keeps the sim radius): for the owner, a click on the upper part of a taller building (above 3 m) selects what it
+  selected before M7-V4, which is whatever the 3 m box behind the click gives, often nothing, so a tall building is
+  clicked on its lower 3 m.
+- **Scale-1 buildings draw exactly as before:** `EconomyViewTest`'s six `--placeholder-art` pictures (the Malazan bases of
+  seeds 1, 6 and 31, hauling, the site, cargo at 60 m), taken at 43ab896 and with this change in one tree, are
+  byte-identical for three (seeds 1 and 6, hauling); the other three differ only in the HUD's frames-per-second number, a
+  wall-clock reading (136, 243 and 1,020 pixels, all inside the top-left text line).
+- **BUG-1350 (the cause: game code, made likelier by the test's collection).** `FogOfWar` cached its three fog shaders per
+  instance, so each match loaded `terrain_fog.gdshader` (and the prop and marker shaders) afresh and each quit left the old
+  wrappers to the collector. The old match's meshes and materials release the shader over successive collections, so a
+  probe shows the old terrain shader still alive after `QaM6V20Test`'s `Collect / WaitForPendingFinalizers / Collect` plus
+  eight frames, freed only by the third collection; the next match's `GD.Load` then finds the cached shader behind a wrapper
+  that is collectable and swaps its GC handle weak-to-strong (`ScriptManagerBridge.SwapGCHandleForType`), which fails with
+  "Handle is not initialized" when the finalizer thread disposes that wrapper at the same moment (the shape of BUG-1093).
+  The fix removes the ingredients: the three fog shaders and `UnitModels`' team shader are held in statics for the
+  process (as `GroundDisc`'s and `Main.MatchScene`), so their wrappers are never finalized and no match start calls
+  `GD.Load` for them. The test's own collection was left as it is. Not changed (same family, never seen failing): `Sfx`
+  loads its clip variants per match with `ResourceLoader.Load`.
+- **Tests:** `game/tests/BuildingScaleViewTest` (headless, in the loop): shipped data, every type's drawn height and bar;
+  a forged copy (Billet 1.25, Barracks 2.0, Keep 1.0), both seats Malazan, fog on: each finished box is the footprint by
+  `3 m x scale` with its base on the ground and its bar 0.6 m over the top; a 2.0 Barracks site rises from 0.9 m to 6 m with
+  its progress bar over 6 m on every sampled frame, 0 bytes over 20 syncs of the rise; the placement ghost of each type
+  and its reason label; a click 3.1 m up the 2.0 box (outside the 3 m box) selects what `PickBuilding` gives there (nothing)
+  and one 1 m up selects the Barracks; hit-point bars on the three hurt by real crossbow bolts; an enemy Billet and Barracks
+  scouted and left drawn as ghosts of their height, 0 bytes over 20 syncs; a Teblor base (Longhouse, Hut, War Lodge)
+  beside a Malazan one at each type's height. Windowed with `-- --shots <dir> --placeholder-art` it saves
+  `building-scale-row.png` and `teblor-beside-malazan.png`. `QaM6V20Test` row 8 (BUG-1350): every match draws with the
+  same fog shader of each kind, and the shaders are still alive after four more collections once every match is gone (red
+  before the fix).
 
 ### Implementation (M6-V20)
 
@@ -4058,7 +4174,7 @@ consumes it.
 | `rules.json` | docs/02 Economy table: `startingResources` (M6-S6, replacing `startingGold` / `startingWood`: a list of presets in the setup's order, each `{id, displayName, description?, gold, wood, aiSpendAbove?}`; ids unique snake_case of at most 64 characters, a `standard` entry required, gold and wood 0 to 1,000,000, at most 16 presets; shipped `standard` 200 / 200 and `high` 1000 / 1000, Producer default; `aiSpendAbove` (M6-S6 fix round 1, BUG-1050) optional, 0 to 1,000,000, 0 or left out = off: the AI's spend-down threshold in gold + wood, shipped `high` 200, `standard` none; every field, the count and the order in `ContentHash`), `startingWorkers`, `popCap`, `workerCarry`, `gatherRate {gold, wood}` (per second), `startMines` / `expansionMines {count, gold}`, `treeWood`, `nodeSearchRadius`, `repair {rateFactor, costFactor}` (M3-3), `buildingSight` (M4-3a: meters, above 0 and at most 64, the sight of a building whose entry gives none; shipped 12, a Producer default: docs/02 gives sight only for the Watch Tower), `stealth {proximity, revealSeconds}` (M4-5: meters and seconds, above 0; shipped 3 and 3, docs/02 "Stealth and detection"). Pop provided by buildings comes with `buildings.json` (M3); the Age II cost with `techs.json` (M3-5) |
 | `common/factions.json` | M7-3: `{ "order": ["malazan", "whirlwind"] }`, the faction order: faction id = index in `order`, and unit and building type ids go faction by faction in this order (ordinal within a faction). Every folder under `factions/` must be listed and every entry must have a folder; a repeat, an entry that isn't a snake_case id (or a string) and more than 8 entries (`DataLimits.MaxFactions`) are errors, one each at `order[i]` (a folder not listed: at `order`, naming the folder). Append-only: a new faction adds its id at the end. Not hashed (the keys in id order are). See "Implementation (M7-3)" |
 | `faction.json` | `id` (must equal the folder name), `displayName`, `description`, `bonus {displayName, description}`, `resources {gold, wood: {displayName}}`, `palette {primary, secondary, accent}` as `#RRGGBB`; `regen` (M7-1, optional: absent = no regeneration) `{hpPerSecond, delay}`, both required when the object is there: `hpPerSecond` above 0 and at most 100 (`DataLimits.MaxRegenPerSecond`) and at least 0.05 (one fixed-point unit a tick), to `FactionDef.RegenPerTick` (`round(hpPerSecond x 400 / 20)`: 1 → 20); `delay` seconds, 0 or more, at most 3600, to `FactionDef.RegenDelayTicks` (6 → 120); an unknown key is an error. No shipped faction has one yet (Teblor, Andii: M7 / M9). See "Implementation (M7-1)" |
-| `buildings.json` | `{ "buildings": [ ... ] }`, each `{id, displayName, description, slot, footprint {width, height}, hp, armor, cost {gold, wood}, buildTime, popProvided, dropOff}`: `slot` is one of the ten template slots (`DataLimits.BuildingSlotIds`), footprint sides 1-4 cells, `buildTime` in seconds (to ticks), `popProvided` a multiple of 0.5 (to half-pop), `dropOff` a required bool, `requires` an optional list of tech / building ids (M3-5; resolved and gating placement since M3-6), `sight` optional meters (M4-3a: above 0 and at most 64, default `rules.json` `buildingSight`; shipped 24 on both watch towers, docs/02), `attack` optional (M4-3b: the unit `attack` object; value at least 1, range above 0, an aimed `projectile` required, `targets` not `buildings`; shipped on both watch towers), `detector` optional meters (M4-3b: above 0 and at most 64; shipped 16 on both watch towers; unused until M4-5), `scale` optional (M7-4: the view's model size, 0.5-3.0, default 1; the sim never reads it). Ids unique across factions (M3-2, see "Economy implementation"); exactly one building per slot per faction (M3-6, BUG-0010) |
+| `buildings.json` | `{ "buildings": [ ... ] }`, each `{id, displayName, description, slot, footprint {width, height}, hp, armor, cost {gold, wood}, buildTime, popProvided, dropOff}`: `slot` is one of the ten template slots (`DataLimits.BuildingSlotIds`), footprint sides 1-4 cells, `buildTime` in seconds (to ticks), `popProvided` a multiple of 0.5 (to half-pop), `dropOff` a required bool, `requires` an optional list of tech / building ids (M3-5; resolved and gating placement since M3-6), `sight` optional meters (M4-3a: above 0 and at most 64, default `rules.json` `buildingSight`; shipped 24 on both watch towers, docs/02), `attack` optional (M4-3b: the unit `attack` object; value at least 1, range above 0, an aimed `projectile` required, `targets` not `buildings`; shipped on both watch towers), `detector` optional meters (M4-3b: above 0 and at most 64; shipped 16 on both watch towers; unused until M4-5), `scale` optional (M7-4: the view's model size, 0.5-3.0, default 1; the sim never reads it; since M7-V4 the placeholder box's height, `3 m x scale`, on the footprint's width and depth: "Implementation (M7-V4)"). Ids unique across factions (M3-2, see "Economy implementation"); exactly one building per slot per faction (M3-6, BUG-0010) |
 | `techs.json` | `{ "techs": [ ... ] }` in `common/` (shared by every faction) and in each faction folder (its own), each `{id, displayName, description, researchedAt, cost {gold, wood}, researchTime, requires?, requiresAnyOf?, effects: [{stat, amount, appliesTo {attackType?, tags?, units?, siege?}}]}`: `researchedAt` is a building slot id (a common tech resolves to each faction's building of it; a faction without one is an error), `researchTime` in seconds (to ticks), `requires` tech / building ids (resolved and gating research since M3-6), `requiresAnyOf` `{count, of: [slot ids, or in a faction file its own building ids]}`: met when `count` of the distinct listed slots hold an own finished building (M3-6; shipped on `age_ii` only), `effects` may be empty. `stat` is one of `attack`, `armor`, `range`, `hp`, `abilityCooldown`, `statusDuration` (M7-4) (`DataLimits.TechStatIds`); `amount` is non-zero, whole for attack / armor / hp, meters for range, seconds for ability cooldown and status duration (to ticks, negative shortens it). A `statusDuration` effect takes `statuses` (statuses.json ids, at least one) and no `appliesTo`; no other stat takes `statuses` (see "Implementation (M7-4)"). `appliesTo` is required (`{}` = every unit) except on `statusDuration`; each filter it sets must match: `attackType` a damage type, `tags` any one of the unit's tags (each must be a tag some unit has), `units` unit ids (a faction tech's must be its own), `siege` true / false for the `siege` slot; a `tags` or `units` list set to `[]` is an error (M3-6, BUG-0098). Tech ids are unique across all techs files and may not equal a building id (M3-6); they number the common file's techs first, then each faction's in `common/factions.json` order, ordinal within each file (M7-3b), so a new faction's techs move no shipped id; `DataLimits.AgeTechIds` (`age_ii`) must be a common tech (M3-5, see "Implementation (M3-5)") |
 | `projectiles.json` | `{ "projectiles": [ ... ] }`, each `{id, kind, speed, hitTolerance?, leadSpeed?}`: `kind` `aimed` or `lob`, `speed` m/s (at least 1), `hitTolerance` m (aimed only, 0-2, default 0.3; an error on a lob), `leadSpeed` m/s (aimed only, not negative, default 0 = never leads; an error on a lob). Ids unique; every unit's `attack.projectile` must name one (M4-2b, see "Implementation (M4-2b)") |
 | `units.json` | `{ "units": [ ... ] }`, entries as in the example. `attack` also takes optional `minRange`, `splash` (m), and `friendlyFire` (docs/02 "Combat / Stats"); they default to 0 / false. Melee range is written as `0.5` (edge to edge). `abilities` (M4-4a, optional): ability ids of the unit's own faction, at most 4 (`DataLimits.MaxUnitAbilities`), no repeats; resolved to `UnitDef.Abilities`; shipped on the Cadre Mage (`telas_fire`), the Sapper (`cusser`) and the Priest of the Whirlwind (`sandstorm`). `passives` (M4-4b-3a, optional): at most 2 (`DataLimits.MaxUnitPassives`), one per `trigger` (`DataLimits.PassiveTriggerIds`): `{trigger: whenBelowHp, hpFraction, status, magnitude}` or `{trigger: onDeath, status, magnitude, duration, radius, units}` (see "Implementation (M4-4b-3a)"); resolved to `UnitDef.Passives`; shipped on the Zealot only. `detector` (M4-5, optional): meters, above 0, at most 64 (`UnitDef.Detector`; see "Implementation (M4-5)"). `scale` (M7-1, optional, default 1): the view's model size, 0.5-3.0 (`DataLimits.MinUnitScale` / `MaxUnitScale`), to `UnitDef.Scale`; presentation only, collision stays `radius` (docs/02 "Combat / Stats"); no shipped unit sets it yet. `spawnCount` (M7-2, optional, default 1): units one queue item spawns, a whole number 1-8 (`DataLimits.MaxSpawnCount`), to `UnitDef.SpawnCount`; `cost` and `trainTime` are the item's, `pop` each unit's (see "Implementation (M7-2)"); no shipped unit sets it yet. `passives` also takes (M7-2) `{trigger: onHit, status, magnitude, duration}`, so at most 3, still one per trigger. `carry` (M7-7, Request 48, optional, a worker only): resources the worker carries a trip, a whole number 1 to 1,000,000, to `UnitDef.Carry`; absent = `rules.json` `workerCarry` (`GameData.CarryOf`; see "Implementation (M7-7)"); no shipped unit sets it yet |
@@ -4798,7 +4914,7 @@ Match.tscn  (new nodes)
   changes the grid after the start, which a hall placed on tick 1 now does).
 - **Building views** (`BuildingViews`): polled each frame from `Buildings.Alive` / `Generation` like the props (no
   sim events yet). A slot's nodes (box, bar back, bar fill) are made the first time it holds a building and hidden
-  while it is free. The box is the footprint (cells x 2 m) by 3 m, in the owner's faction colour; a construction
+  while it is free. The box is the footprint (cells x 2 m) by 3 m (since M7-V4 `3 m x` the type's data `scale`), in the owner's faction colour; a construction
   site is a dusty mauve (`BuildingViews.SiteColor`, a hue far from both factions' building colours;
   it was a slate lighter than the Malazan grey, BUG-0107) and rises from 15% to full height with its progress. The bar over it
   comes from the pure `ViewApi.BuildingBars.Of(buildings, defs, slot, out fill)`: `Progress` (`Work / WorkNeeded`,
@@ -6307,12 +6423,15 @@ game/tests/ShellTest.tscn      the headless flow test
   With the pause's `SceneTree.Paused` line removed the test fails 11 rows. Windowed with `-- --shots <dir>` it saves
   `shell-menu.png`, `shell-setup.png`, `shell-match.png`, `shell-pause.png`.
 - **Remembered sites (BUG-0275 item 1).** A ghost whose `BuildingGhost.Site` is set (it was a construction site when last
-  seen) draws as a foundation: its type's box scaled to `BuildingViews.SiteMinHeight` (0.45 m of the 3 m box; the entry
+  seen) draws as a foundation: its type's box scaled to `BuildingViews.SiteMinHeight` (0.45 m of a scale-1 3 m box; since M7-V4 that share of the type's drawn height; the entry
   keeps no progress, so the lowest a site can be), standing on the ground, in the site colour darkened by
   `FogView.ExploredBrightness` (`GhostSiteMaterial`, one for every owner, as live sites share one). It is re-placed when
-  the entry's generation, anchor or site flag changes. Picking matches the drawing: `BuildingPicker.PickGhostRay` has an
-  overload with a `siteShare` that makes a site ghost's box that share of `boxHeight` tall (the old overload, full height
-  for every ghost, is kept for its callers), and `SelectionController` passes `SiteMinHeight`. Tests: xUnit
+  the entry's generation, anchor or site flag changes. Picking keeps the foundation's share but not the type's scale:
+  `BuildingPicker.PickGhostRay` has an overload with a `siteShare` that makes a site ghost's box that share of `boxHeight`
+  tall (the old overload, full height for every ghost, is kept for its callers), and `SelectionController` passes
+  `BoxHeight` and `SiteMinHeight`, so a remembered site is picked on a 0.45 m box whatever its type's scale. That matches
+  the drawing at scale 1 only (a 3.0 type's foundation is drawn 1.35 m tall, the Teblor's 1.25 0.56 m); like the live hit
+  test (see "Implementation (M7-V4)"), picking stays on the 3 m box by the Producer's M7-V4 decision. Tests: xUnit
   `FogViewTests.GhostPick_ARememberedSite_IsPickedAsAFoundation` (a ray 1 m up meets the remembered box, misses it once the
   entry is a site, still meets the foundation 0.2 m up; the old overload unchanged); headless `FogViewTest` adds, per seed,
   that the House seen as a site is drawn as a foundation (flag, material, scale, base on the ground) and the finished

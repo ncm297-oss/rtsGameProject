@@ -120,7 +120,10 @@ public class RebuildLookMatchQaStressTests
     /// losing seats reopen dozens of build steps and where a seat loses its hall (tick 38,240 at 8155ee4; 40,460 since M5-9a
     /// round 2 fix round 1, BUG-1154's starved check, so the window moved from 40,000 to 41,000 to keep it; 41,160 since M5-H6's
     /// house rule and hunt starts, so it moved to 42,000). This process
-    /// and a fresh child <c>dotnet test</c> of this row fold the same per-tick hashes.
+    /// and a fresh child <c>dotnet test</c> of this row fold the same per-tick hashes. M7-H2: the child's limit is 1,200 s
+    /// (was 600 s), as the other four-seat Pale Hills twins': beside a long loop (every core busy with other Stress rows) the
+    /// child's 42,000 ticks plus its own test discovery ran past 600 s, so the row failed on the clock, not on a hash. A
+    /// longer limit and not an in-process twin, so the row still proves two processes agree.
     /// </summary>
     [Fact]
     [Trait("Category", "Stress")]
@@ -154,7 +157,7 @@ public class RebuildLookMatchQaStressTests
             _out.WriteLine(TwinLine + mine);
             return;
         }
-        Assert.Equal(mine, MapFileTests.RunChild(typeof(RebuildLookMatchQaStressTests), nameof(PaleHillsSeed2_ARebuildingMatch_TwoProcesses_SamePerTickHashes), TwinVariable, TwinLine, seconds: 600));
+        Assert.Equal(mine, MapFileTests.RunChild(typeof(RebuildLookMatchQaStressTests), nameof(PaleHillsSeed2_ARebuildingMatch_TwoProcesses_SamePerTickHashes), TwinVariable, TwinLine, seconds: 1200));
     }
 
     /// <summary>

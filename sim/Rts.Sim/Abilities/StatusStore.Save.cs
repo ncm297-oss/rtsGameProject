@@ -52,8 +52,14 @@ public sealed partial class StatusStore
         r.Check(RegeneratingUnits == total);
     }
 
-    /// <summary>Reads what <see cref="WriteTo"/> wrote into a store of the same capacity; each slot's count must be at most <see cref="PerUnit"/> and each entry's status below <paramref name="statuses"/>.</summary>
-    internal void ReadFrom(SaveReader r, int statuses)
+    /// <summary>
+    /// Reads what <see cref="WriteTo"/> wrote into a store of the same capacity; each slot's count must be at most
+    /// <see cref="PerUnit"/> and each entry's status one of <paramref name="statuses"/>. M7-H2 (BUG-1220): the derived
+    /// counts are held to the entries as <see cref="ReadRegenFrom"/> holds its own: each slot's stealth count is its
+    /// stealthed-kind entries, its blind the one <see cref="StatusSystem.BlindInForce"/> picks from them, and the three
+    /// totals the slots with any entry, with a blind and with a stealth count. A forged count is refused, never trusted.
+    /// </summary>
+    internal void ReadFrom(SaveReader r, System.Collections.Immutable.ImmutableArray<Data.StatusDef> statuses)
     {
         r.ReadArray(Count);
         r.ReadArray(StatusId);
@@ -67,11 +73,21 @@ public sealed partial class StatusStore
         BlindedUnits = r.ReadInt32In(0, Count.Length);
         StealthedUnits = r.ReadInt32In(0, Count.Length);
         if (r.Failed) return;
+        int withStatuses = 0, blinded = 0, stealthed = 0;
         for (int u = 0; u < Count.Length; u++)
         {
             if (!r.Check(Count[u] >= 0 && Count[u] <= PerUnit)) return;
+            int stealth = 0;
             for (int k = u * PerUnit; k < u * PerUnit + Count[u]; k++)
-                if (!r.Check((uint)StatusId[k] < (uint)statuses)) return;
+            {
+                if (!r.Check((uint)StatusId[k] < (uint)statuses.Length)) return;
+                if (statuses[StatusId[k]].Kind == Data.StatusKind.Stealthed) stealth++;
+            }
+            if (!r.Check(_stealth[u] == stealth && _blind[u] == StatusSystem.BlindInForce(this, statuses, u) + 1)) return;
+            if (Count[u] > 0) withStatuses++;
+            if (_blind[u] != 0) blinded++;
+            if (stealth > 0) stealthed++;
         }
+        r.Check(UnitsWithStatuses == withStatuses && BlindedUnits == blinded && StealthedUnits == stealthed);
     }
 }

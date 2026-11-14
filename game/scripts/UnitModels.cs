@@ -39,6 +39,8 @@ public sealed class UnitModels
     private static AnimationLibrary? _library;
     private static bool _libraryTried;
     private static float[] _clipLength = Array.Empty<float>();
+    // BUG-1350: held for the process (FogOfWar's shaders' rule), so no match start loads it behind a dying wrapper.
+    private static Shader? _teamShader;
 
     private readonly PackedScene?[] _scenes;
     private readonly NodePath?[] _meshPath;
@@ -59,7 +61,7 @@ public sealed class UnitModels
         _meshPath = new NodePath?[n];
         _teamSurface = new int[n];
         _team = new ShaderMaterial?[n][];
-        var shader = GD.Load<Shader>(TeamShaderPath);
+        Shader shader = _teamShader ??= GD.Load<Shader>(TeamShaderPath);
         var missing = new List<string>();
         for (int t = 0; t < n; t++)
         {

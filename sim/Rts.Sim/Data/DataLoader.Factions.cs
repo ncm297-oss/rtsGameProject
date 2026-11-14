@@ -32,12 +32,12 @@ public static partial class DataLoader
             c.Error("order", $"{order.Count} factions is above the maximum {DataLimits.MaxFactions}");
         var result = new List<string>(); // load-time only
         var caseOnly = new List<string>(); // M7-H1 (BUG-1173 item 2): folders matched to an entry by case only
+        var caseOnlyIds = new List<string>(); // M7-H2 (BUG-1221): the entries as listed, since result holds the folder's spelling
         for (int i = 0; i < order.Count; i++)
         {
             string id = c.Id(order[i], $"order[{i}]");
             if (id.Length == 0) continue;
-            int first = result.IndexOf(id);
-            if (first >= 0)
+            if (result.Contains(id) || caseOnlyIds.Contains(id))
                 c.Error($"order[{i}]", $"faction '{id}' is listed twice");
             else if (Array.IndexOf(folders, id) >= 0)
                 result.Add(id);
@@ -48,6 +48,7 @@ public static partial class DataLoader
                 // id check reports the mismatch too, as it did.
                 c.Error($"order[{i}]", $"faction '{id}': its folder is factions/{folder}/, not factions/{id}/ (a folder's name must be its id exactly, case included)");
                 caseOnly.Add(folder);
+                caseOnlyIds.Add(id);
                 result.Add(folder);
             }
             else

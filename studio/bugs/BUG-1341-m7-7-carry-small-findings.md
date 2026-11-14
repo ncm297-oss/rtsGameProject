@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S4 |
-| Status | open |
+| Status | fixed |
 | Found | 2026-11-13-2306, task M7-7 (QA) |
 | System | economy (`units.json` `carry`), docs/03, `Economy/WorkerCarryTests` |
-| Fixed by | |
+| Fixed by | M7-H2, session 2026-11-14-0616 |
 
 ## Repro
 Read the files named below.
@@ -29,3 +29,6 @@ Read the files named below.
 - For the data track, not the sim's: `docs/factions/teblor.md`'s Gatherer sentence ("not in the data: `rules.json`
   `workerCarry` is one number for every faction") is now out of date about the schema. The developer flagged it in
   docs/03's "For the data track (M7-7)".
+
+## Fix
+M7-H2 (2026-11-14-0616): (1) docs/03 sentence now "`GameData.CarryOf`'s two array reads and a compare"; (2) `WorkerCarryTests.AGatherOrder_ToAWorkerHoldingItsOwnFullLoad_ReturnsIt` holds `Rules.WorkerCarry + 1`; (3) `WorkerCarryTests.TheAisFullLoadTest_ReadsTheWorkersOwnCarry` (fails with `FullLoad` on the rules' value). The teblor.md note stays the data track's.
