@@ -8,7 +8,8 @@
 #   Sources: -SourceRoot, else <repo>/asset-sources, else (in a git worktree) the main checkout's asset-sources.
 #   Godot import: $env:GODOT (process, then user); without it the Blender outputs are written and the import is left to you.
 # Godot import settings written here (each .import keeps its uid, so a re-run gives the same files):
-#   a model .glb: no animations, no tangents (no normal maps), textures extracted beside it;
+#   a model .glb: no animations, no tangents (no normal maps), textures extracted beside it; its clip map rides in it as
+#   glTF extras on the armature node, which Godot imports as metadata (M6-V21);
 #   an extracted texture: VRAM compressed with mipmaps (docs/04 "Look test (M6-V10)");
 #   the library .glb: imported as an AnimationLibrary, every clip looping (root motion is off: in-place sources).
 # Exit 0 on success; 1 when a build or import fails; 2 when Blender, the manifest or the sources are missing.
@@ -145,6 +146,8 @@ $total = 0
 foreach ($r in $results) {
     Write-Host ("{0}: {1} triangles, {2:0.00} m tall, feet at {3} m, materials [{4}]" -f $r.id, $r.triangles, $r.height, $r.feet, ($r.materials -join ' '))
     foreach ($t in $r.textures.PSObject.Properties) { Write-Host ("    texture {0} {1} x {2}" -f $t.Name, $t.Value[0], $t.Value[1]) }
+    # M6-V21: the clip map written into the model (state name -> library clip).
+    if ($r.clips) { Write-Host ("    clips " + (($r.clips.PSObject.Properties | ForEach-Object { "$($_.Name)=$($_.Value)" }) -join ' ')) }
     $dir = Split-Path (Join-Path $root $r.destination) -Parent
     foreach ($f in Get-ChildItem -LiteralPath $dir -File | Sort-Object Name) {
         if ($f.Extension -ne '.import') { $total += $f.Length }

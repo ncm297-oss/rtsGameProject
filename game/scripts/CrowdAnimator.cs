@@ -67,7 +67,7 @@ public sealed class CrowdAnimator
     /// <param name="shown">Per slot whether its view is drawn.</param>
     /// <param name="views">Per slot its view node, whose global position is the figure's.</param>
     /// <param name="eye">The camera's global position, or null to advance every shown player every frame.</param>
-    /// <param name="delta">View seconds since the last frame.</param>
+    /// <param name="delta">Clip seconds this frame: the view seconds since the last frame times the game speed (M6-V21, <see cref="UnitViews.AnimationRate"/>; the caller skips a paused frame).</param>
     public void Advance(AnimationPlayer?[] anim, bool[] shown, MeshInstance3D?[] views, Vector3? eye, double delta)
     {
         long frame = Frame++;

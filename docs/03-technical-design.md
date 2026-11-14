@@ -3856,6 +3856,74 @@ Fixes after M6-V20: the cost of 400 animated models (BUG-1321), the worker tint 
   `QaM7V3aTest` (40-character name) checks the long list is no wider than the others, every Team list and every stats
   heading on screen.
 
+### Implementation (M6-V21)
+
+The art pass's second slice: the Malazan Heavy Infantry and the Whirlwind Camp Follower, Raider and Desert Archer are drawn
+as animated, team-coloured models (six model types); a per-model attack clip; the figures follow the game speed. View
+code, view tests, the import tooling and generated assets only; no sim, ViewApi or data file changed.
+
+- **The entries** (`tools/asset-manifest.json`, docs/04 "Unit models, as built"): the two outfits on disk recoloured, props
+  as boxes (Producer default). Heavy Infantry: the Ranger without its hood, with bracers, oxblood, a team-coloured big
+  rectangular shield, a steel short sword and box helmet. Camp Follower: the Peasant in bleached sand. Raider: the Ranger
+  with its hood, ochre, a curved steel blade. Desert Archer: the Ranger with hood and pauldron, sand, a bow. 2,507 / 2,597 /
+  2,547 / 2,727 triangles, four 512² textures each, 1.82-1.88 m, 65 bones, one `team` surface.
+- **Clips chosen.** The library gains `attack_melee` (UAL1 `Sword_Attack`); the Heavy Infantry and the Raider attack with it,
+  the Desert Archer keeps `Pistol_Shoot` (UAL1 / UAL2 have no bow clip; candidates in docs/04 "Animation setup").
+- **Clip maps.** A model file carries its clip map (state name -> library clip) as glTF extras on its armature node, which
+  Godot 4.7 imports as the node's `extras` metadata. `UnitModels` reads it at `Bind` (from the probe instance it already
+  makes for the team surface; a missing map or entry means the state's own name, the pre-V21 rule) and gives each model type
+  one `AnimationLibrary` holding the shared library's `Animation`s under the state names (references, no copy), added to that
+  type's players instead of the shared library. So every player still plays `idle`, `walk`, `attack`, ... (`ClipFor` and every
+  test that reads `CurrentAnimation` are unchanged) and the map decides the motion; a state whose source the library lacks
+  is left out and the view plays idle, as before. `UnitModels.ClipSource(type, clip)`, `HasClip(type, clip)`,
+  `ClipLength(type, clip)` and `LibraryOf(type)` are per type; the static `HasClip(clip)` / `ClipLength(clip)` still read
+  the shared library by state name. No unit id is named in code.
+- **Game speed** (docs/01 2026-11-14 (d) (f)). `UnitViews.AdvanceAnimations(delta, eye)` passes `delta x AnimationRate` to
+  `CrowdAnimator.Advance`; `AnimationRate` is the runner's `GameSpeed` (1 without a runner) and 0 while the node can't
+  process (the match's tree paused: the pause menu, the match-over banner). At rate 0 the schedule doesn't run at all (its
+  frame counter and the staggered figures' waits hold), so resume picks up where pause left. The staggered figures wait in
+  clip time (the scaled deltas), so near and far figures advance alike at any speed.
+- **Scenes that turn models off:** unchanged, the five of M6-V20 (`EconomyViewTest`, `QaM6V3Test`, `QaM7V3cTest`,
+  `ScaleViewTest`, `ShellTest`); none is added. Scenes that read a slot's own mesh or overlay for one of the four types read
+  the model's instead: `CombatViewTest` (the hit flash on `ModelMeshOf` for the Heavy Infantry and the Raider), `QaM22Test`
+  (a reused slot draws through its model's mesh: the Whirlwind's first unit is the Camp Follower), `TeblorViewTest` (the
+  Heavy Infantry's capsule size from `MeshOf(type)`, the same numbers). No pin value changed.
+- **A slot's type is set before the fog check** (found by `FogViewTest` / `QaFogViewTest` / `QaGhostViewTest`'s 0-byte
+  steady rows once the line units were models): `Sync` sets a live slot's type, and so instantiates a model type's model,
+  when the slot gets its unit, seen or not, as it already made the slot's node; a fogged army coming into sight then makes
+  nothing. A model made while hidden has its player inactive until it is shown.
+- **Cost** (rule 61; 1600 x 900, vsync off, default zoom, `ModelShots --bench 30 --vsync off`, the units mixed evenly over the
+  six model types, the capsule runs on the same types with `--placeholder-art`, RTX 4070; none of the developer's own test
+  processes running, two other tracks' `testhost`s running throughout, which the developer may not stop):
+
+  | Run | Average | While 90 % live | Worst 1 % (90 % live) | Draw calls |
+  | --- | --- | --- | --- | --- |
+  | 400 models | 10.16 ms | **11.26 ms** (pass: at most 16.7) | 16.03 ms | 4,544 |
+  | 400 capsules | 0.78 ms | 0.79 ms | 2.71 ms | 95 |
+  | 1,000 models | 27.11 ms | 28.17 ms | 35.43 ms | 12,216 |
+  | 1,000 capsules | 1.36 ms | 1.40 ms | 5.91 ms | 131 |
+  | 1,000 models, `--no-anim` | 18.64 ms | 19.52 ms | 25.53 ms | 12,208 |
+  | 1,000 models, `--no-model-shadows` | 22.88 ms | 24.03 ms | 30.28 ms | 4,230 |
+
+  400 mixed models cost about 1 ms more than M6-VH7's two types (10.11 ms while 90 % live): five surfaces on four of the six
+  types (the props' material) against four and five, so about 1,100 more draw calls. **What 16.7 ms at 1,000 would take
+  (rule 61, measured, not built):** the animation (players advanced on the CPU) is about 8.7 ms of the 28.2 (the `--no-anim`
+  split; the still pose's skinning stays), so a shared skeleton per type or baked vertex animation would be worth up to
+  about 8 ms; the models' shadow pass is about 4.1 ms for about 8,000 draw calls (the `--no-model-shadows` split), so
+  about 0.5 µs a draw call, and merged surfaces (one material and one texture atlas a model: 5 surfaces to 1, about 12,200
+  draw calls to about 2,500) would be worth about 4-5 ms. Either alone leaves 1,000 figures over 16.7 ms (about 19.5 and
+  23-24 ms); both together reach about 14-15 ms. Merged surfaces are the cheaper first step (an import-tooling change, no
+  new runtime system); turning the models' shadows off past a zoom (BUG-1321 c) is worth about 4 ms at any count.
+- **Tests:** `ModelViewTest`: exactly the six manifest types draw a model; per model its height within 5 % of 1.8 m x its data
+  `scale` and the clip map read from the file equal to the manifest's; the library holds exactly `library.clips`; a fighting
+  Heavy Infantry and Raider play `attack` = the library's `attack_melee` (by `Animation` identity) and a shooting Desert
+  Archer `attack` = `Pistol_Shoot`, from real sim states; a Camp Follower's build / gather_wood / gather_gold; a library cut
+  without `attack_melee` gives idle; the speed row (400 walking models of the six types under a camera: after warm-up at a
+  speed, every figure, near or staggered, is at exactly 9/60 s x 1, 2 and 0.75 after nine frames; paused, nothing moves and
+  the schedule doesn't run; resumed, it runs); LFS pointers for all six; the slot-reuse row capsule / Laborer / capsule /
+  Heavy Infantry; the steady row 400 models mixed over the six types, 0 bytes. `ModelShots` gains `--types <dir>` and
+  `--lines <dir>` (the pictures) and mixes the bench over every model type.
+
 ## Vision, detection, fog
 
 Fog of war and the high-ground rule are in since M4-3a (`sim/Rts.Sim/Vision/`); the last-known building ghosts, buildings

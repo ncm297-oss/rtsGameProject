@@ -438,7 +438,8 @@ public partial class CombatViewTest : Node
                 Check(false, $"seed {seed} tick {tick} frame {frame} slot {i}: lit {lit} (want {want}), hit {_units.Flash.WasHit(i)} (want {hit})");
             if (U.Alive[i])
             {
-                MeshInstance3D? view = _units.ViewOf(i);
+                // M6-V21: the Heavy Infantry and the Raider are models; a model's flash is on its mesh (ModelMeshOf).
+                MeshInstance3D? view = _units.ModelMeshOf(i) ?? _units.ViewOf(i);
                 bool drawn = view != null && view.MaterialOverlay == _units.FlashMaterial;
                 if (drawn != want) Check(false, $"seed {seed} tick {tick} frame {frame} slot {i}: flash overlay drawn {drawn}, want {want}");
             }
