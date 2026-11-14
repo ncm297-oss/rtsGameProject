@@ -199,6 +199,11 @@ public sealed partial class UnitStore
     /// fraction of a hit point regenerated so far, 0 to just under one; cleared at full health. Hashed when not 0; saved.
     /// </summary>
     public readonly int[] RegenAccum;
+    /// <summary>
+    /// M8-1: the forest stealth's per-unit state (the last landed attack, whether the forest holds the unit's stealth); null
+    /// unless the data has a faction with the bonus (<see cref="EnableForestStealth"/>). Cleared with the slot like the statuses.
+    /// </summary>
+    public Abilities.ForestStealthStore? Forest { get; private set; }
     /// <summary>Whether the slot holds a live unit.</summary>
     public readonly bool[] Alive;
 
@@ -328,6 +333,12 @@ public sealed partial class UnitStore
         _freeCount = capacity;
     }
 
+    /// <summary>
+    /// M8-1: creates <see cref="Forest"/>. The world calls it at construction when its data has a faction with the forest
+    /// stealth, so a match on data without one carries none of its state.
+    /// </summary>
+    internal void EnableForestStealth() => Forest ??= new Abilities.ForestStealthStore(Capacity);
+
     /// <summary>Total number of slots.</summary>
     public int Capacity => Alive.Length;
 
@@ -374,6 +385,7 @@ public sealed partial class UnitStore
         Hp[index] = 0;
         LastDamagedTick[index] = -1;
         RegenAccum[index] = 0;
+        Forest?.Clear(index); // M8-1
         ExpiresAtTick[index] = 0;
         _countedHalfPop[index] = 0;
         Alive[index] = true;
@@ -491,6 +503,7 @@ public sealed partial class UnitStore
         Hp[handle.Index] = 0;
         LastDamagedTick[handle.Index] = -1; // M7-1
         RegenAccum[handle.Index] = 0;
+        Forest?.Clear(handle.Index); // M8-1: the held entry went with the statuses
         // A freed slot stands still: since units die (M4-1), a scan over slots must not count a dead walker as Moving.
         State[handle.Index] = UnitState.Idle;
         Velocity[handle.Index] = default;

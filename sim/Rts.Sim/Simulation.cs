@@ -337,6 +337,9 @@ public sealed partial class Simulation : ICommandSink
         // M7-1: then regeneration, after the countdown (a regenerating status heals in each tick it is still on the unit).
         RegenSystem.Run(World);
         ZoneSystem.Run(World);
+        // M8-1: a faction's forest stealth holds or lets go of each of its units' Stealthed entry, before the detection pass
+        // reads them. Nothing to do in a match whose seats have none.
+        ForestStealthSystem.Run(World);
         // M4-5: then which players detect each stealthed unit, from this tick's statuses and positions and the last fog
         // update, so phases 6-12 (casts, scans, towers, swings) read one answer. Nothing to do while no unit carries stealth.
         StealthSystem.Run(World);
@@ -408,6 +411,7 @@ public sealed partial class Simulation : ICommandSink
         h.Add(World.TickNumber);
 
         UnitStore u = World.Units;
+        ForestStealthStore? forestState = u.Forest; // M8-1
         h.Add(u.Capacity);
         for (int i = 0; i < u.Capacity; i++)
         {
@@ -433,7 +437,10 @@ public sealed partial class Simulation : ICommandSink
             // M7-1: bit 21 a unit with regeneration state: a fraction of a hit point regenerated, or a last damage tick (recorded
             // only under a faction that regenerates); both come last, so a match without regeneration hashes as before.
             bool regen = u.RegenAccum[i] != 0 || u.LastDamagedTick[i] != -1;
-            h.Add((ulong)(byte)u.State[i] | ((ulong)(OrderBits(u, i) | (combat ? 1u << 17 : 0u) | (ability ? 1u << 18 : 0u) | (summoned ? 1u << 19 : 0u) | (flank ? 1u << 20 : 0u) | (regen ? 1u << 21 : 0u)) << 32));
+            // M8-1: bit 22 a unit with forest-stealth state (its last landed attack, or the forest holding its stealth); the
+            // arrays exist only when the data has a faction with the bonus, so other data hashes as before.
+            bool forest = forestState != null && forestState.HasState(i);
+            h.Add((ulong)(byte)u.State[i] | ((ulong)(OrderBits(u, i) | (combat ? 1u << 17 : 0u) | (ability ? 1u << 18 : 0u) | (summoned ? 1u << 19 : 0u) | (flank ? 1u << 20 : 0u) | (regen ? 1u << 21 : 0u) | (forest ? 1u << 22 : 0u)) << 32));
             h.Add(u.Goal[i]);
             h.Add(u.GoalCell[i]);
             h.Add(u.OrderTick[i]);
@@ -460,6 +467,11 @@ public sealed partial class Simulation : ICommandSink
             {
                 h.Add(u.LastDamagedTick[i]);
                 h.Add(u.RegenAccum[i]);
+            }
+            if (forest)
+            {
+                h.Add(forestState!.LastAttackTick[i]);
+                h.Add((int)forestState.Held[i]);
             }
         }
         h.Add(u.FreeCount);

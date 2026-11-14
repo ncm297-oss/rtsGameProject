@@ -556,6 +556,9 @@ public class DataContentHashTests
         Assert.Contains("UnitDef.Scale", checkedFields);
         foreach (string f in new[] { "RegenPerTick", "RegenDelayTicks" })
             Assert.Contains($"FactionDef.{f}", checkedFields);
+        // M8-1: the forest stealth (-1 / 0 / 0 when absent; any field set must differ).
+        foreach (string f in new[] { "ForestStealthStatus", "ForestStealthDelayTicks", "ForestStealthExceptSlots" })
+            Assert.Contains($"FactionDef.{f}", checkedFields);
         Assert.Contains("StatusDef.StateHashId", checkedFields);
         foreach (string f in new[] { "DamageBonus", "OnEndStatus", "OnEndMagnitude", "OnEndTicks" }) // M7-4
             Assert.Contains($"StatusDef.{f}", checkedFields);

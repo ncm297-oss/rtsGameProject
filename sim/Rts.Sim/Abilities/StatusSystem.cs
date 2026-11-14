@@ -37,6 +37,7 @@ public static class StatusSystem
         // M7-4: the onEnd applications owed by the unit being counted down (status ids of the ended entries, their sources).
         Span<int> endedStatus = stackalloc int[StatusStore.PerUnit];
         Span<int> endedSource = stackalloc int[StatusStore.PerUnit];
+        byte[]? forestHeld = u.Forest?.Held; // M8-1: null unless the data has a faction with the forest stealth
         for (int i = 0; i < u.Capacity; i++)
         {
             if (s.Count[i] == 0 || !u.Alive[i]) continue;
@@ -53,11 +54,26 @@ public static class StatusSystem
                 {
                     s.PulseTicks[at] = SimConstants.TicksPerSecond;
                     int damage = PulseDamage(world, i, def.DamageType, s.Magnitude[at]);
+                    int before = s.Count[i];
                     CombatSystem.HitUnit(world, new PendingHit(default, s.SourcePlayer[at], new EntityHandle(i, generation), false, damage));
                     if (!u.Alive[i]) break; // died: the free cleared its statuses
+                    if (s.Count[i] < before)
+                    {
+                        // M8-1: the hp loss let the forest go of a held entry that had nothing timed left, and it ended
+                        // (ForestStealthSystem.OnHpLost); if it stood before this one, this one moved down a place.
+                        at = s.IndexOf(i, def.Id);
+                        k = at - i * StatusStore.PerUnit;
+                    }
                 }
                 if (left > 0)
                 {
+                    k++;
+                    continue;
+                }
+                if (forestHeld != null && forestHeld[i] != 0 && def.Kind == StatusKind.Stealthed && def.Id == world.ForestStatusOf[u.Owner[i]])
+                {
+                    // M8-1: the forest holds this entry: its timed part (TicksRemaining - 1) has run out, the held tick stays.
+                    s.TicksRemaining[at] = 1;
                     k++;
                     continue;
                 }
@@ -107,6 +123,9 @@ public static class StatusSystem
     internal static void Hold(World world, int i, int status, float magnitude, int ticks, int source)
     {
         StatusStore s = world.Units.Statuses;
+        // M8-1: onto an entry the forest stealth holds, a timed application keeps the held tick on top of its own duration
+        // (ForestStealthSystem), so letting go later leaves exactly this duration.
+        if (world.Units.Forest is { } forest && forest.Held[i] != 0 && status == world.ForestStatusOf[world.Units.Owner[i]] && ticks < int.MaxValue) ticks++;
         int before = s.Count[i];
         bool changed = s.Apply(i, status, magnitude, ticks, source);
         if (!changed) return;
