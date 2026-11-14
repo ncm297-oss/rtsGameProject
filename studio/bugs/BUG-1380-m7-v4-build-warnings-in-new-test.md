@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S2 |
-| Status | open |
+| Status | fixed (verified by QA re-check, 2026-11-14-0616, fix round 1) |
 | Found | 2026-11-14-0616, task M7-V4 (QA) |
 | System | view tests (`game/tests/BuildingScaleViewTest.cs`), build hygiene |
-| Fixed by | |
+| Fixed by | 8c34277 (M7-V4 fix round 1) |
 
 ## Repro
 1. Worktree `studio/2026-11-14-0616-view` at 112b9af.
@@ -29,3 +29,9 @@ build that doesn't recompile `RtsGame` hides them, which is probably how the rep
 ## Notes
 A one-line fix each: drop `async` and return `Task.CompletedTask` (or make them plain `void` / `bool` methods and drop the
 `await` at the call sites). Not a behaviour problem; filed S2 only because it is a stated acceptance criterion.
+
+## Verification (QA re-check, fix round 1)
+`SiteRise` and `RememberedGhosts` are now `private void`, with the two `await`s at their call sites removed. Neither
+method awaited anything, so the old call already finished synchronously: the order and the checks are unchanged.
+`dotnet build RtsGame.sln --no-incremental`: 0 Warning(s), 0 Error(s). The `BuildingScaleViewTest` log still prints
+the site rise (100 frames, 0.9 to 5.955 m, 20 frames 0 bytes) and both ghost rows; PASS in the 104/104 scene loop.
