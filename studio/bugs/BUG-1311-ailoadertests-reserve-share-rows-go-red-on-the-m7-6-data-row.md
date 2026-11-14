@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S2 |
-| Status | open |
+| Status | fixed (M7-6 fix round 1, 198c5d4; re-checked 2026-11-13-1118) |
 | Found | 2026-11-13-1118, task M7-6 (QA full) |
 | System | sim test suite (M7-6 loader rows; cross-track sequencing, as BUG-1280 / BUG-1310) |
-| Fixed by | |
+| Fixed by | M7-6 fix round 1 (198c5d4): every opening but the edited one compared to its shipped value; the absent row deletes the field first |
 
 ## Repro
 1. Scratch clone of `studio` at 18be020. Apply docs/03 "For the data track (M7-6)" as written: `"reserveArmyShare": 0.5`
@@ -38,3 +38,4 @@ On the same clone, the rest of the M7-4 / M7-6 classes, `ReserveTests`, `Reserve
 - Fix: compare against the shipped value of each opening (`TestSim.Data`'s) instead of null, as the M7-6 fix did for
   `FrenzyRulesLoaderTests`' "every shipped row" statements; keep "the edited opening carries the value".
 - `Ai/OpeningReserveShareTests` (all four of its methods) and QA's `QA/OpeningReserveShareQaTests` pass with the row.
+- Re-check (QA, 2026-11-13-1118 round 1): VERIFIED. `AnOpeningsReserveArmyShare_Loads` x4 green on the worktree and on the M7-4 + M7-6 rows clone. Still strict on shipped data: mutant "an opening without the share inherits opening 0's" (loader) turns rows 0 / 0.5 / 1 red (the absent row is equivalent under that mutant).

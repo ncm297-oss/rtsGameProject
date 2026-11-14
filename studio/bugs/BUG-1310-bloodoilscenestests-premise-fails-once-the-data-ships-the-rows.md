@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S2 |
-| Status | open |
+| Status | fixed (M7-6 fix round 1, 198c5d4; re-checked 2026-11-13-1118) |
 | Found | 2026-11-13-1118, task M7-6 (QA full) |
 | System | sim test suite (M7-4 fixtures; cross-track sequencing, as BUG-1222 / BUG-1280) |
-| Fixed by | |
+| Fixed by | M7-6 fix round 1 (198c5d4): `DataTrackRows` removes any `teblor_frenzied` row and Anointing `statusDuration` effect before appending |
 
 ## Repro
 1. Scratch clone of `studio` at 18be020. Apply docs/03 "For the data track (M7-4)" to `game/data` exactly as written
@@ -42,3 +42,4 @@ The developer's criterion-1 proof (428 / 428) used BUG-1280's original filter, w
   premise. A regression test is QA's: run `BloodOilScenesTests` on a copy whose shipped files carry the rows.
 - Severity S2: the task's goal and rule 58 (apply the data-track rows and run the classes), not a literal criterion;
   criterion 1's filter itself passes.
+- Re-check (QA, 2026-11-13-1118 round 1): VERIFIED. QA's regression `QA/OpeningReserveShareQaTests.DataTrackRows_OnACopyThatAlreadyCarriesThem_StillLoads` is un-skipped, its body unchanged (diff read), and green on the worktree and on a clone of 198c5d4 with docs/03's M7-4 + M7-6 rows applied (`rows.py --m76`); `BloodOilScenesTests` green on both (not among the 20 reds of the rows loop).

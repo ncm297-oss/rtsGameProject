@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S3 |
-| Status | open |
+| Status | fixed (M7-6 fix round 1, 198c5d4; re-checked 2026-11-13-1118) |
 | Found | 2026-11-13-1118, task M7-6 (QA full) |
 | System | sim test suite (status loader rows; cross-track sequencing, as BUG-1280) |
-| Fixed by | |
+| Fixed by | M7-6 fix round 1 (198c5d4): count read from the shipped file, the seven M7-1 ids first in order, `regenerating`'s hash number = the M4-kind count, the appended row's index = the shipped length |
 
 ## Repro
 1. Scratch clone of `studio` at 18be020 with docs/03 "For the data track (M7-4)" applied as written (QA's
@@ -40,3 +40,4 @@ with no `appliesTo`): QA fixed the oracle this session (`QA/TechBonusOracle.cs`)
   id list as "contains these, in this order" rather than "equals"; or list these three in the data brief as the sim
   track's to re-pin in the same merge.
 - BUG-1280's brief scope was "M7-4 helpers that append blindly"; these are older pins, so S3, not a criterion miss.
+- Re-check (QA, 2026-11-13-1118 round 1): VERIFIED. The three tests are green on the worktree and on the rows clone. Mutants on a clone of 198c5d4 (shipped data otherwise): two shipped rows swapped in the file: the three stay green (the loader sorts; correct); `regenerating` dropped: all three red; `stealthed` + `revealed` dropped: all three red; state-hash numbering in sorted order, or new kinds first: `Shipped_Regenerating_*` red. Residual (S4 note in the re-check report): the id-order pin assumes any status the data track adds sorts after `stealthed`; a future id such as `rooted` would turn it red again.
