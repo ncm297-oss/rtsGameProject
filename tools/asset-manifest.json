@@ -1,0 +1,81 @@
+{
+  "about": "Art import manifest (docs/04 'Import process'). tools/import-assets.ps1 rebuilds every model and the animation library from these entries with Blender (tools/art/build_unit.py). Paths: 'source' relative to sourceRoot, 'destination' relative to the repo root.",
+  "sourceRoot": "asset-sources",
+  "licences": [
+    "Universal Base Characters[Standard]/Universal Base Characters[Standard]/License_Standard.txt",
+    "Modular Character Outfits - Fantasy[Standard]/Modular Character Outfits - Fantasy[Standard]/License_Standard.txt",
+    "Universal Animation Library[Standard]/Universal Animation Library[Standard]/License.txt",
+    "Universal Animation Library 2[Standard]/Universal Animation Library 2[Standard]/License.txt"
+  ],
+  "animationSources": {
+    "UAL1": "Universal Animation Library[Standard]/Universal Animation Library[Standard]/Unreal-Godot/UAL1_Standard.glb",
+    "UAL2": "Universal Animation Library 2[Standard]/Universal Animation Library 2[Standard]/Unreal-Godot/UAL2_Standard.glb"
+  },
+  "library": {
+    "destination": "game/assets/animations/universal_humanoid.glb"
+  },
+  "models": [
+    {
+      "id": "malazan_laborer",
+      "destination": "game/assets/models/malazan/malazan_laborer/malazan_laborer.glb",
+      "maxTriangles": 3000,
+      "textureSize": 512,
+      "yawDegrees": 180,
+      "materials": { "MI_Peasant": "outfit", "MI_Regular_Male": "skin", "MI_Superhero_Male": "head" },
+      "teamRole": "outfit",
+      "tints": { "outfit": { "colour": "#8a7a6a", "amount": 0.45 } },
+      "parts": [
+        { "source": "Modular Character Outfits - Fantasy[Standard]/Modular Character Outfits - Fantasy[Standard]/Exports/glTF (Godot-Unreal)/Outfits/Male_Peasant.gltf", "mesh": "Male_Peasant_Body", "triangles": 800, "team": true },
+        { "source": "Modular Character Outfits - Fantasy[Standard]/Modular Character Outfits - Fantasy[Standard]/Exports/glTF (Godot-Unreal)/Outfits/Male_Peasant.gltf", "mesh": "Male_Peasant_Arms", "triangles": 650 },
+        { "source": "Modular Character Outfits - Fantasy[Standard]/Modular Character Outfits - Fantasy[Standard]/Exports/glTF (Godot-Unreal)/Outfits/Male_Peasant.gltf", "mesh": "Male_Peasant_Legs", "triangles": 350 },
+        { "source": "Modular Character Outfits - Fantasy[Standard]/Modular Character Outfits - Fantasy[Standard]/Exports/glTF (Godot-Unreal)/Outfits/Male_Peasant.gltf", "mesh": "Male_Peasant_Feet", "triangles": 300 },
+        { "source": "Universal Base Characters[Standard]/Universal Base Characters[Standard]/Base Characters/Godot - UE/Superhero_Male_FullBody.gltf", "mesh": "SuperHero_Male", "triangles": 500, "keepBones": ["Head", "neck_01"], "keepThreshold": 0.5 }
+      ],
+      "clips": {
+        "idle": "UAL1/Idle_Loop",
+        "walk": "UAL1/Walk_Loop",
+        "attack": "UAL1/Pistol_Shoot",
+        "gather_gold": "UAL2/Farm_Harvest",
+        "gather_wood": "UAL2/TreeChopping_Loop",
+        "build": "UAL1/Fixing_Kneeling"
+      }
+    },
+    {
+      "id": "malazan_crossbowman",
+      "destination": "game/assets/models/malazan/malazan_crossbowman/malazan_crossbowman.glb",
+      "maxTriangles": 3000,
+      "textureSize": 512,
+      "yawDegrees": 180,
+      "materials": { "MI_Ranger": "outfit", "MI_Regular_Male": "skin", "MI_Superhero_Male": "head" },
+      "teamRole": "outfit",
+      "tints": { "outfit": { "colour": "#7f8288", "amount": 0.65 } },
+      "parts": [
+        { "source": "Modular Character Outfits - Fantasy[Standard]/Modular Character Outfits - Fantasy[Standard]/Exports/glTF (Godot-Unreal)/Outfits/Male_Ranger.gltf", "mesh": "Male_Ranger_Body", "triangles": 600, "team": true },
+        { "source": "Modular Character Outfits - Fantasy[Standard]/Modular Character Outfits - Fantasy[Standard]/Exports/glTF (Godot-Unreal)/Outfits/Male_Ranger.gltf", "mesh": "Male_Ranger_Head_Hood", "triangles": 350, "team": true },
+        { "source": "Modular Character Outfits - Fantasy[Standard]/Modular Character Outfits - Fantasy[Standard]/Exports/glTF (Godot-Unreal)/Outfits/Male_Ranger.gltf", "mesh": "Male_Ranger_Acc_Pauldron", "triangles": 180, "team": true },
+        { "source": "Modular Character Outfits - Fantasy[Standard]/Modular Character Outfits - Fantasy[Standard]/Exports/glTF (Godot-Unreal)/Outfits/Male_Ranger.gltf", "mesh": "Male_Ranger_Arms", "triangles": 550 },
+        { "source": "Modular Character Outfits - Fantasy[Standard]/Modular Character Outfits - Fantasy[Standard]/Exports/glTF (Godot-Unreal)/Outfits/Male_Ranger.gltf", "mesh": "Male_Ranger_Legs", "triangles": 300 },
+        { "source": "Modular Character Outfits - Fantasy[Standard]/Modular Character Outfits - Fantasy[Standard]/Exports/glTF (Godot-Unreal)/Outfits/Male_Ranger.gltf", "mesh": "Male_Ranger_Feet_Boots", "triangles": 350 },
+        { "source": "Universal Base Characters[Standard]/Universal Base Characters[Standard]/Base Characters/Godot - UE/Superhero_Male_FullBody.gltf", "mesh": "SuperHero_Male", "triangles": 350, "keepBones": ["Head", "neck_01"], "keepThreshold": 0.5 }
+      ],
+      "props": [
+        {
+          "name": "crossbow", "bone": "hand_r", "material": "crossbow", "colour": "#4a3626",
+          "pose": { "source": "UAL1", "clip": "Pistol_Shoot", "at": 0.3 },
+          "offset": [0.0, 0.08, 0.0],
+          "boxes": [
+            { "at": [0.0, -0.12, 0.0], "size": [0.05, 0.62, 0.06] },
+            { "at": [0.0, -0.40, 0.01], "size": [0.70, 0.05, 0.04] },
+            { "at": [0.0, -0.30, 0.01], "size": [0.62, 0.015, 0.015] },
+            { "at": [0.0, 0.16, -0.02], "size": [0.06, 0.10, 0.10] }
+          ]
+        }
+      ],
+      "clips": {
+        "idle": "UAL1/Idle_Loop",
+        "walk": "UAL1/Walk_Loop",
+        "attack": "UAL1/Pistol_Shoot"
+      }
+    }
+  ]
+}

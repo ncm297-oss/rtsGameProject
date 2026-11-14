@@ -1173,9 +1173,8 @@ public static class CombatSystem
         world.Hits[world.HitCount++] = new PendingHit(new EntityHandle(i, u.Generation[i]), owner, u.Target[i], building, damage, world.Fog.LevelAt(u.Position[i]));
     }
 
-    /// <summary>One hit's damage by an attacker of unit type <paramref name="attackerType"/> owned by <paramref name="owner"/> on unit slot <paramref name="j"/>: both owners' techs applied.</summary>
-    internal static int DamageToUnit(World world, int attackerType, int owner, int j) =>
-        DamageToUnit(world, world.Data.Units[attackerType].Attack, AttackBonus(world, owner, attackerType, false), j);
+    // M7-6 (BUG-1281): the (attackerType, owner) short forms are gone: they had no caller and left out the status damage
+    // factor, so a later caller (an estimate, a tooltip) would have missed the Frenzy's bonus.
 
     /// <summary>One hit's damage by <paramref name="attack"/> with <paramref name="attackBonus"/> points of the attacker's techs (and, M7-4, its status damage <paramref name="factor"/>) on unit slot <paramref name="j"/>, the victim's armor techs applied.</summary>
     internal static int DamageToUnit(World world, AttackDef attack, int attackBonus, int j, float factor = 1f)
@@ -1185,10 +1184,6 @@ public static class CombatSystem
         int armor = vdef.Armor + DamageCalc.Points(world.Techs.Bonus(u.Owner[j], u.TypeId[j], TechStat.Armor));
         return DamageCalc.Compute(world.Data.DamageTable, attack, attackBonus, vdef.ArmorClass, armor, factor);
     }
-
-    /// <summary>One hit's damage by an attacker of unit type <paramref name="attackerType"/> owned by <paramref name="owner"/> on building slot <paramref name="j"/>, as structure; 0 when the data has no structure class.</summary>
-    internal static int DamageToBuilding(World world, int attackerType, int owner, int j) =>
-        DamageToBuilding(world, world.Data.Units[attackerType].Attack, AttackBonus(world, owner, attackerType, false), j);
 
     /// <summary>One hit's damage by <paramref name="attack"/> with <paramref name="attackBonus"/> points of techs (and, M7-4, a status damage <paramref name="factor"/>) on building slot <paramref name="j"/>, as structure; 0 when the data has no structure class.</summary>
     internal static int DamageToBuilding(World world, AttackDef attack, int attackBonus, int j, float factor = 1f)

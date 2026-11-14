@@ -340,12 +340,13 @@ internal sealed partial class AiPlayer
     /// half-pop (<c>attack.minArmyPop</c>) and its gold + wood (<c>attack.minArmyCost</c>), each times the difficulty's
     /// <c>waveSizeMultiplier</c>. Otherwise army production spends first, as before M5-4g: a reserve held from the start cost
     /// a quarter of the sides their first wave, and one held for good after the first wave (fix round 1) starved the
-    /// follow-up waves and the defense.
+    /// follow-up waves and the defense. M7-6 (Request 52): the seat's own opening's <c>attack.reserveArmyShare</c> when its
+    /// file carries one, so one faction's opening can save earlier without moving its opponent's gate.
     /// </summary>
     internal bool MayReserve()
     {
         if (Board.Defending) return false;
-        float share = Rules.ReserveArmyShare * Knobs.WaveSizeMultiplier;
+        float share = (Opening.ReserveArmyShare ?? Rules.ReserveArmyShare) * Knobs.WaveSizeMultiplier;
         ArmySize(out int half, out int cost);
         return half >= share * Opening.AttackMinHalfPop && cost >= share * Opening.AttackMinCost;
     }

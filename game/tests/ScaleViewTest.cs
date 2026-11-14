@@ -57,6 +57,8 @@ public partial class ScaleViewTest : Node
     public override async void _Ready()
     {
         string root = Path.GetFullPath(ProjectSettings.GlobalizePath($"user://scale-view-{OS.GetProcessId()}"));
+        // M6-V20: this scene pins capsule geometry (the Laborer is its reference body); a scaled model is ModelViewTest's.
+        UnitViews.UseModels = false;
         try
         {
             GetTree().Root.Size = new Vector2I(1152, 648);

@@ -112,7 +112,10 @@ public class StealthLoaderTests
         {
             ["id"] = "unmasked", ["displayName"] = "Unmasked", ["description"] = "Test.", ["kind"] = "revealed",
         })));
-        AssertErrorAt(r, Statuses, "statuses[7].kind", "already the revealed status"); // M7-1: appended after regenerating (statuses[6])
+        // Appended after the shipped rows: statuses[7] on the M7-1 data (after regenerating, statuses[6]); BUG-1312 reads the
+        // index off the shipped list so a row the data track appends (M7-4's teblor_frenzied) moves it rather than failing it.
+        Assert.True(TestSim.Data.Statuses.Length >= 7);
+        AssertErrorAt(r, Statuses, $"statuses[{TestSim.Data.Statuses.Length}].kind", "already the revealed status");
     }
 
     /// <summary>

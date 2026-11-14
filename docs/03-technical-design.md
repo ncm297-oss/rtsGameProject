@@ -3154,7 +3154,9 @@ the loaders in `DataLoader.Abilities.cs` (`ResolveOnEnds`), `DataLoader.Techs.cs
   `statusDuration`. `TechState.AnyStatusDuration` (from the data) skips the lookup when no tech has one.
 - **`buildings.json` `scale`** (Request 47; optional, default 1, `DataLimits.MinUnitScale`-`MaxUnitScale` = 0.5-3.0, one
   error at `buildings[i].scale` outside it): `BuildingDef.Scale`. Presentation only, the unit's M7-1 rule: the sim never
-  reads it (the footprint is the building's room); the view reads it as it reads `UnitDef.Scale`.
+  reads it (the footprint is the building's room). **Nothing draws it yet** (M7-6, BUG-1281): the view reads
+  `UnitDef.Scale` only, so a building's `scale` is drawn at 1.0 until the view's own task (the view half of Request 47)
+  reads `BuildingDef.Scale`.
 - **What is hashed.** `GameData.ContentHash` adds every new field **only away from its default** (as M7-2's
   `spawnCount`): a status's `DamageBonus` when not 0, its three `onEnd` fields when any is set, a tech effect's `Statuses`
   on a `statusDuration` effect (or when set), a building's `Scale` when not 1. So the shipped data's hash, and with it the
@@ -3180,7 +3182,7 @@ the loaders in `DataLoader.Abilities.cs` (`ResolveOnEnds`), `DataLoader.Techs.cs
   Hash_TheAftermath_IsAnOrdinaryStatusEntry_TheBonusesAreDerived`, `Stress/FrenzyAftermathFuzzStressTests` (3 seeds x
   2,000 ticks, three players, the Anointing researched by command, twins, invariants, a save and load in an aftermath, a
   replay round trip), the allocation row, `Abilities/PassivePerfTests` (the brawl, before and after, below).
-  The shared test copy is `Abilities/BloodOilScenes`.
+  The shared test copy is `Abilities/BloodOilScenes` (idempotent since M7-6, see "Implementation (M7-6)").
 
 **For the data track (M7-4).** All four fields are in the schema; nothing ships them. Docs/factions/teblor.md's numbers:
 
@@ -3203,6 +3205,65 @@ Before writing numbers into the Frenzy row's `description` ("20% more damage", "
 tests' description-number reading (D-H2, "For the data track" under M4-4a): it knows the `applyStatus` fields, not
 `damageBonus` or `onEnd`, so such a text needs a pin taught about them, added with the rows.
 
+### Implementation (M7-6)
+
+Two things before the Teblor's rows can land: the sim's own M7-4 test copy made tolerant of them (BUG-1280), and a
+per-opening reserve gate (Request 52; D29 found that `ai.json` alone could not make the Teblor save for Age II, and the
+only knob, `rules.json` `ai.reserveArmyShare`, moves every seat). BUG-1281 folded. Code: `AiOpening.ReserveArmyShare`,
+`AiAttackJson` / `RawValue` (`DataJson.cs`), `DataLoader.OptionalFraction`, `GameData.AddOpening`, `AiPlayer.MayReserve`;
+tests `Abilities/BloodOilScenes` / `BloodOilScenesTests`.
+
+- **BUG-1280: the test copy is idempotent.** `BloodOilScenes.Edit` takes out a `teblor_frenzied` row and any
+  `statusDuration` effect on Blood-oil Anointing already in the files, then appends its own, so the copy has exactly one
+  of each, always last in its list (the layout every M7-4 pin was taken on) whether or not the data ships them; the
+  ability's status and the Longhouse's `scale` are set, not added. The indices the loader rows read
+  (`BloodOilScenes.RowIndex` / `EffectIndex`) follow from the shipped files instead of a literal, and
+  `DataContentHashTests.AnM74FieldInTheFiles_*` first strips the four (a bare Frenzy row, no `statusDuration`, no
+  building `scale`) before adding each one. Two `FrenzyRulesLoaderTests` statements about "every shipped row" now leave
+  the data track's own rows out (the Frenzy row; the Teblor buildings' `scale`). Proof: docs/03 "For the data track
+  (M7-4)" applied to a scratch copy of the shipped data (four files), BUG-1280's filter passes whole (428 / 428; 367 / 427
+  on the base); on the shipped data too.
+- **BUG-1281.** `CombatSystem.DamageToUnit` / `DamageToBuilding`'s `(attackerType, owner)` short forms are removed (no
+  caller; they left out the status damage factor); the two forms left take `factor`
+  (`FrenzyDamageTests.EveryDamageHelper_TakesTheStatusDamageFactor`). The M7-4 `buildings.json scale` bullet now says
+  nothing draws it yet.
+- **`ai.json` `openings[i].attack.reserveArmyShare`** (optional; a fraction 0-1 inclusive, checked as `rules.json`
+  `ai.reserveArmyShare` is: below 0, above 1 or beyond a double is "outside 0-1"; a string, a list, true and a JSON
+  `null` are each one error at `openings[i].attack.reserveArmyShare`: leaving the field out, not `null`, is how a file
+  says "the rules' value"; the field is read raw (`RawValue`) so the null is seen). To `AiOpening.ReserveArmyShare`
+  (`float?`, null when absent).
+- **The rule.** `AiPlayer.MayReserve` (M5-4g's gate) uses `Opening.ReserveArmyShare ?? Rules.ReserveArmyShare`, times
+  the difficulty's `waveSizeMultiplier` as before, so a seat reads **its own opening's** share and no other seat's gate
+  moves; nothing else changed (the fog-filtered view is untouched, nothing new is stored). A share equal to the rules'
+  plays bit-identical to the field left out (the same float; a full literal match proves it, below). No allocation (the
+  think's `AllocationTests` / `ReserveTests` rows unchanged).
+- **Hash and formats.** `GameData.ContentHash` adds the share (a marker then the value) only when the file carries it,
+  so the shipped data's hash (`67269D955D18D885`, computed on the base 6fb79b0 and on this tree) and the golden's header
+  did not move; a file carrying it, at any value, hashes differently. Not in the state hash (data); no save or replay
+  format change (`SaveFormat.CurrentVersion` 10): the seat's opening index is saved already and the share is read from
+  the data each think.
+- **Tests.** `Data/AiLoaderTests.AnOpeningsReserveArmyShare_Loads` (absent, 0, 0.5, 1) and
+  `ABrokenReserveArmyShare_IsOneErrorAtIt`; `DataContentHashTests.AnOpeningsReserveShare_InTheFiles_ChangesTheHash_AbsentDoesNot`
+  and the opening's reflection row; `Ai/OpeningReserveShareTests`: (a) a Hard Malazan seat at half its wave names Age II
+  as its reserved step with its opening at 0.5 and not without; (b) a Malazan and a Whirlwind AI seat each open their
+  gate at half their wave exactly when their own faction's openings carry 0.5; (c) every opening carrying the rules'
+  value plays MatchCriterionTests' literal row (Vathar Crossing seed 1, Normal v Normal) to the same per-tick hash fold,
+  end hash, end tick and winner as the shipped data; a two-seat AI match with every opening at 0.5 saved at ticks 137 and
+  1,000 loads and runs 2,000 ticks hash-identical, reserves named on the way; `Abilities/BloodOilScenesTests` (the
+  helper on a copy that already carries the rows; applied twice hashes as once).
+
+**For the data track (M7-6).** No shipped opening carries the field, so no match moved. To give one opening its own
+gate (D31: the opening and the value are the data track's; the Producer's provisional pick is "save once the army is
+half a raid"), add the field to that opening's `attack` object in `factions/<id>/ai.json`, leaving `minArmyPop` /
+`minArmyCost` as they are:
+
+```json
+"attack": { "minArmyPop": <as shipped>, "minArmyCost": <as shipped>, "reserveArmyShare": 0.5 }
+```
+
+It moves the data hash once (land it with the Frenzy rows and the buildings' `scale`, so old saves and recordings refuse once, not twice). Leave
+the field out on every other opening (they keep `rules.json`'s `ai.reserveArmyShare` 1); do not write `null`.
+
 ### Implementation (M7-V1)
 
 M7's first bullet, the view half ("1.5× visuals"): each unit type is drawn at its data `scale`. View code only; no sim or
@@ -3211,7 +3272,11 @@ ViewApi change, no data file changed (shipped units are all at 1.0, so the game 
 - **The formula** (since M7-V3c, BUG-1260; M7-V1 drew the width at `radius x scale`): a type's placeholder capsule is
   `UnitViews.DrawnRadius(def)` = `radius` (the collision radius alone) wide and `UnitViews.DrawnHeight(def)` =
   `BodyHeight(radius) x scale` = `(2 radius + 1) x scale` tall, so `scale` is the height only: a body is never wider than
-  the room the sim gives it, and a 1.5 unit is 1.5x as tall. The scale is applied once per type when `UnitViews.Bind` builds the shared `CapsuleMesh`; the
+  the room the sim gives it, and a 1.5 unit is 1.5x as tall. **Since M6-V20 (BUG-1290)** the height is never under
+  `2 x radius`: Godot's `CapsuleMesh` clamps its radius to half its height, so a wide type at a small scale
+  (`scale < 2 radius / (2 radius + 1)`, e.g. radius 0.9 at 0.5) was drawn narrower than its collision radius; it is now
+  drawn as a ball `2 radius` tall, and the hp bar and markers (which read `DrawnHeight`) follow. No shipped type is that
+  small. The scale is applied once per type when `UnitViews.Bind` builds the shared `CapsuleMesh`; the
   per-frame path reads nothing new for the body (it already placed the node at half the mesh's height, so feet stay on the
   ground). The view reads `UnitDef.Scale` from `GameData` as it reads `UnitDef.Radius`; nothing else from the sim.
 - **What follows the drawn body:** the selection ring (`1.35 x radius`) and the attack-order target ring
@@ -3461,6 +3526,66 @@ the data's giant radius, once by the view). View code only; no sim, ViewApi or d
   `-- --shots <dir>` it saves five pictures), `ScaleViewTest`, `UnitViewsTest`, `ShellTest` (their width pins moved to the
   rule; `ScaleViewTest`'s click / box rows prove the hit test above the centre, where the drawn body now reaches past the
   sim's pick circle).
+
+### Implementation (M6-V20)
+
+The art pass's first slice: the Laborer and the Crossbowman are drawn as animated, team-coloured models; every other type
+keeps its capsule. View code and generated assets only; no sim, ViewApi or data file changed. The import tooling is in
+docs/04 "Import process" ("Unit models, as built").
+
+- **Which types.** `UnitViews.Bind` makes a `UnitModels`: per type, the file `res://assets/models/<model>/<id>.glb`
+  (`UnitDef.Model` is the stem, `<id>` its last segment); no unit id is named in code. A type draws its model when that
+  file loads and has a `team` material; otherwise its capsule. **Fallbacks, never an `ERROR` line:** the source file is
+  read before `GD.Load` (BUG-0860's lesson: a failed import prints engine errors), so a Git LFS pointer (`version
+  https://git-lfs...`) or a non-glTF file gives one warning line per file per run; files that are simply missing (today 19
+  types) are one summary warning per run; a model without a `team` surface one warning; a missing library one warning (the
+  models then stand in their bind pose). Results are cached per path for the run.
+- **The switch.** `UnitViews.UseModels` (static, read at `Bind`): on, unless the command line holds `--placeholder-art`
+  (any scene: the menu's match, `--skirmish`, a test), which draws every type as its capsule exactly as before M6-V20
+  (`CombatViewTest`'s fixed-camera `combat-seed1-brawl.png` is byte-identical to M7-V3c's).
+- **One view node per slot (rule 7).** The slot's `MeshInstance3D` stays where the capsule's centre is (so the cargo
+  marker, a child of it, is unchanged) and draws no mesh; its child `Model` is the imported scene (`Armature` with the
+  180° yaw fix, `Skeleton3D`, one skinned `MeshInstance3D`), placed `-DrawnHeight / 2` so the feet are on the ground, plus
+  an `AnimationPlayer` on the shared library. 6 nodes a model unit (1 a capsule), no physics body. A type with a data
+  `scale` other than 1 draws its model at that scale uniformly (no shipped model type has one; `ModelViewTest` forges 1.5).
+- **Per frame** (allocation-free once a slot has its model: `ModelViewTest`'s 200-a-side row, 0 bytes): the owner's team
+  material on the `team` surface (`SetSurfaceOverrideMaterial`, only when the owner changes; one `ShaderMaterial` per
+  model type and player, `team_colour.gdshader`, made at `Bind`); the flash and worker-tint overlays on the model's mesh
+  (only when they change); the clip from `UnitViews.ClipFor(world, slot)`, played only when it changes, started at a
+  phase from the slot (`slot x 0.37 s` mod the clip) so a crowd doesn't move in step, 0.15 s blend. State to clip:
+  `Moving` walk, `Attacking` attack, `Building` build, `Gathering` gather_wood or gather_gold by the gathered node's
+  resource (the carried kind once the node is gone), `Idle` / `Returning` / `Casting` idle; a clip the library lacks
+  plays idle. The view holds no gameplay state: everything is read from the unit store each frame.
+- **Slot reuse.** A slot whose new unit is of another type: a capsule type frees the model and shows the capsule; a model
+  type keeps the instance when the scene is the same, else frees it and instantiates the new one; the owner material,
+  overlay and clip are set again. Death or fog hides the slot's node and stops its `AnimationPlayer` (a dead slot may wait
+  long for its next unit); showing it starts it again.
+- **Unchanged numbers:** the selection and target rings, the hp bar's height (`DrawnHeight`), the click and box hit test
+  (the sim's radius), the corpse disc, the cargo marker's place. Death animation and bodies as corpses are a later slice.
+- **Cost, measured (rule 48; 1600 x 900, vsync off, default zoom, 400 units 200 a side moving then fighting,
+  `game/tests/ModelShots.tscn -- --bench 30`, two other tracks' test hosts running):** models 15.7 ms average (64 FPS),
+  worst 1 % 30.1 ms, 3,290 draw calls a frame; `--placeholder-art` 0.96 ms (1,045 FPS), worst 1 % 3.0 ms, 56 draw calls.
+  A second pair with one other test host running: models 14.5 ms (69 FPS), worst 1 % 26.6 ms; capsules 1.97 ms, worst 1 %
+  5.4 ms. (About two thirds of the units are dead by the end of the 30 s.)
+  The split: with every `AnimationPlayer` stopped 6.5 ms; without the models' shadows 14.7 ms (1,221 draw calls); both
+  5.2 ms. So the animation (400 players x 65 bone tracks, 40 of them fingers) is about 9 ms of the 15.7; draw calls and
+  shadows about 1 ms. Not optimised here (out of scope); docs/04's 60 FPS for 400 units holds on average only.
+- **Scenes that turn models off** (`UnitViews.UseModels = false` in their `_Ready`, because they pin capsule geometry or
+  pixels): `EconomyViewTest` (the worker tint as the slot node's overlay), `QaM6V3Test` (each body's colour as the slot
+  node's material override), `QaM7V3cTest` (capsule geometry, its forged Crossbowman's too), `ScaleViewTest` (capsule
+  geometry, the Laborer its reference body), `ShellTest` (capsule size and colour of the menu's match's bodies). No pin
+  value changed. Every other scene runs with models on (`CombatViewTest`, `UnitViewsTest`, `TeblorViewTest` and the
+  playables among them; their pins don't read a Laborer's or Crossbowman's node).
+- **Tests:** `game/tests/ModelViewTest` (headless, in the scene loop): exactly the manifest's types draw a model, at the
+  path their data names; per model the triangles (2,597 / 2,727, cap 3,000), textures (512² at most), height (1.82 / 1.87 m),
+  feet at the origin, toes toward -Z, 65 bones and one `team` surface; the library's six clips, each looping; two players'
+  team colours; a standing, a moving and an attacking Crossbowman play idle, walk and attack (from real sim states, the
+  head upright over the feet), a Laborer's build, gather_wood and gather_gold; the build tint, the hit flash and the cargo
+  marker on a model; one slot reused model, capsule, model, capsule; a data copy whose Laborer `model` points nowhere and a
+  scratch model root of LFS pointer files (capsules); a forged `scale` 1.5 drawn uniformly with the feet on the ground;
+  `UseModels` off; 0 bytes over 120 syncs of 400 animated models. `game/tests/ModelShots.tscn` (windowed, not in the loop):
+  `--look <dir>` (the 40 m, 60 m and grey pictures), `--skirmish <dir>` (a skirmish start with the workers sent to gold and
+  wood), `--bench <s> [--vsync off] [--no-anim] [--no-model-shadows]` (the cost run above).
 
 ## Vision, detection, fog
 
@@ -7789,7 +7914,8 @@ fields are refused: see "Implementation (M5-8a)". Shape as of M5-1:
   after Age I); `units` a non-empty map of the faction's unit ids to weights above 0. A missing age, a second entry for an
   age and an age past the last are errors.
 - `attack`: `minArmyPop` (pop, 0 or more, a multiple of 0.5) and `minArmyCost` (gold + wood, a whole number, 0 or more), the
-  army an AI gathers before a wave, scaled per difficulty by `waveSizeMultiplier`. `retreat`: `hpFraction` (a unit below it
+  army an AI gathers before a wave, scaled per difficulty by `waveSizeMultiplier`; (M7-6) an optional `reserveArmyShare`
+  (a fraction 0-1, the opening's own reserve gate; see "Implementation (M7-6)"). `retreat`: `hpFraction` (a unit below it
   is wounded: read by Hard's `pullBackWounded` since M5-4c slice 2) and `lossFraction` (a wave that lost this much falls
   back), each 0-1.
 - Every fault is one error at its field (`buildOrder[3].id`, `difficulties.hard.thinkInterval`,
@@ -9498,7 +9624,8 @@ BUG-0981 (four of six openings never reached Age II against an active opponent):
   defense manager earlier in the same think) and the army (the census' live non-worker units, `AiPlayer.ArmySize`) is at
   least `ai.reserveArmyShare` of the opening's wave in both of the wave's measures: its half-pop against
   `attack.minArmyPop` and its gold + wood against `attack.minArmyCost`, each x the difficulty's `waveSizeMultiplier`
-  (`AiPlayer.MayReserve`). Otherwise army production spends first, as before M5-4g. Fix round 1 also opened the gate for
+  (`AiPlayer.MayReserve`; since M7-6 the seat's opening's own `attack.reserveArmyShare` replaces `ai.reserveArmyShare`
+  when its file carries one, "Implementation (M7-6)"). Otherwise army production spends first, as before M5-4g. Fix round 1 also opened the gate for
   good once a wave had been sent; that held the reserve through later defenses for 3-8 minutes and cut Malazan's waves
   from 79 to 55 (BUG-1025), so round 2 dropped it: the gate is re-judged every think from the census. **The census
   counts the whole army, the units away on a wave included** (BUG-1026, QA re-check 2: 77 % of reserve thinks on the 27

@@ -44,6 +44,8 @@ public partial class QaM7V3cTest : Node
 
     public override async void _Ready()
     {
+        // M6-V20: this scene pins capsule geometry (the forged Crossbowman's too); models are ModelViewTest's.
+        UnitViews.UseModels = false;
         ProcessMode = ProcessModeEnum.Always;
         _root = Path.GetFullPath(ProjectSettings.GlobalizePath($"user://qa-m7-v3c-{OS.GetProcessId()}"));
         try

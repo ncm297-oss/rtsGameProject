@@ -7,8 +7,15 @@ using Rts.Sim.ViewApi;
 
 namespace Rts.Game;
 
-/// <summary>Placeholder unit views: one capsule <see cref="MeshInstance3D"/> per unit slot, placed from the sim every frame.</summary>
+/// <summary>Unit views: one <see cref="MeshInstance3D"/> per unit slot, placed from the sim every frame, drawing its type's model or its placeholder capsule.</summary>
 /// <remarks>
+/// Models (M6-V20): with <see cref="UseModels"/> on, a type whose model file loads (<see cref="UnitModels"/>, the path from
+/// <c>UnitDef.Model</c>) is drawn as that model: the slot's node keeps its place at the capsule's centre (the cargo marker's
+/// frame) and draws no mesh; a child "Model" (the imported scene, feet on the ground, at the type's data <c>scale</c>) holds
+/// the skinned mesh, whose <c>team</c> surface is overridden by the owner's team material and which takes the flash and
+/// worker-tint overlays, and an <see cref="AnimationPlayer"/> on the shared library playing <see cref="ClipFor"/> the unit's
+/// sim state each frame (only a change of clip touches it). A slot reused by a type of another model or by a capsule type
+/// frees its model; a hidden slot's player stops. Every other type is the capsule below.
 /// A slot's node is created the first time the slot holds a live unit and hidden while it is dead,
 /// so a unit respawned into the slot reuses it. Meshes (one per unit type, radius from data, M7-V1: height times the
 /// type's data <c>scale</c>, M7-V3c: width the collision radius alone, <see cref="DrawnRadius(UnitDef)"/> / <see cref="DrawnHeight"/>) and
@@ -59,6 +66,15 @@ public partial class UnitViews : Node3D
     private static readonly Color BuildingTint = new(0.30f, 0.65f, 1.00f, 0.45f);
     private static readonly Color FlashTint = new(1.00f, 1.00f, 1.00f, 0.75f);
 
+    /// <summary>The flag that forces the placeholder capsules for every unit type (M6-V20).</summary>
+    public const string PlaceholderArtFlag = "--placeholder-art";
+
+    /// <summary>
+    /// Whether <see cref="Bind"/> draws a type that has a model file as that model (M6-V20); on unless the command line holds
+    /// <see cref="PlaceholderArtFlag"/>. A scene that pins capsule geometry or pixels sets it false before binding.
+    /// </summary>
+    public static bool UseModels { get; set; } = Array.IndexOf(OS.GetCmdlineUserArgs(), PlaceholderArtFlag) < 0;
+
     /// <summary>The runner whose sim is shown each frame; null shows nothing (tests call <see cref="Sync"/> directly).</summary>
     public SimRunner? Runner { get; set; }
 
@@ -85,6 +101,36 @@ public partial class UnitViews : Node3D
     private sbyte[] _shownCargo = Array.Empty<sbyte>();
     private bool[] _shownLit = Array.Empty<bool>();
     private StandardMaterial3D _flashMat = null!;
+
+    // M6-V20: models (null: capsules only), the faction colour index each type's team material falls back to without
+    // per-player colours, and per slot its model instance (kept while the slot's type keeps the same model), the mesh the
+    // overlays go on, its player and the clip it shows (-1: none).
+    private UnitModels? _models;
+    private int[] _factionColour = Array.Empty<int>();
+    private string[] _modelPath = Array.Empty<string>();
+    private float[] _modelScale = Array.Empty<float>();
+    private Node3D?[] _model = Array.Empty<Node3D?>();
+    private MeshInstance3D?[] _modelMesh = Array.Empty<MeshInstance3D?>();
+    private AnimationPlayer?[] _anim = Array.Empty<AnimationPlayer?>();
+    private int[] _shownClip = Array.Empty<int>();
+
+    /// <summary>The models of the last <see cref="Bind"/>, or null when <see cref="UseModels"/> was off.</summary>
+    public UnitModels? Models => _models;
+
+    /// <summary>True when type <paramref name="type"/> is drawn as a model (M6-V20), false for a capsule.</summary>
+    public bool DrawsModel(int type) => _models?.Has(type) == true;
+
+    /// <summary>Slot <paramref name="slot"/>'s model instance (M6-V20), or null while it shows a capsule.</summary>
+    public Node3D? ModelOf(int slot) => (uint)slot < (uint)_model.Length ? _model[slot] : null;
+
+    /// <summary>Slot <paramref name="slot"/>'s model mesh, the node the team material and the overlays go on, or null.</summary>
+    public MeshInstance3D? ModelMeshOf(int slot) => (uint)slot < (uint)_modelMesh.Length ? _modelMesh[slot] : null;
+
+    /// <summary>Slot <paramref name="slot"/>'s animation player, or null while it shows a capsule.</summary>
+    public AnimationPlayer? AnimatorOf(int slot) => (uint)slot < (uint)_anim.Length ? _anim[slot] : null;
+
+    /// <summary>The clip slot <paramref name="slot"/> plays (an index into <see cref="UnitModels.ClipNames"/>), or -1.</summary>
+    public int ShownClip(int slot) => (uint)slot < (uint)_shownClip.Length ? _shownClip[slot] : -1;
 
     /// <summary>Hit-flash bookkeeping (M4-V1): which slots are lit and for how long.</summary>
     public HitFlash Flash { get; private set; } = new(0);
@@ -163,6 +209,31 @@ public partial class UnitViews : Node3D
         _shownLit = new bool[unitCapacity];
         _flashMat = Tint(FlashTint);
         Flash = new HitFlash(unitCapacity);
+
+        // M6-V20: the team materials come in the per-player colours when given, else one per faction (the capsule's rule).
+        _models = null;
+        if (UseModels)
+        {
+            uint[] colours = playerRgb ?? new uint[data.Factions.Length];
+            if (playerRgb == null)
+                for (int f = 0; f < colours.Length; f++) colours[f] = data.Factions[f].PrimaryColor;
+            _models = new UnitModels(data, colours);
+            if (_models.ModelTypes == 0) _models = null;
+        }
+        _factionColour = new int[data.Units.Length];
+        _modelPath = new string[data.Units.Length];
+        _modelScale = new float[data.Units.Length];
+        for (int t = 0; t < _factionColour.Length; t++)
+        {
+            _factionColour[t] = data.Units[t].Faction;
+            _modelPath[t] = data.Units[t].Model;
+            _modelScale[t] = data.Units[t].Scale;
+        }
+        _model = new Node3D?[unitCapacity];
+        _modelMesh = new MeshInstance3D?[unitCapacity];
+        _anim = new AnimationPlayer?[unitCapacity];
+        _shownClip = new int[unitCapacity];
+        Array.Fill(_shownClip, -1);
     }
 
     /// <summary>The state whose tint slot <paramref name="slot"/> shows (<see cref="UnitState.Idle"/>: none).</summary>
@@ -213,32 +284,28 @@ public partial class UnitViews : Node3D
             MeshInstance3D? view = _views[i];
             if (!u.Alive[i])
             {
-                if (_shown[i])
-                {
-                    view!.Visible = false;
-                    _shown[i] = false;
-                }
+                if (_shown[i]) Hide(i, view!);
                 continue;
             }
             // A slot gets its node when it first holds a live unit, seen or not, so the fog never changes when nodes are made.
             view ??= CreateView(i);
             if (fog != null && !fog.ShowsUnit(i))
             {
-                if (_shown[i])
-                {
-                    view.Visible = false;
-                    _shown[i] = false;
-                }
+                if (_shown[i]) Hide(i, view);
                 continue;
             }
             int type = u.TypeId[i];
-            if (_viewType[i] != type)
-            {
-                view.Mesh = _meshes[type];
-                _viewType[i] = type;
-            }
+            if (_viewType[i] != type) SetType(i, view, type);
+            MeshInstance3D? model = _modelMesh[i];
             int owner = u.Owner[i];
-            if (_viewOwner[i] != owner && _playerMats.Length > 0)
+            if (_viewOwner[i] != owner && model != null)
+            {
+                // M6-V20: the model's team surface in the owner's colour (the faction's without per-player colours).
+                int colour = _playerMats.Length > 0 ? owner : _factionColour[type];
+                model.SetSurfaceOverrideMaterial(_models!.TeamSurface(type), _models.TeamMaterial(type, colour));
+                _viewOwner[i] = owner;
+            }
+            else if (_viewOwner[i] != owner && _playerMats.Length > 0)
             {
                 view.MaterialOverride = (uint)owner < (uint)_playerMats.Length ? _playerMats[owner] : null;
                 _viewOwner[i] = owner;
@@ -247,6 +314,7 @@ public partial class UnitViews : Node3D
             {
                 view.Visible = true;
                 _shown[i] = true;
+                if (_anim[i] is AnimationPlayer resumed) resumed.Active = true;
             }
             Vector3 ground = GroundPoint(world, i, alpha);
             float facing = BlendFacing(u.PrevFacing[i], u.Facing[i], alpha);
@@ -256,9 +324,15 @@ public partial class UnitViews : Node3D
             bool lit = Flash.IsLit(i);
             if (tint != _shownTint[i] || lit != _shownLit[i])
             {
-                view.MaterialOverlay = lit ? _flashMat : _tints[(int)tint];
+                // On a model the overlay goes on its mesh: the slot's own node draws nothing then.
+                (model ?? view).MaterialOverlay = lit ? _flashMat : _tints[(int)tint];
                 _shownTint[i] = tint;
                 _shownLit[i] = lit;
+            }
+            if (_anim[i] is AnimationPlayer anim)
+            {
+                int clip = (int)ClipFor(world, i);
+                if (clip != _shownClip[i]) PlayClip(i, anim, clip);
             }
             sbyte cargo = u.Cargo[i] > 0 ? (sbyte)u.CargoKind[i] : (sbyte)-1;
             if (cargo != _shownCargo[i]) ShowCargo(i, view, type, cargo);
@@ -356,8 +430,11 @@ public partial class UnitViews : Node3D
     /// inside its neighbours (BUG-1260).</remarks>
     public static float DrawnRadius(UnitDef def) => def.Radius;
 
-    /// <summary>A unit type's drawn capsule height (M7-V1): <see cref="BodyHeight"/> of its radius times its data <c>scale</c>.</summary>
-    public static float DrawnHeight(UnitDef def) => BodyHeight(def.Radius) * def.Scale;
+    /// <summary>A unit type's drawn capsule height (M7-V1): <see cref="BodyHeight"/> of its radius times its data <c>scale</c>, never under twice its radius.</summary>
+    /// <remarks>BUG-1290: Godot's <see cref="CapsuleMesh"/> clamps its radius to half its height, so a wide type at a small scale
+    /// (<c>scale &lt; 2 radius / (2 radius + 1)</c>) was drawn narrower than its collision radius; such a type is drawn as a ball
+    /// instead, and the bar and markers that read this height follow it.</remarks>
+    public static float DrawnHeight(UnitDef def) => Math.Max(BodyHeight(def.Radius) * def.Scale, 2f * DrawnRadius(def));
 
     /// <summary>
     /// Live unit slot <paramref name="slot"/>'s drawn radius (M7-V3c): its collision radius, what the rings, corpse and cue
@@ -372,6 +449,90 @@ public partial class UnitViews : Node3D
     /// <summary>Converts a data colour 0xRRGGBB (sRGB) to a Godot colour.</summary>
     public static Color ColorFromRgb(uint rgb) =>
         new(((rgb >> 16) & 0xFF) / 255f, ((rgb >> 8) & 0xFF) / 255f, (rgb & 0xFF) / 255f);
+
+    private void Hide(int slot, MeshInstance3D view)
+    {
+        view.Visible = false;
+        _shown[slot] = false;
+        // A hidden model doesn't animate (a dead slot may wait a long time for its next unit).
+        if (_anim[slot] is AnimationPlayer anim) anim.Active = false;
+    }
+
+    // The slot now holds a unit of another type: the capsule's mesh, or the type's model (a new instance unless the slot
+    // already holds one of the same scene). Material, overlay and clip are set again on the next lines of Sync.
+    private void SetType(int slot, MeshInstance3D view, int type)
+    {
+        int old = _viewType[slot];
+        _viewType[slot] = type;
+        _viewOwner[slot] = -1;
+        _shownTint[slot] = (UnitState)byte.MaxValue;
+        _shownClip[slot] = -1;
+        bool model = _models?.Has(type) == true;
+        bool sameScene = model && old >= 0 && _model[slot] != null && _modelPath[old] == _modelPath[type];
+        if (_model[slot] != null && !sameScene)
+        {
+            _model[slot]!.QueueFree();
+            _model[slot] = null;
+            _modelMesh[slot] = null;
+            _anim[slot] = null;
+        }
+        view.MaterialOverride = null;
+        view.MaterialOverlay = null;
+        if (!model)
+        {
+            view.Mesh = _meshes[type];
+            return;
+        }
+        view.Mesh = null;
+        if (_model[slot] == null)
+        {
+            Node3D root = _models!.Instantiate(type, out MeshInstance3D mesh, out AnimationPlayer anim);
+            view.AddChild(root);
+            _model[slot] = root;
+            _modelMesh[slot] = mesh;
+            _anim[slot] = anim;
+            ModelNodeCount++;
+        }
+        // The slot's node sits at the capsule's centre (the cargo marker's frame); the model's feet go to the ground. A data
+        // scale other than 1 scales the model uniformly (M6-V20; no shipped model type has one).
+        float s = _modelScale[type];
+        _model[slot]!.Transform = new Transform3D(Basis.Identity.Scaled(new Vector3(s, s, s)), new Vector3(0f, -_halfHeight[type], 0f));
+    }
+
+    /// <summary>The clip a model shows for slot <paramref name="slot"/>'s sim state (M6-V20): standing, moving, attacking, and a worker's three states.</summary>
+    public static UnitModels.Clip ClipFor(World world, int slot)
+    {
+        UnitStore u = world.Units;
+        switch (u.State[slot])
+        {
+            case UnitState.Moving: return UnitModels.Clip.Walk;
+            case UnitState.Attacking: return UnitModels.Clip.Attack;
+            case UnitState.Building: return UnitModels.Clip.Build;
+            case UnitState.Gathering:
+                EntityHandle node = u.GatherNode[slot];
+                ResourceKind kind = world.Resources.IsAlive(node) ? world.Data.Resources[world.Resources.TypeId[node.Index]].Resource : u.CargoKind[slot];
+                return kind == ResourceKind.Wood ? UnitModels.Clip.GatherWood : UnitModels.Clip.GatherGold;
+            default: return UnitModels.Clip.Idle; // Idle, Returning (standing with a load), Casting
+        }
+    }
+
+    // Plays the clip (idle when the library lacks it), started at a phase from the slot so a crowd doesn't move in step.
+    private void PlayClip(int slot, AnimationPlayer anim, int clip)
+    {
+        _shownClip[slot] = clip;
+        if (!UnitModels.HasClip((UnitModels.Clip)clip)) clip = (int)UnitModels.Clip.Idle;
+        if (!UnitModels.HasClip((UnitModels.Clip)clip))
+        {
+            anim.Stop();
+            return;
+        }
+        anim.Play(UnitModels.ClipNames[clip]);
+        float length = UnitModels.ClipLength((UnitModels.Clip)clip);
+        if (length > 0f) anim.Seek(slot * 0.37f % length, true);
+    }
+
+    /// <summary>Model instances created so far (M6-V20; one per slot and model scene it held).</summary>
+    public int ModelNodeCount { get; private set; }
 
     private MeshInstance3D CreateView(int slot)
     {
