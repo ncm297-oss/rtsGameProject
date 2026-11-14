@@ -120,6 +120,7 @@ public static partial class DataLoader
                 Compositions = BuildAiCompositions(c, o.Compositions, faction, ids, p + ".compositions"),
                 AttackMinHalfPop = attack == null ? 0 : HalfPopField(c, attack.MinArmyPop, p + ".attack.minArmyPop"),
                 AttackMinCost = attack == null ? 0 : c.Int(attack.MinArmyCost, p + ".attack.minArmyCost", 0),
+                ReserveArmyShare = attack == null ? null : OptionalFraction(c, attack.ReserveArmyShare, p + ".attack.reserveArmyShare"), // M7-6
             });
         }
         return result.ToImmutable();
@@ -516,6 +517,32 @@ public static partial class DataLoader
         else if (!(value >= 0 && value <= 1)) c.Error(path, $"{value} is outside 0-1");
         else return value.Value;
         return 0;
+    }
+
+    /// <summary>
+    /// M7-6 (Request 52): an optional fraction, 0 to 1 inclusive, checked as <see cref="Fraction"/>; null when absent or
+    /// refused. A JSON null or any non-number is one error at <paramref name="path"/> (leaving the field out is how a file
+    /// says "the rules' value").
+    /// </summary>
+    private static float? OptionalFraction(Checker c, RawValue? raw, string path)
+    {
+        if (raw == null) return null;
+        if (raw.Token == System.Text.Json.JsonTokenType.Null)
+        {
+            c.Error(path, "null is not a fraction (leave the field out to use the rules' value)");
+            return null;
+        }
+        if (raw.Number is not double value)
+        {
+            c.Error(path, "wrong type of value: expected a number 0-1");
+            return null;
+        }
+        if (!(value >= 0 && value <= 1))
+        {
+            Fraction(c, value, path); // the same "outside 0-1" error as rules.json's fraction
+            return null;
+        }
+        return (float)value;
     }
 
     /// <summary>A required true / false.</summary>

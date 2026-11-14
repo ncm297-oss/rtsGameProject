@@ -484,6 +484,37 @@ internal sealed class AiAttackJson
 {
     public double? MinArmyPop { get; set; }
     public int? MinArmyCost { get; set; }
+    public RawValue? ReserveArmyShare { get; set; } // M7-6 (Request 52): optional; a JSON null is an error, not "absent"
+}
+
+/// <summary>
+/// M7-6: an optional field read raw, so the loader tells a JSON <c>null</c> (an error) and a string from a number and reports
+/// each once at the field's own path. Absent leaves the property null; any value, null included, is an instance.
+/// </summary>
+[JsonConverter(typeof(RawValueConverter))]
+internal sealed class RawValue
+{
+    /// <summary>The value's first token (<see cref="JsonTokenType.Null"/>, <see cref="JsonTokenType.String"/>, a number ...).</summary>
+    public JsonTokenType Token { get; init; }
+
+    /// <summary>The number, for a number token (NaN for one beyond a double's range); null for any other token.</summary>
+    public double? Number { get; init; }
+}
+
+/// <summary>Reads any JSON value (null too: <see cref="HandleNull"/>) as a <see cref="RawValue"/>, skipping its content.</summary>
+internal sealed class RawValueConverter : JsonConverter<RawValue>
+{
+    public override bool HandleNull => true;
+
+    public override RawValue Read(ref Utf8JsonReader reader, System.Type typeToConvert, JsonSerializerOptions options)
+    {
+        JsonTokenType token = reader.TokenType;
+        double? number = token != JsonTokenType.Number ? null : reader.TryGetDouble(out double d) && double.IsFinite(d) ? d : double.NaN;
+        reader.Skip();
+        return new RawValue { Token = token, Number = number };
+    }
+
+    public override void Write(Utf8JsonWriter writer, RawValue value, JsonSerializerOptions options) => writer.WriteNullValue();
 }
 
 internal sealed class AiRetreatJson

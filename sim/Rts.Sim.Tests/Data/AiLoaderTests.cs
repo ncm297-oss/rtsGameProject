@@ -278,6 +278,60 @@ public class AiLoaderTests
         Assert.Contains("rounds to 0", e.Message);
     }
 
+    /// <summary>
+    /// M7-6 (Request 52): an opening's optional <c>attack.reserveArmyShare</c> loads absent (null: the rules' value), at 0, 0.5
+    /// and 1, on the opening that carries it only: every other opening (this faction's and the others') loads as shipped.
+    /// BUG-1311: "as shipped", not null, so the data track's docs/03 row (Teblor <c>standard</c> at 0.5) keeps this green;
+    /// the absent row takes the field out rather than leaving whatever the file ships.
+    /// </summary>
+    [Theory]
+    [InlineData(null)]
+    [InlineData("0")]
+    [InlineData("0.5")]
+    [InlineData("1")]
+    public void AnOpeningsReserveArmyShare_Loads(string? rawJson)
+    {
+        GameData d = LoadWith(root =>
+        {
+            JsonObject attack = AiScenes.Opening(root)["attack"]!.AsObject();
+            attack.Remove("reserveArmyShare");
+            if (rawJson != null) attack["reserveArmyShare"] = JsonNode.Parse(rawJson);
+        });
+        int malazan = d.FindFaction("malazan");
+        AiDef ai = d.Ai[malazan];
+        Assert.Equal(rawJson == null ? null : float.Parse(rawJson, System.Globalization.CultureInfo.InvariantCulture), ai.Openings[0].ReserveArmyShare);
+        Assert.Equal(TestSim.Data.Ai.Length, d.Ai.Length);
+        for (int f = 0; f < d.Ai.Length; f++)
+        {
+            AiDef shipped = TestSim.Data.Ai[f];
+            Assert.Equal(shipped.Faction, d.Ai[f].Faction);
+            Assert.Equal(shipped.Openings.Length, d.Ai[f].Openings.Length);
+            for (int o = f == malazan ? 1 : 0; o < shipped.Openings.Length; o++)
+                Assert.Equal(shipped.Openings[o].ReserveArmyShare, d.Ai[f].Openings[o].ReserveArmyShare);
+        }
+    }
+
+    /// <summary>
+    /// M7-6: checked as <c>rules.json</c>'s <c>ai.reserveArmyShare</c> is (a fraction 0-1), each fault one error at
+    /// <c>openings[i].attack.reserveArmyShare</c>: below 0, above 1, a string, a JSON null (not "absent"), a list, true.
+    /// </summary>
+    [Theory]
+    [InlineData("-0.01", "outside 0-1")]
+    [InlineData("1.01", "outside 0-1")]
+    [InlineData("1e400", "outside 0-1")]
+    [InlineData("\"0.5\"", "expected a number 0-1")]
+    [InlineData("null", "null is not a fraction")]
+    [InlineData("[0.5]", "expected a number 0-1")]
+    [InlineData("true", "expected a number 0-1")]
+    public void ABrokenReserveArmyShare_IsOneErrorAtIt(string rawJson, string message)
+    {
+        IReadOnlyList<DataError> errors = ErrorsWith(root => AiScenes.Opening(root, 1)["attack"]!.AsObject()["reserveArmyShare"] = JsonNode.Parse(rawJson));
+        DataError e = Assert.Single(errors);
+        Assert.Equal(MalazanAi, e.File);
+        Assert.Equal("openings[1].attack.reserveArmyShare", e.Path);
+        Assert.Contains(message, e.Message);
+    }
+
     private static GameData LoadWith(Action<JsonObject> edit)
     {
         using TestDataDir dir = TestDataDir.CopyOfShipped();

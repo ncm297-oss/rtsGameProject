@@ -29,7 +29,11 @@ public class StatusLoaderTests
     public void Shipped_BurningIsMagicDamageOverTime_SlowedIsASlow()
     {
         GameData d = TestSim.Data;
-        Assert.Equal(7, d.Statuses.Length); // + blinded (M4-4b-2), frenzied (M4-4b-3a), stealthed and revealed (M4-5), regenerating (M7-1)
+        // + blinded (M4-4b-2), frenzied (M4-4b-3a), stealthed and revealed (M4-5), regenerating (M7-1). BUG-1312: every row the
+        // shipped file carries loads (its own count), and these seven are among them, so a data-track row (M7-4's
+        // teblor_frenzied) does not turn this red.
+        Assert.Equal(ShippedRowCount(), d.Statuses.Length);
+        Assert.Subset(d.Statuses.Select(x => x.Key).ToHashSet(), M7Statuses.ToHashSet());
         StatusDef burning = d.Statuses[d.FindStatus("burning")];
         Assert.Equal(StatusKind.DamageOverTime, burning.Kind);
         Assert.Equal(d.DamageTable.DamageTypeKeys.IndexOf("magic"), burning.DamageType);
@@ -143,9 +147,22 @@ public class StatusLoaderTests
         Assert.False(string.IsNullOrWhiteSpace(regen.Description));
         Assert.Equal((-1, 0f, 0f), (regen.DamageType, regen.Sight, regen.Reach));
         // The state hash's numbers: the M4 kinds keep their old ids' order (0-5), the new kind comes after (StatusDef.StateHashId).
-        Assert.Equal(new[] { "blinded", "burning", "frenzied", "regenerating", "revealed", "slowed", "stealthed" }, d.Statuses.Select(x => x.Key));
-        Assert.Equal(new[] { 0, 1, 2, 6, 3, 4, 5 }, d.Statuses.Select(x => x.StateHashId));
+        // BUG-1312: these seven lead the sorted list; a later id the data track adds (teblor_frenzied sorts after stealthed)
+        // follows them. The six M4-kind rows keep 0-5; regenerating comes after every M4-kind row, so its number is that
+        // count (6 on the M7-1 data; 7 once a frenzied-kind teblor_frenzied ships, which is numbered with the M4 kinds).
+        Assert.True(d.Statuses.Length >= M7Statuses.Length);
+        Assert.Equal(M7Statuses, d.Statuses.Take(M7Statuses.Length).Select(x => x.Key));
+        int m4Kinds = d.Statuses.Count(x => x.Kind <= StatusKind.Revealed);
+        Assert.True(m4Kinds >= 6);
+        Assert.Equal(new[] { 0, 1, 2, m4Kinds, 3, 4, 5 }, d.Statuses.Take(M7Statuses.Length).Select(x => x.StateHashId));
     }
+
+    // The statuses shipped by M7-1, in the loader's (sorted-id) order.
+    private static readonly string[] M7Statuses = { "blinded", "burning", "frenzied", "regenerating", "revealed", "slowed", "stealthed" };
+
+    // The number of rows the shipped statuses.json carries.
+    private static int ShippedRowCount() =>
+        JsonNode.Parse(File.ReadAllText(Path.Combine(TestDataDir.Shipped, StatusFile)))!["statuses"]!.AsArray().Count;
 
     /// <summary>M7-1 criterion 5: a regenerating status refuses a damage type (the kind rule), a sight and a reach, each at its path.</summary>
     [Fact]

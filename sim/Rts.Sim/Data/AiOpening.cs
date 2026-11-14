@@ -33,4 +33,10 @@ public sealed class AiOpening
 
     /// <summary>The army's total cost (gold + wood) it gathers before sending a wave (<c>attack.minArmyCost</c>).</summary>
     public int AttackMinCost { get; init; }
+
+    /// <summary>
+    /// M7-6 (Request 52): this opening's own share of its wave the army must reach before the build order may save for a
+    /// step (<c>attack.reserveArmyShare</c>, 0-1); null when the file leaves it out, and <see cref="AiRulesDef.ReserveArmyShare"/> applies.
+    /// </summary>
+    public float? ReserveArmyShare { get; init; }
 }

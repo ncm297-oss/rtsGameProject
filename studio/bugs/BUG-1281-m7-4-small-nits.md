@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S4 |
-| Status | open |
+| Status | fixed |
 | Found | 2026-11-12-0546, task M7-4 (QA full) |
 | System | docs/03, combat (`CombatSystem`) |
-| Fixed by | |
+| Fixed by | M7-6 (sim, 2026-11-13-1118, 18be020): the two caller-less overloads removed (`FrenzyDamageTests.EveryDamageHelper_TakesTheStatusDamageFactor`); docs/03 "Implementation (M7-4)" now says nothing draws `BuildingDef.Scale` yet |
 
 ## Repro
 1. docs/03 "Implementation (M7-4)", the `buildings.json scale` bullet: "the view reads it as it reads `UnitDef.Scale`".

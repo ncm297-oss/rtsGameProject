@@ -14,11 +14,11 @@ public class FrenzyRulesLoaderTests
     private const string TeblorBuildings = "factions/teblor/buildings.json";
     private const string WhirlwindUnits = "factions/whirlwind/units.json";
 
-    /// <summary>The Frenzy row's index in the test copy's statuses file (appended after the shipped rows).</summary>
-    private static readonly int Row = ShippedArray(Statuses, "statuses").Count;
+    /// <summary>The Frenzy row's index in the test copy's statuses file (last; M7-6, BUG-1280: whether or not the data ships it).</summary>
+    private static readonly int Row = BloodOilScenes.RowIndex;
 
-    /// <summary>Blood-oil Anointing's new effect index (after its two armor effects).</summary>
-    private const int Effect = 2;
+    /// <summary>Blood-oil Anointing's statusDuration effect index in the copy (after its armor effects; BUG-1280 as <see cref="Row"/>).</summary>
+    private static readonly int Effect = BloodOilScenes.EffectIndex;
 
     private static JsonArray ShippedArray(string rel, string list) =>
         JsonNode.Parse(File.ReadAllText(Path.Combine(TestDataDir.Shipped, rel)))![list]!.AsArray();
@@ -65,15 +65,18 @@ public class FrenzyRulesLoaderTests
         Assert.Equal(StatusKind.Frenzied, frenzy.Kind);
         Assert.Equal(0.2f, frenzy.DamageBonus);
         Assert.Equal((d.FindStatus("slowed"), 0.2f, 80), (frenzy.OnEndStatus, frenzy.OnEndMagnitude, frenzy.OnEndTicks));
-        // Without the fields: no bonus, no onEnd (every shipped row).
+        // Without the fields: no bonus, no onEnd (every shipped row but the data track's own Frenzy row, BUG-1280).
         foreach (StatusDef st in TestSim.Data.Statuses)
-            Assert.Equal((0f, -1, 0f, 0), (st.DamageBonus, st.OnEndStatus, st.OnEndMagnitude, st.OnEndTicks));
+            if (st.Key != BloodOilScenes.Status)
+                Assert.Equal((0f, -1, 0f, 0), (st.DamageBonus, st.OnEndStatus, st.OnEndMagnitude, st.OnEndTicks));
         TechEffect e = d.Techs[d.FindTech("teblor_blood_oil_anointing")].Effects[Effect];
         Assert.Equal((TechStat.StatusDuration, 80f), (e.Stat, e.Amount)); // +4 s
         Assert.Equal(new[] { frenzy.Id }, e.Statuses.ToArray());
         Assert.True(e.Units.IsEmpty && e.Tags.IsEmpty && e.AttackType == -1 && e.Siege == -1);
         Assert.Equal(1.25f, d.Buildings[d.FindBuilding("teblor_longhouse")].Scale);
-        Assert.All(TestSim.Data.Buildings, b => Assert.Equal(1f, b.Scale));
+        // Without a scale: 1 (every shipped building outside the Teblor's, whose 1.25 docs/03 gives the data track; BUG-1280).
+        int teblor = TestSim.Data.FindFaction("teblor");
+        Assert.All(TestSim.Data.Buildings.Where(b => b.Faction != teblor), b => Assert.Equal(1f, b.Scale));
         // The ends of the ranges load.
         Assert.True(WithFrenzy(x => x["damageBonus"] = 4).Ok);
         Assert.True(LoadWith(dir => dir.EditJson(TeblorBuildings, r => r["buildings"]![0]!["scale"] = 3.0)).Ok);

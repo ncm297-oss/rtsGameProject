@@ -41,11 +41,13 @@ public sealed class TechBonusOracle
                 var effects = new List<EffectRow>();
                 foreach (JsonNode? e in t!["effects"]!.AsArray())
                 {
-                    JsonNode a = e!["appliesTo"]!;
-                    effects.Add(new EffectRow((string)e["stat"]!, (double)e["amount"]!, (string?)a["attackType"],
-                        a["tags"]?.AsArray().Select(x => (string)x!).ToArray(),
-                        a["units"]?.AsArray().Select(x => (string)x!).ToArray(),
-                        (bool?)a["siege"]));
+                    // M7-6 QA (rule 58): a statusDuration effect (M7-4) has no appliesTo; read it as no filter (the oracle
+                    // was a NullReferenceException once the data track ships docs/03's Anointing row).
+                    JsonNode? a = e!["appliesTo"];
+                    effects.Add(new EffectRow((string)e["stat"]!, (double)e["amount"]!, (string?)a?["attackType"],
+                        a?["tags"]?.AsArray().Select(x => (string)x!).ToArray(),
+                        a?["units"]?.AsArray().Select(x => (string)x!).ToArray(),
+                        (bool?)a?["siege"]));
                 }
                 _techs[(string)t["id"]!] = effects;
             }
