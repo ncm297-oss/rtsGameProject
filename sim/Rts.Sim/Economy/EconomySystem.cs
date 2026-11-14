@@ -46,7 +46,7 @@ public static class EconomySystem
     private static void Step(World world, int i)
     {
         UnitStore u = world.Units;
-        bool full = u.Cargo[i] >= world.Data.Rules.WorkerCarry;
+        bool full = u.Cargo[i] >= world.Data.CarryOf(u.TypeId[i]); // M7-7: the worker's own carry, else the rules'
         if (u.State[i] == UnitState.Moving)
         {
             // Walking a leg. A node gone while the worker walks to it is replaced now, not on arrival.
@@ -82,7 +82,7 @@ public static class EconomySystem
     private static void Work(World world, int i)
     {
         UnitStore u = world.Units;
-        RulesDef rules = world.Data.Rules;
+        int carry = world.Data.CarryOf(u.TypeId[i]); // M7-7 (Request 48)
         EntityHandle node = u.GatherNode[i];
         if (u.State[i] != UnitState.Gathering)
         {
@@ -96,12 +96,12 @@ public static class EconomySystem
         if (progress >= 1f)
         {
             int whole = progress >= int.MaxValue ? int.MaxValue : (int)progress;
-            int taken = world.Resources.Take(node, Math.Min(whole, rules.WorkerCarry - u.Cargo[i]));
+            int taken = world.Resources.Take(node, Math.Min(whole, carry - u.Cargo[i]));
             u.Cargo[i] += taken;
             progress -= whole;
         }
         u.GatherProgress[i] = progress;
-        if (u.Cargo[i] >= rules.WorkerCarry)
+        if (u.Cargo[i] >= carry)
         {
             u.GatherProgress[i] = 0f;
             StartReturn(world, i);
@@ -505,7 +505,7 @@ public static class EconomySystem
         u.Hold[i] = false;
         u.BuildTarget[i] = default; // a Gather ends building or repairing (M3-3)
         u.WalkBack[i] = UnitStore.WalkBackNone;
-        if (u.Cargo[i] >= world.Data.Rules.WorkerCarry) StartReturn(world, i);
+        if (u.Cargo[i] >= world.Data.CarryOf(u.TypeId[i])) StartReturn(world, i);
         else if (InReachOfNode(world, i, n))
         {
             Stand(u, i, UnitState.Gathering);

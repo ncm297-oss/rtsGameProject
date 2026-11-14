@@ -2002,7 +2002,7 @@ closed by rule: only exposed nodes are gathered.
 - **Gathering.** Each tick in reach, `GatherProgress += RulesDef.GoldPerTick` (or `WoodPerTick`);
   whole units are taken with `ResourceStore.Take` into `Cargo`, so the node loses exactly what the
   worker gains. A gold load of 10 takes 286 ticks in reach (14.3 s), wood 334 (16.7 s). At
-  `workerCarry` the progress resets and the worker returns.
+  `workerCarry` (since M7-7, the worker type's own `carry` when its row has one) the progress resets and the worker returns.
 - **Returning.** The drop-off is the player's live `dropOff` building whose footprint center is
   nearest the worker in a straight line (ties to the lower slot), chosen when the trip starts and on
   every retry; in reach of any own drop-off it deposits: total += cargo, cargo 0, then back to the same
@@ -3264,6 +3264,88 @@ half a raid"), add the field to that opening's `attack` object in `factions/<id>
 It moves the data hash once (land it with the Frenzy rows and the buildings' `scale`, so old saves and recordings refuse once, not twice). Leave
 the field out on every other opening (they keep `rules.json`'s `ai.reserveArmyShare` 1); do not write `null`.
 
+### Implementation (M7-7)
+
+Request 53: why the Normal Teblor AI casts Blood-oil Frenzy 0.02-0.16 times a match before 15:00 (D30), measured before any
+rule was built; then, since the measurement did not point at the cast rule, Request 48's worker-carry schema. **No cast rule
+was built and no `ai.castMinOwnFighting` knob exists**: the brief built one only if the rule were the cause. Code:
+`UnitDef.Carry`, `GameData.CarryOf`, `DataLoader.OptionalCarry`, `EconomySystem` (the fill, return and deposit tests),
+`EconomyManager.FullLoad`; tests `Stress/FrenzyCastReportTests`, `Data/UnitCarryLoaderTests`, `Economy/WorkerCarryTests`.
+
+- **The measurement** (`Stress/FrenzyCastReportTests`, Stress category, no bound). On the `Abilities/BloodOilScenes` copy:
+  the Normal Teblor AI against a Normal Malazan and a Normal Whirlwind, the Teblor on seat 0 and on seat 1, seeds 1-8, the
+  generated map, to 15:00 (32 matches a configuration). At the end of every Teblor think (`AiPlayer.ThoughtForTests`) it
+  takes the Shamans the ability manager considered: free by `AbilityManager.Casters`' own test (or sent a `UseAbility` that
+  think, seen through `SentForTests`), the Frenzy ready by the tick the command applies in. For those thinks: at least
+  `ai.castMinTargets` (2) enemies seen within the ability's radius (8 m: today's rule); own army units (not the caster, not
+  workers) within it, and of them `Attacking`; the Shaman's distance to its army's centroid. Per match: Age II, the
+  Shamans' Circle, the first Shaman, Shamans alive at 5 / 10 / 15 min, casts sent (`Blackboard.CastsSent`) and landed (the
+  ready tick moved), defeat, army pop at 15:00, a win. Configurations: the shipped opening; the landing opening (D29's
+  hand-over V24, read read-only from `Content/Fixtures/teblor_standard_d29.json`, with D31's per-opening
+  `reserveArmyShare` 0.5); and a **diagnostic** (the shipped opening with two Shamans spawned at 0:00, not a design number:
+  what today's rule does when Shamans exist). Summed (2026-11-13, this branch; 96 matches in about 30 s):
+
+  | | shipped opening | landing opening | diagnostic: 2 Shamans at 0:00 |
+  | --- | --- | --- | --- |
+  | Age II / Shamans' Circle by 15:00 | 4 / 3 of 32 | 21 / 8 of 32 | 7 / 5 of 32 |
+  | matches with a Shaman (first one) | 3 of 32 (13:09, 13:51, 14:44) | 0 of 32 | 32 of 32 |
+  | Shamans alive at 5 / 10 / 15 min (sum) | 0 / 0 / 2 | 0 / 0 / 0 | 64 / 4 / 2 |
+  | thinks with a free Shaman, Frenzy ready | 73 | 0 | 14,852 |
+  | of them, own army within 8 m: 1+ / 2+ / 3+ / 4+ | 47 / 47 / 32 / 16 | - | 10,918 / 1,912 / 141 / 0 |
+  | Shaman to army centroid, mean / median | 21.1 / 17.6 m | - | 10.1 / 2.0 m |
+  | today's rule: 2+ enemies seen within 8 m | 2 | - | 53 |
+  | own army attacking within 8 m: 1+ / 2+ / 3+ / 4+ | 4 / 2 / 0 / 0 | - | 207 / 31 / 0 / 0 |
+  | casts sent / landed (a match) | 2 / 2 (0.06) | 0 / 0 (0.00) | 65 / 65 (2.03) |
+  | defeated by 15:00 / army pop 15:00 (sum) / wins | 24 / 40 / 0 | 19 / 8 / 0 | 13 / 54 / 0 |
+
+- **The cause: too few Shamans.** The AI almost never has one: the Teblor reaches Age II by 15:00 in 4 of 32 matches
+  (shipped) and is defeated in 24, so 3 of 32 field a Shaman, the first at 13:09; with the landing opening 21 reach Age II
+  and 8 build the Circle, but none trains a Shaman before 15:00 (its 10 % composition share loses to the Warriors at a small
+  army). The other two candidates are not it: when Shamans exist (the diagnostic) they stand with the army (median 2.0 m
+  from its centroid, an own unit within 8 m in 74 % of the ready thinks), and the proposed own-fighting rule would fire
+  **less** than today's (2+ own attacking within 8 m in 31 ready thinks against 53 for 2+ enemies; 3+ or 4+ never). An own
+  unit counts as attacking only in the `Attacking` state (standing in reach); a melee unit chasing is `Moving`, which is
+  why the count is low.
+- **Rule 41.** These figures are this branch's, on the sim's test copy and one generated map; the data track's V24
+  re-measure on `main` is another harness (four maps, its own seat layout) and not comparable with them.
+- **`units.json` `carry`** (Request 48; optional, a worker only): resources a worker of the type carries a trip, a whole
+  number 1 to 1,000,000 (`DataLimits.MaxInteger`, the range of `rules.json` `workerCarry`), to `UnitDef.Carry` (0 when absent: a
+  plain `int`, as `DataLoaderQaTests.GameDataTypes_ExposeOnlyImmutableMembers` asks of every def field). Read raw (`RawValue`, as M7-6), so each of 0, 1,000,001, -1, 1.5, a number beyond a double, a string,
+  `true`, a list, an object and a JSON `null` is one error at `units[i].carry`; the field on a unit whose slot is not
+  `worker` is one error there too ("only a worker carries resources"). **The rule:** `GameData.CarryOf(type)` = the type's
+  `carry`, else `rules.json` `workerCarry`, read wherever the rules' value was: the gather loop's "full" test, the take
+  that fills the load, the return at a full load, a Gather order given to a worker already holding a full load
+  (`EconomySystem`), and the AI's full-load test (`EconomyManager.FullLoad`, through its own unit's type in its view). A
+  load is never above its type's carry. Absent, every worker plays exactly as before: every worker at an explicit
+  `carry` equal to `workerCarry` plays a Teblor v Malazan AI match to the same state hash every tick for 6,000 ticks.
+- **Hash and formats.** `GameData.ContentHash` adds the carry (a marker, then the value) only when the row carries it, so
+  the shipped data's hash did not move (`67269D955D18D885` on the base 5078088 and on this tree, computed on both); a
+  file carrying it, at any value (the rules' own too), hashes differently. Not in the state hash (data; the load is the
+  unit's `Cargo`, hashed as before); no save or replay format change (`SaveFormat.CurrentVersion` 10): a mid-match save on a
+  carry-15 copy loads and runs 2,000 ticks hash-identical. No allocation (`WorkerCarryTests.GatherTicks_WithAWorkerCarry_
+  AllocateNothing`); the cost is one nullable read per gather step.
+- **Tests.** `Data/UnitCarryLoaderTests` (absent, 1, 2, 15, 1,000,000 load; ten broken values and a Warrior's carry, one
+  error each; the hash present / absent), `DataContentHashTests.ChangingAnyFieldOfAnyDef_ChangesTheHash` (the reflection row
+  names `UnitDef.Carry`: 0 to set), `Economy/WorkerCarryTests` (a Laborer at 15 fills to 15 and deposits 15; without the field,
+  or at the rules' value, 10; a Gather order to a worker holding 12 of 15 does not send it home, at 15 it does; the
+  hash-identical match; a carry-15 match carries loads of 15 and moves; the save; the allocation). Rules 58 / 59: every copy
+  strips `carry` first and sets its own; the new tests and the report pass on a scratch tree whose data already carries the
+  four Frenzy rows, the landing opening and a Gatherer `carry` 15.
+
+**For the data track (M7-7).**
+
+- **Shamans.** The Teblor AI casts Frenzy only if it fields Shamans, which is `ai.json`'s (the opening's Age II timing and
+  its composition): today it has none before 13:09 in the shipped opening and none by 15:00 with the landing opening. If
+  the balance pass wants the Frenzy seen before 15:00, the opening has to reach Age II, build the Shamans' Circle and train
+  Shamans earlier (a larger `teblor_shaman` share once in Age II, or a `train` step for one or two). Re-measure with
+  `Stress/FrenzyCastReportTests` (a new configuration is one line). Today's cast rule then casts about two Frenzies a match
+  with two Shamans in the army; no new rule is proposed until a measurement with Shamans fielded by the opening says otherwise.
+- **The Gatherer's 15.** The schema exists; teblor.md's "not in the data: `rules.json` `workerCarry` is one number for
+  every faction" is no longer true of the schema (the row itself is not in the data). The row, in
+  `factions/teblor/units.json` on `teblor_gatherer`: `"carry": 15`. It moves the data hash once (land it with D31's rows
+  so old saves and recordings refuse once). It changes the Teblor economy (each trip 1.5 times the load at the same rate:
+  fewer walks), so the opening's measurements move with it. Leave the field out on every other worker; do not write `null`.
+
 ### Implementation (M7-V1)
 
 M7's first bullet, the view half ("1.5× visuals"): each unit type is drawn at its data `scale`. View code only; no sim or
@@ -3908,7 +3990,7 @@ consumes it.
 | `buildings.json` | `{ "buildings": [ ... ] }`, each `{id, displayName, description, slot, footprint {width, height}, hp, armor, cost {gold, wood}, buildTime, popProvided, dropOff}`: `slot` is one of the ten template slots (`DataLimits.BuildingSlotIds`), footprint sides 1-4 cells, `buildTime` in seconds (to ticks), `popProvided` a multiple of 0.5 (to half-pop), `dropOff` a required bool, `requires` an optional list of tech / building ids (M3-5; resolved and gating placement since M3-6), `sight` optional meters (M4-3a: above 0 and at most 64, default `rules.json` `buildingSight`; shipped 24 on both watch towers, docs/02), `attack` optional (M4-3b: the unit `attack` object; value at least 1, range above 0, an aimed `projectile` required, `targets` not `buildings`; shipped on both watch towers), `detector` optional meters (M4-3b: above 0 and at most 64; shipped 16 on both watch towers; unused until M4-5), `scale` optional (M7-4: the view's model size, 0.5-3.0, default 1; the sim never reads it). Ids unique across factions (M3-2, see "Economy implementation"); exactly one building per slot per faction (M3-6, BUG-0010) |
 | `techs.json` | `{ "techs": [ ... ] }` in `common/` (shared by every faction) and in each faction folder (its own), each `{id, displayName, description, researchedAt, cost {gold, wood}, researchTime, requires?, requiresAnyOf?, effects: [{stat, amount, appliesTo {attackType?, tags?, units?, siege?}}]}`: `researchedAt` is a building slot id (a common tech resolves to each faction's building of it; a faction without one is an error), `researchTime` in seconds (to ticks), `requires` tech / building ids (resolved and gating research since M3-6), `requiresAnyOf` `{count, of: [slot ids, or in a faction file its own building ids]}`: met when `count` of the distinct listed slots hold an own finished building (M3-6; shipped on `age_ii` only), `effects` may be empty. `stat` is one of `attack`, `armor`, `range`, `hp`, `abilityCooldown`, `statusDuration` (M7-4) (`DataLimits.TechStatIds`); `amount` is non-zero, whole for attack / armor / hp, meters for range, seconds for ability cooldown and status duration (to ticks, negative shortens it). A `statusDuration` effect takes `statuses` (statuses.json ids, at least one) and no `appliesTo`; no other stat takes `statuses` (see "Implementation (M7-4)"). `appliesTo` is required (`{}` = every unit) except on `statusDuration`; each filter it sets must match: `attackType` a damage type, `tags` any one of the unit's tags (each must be a tag some unit has), `units` unit ids (a faction tech's must be its own), `siege` true / false for the `siege` slot; a `tags` or `units` list set to `[]` is an error (M3-6, BUG-0098). Tech ids are unique across all techs files and may not equal a building id (M3-6); they number the common file's techs first, then each faction's in `common/factions.json` order, ordinal within each file (M7-3b), so a new faction's techs move no shipped id; `DataLimits.AgeTechIds` (`age_ii`) must be a common tech (M3-5, see "Implementation (M3-5)") |
 | `projectiles.json` | `{ "projectiles": [ ... ] }`, each `{id, kind, speed, hitTolerance?, leadSpeed?}`: `kind` `aimed` or `lob`, `speed` m/s (at least 1), `hitTolerance` m (aimed only, 0-2, default 0.3; an error on a lob), `leadSpeed` m/s (aimed only, not negative, default 0 = never leads; an error on a lob). Ids unique; every unit's `attack.projectile` must name one (M4-2b, see "Implementation (M4-2b)") |
-| `units.json` | `{ "units": [ ... ] }`, entries as in the example. `attack` also takes optional `minRange`, `splash` (m), and `friendlyFire` (docs/02 "Combat / Stats"); they default to 0 / false. Melee range is written as `0.5` (edge to edge). `abilities` (M4-4a, optional): ability ids of the unit's own faction, at most 4 (`DataLimits.MaxUnitAbilities`), no repeats; resolved to `UnitDef.Abilities`; shipped on the Cadre Mage (`telas_fire`), the Sapper (`cusser`) and the Priest of the Whirlwind (`sandstorm`). `passives` (M4-4b-3a, optional): at most 2 (`DataLimits.MaxUnitPassives`), one per `trigger` (`DataLimits.PassiveTriggerIds`): `{trigger: whenBelowHp, hpFraction, status, magnitude}` or `{trigger: onDeath, status, magnitude, duration, radius, units}` (see "Implementation (M4-4b-3a)"); resolved to `UnitDef.Passives`; shipped on the Zealot only. `detector` (M4-5, optional): meters, above 0, at most 64 (`UnitDef.Detector`; see "Implementation (M4-5)"). `scale` (M7-1, optional, default 1): the view's model size, 0.5-3.0 (`DataLimits.MinUnitScale` / `MaxUnitScale`), to `UnitDef.Scale`; presentation only, collision stays `radius` (docs/02 "Combat / Stats"); no shipped unit sets it yet. `spawnCount` (M7-2, optional, default 1): units one queue item spawns, a whole number 1-8 (`DataLimits.MaxSpawnCount`), to `UnitDef.SpawnCount`; `cost` and `trainTime` are the item's, `pop` each unit's (see "Implementation (M7-2)"); no shipped unit sets it yet. `passives` also takes (M7-2) `{trigger: onHit, status, magnitude, duration}`, so at most 3, still one per trigger |
+| `units.json` | `{ "units": [ ... ] }`, entries as in the example. `attack` also takes optional `minRange`, `splash` (m), and `friendlyFire` (docs/02 "Combat / Stats"); they default to 0 / false. Melee range is written as `0.5` (edge to edge). `abilities` (M4-4a, optional): ability ids of the unit's own faction, at most 4 (`DataLimits.MaxUnitAbilities`), no repeats; resolved to `UnitDef.Abilities`; shipped on the Cadre Mage (`telas_fire`), the Sapper (`cusser`) and the Priest of the Whirlwind (`sandstorm`). `passives` (M4-4b-3a, optional): at most 2 (`DataLimits.MaxUnitPassives`), one per `trigger` (`DataLimits.PassiveTriggerIds`): `{trigger: whenBelowHp, hpFraction, status, magnitude}` or `{trigger: onDeath, status, magnitude, duration, radius, units}` (see "Implementation (M4-4b-3a)"); resolved to `UnitDef.Passives`; shipped on the Zealot only. `detector` (M4-5, optional): meters, above 0, at most 64 (`UnitDef.Detector`; see "Implementation (M4-5)"). `scale` (M7-1, optional, default 1): the view's model size, 0.5-3.0 (`DataLimits.MinUnitScale` / `MaxUnitScale`), to `UnitDef.Scale`; presentation only, collision stays `radius` (docs/02 "Combat / Stats"); no shipped unit sets it yet. `spawnCount` (M7-2, optional, default 1): units one queue item spawns, a whole number 1-8 (`DataLimits.MaxSpawnCount`), to `UnitDef.SpawnCount`; `cost` and `trainTime` are the item's, `pop` each unit's (see "Implementation (M7-2)"); no shipped unit sets it yet. `passives` also takes (M7-2) `{trigger: onHit, status, magnitude, duration}`, so at most 3, still one per trigger. `carry` (M7-7, Request 48, optional, a worker only): resources the worker carries a trip, a whole number 1 to 1,000,000, to `UnitDef.Carry`; absent = `rules.json` `workerCarry` (`GameData.CarryOf`; see "Implementation (M7-7)"); no shipped unit sets it yet |
 | `statuses.json` | `{ "statuses": [ ... ] }` (M4-4a), each `{id, displayName, description, kind, damageType?, sight?, reach?, damageBonus?, onEnd?}`: `kind` `damageOverTime`, `slow`, (M4-4b-2) `blind`, (M4-4b-3a) `frenzied`, (M4-5) `stealthed` / `revealed` (at most one `revealed`), or (M7-1) `regenerating` (`DataLimits.StatusKindIds`; its magnitude is HP per second, above 0, at most 100 and at least 0.05); `damageType` (a damage table type) required on `damageOverTime`, an error on any other kind; `sight` and `reach` (m, above 0, at most 64) required on `blind`, errors on any other kind; (M7-4) `damageBonus` (above 0, at most 4) on `frenzied` only, and `onEnd {status, magnitude, duration}` on any row (see "Implementation (M7-4)"). The magnitude and duration come from the effect applying it (a blind, stealthed or revealed status takes no magnitude). Ids unique; shipped `burning` (magic damage over time), `slowed`, `blinded` (2 / 3, M4-4b-2) and `frenzied` (M4-4b-3a; its magnitude, the attack-speed increase, any fraction above 0, is the applying effect's or passive's), `stealthed` and `revealed` (M4-5, "Implementation (M4-5)"), `regenerating` (M7-1: nothing applies it in shipped data yet; the hook M9's Darkness zone and later abilities use) |
 | `abilities.json` | `{ "abilities": [ ... ] }` (M4-4a, per faction, optional), each `{id, displayName, description, kind, range, radius, castTime, cooldown, duration?, affects, autocast?, effects}`: `kind` `targetGround` or (M4-4b-3a) `selfAura` (`targetUnit`, `summon`: "not supported yet"); `range` m above 0 and at most `DataLimits.MaxSight` (64), required on `targetGround` and an error on `selfAura` (0 included); `radius` m above 0 and at most `DataLimits.MaxAbilityRadius` (16); `castTime` s, 0 or more, to ticks; `cooldown` s above 0, to ticks (at least 1); `duration` s, optional (0), to ticks (required with a `createZone` effect, M4-4b-2); `affects` `enemy_units`, `own_units` or `all_units`; `autocast` only `false` ("not supported yet"); `effects` at least one, each `{kind: damage, type, amount, buildings?, friendlyFire?}` (a whole amount, at least 1; M4-4b-1: `buildings` true also hits other players' buildings as structure, not with `own_units`; `friendlyFire` 0-1, the fraction own units take, above 0 only with `enemy_units`) or `{kind: applyStatus, status, magnitude, duration}` (a `statuses.json` id; magnitude whole and at least 1 for damage over time, above 0 and below 1 for a slow; duration s, at least a tick, and for damage over time a whole number of seconds, at least 1, M4-4b-1); M4-4b-2: `{kind: createZone, blocksVision?, statuses: [{status, magnitude, duration}]}` (at least one status, each by the `applyStatus` rules, a blind status without a magnitude; the ability's `duration`, at least a tick, is then required: the zone's lifetime; at most one per ability); `teleport`, `spawn`: "not supported yet"; a field the effect kind doesn't use is an error. Ids unique across factions, numbered faction by faction in `common/factions.json` order, ordinal within a faction (M7-3b), so a new faction's abilities move no shipped id. Shipped: Malazan `telas_fire`, `cusser` (M4-4b-1); Whirlwind `sandstorm` (M4-4b-2) |
 | `maps/<file>.json` | (M6-S7, optional folder, one file a hand-made map, loaded in the files' names' ordinal order into `GameData.Maps`) `{id, displayName, description, players, size, terrain, ramps?, starts, mines, forests}`: see "Implementation (M6-S7)" for every field and check |

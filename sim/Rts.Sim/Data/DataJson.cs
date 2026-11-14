@@ -188,6 +188,7 @@ internal sealed class UnitJson
     public double? Detector { get; set; }
     public double? Scale { get; set; } // M7-1, optional
     public double? SpawnCount { get; set; } // M7-2, optional; read as a number so 1.5 is refused by name, not as a parse error
+    public RawValue? Carry { get; set; } // M7-7 (Request 48): optional, a worker's own load; a JSON null is an error, not "absent"
 }
 
 internal sealed class PassiveJson

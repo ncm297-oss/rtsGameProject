@@ -67,7 +67,7 @@ resources for flavor in their display text (e.g. Teblor "Bloodwood" for wood).
 | Rule | Value |
 | --- | --- |
 | Starting state | Town Hall, 5 workers, 200 Gold, 200 Wood, pop 5/10 (the Standard starting resources; High: 1,000 Gold, 1,000 Wood, M6-S6, "Game flow" 2) |
-| Worker carry capacity | 10 (some factions differ) |
+| Worker carry capacity | 10 (some factions differ: a worker type may carry its own amount, `units.json` `carry`, since M7-7; none ships one yet) |
 | Gather rate | Gold 0.85/s, Wood 0.75/s while working at the node (raised from 0.7 / 0.6 on 2026-10-16, the owner's playtest note: gathering felt slow) |
 | Gold mine | 2 mines of 2,500 at each start location; 2 mines of 2,000 at each expansion |
 | Tree | 100 Wood each; the cell becomes passable when a tree is depleted |
