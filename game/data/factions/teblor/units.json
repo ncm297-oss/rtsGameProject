@@ -19,6 +19,7 @@
       "trainTime": 16,
       "trainedAt": "teblor_longhouse",
       "requires": [],
+      "carry": 15,
       "tags": ["worker", "biological"]
     },
     {

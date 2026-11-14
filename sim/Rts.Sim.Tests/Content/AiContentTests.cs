@@ -32,6 +32,9 @@ public class AiContentTests
     /// <summary>Each opening's "Attack waves:" bullet's wording: the wave's pop, then its gold + wood.</summary>
     internal const string AttackPattern = @"first at (\d+(?:\.\d+)?) army pop and ([\d,]+) gold \+ wood";
 
+    /// <summary>D31: an opening's "Reserve:" bullet's wording: its own <c>attack.reserveArmyShare</c>.</summary>
+    internal const string ReservePattern = @"own reserve share (\d+(?:\.\d+)?)";
+
     /// <summary>A step table's header under each opening heading.</summary>
     public static readonly string[] StepColumns = { "#", "At", "Do", "Id", "Count", "Why" };
 
@@ -220,6 +223,15 @@ public class AiContentTests
             string data = $"{Num(o.AttackMinHalfPop / 2.0)} pop, {o.AttackMinCost.ToString(CultureInfo.InvariantCulture)} cost";
             if (page != data) problems.Add($"{who} attack: page '{page}' vs data '{data}'");
         }
+
+        // D31: the opening's own reserve share (attack.reserveArmyShare, M7-6) is its "Reserve:" bullet's number, both ways;
+        // an opening without one has no such bullet (it plays rules.json's ai.reserveArmyShare).
+        string? reserve = Bullet(bullets, "Reserve");
+        Match rs = reserve == null ? Match.Empty : Regex.Match(reserve, ReservePattern);
+        if (reserve != null && !rs.Success) problems.Add($"{who}: a 'Reserve:' line without 'own reserve share N'");
+        string pageShare = rs.Success ? Num(double.Parse(rs.Groups[1].Value, CultureInfo.InvariantCulture)) : "none";
+        string dataShare = o.ReserveArmyShare is float share ? Num(Math.Round(share, 3)) : "none";
+        if (pageShare != dataShare) problems.Add($"{who} reserve share: page '{pageShare}' vs data '{dataShare}'");
     }
 
     [Fact]

@@ -18,8 +18,9 @@ public class TeblorOpeningQaTests
     private const int Ticks = 20 * 60 * Tps;
 
     // Measured 2026-11-11 (D28) on the shipped data: the Teblor's first wave against the idle seat (416 s, as the page's
-    // "Spending on the menu's map" says).
-    private const int FirstWaveTick = 8321;
+    // "Spending on the menu's map" says). D31 (2026-11-14): re-measured on the landed opening (V24, its own reserve share
+    // 0.25, the Gatherer's carry 15): 8321 -> 6841 (342 s).
+    private const int FirstWaveTick = 6841;
 
     private readonly ITestOutputHelper _out;
 
@@ -56,12 +57,13 @@ public class TeblorOpeningQaTests
 
     /// <summary>
     /// The same opening against a Normal AI of each other faction (the Teblor on player 0): a measured report, pinned so a
-    /// change shows. BUG-1240 (D28, S3, for the balance pass): measured on seed 1 the Teblor are defeated before they send
-    /// a wave or reach Age II.
+    /// change shows. BUG-1240 (D28, S3, for the balance pass): measured on seed 1 the Teblor were defeated before they sent
+    /// a wave or reached Age II (D28: v Whirlwind (-1, -1, 12991), 649 s; v Malazan (-1, -1, 16376), 818 s). D31
+    /// (2026-11-14), re-measured on the landed opening: both matches see a Teblor wave and Age II; the Malazan one stands.
     /// </summary>
     [Theory]
-    [InlineData("whirlwind", -1, -1, 12991)] // 649 s; the Whirlwind sent 1 wave
-    [InlineData("malazan", -1, -1, 16376)]   // 818 s; the Malazan sent 2 waves
+    [InlineData("whirlwind", 7241, 9281, 18218)] // D31: wave 362 s, Age II 464 s, beaten 910 s; the Whirlwind sent 1 wave
+    [InlineData("malazan", 6801, 9321, -1)]      // D31: wave 340 s, Age II 466 s, stands at 20:00; the Malazan sent 1 wave
     public void TheStandardOpening_AgainstANormalAi_Report(string opponent, int firstWave, int ageTwo, int fell)
     {
         GameData d = TestSim.Data;

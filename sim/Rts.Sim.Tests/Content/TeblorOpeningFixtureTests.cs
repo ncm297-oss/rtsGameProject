@@ -46,13 +46,61 @@ public class TeblorOpeningFixtureTests
             Assert.True(JsonNode.DeepEquals(measured[field], fixture[field]), $"{field} differs from {TeblorOpeningHorizonReportTests.HandOverVariant}");
     }
 
-    /// <summary>Every build kind (as many steps of each), research and expand of the shipped opening is still in the hand-over, and its compositions are the shipped ones.</summary>
+    /// <summary>
+    /// Every build kind (as many steps of each), research and expand of the opening shipped before D31 (D28's, now the record
+    /// <see cref="TeblorOpeningVariantsReportTests.D28"/>) is still in the hand-over, and its compositions are D28's.
+    /// </summary>
     [Fact]
     public void D29Fixture_KeepsEveryShippedStepAndComposition()
     {
-        JsonObject shipped = TeblorOpeningVariantsReportTests.Shipped(), fixture = TeblorOpeningHorizonReportTests.HandOver();
+        JsonObject shipped = TeblorOpeningVariantsReportTests.D28(), fixture = TeblorOpeningHorizonReportTests.HandOver();
         Assert.Equal(NonTrain(shipped), NonTrain(fixture));
         Assert.True(JsonNode.DeepEquals(shipped["compositions"], fixture["compositions"]));
+    }
+
+    /// <summary>The D28 record is what <c>ai.json</c> shipped before D31 (V0 of the reports): not V24, the Stables at 8:15.</summary>
+    [Fact]
+    public void TheD28Record_IsV0_NotTheHandOver()
+    {
+        JsonObject d28 = TeblorOpeningVariantsReportTests.D28();
+        Assert.Equal("standard", (string)d28["id"]!);
+        Assert.False(JsonNode.DeepEquals(d28["buildOrder"], TeblorOpeningHorizonReportTests.HandOver()["buildOrder"]));
+        Assert.Contains(d28["buildOrder"]!.AsArray(), s => (string?)s!["id"] == "teblor_stables" && (int?)s["at"]!["time"] == 495);
+        Assert.Null(d28["attack"]!["reserveArmyShare"]);
+    }
+
+    /// <summary>
+    /// D31: the shipped <c>standard</c> opening is the hand-over (V24) field for field, its description included, plus its own
+    /// <c>attack.reserveArmyShare</c> 0.25 (the share D31's measurement picked) and nothing else; a wrong share, no share, or a
+    /// step moved each fail by name (a share on a second opening: <see cref="CarryAndReserveShareContentTests"/>).
+    /// </summary>
+    [Fact]
+    public void TheShippedOpening_IsTheHandOver_PlusItsOwnShare025()
+    {
+        Assert.Empty(ShippedVersusHandOver(TeblorOpeningVariantsReportTests.Shipped()));
+        JsonObject wrong = TeblorOpeningVariantsReportTests.Shipped();
+        wrong["attack"]!["reserveArmyShare"] = 0.5;
+        Assert.Contains("attack.reserveArmyShare: shipped 0.5 vs 0.25", ShippedVersusHandOver(wrong));
+        JsonObject moved = TeblorOpeningVariantsReportTests.Shipped();
+        moved["buildOrder"]![16]!["at"] = new JsonObject { ["time"] = 420 };
+        Assert.Contains("buildOrder differs from the hand-over", ShippedVersusHandOver(moved));
+        JsonObject none = TeblorOpeningVariantsReportTests.Shipped();
+        none["attack"]!.AsObject().Remove("reserveArmyShare");
+        Assert.Contains("attack.reserveArmyShare: shipped none vs 0.25", ShippedVersusHandOver(none));
+    }
+
+    private static List<string> ShippedVersusHandOver(JsonObject shipped)
+    {
+        var problems = new List<string>();
+        JsonObject handOver = TeblorOpeningHorizonReportTests.HandOver();
+        foreach (string field in new[] { "id", "displayName", "description", "buildOrder", "compositions" })
+            if (!JsonNode.DeepEquals(shipped[field], handOver[field])) problems.Add($"{field} differs from the hand-over");
+        JsonObject attack = JsonNode.Parse(shipped["attack"]!.ToJsonString())!.AsObject();
+        string share = attack["reserveArmyShare"] is JsonNode s ? ((double)s).ToString(System.Globalization.CultureInfo.InvariantCulture) : "none";
+        if (share != "0.25") problems.Add($"attack.reserveArmyShare: shipped {share} vs 0.25");
+        attack.Remove("reserveArmyShare");
+        if (!JsonNode.DeepEquals(attack, handOver["attack"])) problems.Add("attack (wave) differs from the hand-over");
+        return problems;
     }
 
     private static string NonTrain(JsonObject o) => string.Join(", ", o["buildOrder"]!.AsArray()

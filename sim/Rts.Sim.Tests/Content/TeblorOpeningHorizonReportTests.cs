@@ -79,7 +79,7 @@ public class TeblorOpeningHorizonReportTests(ITestOutputHelper output)
     /// </summary>
     internal static (string Name, JsonObject Opening)[] Variants()
     {
-        JsonObject v0 = TeblorOpeningVariantsReportTests.Shipped();
+        JsonObject v0 = TeblorOpeningVariantsReportTests.D28();
         JsonObject v4 = TeblorOpeningVariantsReportTests.Fixture(); // the first hand-over (BUG-1300)
         var list = new List<(string, JsonObject)> { ("V0", v0), ("V4", v4) };
 
@@ -427,7 +427,7 @@ public class TeblorOpeningHorizonReportTests(ITestOutputHelper output)
     {
         var configs = new (string, GameData)[]
         {
-            ("V0", TeblorOpeningVariantsReportTests.DataWith(TeblorOpeningVariantsReportTests.Shipped())),
+            ("V0", TeblorOpeningVariantsReportTests.DataWith(TeblorOpeningVariantsReportTests.D28())),
             ("hand-over", TeblorOpeningVariantsReportTests.DataWith(HandOver())),
         };
         foreach (bool swapped in new[] { false, true })
@@ -459,7 +459,7 @@ public class TeblorOpeningHorizonReportTests(ITestOutputHelper output)
         var configs = new List<(string, GameData)>();
         foreach (double share in new[] { 1.0, 0.75, 0.5 })
         {
-            configs.Add(($"V0 share {share}", Make(TeblorOpeningVariantsReportTests.Shipped(), share)));
+            configs.Add(($"V0 share {share}", Make(TeblorOpeningVariantsReportTests.D28(), share)));
             configs.Add(($"hand-over share {share}", Make(HandOver(), share)));
         }
         List<Row> rows = PlayAll(Jobs(configs, false));

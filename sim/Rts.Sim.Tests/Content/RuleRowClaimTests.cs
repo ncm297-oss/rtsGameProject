@@ -36,7 +36,7 @@ public class RuleRowClaimTests
     [InlineData("+20% damage")]
     [InlineData("Slowed 20% for 4 s")]
     [InlineData("duration +4 s")]
-    [InlineData("1.25× scale")]
+    [InlineData("1.25× taller")]
     public void TheTeblorPage_StatesEachClaim_NotedExactlyWhileTheRowsAreOut(string claim)
     {
         string sentence = SentenceFrom(string.Join(" ", PageTables.FactionLines("teblor")).Replace("**", ""), claim);
@@ -53,7 +53,7 @@ public class RuleRowClaimTests
     [InlineData("duration +4 s", "faction upgrade duration")]
     [InlineData("+20% damage", "Abilities damage bonus")]
     [InlineData("Slowed 20% for 4 s", "Abilities aftermath (Slowed)")]
-    [InlineData("1.25× scale", "Buildings scale")]
+    [InlineData("1.25× taller", "Buildings scale")]
     public void TheNoteToggled_FailsNamingTheClaim(string claim, string what)
     {
         string text = string.Join("\n", PageTables.FactionLines("teblor"));

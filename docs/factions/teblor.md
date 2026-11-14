@@ -39,7 +39,7 @@ They lose to kiting, focus fire, and magic.
 ## Faction upgrade: Blood-oil Anointing
 
 Age II, at the Bloodwood Carver, 200 G / 150 W, 45 s. Warriors and Destrier Riders gain **+2 armor**; Blood-oil Frenzy
-**duration +4 s** (the rule exists (M7-4); the row lands with D31).
+**duration +4 s**.
 
 ## Units
 
@@ -60,8 +60,8 @@ one item trains; its **Cost** (120 / 0) and **Train** (24 s) are the item's, pai
 
 ### Unit notes
 
-- **Gatherer:** carries 15 instead of 10 (not in the data: `rules.json` `workerCarry` is one number for every
-  faction). Expensive, tough enough to survive a light raid.
+- **Gatherer:** carries 15 instead of 10 (`units.json` `carry` 15, the worker's own load a trip; every other worker
+  carries `rules.json` `workerCarry` 10). Expensive, tough enough to survive a light raid.
 - **Warrior:** ×1.5 vs Mounted (×1.25 on this page until 2026-11-10: docs/02's Line rule applies, docs/01 2026-11-10
   (d); the M7 balance pass may lower it). The core of the army: long strides make it faster than human infantry, and it
   out-trades two or three template line units.
@@ -83,16 +83,15 @@ one item trains; its **Cost** (120 / 0) and **Train** (24 s) are the item's, pai
 
 | Ability | Unit | Kind | Range | Radius | Cast | Cooldown | Duration | Effect |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| Blood-oil Frenzy | Shaman | Self / aura | — | 8 m | 0.5 s | 40 s | — | Own units in the radius are Frenzied (+40% attack speed) for 10 s. No effect on buildings |
+| Blood-oil Frenzy | Shaman | Self / aura | — | 8 m | 0.5 s | 40 s | — | Own units in the radius get Blood-oil Frenzy (+40% attack speed, +20% damage) for 10 s, then are Slowed 20% for 4 s. No effect on buildings |
 
 In `abilities.json`: `kind` `selfAura` (no range), `radius` 8, `castTime` 0.5, `cooldown` 40, `affects` `own_units`, one
-effect `{ "kind": "applyStatus", "status": "frenzied", "magnitude": 0.4, "duration": 10 }`. The 10 s is the status's,
+effect `{ "kind": "applyStatus", "status": "teblor_frenzied", "magnitude": 0.4, "duration": 10 }`. The 10 s is the status's,
 so the Duration column (the ability's own, a zone's life) is "—", as for Telas Fire.
 
-Two parts of the design wait for their rows: **+20% damage** while Frenzied, and the **aftermath**, Slowed 20% for 4 s
-when the Frenzy ends (the rules exist (M7-4: a status's `damageBonus` and `onEnd`, on a Teblor status of its own beside
-the Zealot's `frenzied`); the rows land with D31). The aftermath slow is the trade-off: Frenzy wins fights, but a
-Frenzied army can't chase or escape right afterward.
+The status, `teblor_frenzied` in `common/statuses.json` ("Blood-oil Frenzy"), carries the rest: **+20% damage** while
+it lasts (`damageBonus` 0.2), and the **aftermath**, Slowed 20% for 4 s when it ends (`onEnd`).
+The aftermath slow is the trade-off: Frenzy wins fights, but a Frenzied army can't chase or escape right afterward.
 
 ## Ranged unit or pure melee? (decided 2026-10-02: Javelin Thrower)
 
@@ -105,23 +104,23 @@ Kept for the record, in case playtests reopen it.
 
 ## Buildings
 
-| Slot | Name | Id | HP | Armor | Cost (G/W) | Build (s) | Footprint | Sight | Provides | Requires |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| Town Hall | Longhouse | `teblor_longhouse` | 2400 | 2 | 275 / 275 | 90 | 4×4 | 12 | +10 pop, drop-off, trains Gatherer, researches Age II | — |
-| House | Hut | `teblor_hut` | 500 | 1 | 0 / 50 | 20 | 2×2 | 12 | +8 pop | — |
-| Camp | Woodcutters' Lodge | `teblor_woodcutters_lodge` | 600 | 1 | 0 / 75 | 25 | 2×2 | 12 | Drop-off | — |
-| Infantry Hall | War Lodge | `teblor_war_lodge` | 1200 | 2 | 0 / 150 | 40 | 3×3 | 12 | Trains Warrior | — |
-| Ranged Hall | Javelin Ground | `teblor_javelin_ground` | 1200 | 2 | 0 / 150 | 40 | 3×3 | 12 | Trains Javelin Thrower | — |
-| Shock Hall | Stables & Kennels | `teblor_stables` | 1200 | 2 | 75 / 150 | 45 | 3×3 | 12 | Trains Destrier Rider, War-dog | War Lodge |
-| Forge | Bloodwood Carver | `teblor_bloodwood_carver` | 1000 | 2 | 100 / 100 | 40 | 3×3 | 12 | Upgrades, Blood-oil Anointing | — |
-| Caster Hall | Shaman's Circle | `teblor_shamans_circle` | 1200 | 2 | 150 / 150 | 50 | 3×3 | 12 | Trains Shaman | Age II |
-| Siege Works | Breaker's Hall | `teblor_breakers_hall` | 1400 | 2 | 150 / 200 | 55 | 3×3 | 12 | Trains Breaker | Age II |
-| Watch Tower | Stone Cairn | `teblor_stone_cairn` | 800 | 2 | 50 / 125 | 35 | 2×2 | 24 | Attack 10 pierce / 2 s, range 18; sight 24; detector 16 m | Age II |
+| Slot | Name | Id | HP | Armor | Cost (G/W) | Build (s) | Footprint | Sight | Provides | Requires | Scale |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| Town Hall | Longhouse | `teblor_longhouse` | 2400 | 2 | 275 / 275 | 90 | 4×4 | 12 | +10 pop, drop-off, trains Gatherer, researches Age II | — | 1.25 |
+| House | Hut | `teblor_hut` | 500 | 1 | 0 / 50 | 20 | 2×2 | 12 | +8 pop | — | 1.25 |
+| Camp | Woodcutters' Lodge | `teblor_woodcutters_lodge` | 600 | 1 | 0 / 75 | 25 | 2×2 | 12 | Drop-off | — | 1.25 |
+| Infantry Hall | War Lodge | `teblor_war_lodge` | 1200 | 2 | 0 / 150 | 40 | 3×3 | 12 | Trains Warrior | — | 1.25 |
+| Ranged Hall | Javelin Ground | `teblor_javelin_ground` | 1200 | 2 | 0 / 150 | 40 | 3×3 | 12 | Trains Javelin Thrower | — | 1.25 |
+| Shock Hall | Stables & Kennels | `teblor_stables` | 1200 | 2 | 75 / 150 | 45 | 3×3 | 12 | Trains Destrier Rider, War-dog | War Lodge | 1.25 |
+| Forge | Bloodwood Carver | `teblor_bloodwood_carver` | 1000 | 2 | 100 / 100 | 40 | 3×3 | 12 | Upgrades, Blood-oil Anointing | — | 1.25 |
+| Caster Hall | Shaman's Circle | `teblor_shamans_circle` | 1200 | 2 | 150 / 150 | 50 | 3×3 | 12 | Trains Shaman | Age II | 1.25 |
+| Siege Works | Breaker's Hall | `teblor_breakers_hall` | 1400 | 2 | 150 / 200 | 55 | 3×3 | 12 | Trains Breaker | Age II | 1.25 |
+| Watch Tower | Stone Cairn | `teblor_stone_cairn` | 800 | 2 | 50 / 125 | 35 | 2×2 | 24 | Attack 10 pierce / 2 s, range 18; sight 24; detector 16 m | Age II | 1.25 |
 
 Building stats are the template's in [02-game-design.md](../02-game-design.md#buildings), unchanged: HP, armor, cost,
 build time, footprint, sight and the Watch Tower's attack and detector (the rows above are the template's numbers with
-the Teblor names, in the slot order of the file). Models are 1.25× scale visually but keep template footprints
-(`buildings.json` `scale`, the view's model size; the rule exists (M7-4); the row lands with D31).
+the Teblor names, in the slot order of the file). Each building is drawn 1.25× taller on the same footprint, the
+template's (`buildings.json` `scale`, the view's model height: the Scale column).
 
 `Content/BuildingContentTests` and `UnitContentTests` pin this page to the data.
 
@@ -129,11 +128,11 @@ the Teblor names, in the slot order of the file). Models are 1.25× scale visual
 
 | Id | Name | Researched at | Cost (G/W) | Time (s) | Requires | Effects |
 | --- | --- | --- | --- | --- | --- | --- |
-| `teblor_blood_oil_anointing` | Blood-oil Anointing | Bloodwood Carver | 200 / 150 | 45 | Age II | Warrior +2 armor; Destrier Rider +2 armor |
+| `teblor_blood_oil_anointing` | Blood-oil Anointing | Bloodwood Carver | 200 / 150 | 45 | Age II | Warrior +2 armor; Destrier Rider +2 armor; Blood-oil Frenzy duration +4 s |
 
 The faction upgrade is the only faction-specific tech: two `armor` effects, one per unit (`appliesTo` `units`
 `["teblor_warrior"]`, then `["teblor_destrier_rider"]`). Its Frenzy duration +4 s is a third effect, a `statusDuration`
-on the Frenzy's status (the rule exists (M7-4); the row lands with D31). The
+on the Frenzy's status (`statuses` `["teblor_frenzied"]`, no `appliesTo`). The
 common techs are the same as for every faction: Age II at the Longhouse, and the six shared Forge upgrades (Melee
 Weapons, Ranged Weapons, Armor, each with a level II in Age II) at the Bloodwood Carver, in
 [02-game-design.md "Forge upgrades"](../02-game-design.md#forge-upgrades). `Content/TechContentTests` pins this table
@@ -152,20 +151,20 @@ The AI opponent's `game/data/factions/teblor/ai.json` (docs/03 "For the data tra
 (M5-8a)") holds one **opening**, read the same way as malazan.md "AI build order (Normal)" (steps run side by side,
 one command per step per think, in this order; **Count** is the `train` commands the step queues over its life). Easy,
 Normal and Hard all play it, since there is one. The name and description below are what the player may read. The
-Teblor keep few workers (16 in Age I, 24 in Age II): each Gatherer costs half as much again as a template worker. The AI
+Teblor keep few workers (14 in Age I, 22 from 10:00): each Gatherer costs half as much again as a template worker. The AI
 starts with 5 Gatherers, 3 on gold and 2 on wood. `Content/AiContentTests` pins the openings table, the opening's step
 table, composition table and wave line, and the retreat line below to the file, both ways.
 
 | # | Id | Name (shown to the player) | Description (shown to the player) |
 | --- | --- | --- | --- |
-| 1 | `standard` | War band | War Lodge and Bloodwood Carver first; four Warriors raid at 8 army pop, then Javelin Throwers, Destrier Riders, Shamans, Breakers and War-dogs join in Age II. |
+| 1 | `standard` | War band | War Lodge and Javelin Ground first, then Age II; four Warriors raid at 8 army pop, with Javelin Throwers beside them. |
 
 Not in the file, because the schema has no field for it (requests to the sim track): the sketch's later waves "whenever
 army pop ≥ 24" (an opening has one wave threshold, used for every wave), its expansion condition "when army ≥ 16 pop"
 (the step fires at its time), "target the nearest enemy production building" for the first wave (a wave goes for the
 known enemy building nearest the rally point), and "retreat to regenerate below 40% total HP" (the file's retreat is a
-share of the wave's pop lost, and a unit's own hp line; see Retreat). The Javelin Ground step (23) is not in the
-sketch: the composition lists Javelin Throwers, so a step must place their hall.
+share of the wave's pop lost, and a unit's own hp line; see Retreat). The Javelin Ground step (5) is not in the
+sketch: the composition lists Javelin Throwers, so a step must place their hall, and here it is Age II's second kind.
 
 - **Retreat:** a wave that has lost 50% falls back; a unit under 40% hp counts as wounded (`retreat`; Hard pulls it
   back to regenerate). The 40% is the sketch's; the 50% is the other pages' loss share (the data track's proposal).
@@ -229,36 +228,38 @@ proposal for a Teblor-only answer (War-dogs against Ranged) is under "Owner revi
 
 ### Opening 1: `standard` (War band)
 
-The sketch's order, step for step: a War Lodge first, a Woodcutters' Lodge, the Bloodwood Carver and Armor in Age I,
-Age II at 7:00, then the Age II halls and the faction upgrade.
+D29's measured variant V24 (BUG-1241, landed in D31): a War Lodge and the Javelin Ground first, the two building kinds
+Age II needs, Age II at 6:00, then the Bloodwood Carver, the Age II halls and the faction upgrade, and from 10:00 Armor,
+eight more Gatherers and the Stables. The sketch's Carver and Armor in Age I moved after Age II so the AI saves for the
+age first; the 11 Gatherers at the start became 9.
 
 | # | At | Do | Id | Count | Why |
 | --- | --- | --- | --- | --- | --- |
-| 1 | time 0 | train | `teblor_gatherer` | 11 | Workers to 16 in Age I (5 at the start + 11) |
+| 1 | time 0 | train | `teblor_gatherer` | 9 | Workers to 14 in Age I (5 at the start + 9) |
 | 2 | pop 6 | build | `teblor_hut` | 1 | First Hut |
 | 3 | pop 7 | build | `teblor_war_lodge` | 1 | War Lodge |
 | 4 | pop 9 | build | `teblor_woodcutters_lodge` | 1 | Woodcutters' Lodge by the nearest known forest |
-| 5 | pop 11 | build | `teblor_hut` | 1 | Second Hut |
-| 6 | pop 15 | build | `teblor_bloodwood_carver` | 1 | The Forge |
-| 7 | pop 15 | research | `armor_1` | 1 | Its first upgrade, Armor (refused, and retried, until the Carver stands) |
-| 8 | pop 16 | build | `teblor_hut` | 1 | From pop 16 a Hut every 6 pop |
-| 9 | pop 22 | build | `teblor_hut` | 1 | |
-| 10 | pop 28 | build | `teblor_hut` | 1 | |
-| 11 | pop 34 | build | `teblor_hut` | 1 | |
-| 12 | pop 40 | build | `teblor_hut` | 1 | |
-| 13 | pop 46 | build | `teblor_hut` | 1 | |
-| 14 | pop 52 | build | `teblor_hut` | 1 | |
-| 15 | pop 58 | build | `teblor_hut` | 1 | |
-| 16 | pop 64 | build | `teblor_hut` | 1 | |
-| 17 | pop 70 | build | `teblor_hut` | 1 | The 12th Hut: Longhouse 10 + 12 × 8 = 106, past the 100 cap |
-| 18 | time 420 | research | `age_ii` | 1 | Age II at 7:00 (needs two kinds: the War Lodge and the Bloodwood Carver) |
-| 19 | time 420 | train | `teblor_gatherer` | 8 | Workers to 24 in Age II |
-| 20 | time 480 | build | `teblor_shamans_circle` | 1 | 8:00, when Age II (60 s) is in |
-| 21 | time 480 | expand | — | 1 | 2nd Longhouse near the nearest free gold mine, at Normal's `expandAfter` (480 s) |
-| 22 | time 495 | build | `teblor_stables` | 1 | Destrier Riders and War-dogs (needs the War Lodge) |
-| 23 | time 510 | build | `teblor_javelin_ground` | 1 | Javelin Throwers for the Age II mix (not in the sketch) |
-| 24 | time 540 | build | `teblor_breakers_hall` | 1 | Breakers |
-| 25 | time 570 | research | `teblor_blood_oil_anointing` | 1 | The faction upgrade, at the Bloodwood Carver |
+| 5 | pop 9 | build | `teblor_javelin_ground` | 1 | Age II's second building kind, and Javelin Throwers for the Age II mix (not in the sketch) |
+| 6 | pop 11 | build | `teblor_hut` | 1 | Second Hut |
+| 7 | pop 16 | build | `teblor_hut` | 1 | From pop 16 a Hut every 6 pop |
+| 8 | pop 22 | build | `teblor_hut` | 1 | |
+| 9 | pop 28 | build | `teblor_hut` | 1 | |
+| 10 | pop 34 | build | `teblor_hut` | 1 | |
+| 11 | pop 40 | build | `teblor_hut` | 1 | |
+| 12 | pop 46 | build | `teblor_hut` | 1 | |
+| 13 | pop 52 | build | `teblor_hut` | 1 | |
+| 14 | pop 58 | build | `teblor_hut` | 1 | |
+| 15 | pop 64 | build | `teblor_hut` | 1 | |
+| 16 | pop 70 | build | `teblor_hut` | 1 | The 12th Hut: Longhouse 10 + 12 × 8 = 106, past the 100 cap |
+| 17 | time 360 | research | `age_ii` | 1 | Age II at 6:00 (needs two kinds: the War Lodge and the Javelin Ground) |
+| 18 | time 480 | build | `teblor_bloodwood_carver` | 1 | The Forge, 8:00, when Age II (60 s) is in |
+| 19 | time 480 | build | `teblor_shamans_circle` | 1 | Shamans |
+| 20 | time 540 | build | `teblor_breakers_hall` | 1 | Breakers |
+| 21 | time 570 | research | `teblor_blood_oil_anointing` | 1 | The faction upgrade, at the Bloodwood Carver |
+| 22 | time 600 | research | `armor_1` | 1 | The Carver's first upgrade, Armor |
+| 23 | time 600 | train | `teblor_gatherer` | 8 | Workers to 22 in Age II, at 10:00 |
+| 24 | time 480 | expand | — | 1 | 2nd Longhouse near the nearest free gold mine, at Normal's `expandAfter` (480 s) |
+| 25 | time 600 | build | `teblor_stables` | 1 | Destrier Riders and War-dogs (needs the War Lodge) |
 
 **Army composition (`compositions`), weights by pop.** Age I lists only the Warrior (the one unit the Age I steps can
 train), so its weights sum to 45. The War-dog's weight is by pop like the rest (1 a dog); how the AI counts a pack item
@@ -277,23 +278,37 @@ against its share is the sim's (docs/03 "Implementation (M7-2)", BUG-1168).
   10% Shaman, 10% Breaker, 5% War-dog.
 - **Attack waves:** first at 8 army pop and 600 gold + wood (`attack`; the cost of 8 pop of the Age I mix: four
   Warriors at 75 a pop). Shamans cast Blood-oil Frenzy at engagement.
+- **Reserve:** the opening's own reserve share 0.25 (`attack.reserveArmyShare`; docs/02 "AI opponent"): the AI saves for
+  a due step once its army is a quarter of the wave, not the whole of it (`rules.json` `ai.reserveArmyShare` 1, which
+  every other opening plays). D31 measured it on the files that ship (below).
 
-**Houses at the cap (D28, 2026-11-11, measured on the shipped files; `QA/Content/AiHouseRuleReportTests.MenuMapNormal_HouseSources_Report` and `MenuMapNormal_TwelfthHouse_Report`).**
+**The reserve share, measured (D31, 2026-11-14, on the files that ship; `Content/TeblorLandedShareReportTests`).**
+Normal against Normal to 15:00, the Teblor on seat 0 against a Malazan and on seat 1 against a Whirlwind, on the
+generated map, Raraku, Pale Hills and Vathar Crossing, seeds 1-8: 64 matches a row. The target (BUG-1241) is Age II and
+a wave by 10:00 in 6 of a seed's 8 matches. Own share 0.25 with the Gatherer's carry 15 (shipped): the target on 8 of 8
+seeds; of the 64, Age II by 10:00 in 55, a wave by 10:00 in 62, every building kind of the opening in 18, the Anointing
+in 35, defeated by 15:00 in 14, army pop 42 at 15:00, no second Longhouse finished by 15:00. Own share 0.5 with the
+carry: 8 of 8; 55, 62, 1, 26, 14, 64. Before the carry (D-H8, 2026-11-13): 0.25 on 6 of 8 (46, 55, 8, 11, 17, 56) and
+0.5 on 6 of 8 (44, 55, 0, 11, 16, 36). The rule fixed before the measurement was "0.25 if it meets 6 of 8, else 0.5",
+so 0.25 ships.
+
+**Houses at the cap (D31, 2026-11-14, measured on the shipped files; `QA/Content/AiHouseRuleReportTests.MenuMapNormal_HouseSources_Report` and `MenuMapNormal_TwelfthHouse_Report`).**
 Since M5-4f the executor skips a house step once the population cap is the hard cap (100): the step is done with no
-command sent and no Hut placed. On the menu's map (20 minutes, the other seat idle): Normal, seed 1: the cap reaches 100
-at 1079 s; the last Hut step (step 17) is done at a cap of 100; skipped at the hard cap: step 17; 11 Huts stand at
-20:00, 0 past the cap. As on the other pages, the 12th Hut step measured taken out: without the 12th Hut step (step 17)
-on the same seed, the cap reaches 100 at 1079 s, and 11 Huts stand at 20:00, 0 past the cap. The step stays: at the hard
-cap it costs nothing.
+command sent and no Hut placed. On the menu's map (20 minutes, the other seat idle): Normal, seed 1: the cap stays below
+100 (92 at 20:00); the last Hut step (step 16) is never done; skipped at the hard cap: none; 11 Huts stand at 20:00, 0
+past the cap. As on the other pages, the 12th Hut step measured taken out: without the 12th Hut step (step 16) on the
+same seed, the cap stays below 100, and 11 Huts stand at 20:00, 0 past the cap. The step stays: it is not reached in 20
+minutes on this seed (V24 keeps fewer Gatherers, so the population grows slower), and it costs nothing until it is.
 
-**Spending on the menu's map (D28, 2026-11-11, gathering gold 0.85 / wood 0.75 a second; `Content/AiSpendingReportTests.GeneratedNormal_Spending_Report`).**
+**Spending on the menu's map (D31, 2026-11-14, gathering gold 0.85 / wood 0.75 a second; `Content/AiSpendingReportTests.GeneratedNormal_Spending_Report`).**
 Against an idle seat, 12 forests and 8 mines (the menu's), 20 minutes. Normal, seed 1 (the smallest seed in 1-50 whose
-Normal pick is this opening): the idle base falls at 566 s; in hand at 5 min 95 gold / 305 wood; the first wave at 416
-s; Age II in at 513 s. Easy, seed 1 (Easy always plays the first opening): the idle base falls at 608 s; in hand at 5
-min 25 gold / 295 wood, at 10 min 65 / 185; the first wave at 430 s; Age II in at 548 s. Against an active opponent the
-opening does worse: on the same map and seed a Normal Teblor seat sends no wave and is beaten before Age II by a Normal
-Whirlwind (at 649 s) and a Normal Malazan (at 818 s) (`QA/Content/TeblorOpeningQaTests`, BUG-1240, for the balance pass
-after M7-4).
+Normal pick is this opening): the idle base falls at 491 s; in hand at 5 min 80 gold / 230 wood; the first wave at 342
+s; Age II in at 489 s. Easy, seed 1 (Easy always plays the first opening): the idle base falls at 523 s; in hand at 5
+min 95 gold / 90 wood; the first wave at 344 s; Age II in at 506 s. Against an active opponent on the same map and seed
+(`QA/Content/TeblorOpeningQaTests`): a Normal Teblor seat sends its first wave at 340 s, is in Age II at 466 s and still
+stands at 20:00 against a Normal Malazan; against a Normal Whirlwind it sends its first wave at 362 s, is in Age II at
+464 s and is beaten at 910 s (BUG-1240's "beaten before Age II" is gone on this seed; the Whirlwind match is the balance
+pass's).
 
 ## Difficulty
 
@@ -361,9 +376,10 @@ pins' rules for every faction).
 | `buildings.json` | `teblor_shamans_circle` | Shaman's Circle | Trains the Shaman, who drives the warriors into a blood-oil frenzy; needs Age II. |
 | `buildings.json` | `teblor_breakers_hall` | Breaker's Hall | Trains the Breaker, a giant who smashes walls with a bloodwood maul; needs Age II. |
 | `buildings.json` | `teblor_stone_cairn` | Stone Cairn | A lookout of piled stone that watches the passes, spots hidden enemies and shoots at intruders; needs Age II. |
-| `techs.json` | `teblor_blood_oil_anointing` | Blood-oil Anointing | Blood-oil rubbed into the skin before battle: Warriors and Destrier Riders gain +2 armor. Needs Age II. |
-| `abilities.json` | `blood_oil_frenzy` | Blood-oil Frenzy | Drives nearby warriors into a frenzy: own units within 8 m attack 40% faster for 10 seconds. |
-| `ai.json` opening | `standard` | War band | War Lodge and Bloodwood Carver first; four Warriors raid at 8 army pop, then Javelin Throwers, Destrier Riders, Shamans, Breakers and War-dogs join in Age II. |
+| `techs.json` | `teblor_blood_oil_anointing` | Blood-oil Anointing | Blood-oil rubbed into the skin before battle: Warriors and Destrier Riders gain +2 armor, and Blood-oil Frenzy lasts 4 s longer. Needs Age II. |
+| `abilities.json` | `blood_oil_frenzy` | Blood-oil Frenzy | Drives nearby warriors into a frenzy: own units within 8 m attack 40% faster and deal 20% more damage for 10 seconds, then are Slowed 20% for 4 seconds. |
+| `statuses.json` | `teblor_frenzied` | Blood-oil Frenzy | Attacks faster and deals 20% more damage. When it ends, the unit is Slowed 20% for 4 seconds. |
+| `ai.json` opening | `standard` | War band | War Lodge and Javelin Ground first, then Age II; four Warriors raid at 8 army pop, with Javelin Throwers beside them. |
 
 **Counter answers (the data track's proposal, the owner's call).** `rules.json` `ai.counters` is one rule by slot for
 every faction, so the Teblor answers in "How the AI adapts" are that rule in Teblor units. The proposal differs in one

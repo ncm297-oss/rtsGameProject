@@ -265,7 +265,7 @@ internal static class TeblorLanding
             "| Slot | Name | Id | HP | Armor | Cost (G/W) | Build (s) | Footprint | Sight | Provides | Requires | Scale |\n"
             + "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |"),
         ("Models are 1.25× scale visually but keep template footprints\n(`buildings.json` `scale`, the view's model size; the rule exists (M7-4); the row lands with D31).",
-            "Models are 1.25× scale visually but keep template footprints\n(`buildings.json` `scale`, the view's model size: the Scale column)."),
+            "Each building is drawn 1.25× taller on the same footprint, the\ntemplate's (`buildings.json` `scale`, the view's model height: the Scale column)."),
         // The Techs table and its note.
         ("| Age II | Warrior +2 armor; Destrier Rider +2 armor |", "| Age II | Warrior +2 armor; Destrier Rider +2 armor; Blood-oil Frenzy duration +4 s |"),
         ("Its Frenzy duration +4 s is a third effect, a `statusDuration`\non the Frenzy's status (the rule exists (M7-4); the row lands with D31).",

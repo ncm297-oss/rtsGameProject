@@ -116,7 +116,7 @@ public class AiHouseRuleReportTests
     {
         ["malazan"] = (17, 81),
         ["whirlwind"] = (18, 79),
-        ["teblor"] = (16, 70), // teblor.md step 17: the 12th Hut, pop 70
+        ["teblor"] = (15, 70), // teblor.md step 16: the 12th Hut, pop 70 (D31: V24; step 17 before)
     };
 
     /// <summary>The menu-map run for one faction's opening (deterministic; computed once per test process and shared with the pin row).</summary>

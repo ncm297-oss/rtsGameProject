@@ -205,7 +205,8 @@ public class TeblorRosterPinTests
     /// <summary>Criterion 2, the AI section (openings, steps, composition, wave): a page cell changed fails naming the row.</summary>
     [Theory]
     [InlineData("| 3 | pop 7 | build | `teblor_war_lodge` | 1 |", "| 3 | pop 8 | build | `teblor_war_lodge` | 1 |", "teblor standard step 3")]
-    [InlineData("| 25 | time 570 | research |", "| 25 | time 600 | research |", "teblor standard step 25")]
+    [InlineData("| 21 | time 570 | research |", "| 21 | time 600 | research |", "teblor standard step 21")] // D31: V24's step 21 (25 before)
+    [InlineData("own reserve share 0.25", "own reserve share 0.5", "teblor standard reserve share: page '0.5' vs data '0.25'")]
     [InlineData("| `teblor_breaker` | — | 10 |", "| `teblor_breaker` | — | 15 |", "teblor standard")]
     [InlineData("first at 8 army pop and 600 gold + wood", "first at 8 army pop and 640 gold + wood", "teblor standard attack")]
     [InlineData("a unit under 40% hp", "a unit under 30% hp", "teblor")]
@@ -225,6 +226,13 @@ public class TeblorRosterPinTests
         GameData wave = LoadEdited(dir => dir.EditJson("factions/teblor/ai.json", root =>
             root["openings"]![0]!["attack"]!["minArmyCost"] = 640));
         AssertNamed(AiContentTests.Problems(wave, Faction, PageTables.FactionLines(Faction)), "teblor standard attack");
+        // D31: the opening's own reserve share, moved and removed.
+        GameData half = LoadEdited(dir => dir.EditJson("factions/teblor/ai.json", root =>
+            root["openings"]![0]!["attack"]!["reserveArmyShare"] = 0.5));
+        AssertNamed(AiContentTests.Problems(half, Faction, PageTables.FactionLines(Faction)), "teblor standard reserve share: page '0.25' vs data '0.5'");
+        GameData none = LoadEdited(dir => dir.EditJson("factions/teblor/ai.json", root =>
+            root["openings"]![0]!["attack"]!.AsObject().Remove("reserveArmyShare")));
+        AssertNamed(AiContentTests.Problems(none, Faction, PageTables.FactionLines(Faction)), "teblor standard reserve share: page '0.25' vs data 'none'");
     }
 
     /// <summary>Criterion 2, the Difficulty table: a page cell and a file value changed each fail.</summary>

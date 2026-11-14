@@ -37,7 +37,7 @@ public class TeblorLandingOpeningReportTests(ITestOutputHelper output)
         }
         JsonObject v24s = Get("V24");
         JsonObject stables = v24s["buildOrder"]!.AsArray().Single(s => (string)s!["do"]! == "build" && (string?)s["id"] == "teblor_stables")!.AsObject();
-        Assert.Equal(495, (int)TimeOf(TeblorOpeningVariantsReportTests.Shipped(), "teblor_stables"));
+        Assert.Equal(495, (int)TimeOf(TeblorOpeningVariantsReportTests.D28(), "teblor_stables"));
         Assert.NotEqual(495, (int)stables["at"]!["time"]!);
         stables["at"] = new JsonObject { ["time"] = 495 };
         return new[] { ("V0", Get("V0")), ("V24", Get("V24")), ("V25", Get("V25")), ("V14", Get("V14")), ("V24s", v24s) };

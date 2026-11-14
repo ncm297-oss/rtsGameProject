@@ -67,7 +67,7 @@ resources for flavor in their display text (e.g. Teblor "Bloodwood" for wood).
 | Rule | Value |
 | --- | --- |
 | Starting state | Town Hall, 5 workers, 200 Gold, 200 Wood, pop 5/10 (the Standard starting resources; High: 1,000 Gold, 1,000 Wood, M6-S6, "Game flow" 2) |
-| Worker carry capacity | 10 (some factions differ: a worker type may carry its own amount, `units.json` `carry`, since M7-7; none ships one yet) |
+| Worker carry capacity | 10 (some factions differ: a worker type may carry its own amount, `units.json` `carry`, since M7-7; the Teblor Gatherer carries 15) |
 | Gather rate | Gold 0.85/s, Wood 0.75/s while working at the node (raised from 0.7 / 0.6 on 2026-10-16, the owner's playtest note: gathering felt slow) |
 | Gold mine | 2 mines of 2,500 at each start location; 2 mines of 2,000 at each expansion |
 | Tree | 100 Wood each; the cell becomes passable when a tree is depleted |
@@ -232,7 +232,8 @@ toggled with right-click on the button (AI always manages its own casting).
 | Stealthed | Invisible and untargetable to enemies without detection | Shadow forest stealth, Shadow Archer |
 | Revealed | Cannot be stealthed (overrides Stealthed) | Attacking from stealth, detector abilities |
 | Slowed | Movement speed × (1 - magnitude) | Sandstorm, War-dog passive, Frenzy aftermath |
-| Frenzied | Attacks faster: the attack cooldown is divided by 1 + the strength; the wind-up is unchanged; only the strongest counts | Blood-oil Frenzy, Zealot passive |
+| Frenzied | Attacks faster: the attack cooldown is divided by 1 + the strength; the wind-up is unchanged; only the strongest counts | Zealot passive |
+| Blood-oil Frenzy | Attacks faster: the attack cooldown is divided by 1 + the strength; the wind-up is unchanged; only the strongest counts; its own attacks deal +20% damage; when it ends: Slowed 20% for 4 s | Blood-oil Frenzy |
 | Regenerating | +HP per second; a faction's regeneration starts only once the unit has gone its delay without taking damage (every hit restarts the wait), while a Regenerating status heals through it | Andii and Teblor passives |
 | Blinded | Sight radius 2 m; can't acquire or attack targets more than 3 m away | Sandstorm, Darkness |
 | Burning | Damage over time (magic) | Telas Fire |
@@ -475,7 +476,8 @@ own cues (select, order, refused, building placed or finished, unit or tech read
   the resource the step lacks (`rules.json` `ai.reserveShift`: 0.25 more, or less, of the workers on gold). The reserve
   is kept only while the army, at home or out on a wave, is at least the opening's wave in both pop and cost
   (`ai.reserveArmyShare`, 1: the whole wave; since M7-6 an opening may set its own share, `attack.reserveArmyShare`, so
-  one faction's opening can save for Age II earlier without changing its opponent's; no shipped opening does yet) and
+  one faction's opening can save for Age II earlier without changing its opponent's; the Teblor `standard` opening
+  saves at 0.25 of its wave, since D31) and
   the base is not being defended: the first wave is always built before
   the AI saves, a wave that dies away has to be rebuilt before it saves again, and a raided base spends on its army.
   A resource the AI knows no node of is not held back, and a step short of one is not reserved at all (built in M5-4g,

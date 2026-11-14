@@ -12,6 +12,7 @@
       "buildTime": 90,
       "popProvided": 10,
       "dropOff": true,
+      "scale": 1.25,
       "requires": []
     },
     {
@@ -26,6 +27,7 @@
       "buildTime": 20,
       "popProvided": 8,
       "dropOff": false,
+      "scale": 1.25,
       "requires": []
     },
     {
@@ -40,6 +42,7 @@
       "buildTime": 25,
       "popProvided": 0,
       "dropOff": true,
+      "scale": 1.25,
       "requires": []
     },
     {
@@ -54,6 +57,7 @@
       "buildTime": 40,
       "popProvided": 0,
       "dropOff": false,
+      "scale": 1.25,
       "requires": []
     },
     {
@@ -68,6 +72,7 @@
       "buildTime": 40,
       "popProvided": 0,
       "dropOff": false,
+      "scale": 1.25,
       "requires": []
     },
     {
@@ -82,6 +87,7 @@
       "buildTime": 45,
       "popProvided": 0,
       "dropOff": false,
+      "scale": 1.25,
       "requires": ["teblor_war_lodge"]
     },
     {
@@ -96,6 +102,7 @@
       "buildTime": 40,
       "popProvided": 0,
       "dropOff": false,
+      "scale": 1.25,
       "requires": []
     },
     {
@@ -110,6 +117,7 @@
       "buildTime": 50,
       "popProvided": 0,
       "dropOff": false,
+      "scale": 1.25,
       "requires": ["age_ii"]
     },
     {
@@ -124,6 +132,7 @@
       "buildTime": 55,
       "popProvided": 0,
       "dropOff": false,
+      "scale": 1.25,
       "requires": ["age_ii"]
     },
     {
@@ -141,6 +150,7 @@
       "requires": ["age_ii"],
       "sight": 24,
       "attack": { "value": 10, "type": "pierce", "cooldown": 2, "range": 18, "windup": 0.4, "projectile": "arrow", "targets": "units" },
+      "scale": 1.25,
       "detector": 16
     }
   ]

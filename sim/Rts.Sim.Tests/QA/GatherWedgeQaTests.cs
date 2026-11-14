@@ -61,6 +61,12 @@ public class GatherWedgeQaTests
     // the tech teblor_blood_oil_anointing (id 9) and the ability blood_oil_frenzy (id 3), all appended after every shipped
     // id, so GameData.ContentHash moved through the new keys. The golden's one seat is a Malazan human seat, so its k lines
     // are byte for byte as before (header data-hash and checksum only).
+    // D31 (data track, rule 51, BUG-0750's rule): regenerated once more, 67269D955D18D885 -> 27036D3A2F2BA1CB, because the
+    // Teblor's finished numbers shipped in one move: the teblor_frenzied status (damageBonus 0.2, onEnd Slowed 0.2 for 4 s)
+    // in common/statuses.json, blood_oil_frenzy applying it, Blood-oil Anointing's statusDuration +4 s, scale 1.25 on the ten
+    // Teblor buildings, the Gatherer's carry 15, and V24 as the Teblor standard opening with its own reserveArmyShare 0.25
+    // (all in GameData.ContentHash). The golden's one seat is a Malazan human seat, so its k lines are byte for byte as
+    // before (header data-hash and checksum only).
 
     /// <summary>
     /// Ticks the replay must still match its recorded checkpoints: all of them (M4-H1, BUG-0211; before the re-recording

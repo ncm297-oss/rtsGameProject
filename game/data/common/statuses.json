@@ -44,6 +44,14 @@
       "displayName": "Regenerating",
       "description": "Heals a little every second while it lasts, even in the thick of a fight.",
       "kind": "regenerating"
+    },
+    {
+      "id": "teblor_frenzied",
+      "displayName": "Blood-oil Frenzy",
+      "description": "Attacks faster and deals 20% more damage. When it ends, the unit is Slowed 20% for 4 seconds.",
+      "kind": "frenzied",
+      "damageBonus": 0.2,
+      "onEnd": { "status": "slowed", "magnitude": 0.2, "duration": 4 }
     }
   ]
 }

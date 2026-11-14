@@ -136,7 +136,7 @@ public class TeblorLandingPinTests
         AssertNamed(problems, "damage bonus: page '+20% damage'");
         AssertNamed(problems, "aftermath (Slowed): page 'Slowed 20% for 4 s'");
         AssertNamed(problems, "duration: page 'duration +4 s'");
-        AssertNamed(problems, "Buildings scale: page '1.25× scale'");
+        AssertNamed(problems, "Buildings scale: page '1.25× taller'");
         AssertNamed(BuildingContentTests.ScaleProblems(before, Teblor, page), "teblor.md Buildings row Hut scale: page 1.25 vs data 1");
         AssertNamed(AbilityContentTests.Compare(before, before.Abilities, Teblor, page).Problems, "'Blood-oil Frenzy' Effect:");
     }

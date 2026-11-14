@@ -14,7 +14,7 @@ namespace Rts.Sim.Tests.Content;
 /// faction ability applies, when that aftermath is a slow.</item>
 /// <item><b>Duration bonus</b>, "duration +4 s" in "## Faction upgrade: ..." and "## Techs": a faction tech's
 /// <c>statusDuration</c> amount.</item>
-/// <item><b>Building scale</b>, "1.25× scale" in the prose (not the table) of "## Buildings": a faction building's
+/// <item><b>Building scale</b>, "1.25× scale" or "1.25× taller" in the prose (not the table) of "## Buildings": a faction building's
 /// <c>scale</c> other than 1.</item>
 /// </list>
 /// A claim in a sentence that says the row "lands with D&lt;n&gt;" (<see cref="Pending"/>) is a promise: the data must not
@@ -30,7 +30,8 @@ internal static class RuleRowClaims
 
     private static readonly Regex DamageClaim = new(@"\+(\d+(?:\.\d+)?) ?% damage\b", Opts);
     private static readonly Regex DurationClaim = new(@"\bduration \+(\d+(?:\.\d+)?) s\b", Opts);
-    private static readonly Regex ScaleClaim = new(@"(\d+(?:\.\d+)?) ?× scale\b", Opts);
+    // D31: "1.25× scale" (the note before the landing) or "1.25× taller" (the page since: the view draws scale as height).
+    private static readonly Regex ScaleClaim = new(@"(\d+(?:\.\d+)?) ?× (?:scale|taller)\b", Opts);
 
     /// <summary>
     /// The sentences of a <c>## </c> section of <paramref name="lines"/> to the next one, bold removed: each table row is one,

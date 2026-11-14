@@ -46,6 +46,13 @@ public class TeblorOpeningVariantsReportTests(ITestOutputHelper output)
         return JsonNode.Parse(opening.ToJsonString())!.AsObject();
     }
 
+    /// <summary>
+    /// D31: the opening shipped before D31 (D28's, "V0" in every D29 / D30 report), kept as <c>Fixtures/teblor_standard_d28.json</c>
+    /// since the shipped file now holds V24, so the reports' variant families stay the ones they measured.
+    /// </summary>
+    internal static JsonObject D28() =>
+        JsonNode.Parse(File.ReadAllText(Path.Combine(TestDataDir.RepoRoot(), "sim", "Rts.Sim.Tests", "Content", "Fixtures", "teblor_standard_d28.json")))!.AsObject();
+
     /// <summary>V4's opening (<see cref="FixturePath"/>).</summary>
     internal static JsonObject Fixture() => JsonNode.Parse(File.ReadAllText(FixturePath))!.AsObject();
 
@@ -81,17 +88,17 @@ public class TeblorOpeningVariantsReportTests(ITestOutputHelper output)
     /// </summary>
     internal static (string Name, JsonObject Opening)[] Variants()
     {
-        JsonObject v1 = Shipped();
+        JsonObject v1 = D28();
         Step(v1, "train", "teblor_gatherer", 1)["at"] = new JsonObject { ["time"] = 480 };
 
-        JsonObject v2 = Shipped();
+        JsonObject v2 = D28();
         ToEnd(v2, Step(v2, "research", "armor_1"), 600);
         ToEnd(v2, Step(v2, "train", "teblor_gatherer", 1), 600);
 
         JsonObject v3 = JsonNode.Parse(v2.ToJsonString())!.AsObject();
         Step(v3, "research", "age_ii")["at"] = new JsonObject { ["time"] = 300 };
 
-        return new[] { ("V0", Shipped()), ("V1", v1), ("V2", v2), ("V3", v3), ("V4", Fixture()) };
+        return new[] { ("V0", D28()), ("V1", v1), ("V2", v2), ("V3", v3), ("V4", Fixture()) };
     }
 
     /// <summary>One match's figures for the Teblor seat (ticks; -1: never).</summary>
