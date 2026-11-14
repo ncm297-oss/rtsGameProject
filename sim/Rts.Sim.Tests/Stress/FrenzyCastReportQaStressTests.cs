@@ -37,7 +37,10 @@ public class FrenzyCastReportQaStressTests(ITestOutputHelper output)
         Simulation sim = AiScenes.Generated(second ? new[] { o, t } : new[] { t, o }, seed, false, out _, data: data);
         World w = sim.World;
         int shaman = data.FindUnit("teblor_shaman");
-        AbilityDef frenzy = data.Abilities[data.Units[shaman].Abilities[0]];
+        // M7-H2 QA: by id, and the ready tick read at the Frenzy's own slot (was the first ability and slot 0).
+        AbilityDef frenzy = data.Abilities[data.FindAbility(BloodOilScenes.FrenzyAbility)];
+        int frenzySlot = data.Units[shaman].Abilities.IndexOf(frenzy.Id);
+        Assert.True(frenzySlot >= 0, "the Shaman has no Frenzy");
         float r2 = frenzy.Radius * frenzy.Radius;
         int minTargets = data.AiRules.CastMinTargets;
         var row = new Row();
@@ -52,7 +55,7 @@ public class FrenzyCastReportQaStressTests(ITestOutputHelper output)
             for (int s = 0; s < u.Capacity; s++)
             {
                 if (!u.Alive[s] || u.Owner[s] != p || u.TypeId[s] != shaman) continue;
-                if (u.AbilityReadyTick[s * DataLimits.MaxUnitAbilities] > sim.TickNumber + 1 || u.State[s] == UnitState.Casting) continue;
+                if (u.AbilityReadyTick[s * DataLimits.MaxUnitAbilities + frenzySlot] > sim.TickNumber + 1 || u.State[s] == UnitState.Casting) continue;
                 any = true;
                 Vector2 at = u.Position[s], sum = Vector2.Zero;
                 int n = 0, near = 0, fight = 0, enemies = 0;
