@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S3 (balance / opening data; the Teblor balance pass after M7-4 owns it; nothing crashes or refuses) |
-| Status | open |
+| Status | fixed |
 | Found | 2026-11-11-1317, task D28 (QA) |
 | System | data: `game/data/factions/teblor/ai.json` (`standard`) and the Teblor costs; AI opening play |
-| Fixed by | |
+| Fixed by | D31 (2026-11-14-0616, data): V24 as the Teblor `standard` opening, its own `attack.reserveArmyShare` 0.25, the Gatherer's `carry` 15 |
 
 ## Repro
 1. `dotnet test sim/Rts.Sim.Tests --filter "FullyQualifiedName~TeblorAiMatchQaStressTests.ATeblorAiSeat" --logger "console;verbosity=detailed"`
@@ -61,3 +61,14 @@ Gatherers between 8:00 and 9:00 (Whirlwind raid) while holding 395-515 wood. The
   stand-in at 0.5 the hand-over meets the target on 3 of 5 seeds with 6 defeats.
 - Nothing shipped moved. The opening lands with the Frenzy rows (D31) after Request 52; this bug closes there or goes to
   the balance pass with what is left.
+
+## D31 (2026-11-14-0616): fixed
+- Shipped: V24 (`Content/Fixtures/teblor_standard_d29.json`) as the `standard` opening with `attack.reserveArmyShare`
+  0.25 (M7-6), and `units.json` `carry` 15 on `teblor_gatherer` (M7-7), with the Frenzy rows.
+- Measured on the files that ship (`Content/TeblorLandedShareReportTests`, D-H8's harness: Normal v Normal to 15:00,
+  four maps, the Teblor on seat 0 v Malazan and seat 1 v Whirlwind, seeds 1-8, 64 matches a row): **Age II and a wave
+  by 10:00 in at least 6 of 8 on 8 of 8 seeds** (Age II by 10:00 in 55 of 64, a wave by 10:00 in 62; per seed
+  7/8, 7/8, 6/8, 6/8, 6/6, 7/8, 8/8, 8/8 as Age II / wave). Defeated by 15:00 in 14 of 64; no second Longhouse finished
+  by 15:00 in any match. Own share 0.5 on the same tree also 8 of 8 (army pop 64 v 42 at 15:00).
+- What is left for the balance pass: the expansion (0 of 64 by 15:00), Shamans (4 of 64 matches field one by 15:00 at
+  0.25), the 14 defeats (11:08-14:29, 12 of them v the Whirlwind).

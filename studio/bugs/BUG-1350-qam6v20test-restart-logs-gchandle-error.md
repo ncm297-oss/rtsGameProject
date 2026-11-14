@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S3 |
-| Status | open |
+| Status | fixed (M7-V4, 2026-11-14-0616; the precondition shown by a probe, the race itself not reproduced) |
 | Found | 2026-11-13-2306, task M6-VH7 (QA) |
 | System | view tests (QaM6V20Test row 8), Godot .NET GC handles |
-| Fixed by | |
+| Fixed by | M7-V4: `FogOfWar`'s three fog shaders and `UnitModels`' team shader held in statics for the process (BUG-1093's fix); `QaM6V20Test` row 8 regression rows |
 
 ## Repro
 1. Fresh clone of `studio/2026-11-13-2306-view` at 4b8f1b6, `dotnet build RtsGame.sln`.
@@ -45,3 +45,14 @@ fix itself holds. Log: QA scratchpad `v20runs\run10.log`.
   no forced GC) avoids it. If it is a general Godot .NET race, it could also fire in a real match start
   after a natural GC; then it is not a test-only problem.
 - Seen only under heavy load so far; not measured with nothing else running.
+
+## Cause (M7-V4)
+Game code, made likelier by the test's collection. `FogOfWar` cached its shaders per instance, so every match loaded
+`terrain_fog.gdshader` again and every quit left the old wrapper to the collector. A probe scene (start a match, quit,
+`Collect / WaitForPendingFinalizers / Collect` as row 8 does) showed the old match's terrain shader still alive natively
+after that sequence, after one more `WaitForPendingFinalizers` and after eight frames; only a third collection freed it
+(the meshes and materials holding it are released one collection at a time). So the next match's `GD.Load` finds the
+cached shader behind a collectable wrapper and swaps its GC handle while the finalizer thread may be disposing it: the
+"Handle is not initialized" trace, BUG-1093's shape. With the shaders held for the process the same probe shows one shader
+object across all matches, never freed. `QaM6V20Test` row 8 now checks the fog shaders are the same in every match and
+still alive after four collections once the matches are gone: red with the per-instance cache, green with the fix.

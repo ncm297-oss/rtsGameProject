@@ -39,10 +39,10 @@ internal static class BloodOilScenes
             RemoveWhere(list, n => (string?)n!["id"] == Status);
             list.Add(StatusRow());
         });
-        dir.EditJson("factions/teblor/abilities.json", r => r["abilities"]![0]!["effects"]![0]!["status"] = Status);
+        dir.EditJson("factions/teblor/abilities.json", r => FrenzyEffect(r)["status"] = Status);
         dir.EditJson("factions/teblor/techs.json", r =>
         {
-            JsonArray effects = r["techs"]![0]!["effects"]!.AsArray();
+            JsonArray effects = AnointingRow(r)["effects"]!.AsArray();
             RemoveWhere(effects, IsStatusDuration);
             effects.Add(new JsonObject { ["stat"] = "statusDuration", ["amount"] = 4, ["statuses"] = new JsonArray(Status) });
         });
@@ -51,6 +51,30 @@ internal static class BloodOilScenes
             foreach (JsonNode? b in r["buildings"]!.AsArray())
                 if ((string)b!["id"]! == "teblor_longhouse") b["scale"] = 1.25;
         });
+    }
+
+    /// <summary>The Frenzy ability's id and Blood-oil Anointing's (the rows the copy edits, found by id since M7-H2, not at <c>[0]</c>).</summary>
+    public const string FrenzyAbility = "blood_oil_frenzy", AnointingTech = "teblor_blood_oil_anointing";
+
+    /// <summary>The <see cref="FrenzyAbility"/> row of a Teblor <c>abilities.json</c> root.</summary>
+    public static JsonObject FrenzyRow(JsonNode root) => ById(root["abilities"]!.AsArray(), FrenzyAbility);
+
+    /// <summary>The Frenzy's <c>applyStatus</c> effect (its first) in a Teblor <c>abilities.json</c> root.</summary>
+    public static JsonObject FrenzyEffect(JsonNode root)
+    {
+        foreach (JsonNode? e in FrenzyRow(root)["effects"]!.AsArray())
+            if ((string?)e!["kind"] == "applyStatus") return e.AsObject();
+        throw new InvalidOperationException($"{FrenzyAbility} has no applyStatus effect");
+    }
+
+    /// <summary>The <see cref="AnointingTech"/> row of a Teblor <c>techs.json</c> root.</summary>
+    public static JsonObject AnointingRow(JsonNode root) => ById(root["techs"]!.AsArray(), AnointingTech);
+
+    private static JsonObject ById(JsonArray list, string id)
+    {
+        foreach (JsonNode? n in list)
+            if ((string?)n!["id"] == id) return n.AsObject();
+        throw new InvalidOperationException($"no row '{id}'");
     }
 
     /// <summary>Whether a tech effect is a <c>statusDuration</c> one.</summary>
@@ -67,7 +91,7 @@ internal static class BloodOilScenes
     public static int RowIndex => Shipped("common/statuses.json", r => r["statuses"]!.AsArray(), n => (string?)n!["id"] == Status);
 
     /// <summary>The Anointing's <c>statusDuration</c> effect's index in the copy <see cref="Edit"/> makes: the last of its effects.</summary>
-    public static int EffectIndex => Shipped("factions/teblor/techs.json", r => r["techs"]![0]!["effects"]!.AsArray(), IsStatusDuration);
+    public static int EffectIndex => Shipped("factions/teblor/techs.json", r => AnointingRow(r)["effects"]!.AsArray(), IsStatusDuration);
 
     // The shipped list's length less its entries Edit takes out: where Edit's appended entry lands.
     private static int Shipped(string rel, Func<JsonNode, JsonArray> list, Func<JsonNode?, bool> taken)
@@ -94,10 +118,18 @@ internal static class BloodOilScenes
     public static int PlainFrenzied => Data.FindStatus("frenzied");
 
     /// <summary>Blood-oil Anointing's tech id.</summary>
-    public static int Anointing => Data.FindTech("teblor_blood_oil_anointing");
+    public static int Anointing => Data.FindTech(AnointingTech);
 
-    /// <summary>The Frenzy's duration in ticks (10 s) and the aftermath's (4 s), from the copy's data.</summary>
-    public static int FrenzyTicks => Data.Abilities[Data.FindAbility("blood_oil_frenzy")].Effects[0].DurationTicks;
+    /// <summary>The Frenzy's duration in ticks (10 s), from the copy's data: its effect applying <see cref="Status"/>.</summary>
+    public static int FrenzyTicks
+    {
+        get
+        {
+            foreach (AbilityEffect e in Data.Abilities[Data.FindAbility(FrenzyAbility)].Effects)
+                if (e.Status == Frenzy) return e.DurationTicks;
+            throw new InvalidOperationException($"{FrenzyAbility} applies no {Status}");
+        }
+    }
 
     /// <summary>The aftermath's duration in ticks, from the status row.</summary>
     public static int AftermathTicks => Data.Statuses[Frenzy].OnEndTicks;

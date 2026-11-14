@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S3 |
-| Status | open |
+| Status | fixed |
 | Found | 2026-11-13-2306, task M7-7 (QA) |
 | System | AI measurement (`Stress/FrenzyCastReportTests`), docs/03 "Implementation (M7-7)" |
-| Fixed by | |
+| Fixed by | M7-H2, session 2026-11-14-0616 |
 
 ## Repro
 1. `dotnet test sim/Rts.Sim.Tests --filter "FullyQualifiedName~FrenzyCastReportQaStressTests"` (QA's independent
@@ -48,3 +48,6 @@ cast rule then casts about two Frenzies a match with two Shamans in the army" re
   2 with Shamans left out of the army count (and say whether to count other Shamans at all) before ruling it out.
 - Fix: in `Measure`, leave units of the caster's type out of the army (or report both), re-run, and correct the docs/03
   table, the "cause" bullet and the "For the data track (M7-7)" paragraph.
+
+## Fix
+M7-H2 (2026-11-14-0616): `FrenzyCastReportTests.Measure` leaves units of the caster's type out of the army, prints the think figures by phase (before / after the seat's first non-Shaman army unit) and a no-army column; re-run (diagnostic: 2+ army within 8 m in 239 of 14,852 free ready thinks, 2+ attacking in 0; QA's 250 of 14,996 counts every ready non-casting Shaman). docs/03 "Implementation (M7-7)" table, cause bullet and "For the data track (M7-7)" rewritten; the correction paragraph is gone. Plus an opening-from-a-file configuration (`FRENZY_REPORT_OPENING`).

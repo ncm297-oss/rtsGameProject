@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S4 |
-| Status | open |
+| Status | fixed |
 | Found | 2026-11-11-1317, task M7-H1 (QA full) |
 | System | data loader (`DataLoader.FactionOrder`, BUG-1173 item 2's folder-case message) |
-| Fixed by | |
+| Fixed by | M7-H2, session 2026-11-14-0616 |
 
 ## Repro
 1. `dotnet test sim/Rts.Sim.Tests --filter "FullyQualifiedName~M7H1QaTests.ACaseOnlyFolder_ListedTwice_IsNotReportedAsUnlisted"`
@@ -32,3 +32,6 @@ The duplicate check is `result.IndexOf(id)`, and after the case-only branch `res
 `!result.Contains(folder)` guard is false) to "has no folder". Checking duplicates against the listed ids (or comparing
 case-insensitively) fixes it. Cosmetic: both entries still refuse the load. Two case-only folders, each listed once, are
 fine (`M7H1QaTests.TwoFoldersDifferingOnlyInCase_EachIsOneOrderError`, green).
+
+## Fix
+M7-H2 (2026-11-14-0616): `DataLoader.FactionOrder`'s duplicate check also reads the entries matched to a folder by case, as listed (`caseOnlyIds`). QA's row un-skipped (green).

@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Immutable;
 using Rts.Sim.Combat;
 using Rts.Sim.Data;
 using Rts.Sim.Entities;
@@ -136,24 +137,30 @@ public static class StatusSystem
     /// the one with the smallest sight, then the smallest reach, then the lowest id; none when it has no blind. Called when
     /// its blinds change, not every tick.
     /// </summary>
-    internal static void RecomputeBlind(World world, int i)
+    internal static void RecomputeBlind(World world, int i) =>
+        world.Units.Statuses.SetBlind(i, BlindInForce(world.Units.Statuses, world.Data.Statuses, i));
+
+    /// <summary>
+    /// The blind <see cref="RecomputeBlind"/> records for unit slot <paramref name="i"/> from its entries, or -1. Shared with
+    /// the save's load check (M7-H2, BUG-1220), so a stored blind is held to the same rule that wrote it.
+    /// </summary>
+    internal static int BlindInForce(StatusStore s, ImmutableArray<StatusDef> defs, int i)
     {
-        StatusStore s = world.Units.Statuses;
         int best = -1;
         int head = i * StatusStore.PerUnit;
         for (int k = 0; k < s.Count[i]; k++)
         {
             int id = s.StatusId[head + k];
-            StatusDef def = world.Data.Statuses[id];
+            StatusDef def = defs[id];
             if (def.Kind != StatusKind.Blind) continue;
             if (best >= 0)
             {
-                StatusDef b = world.Data.Statuses[best];
+                StatusDef b = defs[best];
                 if (def.Sight > b.Sight || (def.Sight == b.Sight && (def.Reach > b.Reach || (def.Reach == b.Reach && id > best)))) continue;
             }
             best = id;
         }
-        s.SetBlind(i, best);
+        return best;
     }
 
     /// <summary>

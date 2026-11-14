@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S4 |
-| Status | open |
+| Status | fixed |
 | Found | 2026-11-11-1317, task M7-H1 (QA full) |
 | System | save format (status part of the unit store, `StatusStore.ReadFrom`) |
-| Fixed by | |
+| Fixed by | M7-H2, session 2026-11-14-0616 |
 
 ## Repro
 1. `dotnet test sim/Rts.Sim.Tests --filter "FullyQualifiedName~M7H1QaTests.AFreeSlot_CarryingAConsistentForgedRegeneratingStatus_IsRefused"`
@@ -33,3 +33,6 @@ from it; no crash.
   `StealthedUnits` / `BlindedUnits` / `UnitsWithStatuses` against the entries as `ReadRegenFrom` now does.
 - Forged-save only; the save is a local file the player owns. S4.
 - Producer triage (2026-11-11-1317 ACCEPT): S4, not blocking; the sim's next hardening, together with the stealth / blind counts (the same unchecked shape, noted by the M7-H1 developer in docs/03).
+
+## Fix
+M7-H2 (2026-11-14-0616): `UnitStore.ReadFrom`'s free-slot branch requires `Statuses.Count[i] == 0`; `StatusStore.ReadFrom` checks each slot's `_stealth` against its stealthed entries, `_blind` against `StatusSystem.BlindInForce` (RecomputeBlind's pick, factored out), and `UnitsWithStatuses` / `BlindedUnits` / `StealthedUnits` against the slots. No format change. QA's row un-skipped (green); `Save/StatusCountSaveTests` (12 forged rows, each `Malformed`, each loading on the base).

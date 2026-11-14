@@ -156,7 +156,7 @@ public class M7H1QaTests
     /// agreeing with it) is refused: freeing a slot clears its statuses, so no build writes one. Loaded, the next unit spawned
     /// into the slot would inherit a regenerating status nothing cast.
     /// </summary>
-    [Fact(Skip = "BUG-1220: a free slot's forged status entries load (the status part checks ids, not that a free slot is empty)")]
+    [Fact] // BUG-1220 fixed in M7-H2: a free slot must hold no status entry
     public void AFreeSlot_CarryingAConsistentForgedRegeneratingStatus_IsRefused()
     {
         (Simulation sim, byte[] bytes, _, _) = Scene();
@@ -274,7 +274,7 @@ public class M7H1QaTests
     }
 
     /// <summary>A case-only folder listed twice: the second entry is reported as listed twice (or at least once, clearly), never "not listed".</summary>
-    [Fact(Skip = "BUG-1221: the second entry reads 'has no folder factions/whirlwind/', not 'listed twice'")]
+    [Fact] // BUG-1221 fixed in M7-H2: the duplicate check reads the entries as listed
     public void ACaseOnlyFolder_ListedTwice_IsNotReportedAsUnlisted()
     {
         using TestDataDir dir = TestDataDir.CopyOfShippedTwoFactions();
