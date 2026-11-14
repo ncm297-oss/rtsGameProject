@@ -6,7 +6,8 @@ namespace Rts.Sim.Tests.Content;
 /// <summary>
 /// D28: the Teblor roster as shipped, pinned to teblor.md where no shared pin reads it. (1) The page's "Owner review" table
 /// is every player-facing name and description the Teblor files carry, character for character, both ways: each row is the
-/// file's entry, and each Teblor faction, bonus, unit, building, faction tech, ability and opening has exactly one row.
+/// file's entry, and each Teblor faction, bonus, unit, building, faction tech, ability, opening and own status (an id
+/// starting <c>teblor_</c> in <c>common/statuses.json</c>, BUG-1331) has exactly one row.
 /// (2) The shared pins read the Teblor both ways: a page cell changed by hand reads red, and a file value changed by hand
 /// (in a temp copy of the data) reads red, for the Units table, the AI section and the Owner review table.
 /// </summary>
@@ -48,6 +49,10 @@ public class TeblorRosterPinTests
         rows.AddRange(d.Buildings.Where(b => b.Faction == f).Select(b => new ReviewRow("`buildings.json`", b.Key, b.DisplayName, b.Description)));
         rows.AddRange(d.Techs.Where(t => t.Faction == f).Select(t => new ReviewRow("`techs.json`", t.Key, t.DisplayName, t.Description)));
         rows.AddRange(d.Abilities.Where(a => a.Faction == f).Select(a => new ReviewRow("`abilities.json`", a.Key, a.DisplayName, a.Description)));
+        // BUG-1331 item 2: a status in common/statuses.json is the faction's own by its id ("teblor_frenzied", docs/03's
+        // naming); the shared statuses (the Zealot's "frenzied", "slowed") belong to no page's table.
+        rows.AddRange(d.Statuses.Where(s => s.Key.StartsWith(Faction + "_", StringComparison.Ordinal))
+            .Select(s => new ReviewRow("`statuses.json`", s.Key, s.DisplayName, s.Description)));
         rows.AddRange(d.Ai[f].Openings.Select(o => new ReviewRow("`ai.json` opening", o.Id, o.DisplayName, o.Description)));
         return rows;
     }
@@ -98,8 +103,37 @@ public class TeblorRosterPinTests
     {
         List<string> problems = OwnerReviewProblems(Data, PageTables.FactionLines(Faction));
         Assert.True(problems.Count == 0, string.Join("\n", problems));
-        // Not vacuous: 1 faction + 1 bonus + 7 units + 10 buildings + 1 tech + 1 ability + 1 opening.
-        Assert.Equal(22, ReviewTable(PageTables.FactionLines(Faction)).Count);
+        // Not vacuous: 1 faction + 1 bonus + 7 units + 10 buildings + 1 tech + 1 ability + 1 opening, and from D31 the
+        // Teblor's own status (teblor_frenzied).
+        int own = Data.Statuses.Count(s => s.Key.StartsWith(Faction + "_", StringComparison.Ordinal));
+        Assert.Equal(22 + own, ReviewTable(PageTables.FactionLines(Faction)).Count);
+    }
+
+    /// <summary>
+    /// BUG-1331 item 2: the landing's status row on the landing's page, both ways. The page row's description or name changed,
+    /// the row dropped, and the data's status description changed each fail naming the status; the row on the page before
+    /// the data has the status fails as no entry.
+    /// </summary>
+    [Fact]
+    public void TheLandingsStatusRow_IsHeldBothWays()
+    {
+        string[] page = TeblorLanding.PageLines();
+        GameData copy = TeblorLanding.Data;
+        Assert.Contains(TeblorLanding.StatusReviewRow, page);
+        Assert.Empty(OwnerReviewProblems(copy, page));
+        Assert.Equal(23, ReviewTable(page).Count);
+
+        string what = "`statuses.json` " + TeblorLanding.Status;
+        string[] Swap(string from, string to) => page.Select(l => l == TeblorLanding.StatusReviewRow ? l.Replace(from, to, StringComparison.Ordinal) : l).ToArray();
+        AssertNamed(OwnerReviewProblems(copy, Swap("Slowed 20%", "Slowed 25%")), $"teblor.md Owner review {what} description: page");
+        AssertNamed(OwnerReviewProblems(copy, Swap("| Blood-oil Frenzy |", "| Blood-Oil Frenzy |")), $"teblor.md Owner review {what} name: page 'Blood-Oil Frenzy'");
+        AssertNamed(OwnerReviewProblems(copy, page.Where(l => l != TeblorLanding.StatusReviewRow).ToArray()), $"teblor.md Owner review: 0 rows for {what}");
+
+        GameData words = TeblorLanding.DataWith(dir => dir.EditJson("common/statuses.json", root =>
+            root["statuses"]!.AsArray().Single(s => (string)s!["id"]! == TeblorLanding.Status)!["description"] = "Attacks faster and deals 20% more damage."));
+        AssertNamed(OwnerReviewProblems(words, page), $"teblor.md Owner review {what} description: page '{TeblorLanding.StatusDescription}' vs data 'Attacks faster and deals 20% more damage.'");
+
+        AssertNamed(OwnerReviewProblems(TeblorLanding.BeforeData, page), $"teblor.md Owner review: row {what} is no entry of the Teblor files");
     }
 
     private static string[] PageEdited(string find, string replace)

@@ -187,14 +187,58 @@ public class TeblorLandingPinTests
         (ImmutableArray<AbilityDef> abilities, ImmutableArray<StatusDef> statuses) =
             AbilityContentTests.WithDescription(TeblorLanding.Status, "deals 20% more damage", "deals 25% more damage", Copy);
         AssertNamed(AbilityContentTests.DescriptionProblems(Copy, abilities, statuses), "teblor_frenzied description: '25%' reads as a percentage");
-        // ... and an ability text stating the status's numbers is read against them too.
-        (abilities, statuses) = AbilityContentTests.WithDescription("blood_oil_frenzy", "for 10 seconds.", "for 10 seconds and deal 25% more damage.", Copy);
+        // ... and the ability's own text, which states the status's numbers, is read against them too.
+        (abilities, statuses) = AbilityContentTests.WithDescription("blood_oil_frenzy", "deal 20% more damage", "deal 25% more damage", Copy);
         AssertNamed(AbilityContentTests.DescriptionProblems(Copy, abilities, statuses), "blood_oil_frenzy description: '25%' reads as a percentage");
-        (abilities, statuses) = AbilityContentTests.WithDescription("blood_oil_frenzy", "for 10 seconds.", "for 10 seconds and deal 20% more damage.", Copy);
-        AssertNone(AbilityContentTests.DescriptionProblems(Copy, abilities, statuses));
+        AssertNone(AbilityContentTests.DescriptionProblems(Copy, Copy.Abilities, Copy.Statuses));
     }
 
-    /// <summary>The bonus itself at 0.25 against the page's "+20% damage": the Abilities row, docs/02 and the claim pin name it.</summary>
+    /// <summary>
+    /// BUG-1331 item 2: the Frenzy's own tooltip on the copy states the attack speed, the damage bonus and the aftermath, each
+    /// held to its field both ways (BUG-1330's phrase roles). A text mutant of each number is named by its role; a text that
+    /// drops one is named as not stating it; the two 20%s swapped for each other's field still fail.
+    /// </summary>
+    [Theory]
+    [InlineData("attack 40% faster", "attack 30% faster", "blood_oil_frenzy description: '30%' reads as a percentage (magnitude")]
+    [InlineData("attack 40% faster", "attack 20% faster", "blood_oil_frenzy description: '20%' reads as a percentage (magnitude")]
+    [InlineData("deal 20% more damage", "deal 40% more damage", "blood_oil_frenzy description: '40%' reads as a percentage (damage bonus")]
+    [InlineData("Slowed 20% for", "Slowed 40% for", "blood_oil_frenzy description: '40%' reads as a percentage (the aftermath's")]
+    [InlineData("Slowed 20% for 4 seconds", "Slowed 20% for 10 seconds", "blood_oil_frenzy description: '10 seconds' reads as a duration (the aftermath's")]
+    [InlineData("for 10 seconds,", "for 4 seconds,", "blood_oil_frenzy description: '4 seconds' reads as a duration, but its data duration is 10")]
+    [InlineData(" and deal 20% more damage", "", "blood_oil_frenzy description: data percentage (damage bonus x 100: 'N% more damage') 20, which the text does not state")]
+    [InlineData(", then are Slowed 20% for 4 seconds", "", "blood_oil_frenzy description: data percentage (the aftermath's magnitude x 100")]
+    [InlineData("Slowed 20% for 4 seconds", "Slowed 20% afterwards", "blood_oil_frenzy description: data duration (the aftermath's")]
+    public void TheFrenzyTooltip_StatesItsThreeNumbers_EachMutantNamed(string text, string mutant, string want)
+    {
+        Assert.Equal(TeblorLanding.FrenzyDescription, Copy.Abilities[Copy.FindAbility("blood_oil_frenzy")].Description);
+        (ImmutableArray<AbilityDef> abilities, ImmutableArray<StatusDef> statuses) = AbilityContentTests.WithDescription("blood_oil_frenzy", text, mutant, Copy);
+        AssertNamed(AbilityContentTests.DescriptionProblems(Copy, abilities, statuses), want);
+    }
+
+    /// <summary>The data side of the Frenzy's tooltip: the ability's magnitude, the status's bonus and its aftermath each moved alone are named on the ability.</summary>
+    [Theory]
+    [InlineData("magnitude", "blood_oil_frenzy description: '40%' reads as a percentage (magnitude")]
+    [InlineData("damageBonus", "blood_oil_frenzy description: '20%' reads as a percentage (damage bonus")]
+    [InlineData("onEnd.magnitude", "blood_oil_frenzy description: '20%' reads as a percentage (the aftermath's")]
+    [InlineData("onEnd.duration", "blood_oil_frenzy description: '4 seconds' reads as a duration (the aftermath's")]
+    public void TheFrenzyTooltip_ADataNumberMovedAlone_IsNamedOnTheAbility(string field, string want)
+    {
+        GameData wrong = TeblorLanding.DataWith(dir =>
+        {
+            if (field == "magnitude")
+                EditRow(dir, "factions/teblor/abilities.json", "abilities", "blood_oil_frenzy", a => a["effects"]![0]!["magnitude"] = 0.5);
+            else
+                EditRow(dir, "common/statuses.json", "statuses", TeblorLanding.Status, s =>
+                {
+                    if (field == "damageBonus") s["damageBonus"] = 0.3;
+                    else if (field == "onEnd.magnitude") s["onEnd"]!["magnitude"] = 0.3;
+                    else s["onEnd"]!["duration"] = 5;
+                });
+        });
+        AssertNamed(AbilityContentTests.DescriptionProblems(wrong, wrong.Abilities, wrong.Statuses), want);
+    }
+
+    /// <summary>The bonus itself at 0.25 against the page's "+20% damage": the Abilities row, docs/02, the claim pin and (BUG-1330) both tooltips name it.</summary>
     [Fact]
     public void ADamageBonusOf025_AgainstThePages20_Fails()
     {
@@ -202,8 +246,10 @@ public class TeblorLandingPinTests
         string[] page = TeblorLanding.PageLines();
         AssertNamed(AbilityContentTests.Compare(wrong, wrong.Abilities, Teblor, page).Problems, "'Blood-oil Frenzy' Effect: '");
         AssertNamed(RuleRowClaims.Problems(wrong, Teblor, page), "Abilities damage bonus: page '+20% damage' vs data [25]");
-        // Not the description rule: its "20% more damage" equals the aftermath's 20% of the same row, which a role-based
-        // reading accepts; the page's claims above are what hold the bonus.
+        // The description rule too since BUG-1330: "20% more damage" is the bonus's phrase, so the aftermath's 20% no longer covers it.
+        List<string> words = AbilityContentTests.DescriptionProblems(wrong, wrong.Abilities, wrong.Statuses);
+        AssertNamed(words, "teblor_frenzied description: '20%' reads as a percentage (damage bonus x 100: 'N% more damage'), but its data percentage (damage bonus x 100: 'N% more damage') is 25");
+        AssertNamed(words, "blood_oil_frenzy description: '20%' reads as a percentage (damage bonus");
         using (ContentScope.Use(TeblorLanding.Scope(wrong)))
             AssertNamed(AbilityContentTests.CompareStatuses(wrong, wrong.Statuses, wrong.Abilities, StatusRows()).Problems, "status 'teblor_frenzied' Effect:");
     }

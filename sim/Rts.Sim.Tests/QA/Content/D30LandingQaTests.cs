@@ -62,7 +62,7 @@ public class D30LandingQaTests
         Assert.True(JsonNode.DeepEquals(JsonNode.Parse("""{ "status": "slowed", "magnitude": 0.2, "duration": 4 }"""), added["onEnd"]));
         Assert.Equal(new[] { "damageBonus", "description", "displayName", "id", "kind", "onEnd" }, added.Select(kv => kv.Key).OrderBy(k => k, StringComparer.Ordinal));
 
-        // abilities.json: only blood_oil_frenzy's effect, and only its status id.
+        // abilities.json: only blood_oil_frenzy's effect, and only its status id; and (D-H8, BUG-1331 item 2) its description.
         JsonObject ab0 = Parse(shipped, four[1]), ab1 = Parse(copy, four[1]);
         JsonArray al0 = ab0["abilities"]!.AsArray(), al1 = ab1["abilities"]!.AsArray();
         Assert.Equal(al0.Count, al1.Count);
@@ -74,8 +74,11 @@ public class D30LandingQaTests
                 Assert.Equal("frenzied", (string)x["effects"]![0]!["status"]!);
                 Assert.Equal("teblor_frenzied", (string)y["effects"]![0]!["status"]!);
                 y["effects"]![0]!["status"] = "frenzied";
+                Assert.Equal(TeblorLanding.ShippedFrenzyDescription, (string)x["description"]!);
+                Assert.Equal(TeblorLanding.FrenzyDescription, (string)y["description"]!);
+                y["description"] = (string)x["description"]!;
             }
-            Assert.True(JsonNode.DeepEquals(x, y), $"abilities[{i}] changed beyond the Frenzy's status id");
+            Assert.True(JsonNode.DeepEquals(x, y), $"abilities[{i}] changed beyond the Frenzy's status id and description");
         }
 
         // techs.json: only the Anointing's third effect and its description.
@@ -215,14 +218,18 @@ public class D30LandingQaTests
     /// <summary>
     /// BUG-1330: the status tooltip ("deals 20% more damage ... Slowed 20% for 4 seconds") against a row whose damage bonus
     /// or aftermath magnitude moved alone. The description-number rule pools both into one set of percentages, so the other
-    /// field's 20% keeps the stale one green: the player-facing text can go wrong with every pin passing.
+    /// field's 20% keeps the stale one green: the player-facing text can go wrong with every pin passing. Fixed in D-H8: each
+    /// row number is read from its own phrase and must be stated.
     /// </summary>
-    [Theory(Skip = "BUG-1330: the description rule cannot tell the Frenzy row's two 20%s apart (un-skip with the fix)")]
+    [Theory]
     [InlineData("onEnd.magnitude 0.3")]
     [InlineData("damageBonus 0.3")]
     [InlineData("damageBonus removed")]
     public void Mutant_OneOfTheTwo20s_Moved_TheStatusTooltipIsNamed(string mutant)
     {
+        // The unmoved copy and the shipped data have no problem, so the names below come from the move.
+        AssertNone(AbilityContentTests.DescriptionProblems(TeblorLanding.Data, TeblorLanding.Data.Abilities, TeblorLanding.Data.Statuses));
+        AssertNone(AbilityContentTests.DescriptionProblems(TestSim.Data, TestSim.Data.Abilities, TestSim.Data.Statuses));
         GameData wrong = Wrong("common/statuses.json", "statuses", TeblorLanding.Status, s =>
         {
             if (mutant == "onEnd.magnitude 0.3") s["onEnd"]!["magnitude"] = 0.3;

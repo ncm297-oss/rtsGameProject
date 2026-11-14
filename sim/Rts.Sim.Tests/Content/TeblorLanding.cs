@@ -10,7 +10,9 @@ namespace Rts.Sim.Tests.Content;
 /// on it; <c>scale</c> 1.25 on every Teblor building), the player-facing words the rows need (written here as a
 /// proposal; the owner reads them at D31), and teblor.md and docs/02 as the landing would leave them. Every edit replaces
 /// rather than appends, so the copy is the same whether or not the shipped files already carry a row. Each page edit must
-/// find its text exactly once, so a page that drifts from what this copy expects fails here by name.
+/// find its text exactly once, so a page that drifts from what this copy expects fails here by name. D-H8 (BUG-1331): the
+/// Frenzy's own description states its status's numbers, the page's Owner review table gains the status's row, and
+/// <see cref="EditText"/> / <see cref="DocText"/> give the files as text that keeps their formatting (the write helper's).
 /// </summary>
 internal static class TeblorLanding
 {
@@ -29,6 +31,17 @@ internal static class TeblorLanding
 
     private const string ShippedAnointing = "Blood-oil rubbed into the skin before battle: Warriors and Destrier Riders gain +2 armor. Needs Age II.";
 
+    /// <summary>
+    /// BUG-1331 item 2: the Frenzy's own tooltip (the Shaman's button) says what its status does, the trade-off included:
+    /// 40% faster attacks (the ability's magnitude), 20% more damage (the status's <c>damageBonus</c>), and Slowed 20% for 4
+    /// seconds afterwards (its <c>onEnd</c>). A proposal; the owner reads it at D31.
+    /// </summary>
+    public const string FrenzyDescription =
+        "Drives nearby warriors into a frenzy: own units within 8 m attack 40% faster and deal 20% more damage for 10 seconds, then are Slowed 20% for 4 seconds.";
+
+    /// <summary>The Frenzy's tooltip before the landing.</summary>
+    public const string ShippedFrenzyDescription = "Drives nearby warriors into a frenzy: own units within 8 m attack 40% faster for 10 seconds.";
+
     /// <summary>The four data files the landing edits, relative to <c>game/data/</c>.</summary>
     public static readonly string[] Files =
     {
@@ -43,12 +56,7 @@ internal static class TeblorLanding
             case "common/statuses.json":
             {
                 JsonArray rows = root["statuses"]!.AsArray();
-                JsonObject row = new()
-                {
-                    ["id"] = Status, ["displayName"] = StatusName, ["description"] = StatusDescription, ["kind"] = "frenzied",
-                    ["damageBonus"] = 0.2,
-                    ["onEnd"] = new JsonObject { ["status"] = "slowed", ["magnitude"] = 0.2, ["duration"] = 4 },
-                };
+                JsonObject row = StatusRow();
                 int at = IndexOf(rows, Status);
                 if (at >= 0) rows[at] = row;
                 else rows.Add(row);
@@ -57,10 +65,8 @@ internal static class TeblorLanding
             case "factions/teblor/abilities.json":
             {
                 JsonObject frenzy = root["abilities"]!.AsArray().Single(a => (string)a!["id"]! == "blood_oil_frenzy")!.AsObject();
-                frenzy["effects"] = new JsonArray(new JsonObject
-                {
-                    ["kind"] = "applyStatus", ["status"] = Status, ["magnitude"] = 0.4, ["duration"] = 10,
-                });
+                frenzy["effects"] = new JsonArray(FrenzyEffect());
+                frenzy["description"] = FrenzyDescription;
                 break;
             }
             case "factions/teblor/techs.json":
@@ -69,7 +75,7 @@ internal static class TeblorLanding
                 JsonArray effects = anointing["effects"]!.AsArray();
                 for (int i = effects.Count - 1; i >= 0; i--)
                     if ((string?)effects[i]!["stat"] == "statusDuration") effects.RemoveAt(i);
-                effects.Add(new JsonObject { ["stat"] = "statusDuration", ["amount"] = 4, ["statuses"] = new JsonArray(Status) });
+                effects.Add(AnointingEffect());
                 anointing["description"] = AnointingDescription;
                 break;
             }
@@ -104,6 +110,7 @@ internal static class TeblorLanding
                 {
                     ["kind"] = "applyStatus", ["status"] = "frenzied", ["magnitude"] = 0.4, ["duration"] = 10,
                 });
+                frenzy["description"] = ShippedFrenzyDescription;
                 break;
             }
             case "factions/teblor/techs.json":
@@ -127,6 +134,70 @@ internal static class TeblorLanding
     {
         for (int i = 0; i < rows.Count; i++) if ((string?)rows[i]!["id"] == id) return i;
         return -1;
+    }
+
+    /// <summary>docs/03's status row.</summary>
+    private static JsonObject StatusRow() => new()
+    {
+        ["id"] = Status, ["displayName"] = StatusName, ["description"] = StatusDescription, ["kind"] = "frenzied",
+        ["damageBonus"] = 0.2,
+        ["onEnd"] = new JsonObject { ["status"] = "slowed", ["magnitude"] = 0.2, ["duration"] = 4 },
+    };
+
+    private static JsonObject FrenzyEffect() => new() { ["kind"] = "applyStatus", ["status"] = Status, ["magnitude"] = 0.4, ["duration"] = 10 };
+
+    private static JsonObject AnointingEffect() => new() { ["stat"] = "statusDuration", ["amount"] = 4, ["statuses"] = new JsonArray(Status) };
+
+    /// <summary>
+    /// BUG-1331 item 3: the landing's edit of data file <paramref name="rel"/> made in its text (<see cref="JsonTextEdit"/>),
+    /// so a file written from it differs from <paramref name="text"/> in exactly the landing's lines and keeps its line
+    /// endings: the status row appended (or replaced), the Frenzy's effect and description replaced, the Anointing's
+    /// <c>statusDuration</c> appended (or replaced) and its description replaced, a <c>"scale": 1.25,</c> line in each Teblor
+    /// building. The result must parse to <see cref="EditRoot"/>'s, or this throws; applied twice it changes nothing more.
+    /// </summary>
+    public static string EditText(string rel, string text)
+    {
+        JsonObject root = JsonNode.Parse(text)!.AsObject();
+        string edited = text;
+        switch (rel)
+        {
+            case "common/statuses.json":
+            {
+                int at = IndexOf(root["statuses"]!.AsArray(), Status);
+                edited = at >= 0 ? JsonTextEdit.ReplaceRow(text, $"/statuses/{at}", StatusRow()) : JsonTextEdit.Append(text, "/statuses", StatusRow(), row: true);
+                break;
+            }
+            case "factions/teblor/abilities.json":
+            {
+                string frenzy = $"/abilities/{IndexOf(root["abilities"]!.AsArray(), "blood_oil_frenzy")}";
+                if (JsonTextEdit.Count(text, frenzy + "/effects") != 1) throw new InvalidOperationException("the Frenzy has more than one effect: EditText replaces one");
+                edited = JsonTextEdit.Replace(edited, frenzy + "/effects/0", FrenzyEffect());
+                edited = JsonTextEdit.Replace(edited, frenzy + "/description", FrenzyDescription);
+                break;
+            }
+            case "factions/teblor/techs.json":
+            {
+                string anointing = $"/techs/{IndexOf(root["techs"]!.AsArray(), "teblor_blood_oil_anointing")}";
+                JsonArray effects = root["techs"]!.AsArray().Single(t => (string)t!["id"]! == "teblor_blood_oil_anointing")!["effects"]!.AsArray();
+                int[] durations = Enumerable.Range(0, effects.Count).Where(i => (string?)effects[i]!["stat"] == "statusDuration").ToArray();
+                if (durations.Length > 1) throw new InvalidOperationException("the Anointing has two statusDuration effects: EditText replaces one");
+                edited = durations.Length == 1
+                    ? JsonTextEdit.Replace(edited, $"{anointing}/effects/{durations[0]}", AnointingEffect())
+                    : JsonTextEdit.Append(edited, anointing + "/effects", AnointingEffect());
+                edited = JsonTextEdit.Replace(edited, anointing + "/description", AnointingDescription);
+                break;
+            }
+            case "factions/teblor/buildings.json":
+                for (int i = 0; i < root["buildings"]!.AsArray().Count; i++)
+                    edited = JsonTextEdit.SetProperty(edited, $"/buildings/{i}", "scale", 1.25);
+                break;
+            default:
+                throw new ArgumentException($"the landing does not edit '{rel}'");
+        }
+        EditRoot(rel, root);
+        if (!JsonTextEdit.Same(JsonNode.Parse(edited), root))
+            throw new InvalidOperationException($"{rel}: the text edit does not parse to the landing's edit");
+        return edited;
     }
 
     /// <summary>Applies the landing to a temp copy of the data.</summary>
@@ -201,7 +272,13 @@ internal static class TeblorLanding
             "Its Frenzy duration +4 s is a third effect, a `statusDuration`\non the Frenzy's status (`statuses` `[\"teblor_frenzied\"]`, no `appliesTo`)."),
         // The Owner review row of the Anointing.
         ("| Blood-oil Anointing | " + ShippedAnointing + " |", "| Blood-oil Anointing | " + AnointingDescription + " |"),
+        // The Owner review row of the Frenzy, and the new status's row after it (BUG-1331 item 2).
+        ("| `abilities.json` | `blood_oil_frenzy` | Blood-oil Frenzy | " + ShippedFrenzyDescription + " |",
+            "| `abilities.json` | `blood_oil_frenzy` | Blood-oil Frenzy | " + FrenzyDescription + " |\n" + StatusReviewRow),
     };
+
+    /// <summary>The Owner review row of the landing's status (<c>common/statuses.json</c>, a Teblor status by its id: <see cref="TeblorRosterPinTests"/>).</summary>
+    public const string StatusReviewRow = "| `statuses.json` | `" + Status + "` | " + StatusName + " | " + StatusDescription + " |";
 
     /// <summary>docs/02's edits at the landing: the Frenzy status's row, and the plain Frenzied's sources without the Teblor ability.</summary>
     private static readonly (string Find, string Replace)[] Doc02Edits =
@@ -219,6 +296,21 @@ internal static class TeblorLanding
 
     /// <summary>docs/02 as the landing leaves it.</summary>
     public static string[] Doc02Lines() => Edited(Doc02, Doc02Edits, landed: true);
+
+    /// <summary>The two docs the landing edits, relative to the repo root.</summary>
+    public static readonly string[] Docs = { Page, Doc02 };
+
+    /// <summary>
+    /// BUG-1331 item 3: doc <paramref name="relativePath"/> (one of <see cref="Docs"/>) as the landing leaves it, as file text:
+    /// its lines joined with the file's own line ending, its final line ending kept.
+    /// </summary>
+    public static string DocText(string relativePath)
+    {
+        string text = File.ReadAllText(Path.Combine(TestDataDir.RepoRoot(), relativePath));
+        string[] lines = relativePath == Page ? PageLines() : relativePath == Doc02 ? Doc02Lines() : throw new ArgumentException($"the landing does not edit '{relativePath}'");
+        string nl = JsonTextEdit.NewLine(text);
+        return string.Join(nl, lines) + (text.EndsWith('\n') ? nl : "");
+    }
 
     /// <summary>
     /// The Buildings rows of teblor.md with a Scale cell exactly when the header has the column: 1.25 added to a row one

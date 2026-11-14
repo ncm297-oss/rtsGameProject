@@ -595,7 +595,9 @@ public class AbilityContentTests
     /// the ability's duration or an applied status's. "&lt;n&gt; m" / "metres" is a distance: the range or radius (a status:
     /// sight or reach). "&lt;n&gt;%" is a magnitude x 100 or the friendly fire x 100. "&lt;n&gt; [type] damage" is a damage
     /// amount, "... damage a second" (or "/s") a damage-over-time magnitude. A number no shape claims must still be one of
-    /// the entry's data numbers. "half" / "a quarter" of the hit is the data's friendly fire. The words around the numbers
+    /// the entry's data numbers. A status row's damage bonus and aftermath (its own, or an applied status's) are read from
+    /// their own phrases and must be stated (BUG-1330, <see cref="RoleProblems"/>).
+    /// "half" / "a quarter" of the hit is the data's friendly fire. The words around the numbers
     /// (who, buildings, which status) are not parsed here; the page pins hold those. A status still in
     /// <see cref="PendingStatuses"/> (one the data track hasn't pinned) goes to <paramref name="reports"/>, never fails.
     /// Statuses are resolved through <paramref name="statuses"/>, so in-memory statuses work.
@@ -612,6 +614,7 @@ public class AbilityContentTests
             roles[Role.Cooldown].Add(Seconds(a.CooldownTicks));
             if (a.DurationTicks > 0) roles[Role.Duration].Add(Seconds(a.DurationTicks));
             double ff = 0;
+            var aftermath = new List<string>();
             foreach (AbilityEffect e in a.Effects)
             {
                 if (e.Kind == AbilityEffectKind.Damage)
@@ -621,11 +624,11 @@ public class AbilityContentTests
                     ff = Math.Max(ff, e.FriendlyFire);
                 }
                 if (e.Kind == AbilityEffectKind.ApplyStatus)
-                    AddStatusNumbers(roles, statuses, e.Status, e.Magnitude, e.DurationTicks, Role.Duration);
+                    AddStatusNumbers(roles, statuses, e.Status, e.Magnitude, e.DurationTicks, Role.Duration, aftermath);
                 if (e.Kind == AbilityEffectKind.CreateZone && !e.ZoneStatuses.IsDefault)
-                    foreach (ZoneStatus z in e.ZoneStatuses) AddStatusNumbers(roles, statuses, z.Status, z.Magnitude, z.DurationTicks, Role.Lingering);
+                    foreach (ZoneStatus z in e.ZoneStatuses) AddStatusNumbers(roles, statuses, z.Status, z.Magnitude, z.DurationTicks, Role.Lingering, aftermath);
             }
-            RoleProblems(a.Key, a.Description, roles, problems);
+            RoleProblems(a.Key, a.Description, roles, aftermath, problems);
             foreach ((string word, double fraction) in new[] { ("half", 0.5), ("a quarter", 0.25) })
                 if (Regex.IsMatch(a.Description, @"\btake " + word + @"\b", RegexOptions.CultureInvariant) && Math.Abs(ff - fraction) > 1e-4)
                     problems.Add($"{a.Key} description says 'take {word}', data friendlyFire {FactionPage.Text(Math.Round(ff, 4))}");
@@ -639,9 +642,10 @@ public class AbilityContentTests
             if (s.Sight > 0) roles[Role.Distance].Add(s.Sight);
             if (s.Reach > 0) roles[Role.Distance].Add(s.Reach);
             // D30 (M7-4): a frenzied row's damage bonus and its aftermath are the row's own numbers.
-            AddRowNumbers(roles, statuses, s);
+            var aftermath = new List<string>();
+            AddRowNumbers(roles, statuses, s, aftermath);
             var found = new List<string>();
-            RoleProblems(s.Key, s.Description, roles, found);
+            RoleProblems(s.Key, s.Description, roles, aftermath, found);
             if (!PendingStatuses.Contains(s.DisplayName)) problems.AddRange(found);
             else reports?.AddRange(found.Select(f => f + " (pending status: reported, not failed)"));
         }
@@ -649,7 +653,16 @@ public class AbilityContentTests
     }
 
     /// <summary>The data field a description number's words name (BUG-0410).</summary>
-    public enum Role { Duration, Lingering, Cooldown, Cast, Distance, Percent, Damage, DamageRate }
+    /// <summary>
+    /// The data field a description number's words name (BUG-0410). The last three (BUG-1330) are a status row's own numbers,
+    /// each read only from its own phrase and each required to be stated: <see cref="DamageBonus"/> "N% more damage",
+    /// <see cref="AftermathPercent"/> "Slowed N%" (the <c>onEnd</c> status's name) and <see cref="AftermathDuration"/> the
+    /// "for N seconds" right after it.
+    /// </summary>
+    public enum Role { Duration, Lingering, Cooldown, Cast, Distance, Percent, Damage, DamageRate, DamageBonus, AftermathPercent, AftermathDuration }
+
+    /// <summary>The roles whose every data number the description must state (BUG-1330: a row number the text never states is a problem).</summary>
+    private static readonly Role[] MustState = { Role.DamageBonus, Role.AftermathPercent, Role.AftermathDuration };
 
     private static Dictionary<Role, List<double>> NoRoles() => Enum.GetValues<Role>().ToDictionary(r => r, _ => new List<double>());
 
@@ -662,16 +675,19 @@ public class AbilityContentTests
         Role.Distance => "distance (range / radius / sight / reach)",
         Role.Percent => "percentage (magnitude / friendly fire x 100)",
         Role.Damage => "damage amount",
+        Role.DamageBonus => "percentage (damage bonus x 100: 'N% more damage')",
+        Role.AftermathPercent => "percentage (the aftermath's magnitude x 100: '<onEnd status> N%')",
+        Role.AftermathDuration => "duration (the aftermath's: '<onEnd status> N% for N seconds')",
         _ => "damage per second",
     };
 
     /// <summary>
     /// An applied (or zone) status's magnitude and duration, filed under the roles its kind's text would use, and (D30) the
-    /// status row's own numbers (<see cref="AddRowNumbers"/>), so an ability's text may state its status's damage bonus and
-    /// aftermath ("20% more damage, then Slowed 20% for 4 s").
+    /// status row's own numbers (<see cref="AddRowNumbers"/>), so an ability's text states its status's damage bonus and
+    /// aftermath ("20% more damage, then Slowed 20% for 4 s"); the aftermath status's name goes to <paramref name="aftermath"/>.
     /// </summary>
     private static void AddStatusNumbers(Dictionary<Role, List<double>> roles, IReadOnlyList<StatusDef> statuses, int status, float magnitude,
-        int durationTicks, Role durationRole, bool withRow = true)
+        int durationTicks, Role durationRole, List<string> aftermath)
     {
         roles[durationRole].Add(Seconds(durationTicks));
         // A damage over time's magnitude is damage per second; any other magnitude (a slow's fraction) reads as a percentage.
@@ -680,19 +696,30 @@ public class AbilityContentTests
         bool dot = known && statuses[status].Kind == StatusKind.DamageOverTime;
         if (!known || dot) roles[Role.DamageRate].Add(magnitude);
         if ((!known || !dot) && magnitude > 0) roles[Role.Percent].Add(magnitude * 100.0);
-        if (known && withRow) AddRowNumbers(roles, statuses, statuses[status]);
+        if (known) AddRowNumbers(roles, statuses, statuses[status], aftermath);
     }
 
     /// <summary>
-    /// D30 (M7-4): a status row's own numbers beyond a blind's: its <c>damageBonus</c> x 100 as a percentage, and its
-    /// <c>onEnd</c> application read as an applied status (magnitude by that status's kind, duration a duration). The loader
-    /// refuses an <c>onEnd</c> naming a row with one of its own, so the aftermath's own row is not read again.
+    /// D30 (M7-4), BUG-1330: a status row's own numbers beyond a blind's, each in a role of its own so the text's words tie it
+    /// to its field: <c>damageBonus</c> x 100 (<see cref="Role.DamageBonus"/>), and the <c>onEnd</c> application's magnitude
+    /// x 100 (<see cref="Role.AftermathPercent"/>; a damage over time's stays a damage per second) and duration
+    /// (<see cref="Role.AftermathDuration"/>), its status's name added to <paramref name="aftermath"/>. The loader refuses an
+    /// <c>onEnd</c> naming a row with one of its own, so the aftermath's own row is not read again.
     /// </summary>
-    private static void AddRowNumbers(Dictionary<Role, List<double>> roles, IReadOnlyList<StatusDef> statuses, StatusDef s)
+    private static void AddRowNumbers(Dictionary<Role, List<double>> roles, IReadOnlyList<StatusDef> statuses, StatusDef s, List<string> aftermath)
     {
-        if (s.DamageBonus > 0) roles[Role.Percent].Add(Math.Round(s.DamageBonus * 100.0, 3));
-        if (s.OnEndStatus >= 0) AddStatusNumbers(roles, statuses, s.OnEndStatus, s.OnEndMagnitude, s.OnEndTicks, Role.Duration, withRow: false);
+        if (s.DamageBonus > 0) roles[Role.DamageBonus].Add(Math.Round(s.DamageBonus * 100.0, 3));
+        if (s.OnEndStatus < 0) return;
+        bool known = s.OnEndStatus < statuses.Count;
+        bool dot = known && statuses[s.OnEndStatus].Kind == StatusKind.DamageOverTime;
+        if (dot) roles[Role.DamageRate].Add(s.OnEndMagnitude);
+        else if (s.OnEndMagnitude > 0) roles[Role.AftermathPercent].Add(Math.Round(s.OnEndMagnitude * 100.0, 3));
+        roles[Role.AftermathDuration].Add(Seconds(s.OnEndTicks));
+        if (known && !aftermath.Contains(statuses[s.OnEndStatus].DisplayName)) aftermath.Add(statuses[s.OnEndStatus].DisplayName);
     }
+
+    /// <summary>"N% more damage", "N% extra damage", "+N% damage": the number is a damage bonus (BUG-1330). Read on the text after the "%".</summary>
+    private static readonly Regex DamageBonusAfter = new(@"^\s*(?:more|extra|bonus|additional|increased)\s+damage\b", RegexOptions.CultureInvariant | RegexOptions.IgnoreCase);
 
     /// <summary>
     /// A number in a description, with the unit word that may follow it ("12 seconds", "30%", "2 m"), a hyphen allowed before
@@ -741,21 +768,39 @@ public class AbilityContentTests
     /// Each number in <paramref name="description"/> against the data numbers of its role; a number with no role word must
     /// be one of the entry's numbers in any role. Problems name the entry, the number and the role.
     /// </summary>
-    private static void RoleProblems(string key, string description, Dictionary<Role, List<double>> roles, List<string> problems)
+    /// <remarks>
+    /// BUG-1330: a status row's own numbers are read from their phrases only. "N% more damage" (or "+N% damage") is the damage
+    /// bonus, in any entry, so a text promising one the data lacks fails. Where an <c>onEnd</c> is in play,
+    /// "&lt;its status's name&gt; [by] N%" is the aftermath's magnitude and the "for N seconds" right after it (or right after
+    /// the name) its duration. Each of those data numbers must be stated in its phrase; any other percentage or duration is
+    /// read against the entry's other numbers, so "40% faster" can't borrow the damage bonus's 20.
+    /// </remarks>
+    private static void RoleProblems(string key, string description, Dictionary<Role, List<double>> roles, IReadOnlyList<string> aftermath,
+        List<string> problems)
     {
+        Regex? afterName = null, afterNamePct = null;
+        if (aftermath.Count > 0)
+        {
+            string names = string.Join("|", aftermath.Select(Regex.Escape));
+            afterName = new Regex($@"\b(?:{names})(?:\s+by)?\s*$", Words);
+            afterNamePct = new Regex($@"\b(?:{names})(?:\s+by)?(?:\s+\d+(?:\.\d+)?\s?%)?\s+for\s*$", Words);
+        }
+        var stated = new List<(Role Role, double Value)>();
         foreach (Match m in DescriptionNumber.Matches(description))
         {
             double n = double.Parse(m.Groups["n"].Value, CultureInfo.InvariantCulture);
+            string before = description[..m.Index];
             string after = description[(m.Index + m.Length)..];
             Role? role =
-                m.Groups["pct"].Success ? Role.Percent :
+                m.Groups["pct"].Success ? PercentRole(before, after, afterName) :
                 m.Groups["m"].Success ? Role.Distance :
-                m.Groups["sec"].Success ? DurationRole(description[..m.Index], after) :
+                m.Groups["sec"].Success ? (afterNamePct != null && afterNamePct.IsMatch(before) ? Role.AftermathDuration : DurationRole(before, after)) :
                 DamageRateAfter.IsMatch(after) ? Role.DamageRate :
                 DamageAfter.IsMatch(after) ? Role.Damage :
                 null;
             if (role is Role r)
             {
+                stated.Add((r, n));
                 List<double> want = roles[r];
                 if (want.Any(v => Math.Abs(v - n) < 1e-3)) continue;
                 string list = want.Count == 0 ? "none" : string.Join(", ", want.Select(v => FactionPage.Text(Math.Round(v, 4))));
@@ -764,6 +809,18 @@ public class AbilityContentTests
             else if (!roles.Values.Any(vs => vs.Any(v => Math.Abs(v - n) < 1e-3)))
                 problems.Add($"{key} description: '{m.Value}' has no unit word and is none of its data numbers ('{description}')");
         }
+        foreach (Role r in MustState)
+            foreach (double v in roles[r].Distinct())
+                if (!stated.Any(s => s.Role == r && Math.Abs(s.Value - v) < 1e-3))
+                    problems.Add($"{key} description: data {RoleText(r)} {FactionPage.Text(Math.Round(v, 4))}, which the text does not state in its phrase ('{description}')");
+    }
+
+    /// <summary>A percentage's role: a damage bonus by its words after, the aftermath's magnitude after its status's name, else a magnitude.</summary>
+    private static Role PercentRole(string before, string after, Regex? afterName)
+    {
+        if (DamageBonusAfter.IsMatch(after) || (before.EndsWith('+') && Regex.IsMatch(after, @"^\s*damage\b", Words))) return Role.DamageBonus;
+        if (afterName != null && afterName.IsMatch(before)) return Role.AftermathPercent;
+        return Role.Percent;
     }
 
     /// <summary>A Sandstorm whose zone hid nothing passes against a page that doesn't claim it (the claim is read both ways).</summary>
