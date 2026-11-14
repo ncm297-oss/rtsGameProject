@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S3 |
-| Status | open |
+| Status | fixed |
 | Found | 2026-11-12-0546, task M7-4 (QA full) |
 | System | sim test suite (M7-4 fixtures; cross-track sequencing, as BUG-1222) |
-| Fixed by | |
+| Fixed by | M7-6 (sim, 2026-11-13-1118; 18be020 + fix round 1 198c5d4): `BloodOilScenes.Edit` removes any shipped `teblor_frenzied` row and `statusDuration` effect, then appends its own; `BloodOilScenesTests` (2), QA `OpeningReserveShareQaTests.DataTrackRows_OnACopyThatAlreadyCarriesThem_StillLoads` |
 
 ## Repro
 1. On a scratch clone of `studio/2026-11-12-0546-sim` (1422a33), apply docs/03 "For the data track (M7-4)" to
@@ -39,3 +39,10 @@ copy idempotent) QA's own `QA/FrenzyRulesQaTests`.
   (`zz_test_frenzied`) that the data track will never ship. Either way the data brief should name the order: this
   fix lands on `main` before the data track's Teblor rows, or the data session will see 84 red tests it may not touch.
 - `DataValidationTests` stays green with the rows (the rows themselves load).
+
+## Fix (M7-6)
+Remove-and-append, not edit in place, so every M7-4 pin keeps its ids. QA's first pass found the fix's own tests still
+broke on the rows (BUG-1310 / 1311 S2, BUG-1312 S3); fix round 1 closed them. Re-check on a clone carrying docs/03's
+M7-4 + M7-6 rows: the only reds are the data track's `Content/**` / `QA/Content/**` pins (D31 moves them) and the two
+golden data-hash pins that move once at the landing (`FactionOrderTests.TheShippedContentHash_IsTheGoldenHeaders`,
+`QA/PackQaTests.TheShippedDataHash_IsTheGoldenHeaders`). Producer at ACCEPT: default loop green on the three-way tree.
