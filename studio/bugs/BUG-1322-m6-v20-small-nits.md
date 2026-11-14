@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S4 |
-| Status | open |
+| Status | fixed (items 1-2, M6-VH7); item 3 is the owner's: the empty `ModelShots.cs` is still in the main checkout (STATE, Waiting on you) |
 | Found | 2026-11-13-1118, task M6-V20 (QA) |
 | System | unit views (models), studio process |
-| Fixed by | |
+| Fixed by | M6-VH7 (2026-11-13-2306, view 4b8f1b6): the old model child leaves the slot node before it is freed (`QaM6V20Test` row 4, `QaM6VH7Test` row 5); the team-less warning once per file per run (`ModelViewTest`: 1 warning over 3 binds) |
 
 ## Repro and actual
 1. **A reused slot's model is not named `Model`.** docs/03 "Implementation (M6-V20)" says the slot node's child is `Model`.

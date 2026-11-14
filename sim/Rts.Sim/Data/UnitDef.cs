@@ -100,6 +100,12 @@ public sealed class UnitDef
     /// In <see cref="GameData.ContentHash"/> only when above 1.
     /// </summary>
     public int SpawnCount { get; init; } = 1;
+    /// <summary>
+    /// M7-7 (Request 48): resources this worker carries a trip (<c>carry</c>, optional, a whole number 1 to
+    /// <see cref="DataLimits.MaxInteger"/>, a worker's only); 0 when the file leaves it out, and <c>rules.json</c>
+    /// <c>workerCarry</c> applies (<see cref="GameData.CarryOf"/>). In <see cref="GameData.ContentHash"/> only when set.
+    /// </summary>
+    public int Carry { get; init; }
     /// <summary>The half-pop one queue item of this type reserves when it starts: <see cref="HalfPop"/> x <see cref="SpawnCount"/> (M7-2).</summary>
     public int ItemHalfPop => HalfPop * SpawnCount;
     /// <summary>

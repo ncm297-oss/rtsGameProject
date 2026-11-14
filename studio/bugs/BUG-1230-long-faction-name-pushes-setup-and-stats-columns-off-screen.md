@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S3 |
-| Status | open |
+| Status | fixed |
 | Found | 2026-11-11-1317, task M7-V3a (QA standard: "a third faction with a 40-character `displayName`") |
 | System | view: `SkirmishSetup` slot grid, `MatchStats` table |
-| Fixed by | |
+| Fixed by | M6-VH7 (2026-11-13-2306, view 4b8f1b6): the setup's faction lists cut a long name with an ellipsis at the list's width, the stats table at 170 px with the full name as a tooltip; rows in `QaM7V3aTest` (every Team list and stats heading on screen with a 40-character name) |
 
 ## Repro
 1. `game/tests/QaM7V3aTest.tscn` forges eight factions, the third (`qf2`) named "The Forty Character Faction Display Name"
