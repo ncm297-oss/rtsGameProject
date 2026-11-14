@@ -3306,6 +3306,14 @@ was built and no `ai.castMinOwnFighting` knob exists**: the brief built one only
   **less** than today's (2+ own attacking within 8 m in 31 ready thinks against 53 for 2+ enemies; 3+ or 4+ never). An own
   unit counts as attacking only in the `Attacking` state (standing in reach); a melee unit chasing is `Moving`, which is
   why the count is low.
+- **Correction at ACCEPT (BUG-1340, open: the report itself is fixed in the sim's hardening).** The diagnostic column's
+  "own army" rows and its centroid distance count the other spawned Shaman as the army, so "they stand with the army
+  (median 2.0 m ...)" above is not supported. QA's re-measure with Shamans left out of the army count
+  (`Stress/FrenzyCastReportQaStressTests`): before 5:00, 9,549 of 9,568 ready thinks have no army at all; a Shaman has
+  2+ army units within 8 m in 250 of 14,996 ready thinks, and 2+ of them attacking in 0 (not 31). "Too few Shamans" stands
+  (the shipped and landing columns reproduce exactly); **whether a fielded Shaman keeps up with the army is not measured
+  yet** and is measured once an opening trains Shamans. The "about two Frenzies a match" below is the diagnostic's figure
+  for two Shamans standing at home from 0:00, not a forecast.
 - **Rule 41.** These figures are this branch's, on the sim's test copy and one generated map; the data track's V24
   re-measure on `main` is another harness (four maps, its own seat layout) and not comparable with them.
 - **`units.json` `carry`** (Request 48; optional, a worker only): resources a worker of the type carries a trip, a whole
@@ -3323,7 +3331,7 @@ was built and no `ai.castMinOwnFighting` knob exists**: the brief built one only
   file carrying it, at any value (the rules' own too), hashes differently. Not in the state hash (data; the load is the
   unit's `Cargo`, hashed as before); no save or replay format change (`SaveFormat.CurrentVersion` 10): a mid-match save on a
   carry-15 copy loads and runs 2,000 ticks hash-identical. No allocation (`WorkerCarryTests.GatherTicks_WithAWorkerCarry_
-  AllocateNothing`); the cost is one nullable read per gather step.
+  AllocateNothing`); the cost is two array reads per gather step (`Carry` is a plain `int`).
 - **Tests.** `Data/UnitCarryLoaderTests` (absent, 1, 2, 15, 1,000,000 load; ten broken values and a Warrior's carry, one
   error each; the hash present / absent), `DataContentHashTests.ChangingAnyFieldOfAnyDef_ChangesTheHash` (the reflection row
   names `UnitDef.Carry`: 0 to set), `Economy/WorkerCarryTests` (a Laborer at 15 fills to 15 and deposits 15; without the field,

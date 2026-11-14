@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S3 |
-| Status | open |
+| Status | fixed |
 | Found | 2026-11-13-1118, task M6-V20 (QA) |
 | System | unit views (models, worker state tint) |
-| Fixed by | |
+| Fixed by | M6-VH7 (2026-11-13-2306, view 4b8f1b6): a model takes only the hit flash overlay, never the worker state tint; capsules keep it. Rows: `ModelViewTest` (a gathering and a returning Laborer's team surface draws the team shader in the player colour, overlay none), `QaM6V20Test` row 5; `EconomyViewTest` unchanged. Pictures: `studio/review/2026-11-13-2306/` |
 
 ## Repro
 1. `& $env:GODOT --path game --resolution 1600x900 res://tests/ModelShots.tscn -- --skirmish <dir>` (a real skirmish start as
