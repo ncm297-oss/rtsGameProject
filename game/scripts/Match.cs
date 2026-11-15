@@ -248,6 +248,10 @@ public partial class Match : Node3D
         targetRing.Init(_runner);
         targetRing.Fog = fog;
         selection.TargetRing = targetRing;
+        // M6-V22: the selected units' queued orders, drawn as the rally line is (fog-filtered Attack targets).
+        var orderPaths = GetNode<OrderPathView>("World3D/OrderPaths");
+        orderPaths.Init(_runner, selection);
+        orderPaths.Fog = fog;
         var abilityViews = GetNode<AbilityViews>("World3D/AbilityViews");
         abilityViews.Fog = fog;
         abilityViews.Camera = camera;

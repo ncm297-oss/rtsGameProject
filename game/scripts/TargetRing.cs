@@ -29,8 +29,8 @@ public partial class TargetRing : Node3D
     /// <summary>Height above the ground (above the selection ring's), in meters.</summary>
     public const float Lift = 0.09f;
 
-    // UI tint, not team colour: "attack" reads red.
-    private static readonly Color RingColor = new(1f, 0.15f, 0.12f);
+    /// <summary>The ring's colour, a UI tint, not team colour: "attack" reads red (M6-V22: also a queued Attack's line and marker).</summary>
+    public static readonly Color RingColor = new(1f, 0.15f, 0.12f);
 
     private SimRunner? _runner;
     private MeshInstance3D _ring = null!;

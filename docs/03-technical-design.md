@@ -4006,6 +4006,107 @@ Producer's run alone).
   same evening (one other track's `testhost` running, none of the developer's) read 27.49 ms for 400 figures and 2.07 ms
   for 400 capsules, the same 13x ratio: the machine's slow state (handoff, BUG-1170's note), not a figure.
 
+### Implementation (M6-V22)
+
+The owner's Shift-queue request (inbox 2026-11-14): the sim already queued every unit order (8 a unit, docs/03 "Orders
+and unit states") and the view already passed Shift, but nothing drew the queue. This task draws it, closes the one
+building-placement gap, and proves each order kind queues and starts in its turn. No sim change outside `ViewApi`, no
+data, no player-facing text.
+
+- **`ViewApi/OrderPath`** (read only, outside the hash; built once per match over the unit store's own arrays, the
+  buildings, the grid and the data by `OrderPathView.NewReader`, since ViewApi code never names the world or the unit
+  store, QA's source rule): `Fill(unit, span)` writes a unit's `OrderPoint`s in order:
+  its current order's place when it has one (a cast: `CastPoint`, no place for a no-target ability; an explicit Attack
+  (`CombatMode.Ordered`): the target; an attack-move leg: `AnchorPosition`; a build or repair: the site's footprint
+  centre (`Build` while under construction, else `Repair`); a gather loop: `GatherSite`; a plain walk: `Goal`; a
+  retaliating or leashed unit is on no order), then each queue entry (`QueueKind` / `QueuePosition` / `QueueTypeId`):
+  an Attack's target decoded as `UnitStore.QueuedTarget` does (never `QueuePosition` as a point; a test pins the two equal) with `TargetLive` and its position now
+  (a unit's position, a building's footprint centre), a Build at the footprint centre its anchor cell gives
+  (`ConstructionSystem.StartBuild`'s rule), a UseAbility at its point unless the ability is no-target, Stop and
+  HoldPosition with no place. A dead or stale handle gives nothing. `QueuesBehind(slot)` is the building rule
+  below. `OrderPoint` is a plain struct.
+- **The drawing, `game/scripts/OrderPathView`** (node `World3D/OrderPaths`, wired in `Match.Wire` beside the rally
+  marker, given the fog): every frame, for each selected unit the local seat owns, a line from the unit's drawn position
+  through its order points and a marker at each queued point (the current order's point gets the line, no marker, so a
+  marker goes the moment its order starts). Colours by kind: Attack is `TargetRing.RingColor` and UseAbility the cast
+  bar's `AbilityViews.BarFillColor` (the existing order marks); Move green, AttackMove orange, Gather gold, Build blue,
+  Repair teal, Stop off-white, Hold pale yellow. A no-place entry is a wider, lower disc (a ring round the previous
+  point's marker; at the unit itself when it comes first). An Attack is drawn on its target only while the fog shows
+  it (`FogView.ShowsUnit` / `ShowsBuilding`, or a building's ghost with the same generation, as `TargetRing` does): a
+  hidden or dead target gets no marker and no line, and the path continues from the last drawn point. Markers are
+  shared per (kind, point to 1 cm) and lines per (ends to 1 cm, kind), so 200 units on one path draw 8 markers. Two
+  `MultiMesh`es (lines, markers; unshaded, vertex colour, no depth test so a leg up a cliff is not swallowed by the
+  slope), buffers that double while warming up, transforms rewritten only when they moved and colours only when they
+  change: 0 bytes a frame once warm. Line 0.12 m wide (the rally line's), marker radius 0.5 m.
+- **The building gap (Producer decision 2026-11-15, owner may revisit).** `CommandCard.GhostClick`'s first Shift
+  placement of a ghost now calls `SelectionController.OrderBuild(..., queueBehindEndingOrders: true)`: per worker,
+  `OrderPath.QueuesBehind` queues the Build behind an order that ends (a walk, an attack or a fight, a build, a repair, a
+  cast, or orders already queued) and replaces a gather loop or idleness (a loop never ends, and the sim starts a
+  queued order only for an Idle unit: `OrderSystem.Run`). Later Shift placements queue as before; BUG-0122's
+  same-anchor guard is unchanged. The rule reads the sim state of the frame: an order still pending (given in the same
+  tick) is not seen.
+- **Audit** (the shipped data; `OrderQueueViewTest`, each kind queued with Shift behind a 10 m Move through the mouse's
+  entry point):
+
+  | Order kind | Queues | Drawn | Starts in its turn |
+  | --- | --- | --- | --- |
+  | Move (Shift + right click) | yes | green marker at the point | yes (walks it) |
+  | AttackMove (A + Shift click) | yes | orange marker at the point | yes (`CombatMode.AttackMove`) |
+  | Attack on a unit (Shift + right click's Attack) | yes | red marker on the target while seen; none while hidden or dead | yes (`Ordered`, holds it); dropped at its turn if the target died (sim rule) |
+  | Attack on a building | yes | red marker at its footprint centre, or at its ghost's | yes (xUnit `AWorkerWithACurrentMoveAndEightQueuedKinds_ReadsThemInOrder` reads it; the scene row uses a unit target) |
+  | Gather (Shift + right click on a node) | yes | gold marker at the node's centre | yes (on the loop) |
+  | Build (the ghost, Shift click) | yes | blue marker at the footprint centre | yes (the site is placed at its turn) |
+  | Repair (Shift + right click on an own damaged building) | yes | teal marker at the click point | yes |
+  | UseAbility at a point (ability key, Shift click) | yes | violet marker at the point | yes (casting, or walking into range) |
+  | UseAbility with no target (the Frenzy key with Shift) | yes | violet ring at the previous point | yes |
+  | Stop (Shift + S) | yes | off-white ring at the previous point | yes (stops; the rest of the queue goes) |
+  | HoldPosition (Shift + H) | yes | pale yellow ring at the previous point | yes (holds; the rest goes) |
+  | Any order behind a gather loop | yes | yes (from the node) | **no: Request for the sim track below** |
+
+  A ninth order at a full queue is dropped by the sim (`UnitQueueFull`, silently): 8 markers are drawn.
+- **Request for the sim track (not fixed here):** an order queued behind a worker's gather loop never starts, because
+  `OrderSystem.Run` starts a queued order only for an `Idle` unit with no target and a loop is never Idle. Repro:
+  `OrderQueueViewTest`'s `BehindAGatherLoop` row (a Laborer gathering the gold mine nearest player 0's hall on seed 1,
+  Shift + right click on open ground 12 m out: the Move is queued and drawn, and after 1,200 ticks it is still queued
+  and the worker still gathers; printed as "known gap"). A fix could let a queued order end a loop at a natural break
+  (a drop-off), as docs/02 now says it waits "until its gathering ends". The building rule above sidesteps it for the
+  first Shift-placed building.
+- **Tests.** xUnit `ViewApi/OrderPathTests` (a worker walking a Move with eight queued kinds read in order with their
+  places; UseAbility at a point v a no-target cast and Hold; an empty queue; the current attack-move, Attack, gather and
+  build; a queued Attack on a dead target; dead, stale and recycled slots; a short buffer; `QueuesBehind`'s rows; twin
+  sims read every tick v never read, equal hashes for 600 ticks) and `OrderPathAllocationTests` (0 bytes).
+  `game/tests/OrderQueueViewTest` (headless, in the scene loop): the kind rows above (the queue holds it, a marker of
+  the kind within 0.1 m, kept until its turn, the unit starts it, the marker gone), the gather-loop gap row, the ninth
+  order, the building rule ((a) a gatherer and (b) an idle worker build at once, (c) a walker's Build is queued with its
+  Move kept and built when it arrives, (d) houses 1-3 built in turn by a worker already building, (e) BUG-0122's
+  guard), the fog rows (an enemy selected draws nothing; a queued Attack's marker equals `FogView.ShowsUnit` on every
+  frame while its target walks out of the spotter's sight and back; the marker goes when the target dies), and the
+  cost rows. Windowed, `-- --shots <dir>` saves the pictures in a fresh match and `-- --cost` adds frame time and draw
+  calls. **Edited rows:** `CommandCardTest.Placement`'s Shift houses (the three workers are building the hall site from
+  the row before, so the first Shift house would now queue behind it: they are stopped first; the row is about idle
+  workers) and `Bug0122Flood` (two ticks first, so the Repair row's Stops have applied and the three stand idle). No
+  other scene that clicks a ghost with Shift changed.
+- **Cost** (rule 42 asks "alone": two other tracks' `testhost`s were running and could not be stopped; 1152 x 648, vsync
+  off, default zoom, 200 Heavy Infantry, 300 frames a case, `OrderQueueViewTest -- --cost`, 2026-11-15):
+
+  | Case | Frame | Draw calls | `OrderPathView.Sync` | Bytes a frame |
+  | --- | --- | --- | --- | --- |
+  | Nothing selected | 5.44 ms | 3,243 | 0.3 us | 0 |
+  | 200 selected, no orders (rings, portraits) | 5.73 ms | 3,329 | 10.6 us | 0 |
+  | 200 x 8 queued, shared points (8 markers) | 6.15 ms (+0.42 on the idle selection, +0.71 on none) | 3,330 (+1) | 343 us | 0 |
+  | 200 x 8 queued, distinct points (1,600 markers, 1,795 lines) | 6.15 ms (+0.42, +0.71) | 3,330 (+1) | 623 us | 0 |
+
+  The shared case adds under 1.0 ms. Most of `Sync` is the 1,800 path points' lookups and the engine calls for the
+  lines that move with their units (headless: 410 us shared, 520 us distinct).
+- **Questions for the Producer (rule 67), each with a recommendation:**
+  1. At the zoomed-out camera (60 m) the 0.5 m markers and 0.12 m lines are small. Scale them with the camera's zoom?
+     Recommendation: yes, in a later view polish task (no gameplay effect).
+  2. The current order's point has a line but no marker (so a marker means "queued"). Recommendation: keep it.
+  3. Lines and markers ignore depth (drawn over terrain, units and buildings), as waypoints are in other RTS games.
+     Recommendation: keep it; the rally line still uses depth and could follow.
+  4. The first-Shift-building rule reads the frame's sim state, so a Shift placement within the same tick as another
+     order to that worker decides on the older state. Recommendation: accept (one tick, 50 ms).
+
 ## Vision, detection, fog
 
 Fog of war and the high-ground rule are in since M4-3a (`sim/Rts.Sim/Vision/`); the last-known building ghosts, buildings
