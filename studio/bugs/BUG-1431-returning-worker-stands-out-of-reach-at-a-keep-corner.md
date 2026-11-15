@@ -33,3 +33,13 @@ every `RetryTicks` without getting in. QA's re-measure (longest gap, s): seed 4:
 - Likely the BUG-0146 / BUG-0790 family: a corner stand point behind returning traffic; each retry picks the same point
   and stops short of it. BUG-1430's seed-7 wedge (a walker held at a Keep's north-east corner by parked Idle workers, its
   stuck count reset by every retry) may share the cause.
+
+## Re-check 2026-11-14-2156, fix round 1: still open, and more common than it looked
+QA's wider sweep (`Stress/GatherOverlapWedgeQaStressTests.WiderSeedSweep_17To56_BreachesByValue`, the developer's fuzz
+scene on seeds 17-56): **with the knob off, 5 of 40 seeds pass 60 s without a trip.** Seed 22: 67.3 s, a 0.75 m Gatherer
+Returning 1.47 m from the footprint. Seed 27: 89.8 s, a Laborer held at the Keep on its way out (cargo 0, 0.63 m). Seeds 35
+(67.4 s) and 44 (66.5 s): Laborers Returning 1.47-1.57 m from the footprint. Seed 56: 73.2 s, a Gatherer 6.3 m out. With
+seeds 2-16 that makes 6 of 54 with the knob off. This is the root of every criterion-7 breach in BUG-1430; the knob only
+changes which seeds hit it (5 / 54 at 0.25, 2 / 54 at 0.5, 1 / 54 at 0.75). Severity stays S3 (shipped behaviour, slower
+income, no hang), but it now blocks M6-S9's criterion 7 as written. It should be scheduled before or with the slice that
+ships the knob.

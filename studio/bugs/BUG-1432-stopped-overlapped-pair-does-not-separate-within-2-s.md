@@ -31,3 +31,13 @@ Brief criterion 5: "a worker overlapped with another gets a Move or Stop; the pa
   Laborers 2.8 cm apart at 0 on the tree line), and the same never-separates behaviour applies.
 - The developer added no rule (correctly: the brief scoped movement rules to gather pairs). The fix is a Producer decision:
   amend the criterion (Stop: separates when either unit next moves), or schedule a standing-overlap rule.
+
+## Re-check 2026-11-14-2156, fix round 1 (4377d68): still open, S2; a Producer decision, can't be fixed in scope
+No rule was added (no production change in 4377d68). docs/03's criterion-5 bullet now gives the analysis and names
+BUG-1432. QA re-ran the off control in the default loop
+(`GatherOverlapQaTests.Off_TwoIdleLaborersOverlapped_SeparationTime_Report`): unchanged. QA agrees with the developer's
+reasoning. The Stop ends the gather pair, so the stopped worker and its mate become an Idle worker and a gatherer, and
+criterion 4 requires that pair to stay on today's rules, which never separate two standing units. Meeting the Stop clause
+needs either a standing-overlap rule for every pair (moves the shipped hash) or a knob-on-only exception to criterion 4.
+**Criteria 4 and 5 conflict as written.** The Producer picks: amend criterion 5 (Stop: "separates when either unit next
+moves", 2.8-11.5 s today) or schedule a rule.

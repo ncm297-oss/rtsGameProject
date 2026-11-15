@@ -34,3 +34,19 @@
 
 ## Notes
 None of these change the shipped game (the knob is off). Item 1 matters for the value chosen next session.
+
+## Re-check 2026-11-14-2156, fix round 1 (4377d68)
+- Item 1 (the floor at a small value): now documented in a docs/03 bullet that names BUG-1433; no fading floor was built.
+  That's acceptable as documented, and stays open only as a design choice for the next PLAN.
+- Item 2 (enemy scenes): **half fixed.** The 6-v-6 scene now has player 1's Keep beside player 0's: 17,253 / 14,703 enemy
+  pair-ticks within 3 m (off / 0.5), asserted at least 500. QA re-ran it green. But the one-worker-each hash-equal row
+  (`Criterion4_TwoPlayersWorkersOnOneMine_OneEach_IsHashEqualAtZeroAndHalf`) still never brings the two workers together.
+  QA rebuilt the same scene (`QA/GatherOverlapQaTests.EnemyScene_OneEach_DoTheTwoWorkersMeet_Report`): **0 ticks within 3 m
+  in 2,400, closest 5.51 of the radii sum**, at 0 and 0.5 (both banks 260). The row proves nothing about enemy contact; it
+  would be hash-equal under any rule scoped to gather pairs. Criterion 4 is still met through the 6-v-6 scene and QA's
+  12-v-12 rows.
+- Item 3 (the harness): fixed. Seed 13 now fails with "player 1's Keep was refused (no Keep), so the fuzz scene can't be
+  built on this seed" (`Seed13_TheSceneCannotBeBuilt_AndTheHarnessSaysSo`, green). The left-out seeds are listed in `Seeds`
+  and `KnownWedges` with their reasons.
+
+Status: open (only item 2's one-each row).

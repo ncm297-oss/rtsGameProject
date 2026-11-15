@@ -53,3 +53,44 @@ left out as the pre-existing drop-off wedge (BUG-1431), but it crosses the 60 s 
 - Either the wedge gets a fix, or the Producer re-scopes the criterion (for example: 0.5 only, or the cap lowered to the
   values that hold). Leaving seeds out of the asserting rows hides the failure; the rows should name every left-out seed
   and why.
+
+## Re-check 2026-11-14-2156, fix round 1 (4377d68): still open, S2 (criterion 7 not met), now a Producer decision
+The round changed no production code. The developer's fuzz now has 56 rows (seeds 2-16 without 13, at 0 / 0.25 / 0.5 /
+0.75). Four rows **measure the trip window instead of asserting it**, listed in `GatherOverlapFuzzTests.KnownWedges`:
+0 / 4, 0.25 / 3, 0.25 / 4 and 0.75 / 7. The default loop is green because of those exclusions, not because the criterion
+holds: **0.25 and 0.75 still fail criterion 7 on the developer's own seeds.**
+
+What QA checked (`sim/Rts.Sim.Tests/Stress/GatherOverlapWedgeQaStressTests.cs`):
+- **The exclusions are honest.** `KnownWedges_EveryBreachInAnExcludedRow_IsTheNamedKeepWedge` (4 rows, green): every worker
+  past 60 s in an excluded row stands at its own Keep (0.06-1.87 m from the footprint). At 0.75 / 7 the only breach is the
+  0.75 m Gatherer (unit 35). Three rows hide more than one breach, all at the Keep: seed 4 at 0 (units 25 and 23), seed 4 at
+  0.25 (unit 22 Returning; unit 25 Gathering with cargo 0, 1.09 m from the footprint) and seed 3 at 0.25 (unit 7 twice).
+  Every other invariant is still asserted on those rows, and every 0.5 row asserts the window (14 of 14 green).
+- **"Today's rules, not the scaled distance" is true of the hold, not of how the run gets into it.** Seed 7 at 0.75 was run
+  with the knob switched mid-wedge (the World's two flags set by reflection, test-only;
+  `Seed7AtTheCap_RealRun_KnobOffOrNudgedMidWedge_Report`). With the knob off from 20 s or 40 s into the stretch, unit 35
+  still goes 84.0 / 80.9 s without a trip, so once it is in the corner today's rules hold it. With the knob off from 0 s or
+  10 s it gets free (longest 40.2 s). With the knob nudged to 0.74 from any point it is held longer (107.0 s): the Laborer
+  that frees it at 57 s is a gather pair and presses in at the scaled distance. So the knob decides whether a run falls into
+  the wedge and how it leaves; the wedge itself is today's corner handling. The developer's evidence row reproduces
+  (nearest standing gather pair 8.62 m, reach 3.31 m, passers 46 ticks).
+- **The breaches are chaotic.** The same scene with the knob switched on one tick late (at tick 2) gives seed 7 at 0.75 a
+  longest gap of 32.9 s (no breach), seed 3 at 0.25 67.3 s with a different worker, and seed 4 at 0.25 60.2 s
+  (`KnobSwitchedOffMidWedge_Report`). Which seed breaches at which value is a lottery over today's wedges.
+- **The knob makes breaches rarer, but 0.5 isn't clean either.** `WiderSeedSweep_17To56_BreachesByValue` ran 40 more seeds,
+  all buildable. Seeds past 60 s: off 5 (22, 27, 35, 44, 56), 0.25 3 (23, 27, 31), **0.5 2 (23: 77.7 s; 27: 90.8 s)**,
+  0.75 0. Adding seeds 2-16 gives: off 6 / 54, 0.25 5, 0.5 2, 0.75 1. Breaches only with the knob on: **seed 23 at 0.5
+  (77.7 s; 42.1 s off)** and at 0.25 (83.8 s), and seed 31 at 0.25 (65.5 s; 59.4 off). Seed 23's are BUG-1431's shape:
+  Returning with a load, 1.41-1.72 m from the Keep's footprint, so out of reach. Seed 27 at 0 is an outbound worker held at
+  the Keep **with the knob off** (Gathering, cargo 0, 0.63 m from the footprint, 89.8 s), the same class as seed 7's walker.
+  Seed 31 at 0.25 is a slow Gatherer 6-12 m out with a full load, a long trip rather than a wedge.
+- **docs/03 is wrong.** It says "criterion 7 holds at 0.5 on every seed" and "0.5 is the only value whose fuzz gaps all
+  stay under 60 s". Both are true only of seeds 2-16. The developer's rows assert that seed set and stay green; QA's sweep
+  row is the expected red.
+
+For the Producer: **this can't be fixed inside M6-S9's scope.** Every breach found comes from today's Keep-corner handling:
+BUG-1431's drop-off shape, or an outbound walker held at the corner. That happens with the knob off on 6 of 54 seeds, and
+curing it moves the shipped hash, which the brief rules out. The knob only changes which seeds hit it (fewer overall). The
+call: amend criterion 7 (for example "no more 60 s breaches than off over N seeds, and none away from a Keep corner") and
+schedule BUG-1431, or hold the shipping slice until BUG-1431 is fixed. Shipping 0.5 as planned leaves 2 breaches in 54
+seeds, against 6 with the knob off.

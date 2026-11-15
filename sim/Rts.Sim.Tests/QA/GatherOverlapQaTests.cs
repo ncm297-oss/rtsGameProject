@@ -202,4 +202,34 @@ public class GatherOverlapQaTests
         for (int t = 0; t < f.Length && first < 0; t++) if (f[t] != r[t]) first = t;
         _out.WriteLine($"{count} workers at {overlap}: spawn orders first differ at tick {first} (-1: never in 3,000)");
     }
+
+    /// <summary>
+    /// Re-check of BUG-1433 item 2: the developer's one-worker-each enemy scene (criterion 4, hash-equal), rebuilt as it now
+    /// stands (player 1's Keep 6 rows below player 0's, both west of the mine): the two workers must actually meet, or the
+    /// hash-equal row proves nothing about enemies. Counts ticks the two stand within 3 m and the closest share of their sum.
+    /// </summary>
+    [Theory]
+    [InlineData(0.0)]
+    [InlineData(0.5)]
+    public void EnemyScene_OneEach_DoTheTwoWorkersMeet_Report(double overlap)
+    {
+        Simulation sim = NewSim(DataAt(overlap), 8, players: 2);
+        EntityHandle mine0 = Setup(sim, Node.Mine, Workers.Laborer, 1)[0];
+        Building(sim, KeepX, KeepY + 6, 1);
+        EntityHandle other = Unit(sim, At(sim, KeepX + 5, KeepY + 6 + 2), player: 1);
+        sim.Enqueue(Command.Gather(1, other, At(sim, MineX, MineY)));
+        UnitStore u = sim.World.Units;
+        int near = 0;
+        float closest = float.PositiveInfinity;
+        for (int t = 0; t < 2400; t++)
+        {
+            sim.Tick();
+            float d = Vector2.Distance(u.Position[mine0.Index], u.Position[other.Index]);
+            if (d < 3f) near++;
+            closest = MathF.Min(closest, d / (u.Radius[mine0.Index] + u.Radius[other.Index]));
+        }
+        _out.WriteLine($"one each at {overlap}: within 3 m for {near} ticks of 2,400; closest {closest:F3} of the radii sum; banked p0 {sim.World.Gold[0]}, p1 {sim.World.Gold[1]}");
+        // A report, not a bound (the scene is the developer's): at 2026-11-15 the two never come within 3 m (0 ticks; closest
+        // 5.51 of the sum) at 0 or 0.5, so the hash-equal row is vacuous for enemy contact (BUG-1433 item 2, still open for it).
+    }
 }
