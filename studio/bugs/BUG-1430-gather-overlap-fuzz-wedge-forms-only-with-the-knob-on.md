@@ -2,8 +2,8 @@
 
 | Field | Value |
 | --- | --- |
-| Severity | S2 |
-| Status | open |
+| Severity | S3 (filed S2 by QA against criterion 7 as written; re-triaged by the Producer at the 2026-11-14-2156 ACCEPT, see "Producer ruling") |
+| Status | open (gates the session that ships a non-zero `gatherOverlap`; root BUG-1431) |
 | Found | 2026-11-14-2156, task M6-S9 (QA) |
 | System | sim: movement / economy (gather loop at a Keep's corner), tests (`Movement/GatherOverlapFuzzTests`) |
 | Fixed by | |
@@ -94,3 +94,16 @@ curing it moves the shipped hash, which the brief rules out. The knob only chang
 call: amend criterion 7 (for example "no more 60 s breaches than off over N seeds, and none away from a Keep corner") and
 schedule BUG-1431, or hold the shipping slice until BUG-1431 is fixed. Shipping 0.5 as planned leaves 2 breaches in 54
 seeds, against 6 with the knob off.
+
+## Producer ruling (2026-11-14-2156 ACCEPT)
+- Criterion 7's "no worker without a trip for 60 s" was the Producer's error at the PLAN (rule 48, now rule 66): it
+  does not hold with the knob **off** either (6 of 54 fuzz seeds, QA's sweep), and the brief forbade any change to
+  knob-off behaviour, so the task could not move it. It is re-read as "measure and report". What was measured: seeds
+  past 60 s over seeds 2-56: off 6, 0.25 5, 0.5 2, 0.75 1; every breach is BUG-1431's Keep-corner shape; one
+  knob-only breach at 0.5 (seed 23, 77.7 s against 42.1 s off).
+- S3, not S2: the shipped data has no `gatherOverlap`, so no match on `main` can show it, and with the knob on the
+  wedge is rarer than today's. It is still **open and gates the value**: the session that ships a non-zero
+  `gatherOverlap` fixes BUG-1431 first (or in the same hash move) and must turn QA's five expected-red Stress rows
+  green (`EconomyFuzz_Seeds2To16_NoWedgeOnlyTheKnobForms` at 0.25 and 0.75, `Bug1430_*` x2,
+  `WiderSeedSweep_17To56_BreachesByValue`) or re-state them as "no more breaches than off, none away from a Keep
+  corner" with the figures. They reach `main` red by this ruling (rule 57; Stress only, not in the default loop).

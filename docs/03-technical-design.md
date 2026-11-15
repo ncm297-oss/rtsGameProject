@@ -12010,7 +12010,9 @@ changes (within 2 trips). At 24 workers on the mine: Laborers bank 3,430 at 0 an
 as one), five Laborers on a mine collect more stuck ticks than at 0 (226 against 85), and one fuzz seed's worker goes 82 s without a trip
 (seed 7, BUG-1430 below; 52.7 s at 0). Against 0.25: the gain is small (24 Laborers on the
 mine +6 %), 10 Gatherers on the tree line give up more than at 0 (40 against 35), and the drop-off wedge below runs 71-75 s
-on two seeds. **0.5 is the only value whose fuzz gaps all stay under 60 s (at most 51.4 s, all 14 seeds), and with it a crowded node's
+on two seeds. **On seeds 2-16, 0.5 is the only value whose fuzz gaps all stay under 60 s (at most 51.4 s, all 14 seeds;
+QA's wider sweep of seeds 17-56 breaks it too: seed 23 at 77.7 s, 42.1 s off, and seed 27 at 90.8 s, 89.8 s off; seeds
+past 60 s over seeds 2-56: off 6, 0.25 5, 0.5 2, 0.75 1, so the knob makes the wedge rarer, not gone), and with it a crowded node's
 workers stand at half to two thirds of their distance at 0 from their nearest (12 Laborers on the mine 0.40 m against
 0.78).** The matches (b) move: at 0.5 each side gathers more by 10:00 (up to +870 on Vathar), Vathar Crossing's
 winner flips (seat 1 at 23,322, seat 0 at 28,729: past its 24,000 bound), the
@@ -12039,7 +12041,10 @@ ships a value re-measures the M5-5 rows and decides Pale Hills by rules 43 / 45.
   knob made the scene (more trips, trees run out sooner, more workers parked at the Keep), not the wedge. At 57 s the fuzz
   re-orders a parked Laborer onto a loop, it presses in and shoves the walker free at 60 s; the gap then runs to 81.7 s for
   the trip still owed. Curing either wedge changes the shipped game's movement or economy (a hash move, the golden and the
-  pins), outside this slice: criterion 7 holds at 0.5 on every seed, not at 0.25 or 0.75 (a Producer call). And today's
+  pins), outside this slice: criterion 7 holds at 0.5 on seeds 2-16 only, not at 0.25 or 0.75, and not on seeds 23 and
+  27 of QA's wider sweep. **Producer ruling (ACCEPT, 2026-11-14-2156):** the 60 s window does not hold with the knob off
+  either (6 of 54 seeds), so it was "measure and report" for this slice (rule 66); the session that ships a value fixes
+  BUG-1431 in the same hash move and turns QA's five red Stress rows green or re-states them against off. And today's
   rules have no floor between walkers: off, two Laborers came within 2.8 cm (16 at the tree line).
 - **Criterion 5, Stop (BUG-1432).** A worker leaving the loop with a Move is back at the radii sum in 3-5 ticks. With a Stop
   beside a mate that keeps working, both stand, and standing units never push apart under today's rules (off, two Idle
@@ -12048,7 +12053,8 @@ ships a value re-measures the M5-5 rows and decides Pale Hills by rules 43 / 45.
   the Stop ends the pair (an Idle worker and a gatherer), and criterion 4 keeps that pair on today's rules. Meeting it needs
   either a standing-overlap rule for every pair (separating standing units; a hash move off too) or an exception to
   criterion 4 (a "just left the loop" separation, knob-on only, which needs per-unit state or a rule on the Stop itself).
-  No rule was added; a Producer call: amend the criterion (Stop: separates when either unit next moves) or schedule one.
+  No rule was added. **Producer decision (ACCEPT, 2026-11-14-2156; owner may revisit): the criterion is amended, a Stop
+  separates the pair when either unit next moves** (BUG-1432 closed as wontfix; docs/01 2026-11-15 (a)).
 - **Spawn order.** Two workers on a mine run bit-equal in either spawn order at 0 and 0.5 for 2.5 minutes; four do not, at
   0 either (first difference tick 1,568 off, 404 at 0.5): the economy phase and the wall clips go in slot order, as
   `LocalMovementTests`' column row says. Same seed and commands give the same hash (the twins rows).

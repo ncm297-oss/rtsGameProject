@@ -2,8 +2,8 @@
 
 | Field | Value |
 | --- | --- |
-| Severity | S2 |
-| Status | open (needs a Producer call: the criterion cannot hold "under today's rules") |
+| Severity | S4 (filed S2 by QA against criterion 5 as written; re-triaged by the Producer at the 2026-11-14-2156 ACCEPT) |
+| Status | wontfix (Producer decision 2026-11-14-2156, owner may revisit: a Stop does not push an overlapped pair apart; they part when either next moves) |
 | Found | 2026-11-14-2156, task M6-S9 (QA; reported as "partly met" by the developer) |
 | System | sim: movement (standing units, `MovementSystem`), the M6-S9 brief |
 | Fixed by | |
@@ -41,3 +41,15 @@ criterion 4 requires that pair to stay on today's rules, which never separate tw
 needs either a standing-overlap rule for every pair (moves the shipped hash) or a knob-on-only exception to criterion 4.
 **Criteria 4 and 5 conflict as written.** The Producer picks: amend criterion 5 (Stop: "separates when either unit next
 moves", 2.8-11.5 s today) or schedule a rule.
+
+## Producer ruling (2026-11-14-2156 ACCEPT)
+- The brief's criteria 4 and 5 contradicted each other (the Producer's error at the PLAN): a Stop ends the gather
+  pair, criterion 4 keeps every non-gather pair on today's rules, and today's rules never separate two standing
+  units. Criterion 5 is amended to: **a Move separates the pair within 2 s (met: 3-5 ticks) and no unit ever steps
+  past its speed (met); after a Stop the pair parts when either unit next moves** (measured: 2.8-11.5 s in the
+  scenes, because a passing worker shoves one of them).
+- Why not a rule: separating standing units is a change to every pair in the game (a hash move, every pin
+  re-measured) for a case the player causes on purpose and that looks the same as today's knob-off game, where two
+  walking Laborers can already end 2.8 cm apart. If the owner wants standing workers to spread out, it is one inbox
+  note ("stopped workers should spread") and its own task.
+- `GatherOverlapTests.Criterion5_*` keep their measured figures as reports.
