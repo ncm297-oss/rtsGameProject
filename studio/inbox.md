@@ -9,6 +9,23 @@ Commit and push after editing, from either machine (or ask Claude to).
 
 ## New
 
+- 2026-11-14 · **Two requests (owner, relayed by the watcher session).**
+  1. **Teblor models, expedited.** The Teblor have no character models at all: `units.json` names seven
+     (`teblor/teblor_gatherer`, `_warrior`, `_javelin_thrower`, `_destrier_rider`, `_shaman`, `_breaker`, `_war_dog`) and none
+     exists under `game/assets/models/`, so they would draw as capsules; Teblor buildings carry no model either. Owner wants
+     the Teblor on screen sooner: please put the five humanoids (Gatherer, Warrior, Javelin Thrower, Shaman, Breaker) at the
+     front of the view track's art queue, ahead of further Malazan / Whirlwind slices, built the way docs/04 plans (Universal
+     Base Character at 1.5x, the two outfits on disk recoloured, team colour, via the import tooling and
+     `tools/asset-manifest.json`). The Destrier Rider (no horse pack on disk) and the War-dog (no dog pack) follow once your
+     default for them stands; if they need an owner call, put it under Waiting on you. Say in STATE when each lands.
+  2. **Shift-click to queue orders.** Owner wants to Shift + click to queue actions for units. The sim already has an order
+     queue (`OrderSystem`, `OrderConstants.QueueCapacity`; Shift appends instead of replacing) and the view passes Shift on
+     move, attack, build and ability casts, so part of this may exist and the owner may not have seen it, or some orders
+     do not queue. Please audit which unit orders queue today (move, attack-move, attack, gather, repair, garrison, patrol if
+     any, rally, abilities, build), close the gaps with the same command flag (no new mechanic), and make the queue
+     visible (waypoint line or markers per queued order) if it is not; then tell the owner in STATE what queues and how to
+     see it. Sim + view task, with tests; check the replay golden hashes (queued orders touch determinism).
+
 ## Processed
 
 - 2026-11-12 · **The art call (owner): look: go.** Keep the Quaternius stack; add outfits + team colour (per the
