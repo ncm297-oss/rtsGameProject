@@ -7,8 +7,8 @@ namespace Rts.Sim.Tests.Content;
 
 /// <summary>
 /// D-R36: every faction page has the sections and columns the content pins read, in a shape they can parse, for every
-/// faction of the data and every page written ahead of its data (<see cref="ContentFactions.PagesAhead"/>; none since D28
-/// shipped teblor.md's roster, whose page the edit rows below still use).
+/// faction of the data and every page written ahead of its data (<see cref="ContentFactions.PagesAhead"/>: shadow.md since
+/// D-R38; teblor.md's roster shipped in D28, and its page keeps the edit rows below).
 /// The pins themselves compare values; this checks only that there is something to compare, so a faction whose files land
 /// is pinned the same session, and a page missing a section fails here naming the page, the section and the pin that
 /// reads it, not as a bare index or key error deep in a pin.
@@ -358,6 +358,54 @@ public class PagePinReadinessTests
         string[] edited = (string[])lines.Clone();
         edited[i] = lines[i].Replace(find, replace, StringComparison.Ordinal);
         List<string> problems = Problems("teblor", edited);
+        Assert.True(problems.Any(p => p.StartsWith(expected, StringComparison.Ordinal)), $"expected '{expected}', got:\n{string.Join("\n", problems)}");
+    }
+
+    /// <summary>
+    /// D-R38: the page written ahead is checked, not skipped: shadow.md is in <see cref="ContentFactions.Pages"/>, and a copy
+    /// of it without one whole section (its heading to the next <c>## </c>) fails naming the page, the section and the pin
+    /// that reads it.
+    /// </summary>
+    [Theory]
+    [InlineData("## Techs", "shadow.md: no '## Techs' section (read by TechContentTests C)")]
+    [InlineData("## Units", "shadow.md: no '## Units' section (read by UnitContentTests G)")]
+    [InlineData("## Abilities", "shadow.md: no '## Abilities' section (read by AbilityContentTests)")]
+    [InlineData("## Buildings", "shadow.md: no '## Buildings' section (read by BuildingContentTests G / J)")]
+    [InlineData("## Difficulty", "shadow.md: no '## Difficulty' section (read by AiContentTests J)")]
+    [InlineData("## AI build order (Normal)", "shadow.md: no '## AI build order (Normal)' section (read by AiContentTests A, AiAdaptsContentTests)")]
+    [InlineData("## Faction upgrade: Wraith-binding", "shadow.md: no '## Faction upgrade: <name>' section (read by TechContentTests B)")]
+    public void AShadowPageWithoutASection_FailsNamingThePageTheSectionAndThePin(string heading, string expected)
+    {
+        Assert.Contains("shadow", ContentFactions.Pages);
+        string[] lines = PageTables.FactionLines("shadow");
+        Assert.Empty(Problems("shadow", lines));
+        int from = Array.IndexOf(lines, heading);
+        Assert.True(from >= 0, $"shadow.md has no line '{heading}'");
+        int to = from + 1;
+        while (to < lines.Length && !lines[to].StartsWith("## ", StringComparison.Ordinal)) to++;
+        string[] cut = lines[..from].Concat(lines[to..]).ToArray();
+        List<string> problems = Problems("shadow", cut);
+        Assert.True(problems.Any(p => p.StartsWith(expected, StringComparison.Ordinal)), $"expected '{expected}', got:\n{string.Join("\n", problems)}");
+    }
+
+    /// <summary>D-R38: single edits of shadow.md fail by name too (the subsections and cells the pins parse).</summary>
+    [Theory]
+    [InlineData("### Unit notes", "### Notes", "shadow.md: no '### Unit notes' section (read by UnitContentTests H / J, PassiveContentTests)")]
+    [InlineData("#### How the AI adapts", "#### How the AI learns", "shadow.md: no '#### How the AI adapts' heading under '## AI build order (Normal)' (AiAdaptsContentTests)")]
+    [InlineData("### Opening 1: `standard` (Forest ambush)", "### Opening 1: `standard` (Ambush)", "shadow.md: no '### Opening 1: `standard` (Forest ambush)' heading for opening row 1")]
+    [InlineData("| 3 | 36 | 1 | 1 | Ram Shed |", "| 3 | 36 | 1 | 1 | Ram Shed | x |", "shadow.md Units row Edur Ram: 20 cells, header 19")]
+    [InlineData("| 3.0 | melee | buildings |", "| 3.0 | melee | structures |", "shadow.md Units row Edur Ram Targets: 'structures' is not one of")]
+    [InlineData("first at 18 army pop and 1,516 gold + wood", "first at 18 army pop", "shadow.md opening 1 `standard`: no 'Attack waves:")]
+    [InlineData("e.g. two Edur Warriors from home", "e.g. some Edur Warriors from home", "shadow.md Defense: no 'One X (N gold + wood)")]
+    [InlineData("(not pinned)", "(not yet)", "shadow.md High starting resources: no 'not pinned'")]
+    public void AnEditedShadowPage_FailsNamingTheSection(string find, string replace, string expected)
+    {
+        string[] lines = PageTables.FactionLines("shadow");
+        int i = Array.FindIndex(lines, l => l.Contains(find, StringComparison.Ordinal));
+        Assert.True(i >= 0, $"shadow.md has no line containing '{find}'");
+        string[] edited = (string[])lines.Clone();
+        edited[i] = lines[i].Replace(find, replace, StringComparison.Ordinal);
+        List<string> problems = Problems("shadow", edited);
         Assert.True(problems.Any(p => p.StartsWith(expected, StringComparison.Ordinal)), $"expected '{expected}', got:\n{string.Join("\n", problems)}");
     }
 

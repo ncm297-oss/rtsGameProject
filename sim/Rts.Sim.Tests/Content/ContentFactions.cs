@@ -10,10 +10,10 @@ internal static class ContentFactions
 {
     /// <summary>
     /// Pages written ahead of their faction's data, checked for the sections the pins read
-    /// (<see cref="PagePinReadinessTests"/>). Empty since D28 shipped the Teblor roster (teblor.md is a data faction's page
-    /// now); the next faction page written ahead (M9's) goes here until its files land.
+    /// (<see cref="PagePinReadinessTests"/>). D-R38: shadow.md (M8), written ahead until the Shadow roster's schemas exist
+    /// and its files land; it leaves this list the session they do (teblor.md left it with D28).
     /// </summary>
-    public static readonly string[] PagesAhead = Array.Empty<string>();
+    public static readonly string[] PagesAhead = { "shadow" };
 
     /// <summary>Every faction key of the shipped data, in data order.</summary>
     public static string[] Keys => TestSim.Data.Factions.Select(f => f.Key).ToArray();

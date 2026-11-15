@@ -46,10 +46,15 @@ public class TeblorLandingOpeningReportTests(ITestOutputHelper output)
     private static double TimeOf(JsonObject opening, string building) =>
         (double)opening["buildOrder"]!.AsArray().Single(s => (string)s!["do"]! == "build" && (string?)s["id"] == building)!["at"]!["time"]!;
 
-    /// <summary>The shipped data with <paramref name="opening"/> as the Teblor's, the landing's rows when <paramref name="rows"/>, and the share.</summary>
-    private static GameData Make(JsonObject opening, bool rows, double share) => AiScenes.DataWith(dir =>
+    /// <summary>
+    /// The shipped data with <paramref name="opening"/> as the Teblor's, the landing's rows when <paramref name="rows"/> and
+    /// the landing taken back out (<see cref="TeblorLanding.BeforeRoot"/>) when not, and the share. BUG-1400: since D31 the
+    /// shipped files carry the rows, so "without the rows" is built from a copy with them removed, not the shipped data.
+    /// </summary>
+    internal static GameData Make(JsonObject opening, bool rows, double share) => AiScenes.DataWith(dir =>
     {
         if (rows) TeblorLanding.Edit(dir);
+        else foreach (string rel in TeblorLanding.Files) dir.EditJson(rel, root => TeblorLanding.BeforeRoot(rel, root));
         dir.EditJson("factions/teblor/ai.json", root => root["openings"]![0] = JsonNode.Parse(opening.ToJsonString()));
         dir.EditJson("common/rules.json", root => root["ai"]!["reserveArmyShare"] = share);
     });
@@ -159,6 +164,7 @@ public class TeblorLandingOpeningReportTests(ITestOutputHelper output)
         JsonObject v0 = Openings().Single(o => o.Name == "V0").Opening;
         GameData off = Make(v0, false, 0.5), on = Make(v0, true, 0.5);
         int frenzyOn = on.FindStatus(TeblorLanding.Status), frenzyOff = off.FindStatus("frenzied");
+        Assert.True(frenzyOn >= 0 && frenzyOff >= 0 && off.FindStatus(TeblorLanding.Status) < 0, "the two copies are not without / with the rows (BUG-1400)");
         var jobs = Maps.SelectMany(m => Opponents.Select(o => (Map: m, Opponent: o))).ToArray();
         var lines = new string[jobs.Length];
         var firsts = new (int Cast, int Diverged)[jobs.Length];
