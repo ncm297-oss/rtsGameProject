@@ -32,3 +32,15 @@ BUG-1462 lists the malazan / whirlwind prose; these two Teblor ones are missing:
   steps 15, 16".
 - lines 337-338: "sends its first wave at 340 s ... against a Normal Whirlwind it sends its first wave at 362 s" quoting
   `QA/Content/TeblorOpeningQaTests`, whose rows now read 323 s and 316 s (Age II 448 / 429 s, beaten at 1,022 s, not 910 s).
+
+## Re-check, fix round 1 (2026-11-15-0506, e49be01)
+- Item 2: **fixed** in docs/03 (Known = Raraku 1, 3, 4 and 6; `FarExpandProbe` (raraku, 1) listed green) and in the
+  developer's unapplied BUG-1460 patch. Checked against `MatchCriterionSweepQaStressTests.Known` and QA's round-0 Stress run.
+- Item 3: **fixed**: both Teblor sentences are now on docs/03's data-track list, with cells matching
+  `TeblorOpeningQaTests` (6,461 / 6,321 ticks = 323 / 316 s; Age II 448 / 429 s; beaten 20,444 = 1,022 s).
+- Item 1: **open, deferred to the Producer**. The developer reports that an every-tick check flags fuzz seed 14 at knob 0
+  at tick 1,240 on a Teblor Gatherer 0.03 m from its node, Gathering (cargo 14 of 15), which delivers at 1,272. Plausible
+  (a 120 m walk leaves the clock past 1,200 when the load starts) and QA did not reproduce it. The fix needs "held" to
+  exclude a worker in reach and gathering. QA's own every-tick check in `KeepCornerCureQaStressTests` (moved at most 2 m
+  in 600 ticks, past 1,200 without a delivery) has the same gap and would flag that worker too; its staged rows are green
+  today, so nothing there is mis-reported yet. Status stays open on item 1 only.
