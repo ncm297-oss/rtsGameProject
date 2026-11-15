@@ -40,4 +40,15 @@ public sealed class FactionDef
     public int RegenPerTick { get; init; }
     /// <summary>M7-1: ticks a unit of the faction must go without damage before <see cref="RegenPerTick"/> applies (<c>regen.delay</c>); 0 without regen.</summary>
     public int RegenDelayTicks { get; init; }
+    /// <summary>
+    /// M8-1: the status (of kind <see cref="StatusKind.Stealthed"/>) the faction's forest stealth holds on a unit that qualifies
+    /// (<c>forestStealth.status</c>); -1 without the bonus (no <c>forestStealth</c> object).
+    /// </summary>
+    public int ForestStealthStatus { get; init; } = -1;
+    /// <summary>M8-1: ticks a unit must go without its attack landing (or cast resolving) and without losing hit points before the forest hides it (<c>forestStealth.delay</c>); 0 without the bonus.</summary>
+    public int ForestStealthDelayTicks { get; init; }
+    /// <summary>M8-1: the unit slots the forest never hides (<c>forestStealth.exceptSlots</c>), bit <c>1 &lt;&lt; (int)</c><see cref="UnitSlot"/> each; 0 for none.</summary>
+    public int ForestStealthExceptSlots { get; init; }
+    /// <summary>M8-1: whether the faction has the forest-stealth bonus.</summary>
+    public bool HasForestStealth => ForestStealthStatus >= 0;
 }

@@ -15,7 +15,7 @@ Status legend: **Next** = start here, **Planned** = not started, **Done** = acce
 | M5 | AI opponent | **In progress** (since 2026-10-11; 8 / 9 criteria (1, 2, 3, 4, 5, 7, 8, 9), three owner-requested criteria added 2026-10-14; left: criterion 6, the owner's playtest) | Lose to a Whirlwind AI |
 | M6 | Game shell & real art | **Started ahead** (view track since 2026-10-11; 5 / 10 criteria (1, 2, 3, 4, 7); criterion 7 ticked 2026-11-06-0326 when M6-S8's two maps landed) | A friend can play it |
 | M7 | Teblor | **Started** (2026-11-09-2226, while M5 waits on the owner's playtest and M6 on the owner's items; 3 / 4 criteria (1, 2, 3; criterion 3 since D31, 2026-11-14-0616); the Teblor roster on `main` since 2026-11-11-2256) | Third faction: scale and population systems proven |
-| M8 | Shadow | Planned | Fourth faction: stealth polish, summons |
+| M8 | Shadow | **Started** (sim track, 2026-11-14-1246, while M7 waits on the Teblor balance pass and models; 0 / 3 criteria; forest stealth built on test data, no Shadow roster yet) | Fourth faction: stealth polish, summons |
 | M9 | Tiste Andii | Planned | Fifth faction: darkness, flying, elite balance |
 
 M7-M9 order is adjustable. Teblor goes first because scale and pop cost are the simplest new
@@ -965,7 +965,13 @@ open S1 / S2. Retro below; open S3 / S4 listed there.)_
 
 ## M8 — Shadow
 
-- [ ] Forest stealth and Shadow Archer stand-still stealth; stealth visuals for owner and enemies.
+- [ ] Forest stealth and Shadow Archer stand-still stealth; stealth visuals for owner and enemies. (M8-1, 2026-11-14-1246:
+      **forest stealth is built as a generic faction bonus, on test data only**: `faction.json`
+      `forestStealth { status, delay, exceptSlots }`, `ForestStealthSystem` in phase 5 before the detection pass, the save
+      part `FRST` written only when the data has the bonus (format 10 unchanged, the shipped hash unchanged); docs/03
+      "Implementation (M8-1)". **Not ticked:** no shipped faction carries the block (the Shadow roster is the data
+      track's), the Shadow Archer's stand-still stealth is M8-2, the view's stealth visuals for a forest-hidden unit are
+      checked once a roster ships.)
 - [ ] Hounds (pack bonus, 7-alive limit), Aptorian Stalker, Shadow-step, Summon Wraiths.
 - [ ] Shadow AI with ambush behavior; models; balance pass (watch early-game stealth, see faction page).
 

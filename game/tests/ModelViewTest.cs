@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Text.Json.Nodes;
 using System.Threading.Tasks;
 using Godot;
@@ -28,6 +29,12 @@ namespace Rts.Game.Tests;
 /// (BUG-1320); a reused slot's model child is named <c>Model</c> and a team-less model warns once over three binds
 /// (BUG-1322); the crowd schedule (<see cref="CrowdAnimator"/>) under a camera over 400 models (the nearest every frame,
 /// every shown one within the stagger period, none hidden); the steady row runs the schedule too.
+/// M6-V21: six model types (the Heavy Infantry, Camp Follower, Raider and Desert Archer join); per model its height within
+/// 5 % of 1.8 m x its data <c>scale</c> and its clip map (read from the file) equal to the manifest's; the library holds
+/// every clip a map names; a fighting Heavy Infantry and Raider play their melee clip, a shooting Desert Archer its shot,
+/// from real sim states, a Camp Follower its three worker clips; a library lacking the melee clip gives idle; the figures
+/// follow the game speed (1x, 2x, 0.75x: the same frames advance a walk 1, 2 and 0.75 times as far, under a camera with the
+/// stagger too) and stand still while paused; the steady row is 400 models mixed over every model type.
 /// </remarks>
 public partial class ModelViewTest : Node
 {
@@ -73,6 +80,8 @@ public partial class ModelViewTest : Node
         LibraryRows(manifest);
         await StateRows(data, views, rgb);
         views.QueueFree();
+        await FightRows(data, manifest);
+        await SpeedRows(data);
         await MenuRow(data);
         ForgedRows(dataDir, data);
         WarningRow(data);
@@ -133,7 +142,20 @@ public partial class ModelViewTest : Node
         GD.Print($"{id}: {tris} triangles, {box.Size.Y:F2} m tall, feet at {box.Position.Y:F3}, toes ({toes.X:F2}, {toes.Y:F2}, {toes.Z:F2}), {skeleton?.GetBoneCount()} bones, materials [{string.Join(' ', mats)}]");
         Check(tris > 0 && tris <= maxTris, $"{id}: {tris} triangles, cap {maxTris}");
         Check(team == 1, $"{id}: {team} '{UnitModels.TeamMaterialName}' surfaces, want 1");
-        Check(box.Size.Y > 1.7f && box.Size.Y < 1.95f, $"{id}: {box.Size.Y} m tall, want about 1.8");
+        // M6-V21: within 5 % of the style guide's 1.8 m human at the type's data scale (docs/04 "Scale and dimensions").
+        float want = 1.8f * data.Units[type].Scale;
+        Check(Mathf.Abs(box.Size.Y - want) <= 0.05f * want, $"{id}: {box.Size.Y:F3} m tall, want {want:F2} m within 5 %");
+        // M6-V21: the clip map the file carries (glTF extras) is the manifest's.
+        var map = new List<string>();
+        foreach (UnitModels.Clip c in Enum.GetValues<UnitModels.Clip>())
+        {
+            string name = UnitModels.ClipNames[(int)c];
+            string source = views.Models.ClipSource(type, c)!;
+            string expect = (string?)m["clips"]![name] ?? name;
+            map.Add($"{name}={source}");
+            Check(source == expect, $"{id}: clip {name} plays the library's {source}, the manifest says {expect}");
+        }
+        GD.Print($"{id}: clip map [{string.Join(' ', map)}]");
         Check(Mathf.Abs(box.Position.Y) < 0.05f, $"{id}: feet at {box.Position.Y} m, want the origin");
         Check(toes.Z < -0.05f, $"{id}: toes point {toes}, want -Z");
         Check(skeleton?.GetBoneCount() == 65, $"{id}: {skeleton?.GetBoneCount()} bones, want the 65-bone Universal rig");
@@ -148,7 +170,10 @@ public partial class ModelViewTest : Node
         if (lib == null) return;
         var names = new SortedSet<string>();
         foreach (JsonNode? m in manifest["models"]!.AsArray())
-            foreach (KeyValuePair<string, JsonNode?> clip in m!["clips"]!.AsObject()) names.Add(clip.Key);
+            foreach (KeyValuePair<string, JsonNode?> clip in m!["clips"]!.AsObject()) names.Add((string)clip.Value!);
+        // M6-V21: and the library holds exactly the manifest's library.clips.
+        foreach (KeyValuePair<string, JsonNode?> clip in manifest["library"]!["clips"]!.AsObject()) Check(names.Contains(clip.Key), $"library clip {clip.Key} is played by no model");
+        Check(lib.GetAnimationList().Count == manifest["library"]!["clips"]!.AsObject().Count, $"library has {lib.GetAnimationList().Count} clips, the manifest {manifest["library"]!["clips"]!.AsObject().Count}");
         foreach (string name in names)
         {
             Check(lib.HasAnimation(name), $"library lacks {name}");
@@ -232,7 +257,10 @@ public partial class ModelViewTest : Node
         u.Free(new EntityHandle(a, u.Generation[a]));
         views.Sync(w, 1f);
         Check(!views.ViewOf(a)!.Visible && views.AnimatorOf(a)?.Active == false, "a dead model slot should hide and stop animating");
-        int[] kinds = { heavy, laborer, heavy };
+        // M6-V21: the Heavy Infantry is a model now: the capsule kind is the first type without one.
+        int capsule = 0;
+        while (capsule < data.Units.Length && views.DrawsModel(capsule)) capsule++;
+        int[] kinds = { capsule, laborer, capsule, heavy };
         foreach (int kind in kinds)
         {
             sim.Enqueue(Command.SpawnUnit(1, kind, west[5]));
@@ -329,8 +357,10 @@ public partial class ModelViewTest : Node
         views.QueueFree();
 
         // An LFS pointer in a model's place (a clone without git lfs pull): a scratch model root holding pointer files.
-        foreach (int t in new[] { shipped.FindUnit("malazan_laborer"), shipped.FindUnit("malazan_crossbowman") })
+        // M6-V21: a pointer for every shipped model type.
+        for (int t = 0; t < shipped.Units.Length; t++)
         {
+            if (!File.Exists(ProjectSettings.GlobalizePath(UnitModels.PathFor(shipped.Units[t].Model)))) continue;
             string model = shipped.Units[t].Model;
             string file = Path.Combine(_scratch, "models", model, model[(model.LastIndexOf('/') + 1)..] + ".glb");
             Directory.CreateDirectory(Path.GetDirectoryName(file)!);
@@ -359,12 +389,13 @@ public partial class ModelViewTest : Node
         const int perSide = 200;
         var sim = new Simulation(new SimConfig(5, 2, 2 * perSide, 4096) { Data = data });
         World w = sim.World;
-        int[] types = { data.FindUnit("malazan_laborer"), data.FindUnit("malazan_crossbowman") };
+        // M6-V21: mixed evenly over every model type.
+        int[] types = ModelTypes(data);
         NVector2[] west = StartLayout.Block(w.NavGrid, perSide, true, 1f), east = StartLayout.Block(w.NavGrid, perSide, false, 1f);
         for (int i = 0; i < perSide; i++)
         {
-            sim.Enqueue(Command.SpawnUnit(0, types[i % 2], west[i]));
-            sim.Enqueue(Command.SpawnUnit(1, types[i % 2], east[i]));
+            sim.Enqueue(Command.SpawnUnit(0, types[i % types.Length], west[i]));
+            sim.Enqueue(Command.SpawnUnit(1, types[(i + types.Length / 2) % types.Length], east[i]));
         }
         sim.Tick();
         sim.Tick();
@@ -384,10 +415,202 @@ public partial class ModelViewTest : Node
             views.AdvanceAnimations(1.0 / 60.0, eye);
             bytes += GC.GetAllocatedBytesForCurrentThread() - start;
         }
-        GD.Print($"steady: {views.ModelNodeCount} models, 120 syncs and crowd frames allocated {bytes} bytes ({views.Crowd.AdvancedLastFrame} players advanced in the last)");
+        GD.Print($"steady: {views.ModelNodeCount} models of {types.Length} types, 120 syncs and crowd frames allocated {bytes} bytes ({views.Crowd.AdvancedLastFrame} players advanced in the last)");
         Check(views.ModelNodeCount == 2 * perSide, $"{views.ModelNodeCount} model instances for {2 * perSide} units");
         Check(bytes == 0, $"120 steady syncs of {2 * perSide} models allocated {bytes} bytes");
         views.QueueFree();
+    }
+
+    // M6-V21: every type drawn as a model on the shipped data, in type order.
+    private static int[] ModelTypes(GameData data)
+    {
+        var probe = new UnitModels(data, new uint[] { 0xC03030 });
+        var list = new List<int>();
+        for (int t = 0; t < data.Units.Length; t++) if (probe.Has(t)) list.Add(t);
+        return list.ToArray();
+    }
+
+    // M6-V21, criterion 2: from real sim states, a Heavy Infantry and a Raider fighting each other play their melee clip, a
+    // Desert Archer shooting a Crossbowman its shot; a Camp Follower's worker clips; a library without the melee clip: idle.
+    private async Task FightRows(GameData data, JsonNode manifest)
+    {
+        var sim = new Simulation(new SimConfig(7, 2, 32, 4096) { Data = data });
+        World w = sim.World;
+        UnitStore u = w.Units;
+        int heavy = data.FindUnit("malazan_heavy_infantry"), raider = data.FindUnit("whirlwind_raider"),
+            archer = data.FindUnit("whirlwind_desert_archer"), follower = data.FindUnit("whirlwind_camp_follower"),
+            xbow = data.FindUnit("malazan_crossbowman");
+        NVector2[] west = StartLayout.Block(w.NavGrid, 8, true, 1f);
+        // The melee pair face to face; the archer 10 m from a crossbowman 30 m north of them (in the archer's range, 14 m).
+        sim.Enqueue(Command.SpawnUnit(0, heavy, west[0]));
+        sim.Enqueue(Command.SpawnUnit(1, raider, west[0] + new NVector2(1.5f, 0f)));
+        sim.Enqueue(Command.SpawnUnit(1, archer, west[0] + new NVector2(0f, 30f)));
+        sim.Enqueue(Command.SpawnUnit(0, xbow, west[0] + new NVector2(0f, 40f)));
+        sim.Enqueue(Command.SpawnUnit(1, follower, west[0] + new NVector2(-20f, 60f)));
+        sim.Tick();
+        sim.Tick();
+        var views = new UnitViews();
+        AddChild(views);
+        uint[] rgb = { 0xC03030, 0x3060D0 };
+        views.Bind(data, 32, rgb);
+        int h = Slot(u, 0, heavy), r = Slot(u, 1, raider), a = Slot(u, 1, archer), f = Slot(u, 1, follower);
+        if (!Check(h >= 0 && r >= 0 && a >= 0 && f >= 0 && Slot(u, 0, xbow) >= 0, $"fight rows: a spawn failed (slots {h} {r} {a} {f})")) return;
+        var who = new[] { (h, heavy, "a fighting heavy infantry"), (r, raider, "a fighting raider"), (a, archer, "a shooting desert archer") };
+        var seen = new bool[who.Length];
+        for (int tick = 0; tick < 400 && Array.IndexOf(seen, false) >= 0; tick++)
+        {
+            sim.Tick();
+            views.Sync(w, 1f);
+            for (int k = 0; k < who.Length; k++)
+            {
+                (int slot, int type, string label) = who[k];
+                if (seen[k] || !u.Alive[slot] || u.State[slot] != UnitState.Attacking) continue;
+                seen[k] = true;
+                string source = (string)manifest["models"]!.AsArray().First(m => (string)m!["id"]! == data.Units[type].Key)!["clips"]!["attack"]!;
+                AttackClip(views, slot, type, source, label);
+            }
+        }
+        for (int k = 0; k < who.Length; k++) Check(seen[k], $"{who[k].Item3}: never attacked within 400 ticks (state {u.State[who[k].Item1]})");
+        // The brief's clips: a melee swing for the two line units, the shot for the archer (no bow clip in UAL1 / UAL2).
+        Check(views.Models!.ClipSource(heavy, UnitModels.Clip.Attack) == "attack_melee" && views.Models.ClipSource(raider, UnitModels.Clip.Attack) == "attack_melee",
+            $"the line units attack with {views.Models.ClipSource(heavy, UnitModels.Clip.Attack)} / {views.Models.ClipSource(raider, UnitModels.Clip.Attack)}, want attack_melee");
+        Check(views.Models.ClipSource(archer, UnitModels.Clip.Attack) == "attack", $"the archer shoots with {views.Models.ClipSource(archer, UnitModels.Clip.Attack)}, want the library's attack");
+
+        // The Camp Follower's three worker states, written into this test's own world (the view only reads them).
+        u.State[f] = UnitState.Building;
+        views.Sync(w, 1f);
+        CheckClip(views, f, "build", "a building camp follower");
+        u.State[f] = UnitState.Gathering;
+        u.GatherNode[f] = default;
+        u.CargoKind[f] = ResourceKind.Wood;
+        views.Sync(w, 1f);
+        CheckClip(views, f, "gather_wood", "a camp follower gathering wood");
+        u.CargoKind[f] = ResourceKind.Gold;
+        views.Sync(w, 1f);
+        CheckClip(views, f, "gather_gold", "a camp follower gathering gold");
+        TeamSurfaceRow(views, f, follower, UnitViews.ColorFromRgb(rgb[1]), "a gathering camp follower");
+        views.QueueFree();
+        await Frames(1);
+
+        // A library that lacks the melee clip (a cut copy swapped in, as QaM6V20Test row 2 does): a fighting Heavy
+        // Infantry plays idle, never nothing.
+        var field = typeof(UnitModels).GetField("_library", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)!;
+        var real = (AnimationLibrary)field.GetValue(null)!;
+        var cut = new AnimationLibrary();
+        foreach (StringName name in real.GetAnimationList()) if (name != "attack_melee") cut.AddAnimation(name, real.GetAnimation(name));
+        field.SetValue(null, cut);
+        try
+        {
+            var lacking = new UnitViews();
+            AddChild(lacking);
+            lacking.Bind(data, 32, rgb);
+            u.State[h] = UnitState.Attacking;
+            if (u.Alive[h])
+            {
+                lacking.Sync(w, 1f);
+                CheckClip(lacking, h, "idle", "a fighting heavy infantry without the library's attack_melee");
+                Check(lacking.ShownClip(h) == (int)UnitModels.Clip.Attack, $"the fallback should still record the attack state, shows {lacking.ShownClip(h)}");
+            }
+            else Check(false, "the heavy infantry died before the fallback row");
+            lacking.QueueFree();
+        }
+        finally
+        {
+            field.SetValue(null, real);
+        }
+        await Frames(1);
+    }
+
+    // The player of slot plays "attack", and that is the library clip the type's map names (by Animation identity).
+    private void AttackClip(UnitViews views, int slot, int type, string source, string who)
+    {
+        AnimationPlayer? anim = views.AnimatorOf(slot);
+        CheckClip(views, slot, "attack", who);
+        Animation? playing = anim != null && anim.HasAnimation("attack") ? anim.GetAnimation("attack") : null;
+        Animation? want = UnitModels.Library?.GetAnimation(source);
+        GD.Print($"{who}: plays attack = library {source} ({want?.Length:F2} s)");
+        Check(playing != null && playing == want, $"{who}: its attack is {playing?.ResourceName} ({playing?.Length} s), want the library's {source} ({want?.Length} s)");
+        Check(views.Models!.ClipSource(type, UnitModels.Clip.Attack) == source, $"{who}: clip map says {views.Models.ClipSource(type, UnitModels.Clip.Attack)}, manifest {source}");
+    }
+
+    // M6-V21, criterion 3: the figures follow the game speed. 400 walking models mixed over the model types under a camera
+    // (the 48 nearest every frame, the rest staggered): after warm-up frames at a speed, every player is put at 0 and nine
+    // frames of 1/60 s run; every figure's walk is then at 9/60 s x the speed (1x, 2x, 0.75x), the near and the staggered
+    // alike. Paused (the tree, this node pausable): nine frames move nothing and the schedule doesn't run; resumed, it runs.
+    private async Task SpeedRows(GameData data)
+    {
+        const int perSide = 200;
+        const double dt = 1.0 / 60.0;
+        var sim = new Simulation(new SimConfig(5, 2, 2 * perSide, 4096) { Data = data, Combat = false });
+        World w = sim.World;
+        UnitStore u = w.Units;
+        int[] types = ModelTypes(data);
+        NVector2[] west = StartLayout.Block(w.NavGrid, perSide, true, 1f), east = StartLayout.Block(w.NavGrid, perSide, false, 1f);
+        for (int i = 0; i < perSide; i++)
+        {
+            sim.Enqueue(Command.SpawnUnit(0, types[i % types.Length], west[i]));
+            sim.Enqueue(Command.SpawnUnit(1, types[i % types.Length], east[i]));
+        }
+        sim.Tick();
+        sim.Tick();
+        var runner = new SimRunner { Name = "SpeedRunner" };
+        AddChild(runner);
+        var views = new UnitViews { Runner = runner, ProcessMode = ProcessModeEnum.Pausable };
+        AddChild(views);
+        views.Bind(data, 2 * perSide, new uint[] { 0xC03030, 0x3060D0 });
+        // Every unit walks (the view only reads the state): one clip, one length, for every figure.
+        for (int i = 0; i < u.Capacity; i++) if (u.Alive[i]) u.State[i] = UnitState.Moving;
+        views.Sync(w, 1f);
+        int anchor = Slot(u, 0, types[0]);
+        Vector3 eye = views.ViewOf(anchor)!.GlobalPosition + new Vector3(0f, 30f, 10f);
+        int n = 0;
+        for (int i = 0; i < u.Capacity; i++) if (views.AnimatorOf(i) != null) n++;
+        Check(n == 2 * perSide, $"speed: {n} model players for {2 * perSide} units");
+
+        var amount = new Dictionary<double, double>();
+        foreach (double speed in new[] { 1.0, 2.0, 0.75 })
+        {
+            runner.GameSpeed = speed;
+            Check(views.AnimationRate == speed, $"speed {speed}: the animation rate is {views.AnimationRate}");
+            for (int k = 0; k < CrowdAnimator.StaggerFrames; k++) views.AdvanceAnimations(dt, eye);
+            for (int i = 0; i < u.Capacity; i++) views.AnimatorOf(i)?.Seek(0, true);
+            for (int k = 0; k < 3 * CrowdAnimator.StaggerFrames; k++) views.AdvanceAnimations(dt, eye);
+            double min = double.MaxValue, max = double.MinValue;
+            int full = 0;
+            for (int i = 0; i < u.Capacity; i++)
+            {
+                if (views.AnimatorOf(i) is not AnimationPlayer p) continue;
+                min = Math.Min(min, p.CurrentAnimationPosition);
+                max = Math.Max(max, p.CurrentAnimationPosition);
+                if (views.Crowd.WasFullRate(i)) full++;
+            }
+            amount[speed] = max;
+            double want = 3 * CrowdAnimator.StaggerFrames * dt * speed;
+            GD.Print($"speed {speed}x: nine frames advanced every walk {min:F4} - {max:F4} s (want {want:F4}), {full} at the full rate in the last frame");
+            Check(Math.Abs(min - want) < 1e-4 && Math.Abs(max - want) < 1e-4, $"speed {speed}x: walks advanced {min:F4} - {max:F4} s over nine frames, want {want:F4} for every figure");
+        }
+        Check(Math.Abs(amount[2.0] / amount[1.0] - 2.0) < 1e-3 && Math.Abs(amount[0.75] / amount[1.0] - 0.75) < 1e-3,
+            $"speed: 2x / 1x = {amount[2.0] / amount[1.0]:F4}, 0.75x / 1x = {amount[0.75] / amount[1.0]:F4}");
+
+        // Paused: nothing moves, the schedule holds; resumed: it runs again at the speed.
+        runner.GameSpeed = 1.0;
+        var before = new double[u.Capacity];
+        for (int i = 0; i < u.Capacity; i++) before[i] = views.AnimatorOf(i)?.CurrentAnimationPosition ?? 0;
+        long frame = views.Crowd.Frame;
+        GetTree().Paused = true;
+        double pausedRate = views.AnimationRate;
+        for (int k = 0; k < 3 * CrowdAnimator.StaggerFrames; k++) views.AdvanceAnimations(dt, eye);
+        long pausedFrames = views.Crowd.Frame - frame;
+        GetTree().Paused = false;
+        int moved = 0;
+        for (int i = 0; i < u.Capacity; i++) if (views.AnimatorOf(i) is AnimationPlayer p && p.CurrentAnimationPosition != before[i]) moved++;
+        GD.Print($"paused: rate {pausedRate}, {moved} figures moved over nine frames, the schedule ran {pausedFrames} frames");
+        Check(pausedRate == 0.0 && moved == 0 && pausedFrames == 0, $"paused: rate {pausedRate}, {moved} figures moved, {pausedFrames} schedule frames (want 0, 0, 0)");
+        views.AdvanceAnimations(dt, eye);
+        Check(views.AnimationRate == 1.0 && views.Crowd.Frame == frame + 1 && views.Crowd.AdvancedLastFrame > 0, "resumed: the schedule did not run again");
+        views.QueueFree();
+        runner.QueueFree();
+        await Frames(1);
     }
 
     // A clip keeps the figure upright over its feet, facing the slot's forward: the head about 1.6 m over the ground point
@@ -557,8 +780,9 @@ public partial class ModelViewTest : Node
         for (int i = 0; i < n; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
     }
 
-    private void Check(bool ok, string why)
+    private bool Check(bool ok, string why)
     {
         if (!ok) _failures.Add(why);
+        return ok;
     }
 }

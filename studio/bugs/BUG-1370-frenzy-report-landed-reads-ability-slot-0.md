@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S4 |
-| Status | open |
+| Status | fixed (M8-1, 2026-11-14-1246; QA verified) |
 | Found | 2026-11-14-0616, task M7-H2 (QA) |
 | System | `Stress/FrenzyCastReportTests` (a measurement harness the data track runs read-only) |
-| Fixed by | |
+| Fixed by | 62542ff (M8-1); regression `Abilities/FrenzyReportSlotTests` (a forged Shaman with a second ability listed before the Frenzy; failed first), the report reads `FrenzySlot` for "landed" and `TryGetAbilityReady` |
 
 ## Repro
 1. Read `sim/Rts.Sim.Tests/Stress/FrenzyCastReportTests.cs`, `Play`, the per-tick loop:

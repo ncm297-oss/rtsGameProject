@@ -215,7 +215,10 @@ public partial class QaM6V20Test : Node
         var sim = new Simulation(new SimConfig(3, 2, 8, 4096) { Data = _data, Combat = false });
         World w = sim.World;
         UnitStore u = w.Units;
-        int laborer = _data.FindUnit("malazan_laborer"), xbow = _data.FindUnit("malazan_crossbowman"), heavy = _data.FindUnit("malazan_heavy_infantry");
+        int laborer = _data.FindUnit("malazan_laborer"), xbow = _data.FindUnit("malazan_crossbowman");
+        // M6-V21: the Heavy Infantry is a model now; the capsule kind is the first type still drawn as a capsule.
+        int heavy = 0;
+        while (heavy < _data.Units.Length && views.DrawsModel(heavy)) heavy++;
         NVector2[] west = StartLayout.Block(w.NavGrid, 2, true, 1f);
         // owner, type: capsule -> model -> capsule -> model -> other model -> same model, other owner (dead in between)
         (int Owner, int Type)[] steps = { (0, heavy), (0, laborer), (1, heavy), (1, xbow), (0, laborer), (1, laborer) };

@@ -7,8 +7,9 @@
 # A model: the outfit parts and the base character's head on one 65-bone armature, each part decimated to its triangle
 # share, joined into one mesh with one material per role (the team part's material is named "team"), base colour
 # textures only, cut to the manifest's size and tinted toward the faction palette, the manifest's props built from boxes
-# and bound to their bone, the yaw fix on the armature node (glTF faces +Z, docs/04 wants -Z), exported as one .glb with
-# no animations. The library: the clips every model's clip map names, renamed to docs/04's names, on one armature with a
+# and bound to their bone (a "team" prop on the team surface), the yaw fix on the armature node (glTF faces +Z, docs/04
+# wants -Z), the model's clip map as glTF extras on the armature node (M6-V21), exported as one .glb with no animations.
+# The library: the manifest's library.clips, renamed to their library names, on one armature with a
 # one-triangle skin (so Godot imports the tracks as Skeleton3D bone tracks), the bones the manifest's "dropBonePrefixes"
 # name (the 40 finger bones, BUG-1321) deleted with their curves so no clip carries their tracks, exported as one .glb.
 # Prints one "RESULT {json}" line the PowerShell script reads; exits 1 with a "FAIL <why>" line on any problem.
@@ -20,7 +21,7 @@ import os
 import sys
 
 import numpy as np
-from mathutils import Matrix, Vector
+from mathutils import Euler, Matrix, Vector
 
 FPS = 30  # the Universal Animation Library's rate: clips keep their keys when imported and exported at it
 
@@ -190,16 +191,36 @@ def single_uv(obj, uv_for_material):
     first.name = "UVMap"
 
 
-def box(bm, centre, size, deform, group):
-    """Adds an axis-aligned box (12 triangles) to `bm`, every vertex weighted 1 to `group`."""
+def box(bm, centre, size, deform, group, rotation=None):
+    """Adds a box (12 triangles) to `bm`, every vertex weighted 1 to `group`: axis-aligned, or turned about its own centre
+    by `rotation` (Euler XYZ degrees, M6-V21: a curved blade or a bow's limbs are a few turned boxes)."""
     res = bmesh.ops.create_cube(bm, size=1.0)
+    turn = Euler([math.radians(float(a)) for a in rotation], 'XYZ').to_matrix() if rotation else Matrix.Identity(3)
     for v in res["verts"]:
-        v.co = Vector((centre[0] + v.co.x * size[0], centre[1] + v.co.y * size[1], centre[2] + v.co.z * size[2]))
+        local = turn @ Vector((v.co.x * size[0], v.co.y * size[1], v.co.z * size[2]))
+        v.co = Vector(centre) + local
         v[deform][group] = 1.0
 
 
-def build_prop(prop, arm, work_clip_pose):
-    """A prop made of boxes (in armature space, -Y forward) placed so it sits in its bone's hand at the clip pose."""
+def team_uv(image, shade, block=32):
+    """M6-V21: the UV of the centre of the `block` x `block` texel square of the team texture that is the most even and
+    nearest the mean brightness `shade`. A prop drawn in team colour (a shield) puts all its UVs there, so it joins the team
+    surface (no extra material, no extra draw call) and the team shader draws it in the player colour at about the
+    brightness of the rest of the team part, at every mip level."""
+    w, h = image.size
+    px = np.empty(w * h * 4, dtype=np.float32)
+    image.pixels.foreach_get(px)
+    lum = (px.reshape(h, w, 4)[:, :, :3] @ LUMA).reshape(h // block, block, w // block, block)
+    mean = lum.mean(axis=(1, 3))
+    score = lum.var(axis=(1, 3)) + (mean - float(shade)) ** 2
+    by, bx = np.unravel_index(int(np.argmin(score)), score.shape)  # first minimum: the same square every run
+    # Blender's pixel rows and UV v both run from the bottom.
+    return ((bx + 0.5) * block / w, (by + 0.5) * block / h)
+
+
+def build_prop(prop, arm, work_clip_pose, material, uv=None):
+    """A prop made of boxes (in armature space, -Y forward) placed so it sits in its bone's hand at the clip pose, drawn
+    with `material`; `uv` (a team prop) is the one texture point every corner samples."""
     me = bpy.data.meshes.new(prop["name"])
     obj = bpy.data.objects.new(prop["name"], me)
     bpy.context.scene.collection.objects.link(obj)
@@ -207,7 +228,7 @@ def build_prop(prop, arm, work_clip_pose):
     bm = bmesh.new()
     deform = bm.verts.layers.deform.verify()
     for b in prop["boxes"]:
-        box(bm, b["at"], b["size"], deform, group.index)
+        box(bm, b["at"], b["size"], deform, group.index, b.get("rotation"))
     # Placed where the bone is in the clip's pose, then carried back into the rest pose the mesh is bound in.
     pose = work_clip_pose
     rest = arm.data.bones[prop["bone"]].matrix_local
@@ -215,14 +236,36 @@ def build_prop(prop, arm, work_clip_pose):
     to_rest = rest @ pose.inverted() @ grip
     for v in bm.verts:
         v.co = to_rest @ v.co
+    if uv is not None:
+        layer = bm.loops.layers.uv.new("UVMap")
+        for f in bm.faces:
+            for loop in f.loops:
+                loop[layer].uv = uv
     bm.to_mesh(me)
     bm.free()
-    mat = flat_material(prop["material"], colour=hex_rgb(prop["colour"]), roughness=0.8)
-    me.materials.append(mat)
+    me.materials.append(material)
     obj.parent = arm
     mod = obj.modifiers.new("armature", 'ARMATURE')
     mod.object = arm
     return obj
+
+
+def clear_custom_properties():
+    """Drops every custom property (the glTF importer keeps a source's extras as custom properties): with extras exported,
+    only the ones this script sets may reach the file."""
+    for coll in (bpy.data.objects, bpy.data.meshes, bpy.data.materials, bpy.data.armatures, bpy.data.scenes,
+                 bpy.data.images, bpy.data.actions):
+        for idb in coll:
+            for key in list(idb.keys()):
+                del idb[key]
+    for arm in bpy.data.armatures:
+        for bone in arm.bones:
+            for key in list(bone.keys()):
+                del bone[key]
+    for obj in bpy.data.objects:
+        for pbone in (obj.pose.bones if obj.pose else []):
+            for key in list(pbone.keys()):
+                del pbone[key]
 
 
 def clip_pose(source_path, action_name, bone, frame):
@@ -245,6 +288,7 @@ def clip_pose(source_path, action_name, bone, frame):
 
 
 def build_model(manifest, model, src_root, repo, work):
+    check_clip_map(manifest, model)
     reset()
     sources = {}
     arm = None
@@ -299,10 +343,23 @@ def build_model(manifest, model, src_root, repo, work):
         decimate(obj, int(part["triangles"]))
 
     props = []
+    prop_colours = {}
     for prop in model.get("props", []):
         pose = clip_pose(os.path.join(src_root, manifest["animationSources"][prop["pose"]["source"]]),
                          prop["pose"]["clip"], prop["bone"], float(prop["pose"]["at"]))
-        props.append(build_prop(prop, arm, pose))
+        name = prop["material"]
+        uv = None
+        if name == "team":
+            # M6-V21: a team prop (the Heavy Infantry's shield) joins the team surface at one even point of its texture.
+            uv = team_uv(images["team"], model.get("teamShade", 0.8))
+        elif name in materials:
+            # Props naming one material share it (one surface): they must name one colour.
+            if prop_colours.get(name) != prop["colour"]:
+                fail(f"{model['id']}: prop material {name} is also a role or has two colours")
+        else:
+            materials[name] = flat_material(name, colour=hex_rgb(prop["colour"]), roughness=0.8)
+            prop_colours[name] = prop["colour"]
+        props.append(build_prop(prop, arm, pose, materials[name], uv))
 
     meshes = [obj for _, obj in parts] + props
     with bpy.context.temp_override(active_object=meshes[0], selected_editable_objects=meshes, object=meshes[0]):
@@ -318,6 +375,11 @@ def build_model(manifest, model, src_root, repo, work):
     # glTF faces +Z; docs/04 wants -Z: the yaw lives on the armature node, so bone tracks stay untouched.
     arm.rotation_mode = 'XYZ'
     arm.rotation_euler = (0.0, 0.0, math.radians(float(model.get("yawDegrees", 0))))
+    # M6-V21: the model's clip map (docs/04 state name -> library clip) rides on the armature node as glTF extras; Godot
+    # imports it as the node's "extras" metadata and UnitModels plays those clips (a sword swing for one model, a shot
+    # for another). Nothing else may carry extras.
+    clear_custom_properties()
+    arm["clips"] = {k: model["clips"][k] for k in sorted(model["clips"])}
 
     tris = triangles(body)
     zs = [v.co.z for v in body.data.vertices]
@@ -329,24 +391,38 @@ def build_model(manifest, model, src_root, repo, work):
     dest = os.path.join(repo, model["destination"])
     os.makedirs(os.path.dirname(dest), exist_ok=True)
     bpy.ops.export_scene.gltf(filepath=dest, export_format='GLB', export_animations=False, export_skins=True,
-                              export_morph=False, export_yup=True, export_apply=False, export_extras=False,
+                              export_morph=False, export_yup=True, export_apply=False, export_extras=True,
                               export_tangents=False, export_cameras=False, export_lights=False)
     return {"id": model["id"], "destination": model["destination"], "triangles": tris,
-            "height": round(height, 3), "feet": round(min(zs), 3),
+            "height": round(height, 3), "feet": round(min(zs), 3), "clips": arm["clips"].to_dict(),
             "materials": sorted(m.name for m in body.data.materials),
             "textures": {img.name: list(img.size) for img in images.values()}}
 
 
 def library_clips(manifest):
-    """docs/04 name -> (source alias, clip): the union of every model's clip map; one name must mean one clip."""
+    """Library name -> (source alias, clip), from the manifest's library.clips (M6-V21; one name, one clip). Every clip a
+    model's clip map names must be there, and every library clip must be named by some model (no dead weight)."""
     clips = {}
+    for name, ref in manifest["library"]["clips"].items():
+        alias, clip = ref.split("/", 1)
+        if alias not in manifest["animationSources"]:
+            fail(f"library clip {name}: no animation source {alias}")
+        clips[name] = (alias, clip)
+    used = set()
     for model in manifest["models"]:
-        for name, ref in model["clips"].items():
-            alias, clip = ref.split("/", 1)
-            if name in clips and clips[name] != (alias, clip):
-                fail(f"clip {name} maps to {clips[name]} and {(alias, clip)}: one library name, one clip")
-            clips[name] = (alias, clip)
+        check_clip_map(manifest, model)
+        used.update(model["clips"].values())
+    unused = sorted(set(clips) - used)
+    if unused:
+        fail(f"library clips no model plays: {unused}")
     return clips
+
+
+def check_clip_map(manifest, model):
+    """A model's clip map: docs/04 state name -> a library clip name."""
+    for state, name in model["clips"].items():
+        if name not in manifest["library"]["clips"]:
+            fail(f"{model['id']}: clip {state} -> {name}, not in library.clips")
 
 
 def action_fcurve_bags(action):

@@ -14,6 +14,12 @@ namespace Rts.Game;
 /// once per file per run. The shared animation library (<see cref="LibraryPath"/>, imported as an <c>AnimationLibrary</c>)
 /// is loaded once per run; its clips loop. The team surface of each model is drawn by <c>team_colour.gdshader</c>: one
 /// material per type and player (the outfit's shading times the player colour), made here, never per frame.
+/// Clip maps (M6-V21): a model file carries its clip map (docs/04 state name -> library clip, the asset manifest's
+/// <c>clips</c>) as glTF extras on its armature node, which Godot imports as the node's <c>extras</c> metadata. Each model
+/// type gets its own small <see cref="AnimationLibrary"/> holding the shared library's <see cref="Animation"/>s under the
+/// state names (no copy), so a player always plays <c>idle</c>, <c>walk</c>, <c>attack</c>, ... and the map decides which
+/// motion that is: the Heavy Infantry's <c>attack</c> is the library's <c>attack_melee</c>. A state the map doesn't name
+/// plays the library clip of that name (the pre-V21 rule); one the library lacks is left out, and the view plays idle.
 /// </remarks>
 public sealed class UnitModels
 {
@@ -46,6 +52,9 @@ public sealed class UnitModels
     private readonly NodePath?[] _meshPath;
     private readonly int[] _teamSurface;
     private readonly ShaderMaterial?[][] _team;
+    private readonly string[]?[] _clipMap;
+    private readonly AnimationLibrary?[] _libs;
+    private readonly float[]?[] _lengths;
 
     /// <summary>Types with a model.</summary>
     public int ModelTypes { get; }
@@ -61,6 +70,9 @@ public sealed class UnitModels
         _meshPath = new NodePath?[n];
         _teamSurface = new int[n];
         _team = new ShaderMaterial?[n][];
+        _clipMap = new string[n][];
+        _libs = new AnimationLibrary?[n];
+        _lengths = new float[n][];
         Shader shader = _teamShader ??= GD.Load<Shader>(TeamShaderPath);
         var missing = new List<string>();
         for (int t = 0; t < n; t++)
@@ -68,8 +80,9 @@ public sealed class UnitModels
             _team[t] = Array.Empty<ShaderMaterial?>();
             string path = PathFor(data.Units[t].Model);
             PackedScene? scene = Load(path, missing);
-            if (scene == null || !FindTeam(scene, path, out NodePath meshPath, out int surface, out Texture2D? texture)) continue;
+            if (scene == null || !FindTeam(scene, path, out NodePath meshPath, out int surface, out Texture2D? texture, out string[] clipMap)) continue;
             _scenes[t] = scene;
+            _clipMap[t] = clipMap;
             _meshPath[t] = meshPath;
             _teamSurface[t] = surface;
             _team[t] = new ShaderMaterial?[colours.Length];
@@ -86,6 +99,24 @@ public sealed class UnitModels
         if (missing.Count > 0)
             GD.PushWarning($"Unit models: {missing.Count} file(s) missing ({missing[0]}{(missing.Count > 1 ? ", ..." : "")}): those types draw the placeholder capsule.");
         if (ModelTypes > 0) LoadLibrary();
+        // Each model type's library: the shared clips its map names, under the state names (made per Bind from the library
+        // as it is now, so a test that swaps the library sees the swap).
+        for (int t = 0; t < n && _library != null; t++)
+        {
+            if (_scenes[t] == null) continue;
+            var lib = new AnimationLibrary();
+            var lengths = new float[ClipNames.Length];
+            for (int c = 0; c < ClipNames.Length; c++)
+            {
+                StringName source = _clipMap[t]![c];
+                if (!_library.HasAnimation(source)) continue;
+                Animation anim = _library.GetAnimation(source);
+                lib.AddAnimation(ClipNames[c], anim);
+                lengths[c] = (float)anim.Length;
+            }
+            _libs[t] = lib;
+            _lengths[t] = lengths;
+        }
     }
 
     /// <summary>A unit model's file for a data <c>model</c> stem: <c>{ModelRoot}{model}/{last segment}.glb</c>.</summary>
@@ -102,6 +133,18 @@ public sealed class UnitModels
 
     /// <summary>Clip <paramref name="clip"/>'s length in seconds (0 when the library lacks it).</summary>
     public static float ClipLength(Clip clip) => (int)clip < _clipLength.Length ? _clipLength[(int)clip] : 0f;
+
+    /// <summary>The library clip type <paramref name="type"/> plays for <paramref name="clip"/> (M6-V21: its file's clip map, else the state's own name), or null for a capsule type.</summary>
+    public string? ClipSource(int type, Clip clip) => Has(type) ? _clipMap[type]![(int)clip] : null;
+
+    /// <summary>Whether type <paramref name="type"/>'s players hold clip <paramref name="clip"/> (its source is in the library).</summary>
+    public bool HasClip(int type, Clip clip) => Has(type) && _libs[type]?.HasAnimation(ClipNames[(int)clip]) == true;
+
+    /// <summary>The length in seconds of what type <paramref name="type"/> plays for <paramref name="clip"/> (0 when it has none).</summary>
+    public float ClipLength(int type, Clip clip) => Has(type) && _lengths[type] is float[] l ? l[(int)clip] : 0f;
+
+    /// <summary>Type <paramref name="type"/>'s animation library (the shared clips under the state names), or null.</summary>
+    public AnimationLibrary? LibraryOf(int type) => Has(type) ? _libs[type] : null;
 
     /// <summary>The team material of type <paramref name="type"/> in colour <paramref name="colour"/>, or null.</summary>
     public ShaderMaterial? TeamMaterial(int type, int colour) =>
@@ -120,7 +163,7 @@ public sealed class UnitModels
         // Manual: UnitViews' crowd schedule advances it (M6-VH7, CrowdAnimator), never Godot's own process step.
         player = new AnimationPlayer { Name = "AnimationPlayer", PlaybackDefaultBlendTime = 0.15, CallbackModeProcess = AnimationMixer.AnimationCallbackModeProcess.Manual };
         root.AddChild(player);
-        if (_library != null) player.AddAnimationLibrary("", _library);
+        if (_libs[type] is AnimationLibrary lib) player.AddAnimationLibrary("", lib);
         return root;
     }
 
@@ -159,13 +202,15 @@ public sealed class UnitModels
         return ResourceLoader.Exists(path) ? null : Missing;
     }
 
-    // The model's first mesh with a "team" surface: its path from the root, the surface, and the texture the team shader shades.
-    private static bool FindTeam(PackedScene scene, string path, out NodePath meshPath, out int surface, out Texture2D? texture)
+    // The model's first mesh with a "team" surface: its path from the root, the surface, and the texture the team shader
+    // shades; and its clip map (M6-V21): per Clip, the library clip its extras name, else the state's own name.
+    private static bool FindTeam(PackedScene scene, string path, out NodePath meshPath, out int surface, out Texture2D? texture, out string[] clipMap)
     {
         meshPath = new NodePath();
         surface = -1;
         texture = null;
         Node probe = scene.Instantiate();
+        clipMap = ReadClipMap(probe);
         foreach (Node n in probe.FindChildren("*", "MeshInstance3D", true, false))
         {
             Mesh? mesh = ((MeshInstance3D)n).Mesh;
@@ -190,6 +235,26 @@ public sealed class UnitModels
     }
 
     private static readonly HashSet<string> NoTeamWarned = new();
+
+    /// <summary>The name of the glTF extras key that holds a model's clip map (M6-V21, tools/art/build_unit.py).</summary>
+    public const string ClipMapKey = "clips";
+
+    // The clip map in the first node with imported glTF extras (the armature's: the builder writes no other extras); a file
+    // without one, or an entry that is not a string, keeps the state's own name.
+    private static string[] ReadClipMap(Node root)
+    {
+        var map = new string[ClipNames.Length];
+        for (int c = 0; c < map.Length; c++) map[c] = ClipNames[c];
+        Node? holder = root.HasMeta("extras") ? root : null;
+        if (holder == null)
+            foreach (Node n in root.FindChildren("*", "", true, false))
+                if (n.HasMeta("extras")) { holder = n; break; }
+        if (holder == null || holder.GetMeta("extras").Obj is not Godot.Collections.Dictionary extras) return map;
+        if (!extras.TryGetValue(ClipMapKey, out Variant clipsVar) || clipsVar.Obj is not Godot.Collections.Dictionary clips) return map;
+        for (int c = 0; c < map.Length; c++)
+            if (clips.TryGetValue(ClipNames[c].ToString(), out Variant v) && v.VariantType == Variant.Type.String) map[c] = v.AsString();
+        return map;
+    }
 
     /// <summary>"No team material" warnings printed since the program started (a test counter: one per file per run, BUG-1322).</summary>
     public static int NoTeamWarnings { get; private set; }

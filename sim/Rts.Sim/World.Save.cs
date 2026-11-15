@@ -175,6 +175,7 @@ public sealed partial class World
         // without), so -1 there is forged too.
         for (int i = 0; i < Units.Capacity && !r.Failed; i++)
             if (Units.Alive[i] && !r.Check(Units.GoalCell[i] >= (Units.State[i] == UnitState.Moving ? 0 : -1) && Units.GoalCell[i] < cells)) return;
+        if (!CheckForestState(r)) return;
         _ledger.ReadFrom(r);
         Techs.ReadFrom(r);
         Projectiles.ReadFrom(r, Data.Projectiles.Length, Data.Units.Length, Data.Buildings.Length);
@@ -190,6 +191,31 @@ public sealed partial class World
         if (!r.Expect(SaveFormat.TagStealth)) return;
         r.ReadArray(_detectedBy);
         ReadEvents(r);
+    }
+
+    /// <summary>
+    /// M8-1: the forest part against the seats and the entries (the unit store has read it): only a unit of a seat with the
+    /// forest stealth has a last landed attack; a held unit is such a unit, not summoned, of a slot its faction does not
+    /// except, and carries an entry of its faction's status with at least the held tick. A forged part is refused, never trusted.
+    /// </summary>
+    private bool CheckForestState(SaveReader r)
+    {
+        ForestStealthStore? forest = Units.Forest;
+        if (forest == null || r.Failed) return !r.Failed;
+        int[] attacked = forest.LastAttackTick;
+        byte[] held = forest.Held;
+        for (int i = 0; i < Units.Capacity; i++)
+        {
+            if (!Units.Alive[i]) continue;
+            int owner = Units.Owner[i];
+            int status = ForestStatusOf[owner];
+            if (!r.Check(attacked[i] == -1 || status >= 0)) return false;
+            if (held[i] == 0) continue;
+            int at = status < 0 ? -1 : Units.Statuses.IndexOf(i, status);
+            bool excepted = (ForestExceptOf[owner] & (1 << (int)Data.Units[Units.TypeId[i]].Slot)) != 0;
+            if (!r.Check(at >= 0 && Units.Statuses.TicksRemaining[at] >= 1 && !excepted && !Units.IsSummoned(i))) return false;
+        }
+        return true;
     }
 
     private void ReadEvents(SaveReader r)

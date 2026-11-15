@@ -109,7 +109,7 @@ public static partial class DataLoader
             var own = ImmutableArray.CreateBuilder<int>();
             for (int id = 0; id < units.Length; id++)
                 if (units[id] != null && units[id].Faction == f) own.Add(id);
-            factions[f] = BuildFaction(c, factionJsons[f]!, folders[f], f, own.ToImmutable());
+            factions[f] = BuildFaction(c, factionJsons[f]!, folders[f], f, own.ToImmutable(), statuses);
         }
 
         // M4-4b-3a: each unit's passives (they name statuses and own-faction unit types).
@@ -583,7 +583,7 @@ public static partial class DataLoader
         return defs;
     }
 
-    private static FactionDef BuildFaction(Checker c, FactionJson j, string folder, int id, ImmutableArray<int> units)
+    private static FactionDef BuildFaction(Checker c, FactionJson j, string folder, int id, ImmutableArray<int> units, StatusDef[]? statuses)
     {
         string key = c.Id(j.Id, "id");
         if (key.Length > 0 && key != folder)
@@ -598,6 +598,9 @@ public static partial class DataLoader
             regenPerTick = RegenRate(c, j.Regen.HpPerSecond, "regen.hpPerSecond");
             regenDelay = c.Ticks(j.Regen.Delay, "regen.delay", 0);
         }
+        // M8-1: the optional forest stealth (docs/factions/shadow.md "Children of Shadow").
+        int forestStatus = -1, forestDelay = 0, forestExcept = 0;
+        if (j.ForestStealth != null) ForestStealth(c, j.ForestStealth, statuses, out forestStatus, out forestDelay, out forestExcept);
         return new FactionDef
         {
             Id = id,
@@ -614,7 +617,51 @@ public static partial class DataLoader
             Units = units,
             RegenPerTick = regenPerTick,
             RegenDelayTicks = regenDelay,
+            ForestStealthStatus = forestStatus,
+            ForestStealthDelayTicks = forestDelay,
+            ForestStealthExceptSlots = forestExcept,
         };
+    }
+
+    /// <summary>
+    /// M8-1: <c>faction.json</c> <c>forestStealth { status, delay, exceptSlots }</c>. <c>status</c> (required) names a status
+    /// of kind <c>stealthed</c>; <c>delay</c> (required) is seconds, at least a tick once converted and at most
+    /// <see cref="DataLimits.MaxForestStealthDelay"/>; <c>exceptSlots</c> (optional) lists unit slot names
+    /// (<see cref="DataLimits.SlotIds"/>), each once. One error per bad field, at its path; a broken <c>statuses.json</c> is
+    /// reported there, not again here. Absent fields come out as no bonus (-1, 0, 0) only when the load fails anyway.
+    /// </summary>
+    private static void ForestStealth(Checker c, ForestStealthJson j, StatusDef[]? statuses, out int status, out int delayTicks, out int exceptMask)
+    {
+        status = -1;
+        delayTicks = 0;
+        exceptMask = 0;
+        const string p = "forestStealth";
+        if (j.Status == null) c.Error(p + ".status", "missing required field");
+        else if (statuses != null)
+        {
+            int found = -1;
+            for (int s = 0; s < statuses.Length; s++)
+                if (string.Equals(statuses[s].Key, j.Status, StringComparison.Ordinal)) found = s;
+            if (found < 0)
+                c.Error(p + ".status", $"unknown status '{j.Status}' (not in common/statuses.json)");
+            else if (statuses[found].Kind != StatusKind.Stealthed)
+                c.Error(p + ".status", $"status '{j.Status}' is of kind '{DataLimits.StatusKindIds[(int)statuses[found].Kind]}', not 'stealthed' (forest stealth hides the unit)");
+            else status = found;
+        }
+        if (j.Delay is double d && d > DataLimits.MaxForestStealthDelay)
+            c.Error(p + ".delay", $"{d} s is above the maximum {DataLimits.MaxForestStealthDelay} s");
+        else delayTicks = c.Ticks(j.Delay, p + ".delay", 1);
+        if (j.ExceptSlots == null) return;
+        for (int i = 0; i < j.ExceptSlots.Count; i++)
+        {
+            string at = $"{p}.exceptSlots[{i}]";
+            string? key = j.ExceptSlots[i];
+            int slot = key == null ? -1 : DataLimits.SlotIds.IndexOf(key);
+            if (key == null) c.Error(at, "missing required field");
+            else if (slot < 0) c.Error(at, $"unknown slot '{key}' (expected one of {string.Join(", ", DataLimits.SlotIds)})");
+            else if ((exceptMask & (1 << slot)) != 0) c.Error(at, $"slot '{key}' is listed twice");
+            else exceptMask |= 1 << slot;
+        }
     }
 
     /// <summary>

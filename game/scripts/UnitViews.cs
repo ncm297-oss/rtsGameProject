@@ -274,10 +274,24 @@ public partial class UnitViews : Node3D
 
     /// <summary>
     /// One frame of the models' animation (M6-VH7, <see cref="CrowdAnimator"/>): the shown figures nearest
-    /// <paramref name="eye"/> advance by <paramref name="delta"/>, the rest staggered; a null eye advances every shown figure.
-    /// Called by <see cref="_Process"/> with the viewport's camera; allocation-free.
+    /// <paramref name="eye"/> advance by <paramref name="delta"/> times <see cref="AnimationRate"/> (M6-V21: the game speed;
+    /// nothing while paused), the rest staggered; a null eye advances every shown figure. Called by <see cref="_Process"/>
+    /// with the viewport's camera; allocation-free.
     /// </summary>
-    public void AdvanceAnimations(double delta, Vector3? eye) => _crowd.Advance(_anim, _shown, _views, eye, delta);
+    public void AdvanceAnimations(double delta, Vector3? eye)
+    {
+        double rate = AnimationRate;
+        // Paused: no figure moves, and the schedule doesn't run (its stagger phase and the figures' waits hold still).
+        if (rate <= 0.0) return;
+        _crowd.Advance(_anim, _shown, _views, eye, delta * rate);
+    }
+
+    /// <summary>
+    /// How fast the figures' clips run against view time (M6-V21, docs/01 2026-11-14 (d) (f)): the runner's
+    /// <see cref="SimRunner.GameSpeed"/> (1 without a runner), so a clip plays at 2x on Fast; 0 while this node can't
+    /// process (the match's tree paused: the pause menu, the match-over banner), so paused figures stand still.
+    /// </summary>
+    public double AnimationRate => IsInsideTree() && !CanProcess() ? 0.0 : Runner?.GameSpeed ?? 1.0;
 
     /// <summary>Sizes the shared cargo meshes for camera zoom <paramref name="zoom"/> (one write per kind, only when the zoom changed).</summary>
     public void SetCargoZoom(float zoom)
@@ -305,13 +319,19 @@ public partial class UnitViews : Node3D
             }
             // A slot gets its node when it first holds a live unit, seen or not, so the fog never changes when nodes are made.
             view ??= CreateView(i);
+            // M6-V21: the same for its type and a model type's instance: set when the slot gets its unit, seen or not, so a
+            // fogged army coming into sight makes nothing (0 bytes). A model made hidden doesn't animate until shown.
+            int type = u.TypeId[i];
+            if (_viewType[i] != type)
+            {
+                SetType(i, view, type);
+                if (!_shown[i] && _anim[i] is AnimationPlayer still) still.Active = false;
+            }
             if (fog != null && !fog.ShowsUnit(i))
             {
                 if (_shown[i]) Hide(i, view);
                 continue;
             }
-            int type = u.TypeId[i];
-            if (_viewType[i] != type) SetType(i, view, type);
             MeshInstance3D? model = _modelMesh[i];
             int owner = u.Owner[i];
             if (_viewOwner[i] != owner && model != null)
@@ -539,18 +559,20 @@ public partial class UnitViews : Node3D
         }
     }
 
-    // Plays the clip (idle when the library lacks it), started at a phase from the slot so a crowd doesn't move in step.
+    // Plays the clip (idle when the type's library lacks it), started at a phase from the slot so a crowd doesn't move in
+    // step. M6-V21: the type's own library (its file's clip map) decides which motion a state name is.
     private void PlayClip(int slot, AnimationPlayer anim, int clip)
     {
         _shownClip[slot] = clip;
-        if (!UnitModels.HasClip((UnitModels.Clip)clip)) clip = (int)UnitModels.Clip.Idle;
-        if (!UnitModels.HasClip((UnitModels.Clip)clip))
+        int type = _viewType[slot];
+        if (!_models!.HasClip(type, (UnitModels.Clip)clip)) clip = (int)UnitModels.Clip.Idle;
+        if (!_models.HasClip(type, (UnitModels.Clip)clip))
         {
             anim.Stop();
             return;
         }
         anim.Play(UnitModels.ClipNames[clip]);
-        float length = UnitModels.ClipLength((UnitModels.Clip)clip);
+        float length = _models.ClipLength(type, (UnitModels.Clip)clip);
         if (length > 0f) anim.Seek(slot * 0.37f % length, true);
     }
 

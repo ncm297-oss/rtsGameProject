@@ -339,7 +339,8 @@ public partial class TeblorViewTest : Node
             if (!Check(wr != default && hi != default, "the pair did not spawn")) return;
             await Frames(1);
             var wm = (CapsuleMesh)views.ViewOf(wr.Index)!.Mesh;
-            var hm = (CapsuleMesh)views.ViewOf(hi.Index)!.Mesh;
+            // M6-V21: the Heavy Infantry is drawn as a model now; its type's capsule (the hit-test body) is still MeshOf.
+            var hm = views.DrawsModel(heavy) ? views.MeshOf(heavy)! : (CapsuleMesh)views.ViewOf(hi.Index)!.Mesh;
             float ratio = wm.Radius / hm.Radius;
             GD.Print($"  (c) Warrior {2f * wm.Radius:0.###} m wide x {wm.Height:0.###} m tall, Heavy Infantry {2f * hm.Radius:0.###} m x {hm.Height:0.###} m: width ratio {ratio:0.####} (0.75 / 0.4 = {0.75f / 0.4f:0.####}), height ratio {wm.Height / hm.Height:0.####}");
             Check(Mathf.Abs(ratio - 0.75f / 0.4f) < 1e-4f && Mathf.Abs(ratio - _data.Units[warrior].Radius / _data.Units[heavy].Radius) < 1e-6f,

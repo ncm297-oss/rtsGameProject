@@ -119,7 +119,8 @@ public partial class QaM22Test : Node
         Check(sel.Selection.Count > 0, "full-screen box selected nothing");
         await Frame();
         Check(ReferenceEquals(views.ViewOf(a), nodeA) && nodeA != null && nodeA.Visible, "respawned slot did not reuse its visible node");
-        Check(nodeA != null && nodeA.Mesh != null, "respawned node has no mesh");
+        // M6-V21: the Whirlwind's first unit (the Camp Follower) is a model: its node draws through the model's mesh.
+        Check(nodeA != null && (nodeA.Mesh != null || views.ModelMeshOf(a)?.Mesh != null), "respawned node has no mesh");
 
         // Right-click with a stale handle in the selection: only live own units get orders.
         int selected = sel.Selection.Count;

@@ -15,13 +15,18 @@ namespace Rts.Game.Tests;
 /// <remarks>
 /// Pictures: <c>&amp; $env:GODOT --path game --resolution 1600x900 res://tests/ModelShots.tscn -- --look &lt;dir&gt;</c> saves
 /// <c>models-40m.png</c>, <c>models-60m.png</c> and <c>models-40m-gray.png</c>: ten Laborers and ten Crossbowmen of player 1
-/// (front row) and of player 2 (second row) beside a row of Heavy Infantry capsules, on a real match's ground and light.
+/// (front row) and of player 2 (second row) beside a row of Heavy Infantry (capsules until M6-V21, models since), on a real match's ground and light.
 /// Cost: <c>... -- --bench 30 [--vsync off]</c> stages 200 units a side (Laborers and Crossbowmen alternating), sends each
 /// side at the other (moving, then fighting) under the default zoom, and prints the frame times (average, 99th percentile,
 /// the worst 1 % averaged), draw calls, and nodes and materials per unit; with <c>--placeholder-art</c> the same run on
 /// capsules; <c>--per-side N</c> stages N a side (M6-VH7). <c>--skirmish &lt;dir&gt;</c> also saves <c>models-gather-20m.png</c> /
 /// <c>-40m.png</c> on a gatherer; <c>--crowd-look &lt;dir&gt;</c> saves <c>models-crowd-20m.png</c> / <c>-40m.png</c>, two
 /// groups walking at each other until they fight (M6-VH7: the crowd animation's look). Prints "MODEL SHOTS DONE" and quits.
+/// M6-V21: the bench mixes evenly over every type that has a model file (with <c>--placeholder-art</c> the same types as
+/// capsules); <c>--types &lt;dir&gt;</c> saves, per model type, <c>type-&lt;id&gt;-40m.png</c> and <c>-20m.png</c>: the type in
+/// players 1 and 2's colours beside a Laborer and a capsule type of its faction, facing the camera; <c>--lines &lt;dir&gt;</c>
+/// saves <c>lines-40m.png</c> / <c>-20m.png</c>: a Malazan line (Heavy Infantry, Crossbowmen behind) fighting a Whirlwind
+/// line (Raiders, Desert Archers behind), taken once the first melee has started.
 /// </remarks>
 public partial class ModelShots : Node
 {
@@ -37,6 +42,8 @@ public partial class ModelShots : Node
         string? bench = Arg(args, "--bench");
         string? skirmish = Arg(args, "--skirmish");
         string? crowd = Arg(args, "--crowd-look");
+        string? typeShots = Arg(args, "--types");
+        string? lines = Arg(args, "--lines");
         try
         {
             DataLoadResult loaded = DataLoader.LoadAll(ProjectSettings.GlobalizePath("res://data"));
@@ -46,7 +53,7 @@ public partial class ModelShots : Node
             string vsync = Arg(args, "--vsync") ?? "on";
             // The pictures stand still (no combat); the cost run fights.
             var flags = new System.Collections.Generic.List<string> { "--seed", "1", "--units", "0", "--no-bases", "--no-fog", "--mute", "--no-hud", "--vsync", vsync };
-            if (look != null) flags.Add("--no-combat");
+            if (look != null || typeShots != null) flags.Add("--no-combat");
             // The real skirmish start: a Town Hall and the starting workers a side, the fog, an AI seat; Malazan for slot 1.
             if (skirmish != null) flags = new System.Collections.Generic.List<string> { "--skirmish", "--seed", "1", "--faction", "1", "malazan", "--mute" };
             _match.Start(data, LaunchOptions.Parse(flags.ToArray()));
@@ -59,6 +66,8 @@ public partial class ModelShots : Node
             if (bench != null) await Bench(data, double.Parse(bench, CultureInfo.InvariantCulture));
             if (skirmish != null) await Skirmish(data, skirmish);
             if (crowd != null) await CrowdLook(data, crowd);
+            if (typeShots != null) await TypeShots(data, typeShots);
+            if (lines != null) await Lines(data, lines);
         }
         catch (Exception ex)
         {
@@ -111,7 +120,9 @@ public partial class ModelShots : Node
 
     private async Task Bench(GameData data, double seconds)
     {
-        int[] types = { data.FindUnit("malazan_laborer"), data.FindUnit("malazan_crossbowman") };
+        // M6-V21: mixed evenly over every type with a model file (the same types as capsules with --placeholder-art).
+        int[] types = ModelFileTypes(data);
+        GD.Print($"bench: types {string.Join(' ', Array.ConvertAll(types, t => data.Units[t].Key))}");
         NVector2 c = Centre();
         // --per-side N (M6-VH7): 500 gives BUG-1321's 1,000-unit run.
         int perSide = int.Parse(Arg(OS.GetCmdlineUserArgs(), "--per-side") ?? "200", CultureInfo.InvariantCulture);
@@ -120,7 +131,7 @@ public partial class ModelShots : Node
             for (int k = 0; k < perSide; k++)
             {
                 float side = p == 0 ? -1f : 1f;
-                Spawn(p, types[k % 2], c + new NVector2(side * (14f + (k / columns) * 1.3f), (k % columns - columns / 2) * 1.3f));
+                Spawn(p, types[(k + p * (types.Length / 2)) % types.Length], c + new NVector2(side * (14f + (k / columns) * 1.3f), (k % columns - columns / 2) * 1.3f));
             }
         long at = _sim.TickNumber;
         while (_sim.TickNumber < at + 4) await Frames(1);
@@ -258,6 +269,88 @@ public partial class ModelShots : Node
         GD.Print($"crowd look: moving {states[(int)UnitState.Moving]} attacking {states[(int)UnitState.Attacking]} idle {states[(int)UnitState.Idle]}");
         _camera.SetFocus(c.X, c.Y);
         await Shots(dir, "models-crowd");
+    }
+
+    // M6-V21: the types whose model file exists, in type order (independent of --placeholder-art).
+    private static int[] ModelFileTypes(GameData data)
+    {
+        var list = new System.Collections.Generic.List<int>();
+        for (int t = 0; t < data.Units.Length; t++) if (ResourceLoader.Exists(UnitModels.PathFor(data.Units[t].Model))) list.Add(t);
+        return list.ToArray();
+    }
+
+    // M6-V21: per model type, a row facing the camera: the type for player 1 and player 2, a Laborer and the first capsule
+    // type of the type's faction; pictures at the default zoom (40 m) and the closest (20 m).
+    private async Task TypeShots(GameData data, string dir)
+    {
+        int laborer = data.FindUnit("malazan_laborer");
+        UnitStore u = _sim.World.Units;
+        foreach (int type in ModelFileTypes(data))
+        {
+            for (int i = 0; i < u.Capacity; i++) if (u.Alive[i]) u.Free(new EntityHandle(i, u.Generation[i]));
+            int capsule = -1;
+            for (int t = 0; t < data.Units.Length && capsule < 0; t++)
+                if (data.Units[t].Faction == data.Units[type].Faction && !_views.DrawsModel(t)) capsule = t;
+            NVector2 c = Centre();
+            Spawn(0, type, c + new NVector2(-2.4f, -3f));
+            Spawn(1, type, c + new NVector2(-0.8f, -3f));
+            Spawn(0, laborer, c + new NVector2(0.8f, -3f));
+            if (capsule >= 0) Spawn(0, capsule, c + new NVector2(2.4f, -3f));
+            long at = _sim.TickNumber;
+            while (_sim.TickNumber < at + 4) await Frames(1);
+            // Everyone walks 3 m toward the camera (+y is down the screen), so each ends facing it, then stands.
+            for (int i = 0; i < u.Capacity; i++)
+                if (u.Alive[i]) _sim.Enqueue(Command.Move(u.Owner[i], new EntityHandle(i, u.Generation[i]), u.Position[i] + new NVector2(0f, 3f)));
+            at = _sim.TickNumber;
+            while (_sim.TickNumber < at + 40) await Frames(1);
+            _camera.SetFocus(c.X, c.Y);
+            foreach (float zoom in new[] { CameraLimits.DefaultZoom, CameraLimits.MinZoom })
+            {
+                _camera.SetZoom(zoom);
+                await Frames(10);
+                string name = $"type-{data.Units[type].Key}-{zoom:0}m.png";
+                GetViewport().GetTexture().GetImage().SavePng(System.IO.Path.Combine(dir, name));
+                GD.Print($"saved {name}: {data.Units[type].Key} p1 / p2, {data.Units[laborer].Key}, {(capsule >= 0 ? data.Units[capsule].Key : "no capsule")}");
+            }
+        }
+    }
+
+    // M6-V21: a Malazan line fighting a Whirlwind line: 8 Heavy Infantry with 6 Crossbowmen behind (player 1) against 8
+    // Raiders with 6 Desert Archers behind (player 2), attack-moved at each other; the pictures once 4 melee units fight.
+    private async Task Lines(GameData data, string dir)
+    {
+        int heavy = data.FindUnit("malazan_heavy_infantry"), xbow = data.FindUnit("malazan_crossbowman");
+        int raider = data.FindUnit("whirlwind_raider"), archer = data.FindUnit("whirlwind_desert_archer");
+        NVector2 c = Centre();
+        for (int k = 0; k < 8; k++)
+        {
+            Spawn(0, heavy, c + new NVector2(-9f, (k - 3.5f) * 1.3f));
+            Spawn(1, raider, c + new NVector2(9f, (k - 3.5f) * 1.3f));
+            if (k < 6)
+            {
+                Spawn(0, xbow, c + new NVector2(-12f, (k - 2.5f) * 1.4f));
+                Spawn(1, archer, c + new NVector2(12f, (k - 2.5f) * 1.4f));
+            }
+        }
+        long at = _sim.TickNumber;
+        while (_sim.TickNumber < at + 4) await Frames(1);
+        UnitStore u = _sim.World.Units;
+        for (int i = 0; i < u.Capacity; i++)
+            if (u.Alive[i]) _sim.Enqueue(Command.AttackMove(u.Owner[i], new EntityHandle(i, u.Generation[i]), c + new NVector2(u.Owner[i] == 0 ? 20f : -20f, 0f)));
+        int melee = 0;
+        for (int t = 0; t < 20 * 30 && melee < 4; t++)
+        {
+            long now = _sim.TickNumber;
+            while (_sim.TickNumber == now) await Frames(1);
+            melee = 0;
+            for (int i = 0; i < u.Capacity; i++)
+                if (u.Alive[i] && u.State[i] == UnitState.Attacking && (u.TypeId[i] == heavy || u.TypeId[i] == raider)) melee++;
+        }
+        var states = new int[8];
+        for (int i = 0; i < u.Capacity; i++) if (u.Alive[i]) states[(int)u.State[i]]++;
+        GD.Print($"lines: moving {states[(int)UnitState.Moving]} attacking {states[(int)UnitState.Attacking]} idle {states[(int)UnitState.Idle]}, melee {melee}");
+        _camera.SetFocus(c.X, c.Y);
+        await Shots(dir, "lines");
     }
 
     // One picture at 20 m and one at 40 m; the sim keeps running between them (the figures move on).

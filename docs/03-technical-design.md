@@ -95,7 +95,9 @@ phases in this fixed order:
    counts down (freed when its time is up) or applies its statuses to the units inside; see "Implementation (M4-4b-2)".
    M7-1: between the two, `RegenSystem.Run`: every live unit below its maximum gains its faction's regeneration (after the
    faction's delay without damage) plus its regenerating statuses' rates, through a fixed-point accumulator; skipped when
-   no faction of the match regenerates and no unit carries the status; see "Implementation (M7-1)".)
+   no faction of the match regenerates and no unit carries the status; see "Implementation (M7-1)". M8-1: after the zones,
+   `ForestStealthSystem.Run`: a faction's forest stealth holds or lets go of each of its units' Stealthed entry; returns at
+   once when no seat has the bonus; see "Implementation (M8-1)". Last, M4-5's `StealthSystem.Run`, the detection pass.)
 6. **Abilities:** cast timers, effect resolution. (M4-4a: `AbilitySystem.Run`: every caster in slot order starts casting
    once in range (or drops a walk that stopped short), counts its cast down, and on the last tick resolves the effects on
    the units in the radius and starts the cooldown. Before phase 7, so a caster whose cast resolved takes its next queued
@@ -3188,7 +3190,7 @@ the loaders in `DataLoader.Abilities.cs` (`ResolveOnEnds`), `DataLoader.Techs.cs
   replay round trip), the allocation row, `Abilities/PassivePerfTests` (the brawl, before and after, below).
   The shared test copy is `Abilities/BloodOilScenes` (idempotent since M7-6, see "Implementation (M7-6)").
 
-**For the data track (M7-4).** All four fields are in the schema; nothing ships them. Docs/factions/teblor.md's numbers:
+**For the data track (M7-4).** All four fields are in the schema; D31 shipped all four (the rows below, as written). Docs/factions/teblor.md's numbers:
 
 - A Frenzy status row in `common/statuses.json` (its own id beside the Zealot's `frenzied`, so the one-entry-per-status
   rule keeps them apart):
@@ -3292,41 +3294,47 @@ was built and no `ai.castMinOwnFighting` knob exists**: the brief built one only
   one, else D31's provisional 0.5: `FrenzyCastReportTests.LandingShare`, so the column follows the landing); a
   **diagnostic** (the shipped opening with two Shamans spawned at 0:00, not a design number: what today's rule does when
   Shamans exist); and, when the environment variable `FRENZY_REPORT_OPENING` names a file, that opening (below, "For the
-  data track (M7-7)"). Summed (2026-11-14, M7-H2 on this branch; the shipped data carries no share, so the landing column
-  is at 0.5; 96 matches in about 2 minutes beside other runs):
+  data track (M7-7)"). Summed (re-run 2026-11-14 for M8-1 on this branch, BUG-1370's fix in: the shipped `standard` is
+  D31's V24 at share 0.25, so the landing column, the fixture's V24 at the shipped opening's own 0.25, plays the same
+  opening and prints the same figures; 96 matches in 58 s):
 
   | | shipped opening | landing opening | diagnostic: 2 Shamans at 0:00 |
   | --- | --- | --- | --- |
-  | Age II / Shamans' Circle by 15:00 | 4 / 3 of 32 | 21 / 8 of 32 | 7 / 5 of 32 |
-  | matches with a Shaman (first one) | 3 of 32 (13:09, 13:51, 14:44) | 0 of 32 | 32 of 32 (0:00) |
-  | Shamans alive at 5 / 10 / 15 min (sum) | 0 / 0 / 2 | 0 / 0 / 0 | 64 / 4 / 2 |
-  | first non-Shaman army unit (median; matches with one) | 5:47 (32 of 32) | 4:45 (32 of 32) | 5:42 (31 of 32) |
-  | thinks with a free Shaman, Frenzy ready | 73 | 0 | 14,852 |
-  | of them before the first army unit | 0 | - | 10,777 |
-  | of them with no army at all | 9 | - | 11,125 |
-  | army within 8 m: 1+ / 2+ / 3+ / 4+ | 47 / 47 / 32 / 16 | - | 2,599 / 239 / 0 / 0 |
-  | Shaman to army centroid, mean / median (thinks with an army) | 21.1 / 17.6 m | - | 25.9 / 6.6 m |
-  | today's rule: 2+ enemies seen within 8 m | 2 | - | 53 |
-  | army attacking within 8 m: 1+ / 2+ / 3+ / 4+ | 4 / 2 / 0 / 0 | - | 45 / 0 / 0 / 0 |
-  | casts sent / landed (a match) | 2 / 2 (0.06) | 0 / 0 (0.00) | 65 / 65 (2.03) |
-  | defeated by 15:00 / army pop 15:00 (sum) / wins | 24 / 40 / 0 | 19 / 8 / 0 | 13 / 54 / 0 |
+  | Age II / Shamans' Circle by 15:00 | 25 / 11 of 32 | 25 / 11 of 32 | 24 / 12 of 32 |
+  | matches with a Shaman (first one) | 0 of 32 | 0 of 32 | 32 of 32 (0:00) |
+  | Shamans alive at 5 / 10 / 15 min (sum) | 0 / 0 / 0 | 0 / 0 / 0 | 64 / 4 / 1 |
+  | first non-Shaman army unit (median; matches with one) | 4:28 (32 of 32) | 4:28 (32 of 32) | 5:30 (32 of 32) |
+  | thinks with a free Shaman, Frenzy ready | 0 | 0 | 14,836 |
+  | of them before the first army unit | - | - | 10,474 |
+  | of them with no army at all | - | - | 10,896 |
+  | army within 8 m: 1+ / 2+ / 3+ / 4+ | - | - | 2,719 / 759 / 109 / 42 |
+  | Shaman to army centroid, mean / median (thinks with an army) | - | - | 23.9 / 9.6 m |
+  | today's rule: 2+ enemies seen within 8 m | - | - | 64 |
+  | army attacking within 8 m: 1+ / 2+ / 3+ / 4+ | - | - | 52 / 8 / 0 / 0 |
+  | casts sent / landed (a match) | 0 / 0 (0.00) | 0 / 0 (0.00) | 70 / 69 (2.16) |
+  | defeated by 15:00 / army pop 15:00 (sum) / wins | 13 / 0 / 0 | 13 / 0 / 0 | 9 / 2 / 0 |
 
-  The diagnostic after its first army unit: 4,075 ready thinks, 348 of them with that army gone again; army within 8 m
-  2,599 / 239 / 0 / 0; attacking 45 / 0 / 0 / 0; 47 of the 53 thinks of today's rule. The shipped column has no Shaman
-  before its first army unit, so it is the same as before the fix. QA's independent re-measure
-  (`Stress/FrenzyCastReportQaStressTests`, the same matches) reads 2+ army units within 8 m in 250 of 14,996 ready thinks
-  and 2+ attacking in 0. It counts every ready, non-casting Shaman, not only the free ones the ability manager would send,
-  so it has 144 more ready thinks (and 11 more at 2+). It reads enemies from the world rather than the fogged view, and it
-  splits at 5:00 rather than at the first army unit. The army it counts is the same.
-- **The cause: too few Shamans.** The AI almost never has one: the Teblor reaches Age II by 15:00 in 4 of 32 matches
-  (shipped) and is defeated in 24, so 3 of 32 field a Shaman, the first at 13:09; with the landing opening 21 reach Age II
-  and 8 build the Circle, but none trains a Shaman before 15:00 (its 10 % composition share loses to the Warriors at a small
-  army). **Whether a fielded Shaman stands with the army is not measured by this copy.** In the diagnostic, two
-  Shamans standing at home from 0:00 have no army at all in 11,125 of their 14,852 ready thinks (all 10,777 before the
-  first army unit, which comes at a median 5:42). After it, 2+ army units stand within 8 m of a ready Shaman in 239
-  ready thinks and 4+ never. That describes Shamans spawned before the army, not Shamans trained into it; the opening
-  has to field them before the question can be measured. The proposed own-fighting rule would fire **less** than today's: 2+ army units attacking within
-  8 m in no ready think, against 53 for 2+ enemies. An army unit counts as attacking only in the `Attacking` state
+  The diagnostic after its first army unit: 4,362 ready thinks, 422 of them with that army gone again; army within 8 m
+  2,719 / 759 / 109 / 42; attacking 52 / 8 / 0 / 0; 61 of the 64 thinks of today's rule. Neither opening column has a
+  Shaman by 15:00, so their think rows are empty. QA's independent re-measure (`Stress/FrenzyCastReportQaStressTests`; its
+  figures are M7-H2's run, on the shipped data of that day, not re-run here) read 2+ army units within 8 m in 250 of 14,996
+  ready thinks and 2+ attacking in 0. It counts every ready, non-casting Shaman, not only the free ones the ability manager
+  would send, reads enemies from the world rather than the fogged view, and splits at 5:00 rather than at the first army
+  unit. The army it counts is the same.
+  **Note (Producer, 2026-11-14-1246 ACCEPT): the table above is D31's opening.** D32 landed in the same session and
+  changed the shipped `standard` opening (data hash 5353DF8A1473FC6D). D32's opening on this report
+  (`FRENZY_REPORT_OPENING=Content/Fixtures/teblor_standard_d32.json`; the data's developer and its QA, the same figures):
+  a Shaman in 5 of 32 matches (the first at 11:24-12:36), 8 casts sent / 8 landed, defeated 10. The sim re-prints the
+  table when it next reads the report (Request 53's second half).
+- **The cause: too few Shamans.** The AI never has one by 15:00: with the shipped opening (V24 at 0.25) the Teblor reaches
+  Age II in 25 of 32 matches and builds the Circle in 11, is defeated in 13, and trains no Shaman before 15:00 (its 10 %
+  composition share loses to the Warriors at a small army). **Whether a fielded Shaman stands with the army is not
+  measured by this copy.** In the diagnostic, two Shamans standing at home from 0:00 have no army at all in 10,896 of
+  their 14,836 ready thinks (10,474 of them before the first army unit, which comes at a median 5:30). After it, 2+ army
+  units stand within 8 m of a ready Shaman in 759 ready thinks and 4+ in 42. That describes Shamans spawned before the
+  army, not Shamans trained into it; the opening has to field them before the question can be measured. The proposed
+  own-fighting rule would fire **less** than today's: 2+ army units attacking within 8 m in 8 ready thinks, against 64
+  for 2+ enemies. An army unit counts as attacking only in the `Attacking` state
   (standing in reach); a melee unit chasing is `Moving`, so the count is low.
 - **Rule 41.** These figures are this branch's, on the sim's test copy and one generated map; the data track's V24
   re-measure on `main` is another harness (four maps, its own seat layout) and not comparable with them.
@@ -3361,10 +3369,10 @@ was built and no `ai.castMinOwnFighting` knob exists**: the brief built one only
 **For the data track (M7-7).**
 
 - **Shamans.** The Teblor AI casts Frenzy only if it fields Shamans, which is `ai.json`'s (the opening's Age II timing and
-  its composition): today it has none before 13:09 in the shipped opening and none by 15:00 with the landing opening. If
+  its composition): with the shipped opening (V24 at 0.25) it has none by 15:00 in any of the 32 matches. If
   the balance pass wants the Frenzy seen before 15:00, the opening has to reach Age II, build the Shamans' Circle and train
   Shamans earlier (a larger `teblor_shaman` share once in Age II, or a `train` step for one or two). The diagnostic's
-  2.03 casts a match is two Shamans standing at home from 0:00, not a forecast for trained ones. No new rule is proposed
+  2.16 casts a match (M8-1's re-run) is two Shamans standing at home from 0:00, not a forecast for trained ones. No new rule is proposed
   until a measurement with Shamans fielded by the opening says otherwise.
 - **Measuring an opening without a sim edit (M7-H2).** Write the opening (one JSON object, exactly an `ai.json`
   `openings[]` entry) to a file and name it in `FRENZY_REPORT_OPENING`: an absolute path, or one relative to
@@ -3381,8 +3389,9 @@ was built and no `ai.castMinOwnFighting` knob exists**: the brief built one only
   Remove-Item Env:FRENZY_REPORT_OPENING
   ```
 
-  On this branch that file (V24 without a share) reads Age II / Circle 11 / 3 of 32 and no Shaman by 15:00 (12 defeated).
-  The landing column, V24 at 0.5, reads 21 / 8, so the share is what moves Age II there.
+  Re-run for M8-1 (128 matches in 86 s, the three columns above unchanged): that file (V24 without a share) reads Age II /
+  Circle 19 / 6 of 32, a Shaman in 2 of 32 (10:20, 10:34), 2 casts sent and landed, 13 defeated. The landing column, V24
+  at the shipped 0.25, reads 25 / 11 and no Shaman by 15:00.
 - **The Gatherer's 15.** The schema exists; teblor.md's "not in the data: `rules.json` `workerCarry` is one number for
   every faction" is no longer true of the schema (the row itself is not in the data). The row, in
   `factions/teblor/units.json` on `teblor_gatherer`: `"carry": 15`. It moves the data hash once (land it with D31's rows
@@ -3856,6 +3865,74 @@ Fixes after M6-V20: the cost of 400 animated models (BUG-1321), the worker tint 
   `QaM7V3aTest` (40-character name) checks the long list is no wider than the others, every Team list and every stats
   heading on screen.
 
+### Implementation (M6-V21)
+
+The art pass's second slice: the Malazan Heavy Infantry and the Whirlwind Camp Follower, Raider and Desert Archer are drawn
+as animated, team-coloured models (six model types); a per-model attack clip; the figures follow the game speed. View
+code, view tests, the import tooling and generated assets only; no sim, ViewApi or data file changed.
+
+- **The entries** (`tools/asset-manifest.json`, docs/04 "Unit models, as built"): the two outfits on disk recoloured, props
+  as boxes (Producer default). Heavy Infantry: the Ranger without its hood, with bracers, oxblood, a team-coloured big
+  rectangular shield, a steel short sword and box helmet. Camp Follower: the Peasant in bleached sand. Raider: the Ranger
+  with its hood, ochre, a curved steel blade. Desert Archer: the Ranger with hood and pauldron, sand, a bow. 2,507 / 2,597 /
+  2,547 / 2,727 triangles, four 512² textures each, 1.82-1.88 m, 65 bones, one `team` surface.
+- **Clips chosen.** The library gains `attack_melee` (UAL1 `Sword_Attack`); the Heavy Infantry and the Raider attack with it,
+  the Desert Archer keeps `Pistol_Shoot` (UAL1 / UAL2 have no bow clip; candidates in docs/04 "Animation setup").
+- **Clip maps.** A model file carries its clip map (state name -> library clip) as glTF extras on its armature node, which
+  Godot 4.7 imports as the node's `extras` metadata. `UnitModels` reads it at `Bind` (from the probe instance it already
+  makes for the team surface; a missing map or entry means the state's own name, the pre-V21 rule) and gives each model type
+  one `AnimationLibrary` holding the shared library's `Animation`s under the state names (references, no copy), added to that
+  type's players instead of the shared library. So every player still plays `idle`, `walk`, `attack`, ... (`ClipFor` and every
+  test that reads `CurrentAnimation` are unchanged) and the map decides the motion; a state whose source the library lacks
+  is left out and the view plays idle, as before. `UnitModels.ClipSource(type, clip)`, `HasClip(type, clip)`,
+  `ClipLength(type, clip)` and `LibraryOf(type)` are per type; the static `HasClip(clip)` / `ClipLength(clip)` still read
+  the shared library by state name. No unit id is named in code.
+- **Game speed** (docs/01 2026-11-14 (d) (f)). `UnitViews.AdvanceAnimations(delta, eye)` passes `delta x AnimationRate` to
+  `CrowdAnimator.Advance`; `AnimationRate` is the runner's `GameSpeed` (1 without a runner) and 0 while the node can't
+  process (the match's tree paused: the pause menu, the match-over banner). At rate 0 the schedule doesn't run at all (its
+  frame counter and the staggered figures' waits hold), so resume picks up where pause left. The staggered figures wait in
+  clip time (the scaled deltas), so near and far figures advance alike at any speed.
+- **Scenes that turn models off:** unchanged, the five of M6-V20 (`EconomyViewTest`, `QaM6V3Test`, `QaM7V3cTest`,
+  `ScaleViewTest`, `ShellTest`); none is added. Scenes that read a slot's own mesh or overlay for one of the four types read
+  the model's instead: `CombatViewTest` (the hit flash on `ModelMeshOf` for the Heavy Infantry and the Raider), `QaM22Test`
+  (a reused slot draws through its model's mesh: the Whirlwind's first unit is the Camp Follower), `TeblorViewTest` (the
+  Heavy Infantry's capsule size from `MeshOf(type)`, the same numbers). No pin value changed.
+- **A slot's type is set before the fog check** (found by `FogViewTest` / `QaFogViewTest` / `QaGhostViewTest`'s 0-byte
+  steady rows once the line units were models): `Sync` sets a live slot's type, and so instantiates a model type's model,
+  when the slot gets its unit, seen or not, as it already made the slot's node; a fogged army coming into sight then makes
+  nothing. A model made while hidden has its player inactive until it is shown.
+- **Cost** (rule 61; 1600 x 900, vsync off, default zoom, `ModelShots --bench 30 --vsync off`, the units mixed evenly over the
+  six model types, the capsule runs on the same types with `--placeholder-art`, RTX 4070; none of the developer's own test
+  processes running, two other tracks' `testhost`s running throughout, which the developer may not stop):
+
+  | Run | Average | While 90 % live | Worst 1 % (90 % live) | Draw calls |
+  | --- | --- | --- | --- | --- |
+  | 400 models | 10.16 ms | **11.26 ms** (pass: at most 16.7) | 16.03 ms | 4,544 |
+  | 400 capsules | 0.78 ms | 0.79 ms | 2.71 ms | 95 |
+  | 1,000 models | 27.11 ms | 28.17 ms | 35.43 ms | 12,216 |
+  | 1,000 capsules | 1.36 ms | 1.40 ms | 5.91 ms | 131 |
+  | 1,000 models, `--no-anim` | 18.64 ms | 19.52 ms | 25.53 ms | 12,208 |
+  | 1,000 models, `--no-model-shadows` | 22.88 ms | 24.03 ms | 30.28 ms | 4,230 |
+
+  400 mixed models cost about 1 ms more than M6-VH7's two types (10.11 ms while 90 % live): five surfaces on four of the six
+  types (the props' material) against four and five, so about 1,100 more draw calls. **What 16.7 ms at 1,000 would take
+  (rule 61, measured, not built):** the animation (players advanced on the CPU) is about 8.7 ms of the 28.2 (the `--no-anim`
+  split; the still pose's skinning stays), so a shared skeleton per type or baked vertex animation would be worth up to
+  about 8 ms; the models' shadow pass is about 4.1 ms for about 8,000 draw calls (the `--no-model-shadows` split), so
+  about 0.5 µs a draw call, and merged surfaces (one material and one texture atlas a model: 5 surfaces to 1, about 12,200
+  draw calls to about 2,500) would be worth about 4-5 ms. Either alone leaves 1,000 figures over 16.7 ms (about 19.5 and
+  23-24 ms); both together reach about 14-15 ms. Merged surfaces are the cheaper first step (an import-tooling change, no
+  new runtime system); turning the models' shadows off past a zoom (BUG-1321 c) is worth about 4 ms at any count.
+- **Tests:** `ModelViewTest`: exactly the six manifest types draw a model; per model its height within 5 % of 1.8 m x its data
+  `scale` and the clip map read from the file equal to the manifest's; the library holds exactly `library.clips`; a fighting
+  Heavy Infantry and Raider play `attack` = the library's `attack_melee` (by `Animation` identity) and a shooting Desert
+  Archer `attack` = `Pistol_Shoot`, from real sim states; a Camp Follower's build / gather_wood / gather_gold; a library cut
+  without `attack_melee` gives idle; the speed row (400 walking models of the six types under a camera: after warm-up at a
+  speed, every figure, near or staggered, is at exactly 9/60 s x 1, 2 and 0.75 after nine frames; paused, nothing moves and
+  the schedule doesn't run; resumed, it runs); LFS pointers for all six; the slot-reuse row capsule / Laborer / capsule /
+  Heavy Infantry; the steady row 400 models mixed over the six types, 0 bytes. `ModelShots` gains `--types <dir>` and
+  `--lines <dir>` (the pictures) and mixes the bench over every model type.
+
 ## Vision, detection, fog
 
 Fog of war and the high-ground rule are in since M4-3a (`sim/Rts.Sim/Vision/`); the last-known building ghosts, buildings
@@ -3968,9 +4045,10 @@ and the Blinded sight since M4-4b-2 (see "Implementation (M4-4b-2)"); stealth an
   the corner of a map under 46 cells). (4) The byte map and the packed bits are two copies of the visible set; combat
   reads the bits, the view the bytes; both are written only by the update.
 - **Not yet.** (M4-3b's towers, last-known list and explored-placement rule, M4-4b-2's zone vision and M4-5's stealth and
-  detection are in.) Stealth has no shipped source before M8: Shadow's forest stealth (a tree/forest rule), the Shadow
-  Archer's stand-still stealth (a `whenStanding` passive trigger) and its first-shot bonus are M8's, built on the M4-5
-  status; the casters' 10 m `detector` is the data track's next task (D12). Detection is not stamped into the fog: it is a
+  detection are in.) Stealth has no shipped source before M8: Shadow's forest stealth is in the schema since M8-1 (a
+  `faction.json` block, "Implementation (M8-1)"; no shipped faction carries it yet), the Shadow Archer's stand-still
+  stealth (a `whenStanding` passive trigger) and its first-shot bonus are M8-2's, all built on the M4-5 status; the
+  casters' 10 m `detector` shipped with D12. Detection is not stamped into the fog: it is a
   per-unit answer for stealthed units only ("Implementation (M4-5)"). M5: the AI reads the world only through a
   `PlayerView` facade that applies these checks (`Fog.CanSeeUnit` already applies stealth); in since M5-1 ("AI architecture"). **Rendering** (M4-V4): the local player's grid uploads to an R8 texture
   each update; the terrain shader samples it with smooth filtering (unexplored black, explored desaturated and dark,
@@ -4004,7 +4082,7 @@ counters in `StatusStore` (`HasStealth`, `StealthedUnits`), `FogStore.SeesUnitCe
   doesn't cover doesn't detect it, nor does a detector below a cliff. The answer is a per-slot bit per player
   (`World._detectedBy`, `(players + 7) / 8` bytes a slot: one for up to 8 players), read through `World.IsDetectedBy(p,
   slot)`; meaningful only while the slot carries a Stealthed status (false otherwise, and for the unit's own owner).
-- **When.** Phase 5, last: `SummonSystem`, `PassiveSystem`, `StatusSystem`, `ZoneSystem`, then `StealthSystem.Run`, which
+- **When.** Phase 5, last: `SummonSystem`, `PassiveSystem`, `StatusSystem`, `ZoneSystem` (M8-1: then `ForestStealthSystem`), then `StealthSystem.Run`, which
   returns at once while `StatusStore.StealthedUnits` is 0 and otherwise rebuilds the bits of every live slot with a
   Stealthed status, in slot order: one `SpatialHash.QueryEnemies` at `max(proximity, largest unit detector)` round it, then
   the finished detector buildings (collected once a pass into `World.DetectorBuildings`, slot order). The fog is asked at
@@ -4091,6 +4169,95 @@ application); D12 took them out of `AbilityContentTests.PendingStatuses` and pin
 (`StealthedAndRevealed_AreLoaded_AndStrictlyPinned`). `rules.json` `stealth.proximity` / `revealSeconds` hold docs/02's 3 m
 and 3 s. Stealth sources (Shadow's forest stealth, the Archer's stand-still) are M8's.
 
+### Implementation (M8-1)
+
+M8's first sim slice: the Shadow page's "Children of Shadow" as a generic faction bonus, in the schema and tested on forged
+data only (no shipped file carries it, so the data hash, the golden and every save are unchanged). Readings: docs/01
+"2026-11-14 (d)" and docs/02 "Stealth and detection". Code: `Abilities/ForestStealthSystem.cs`, `World.ForestStealth.cs`,
+`Abilities/ForestStealthStore.cs` (`UnitStore.Forest`), `ResourceStore.TrackWoodCells` / `IsWoodCell`, the hooks in `StatusSystem.Run` /
+`Hold`, `CombatSystem.HitUnit` / `HitBuilding` and `AbilitySystem.Run`; data in `DataLoader.ForestStealth`.
+
+- **Schema.** `faction.json` `forestStealth { status, delay, exceptSlots }` (the "Data format" table): `status` a status of
+  kind `stealthed` (`FactionDef.ForestStealthStatus`, -1 absent), `delay` seconds of at least a tick, at most 60
+  (`DataLimits.MaxForestStealthDelay`; `ForestStealthDelayTicks`), `exceptSlots` optional unit slot names, each once
+  (`ForestStealthExceptSlots`, a bit per `UnitSlot`). One error per bad field at its path
+  (`DataValidationTests.BrokenFactionForestStealth_YieldsExactlyOneError`). `GameData.ContentHash` adds the block (a marker,
+  then the three fields) only when a faction carries it: the shipped hash did not move, any block moves it, each field again.
+- **The rule** (`ForestStealthSystem.Run`, phase 5 after the countdown, regeneration and zones, right before
+  `StealthSystem.Run`). A live unit whose owner's faction has the block, of a slot not excepted and not summoned, qualifies
+  when (i) its own cell or one of the 8 round it holds a standing tree (9 reads of a bit per cell that the resource store
+  keeps in a match seating the bonus: set by a wood node's spawn, cleared by its felling, rebuilt at a load; no spatial
+  query), (ii) `tick - LastAttackTick >= delay` or it never attacked, (iii) `tick - LastDamagedTick >= delay` or it was
+  never hurt. While it qualifies it carries the faction's status through the status store, so the one predicate
+  (`World.IsStealthed` / `HiddenFrom`), detection, Revealed, targeting, the fog, `Fog.CanSeeUnit` and the AI's `PlayerView`
+  treat it as any Stealthed unit (M4-5), with no second path. The tick phase 5 finds it no longer qualifying, the stealth
+  ends (no linger). Positions are phase 5's (as movement left them in the previous tick), so a unit that walks beside a
+  tree is hidden from the next tick's phase 5 and one that walks away is seen from the next tick's phase 5; a tree felled
+  by a gatherer in phase 4 ends it in the same tick's phase 5.
+- **The held entry.** The store keeps one entry per status id, so the forest shares its entry with any timed application
+  of the same status (an ability's). While the forest holds it (`ForestStealthStore.Held` 1), the entry's `TicksRemaining` is
+  one more than the timed applications left it (1 = nothing timed): `StatusSystem.Run` counts it down as ever but never
+  below 1, and a timed application onto a held entry adds the one (`StatusSystem.Hold`), so the stacking rule compares
+  like with like. Letting go takes the one back: the entry ends at once when nothing timed is left, else runs out in
+  exactly the tick the timed application would have. So a timed Stealthed is never shortened or lengthened by the forest
+  (`ForestStealthTests.H_*`), and a held entry always shows at least one tick left (the view's status markers draw it). No
+  widening of the store: the 8-entry cap and the one-entry-per-id merge did not get in the way.
+- **Attack and hp loss.** An attack landing or a cast resolving (the moments M4-5's reveal uses: `HitUnit`, `HitBuilding`,
+  `AbilitySystem.Run`) sets `LastAttackTick` for a unit of a seat with the bonus; from stealth it also reveals (M4-5), and
+  the next phase 5 lets go. `HitUnit` with damage above 0 sets `LastDamagedTick` for such a unit too (the M7-1 gate widened
+  from regenerating factions) and lets go of a held entry at once, so a hidden unit hit in phase 11 is seen for the rest of
+  that tick; a damage-over-time pulse in phase 5 does the same (the countdown re-finds its own entry when the let-go removed
+  one before it). Gathering is not attacking.
+- **State, hash, save.** `ForestStealthStore.LastAttackTick` (int a slot, -1 never) and `Held` (byte a slot), the unit store's `Forest`, exist only when the loaded
+  data has a faction with the block (`GameData.AnyForestStealth()`; null otherwise), reset at spawn and free. Hashed under
+  bit 22 of the unit's state word when either is off its default, after the regeneration words; `LastDamagedTick` was
+  already hashed (bit 21). Derived and not hashed: the per-player tables (`World.ForestStatusOf` / `ForestDelayOf` /
+  `ForestExceptOf`, from the seats and the data), `World.AnyForestStealth` (a seat has the bonus) and the wood bits. Saved
+  as the unit store's `FRST` part after `REGN`, written exactly when the data has the block (as `HUNT` is with an AI seat),
+  so `SaveFormat.CurrentVersion` stays 10 and every other save is the bytes it was. A save whose part disagrees with the data
+  meets an unexpected tag and is refused `Malformed`; the part is held to the rest at load (a free slot's state is default,
+  a last attack is at most the save's tick and only on a unit of a seat with the bonus, a held unit is such a unit, not
+  summoned, not excepted, and carries the status). The replay format is unchanged (a replay holds no unit state).
+- **Cost.** A match whose seats have no bonus: one bool test in phase 5 (`ForestStealthPerfTests.NoForestStealthSeat_*`),
+  one in each hit and cast. With the bonus, the pass reads each live unit's owner, and for the faction's units a slot mask,
+  two ticks and up to 9 bits; holding or letting go is a status application or removal. Nothing allocates
+  (`ForestBrawlTicks_AllocateNothing`: 0 bytes over 100 brawl ticks). Measured (Debug, 2026-11-14, the Perf rows alone
+  from this track but beside another track's test run, head and base 93c2f3b alternating): the forest brawl (500 units, 250
+  of the faction among 286 trees, `ForestBrawl500_First200Ticks_AverageUnder4Ms`) 1.154 / 1.153 ms a tick over ticks 5-205
+  (worst 2.6 ms; budget 4 ms), 1.21 / 1.19 ms over 205-605; `EmptyTick(2500)` 905 / 909 / 713 us against the base's
+  887 / 730 / 717 us (the machine's noise is wider than the difference; budget 1.1 ms); M4-5's stealth brawl 1.961 / 1.942
+  / 2.053 ms against the base's 2.732 / 2.035 / 2.045 ms, its outcome identical (23 carriers left, 136 killed); 10,000
+  forest passes over 2,500 slots with no seat having the bonus 0.033 ms.
+- **Known limits.** (1) A unit with 8 other statuses can't take the forest's entry (the store's cap; the next pass tries
+  again). (2) A held entry shows one tick more than the timed applications left it; the view's status markers count it as
+  active, which is the wanted reading. (3) The tree test is by cell, not distance: a unit at the far edge of its cell is up
+  to about 3 m from the tree's centre in a straight line, and diagonal neighbours count. (4) Gathering a tree does not
+  break the stealth (docs/01 "2026-11-14 (d)" (c), flagged for the M8 balance pass).
+- **Tests.** `Data/ForestStealthLoaderTests`, `DataValidationTests.BrokenFactionForestStealth_YieldsExactlyOneError`,
+  `DataContentHashTests` (the three fields in the reflection row), `Vision/ForestStealthTests` (criterion 3's rows (a)-(i):
+  beside and away tick for tick, the nine cells, the attack with 3 s and 5 s, the walk-in after an attack, hp loss by a
+  melee hit, a projectile, a splash and a zone's pulse, excepted / summoned / other faction, the felled tree, the ability's
+  own duration in and out of the forest, proximity, a unit detector, a tower, no scan, a dropped Attack, the enemy AI's
+  view), `Vision/ForestStealthMatchTests` (twins over 3,000 ticks with the recording replayed, a save while hidden and
+  mid-wait matching the unsaved run 1,000 ticks, a timer's hash, forged saves), `Vision/ForestStealthPerfTests`. The test
+  copy is `Vision/ForestScenes` (the Malazan carry the block; no shipped file changes).
+
+**For the data track (M8-1).** The Shadow's `faction.json` carries, beside its other fields:
+
+```json
+"forestStealth": { "status": "stealthed", "delay": 3, "exceptSlots": ["siege"] }
+```
+
+`stealthed` is the shipped status (M4-5); the delay is the page's 3 s (its first balance fix is 5); the Edur Ram is the
+siege slot. Summoned units (the Wraith) are never hidden by the rule, so they need no entry here. The block moves the data
+hash once; land it with the Shadow roster.
+
+**For the view (M8-1).** Nothing new is needed: a forest-hidden unit is an ordinary Stealthed unit. Draw the local player's
+own hidden units from `World.IsStealthed(slot)` as M4-V8 does, hide an enemy's by `Fog.CanSeeUnit`, and the status markers
+show its Stealthed entry (`TicksRemaining` at least 1 while the forest holds it). Whether the forest holds a unit is
+`UnitStore.Forest.Held` (`Forest` is null on data without the bonus) should a marker ever want to tell the forest's stealth from an
+ability's; nothing reads it today.
+
 ## Data format
 
 All definitions are JSON under `game/data/`, loaded by both the game and the tests (tests find the
@@ -4107,7 +4274,7 @@ game/data/
     projectiles.json         # projectile types: aimed / lob, speed, hit tolerance, lead speed (M4-2b)
     statuses.json            # status types: damage over time, slow (M4-4a), blind (M4-4b-2), frenzied (M4-4b-3a), regenerating (M7-1)
   factions/<faction_id>/
-    faction.json             # id, displayName, bonus, palette, resource display names; regen (M7-1, optional)
+    faction.json             # id, displayName, bonus, palette, resource display names; regen (M7-1), forestStealth (M8-1), both optional
     units.json
     buildings.json           # building types (M3-2 schema; all ten slots per faction since D1)
     techs.json               # the faction upgrade (M3-5)
@@ -4173,11 +4340,11 @@ consumes it.
 | `resources.json` | `{ "resources": [ ... ] }`, each `{id, displayName, description, resource, footprint {width, height}}`: `resource` is `gold` or `wood`, footprint sides are cells, 1-4 (`DataLimits.MaxFootprint`). Amounts are not here: a tree holds `rules.json` `treeWood`, a mine `startMines.gold` (M3-1, see "Economy implementation") |
 | `rules.json` | docs/02 Economy table: `startingResources` (M6-S6, replacing `startingGold` / `startingWood`: a list of presets in the setup's order, each `{id, displayName, description?, gold, wood, aiSpendAbove?}`; ids unique snake_case of at most 64 characters, a `standard` entry required, gold and wood 0 to 1,000,000, at most 16 presets; shipped `standard` 200 / 200 and `high` 1000 / 1000, Producer default; `aiSpendAbove` (M6-S6 fix round 1, BUG-1050) optional, 0 to 1,000,000, 0 or left out = off: the AI's spend-down threshold in gold + wood, shipped `high` 200, `standard` none; every field, the count and the order in `ContentHash`), `startingWorkers`, `popCap`, `workerCarry`, `gatherRate {gold, wood}` (per second), `startMines` / `expansionMines {count, gold}`, `treeWood`, `nodeSearchRadius`, `repair {rateFactor, costFactor}` (M3-3), `buildingSight` (M4-3a: meters, above 0 and at most 64, the sight of a building whose entry gives none; shipped 12, a Producer default: docs/02 gives sight only for the Watch Tower), `stealth {proximity, revealSeconds}` (M4-5: meters and seconds, above 0; shipped 3 and 3, docs/02 "Stealth and detection"). Pop provided by buildings comes with `buildings.json` (M3); the Age II cost with `techs.json` (M3-5) |
 | `common/factions.json` | M7-3: `{ "order": ["malazan", "whirlwind"] }`, the faction order: faction id = index in `order`, and unit and building type ids go faction by faction in this order (ordinal within a faction). Every folder under `factions/` must be listed and every entry must have a folder; a repeat, an entry that isn't a snake_case id (or a string) and more than 8 entries (`DataLimits.MaxFactions`) are errors, one each at `order[i]` (a folder not listed: at `order`, naming the folder). Append-only: a new faction adds its id at the end. Not hashed (the keys in id order are). See "Implementation (M7-3)" |
-| `faction.json` | `id` (must equal the folder name), `displayName`, `description`, `bonus {displayName, description}`, `resources {gold, wood: {displayName}}`, `palette {primary, secondary, accent}` as `#RRGGBB`; `regen` (M7-1, optional: absent = no regeneration) `{hpPerSecond, delay}`, both required when the object is there: `hpPerSecond` above 0 and at most 100 (`DataLimits.MaxRegenPerSecond`) and at least 0.05 (one fixed-point unit a tick), to `FactionDef.RegenPerTick` (`round(hpPerSecond x 400 / 20)`: 1 → 20); `delay` seconds, 0 or more, at most 3600, to `FactionDef.RegenDelayTicks` (6 → 120); an unknown key is an error. No shipped faction has one yet (Teblor, Andii: M7 / M9). See "Implementation (M7-1)" |
+| `faction.json` | `id` (must equal the folder name), `displayName`, `description`, `bonus {displayName, description}`, `resources {gold, wood: {displayName}}`, `palette {primary, secondary, accent}` as `#RRGGBB`; `regen` (M7-1, optional: absent = no regeneration) `{hpPerSecond, delay}`, both required when the object is there: `hpPerSecond` above 0 and at most 100 (`DataLimits.MaxRegenPerSecond`) and at least 0.05 (one fixed-point unit a tick), to `FactionDef.RegenPerTick` (`round(hpPerSecond x 400 / 20)`: 1 → 20); `delay` seconds, 0 or more, at most 3600, to `FactionDef.RegenDelayTicks` (6 → 120); an unknown key is an error. The Teblor ship one (1 HP/s after 6 s); see "Implementation (M7-1)". `forestStealth` (M8-1, optional: absent = no forest stealth) `{status, delay, exceptSlots}`: `status` (required) a status of kind `stealthed`, to `FactionDef.ForestStealthStatus` (-1 absent); `delay` (required) seconds, at least one tick once converted, at most 60 (`DataLimits.MaxForestStealthDelay`), to `FactionDef.ForestStealthDelayTicks` (3 → 60); `exceptSlots` (optional) unit slot names (`DataLimits.SlotIds`), each once, to `FactionDef.ForestStealthExceptSlots` (a bit per `UnitSlot`); one error per bad field, an unknown key is an error. No shipped faction has one yet (the Shadow: the data track, M8). See "Implementation (M8-1)" |
 | `buildings.json` | `{ "buildings": [ ... ] }`, each `{id, displayName, description, slot, footprint {width, height}, hp, armor, cost {gold, wood}, buildTime, popProvided, dropOff}`: `slot` is one of the ten template slots (`DataLimits.BuildingSlotIds`), footprint sides 1-4 cells, `buildTime` in seconds (to ticks), `popProvided` a multiple of 0.5 (to half-pop), `dropOff` a required bool, `requires` an optional list of tech / building ids (M3-5; resolved and gating placement since M3-6), `sight` optional meters (M4-3a: above 0 and at most 64, default `rules.json` `buildingSight`; shipped 24 on both watch towers, docs/02), `attack` optional (M4-3b: the unit `attack` object; value at least 1, range above 0, an aimed `projectile` required, `targets` not `buildings`; shipped on both watch towers), `detector` optional meters (M4-3b: above 0 and at most 64; shipped 16 on both watch towers; unused until M4-5), `scale` optional (M7-4: the view's model size, 0.5-3.0, default 1; the sim never reads it; since M7-V4 the placeholder box's height, `3 m x scale`, on the footprint's width and depth: "Implementation (M7-V4)"). Ids unique across factions (M3-2, see "Economy implementation"); exactly one building per slot per faction (M3-6, BUG-0010) |
 | `techs.json` | `{ "techs": [ ... ] }` in `common/` (shared by every faction) and in each faction folder (its own), each `{id, displayName, description, researchedAt, cost {gold, wood}, researchTime, requires?, requiresAnyOf?, effects: [{stat, amount, appliesTo {attackType?, tags?, units?, siege?}}]}`: `researchedAt` is a building slot id (a common tech resolves to each faction's building of it; a faction without one is an error), `researchTime` in seconds (to ticks), `requires` tech / building ids (resolved and gating research since M3-6), `requiresAnyOf` `{count, of: [slot ids, or in a faction file its own building ids]}`: met when `count` of the distinct listed slots hold an own finished building (M3-6; shipped on `age_ii` only), `effects` may be empty. `stat` is one of `attack`, `armor`, `range`, `hp`, `abilityCooldown`, `statusDuration` (M7-4) (`DataLimits.TechStatIds`); `amount` is non-zero, whole for attack / armor / hp, meters for range, seconds for ability cooldown and status duration (to ticks, negative shortens it). A `statusDuration` effect takes `statuses` (statuses.json ids, at least one) and no `appliesTo`; no other stat takes `statuses` (see "Implementation (M7-4)"). `appliesTo` is required (`{}` = every unit) except on `statusDuration`; each filter it sets must match: `attackType` a damage type, `tags` any one of the unit's tags (each must be a tag some unit has), `units` unit ids (a faction tech's must be its own), `siege` true / false for the `siege` slot; a `tags` or `units` list set to `[]` is an error (M3-6, BUG-0098). Tech ids are unique across all techs files and may not equal a building id (M3-6); they number the common file's techs first, then each faction's in `common/factions.json` order, ordinal within each file (M7-3b), so a new faction's techs move no shipped id; `DataLimits.AgeTechIds` (`age_ii`) must be a common tech (M3-5, see "Implementation (M3-5)") |
 | `projectiles.json` | `{ "projectiles": [ ... ] }`, each `{id, kind, speed, hitTolerance?, leadSpeed?}`: `kind` `aimed` or `lob`, `speed` m/s (at least 1), `hitTolerance` m (aimed only, 0-2, default 0.3; an error on a lob), `leadSpeed` m/s (aimed only, not negative, default 0 = never leads; an error on a lob). Ids unique; every unit's `attack.projectile` must name one (M4-2b, see "Implementation (M4-2b)") |
-| `units.json` | `{ "units": [ ... ] }`, entries as in the example. `attack` also takes optional `minRange`, `splash` (m), and `friendlyFire` (docs/02 "Combat / Stats"); they default to 0 / false. Melee range is written as `0.5` (edge to edge). `abilities` (M4-4a, optional): ability ids of the unit's own faction, at most 4 (`DataLimits.MaxUnitAbilities`), no repeats; resolved to `UnitDef.Abilities`; shipped on the Cadre Mage (`telas_fire`), the Sapper (`cusser`) and the Priest of the Whirlwind (`sandstorm`). `passives` (M4-4b-3a, optional): at most 2 (`DataLimits.MaxUnitPassives`), one per `trigger` (`DataLimits.PassiveTriggerIds`): `{trigger: whenBelowHp, hpFraction, status, magnitude}` or `{trigger: onDeath, status, magnitude, duration, radius, units}` (see "Implementation (M4-4b-3a)"); resolved to `UnitDef.Passives`; shipped on the Zealot only. `detector` (M4-5, optional): meters, above 0, at most 64 (`UnitDef.Detector`; see "Implementation (M4-5)"). `scale` (M7-1, optional, default 1): the view's model size, 0.5-3.0 (`DataLimits.MinUnitScale` / `MaxUnitScale`), to `UnitDef.Scale`; presentation only, collision stays `radius` (docs/02 "Combat / Stats"); no shipped unit sets it yet. `spawnCount` (M7-2, optional, default 1): units one queue item spawns, a whole number 1-8 (`DataLimits.MaxSpawnCount`), to `UnitDef.SpawnCount`; `cost` and `trainTime` are the item's, `pop` each unit's (see "Implementation (M7-2)"); no shipped unit sets it yet. `passives` also takes (M7-2) `{trigger: onHit, status, magnitude, duration}`, so at most 3, still one per trigger. `carry` (M7-7, Request 48, optional, a worker only): resources the worker carries a trip, a whole number 1 to 1,000,000, to `UnitDef.Carry`; absent = `rules.json` `workerCarry` (`GameData.CarryOf`; see "Implementation (M7-7)"); no shipped unit sets it yet |
+| `units.json` | `{ "units": [ ... ] }`, entries as in the example. `attack` also takes optional `minRange`, `splash` (m), and `friendlyFire` (docs/02 "Combat / Stats"); they default to 0 / false. Melee range is written as `0.5` (edge to edge). `abilities` (M4-4a, optional): ability ids of the unit's own faction, at most 4 (`DataLimits.MaxUnitAbilities`), no repeats; resolved to `UnitDef.Abilities`; shipped on the Cadre Mage (`telas_fire`), the Sapper (`cusser`) and the Priest of the Whirlwind (`sandstorm`). `passives` (M4-4b-3a, optional): at most 2 (`DataLimits.MaxUnitPassives`), one per `trigger` (`DataLimits.PassiveTriggerIds`): `{trigger: whenBelowHp, hpFraction, status, magnitude}` or `{trigger: onDeath, status, magnitude, duration, radius, units}` (see "Implementation (M4-4b-3a)"); resolved to `UnitDef.Passives`; shipped on the Zealot only. `detector` (M4-5, optional): meters, above 0, at most 64 (`UnitDef.Detector`; see "Implementation (M4-5)"). `scale` (M7-1, optional, default 1): the view's model size, 0.5-3.0 (`DataLimits.MinUnitScale` / `MaxUnitScale`), to `UnitDef.Scale`; presentation only, collision stays `radius` (docs/02 "Combat / Stats"); shipped on six Teblor units (1.5). `spawnCount` (M7-2, optional, default 1): units one queue item spawns, a whole number 1-8 (`DataLimits.MaxSpawnCount`), to `UnitDef.SpawnCount`; `cost` and `trainTime` are the item's, `pop` each unit's (see "Implementation (M7-2)"); shipped on the War-dogs (3). `passives` also takes (M7-2) `{trigger: onHit, status, magnitude, duration}`, so at most 3, still one per trigger. `carry` (M7-7, Request 48, optional, a worker only): resources the worker carries a trip, a whole number 1 to 1,000,000, to `UnitDef.Carry`; absent = `rules.json` `workerCarry` (`GameData.CarryOf`; see "Implementation (M7-7)"); shipped on the Teblor Gatherer (15, D31) |
 | `statuses.json` | `{ "statuses": [ ... ] }` (M4-4a), each `{id, displayName, description, kind, damageType?, sight?, reach?, damageBonus?, onEnd?}`: `kind` `damageOverTime`, `slow`, (M4-4b-2) `blind`, (M4-4b-3a) `frenzied`, (M4-5) `stealthed` / `revealed` (at most one `revealed`), or (M7-1) `regenerating` (`DataLimits.StatusKindIds`; its magnitude is HP per second, above 0, at most 100 and at least 0.05); `damageType` (a damage table type) required on `damageOverTime`, an error on any other kind; `sight` and `reach` (m, above 0, at most 64) required on `blind`, errors on any other kind; (M7-4) `damageBonus` (above 0, at most 4) on `frenzied` only, and `onEnd {status, magnitude, duration}` on any row (see "Implementation (M7-4)"). The magnitude and duration come from the effect applying it (a blind, stealthed or revealed status takes no magnitude). Ids unique; shipped `burning` (magic damage over time), `slowed`, `blinded` (2 / 3, M4-4b-2) and `frenzied` (M4-4b-3a; its magnitude, the attack-speed increase, any fraction above 0, is the applying effect's or passive's), `stealthed` and `revealed` (M4-5, "Implementation (M4-5)"), `regenerating` (M7-1: nothing applies it in shipped data yet; the hook M9's Darkness zone and later abilities use) |
 | `abilities.json` | `{ "abilities": [ ... ] }` (M4-4a, per faction, optional), each `{id, displayName, description, kind, range, radius, castTime, cooldown, duration?, affects, autocast?, effects}`: `kind` `targetGround` or (M4-4b-3a) `selfAura` (`targetUnit`, `summon`: "not supported yet"); `range` m above 0 and at most `DataLimits.MaxSight` (64), required on `targetGround` and an error on `selfAura` (0 included); `radius` m above 0 and at most `DataLimits.MaxAbilityRadius` (16); `castTime` s, 0 or more, to ticks; `cooldown` s above 0, to ticks (at least 1); `duration` s, optional (0), to ticks (required with a `createZone` effect, M4-4b-2); `affects` `enemy_units`, `own_units` or `all_units`; `autocast` only `false` ("not supported yet"); `effects` at least one, each `{kind: damage, type, amount, buildings?, friendlyFire?}` (a whole amount, at least 1; M4-4b-1: `buildings` true also hits other players' buildings as structure, not with `own_units`; `friendlyFire` 0-1, the fraction own units take, above 0 only with `enemy_units`) or `{kind: applyStatus, status, magnitude, duration}` (a `statuses.json` id; magnitude whole and at least 1 for damage over time, above 0 and below 1 for a slow; duration s, at least a tick, and for damage over time a whole number of seconds, at least 1, M4-4b-1); M4-4b-2: `{kind: createZone, blocksVision?, statuses: [{status, magnitude, duration}]}` (at least one status, each by the `applyStatus` rules, a blind status without a magnitude; the ability's `duration`, at least a tick, is then required: the zone's lifetime; at most one per ability); `teleport`, `spawn`: "not supported yet"; a field the effect kind doesn't use is an error. Ids unique across factions, numbered faction by faction in `common/factions.json` order, ordinal within a faction (M7-3b), so a new faction's abilities move no shipped id. Shipped: Malazan `telas_fire`, `cusser` (M4-4b-1); Whirlwind `sandstorm` (M4-4b-2) |
 | `maps/<file>.json` | (M6-S7, optional folder, one file a hand-made map, loaded in the files' names' ordinal order into `GameData.Maps`) `{id, displayName, description, players, size, terrain, ramps?, starts, mines, forests}`: see "Implementation (M6-S7)" for every field and check |
@@ -10935,7 +11102,7 @@ version 2) stores the AI seats too, so every match saves. Code in `sim/Rts.Sim/S
   | `GRID` | the nav grid: every cell's flags and cost, `Version`, `BlockVersion`, `PassableCount` |
   | `RSSC` | the resource store whole (felled trees' freed slots and generations), free list, high-water mark |
   | `BLDG` | the building store whole: construction work, queues (tech flags), progress, rally points, repair accumulators, tower state, free list, high-water mark |
-  | `UNIT` | the unit store whole (every array, `Flank`, `PrevPosition` / `PrevFacing`, order queues, cargo, combat and cast state, the counted population and live flags, the free list, the derived counters), then the statuses whole; then (format 10, M7-1) the tag `REGN` and the regeneration part: `LastDamagedTick` and `RegenAccum` (int32 per slot), the statuses' per-slot regenerating counts (byte) and their total |
+  | `UNIT` | the unit store whole (every array, `Flank`, `PrevPosition` / `PrevFacing`, order queues, cargo, combat and cast state, the counted population and live flags, the free list, the derived counters), then the statuses whole; then (format 10, M7-1) the tag `REGN` and the regeneration part: `LastDamagedTick` and `RegenAccum` (int32 per slot), the statuses' per-slot regenerating counts (byte) and their total; then (still format 10, M8-1), exactly when the data has a faction with `forestStealth`, the tag `FRST` and the forest part: `ForestStealthStore.LastAttackTick` (int32 per slot) and `Held` (byte per slot) ("Implementation (M8-1)") |
   | `LEDR` | the ledger: gold, wood, half-pop, provided, cap, kills, losses, live buildings and units, production buildings, `EverBuilt`, `Defeated`, the finished-building counts; then `STAT`, the M6-S1 stats whole (every counter, each tech's tick, the samples and their count) |
   | `TECH` | the researched-tech flags and the bonus sums (stored, not re-summed) |
   | `PROJ` | the projectiles in flight, count and loop bounds |

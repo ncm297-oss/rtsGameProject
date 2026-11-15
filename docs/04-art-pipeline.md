@@ -50,6 +50,9 @@ and pauldron alone were 2-3 px of colour at the default zoom and the two players
 Nothing is drawn over a model's team surface but the hit flash (M6-VH7, BUG-1320, Producer default, owner may revisit): the
 worker's gathering / returning / building tint, a 45 % overlay over the whole figure, hid the outfit and the player colour,
 so a model doesn't take it (its clip and the cargo marker show what it does); capsules keep it.
+M6-V21 (Producer default, owner may revisit): the Heavy Infantry's team parts are its jerkin, pauldron **and its big shield**
+(a box prop drawn on the team surface, "Unit models, as built"); the Raider's jerkin and hood; the Desert Archer's as the
+Crossbowman's; the Camp Follower's tunic as the Laborer's.
 
 ### Faction palettes and silhouettes
 
@@ -256,14 +259,14 @@ tools/
   `head`), `tints` (per role: a palette colour and how far toward it), `parts` (source glTF, mesh name, triangle share,
   `team`, and for the base character `keepBones`: only the vertices weighted to `Head` / `neck_01` are kept, the pack's
   Readme), `props` (boxes bound to a bone, placed by a clip's pose: the Crossbowman's crossbow sits in `hand_r` aimed forward at
-  30 % of the shot clip) and `clips` (docs/04's name -> `UAL1/<clip>` or `UAL2/<clip>`). One library name must mean one clip
-  across all models (the script fails otherwise).
+  30 % of the shot clip) and `clips` (docs/04's state name -> a library clip name; since M6-V21, before it the source clip),
+  plus `library.clips` (library name -> `UAL1/<clip>` or `UAL2/<clip>`, one name one clip).
 - **`tools/art/build_unit.py`** per model: imports the parts onto the outfit's 65-bone armature, cuts the head, decimates each
   part to its share (Decimate collapse, before the armature), merges the parts' UV maps into one, rebuilds each role's
   material with its base colour texture only (no normal / roughness maps: invisible at 20-60 m), scaled to `textureSize` and
   tinted, builds the props (at most 200 triangles), joins everything into one skinned mesh, puts the yaw on the armature
   node (glTF faces +Z; the bone tracks stay untouched), and exports one `.glb` without animations; it fails over
-  `maxTriangles` or without a `team` material. The library: the union of the clip maps from the non-root-motion
+  `maxTriangles` or without a `team` material. The library: the `library.clips` from the non-root-motion
   UAL1 / UAL2 `.glb` files, renamed `<name>_loop` (Godot's import rule for a looping clip; the suffix is dropped), on one
   armature with a one-triangle skin (so the tracks import as `Skeleton3D` bone tracks), one NLA track per clip, without
   the bones the manifest's `library.dropBonePrefixes` names (the 40 finger bones, M6-VH7; "Animation setup" below).
@@ -274,6 +277,29 @@ tools/
   the library's clip map, and `IMPORT ASSETS PASS`. Two runs give byte-identical files (M6-V20's check).
 - **Budget as built:** Laborer 2,597 triangles, Crossbowman 2,727 (the crossbow 48), four 512² textures each, library 6 clips;
   all generated binaries about 4.5 MB (about 4.2 MB since M6-VH7 dropped the finger tracks from the library).
+- **Second slice (M6-V21): six model types.** The Producer's default (the owner may revisit): the two outfits on disk
+  recoloured, props as boxes.
+
+  | Type | Outfit parts (team parts in bold) | Outfit tint | Props | Triangles |
+  | --- | --- | --- | --- | --- |
+  | Malazan Heavy Infantry | Ranger **body**, **pauldron**, arms, bracers, legs, boots; bare head | oxblood `#6a3430` 0.6 | big rectangular shield (0.50 x 0.86 m, **team**, on `spine_03`), short sword (`hand_r`) and box helmet (`Head`), both steel `#6c7178` | 2,507 |
+  | Whirlwind Camp Follower | Peasant **body**, arms, legs, feet (the Laborer's mesh) | bleached sand `#d8cba8` 0.55 | none | 2,597 |
+  | Whirlwind Raider | Ranger **body**, **hood**, arms, legs, boots | ochre `#b08a3e` 0.6 | curved blade (four boxes, the last two turned up 18° / 40°; `hand_r`), steel `#b4b6b8` | 2,547 |
+  | Whirlwind Desert Archer | Ranger **body**, **hood**, **pauldron**, arms, legs, boots (the Crossbowman's mesh) | sand `#ddd3b8` 0.6 | bow (a grip, two limbs turned back 18°, a string; `hand_r`), wood `#5a3d22` | 2,727 |
+
+  Each has four 512² textures (head, outfit, skin, team) and at most five surfaces (props of one colour share one material:
+  the Heavy Infantry's sword and helmet are one `steel` surface). The models are 1.82-1.88 m tall (the helmet), feet at the
+  origin, 65 bones. The generated binaries are 11.8 MB (six models with their textures, and the library).
+- **Manifest additions (M6-V21).** A box may carry `rotation` (Euler XYZ degrees about its own centre), so a curved blade or a
+  bow's limbs are a few turned boxes. Props that name one `material` share it (and must name one `colour`). A prop whose
+  `material` is `team` joins the team surface: all its UVs sample one point of the team texture, the centre of the most even
+  32 x 32 texel square whose mean is nearest `teamShade` (`build_unit.py` `team_uv`), so the shield is drawn in the player
+  colour at about the brightness of the rest of the team part, with no extra surface or draw call. **Clip maps:** a model's
+  `clips` maps docs/04's state names to library clip names, and `library.clips` maps each library name to its source clip
+  (`UAL1/<clip>` or `UAL2/<clip>`); the script fails on a map naming a clip the library lacks, or a library clip no model
+  plays. The builder writes the model's map onto its armature node as glTF extras (`{"clips": {...}}`, the only extras in the
+  file); Godot imports them as the node's `extras` metadata, and `UnitModels` gives each model type its own
+  `AnimationLibrary` of the shared clips under the state names (docs/03 "Implementation (M6-V21)").
 - The view: `UnitViews` draws a type whose file loads as its model, any other type as its capsule (docs/03 "Implementation
   (M6-V20)").
 
@@ -365,6 +391,16 @@ which also renames to snake_case. Findings:
   per-weapon `attack_<weapon>` clip lands), `gather_gold` (UAL2 `Farm_Harvest`: no pick swing in either library),
   `gather_wood` (UAL2 `TreeChopping_Loop`), `build` (UAL1 `Fixing_Kneeling`). `cast`, `hit` and `death` come with the slices
   that need them.
+- **Per-weapon attack (M6-V21).** The library has seven clips: the six above and `attack_melee` (UAL1 `Sword_Attack`, 1.53 s:
+  a one-handed slash with a lunge, about one loop per 1.5 s melee cooldown). Each model's clip map says what its `attack` is:
+  the Heavy Infantry and the Raider play `attack_melee`; the Crossbowman, the Desert Archer and the two workers play `attack`
+  (`Pistol_Shoot`). Candidates considered for the melee swing: UAL1 `Sword_Attack` (chosen), UAL2 `Sword_Regular_A` (0.43 s,
+  needs its `_Rec` recovery to loop), `Sword_Regular_B` / `_C`, `Sword_Regular_Combo` (3.0 s) and `Sword_Heavy_Combo`
+  (4.33 s: too long for one blow), `Melee_Hook` and UAL1 `Punch_Jab` / `Punch_Cross` (unarmed), `Shield_OneShot` (a shield
+  bash). **No bow clip:** neither UAL1 nor UAL2 Standard (nor the UAL1 Pro edition on disk) has a bow, crossbow or rifle
+  clip; `Spell_Simple_Shoot` (an open-hand cast) and `OverhandThrow` were considered and rejected, so the Desert Archer keeps
+  `Pistol_Shoot`, its bow held upright in the extended hand. A real draw needs the Mixamo Pro Longbow pack retargeted
+  (out of M6-V21's scope).
 - **No finger tracks (M6-VH7, BUG-1321).** The library carries 25 of the rig's 65 bones: the import deletes the 40 finger
   bones (`thumb_`, `index_`, `middle_`, `ring_`, `pinky_`, 01-03 and the `_04_leaf` ends, both hands; the manifest's
   `library.dropBonePrefixes`, checked against `dropBoneCount` 40) and their curves before export, so each clip has 75 tracks
@@ -376,6 +412,9 @@ which also renames to snake_case. Findings:
   advances once in 3 frames by all the time it waited (20 Hz at 60 FPS; spread over the frames by slot), hidden ones not at
   all. Clips keep their true speed; far figures move in coarser steps, which at 40-60 m doesn't read. Clips stay authored
   at the library's 30 fps.
+- **Game speed (M6-V21, docs/01 2026-11-14 (d) (f)).** The figures' clips run at the game speed: each frame's advance is the
+  frame's time times the runner's `GameSpeed` (2x on Fast, 0.75x on Slow), and a paused match (the pause menu, the
+  match-over banner) advances nothing.
 
 ## Licensing log
 
@@ -383,9 +422,9 @@ Every third-party asset in the repo gets a row, added in the same commit that im
 
 | Asset / pack | Author | Source URL | License | Version / date | Used for |
 | --- | --- | --- | --- | --- | --- |
-| Quaternius – Universal Base Characters (Standard) | Quaternius | <https://quaternius.com/packs/universalbasecharacters.html> | CC0 1.0 (pack's `License_Standard.txt`) | Standard (free) edition, no version number; downloaded 2026-10-08 | Look test (M6-V10): `Superhero_Male_FullBody.gltf` + `.bin` + 7 textures in `game/assets/models/looktest/`, from `asset-sources/Universal Base Characters[Standard]/Universal Base Characters[Standard]/Base Characters/Godot - UE/`. **M6-V20:** the head of `SuperHero_Male` (the vertices weighted to `Head` / `neck_01`, decimated) and its base colour texture cut to 512² (`<id>_head.png`), inside `malazan_laborer.glb` and `malazan_crossbowman.glb` (`tools/asset-manifest.json`; the licence file is read at each import) |
-| Quaternius – Universal Animation Library 1 and 2 (Standard) | Quaternius | <https://quaternius.com/packs/universalanimationlibrary.html> | CC0 1.0 (each pack's `License.txt`) | UAL1 Standard and UAL2 Standard, no version numbers; downloaded 2026-10-08 | Look test (M6-V10): `UAL1_Standard.glb` (no root motion), from `asset-sources/Universal Animation Library[Standard]/Universal Animation Library[Standard]/Unreal-Godot/`. **M6-V20:** six clips re-exported into `game/assets/animations/universal_humanoid.glb`: `Idle_Loop`, `Walk_Loop`, `Pistol_Shoot`, `Fixing_Kneeling` from `UAL1_Standard.glb`, `Farm_Harvest`, `TreeChopping_Loop` from `asset-sources/Universal Animation Library 2[Standard]/Universal Animation Library 2[Standard]/Unreal-Godot/UAL2_Standard.glb`; the `Pistol_Shoot` pose also places the crossbow (licence files read at each import) |
-| Quaternius – Modular Character Outfits – Fantasy (Standard) | Quaternius | <https://quaternius.com/packs/modularcharacteroutfitsfantasy.html> | CC0 1.0 (pack's `License_Standard.txt`, read at each import by `tools/import-assets.ps1`) | Standard (free) edition, no version number; downloaded 2026-10-08 | M6-V20: from `asset-sources/Modular Character Outfits - Fantasy[Standard]/Modular Character Outfits - Fantasy[Standard]/Exports/glTF (Godot-Unreal)/Outfits/`: `Male_Peasant.gltf` (body, arms, legs, feet) in `game/assets/models/malazan/malazan_laborer/malazan_laborer.glb`; `Male_Ranger.gltf` (body, hood, pauldron, arms, legs, boots; not the bracers or belts) in `.../malazan_crossbowman/malazan_crossbowman.glb`; decimated, textures (`T_Peasant_BaseColor`, `T_Ranger_BaseColor`, `T_Regular_Male_Dark_BaseColor`) cut from 4096² / 2048² to 512², tinted, and a grey team copy; the extracted `<id>_<role>.png` beside each model |
+| Quaternius – Universal Base Characters (Standard) | Quaternius | <https://quaternius.com/packs/universalbasecharacters.html> | CC0 1.0 (pack's `License_Standard.txt`) | Standard (free) edition, no version number; downloaded 2026-10-08 | Look test (M6-V10): `Superhero_Male_FullBody.gltf` + `.bin` + 7 textures in `game/assets/models/looktest/`, from `asset-sources/Universal Base Characters[Standard]/Universal Base Characters[Standard]/Base Characters/Godot - UE/`. **M6-V20:** the head of `SuperHero_Male` (the vertices weighted to `Head` / `neck_01`, decimated) and its base colour texture cut to 512² (`<id>_head.png`), inside `malazan_laborer.glb` and `malazan_crossbowman.glb` (`tools/asset-manifest.json`; the licence file is read at each import). **M6-V21:** the same head and texture inside `malazan_heavy_infantry.glb`, `whirlwind_camp_follower.glb`, `whirlwind_raider.glb` and `whirlwind_desert_archer.glb` (no new source file) |
+| Quaternius – Universal Animation Library 1 and 2 (Standard) | Quaternius | <https://quaternius.com/packs/universalanimationlibrary.html> | CC0 1.0 (each pack's `License.txt`) | UAL1 Standard and UAL2 Standard, no version numbers; downloaded 2026-10-08 | Look test (M6-V10): `UAL1_Standard.glb` (no root motion), from `asset-sources/Universal Animation Library[Standard]/Universal Animation Library[Standard]/Unreal-Godot/`. **M6-V20:** six clips re-exported into `game/assets/animations/universal_humanoid.glb`: `Idle_Loop`, `Walk_Loop`, `Pistol_Shoot`, `Fixing_Kneeling` from `UAL1_Standard.glb`, `Farm_Harvest`, `TreeChopping_Loop` from `asset-sources/Universal Animation Library 2[Standard]/Universal Animation Library 2[Standard]/Unreal-Godot/UAL2_Standard.glb`; the `Pistol_Shoot` pose also places the crossbow (licence files read at each import). **M6-V21:** `Sword_Attack` from the same `UAL1_Standard.glb` added to the library as `attack_melee` (seven clips); its first frame places the Heavy Infantry's sword and the Raider's blade, `Idle_Loop`'s the shield and helmet, `Pistol_Shoot`'s the bow (no new source file) |
+| Quaternius – Modular Character Outfits – Fantasy (Standard) | Quaternius | <https://quaternius.com/packs/modularcharacteroutfitsfantasy.html> | CC0 1.0 (pack's `License_Standard.txt`, read at each import by `tools/import-assets.ps1`) | Standard (free) edition, no version number; downloaded 2026-10-08 | M6-V20: from `asset-sources/Modular Character Outfits - Fantasy[Standard]/Modular Character Outfits - Fantasy[Standard]/Exports/glTF (Godot-Unreal)/Outfits/`: `Male_Peasant.gltf` (body, arms, legs, feet) in `game/assets/models/malazan/malazan_laborer/malazan_laborer.glb`; `Male_Ranger.gltf` (body, hood, pauldron, arms, legs, boots; not the bracers or belts) in `.../malazan_crossbowman/malazan_crossbowman.glb`; **M6-V21:** from the same two files (no new source file), `Male_Ranger.gltf` (body, pauldron, arms, **bracers**, legs, boots) in `.../malazan_heavy_infantry/malazan_heavy_infantry.glb`, (body, hood, arms, legs, boots) in `game/assets/models/whirlwind/whirlwind_raider/whirlwind_raider.glb`, (body, hood, pauldron, arms, legs, boots) in `.../whirlwind_desert_archer/whirlwind_desert_archer.glb`, and `Male_Peasant.gltf` (body, arms, legs, feet) in `.../whirlwind_camp_follower/whirlwind_camp_follower.glb`; decimated, textures (`T_Peasant_BaseColor`, `T_Ranger_BaseColor`, `T_Regular_Male_Dark_BaseColor`) cut from 4096² / 2048² to 512², tinted, and a grey team copy; the extracted `<id>_<role>.png` beside each model |
 | Quaternius – Ultimate Fantasy RTS | Quaternius | <https://quaternius.com/packs/ultimatefantasyrts.html> | CC0 1.0 (pack's `License.txt`; its header says "Ultimate Platformer Pack", a slip in the pack) | Aug 2022 (folder `quaternius-ultimate-fantasy-rts-2022-08`) | Look test (M6-V10): `Barracks_FirstAge_Level1.fbx`, from `asset-sources/quaternius-ultimate-fantasy-rts-2022-08/Ultimate Fantasy RTS - Aug 2022/FBX/` |
 | Epic Stock Media – Board Game: Sound Set Kit for Tabletop and Digital Games (Sonniss GDC 2026) | Epic Stock Media | <https://sonniss.com/gameaudiogdc> | Sonniss GDC Game Audio Bundle licence: royalty-free, commercial use, no attribution; raw files not redistributed or resold (bundle's `License - GDC Game Audio.pdf`, `Readme.txt`) | GDC 2026 bundle, downloaded 2026-10-08 (`asset-sources/sonniss-gdc-2026/`) | SFX (M6-V12): `ui/select_1.wav` from `UIClick_UI Button Analog Vintage Double Click Neutral Dry Press 11_ESM_BG.wav`; `building/building_done_1.wav` from `GAMEBoard_Event Board Reset Organic Multiple Pieces Wood Small 02_ESM_BG.wav` |
 | Cinematic Sound Design – UI Interaction Elements (Sonniss GDC 2026) | Cinematic Sound Design | <https://sonniss.com/gameaudiogdc> | Sonniss GDC Game Audio Bundle licence: royalty-free, commercial use, no attribution; raw files not redistributed or resold (bundle's `License - GDC Game Audio.pdf`, `Readme.txt`) | GDC 2026 bundle, downloaded 2026-10-08 (`asset-sources/sonniss-gdc-2026/`) | SFX (M6-V12): `ui/command_1.wav` from `Accept Boing Crunch.wav`; `ui/refused_1.wav` from `Deny Muted.wav`; `ui/ready_2.wav` from `Ting Coins.wav` |

@@ -82,6 +82,9 @@ public sealed partial class UnitStore
         w.WriteArray(LastDamagedTick);
         w.WriteArray(RegenAccum);
         Statuses.WriteRegenTo(w);
+        // M8-1 (format 10 still): the forest stealth's part, written exactly when the data has a faction with the bonus (the
+        // arrays exist then), so a save on other data is the bytes it was.
+        Forest?.WriteTo(w);
     }
 
     /// <summary>
@@ -163,6 +166,13 @@ public sealed partial class UnitStore
         r.ReadArray(RegenAccum);
         Statuses.ReadRegenFrom(r, statuses);
         if (r.Failed) return;
+        // M8-1: the forest part is there exactly when this data has a faction with the bonus; a save whose part disagrees
+        // with the data meets a tag it does not expect (FRST, or the ledger's LEDR) and is refused Malformed.
+        if (Forest != null)
+        {
+            Forest.ReadFrom(r);
+            if (r.Failed) return;
+        }
 
         int live = 0;
         for (int i = 0; i < Capacity; i++)
@@ -173,12 +183,16 @@ public sealed partial class UnitStore
                 // BUG-1165: freeing a slot clears both (UnitStore.Free), so a free slot carrying either is forged. BUG-1220:
                 // and its statuses (StatusStore.Clear), so a free slot holding an entry is forged too.
                 if (!r.Check(LastDamagedTick[i] == -1 && RegenAccum[i] == 0 && Statuses.Count[i] == 0)) return;
+                // M8-1: freeing clears the forest state too.
+                if (Forest != null && !r.Check(Forest.LastAttackTick[i] == -1 && Forest.Held[i] == 0)) return;
                 continue;
             }
             live++;
             if (!r.Check((uint)Owner[i] < (uint)players && (uint)TypeId[i] < (uint)unitTypes)) return;
             // M7-1: a fraction of a hit point, and (BUG-1165) a tick that has been: none, or at most the save's own.
             if (!r.Check(RegenAccum[i] >= 0 && RegenAccum[i] < Combat.CombatConstants.RegenFixedOne && LastDamagedTick[i] >= -1 && LastDamagedTick[i] <= tick)) return;
+            // M8-1: likewise the last landed attack; held is 0 or 1 (the world checks it against the faction and the entries).
+            if (Forest != null && !r.Check(Forest.LastAttackTick[i] >= -1 && Forest.LastAttackTick[i] <= tick && Forest.Held[i] <= 1)) return;
         }
         if (!r.Check(live == Capacity - _freeCount)) return;
         for (int k = 0; k < _freeCount; k++)

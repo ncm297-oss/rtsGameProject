@@ -1,5 +1,5 @@
 {
-  "about": "Art import manifest (docs/04 'Import process'). tools/import-assets.ps1 rebuilds every model and the animation library from these entries with Blender (tools/art/build_unit.py). Paths: 'source' relative to sourceRoot, 'destination' relative to the repo root.",
+  "about": "Art import manifest (docs/04 'Import process'). tools/import-assets.ps1 rebuilds every model and the animation library from these entries with Blender (tools/art/build_unit.py). Paths: 'source' relative to sourceRoot, 'destination' relative to the repo root. A model's 'clips' maps docs/04's state names to library clip names; 'library.clips' maps each library name to its source clip.",
   "sourceRoot": "asset-sources",
   "licences": [
     "Universal Base Characters[Standard]/Universal Base Characters[Standard]/License_Standard.txt",
@@ -14,7 +14,16 @@
   "library": {
     "destination": "game/assets/animations/universal_humanoid.glb",
     "dropBonePrefixes": ["thumb_", "index_", "middle_", "ring_", "pinky_"],
-    "dropBoneCount": 40
+    "dropBoneCount": 40,
+    "clips": {
+      "idle": "UAL1/Idle_Loop",
+      "walk": "UAL1/Walk_Loop",
+      "attack": "UAL1/Pistol_Shoot",
+      "attack_melee": "UAL1/Sword_Attack",
+      "gather_gold": "UAL2/Farm_Harvest",
+      "gather_wood": "UAL2/TreeChopping_Loop",
+      "build": "UAL1/Fixing_Kneeling"
+    }
   },
   "models": [
     {
@@ -34,12 +43,12 @@
         { "source": "Universal Base Characters[Standard]/Universal Base Characters[Standard]/Base Characters/Godot - UE/Superhero_Male_FullBody.gltf", "mesh": "SuperHero_Male", "triangles": 500, "keepBones": ["Head", "neck_01"], "keepThreshold": 0.5 }
       ],
       "clips": {
-        "idle": "UAL1/Idle_Loop",
-        "walk": "UAL1/Walk_Loop",
-        "attack": "UAL1/Pistol_Shoot",
-        "gather_gold": "UAL2/Farm_Harvest",
-        "gather_wood": "UAL2/TreeChopping_Loop",
-        "build": "UAL1/Fixing_Kneeling"
+        "idle": "idle",
+        "walk": "walk",
+        "attack": "attack",
+        "gather_gold": "gather_gold",
+        "gather_wood": "gather_wood",
+        "build": "build"
       }
     },
     {
@@ -74,9 +83,158 @@
         }
       ],
       "clips": {
-        "idle": "UAL1/Idle_Loop",
-        "walk": "UAL1/Walk_Loop",
-        "attack": "UAL1/Pistol_Shoot"
+        "idle": "idle",
+        "walk": "walk",
+        "attack": "attack"
+      }
+    },
+    {
+      "id": "malazan_heavy_infantry",
+      "destination": "game/assets/models/malazan/malazan_heavy_infantry/malazan_heavy_infantry.glb",
+      "maxTriangles": 3000,
+      "textureSize": 512,
+      "yawDegrees": 180,
+      "materials": { "MI_Ranger": "outfit", "MI_Regular_Male": "skin", "MI_Superhero_Male": "head" },
+      "teamRole": "outfit",
+      "tints": { "outfit": { "colour": "#6a3430", "amount": 0.6 } },
+      "parts": [
+        { "source": "Modular Character Outfits - Fantasy[Standard]/Modular Character Outfits - Fantasy[Standard]/Exports/glTF (Godot-Unreal)/Outfits/Male_Ranger.gltf", "mesh": "Male_Ranger_Body", "triangles": 600, "team": true },
+        { "source": "Modular Character Outfits - Fantasy[Standard]/Modular Character Outfits - Fantasy[Standard]/Exports/glTF (Godot-Unreal)/Outfits/Male_Ranger.gltf", "mesh": "Male_Ranger_Acc_Pauldron", "triangles": 180, "team": true },
+        { "source": "Modular Character Outfits - Fantasy[Standard]/Modular Character Outfits - Fantasy[Standard]/Exports/glTF (Godot-Unreal)/Outfits/Male_Ranger.gltf", "mesh": "Male_Ranger_Arms", "triangles": 500 },
+        { "source": "Modular Character Outfits - Fantasy[Standard]/Modular Character Outfits - Fantasy[Standard]/Exports/glTF (Godot-Unreal)/Outfits/Male_Ranger.gltf", "mesh": "Male_Ranger_Arms_Bracer", "triangles": 150 },
+        { "source": "Modular Character Outfits - Fantasy[Standard]/Modular Character Outfits - Fantasy[Standard]/Exports/glTF (Godot-Unreal)/Outfits/Male_Ranger.gltf", "mesh": "Male_Ranger_Legs", "triangles": 300 },
+        { "source": "Modular Character Outfits - Fantasy[Standard]/Modular Character Outfits - Fantasy[Standard]/Exports/glTF (Godot-Unreal)/Outfits/Male_Ranger.gltf", "mesh": "Male_Ranger_Feet_Boots", "triangles": 330 },
+        { "source": "Universal Base Characters[Standard]/Universal Base Characters[Standard]/Base Characters/Godot - UE/Superhero_Male_FullBody.gltf", "mesh": "SuperHero_Male", "triangles": 400, "keepBones": ["Head", "neck_01"], "keepThreshold": 0.5 }
+      ],
+      "props": [
+        {
+          "name": "shield", "bone": "spine_03", "material": "team", "colour": "#000000",
+          "pose": { "source": "UAL1", "clip": "Idle_Loop", "at": 0.0 },
+          "offset": [0.0, 0.0, 0.0],
+          "boxes": [
+            { "at": [0.17, -0.25, -0.33], "size": [0.50, 0.05, 0.86] }
+          ]
+        },
+        {
+          "name": "sword", "bone": "hand_r", "material": "steel", "colour": "#6c7178",
+          "pose": { "source": "UAL1", "clip": "Sword_Attack", "at": 0.0 },
+          "offset": [0.0, 0.0, 0.0],
+          "boxes": [
+            { "at": [0.0, -0.32, 0.0], "size": [0.025, 0.52, 0.06] },
+            { "at": [0.0, -0.05, 0.0], "size": [0.04, 0.04, 0.18] }
+          ]
+        },
+        {
+          "name": "helmet", "bone": "Head", "material": "steel", "colour": "#6c7178",
+          "pose": { "source": "UAL1", "clip": "Idle_Loop", "at": 0.0 },
+          "offset": [0.0, 0.0, 0.0],
+          "boxes": [
+            { "at": [0.0, 0.01, 0.17], "size": [0.21, 0.25, 0.16] }
+          ]
+        }
+      ],
+      "clips": {
+        "idle": "idle",
+        "walk": "walk",
+        "attack": "attack_melee"
+      }
+    },
+    {
+      "id": "whirlwind_camp_follower",
+      "destination": "game/assets/models/whirlwind/whirlwind_camp_follower/whirlwind_camp_follower.glb",
+      "maxTriangles": 3000,
+      "textureSize": 512,
+      "yawDegrees": 180,
+      "materials": { "MI_Peasant": "outfit", "MI_Regular_Male": "skin", "MI_Superhero_Male": "head" },
+      "teamRole": "outfit",
+      "tints": { "outfit": { "colour": "#d8cba8", "amount": 0.55 } },
+      "parts": [
+        { "source": "Modular Character Outfits - Fantasy[Standard]/Modular Character Outfits - Fantasy[Standard]/Exports/glTF (Godot-Unreal)/Outfits/Male_Peasant.gltf", "mesh": "Male_Peasant_Body", "triangles": 800, "team": true },
+        { "source": "Modular Character Outfits - Fantasy[Standard]/Modular Character Outfits - Fantasy[Standard]/Exports/glTF (Godot-Unreal)/Outfits/Male_Peasant.gltf", "mesh": "Male_Peasant_Arms", "triangles": 650 },
+        { "source": "Modular Character Outfits - Fantasy[Standard]/Modular Character Outfits - Fantasy[Standard]/Exports/glTF (Godot-Unreal)/Outfits/Male_Peasant.gltf", "mesh": "Male_Peasant_Legs", "triangles": 350 },
+        { "source": "Modular Character Outfits - Fantasy[Standard]/Modular Character Outfits - Fantasy[Standard]/Exports/glTF (Godot-Unreal)/Outfits/Male_Peasant.gltf", "mesh": "Male_Peasant_Feet", "triangles": 300 },
+        { "source": "Universal Base Characters[Standard]/Universal Base Characters[Standard]/Base Characters/Godot - UE/Superhero_Male_FullBody.gltf", "mesh": "SuperHero_Male", "triangles": 500, "keepBones": ["Head", "neck_01"], "keepThreshold": 0.5 }
+      ],
+      "clips": {
+        "idle": "idle",
+        "walk": "walk",
+        "attack": "attack",
+        "gather_gold": "gather_gold",
+        "gather_wood": "gather_wood",
+        "build": "build"
+      }
+    },
+    {
+      "id": "whirlwind_raider",
+      "destination": "game/assets/models/whirlwind/whirlwind_raider/whirlwind_raider.glb",
+      "maxTriangles": 3000,
+      "textureSize": 512,
+      "yawDegrees": 180,
+      "materials": { "MI_Ranger": "outfit", "MI_Regular_Male": "skin", "MI_Superhero_Male": "head" },
+      "teamRole": "outfit",
+      "tints": { "outfit": { "colour": "#b08a3e", "amount": 0.6 } },
+      "parts": [
+        { "source": "Modular Character Outfits - Fantasy[Standard]/Modular Character Outfits - Fantasy[Standard]/Exports/glTF (Godot-Unreal)/Outfits/Male_Ranger.gltf", "mesh": "Male_Ranger_Body", "triangles": 600, "team": true },
+        { "source": "Modular Character Outfits - Fantasy[Standard]/Modular Character Outfits - Fantasy[Standard]/Exports/glTF (Godot-Unreal)/Outfits/Male_Ranger.gltf", "mesh": "Male_Ranger_Head_Hood", "triangles": 350, "team": true },
+        { "source": "Modular Character Outfits - Fantasy[Standard]/Modular Character Outfits - Fantasy[Standard]/Exports/glTF (Godot-Unreal)/Outfits/Male_Ranger.gltf", "mesh": "Male_Ranger_Arms", "triangles": 550 },
+        { "source": "Modular Character Outfits - Fantasy[Standard]/Modular Character Outfits - Fantasy[Standard]/Exports/glTF (Godot-Unreal)/Outfits/Male_Ranger.gltf", "mesh": "Male_Ranger_Legs", "triangles": 300 },
+        { "source": "Modular Character Outfits - Fantasy[Standard]/Modular Character Outfits - Fantasy[Standard]/Exports/glTF (Godot-Unreal)/Outfits/Male_Ranger.gltf", "mesh": "Male_Ranger_Feet_Boots", "triangles": 350 },
+        { "source": "Universal Base Characters[Standard]/Universal Base Characters[Standard]/Base Characters/Godot - UE/Superhero_Male_FullBody.gltf", "mesh": "SuperHero_Male", "triangles": 350, "keepBones": ["Head", "neck_01"], "keepThreshold": 0.5 }
+      ],
+      "props": [
+        {
+          "name": "blade", "bone": "hand_r", "material": "steel", "colour": "#b4b6b8",
+          "pose": { "source": "UAL1", "clip": "Sword_Attack", "at": 0.0 },
+          "offset": [0.0, 0.0, 0.0],
+          "boxes": [
+            { "at": [0.0, -0.05, 0.0], "size": [0.04, 0.04, 0.16] },
+            { "at": [0.0, -0.22, 0.0], "size": [0.02, 0.28, 0.06] },
+            { "at": [0.0, -0.45, 0.04], "size": [0.02, 0.22, 0.065], "rotation": [-18, 0, 0] },
+            { "at": [0.0, -0.62, 0.12], "size": [0.02, 0.16, 0.05], "rotation": [-40, 0, 0] }
+          ]
+        }
+      ],
+      "clips": {
+        "idle": "idle",
+        "walk": "walk",
+        "attack": "attack_melee"
+      }
+    },
+    {
+      "id": "whirlwind_desert_archer",
+      "destination": "game/assets/models/whirlwind/whirlwind_desert_archer/whirlwind_desert_archer.glb",
+      "maxTriangles": 3000,
+      "textureSize": 512,
+      "yawDegrees": 180,
+      "materials": { "MI_Ranger": "outfit", "MI_Regular_Male": "skin", "MI_Superhero_Male": "head" },
+      "teamRole": "outfit",
+      "tints": { "outfit": { "colour": "#ddd3b8", "amount": 0.6 } },
+      "parts": [
+        { "source": "Modular Character Outfits - Fantasy[Standard]/Modular Character Outfits - Fantasy[Standard]/Exports/glTF (Godot-Unreal)/Outfits/Male_Ranger.gltf", "mesh": "Male_Ranger_Body", "triangles": 600, "team": true },
+        { "source": "Modular Character Outfits - Fantasy[Standard]/Modular Character Outfits - Fantasy[Standard]/Exports/glTF (Godot-Unreal)/Outfits/Male_Ranger.gltf", "mesh": "Male_Ranger_Head_Hood", "triangles": 350, "team": true },
+        { "source": "Modular Character Outfits - Fantasy[Standard]/Modular Character Outfits - Fantasy[Standard]/Exports/glTF (Godot-Unreal)/Outfits/Male_Ranger.gltf", "mesh": "Male_Ranger_Acc_Pauldron", "triangles": 180, "team": true },
+        { "source": "Modular Character Outfits - Fantasy[Standard]/Modular Character Outfits - Fantasy[Standard]/Exports/glTF (Godot-Unreal)/Outfits/Male_Ranger.gltf", "mesh": "Male_Ranger_Arms", "triangles": 550 },
+        { "source": "Modular Character Outfits - Fantasy[Standard]/Modular Character Outfits - Fantasy[Standard]/Exports/glTF (Godot-Unreal)/Outfits/Male_Ranger.gltf", "mesh": "Male_Ranger_Legs", "triangles": 300 },
+        { "source": "Modular Character Outfits - Fantasy[Standard]/Modular Character Outfits - Fantasy[Standard]/Exports/glTF (Godot-Unreal)/Outfits/Male_Ranger.gltf", "mesh": "Male_Ranger_Feet_Boots", "triangles": 350 },
+        { "source": "Universal Base Characters[Standard]/Universal Base Characters[Standard]/Base Characters/Godot - UE/Superhero_Male_FullBody.gltf", "mesh": "SuperHero_Male", "triangles": 350, "keepBones": ["Head", "neck_01"], "keepThreshold": 0.5 }
+      ],
+      "props": [
+        {
+          "name": "bow", "bone": "hand_r", "material": "bow", "colour": "#5a3d22",
+          "pose": { "source": "UAL1", "clip": "Pistol_Shoot", "at": 0.3 },
+          "offset": [0.0, 0.0, 0.0],
+          "boxes": [
+            { "at": [0.0, 0.0, 0.0], "size": [0.04, 0.04, 0.34] },
+            { "at": [0.0, 0.05, 0.33], "size": [0.03, 0.03, 0.34], "rotation": [-18, 0, 0] },
+            { "at": [0.0, 0.05, -0.33], "size": [0.03, 0.03, 0.34], "rotation": [18, 0, 0] },
+            { "at": [0.0, 0.11, 0.0], "size": [0.008, 0.008, 1.0] }
+          ]
+        }
+      ],
+      "clips": {
+        "idle": "idle",
+        "walk": "walk",
+        "attack": "attack"
       }
     }
   ]
