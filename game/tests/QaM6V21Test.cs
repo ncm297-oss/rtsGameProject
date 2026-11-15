@@ -25,6 +25,8 @@ namespace Rts.Game.Tests;
 ///     owner's colour when shown, its player active iff shown; units are killed and respawned in sight and in the fog;
 /// (4) per-type clip maps: each model type's library names only its map's clips (the Heavy Infantry's and Raider's attack is
 ///     the library's attack_melee, everyone else's the library's attack); a Camp Follower's three worker clips exist.
+/// M7-V5 (the developer, with the Teblor figures): row (1) wants one model type per manifest entry (read from the file, 11),
+/// row (4) keeps those pins for M6-V21's six types and checks a later type's attack against its manifest entry.
 /// </remarks>
 public partial class QaM6V21Test : Node
 {
@@ -57,6 +59,18 @@ public partial class QaM6V21Test : Node
         SceneExit.Quit(this, _failures.Count == 0 ? 0 : 1);
     }
 
+    // M7-V5: the asset manifest (the model entries and their clip maps), read once.
+    private System.Text.Json.Nodes.JsonNode? _manifest;
+    private System.Text.Json.Nodes.JsonNode Manifest() => _manifest ??= System.Text.Json.Nodes.JsonNode.Parse(System.IO.File.ReadAllText(
+        System.IO.Path.Combine(ProjectSettings.GlobalizePath("res://"), "..", "tools", "asset-manifest.json")))!;
+
+    private string ManifestAttack(string id)
+    {
+        foreach (System.Text.Json.Nodes.JsonNode? m in Manifest()["models"]!.AsArray())
+            if ((string?)m!["id"] == id) return (string?)m["clips"]?["attack"] ?? "attack";
+        return "(no manifest entry)";
+    }
+
     private int[] ModelTypes(UnitViews views)
     {
         var list = new List<int>();
@@ -78,7 +92,9 @@ public partial class QaM6V21Test : Node
         AddChild(views);
         views.Bind(_data, 2 * perSide, new uint[] { 0xC03030, 0x3060D0 });
         int[] types = ModelTypes(views);
-        Check(types.Length == 6, $"(1) {types.Length} model types on the shipped data, want 6");
+        // M7-V5: one model type per manifest entry (6 at M6-V21, 11 with the Teblor figures), read from the file.
+        int wantTypes = Manifest()["models"]!.AsArray().Count;
+        Check(types.Length == wantTypes, $"(1) {types.Length} model types on the shipped data, want {wantTypes} (the manifest's entries)");
         NVector2[] west = StartLayout.Block(w.NavGrid, perSide, true, 1f), east = StartLayout.Block(w.NavGrid, perSide, false, 1f);
         for (int i = 0; i < perSide; i++)
         {
@@ -254,7 +270,7 @@ public partial class QaM6V21Test : Node
                 int type = u.TypeId[i];
                 if (lastType[i] >= 0 && lastType[i] != type) typeChanges++;
                 lastType[i] = type;
-                string why = SlotProblem(views, w, i, type, rgb);
+                string? why = SlotProblem(views, w, i, type, rgb);
                 if (why != null && errors++ == 0) first = $"step {step} slot {i} ({_data.Units[type].Key}, owner {u.Owner[i]}): {why}";
                 if (views.DrawsModel(type)) { modelSeen++; if (!views.IsShown(i)) hiddenModels++; }
                 else capsuleSeen++;
@@ -326,8 +342,12 @@ public partial class QaM6V21Test : Node
             }
             rows.Add($"{_data.Units[t].Key} [{string.Join(' ', names)}]");
             string attack = views.Models.ClipSource(t, UnitModels.Clip.Attack)!;
-            bool melee = _data.Units[t].Key is "malazan_heavy_infantry" or "whirlwind_raider";
-            Check(attack == (melee ? "attack_melee" : "attack"), $"(4) {_data.Units[t].Key} attacks with {attack}");
+            string key = _data.Units[t].Key;
+            // M6-V21's six keep this row's pins; a later type (M7-V5's Teblor) attacks with what its manifest entry names.
+            string expect = key is "malazan_heavy_infantry" or "whirlwind_raider" ? "attack_melee"
+                : key is "malazan_laborer" or "malazan_crossbowman" or "whirlwind_camp_follower" or "whirlwind_desert_archer" ? "attack"
+                : ManifestAttack(key);
+            Check(attack == expect, $"(4) {key} attacks with {attack}, want {expect}");
             Check(lib.HasAnimation("idle") && lib.HasAnimation("walk") && lib.HasAnimation("attack"), $"(4) {_data.Units[t].Key} lacks idle / walk / attack");
         }
         int follower = _data.FindUnit("whirlwind_camp_follower");

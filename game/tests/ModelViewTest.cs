@@ -35,6 +35,9 @@ namespace Rts.Game.Tests;
 /// from real sim states, a Camp Follower its three worker clips; a library lacking the melee clip gives idle; the figures
 /// follow the game speed (1x, 2x, 0.75x: the same frames advance a walk 1, 2 and 0.75 times as far, under a camera with the
 /// stagger too) and stand still while paused; the steady row is 400 models mixed over every model type.
+/// M7-V5: eleven model types (five Teblor), one per manifest entry, every other type (the Teblor Destrier Rider and War-dog
+/// among them) a capsule; each file's figure (without its props' own surfaces) is 1.8 m within 5 %: the file holds the base
+/// figure and the view applies the data scale (TeblorModelTest checks the drawn size).
 /// </remarks>
 public partial class ModelViewTest : Node
 {
@@ -105,6 +108,12 @@ public partial class ModelViewTest : Node
             if (views.DrawsModel(t)) models++;
         }
         GD.Print($"types: {models} models, {data.Units.Length - models} capsules");
+        // M7-V5: one model type per manifest entry (11: the six of M6-V21 and five Teblor); every other type, the Teblor
+        // Destrier Rider and War-dog among them, a capsule (checked per type above).
+        Check(models == expected.Count, $"{models} types draw a model, the manifest has {expected.Count} entries");
+        var capsules = new List<string>();
+        for (int t = 0; t < data.Units.Length; t++) if (!views.DrawsModel(t) && data.Units[t].Key.StartsWith("teblor_", StringComparison.Ordinal)) capsules.Add(data.Units[t].Key);
+        GD.Print($"teblor capsules: [{string.Join(' ', capsules)}]");
     }
 
     // Criterion 3 (b): triangles, textures, height, feet, facing, rig and the team material, read from the imported model.
@@ -142,9 +151,16 @@ public partial class ModelViewTest : Node
         GD.Print($"{id}: {tris} triangles, {box.Size.Y:F2} m tall, feet at {box.Position.Y:F3}, toes ({toes.X:F2}, {toes.Y:F2}, {toes.Z:F2}), {skeleton?.GetBoneCount()} bones, materials [{string.Join(' ', mats)}]");
         Check(tris > 0 && tris <= maxTris, $"{id}: {tris} triangles, cap {maxTris}");
         Check(team == 1, $"{id}: {team} '{UnitModels.TeamMaterialName}' surfaces, want 1");
-        // M6-V21: within 5 % of the style guide's 1.8 m human at the type's data scale (docs/04 "Scale and dimensions").
-        float want = 1.8f * data.Units[type].Scale;
-        Check(Mathf.Abs(box.Size.Y - want) <= 0.05f * want, $"{id}: {box.Size.Y:F3} m tall, want {want:F2} m within 5 %");
+        // M6-V21: within 5 % of the style guide's 1.8 m human (docs/04 "Scale and dimensions"). M7-V5: the file holds the base
+        // figure and the view applies the data scale (a 1.5x Teblor's file is 1.8 m too: no size is baked in), and the height
+        // is the figure's without its props' own surfaces (a javelin stands over the head in the rest pose).
+        var props = new HashSet<string>();
+        foreach (JsonNode? p in m["props"]?.AsArray() ?? new JsonArray())
+            if ((string)p!["material"]! != UnitModels.TeamMaterialName) props.Add((string)p["material"]!);
+        float figure = FigureHeight(mesh, props);
+        const float want = 1.8f;
+        GD.Print($"{id}: figure {figure:F3} m tall without the prop surfaces [{string.Join(' ', props)}], data scale {data.Units[type].Scale} (drawn {figure * data.Units[type].Scale:F2} m)");
+        Check(Mathf.Abs(figure - want) <= 0.05f * want, $"{id}: the figure is {figure:F3} m tall, want {want:F2} m within 5 % (the data scale is applied by the view)");
         // M6-V21: the clip map the file carries (glTF extras) is the manifest's.
         var map = new List<string>();
         foreach (UnitModels.Clip c in Enum.GetValues<UnitModels.Clip>())
@@ -160,6 +176,24 @@ public partial class ModelViewTest : Node
         Check(toes.Z < -0.05f, $"{id}: toes point {toes}, want -Z");
         Check(skeleton?.GetBoneCount() == 65, $"{id}: {skeleton?.GetBoneCount()} bones, want the 65-bone Universal rig");
         holder.Free();
+    }
+
+    // M7-V5: a figure's rest-pose height over every surface but the props' own materials.
+    private static float FigureHeight(MeshInstance3D mi, HashSet<string> props)
+    {
+        float lo = float.MaxValue, hi = float.MinValue;
+        Transform3D x = mi.GlobalTransform;
+        for (int s = 0; s < mi.Mesh.GetSurfaceCount(); s++)
+        {
+            if (mi.Mesh.SurfaceGetMaterial(s) is BaseMaterial3D mat && props.Contains(mat.ResourceName)) continue;
+            foreach (Vector3 v in mi.Mesh.SurfaceGetArrays(s)[(int)Mesh.ArrayType.Vertex].AsVector3Array())
+            {
+                float y = (x * v).Y;
+                lo = Math.Min(lo, y);
+                hi = Math.Max(hi, y);
+            }
+        }
+        return hi - lo;
     }
 
     // Criterion 3 (d): the library holds every clip a model's clip map names, each looping.

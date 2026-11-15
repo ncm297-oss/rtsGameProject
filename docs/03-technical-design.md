@@ -3896,25 +3896,29 @@ code, view tests, the import tooling and generated assets only; no sim, ViewApi 
   `ScaleViewTest`, `ShellTest`); none is added. Scenes that read a slot's own mesh or overlay for one of the four types read
   the model's instead: `CombatViewTest` (the hit flash on `ModelMeshOf` for the Heavy Infantry and the Raider), `QaM22Test`
   (a reused slot draws through its model's mesh: the Whirlwind's first unit is the Camp Follower), `TeblorViewTest` (the
-  Heavy Infantry's capsule size from `MeshOf(type)`, the same numbers). No pin value changed.
+  Heavy Infantry's capsule size from `MeshOf(type)`, the same numbers), and since M7-V5 (BUG-1410) `QaV5Test` (phase 2's
+  "no inherited flash" on `ModelMeshOf(slot) ?? ViewOf(slot)` and `ShownLit`, where it read the slot node a Heavy Infantry
+  model never draws on). No pin value changed.
 - **A slot's type is set before the fog check** (found by `FogViewTest` / `QaFogViewTest` / `QaGhostViewTest`'s 0-byte
   steady rows once the line units were models): `Sync` sets a live slot's type, and so instantiates a model type's model,
   when the slot gets its unit, seen or not, as it already made the slot's node; a fogged army coming into sight then makes
   nothing. A model made while hidden has its player inactive until it is shown.
 - **Cost** (rule 61; 1600 x 900, vsync off, default zoom, `ModelShots --bench 30 --vsync off`, the units mixed evenly over the
-  six model types, the capsule runs on the same types with `--placeholder-art`, RTX 4070; none of the developer's own test
-  processes running, two other tracks' `testhost`s running throughout, which the developer may not stop):
+  six model types, the capsule runs on the same types with `--placeholder-art`, RTX 4070). **The Producer's run alone
+  (rule 42), 2026-11-14**, no other test process on the machine:
 
-  | Run | Average | While 90 % live | Worst 1 % (90 % live) | Draw calls |
-  | --- | --- | --- | --- | --- |
-  | 400 models | 10.16 ms | **11.26 ms** (pass: at most 16.7) | 16.03 ms | 4,544 |
-  | 400 capsules | 0.78 ms | 0.79 ms | 2.71 ms | 95 |
-  | 1,000 models | 27.11 ms | 28.17 ms | 35.43 ms | 12,216 |
-  | 1,000 capsules | 1.36 ms | 1.40 ms | 5.91 ms | 131 |
-  | 1,000 models, `--no-anim` | 18.64 ms | 19.52 ms | 25.53 ms | 12,208 |
-  | 1,000 models, `--no-model-shadows` | 22.88 ms | 24.03 ms | 30.28 ms | 4,230 |
+  | Run | While 90 %+ live | Worst 1 % (90 %+ live) | Draw calls |
+  | --- | --- | --- | --- |
+  | 400 models | **10.11 ms** (pass: at most 16.7) | 14.52 ms | 4,542 |
+  | 400 capsules | 0.77 ms | | |
+  | 1,000 models | 26.87 ms | 32.79 ms | 12,219 |
+  | 1,000 capsules | 1.29 ms | | |
 
-  400 mixed models cost about 1 ms more than M6-VH7's two types (10.11 ms while 90 % live): five surfaces on four of the six
+  The split rows below are the developer's, from one window with two other tracks' `testhost`s running (so about 1 ms over
+  the alone figures): 1,000 models 28.17 ms while 90 % live; with `--no-anim` 19.52 ms (worst 1 % 25.53, 12,208 draw calls);
+  with `--no-model-shadows` 24.03 ms (worst 1 % 30.28, 4,230 draw calls).
+
+  400 mixed models cost about what M6-VH7's two types did (10.11 ms while 90 % live): five surfaces on four of the six
   types (the props' material) against four and five, so about 1,100 more draw calls. **What 16.7 ms at 1,000 would take
   (rule 61, measured, not built):** the animation (players advanced on the CPU) is about 8.7 ms of the 28.2 (the `--no-anim`
   split; the still pose's skinning stays), so a shared skeleton per type or baked vertex animation would be worth up to
@@ -3932,6 +3936,72 @@ code, view tests, the import tooling and generated assets only; no sim, ViewApi 
   the schedule doesn't run; resumed, it runs); LFS pointers for all six; the slot-reuse row capsule / Laborer / capsule /
   Heavy Infantry; the steady row 400 models mixed over the six types, 0 bytes. `ModelShots` gains `--types <dir>` and
   `--lines <dir>` (the pictures) and mixes the bench over every model type.
+
+### Implementation (M7-V5)
+
+The art pass's third slice (the owner's request, inbox 2026-11-14): the Teblor Gatherer, Warrior, Javelin Thrower, Shaman and
+Breaker are drawn as animated, team-coloured figures (eleven model types); the Destrier Rider and the War-dog stay capsules
+(no horse or dog source on disk). The import tooling, generated assets, view tests and docs; no sim, ViewApi or data file
+changed, and no view code beyond a comment (M6-V20's `UnitViews.SetType` already draws a model at its data `scale`). Also
+BUG-1412 (`QaM6V21Test` line 257, `string?`), BUG-1410 (`QaV5Test`, M6-V21's list above) and M6-V21's bench table (the
+Producer's run alone).
+
+- **The size rule** (Producer decision, 2026-11-14): a figure is drawn at its **base figure's height times the data
+  `scale`**, scaled uniformly, feet on the ground, never stretched to the room the sim gives it. The file holds the base
+  figure (1.84-1.85 m, as every model: `ModelViewTest` checks every file's figure at 1.8 m within 5 %); `SetType` scales the
+  model node by `UnitDef.Scale` and places it `-DrawnHeight / 2` under the slot node (the capsule's centre), so the feet
+  stay on the ground at any scale. The Teblor at 1.5 are 2.76-2.78 m. The selection ring (1.35x), target ring (1.7x),
+  corpse disc and rim, and the cue disc keep the data radius (0.75 m, M7-V3c's rule); the click and box hit test keep the
+  sim's. No size is typed in C# or baked into a file.
+- **What stays at the capsule's numbers** (not changed here, a finding for the owner): the hp bar, the status and cast
+  marks and the cargo marker sit over `DrawnHeight` (the capsule's: `(2 x radius + 1 m) x scale`, 3.75 m for a giant),
+  so over a Teblor figure they float about 1 m above its 2.76 m head (above it, never inside it). The Heavy Infantry's
+  capsule is 1.8 m, its figure 1.88 m, so the human types sit as before.
+- **The entries** (docs/04 "Unit models, as built", third slice; the clip map in "Animation setup"): the two outfits on disk
+  recoloured to the Teblor palette, the Universal Base Characters' `Hair_Long` on every figure, props as boxes in bloodwood
+  (a tool, a greatsword, javelins, a staff, a maul). 2,609-2,802 triangles, five 512² textures, six surfaces, 65 bones, one
+  `team` surface each. Three opt-in manifest hooks (`alignBone`, a tint's `brightness`, `propColourSpace`) and the
+  stale-texture fix in `tools/import-assets.ps1`; the six earlier models' files are byte-identical after a run.
+- **Clips.** The library gains `attack_throw` (UAL2 `OverhandThrow`) and `attack_cast` (UAL1 `Spell_Simple_Shoot`): the
+  Javelin Thrower and the Shaman attack with them; the Warrior, Breaker and Gatherer with `attack_melee`; the Gatherer has
+  the workers' three clips. `Returning` and `Casting` play `idle` (M6-V20's `ClipFor`).
+- **Scenes:** none turns models off (the five of M6-V20 unchanged). New: `game/tests/TeblorModelTest` (headless, in the
+  loop): on the shipped data in a real match, per Teblor model type and both players, the drawn figure (its rest pose
+  without the props' own surfaces) is the base figure's height x the data `scale` within 2 %, uniform, the lowest vertex
+  within 5 cm of the ground and the model's origin on it; selection ring 1.35x, target ring 1.7x and corpse disc 1x the
+  data radius; a forged copy whose Warrior has `scale` 1.25 (found by id and edited) is drawn at 1.25x its base with the
+  radius unchanged; per type, idle, walk and attack from real sim states and every other state written into the test's
+  world: the playing clip is `ClipFor`'s and is the library's `Animation` the type's map names (by identity), and a clip
+  plays in every state. Changed: `ModelViewTest` (eleven model types, one per manifest entry, the Teblor Rider and War-dog
+  capsules; each file's figure at 1.8 m without its prop surfaces, where it compared the whole mesh with 1.8 m x the data
+  scale), `QaV5Test` (BUG-1410), `QaM6V21Test` (BUG-1412; and QA's pins of M6-V21's world: row 1's six model types are
+  now the manifest's entry count, row 4 keeps its attack pins for M6-V21's six types and checks a later type against its
+  manifest entry), `TeblorViewTest` (the Teblor units are models now: the start's flash and player-colour row reads
+  `ModelMeshOf(slot) ?? ViewOf(slot)` and a model's team surface, the Warrior's 1.5 m x 3.75 m body is its type's capsule
+  `MeshOf(type)` as the Heavy Infantry's since M6-V21, the hurt Warrior's first-frame flash is on its model's mesh; no pin
+  value changed). `ModelShots` gains `--teblor <dir>` (close-ups of each Teblor type
+  in its clips, the row of the five beside a Heavy Infantry and a Laborer in two colours, and a grey copy), `--teblor <dir>
+  --teblor-fight` (Teblor against Malazan) and `--skirmish-faction <id>` for `--skirmish` (a Teblor base gathering).
+- **Cost** (rules 42 / 61; 1600 x 900, vsync off, default zoom, `ModelShots --bench 30 --vsync off`, RTX 4070, 2026-11-14,
+  all six runs in one window, none of the developer's own test processes running, two other tracks' `testhost`s running
+  throughout, which the developer may not stop; the 400-capsule figure, 0.84 ms against the Producer's 0.77 alone, says
+  the window was close to alone). "Eleven types" mixes the units evenly over every model type; "M6-V21's six" is the same
+  run with `--bench-without teblor` (the base); capsules are the eleven types with `--placeholder-art`:
+
+  | Run | Average | While 90 %+ live | Worst 1 % (90 %+ live) | Draw calls |
+  | --- | --- | --- | --- | --- |
+  | 400 figures, eleven types | 9.87 ms | **11.00 ms** (at most 16.7) | 15.75 ms | 5,203 |
+  | 400 figures, M6-V21's six | 9.36 ms | 10.37 ms | 14.72 ms | 4,542 |
+  | 400 capsules | 0.84 ms | 0.84 ms | 2.79 ms | 143 |
+  | 1,000 figures, eleven types | 28.59 ms | 29.22 ms | 36.37 ms | 13,974 |
+  | 1,000 figures, M6-V21's six | 26.13 ms | 27.51 ms | 35.54 ms | 12,068 |
+  | 1,000 capsules | 1.35 ms | 1.39 ms | 5.91 ms | 186 |
+
+  The Teblor types cost about 0.6 ms at 400 and 1.7 ms at 1,000 over M6-V21's six (six surfaces against four or five:
+  about 660 and 1,900 more draw calls; bigger figures cover more pixels). The 1,000 figure is reported, not gated; merged
+  surfaces (the next view task, rule 61) is the step docs/03 "Implementation (M6-V21)" measured. A first window earlier the
+  same evening (one other track's `testhost` running, none of the developer's) read 27.49 ms for 400 figures and 2.07 ms
+  for 400 capsules, the same 13x ratio: the machine's slow state (handoff, BUG-1170's note), not a figure.
 
 ## Vision, detection, fog
 

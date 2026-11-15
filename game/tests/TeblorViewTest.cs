@@ -262,9 +262,15 @@ public partial class TeblorViewTest : Node
                 {
                     if (!views.IsShown(i)) continue;
                     looks++;
+                    // M7-V5: the Teblor Gatherers are models: the flash is on the model's mesh and the player's colour on
+                    // its team surface (a capsule: the slot node's overlay and material, as before).
                     MeshInstance3D view = views.ViewOf(i)!;
-                    if (views.ShownLit(i) || view.MaterialOverlay == views.FlashMaterial) white++;
-                    if (view.MaterialOverride != views.PlayerMaterial(u.Owner[i])) uncoloured++;
+                    MeshInstance3D drawn = views.ModelMeshOf(i) ?? view;
+                    if (views.ShownLit(i) || drawn.MaterialOverlay == views.FlashMaterial) white++;
+                    bool coloured = views.ModelMeshOf(i) is MeshInstance3D model
+                        ? model.GetSurfaceOverrideMaterial(views.Models!.TeamSurface(u.TypeId[i])) == views.Models.TeamMaterial(u.TypeId[i], u.Owner[i])
+                        : view.MaterialOverride == views.PlayerMaterial(u.Owner[i]);
+                    if (!coloured) uncoloured++;
                 }
             }
             runner.ProcessMode = ProcessModeEnum.Disabled; // hold the base still for the measure and the picture
@@ -338,8 +344,9 @@ public partial class TeblorViewTest : Node
             EntityHandle hi = await SpawnOne(sim, 0, heavy, pairAt + new System.Numerics.Vector2(2.5f, 0f));
             if (!Check(wr != default && hi != default, "the pair did not spawn")) return;
             await Frames(1);
-            var wm = (CapsuleMesh)views.ViewOf(wr.Index)!.Mesh;
-            // M6-V21: the Heavy Infantry is drawn as a model now; its type's capsule (the hit-test body) is still MeshOf.
+            // M6-V21: the Heavy Infantry is drawn as a model now, M7-V5 the Warrior too; each type's capsule (the hit-test
+            // body, the bar's height) is still MeshOf.
+            var wm = views.DrawsModel(warrior) ? views.MeshOf(warrior)! : (CapsuleMesh)views.ViewOf(wr.Index)!.Mesh;
             var hm = views.DrawsModel(heavy) ? views.MeshOf(heavy)! : (CapsuleMesh)views.ViewOf(hi.Index)!.Mesh;
             float ratio = wm.Radius / hm.Radius;
             GD.Print($"  (c) Warrior {2f * wm.Radius:0.###} m wide x {wm.Height:0.###} m tall, Heavy Infantry {2f * hm.Radius:0.###} m x {hm.Height:0.###} m: width ratio {ratio:0.####} (0.75 / 0.4 = {0.75f / 0.4f:0.####}), height ratio {wm.Height / hm.Height:0.####}");
@@ -385,7 +392,8 @@ public partial class TeblorViewTest : Node
             {
                 u.Hp[fresh] = w.MaxHp(fresh) / 2;
                 views.Sync(w, 1f, 0.016f);
-                bool lit = views.ShownLit(fresh) && views.ViewOf(fresh)!.MaterialOverlay == views.FlashMaterial;
+                // M7-V5: a Warrior model's flash is on its mesh.
+                bool lit = views.ShownLit(fresh) && (views.ModelMeshOf(fresh) ?? views.ViewOf(fresh)!).MaterialOverlay == views.FlashMaterial;
                 views.Sync(w, 1f, HitFlash.DefaultSeconds);
                 bool after = views.ShownLit(fresh);
                 GD.Print($"  BUG-1260 item 2, the cause: a Warrior first seen at half hp is drawn flash-white on its first frame: {lit}; {HitFlash.DefaultSeconds} s later: {after}");

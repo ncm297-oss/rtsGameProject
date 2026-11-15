@@ -200,7 +200,11 @@ public partial class QaV5Test : Node
         Check(view.Visible, "phase 2: re-used slot's view hidden");
         Check(System.Numerics.Vector2.Distance(new System.Numerics.Vector2(o.X, o.Z), far) < 1.5f, $"phase 2: re-used slot drawn at {o}, spawned at {far} (old unit died at {deathPos})");
         Check(!BarOn(reborn.Index) && U.Hp[reborn.Index] == _data.Units[_hi].Hp, $"phase 2: new full-hp unit has a bar ({U.Hp[reborn.Index]})");
-        Check(!_units.Flash.IsLit(reborn.Index) && view.MaterialOverlay != _units.FlashMaterial, "phase 2: new unit inherited a flash");
+        // BUG-1410: the flash is drawn on the model's mesh when the type is a model (the Heavy Infantry since M6-V21), and the
+        // slot node then draws nothing: read the mesh that is drawn.
+        MeshInstance3D drawn = _units.ModelMeshOf(reborn.Index) ?? view;
+        Check(!_units.Flash.IsLit(reborn.Index) && !_units.ShownLit(reborn.Index) && drawn.MaterialOverlay != _units.FlashMaterial,
+            $"phase 2: new unit inherited a flash (lit {_units.Flash.IsLit(reborn.Index)}, shown lit {_units.ShownLit(reborn.Index)}, overlay on {drawn.Name}: {drawn.MaterialOverlay})");
         Check(_combat.Markers.Count == 1 && _combat.Markers.Position[0] == deathPos, "phase 2: the corpse moved or another appeared with the new unit");
         Check(_sel.Selection.Count == 0, "phase 2: the new unit in the dead selected unit's slot became selected");
 

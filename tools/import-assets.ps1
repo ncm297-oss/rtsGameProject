@@ -130,6 +130,20 @@ if ($NoGodot -or -not $godot -or -not (Test-Path -LiteralPath $godot)) {
     Write-Host "note: Godot import skipped; run: & `$env:GODOT --headless --path game --import, then this script again"
 } else {
     Write-Host "importing in Godot ..."
+    # M7-V5: Godot's glTF import overwrites a texture it extracted only when the .png.import names the md5 it wrote
+    # (generator_parameters); Set-Import below writes the file without it, so a texture changed in the manifest (a tint)
+    # never reached the game. Each rebuilt model's texture imports get a placeholder md5: the import below extracts every
+    # texture again (the same bytes when nothing changed) and keeps each uid; Set-Import then writes them as before.
+    foreach ($r in $results) {
+        $dir = Split-Path (Join-Path $root $r.destination) -Parent
+        foreach ($imp in Get-ChildItem -LiteralPath $dir -Filter "$($r.id)_*.png.import") {
+            $text = [IO.File]::ReadAllText($imp.FullName)
+            if ($text -notmatch 'generator_parameters=') {
+                $text = $text -replace '(?m)^(uid="[^"]*")$', "`$1`ngenerator_parameters={`"md5`": `"stale`"}"
+                [IO.File]::WriteAllText($imp.FullName, $text)
+            }
+        }
+    }
     Invoke-GodotImport
     # The textures Godot extracted from each model: VRAM compressed with mipmaps, then imported again.
     foreach ($r in $results) {

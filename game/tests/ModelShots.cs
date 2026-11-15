@@ -27,6 +27,10 @@ namespace Rts.Game.Tests;
 /// players 1 and 2's colours beside a Laborer and a capsule type of its faction, facing the camera; <c>--lines &lt;dir&gt;</c>
 /// saves <c>lines-40m.png</c> / <c>-20m.png</c>: a Malazan line (Heavy Infantry, Crossbowmen behind) fighting a Whirlwind
 /// line (Raiders, Desert Archers behind), taken once the first melee has started.
+/// M7-V5: <c>--teblor &lt;dir&gt;</c> (close-ups of each Teblor model type in its clips, the five in a row beside a Heavy
+/// Infantry and a Laborer in two colours), <c>--teblor &lt;dir&gt; --teblor-fight</c> (Teblor against Malazan), and
+/// <c>--skirmish-faction &lt;id&gt;</c> for <c>--skirmish</c> (a Teblor base gathering); <c>--bench-without &lt;faction id&gt;</c>
+/// leaves that faction's model types out of the bench.
 /// </remarks>
 public partial class ModelShots : Node
 {
@@ -44,6 +48,7 @@ public partial class ModelShots : Node
         string? crowd = Arg(args, "--crowd-look");
         string? typeShots = Arg(args, "--types");
         string? lines = Arg(args, "--lines");
+        string? teblor = Arg(args, "--teblor");
         try
         {
             DataLoadResult loaded = DataLoader.LoadAll(ProjectSettings.GlobalizePath("res://data"));
@@ -53,9 +58,10 @@ public partial class ModelShots : Node
             string vsync = Arg(args, "--vsync") ?? "on";
             // The pictures stand still (no combat); the cost run fights.
             var flags = new System.Collections.Generic.List<string> { "--seed", "1", "--units", "0", "--no-bases", "--no-fog", "--mute", "--no-hud", "--vsync", vsync };
-            if (look != null || typeShots != null) flags.Add("--no-combat");
-            // The real skirmish start: a Town Hall and the starting workers a side, the fog, an AI seat; Malazan for slot 1.
-            if (skirmish != null) flags = new System.Collections.Generic.List<string> { "--skirmish", "--seed", "1", "--faction", "1", "malazan", "--mute" };
+            if (look != null || typeShots != null || (teblor != null && Array.IndexOf(args, "--teblor-fight") < 0)) flags.Add("--no-combat");
+            // The real skirmish start: a Town Hall and the starting workers a side, the fog, an AI seat; Malazan for slot 1
+            // unless --skirmish-faction names another (M7-V5: teblor).
+            if (skirmish != null) flags = new System.Collections.Generic.List<string> { "--skirmish", "--seed", "1", "--faction", "1", Arg(args, "--skirmish-faction") ?? "malazan", "--mute" };
             _match.Start(data, LaunchOptions.Parse(flags.ToArray()));
             _sim = _match.GetNode<SimRunner>("SimRunner").Simulation!;
             _camera = _match.GetNode<RtsCamera>("RtsCamera");
@@ -68,6 +74,7 @@ public partial class ModelShots : Node
             if (crowd != null) await CrowdLook(data, crowd);
             if (typeShots != null) await TypeShots(data, typeShots);
             if (lines != null) await Lines(data, lines);
+            if (teblor != null) await TeblorShots(data, teblor);
         }
         catch (Exception ex)
         {
@@ -122,6 +129,10 @@ public partial class ModelShots : Node
     {
         // M6-V21: mixed evenly over every type with a model file (the same types as capsules with --placeholder-art).
         int[] types = ModelFileTypes(data);
+        // M7-V5: --bench-without <faction id> leaves that faction's model types out (M6-V21's six types against all eleven
+        // in one window: the base against the head).
+        string? without = Arg(OS.GetCmdlineUserArgs(), "--bench-without");
+        if (without != null) types = Array.FindAll(types, t => data.Factions[data.Units[t].Faction].Key != without);
         GD.Print($"bench: types {string.Join(' ', Array.ConvertAll(types, t => data.Units[t].Key))}");
         NVector2 c = Centre();
         // --per-side N (M6-VH7): 500 gives BUG-1321's 1,000-unit run.
@@ -351,6 +362,176 @@ public partial class ModelShots : Node
         GD.Print($"lines: moving {states[(int)UnitState.Moving]} attacking {states[(int)UnitState.Attacking]} idle {states[(int)UnitState.Idle]}, melee {melee}");
         _camera.SetFocus(c.X, c.Y);
         await Shots(dir, "lines");
+    }
+
+    // M7-V5: the Teblor figures (the shipped data, rule 56). With --no-combat (the default for this mode's match), per
+    // Teblor model type: player 1 and player 2's figure facing a close camera, idle and held in each of its own clips
+    // (closeup-<id>-<clip>.png); then the row (row-40m.png / -20m.png and row-40m-gray.png): every Teblor model type, a
+    // Heavy Infantry and a Laborer, player 1's in front and player 2's behind, at the default and the closest zoom. With
+    // --teblor-fight the match fights instead: Teblor Warriors and Breakers with Javelin Throwers and Shamans behind
+    // (player 1) against Heavy Infantry with Crossbowmen behind (player 2), fight-20m.png / -40m.png once 4 melee units
+    // fight, and a close camera on the melee (fight-close.png).
+    private async Task TeblorShots(GameData data, string dir)
+    {
+        int teblor = -1;
+        for (int f = 0; f < data.Factions.Length; f++) if (data.Factions[f].Key == "teblor") teblor = f;
+        var types = new System.Collections.Generic.List<int>();
+        foreach (int t in ModelFileTypes(data)) if (data.Units[t].Faction == teblor) types.Add(t);
+        GD.Print($"teblor shots: model types {string.Join(' ', types.ConvertAll(t => data.Units[t].Key))}");
+        UnitStore u = _sim.World.Units;
+        NVector2 c = Centre();
+        if (Array.IndexOf(OS.GetCmdlineUserArgs(), "--teblor-fight") >= 0)
+        {
+            await TeblorFight(data, dir, types, c);
+            return;
+        }
+        Camera3D? match = GetViewport().GetCamera3D();
+        var close = new Camera3D { Fov = 40f };
+        AddChild(close);
+        foreach (int type in types)
+        {
+            ClearUnits();
+            Spawn(0, type, c + new NVector2(-1.3f, -3f));
+            Spawn(1, type, c + new NVector2(1.3f, -3f));
+            await FaceCamera();
+            int[] slots = { SlotOf(0, type), SlotOf(1, type) };
+            Vector3 mid = (_views.ViewOf(slots[0])!.GlobalPosition + _views.ViewOf(slots[1])!.GlobalPosition) / 2f;
+            Vector3 ground = new(mid.X, UnitViews.GroundPoint(_sim.World, slots[0], 1f).Y, mid.Z);
+            close.LookAtFromPosition(ground + new Vector3(0f, 2.6f, 8.5f), ground + new Vector3(0f, 1.5f, 0f), Vector3.Up);
+            close.MakeCurrent();
+            string id = data.Units[type].Key;
+            await Frames(10);
+            Save(dir, $"closeup-{id}-idle.png");
+            foreach (string clip in new[] { "walk", "attack", "gather_gold", "gather_wood", "build" })
+            {
+                if (!_views.Models!.HasClip(type, (UnitModels.Clip)Array.IndexOf(UnitModels.ClipNames, (StringName)clip))) continue;
+                if (clip.StartsWith("gather", StringComparison.Ordinal) || clip == "build")
+                    if (!data.Units[type].IsWorker) continue;
+                foreach (int s in slots)
+                {
+                    AnimationPlayer anim = _views.AnimatorOf(s)!;
+                    anim.Active = true;
+                    anim.Play(clip, 0);
+                    anim.Seek(anim.CurrentAnimationLength * 0.4, true);
+                    anim.Active = false; // held: the crowd schedule advances nothing that is inactive
+                }
+                await Frames(4);
+                Save(dir, $"closeup-{id}-{clip}.png");
+            }
+            foreach (int s in slots) { _views.AnimatorOf(s)!.Active = true; _views.AnimatorOf(s)!.Play("idle"); }
+        }
+        match?.MakeCurrent();
+        close.QueueFree();
+
+        ClearUnits();
+        int heavy = data.FindUnit("malazan_heavy_infantry"), laborer = data.FindUnit("malazan_laborer");
+        var row = new System.Collections.Generic.List<int>(types) { heavy, laborer };
+        for (int p = 0; p < 2; p++)
+            for (int k = 0; k < row.Count; k++)
+                Spawn(p, row[k], c + new NVector2((k - (row.Count - 1) / 2f) * 2.2f, -4f + p * 3.5f));
+        await FaceCamera();
+        _camera.SetFocus(c.X, c.Y - 1f);
+        foreach (float zoom in new[] { CameraLimits.DefaultZoom, CameraLimits.MinZoom })
+        {
+            _camera.SetZoom(zoom);
+            await Frames(10);
+            Image img = GetViewport().GetTexture().GetImage();
+            img.SavePng(System.IO.Path.Combine(dir, $"row-{zoom:0}m.png"));
+            GD.Print($"saved row-{zoom:0}m.png: {string.Join(' ', row.ConvertAll(t => data.Units[t].Key))}, player 1 front, player 2 behind");
+            if (zoom != CameraLimits.DefaultZoom) continue;
+            for (int y = 0; y < img.GetHeight(); y++)
+                for (int x = 0; x < img.GetWidth(); x++)
+                {
+                    Color px = img.GetPixel(x, y);
+                    float l = 0.2126f * px.R + 0.7152f * px.G + 0.0722f * px.B;
+                    img.SetPixel(x, y, new Color(l, l, l));
+                }
+            img.SavePng(System.IO.Path.Combine(dir, "row-40m-gray.png"));
+        }
+    }
+
+    private async Task TeblorFight(GameData data, string dir, System.Collections.Generic.List<int> types, NVector2 c)
+    {
+        int Find(string id) => data.FindUnit(id);
+        int warrior = Find("teblor_warrior"), breaker = Find("teblor_breaker"), javelin = Find("teblor_javelin_thrower"), shaman = Find("teblor_shaman");
+        int heavy = Find("malazan_heavy_infantry"), xbow = Find("malazan_crossbowman");
+        for (int k = 0; k < 8; k++)
+        {
+            Spawn(0, k % 4 == 3 ? breaker : warrior, c + new NVector2(-9f, (k - 3.5f) * 1.6f));
+            Spawn(1, heavy, c + new NVector2(9f, (k - 3.5f) * 1.3f));
+            if (k < 6)
+            {
+                Spawn(0, k % 3 == 2 ? shaman : javelin, c + new NVector2(-12.5f, (k - 2.5f) * 1.7f));
+                Spawn(1, xbow, c + new NVector2(12f, (k - 2.5f) * 1.4f));
+            }
+        }
+        long at = _sim.TickNumber;
+        while (_sim.TickNumber < at + 4) await Frames(1);
+        UnitStore u = _sim.World.Units;
+        for (int i = 0; i < u.Capacity; i++)
+            if (u.Alive[i]) _sim.Enqueue(Command.AttackMove(u.Owner[i], new EntityHandle(i, u.Generation[i]), c + new NVector2(u.Owner[i] == 0 ? 20f : -20f, 0f)));
+        int melee = 0;
+        for (int t = 0; t < 20 * 30 && melee < 4; t++)
+        {
+            long now = _sim.TickNumber;
+            while (_sim.TickNumber == now) await Frames(1);
+            melee = 0;
+            for (int i = 0; i < u.Capacity; i++)
+                if (u.Alive[i] && u.State[i] == UnitState.Attacking && (u.TypeId[i] == heavy || u.TypeId[i] == warrior || u.TypeId[i] == breaker)) melee++;
+        }
+        var states = new int[8];
+        for (int i = 0; i < u.Capacity; i++) if (u.Alive[i]) states[(int)u.State[i]]++;
+        GD.Print($"teblor fight: moving {states[(int)UnitState.Moving]} attacking {states[(int)UnitState.Attacking]} idle {states[(int)UnitState.Idle]}, melee {melee}");
+        _camera.SetFocus(c.X - 2f, c.Y);
+        await Shots(dir, "fight");
+        Camera3D? match = GetViewport().GetCamera3D();
+        var close = new Camera3D { Fov = 45f };
+        AddChild(close);
+        Vector3 focus = Vector3.Zero;
+        int n = 0;
+        for (int i = 0; i < u.Capacity; i++)
+            if (u.Alive[i] && u.State[i] == UnitState.Attacking && _views.ViewOf(i) is MeshInstance3D v && (u.TypeId[i] == warrior || u.TypeId[i] == breaker)) { focus += v.GlobalPosition; n++; }
+        if (n > 0)
+        {
+            focus /= n;
+            close.LookAtFromPosition(focus + new Vector3(0f, 6f, 13f), focus, Vector3.Up);
+            close.MakeCurrent();
+            await Frames(6);
+            Save(dir, "fight-close.png");
+        }
+        match?.MakeCurrent();
+        close.QueueFree();
+    }
+
+    private void ClearUnits()
+    {
+        UnitStore u = _sim.World.Units;
+        for (int i = 0; i < u.Capacity; i++) if (u.Alive[i]) u.Free(new EntityHandle(i, u.Generation[i]));
+    }
+
+    // Everyone walks 3 m toward the camera (+y is down the screen), so each ends facing it, then stands.
+    private async Task FaceCamera()
+    {
+        UnitStore u = _sim.World.Units;
+        long at = _sim.TickNumber;
+        while (_sim.TickNumber < at + 4) await Frames(1);
+        for (int i = 0; i < u.Capacity; i++)
+            if (u.Alive[i]) _sim.Enqueue(Command.Move(u.Owner[i], new EntityHandle(i, u.Generation[i]), u.Position[i] + new NVector2(0f, 3f)));
+        at = _sim.TickNumber;
+        while (_sim.TickNumber < at + 50) await Frames(1);
+    }
+
+    private int SlotOf(int owner, int type)
+    {
+        UnitStore u = _sim.World.Units;
+        for (int i = 0; i < u.Capacity; i++) if (u.Alive[i] && u.Owner[i] == owner && u.TypeId[i] == type) return i;
+        return -1;
+    }
+
+    private void Save(string dir, string name)
+    {
+        GetViewport().GetTexture().GetImage().SavePng(System.IO.Path.Combine(dir, name));
+        GD.Print($"saved {name}");
     }
 
     // One picture at 20 m and one at 40 m; the sim keeps running between them (the figures move on).
