@@ -36,16 +36,16 @@ public class GatherOverlapReport
     }
 
     /// <summary>
-    /// <see cref="GatherOverlapFuzzTests"/>' scene on seeds 2-7 at every value, the trip window only measured: per run the longest
-    /// a worker on its loop went without a trip (its node alive), and the income. Shows the drop-off wedge of today's rules the
-    /// fuzz's rows leave out (seeds 3 and 4).
+    /// <see cref="GatherOverlapFuzzTests"/>' scene on its seeds (2-16 without 13) at every value, the trip window only measured:
+    /// per run the longest a worker on its loop went without a trip (its node alive), and the income. Shows the four wedges the
+    /// fuzz's rows measure instead of asserting (GatherOverlapFuzzTests.KnownWedges: BUG-1430, BUG-1431).
     /// </summary>
     [Fact]
     public void TableC_EconomyFuzz_LongestGapWithoutATrip()
     {
         _out.WriteLine("| Seed | " + string.Join(" | ", Values.Select(v => $"{v}: longest gap (s), income p0 / p1")) + " |");
         _out.WriteLine("| --- |" + string.Concat(Values.Select(_ => " --- |")));
-        for (ulong seed = 2; seed <= 7; seed++) // seed 1: a Keep with no node within a 30 m walk (the fuzz rows' note)
+        foreach (ulong seed in GatherOverlapFuzzTests.Seeds)
         {
             var cells = new List<string>();
             foreach (double v in Values)

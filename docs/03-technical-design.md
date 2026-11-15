@@ -11888,9 +11888,11 @@ move (docs/01 "2026-11-14 (f)": default 0.5). Code: `Movement/MovementSystem.cs`
   show two Laborers 2.8 cm apart at 0 (16 at the tree line, 0.03 of the sum): today's rules have no floor between walkers.
 - **Tests.** `Data/GatherOverlapLoaderTests` (criterion 1); `Movement/GatherOverlapTests` (3: head-on on the leg, 12 on one
   mine for 0.4 m / 0.75 m / mixed; 4: the predicate, four scenes with no gather pair hash-equal tick for tick at 0 and 0.5,
-  three with gather pairs keeping the radii sum for every other pair; 5: leaving the loop; 6: twins, save at 3,000 continued,
+  three with gather pairs keeping the radii sum for every other pair, the two-player one with both Keeps west of the mine so
+  the sides meet; 5: leaving the loop; 6: twins, save at 3,000 continued,
   replay played back and refused on data with the knob off, spawn-order rows; 8: allocation);
-  `Movement/GatherOverlapFuzzTests` (7); `Movement/GatherOverlapPerfTests` (8, Perf); `Movement/GatherOverlapReport`
+  `Movement/GatherOverlapFuzzTests` (7: seeds 2-16 without 13 at 0 / 0.25 / 0.5 / 0.75, 56 rows, four named in
+  `KnownWedges`; the two BUG-1430 rows; seed 13's can't-be-built row); `Movement/GatherOverlapPerfTests` (8, Perf); `Movement/GatherOverlapReport`
   (Stress: the tables). Scenes: `Movement/GatherOverlapScenes` (each copy writes or removes the field itself, rule 58).
 
 **(a) One mine (50,000 gold, so the pace is measured, not the mine running out) 10 m from a Keep, and a two-deep line of 72
@@ -11980,26 +11982,35 @@ three named maps; result tick (bound 72,000), gold + wood gathered by 10:00, whe
 | Pale Hills | 0 | 50140 (41:47) | p1 | 5180 / 4520 | yes |
 | Pale Hills | 0.5 | 72000 (60:00) | none | 5410 / 4590 | no (bound 72000) |
 
-**(c) The economy fuzz's scene (criterion 7) on seeds 2-7, the 60 s trip window measured, not asserted:** the longest a
-worker on its loop went without a trip (its node alive), and the income.
+**(c) The economy fuzz's scene (criterion 7) on seeds 2-16, the 60 s trip window measured, not asserted:** the longest a
+worker on its loop went without a trip (its node alive), and the income. Seed 13 can't be built (its second Keep is
+refused; the harness says so); seed 1 has a Keep with no node within the fuzz's 30 m walk. Bold: past the window.
 
 | Seed | 0: longest gap (s), income p0 / p1 | 0.25: longest gap (s), income p0 / p1 | 0.5: longest gap (s), income p0 / p1 | 0.75: longest gap (s), income p0 / p1 |
 | --- | --- | --- | --- | --- |
 | 2 | 49.8, 2450 / 1455 | 49.6, 2450 / 1475 | 36.8, 2470 / 1470 | 35.2, 2425 / 1460 |
-| 3 | 58.5, 1915 / 1745 | 74.6, 2030 / 1885 | 37.9, 2320 / 1915 | 33.1, 2370 / 1905 |
-| 4 | 68.1, 2400 / 2185 | 70.7, 2400 / 2425 | 51.4, 2430 / 2440 | 39.4, 2380 / 2440 |
+| 3 | 58.5, 1915 / 1745 | **74.6**, 2030 / 1885 | 37.9, 2320 / 1915 | 33.1, 2370 / 1905 |
+| 4 | **68.1**, 2400 / 2185 | **70.7**, 2400 / 2425 | 51.4, 2430 / 2440 | 39.4, 2380 / 2440 |
 | 5 | 41.7, 720 / 1800 | 39.4, 720 / 1830 | 33.8, 720 / 1855 | 33.9, 710 / 1870 |
 | 6 | 42.7, 2455 / 785 | 37.5, 2415 / 790 | 38.9, 2465 / 810 | 37.5, 2435 / 800 |
-| 7 | 52.7, 2440 / 2190 | 45.8, 2470 / 2225 | 40.8, 2430 / 2410 | 81.7, 2400 / 2400 |
+| 7 | 52.7, 2440 / 2190 | 45.8, 2470 / 2225 | 40.8, 2430 / 2410 | **81.7**, 2400 / 2400 |
+| 8 | 40.8, 2135 / 2450 | 39.5, 2220 / 2450 | 39.2, 2250 / 2450 | 34.2, 2260 / 2470 |
+| 9 | 47.4, 1350 / 2310 | 29.6, 1360 / 2435 | 28.4, 1370 / 2450 | 28.8, 1370 / 2420 |
+| 10 | 44.7, 2550 / 1650 | 45.1, 2640 / 1680 | 42.1, 2710 / 1685 | 42.0, 2790 / 1695 |
+| 11 | 49.7, 1670 / 2250 | 49.7, 1690 / 2445 | 34.0, 1760 / 2440 | 27.5, 1770 / 2475 |
+| 12 | 40.2, 1690 / 1550 | 43.1, 1710 / 1605 | 36.8, 1680 / 1620 | 34.7, 1690 / 1635 |
+| 14 | 53.8, 2405 / 2220 | 51.4, 2425 / 2435 | 48.1, 2370 / 2445 | 48.7, 2415 / 2440 |
+| 15 | 42.5, 1380 / 2000 | 37.0, 1455 / 2000 | 37.0, 1450 / 2015 | 36.9, 1490 / 2025 |
+| 16 | 57.4, 2100 / 1390 | 45.0, 2165 / 1355 | 45.2, 2200 / 1370 | 45.2, 2210 / 1370 |
 
 **Reading.** Every value raises a crowded node's pace and cuts stuck ticks and give-ups; with 5 workers nothing
 changes (within 2 trips). At 24 workers on the mine: Laborers bank 3,430 at 0 and 3,630 / 3,930 / 4,080 at 0.25 / 0.5 /
 0.75, Gatherers 2,790 and 3,450 / 3,960 / 4,320 (+42 % at 0.5); 24 Gatherers on the tree line give up 348 times at 0 and
 175 / 71 / 25 times. Against 0.75: Laborers working a node stand 0.17-0.24 m from their nearest (0.4 m each: two drawn
 as one), five Laborers on a mine collect more stuck ticks than at 0 (226 against 85), and one fuzz seed's worker goes 82 s without a trip
-(seed 7: walking round a Keep to a mine 4 m south of it; 52.7 s at 0). Against 0.25: the gain is small (24 Laborers on the
+(seed 7, BUG-1430 below; 52.7 s at 0). Against 0.25: the gain is small (24 Laborers on the
 mine +6 %), 10 Gatherers on the tree line give up more than at 0 (40 against 35), and the drop-off wedge below runs 71-75 s
-on two seeds. **0.5 is the only value whose fuzz gaps all stay under 60 s (at most 51.4 s), and with it a crowded node's
+on two seeds. **0.5 is the only value whose fuzz gaps all stay under 60 s (at most 51.4 s, all 14 seeds), and with it a crowded node's
 workers stand at half to two thirds of their distance at 0 from their nearest (12 Laborers on the mine 0.40 m against
 0.78).** The matches (b) move: at 0.5 each side gathers more by 10:00 (up to +870 on Vathar), Vathar Crossing's
 winner flips (seat 1 at 23,322, seat 0 at 28,729: past its 24,000 bound), the
@@ -12007,14 +12018,37 @@ menu's map ends 6,286 ticks sooner, Raraku 1,901 later, and **Pale Hills seed 1 
 0). At 0 every row equals its M5-5 pin (23,322 / 28,231 / 50,140): the off path is the shipped game. So the session that
 ships a value re-measures the M5-5 rows and decides Pale Hills by rules 43 / 45.
 
-- **Found on the way (not this rule's; BUG patch with the report):** a worker returning with a load stands out of reach at a
-  Keep's corner (1.3-1.5 m from the footprint, its stand point 1.2-1.4 m off) for 58-68 s **with the knob off** (table (c)
-  seeds 3 and 4), 71-75 s at 0.25, at most 51 s at 0.5; the fuzz's asserting rows leave those seeds out at 0 and 0.25 and
-  say so. And today's rules have no floor between walkers: off, two Laborers came within 2.8 cm (16 at the tree line).
-- **Criterion 5, Stop.** A worker leaving the loop with a Move is back at the radii sum in 3-5 ticks. With a Stop beside a
-  mate that keeps working, both stand, and standing units never push apart under today's rules: they separate when the mate
-  next walks (230 ticks for two Laborers, 56 for a mixed pair), or when a walker shoves the stopped, goal-less one. No rule
-  was added for it (it would be a new movement rule outside gather pairs); a Producer call.
+- **The floor at a small value (BUG-1433).** The floor is on for any value above 0, and off has none, so the knob is not
+  continuous at 0: at 0.001, 24 Laborers' gather pairs never come closer than 0.50 of their radii sum (0.15 off), and at
+  0.25 their closest is 0.38. A small value makes gather pairs *stiffer* than off at their closest, while still packing
+  them closer on average (mean stand gap 0.58 m at 0.25 against 0.75 m off). Choose a value with that in mind; a floor
+  that fades in with the value would be a new design.
+- **Wedges past the fuzz's 60 s window (BUG-1430, BUG-1431): today's rules, not the scaled distance.** Four (value, seed)
+  rows of table (c) pass 60 s; the fuzz measures their window instead of asserting it, each named in
+  `GatherOverlapFuzzTests.KnownWedges` (every other invariant still asserted every tick; every other row of the 56 asserts
+  the window). (1) **A drop-off wedge at a Keep's corner (BUG-1431)**: a worker returning with a load arrives by the pack
+  1.3-1.5 m from the footprint, out of reach, behind mates that mine standing in reach of the mine and the Keep at once
+  (they never walk off) and still hold the Keep's stand cell as their goal cell, so each retry arrives the same way. Seed 4
+  at 0 (68.1 s) and 0.25 (70.7 s); seed 3 at 0.25 (74.6 s) is the same worker at the same corner as at 0 (58.5 s there:
+  `Bug1430_Seed3AtAQuarter_IsTheDropOffWedgeTheKnobOffHasToo`). 0.5 / 0.75 shorten it (at most 51.4 s). (2) **A 0.75 m
+  walker held at a Keep's corner (seed 7 at 0.75)**: the gap between the corner and its own side's Idle workers parked there
+  (loops ended when their trees ran out) is narrower than its 1.5 m width, and each retry starts a fresh walk (stuck count 0)
+  into the same corner, so it never gives up or goes round. From 20 s to 55 s of its wait no gather pair stands within
+  movement's reach of it (`Bug1430_Seed7AtTheCap_NoGatherPairStandsInMovementReachOfTheWedgedWalker`); the two that come
+  into reach are 0.4 m Laborers walking past it through that gap. So the scale is read for it only for those passers; the
+  knob made the scene (more trips, trees run out sooner, more workers parked at the Keep), not the wedge. At 57 s the fuzz
+  re-orders a parked Laborer onto a loop, it presses in and shoves the walker free at 60 s; the gap then runs to 81.7 s for
+  the trip still owed. Curing either wedge changes the shipped game's movement or economy (a hash move, the golden and the
+  pins), outside this slice: criterion 7 holds at 0.5 on every seed, not at 0.25 or 0.75 (a Producer call). And today's
+  rules have no floor between walkers: off, two Laborers came within 2.8 cm (16 at the tree line).
+- **Criterion 5, Stop (BUG-1432).** A worker leaving the loop with a Move is back at the radii sum in 3-5 ticks. With a Stop
+  beside a mate that keeps working, both stand, and standing units never push apart under today's rules (off, two Idle
+  Laborers spawned 0.4 m apart are 0.4 m apart 1,200 ticks later): they separate when the mate next walks (230 ticks for
+  two Laborers, 56 for a mixed pair), or when a walker shoves the stopped, goal-less one. Within the slice it can't be met:
+  the Stop ends the pair (an Idle worker and a gatherer), and criterion 4 keeps that pair on today's rules. Meeting it needs
+  either a standing-overlap rule for every pair (separating standing units; a hash move off too) or an exception to
+  criterion 4 (a "just left the loop" separation, knob-on only, which needs per-unit state or a rule on the Stop itself).
+  No rule was added; a Producer call: amend the criterion (Stop: separates when either unit next moves) or schedule one.
 - **Spawn order.** Two workers on a mine run bit-equal in either spawn order at 0 and 0.5 for 2.5 minutes; four do not, at
   0 either (first difference tick 1,568 off, 404 at 0.5): the economy phase and the wall clips go in slot order, as
   `LocalMovementTests`' column row says. Same seed and commands give the same hash (the twins rows).

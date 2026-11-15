@@ -157,6 +157,12 @@ public class GatherOverlapTests
         Assert.Equal(offSim.World.Units.Radius[o1.Index] * 2f, MovementSystem.PairSum(offSim.World, offSim.World.Units, o1.Index, o2.Index));
     }
 
+    /// <summary>Rows below player 0's Keep that player 1's Keep stands in the two-player scenes: both west of the mine.</summary>
+    private const int EnemyKeepRows = 6;
+
+    /// <summary>Pair-ticks within 3 m the two sides of the enemy scene must share in its 2,400 ticks (BUG-1433: it had 2).</summary>
+    private const int MinEnemyPairTicks = 500;
+
     /// <summary>Runs <paramref name="scene"/> on a fresh sim at 0 and at 0.5 for <paramref name="ticks"/> ticks; asserts the hashes are equal every tick.</summary>
     private void HashEqualAtZeroAndHalf(string name, Func<GameData, Simulation> scene, int ticks)
     {
@@ -212,8 +218,10 @@ public class GatherOverlapTests
         {
             Simulation sim = NewSim(data, 8, players: 2);
             Setup(sim, Node.Mine, Workers.Laborer, 1);
-            Building(sim, KeepX + 16, KeepY, 1);
-            EntityHandle other = Unit(sim, At(sim, KeepX + 21, KeepY), player: 1);
+            // BUG-1433: player 1's Keep beside player 0's, west of the mine, so both carry to the mine's west face (it stood
+            // east of the mine, and the two never met).
+            Building(sim, KeepX, KeepY + EnemyKeepRows, 1);
+            EntityHandle other = Unit(sim, At(sim, KeepX + 5, KeepY + EnemyKeepRows + 2), player: 1);
             sim.Enqueue(Command.Gather(1, other, At(sim, MineX, MineY)));
             return sim;
         }, 2400);
@@ -251,10 +259,10 @@ public class GatherOverlapTests
             {
                 Simulation sim = NewSim(data, 24, players: 2);
                 Setup(sim, Node.Mine, Workers.Laborer, 6);
-                Building(sim, KeepX + 16, KeepY, 1);
+                Building(sim, KeepX, KeepY + EnemyKeepRows, 1); // BUG-1433: beside player 0's Keep, so the two sides share the mine's west face
                 for (int k = 0; k < 6; k++)
                 {
-                    EntityHandle h = Unit(sim, At(sim, KeepX + 21 + k % 2, KeepY + k / 2), player: 1);
+                    EntityHandle h = Unit(sim, At(sim, KeepX + 5 + k % 2, KeepY + EnemyKeepRows + 1 + k / 2), player: 1);
                     sim.Enqueue(Command.Gather(1, h, At(sim, MineX, MineY)));
                 }
                 return (sim, default);
@@ -265,6 +273,8 @@ public class GatherOverlapTests
             float onClosest = ClosestOtherPair(scene(DataAt(0.5)), 2400, scaled: true, out int onPairs);
             _out.WriteLine($"{name}: closest non-gather pair (share of its radii sum) {offClosest:F3} at 0, {onClosest:F3} at 0.5 ({offPairs} / {onPairs} pair-ticks within reach)");
             Assert.True(onPairs > 0, $"{name}: no non-gather pair ever came near");
+            // BUG-1433: the enemy scene must bring the two sides together, not two pair-ticks in 2 minutes.
+            if (name.StartsWith("two players")) Assert.True(onPairs >= MinEnemyPairTicks && offPairs >= MinEnemyPairTicks, $"{name}: the sides met for {offPairs} / {onPairs} pair-ticks");
         }
     }
 
