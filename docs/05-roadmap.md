@@ -767,7 +767,13 @@ open S1 / S2. Retro below; open S3 / S4 listed there.)_
       expansion's leg capped and bounded (BUG-1158 / BUG-1159); Pale Hills 2 / 5 Normal v Normal un-skipped at 49,565 /
       55,485, seed 1 50,140, the literal row 23,322, the Hard v Normal tally 29 / 11 / 2 (Vathar level at 7 / 7: BUG-1163
       S3, the data track's Hard tuning); golden unchanged, formats unchanged; docs/03 "Implementation (M5-H6)". **The
-      sim's end-of-M5 hardening is done; the sign-off waits only on criterion 6.**)
+      sim's end-of-M5 hardening is done; the sign-off waits only on criterion 6.**
+      **M6-S10 (2026-11-15-0506; the owner's gatherer overlap shipped at 0.5, every match row re-measured once):**
+      criterion 5's literal 20-minute row is Vathar Crossing **seed 7** (23,412; seed 1 ends at 24,497; the
+      `MatchCriterionTests` method names still say "Seed1"); Raraku's row is seed 2 (27,936), Pale Hills seed 1 42,384;
+      the Hard v Normal tally 36 / 3 / 3. **Open against criterion 5's other maps: Raraku seeds 1, 3, 4 and 6 no longer
+      end inside 72,000 (BUG-1460 / BUG-1465, the sim's next hardening).** No criterion ticked or unticked; docs/03 "Implementation
+      (M6-S10)".)
 
 ## M6 — Game shell & real art
 

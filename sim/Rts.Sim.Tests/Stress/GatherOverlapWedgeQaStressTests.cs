@@ -108,7 +108,11 @@ public class GatherOverlapWedgeQaStressTests(ITestOutputHelper output)
         var (crossers, longest) = Plain(overlap, seed);
         output.WriteLine($"seed {seed} at {overlap}: longest {longest / 20.0:F1} s; {crossers.Count} breach(es)");
         foreach (Crosser c in crossers) output.WriteLine("  " + c);
-        Assert.NotEmpty(crossers);
+        // M6-S10 (BUG-1431 cured; the developer's KnownWedges is empty): these four rows assert the window again, and none
+        // has a breach (longest 55.6 / 26.0 / 45.5 / 32.9 s). The row asserted Assert.NotEmpty(crossers) (the excluded wedge
+        // present), then every breach within 3 m of its Keep (and 0.75 m wide at the cap); the per-breach checks stay for any
+        // breach that comes back.
+        Assert.Empty(crossers);
         foreach (Crosser c in crossers) Assert.True(c.KeepGap < 3f, $"a breach away from the Keep, not the named wedge: {c}");
         if (overlap == 0.75) Assert.All(crossers, c => Assert.Equal(0.75f, c.Radius));
     }
@@ -148,7 +152,10 @@ public class GatherOverlapWedgeQaStressTests(ITestOutputHelper output)
     {
         var (baseCrossers, baseLongest) = Plain(0.75, 7);
         output.WriteLine($"seed 7 at 0.75: longest {baseLongest / 20.0:F1} s; breaches: {string.Join("; ", baseCrossers)}");
-        Assert.NotEmpty(baseCrossers);
+        // M6-S10: the wedge is gone (32.9 s), so there is nothing to switch mid-wedge. The probe asserted
+        // Assert.NotEmpty(baseCrossers) (81.7 s before the cure); re-stated: no breach at the cap on this seed.
+        Assert.Empty(baseCrossers);
+        if (baseCrossers.Count == 0) return;
         int start = baseCrossers[0].Tick - (Window + 1);
         foreach (float to in new[] { 0f, 0.74f })
             foreach (int s in new[] { 0, 10, 20, 40 })

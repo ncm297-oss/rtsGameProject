@@ -93,17 +93,73 @@ public class CounterCompositionTests
             NextThink(sim);
             Assert.True(sim.TickNumber < 9000, "no barracks and crossbow range by 7:30");
         }
+        // M6-S10 re-staging (rule 57 / criterion 10). From M6-S10 (the Keep-corner cure, gatherOverlap 0.5) this flat seat is
+        // wood-bound once its producers stand (gold 312-506 banked, wood 5-10): the seen and unseen runs trained the same
+        // 10 Line / 8 Ranged (Hard 10 / 9) and the counter weights never chose (on c684902: 11 v 10 Line, Normal). The weights
+        // decide only on a think where both producers are free and the bank pays for one unit. Wood topped up alone leaves the
+        // seat producer-bound (11 / 10 both ways); a gold trickle of half the two producers' rate is a round robin (the
+        // producer that just trained is busy while the other is paid for: 6 / 7 both ways). So, from here on, each tick:
+        // player 0's wood is topped up to WoodTopUp and the gold its workers deliver is replaced by a trickle at the gold-bound
+        // boundary, the cheaper unit's gold over the longer train time (both from the data): the bank pays for a unit no
+        // faster than a producer finishes one, so each purchase is the weights' choice. Seen and unseen runs get the same
+        // staging; the AI, the sighting and the memory are untouched. Normal: 6 / 3 seen v 5 / 4 unseen.
         int line = Unit("malazan_heavy_infantry"), ranged = Unit("malazan_crossbowman");
         int lineBefore = ai.Live[line] + ai.Queued[line], rangedBefore = ai.Live[ranged] + ai.Queued[ranged];
         List<EntityHandle> raiders = Spawn(sim, Unit("whirlwind_horse_raider"), 8, seen);
-        NextThink(sim);
+        var purse = new Purse(sim, line, ranged);
+        purse.Think();
         Free(sim, raiders);
         int[] count = (int[])ai.Board.SeenSlotCount.Clone(), tick = (int[])ai.Board.SeenSlotTick.Clone();
         int end = sim.TickNumber + 180 * Tps;
-        while (sim.TickNumber < end) NextThink(sim);
+        while (sim.TickNumber < end) purse.Think();
         _out.WriteLine($"{difficulty} seen {seen}: sighting at {sim.TickNumber - 180 * Tps}, line {lineBefore} -> {ai.Live[line] + ai.Queued[line]}, "
-            + $"ranged {rangedBefore} -> {ai.Live[ranged] + ai.Queued[ranged]}, memory [{string.Join(",", count)}] at [{string.Join(",", tick)}]");
+            + $"ranged {rangedBefore} -> {ai.Live[ranged] + ai.Queued[ranged]}, memory [{string.Join(",", count)}] at [{string.Join(",", tick)}], "
+            + $"gold {sim.World.Gold[0]} wood {sim.World.Wood[0]} at the end");
         return (ai.Live[line] + ai.Queued[line], ai.Live[ranged] + ai.Queued[ranged], count, tick);
+    }
+
+    /// <summary>Player 0's wood the criterion-2 run keeps topped up after its producers stand (M6-S10 re-staging; see <see cref="Run"/>).</summary>
+    private const int WoodTopUp = 2000;
+
+    /// <summary>
+    /// M6-S10 re-staging of the criterion-2 run (see <see cref="Run"/>): each tick tops player 0's wood up to
+    /// <see cref="WoodTopUp"/>, takes back the gold its workers delivered in the tick and pays a trickle instead,
+    /// min(Line gold, Ranged gold) / max(Line train ticks, Ranged train ticks) per tick, carried in a remainder so none is lost.
+    /// </summary>
+    private sealed class Purse
+    {
+        private readonly Simulation _sim;
+        private readonly long _num, _den; // gold per tick = _num / _den: the gold-bound boundary
+        private long _carry;
+
+        public Purse(Simulation sim, int line, int ranged)
+        {
+            _sim = sim;
+            UnitDef l = sim.World.Data.Units[line], r = sim.World.Data.Units[ranged];
+            _num = Math.Min(l.CostGold, r.CostGold);
+            _den = Math.Max(l.TrainTicks, r.TrainTicks);
+        }
+
+        public void Think()
+        {
+            // Tick by tick (as NextThink): the seat thinks at the start of a tick, before that tick's deliveries, so it
+            // never sees gold the purse takes back before its Train applies.
+            int think = _sim.AiOf(0)!.ThinkTicks;
+            do Tick(); while ((_sim.TickNumber - 1) % think != 0);
+        }
+
+        private void Tick()
+        {
+            World w = _sim.World;
+            if (w.Ledger.Wood[0] < WoodTopUp) w.Ledger.Wood[0] = WoodTopUp;
+            int delivered = w.GatheredGold[0];
+            _sim.Tick();
+            delivered = w.GatheredGold[0] - delivered;
+            _carry += _num;
+            int paid = (int)(_carry / _den);
+            _carry -= paid * _den;
+            w.Ledger.Gold[0] = Math.Max(0, w.Ledger.Gold[0] - delivered) + paid;
+        }
     }
 
     /// <summary>Criterion 2 (a) and (c): a Normal seat that saw 8 Horse Raiders once trains more Line than the same seat and seed that did not; the unseen run's memory is all zeros.</summary>
@@ -119,6 +175,8 @@ public class CounterCompositionTests
     }
 
     /// <summary>Criterion 2 (b): the same sighting moves a Hard seat's Line share further than a Normal seat's (strength 1 against 0.5).</summary>
+    // M6-S10: red on the re-staged run (see Run): Normal and Hard both go 5 / 4 unseen -> 6 / 3 seen, shift 0.111 each; nine
+    // units in the 180 s memory window cannot tell Line weighted x 1.5 from x 2. Listed for the ACCEPT's ruling (BUG-1462).
     [Fact]
     public void AHardSeat_ShiftsItsLineShareFurther_ThanANormalSeat()
     {
@@ -341,14 +399,14 @@ public class CounterCompositionTests
     /// </summary>
     [Theory]
     [Trait("Category", "Stress")]
-    [InlineData("raraku", 1UL, AiDifficulty.Normal, "ABF56AB721E8B0DC 28193 1531")] // M7-3b (tech / ability ids by faction order; outcomes unchanged): was 4765275972CD8BD8; pre-M5-9a: E0612240C3E713D2 28083 1476
-    [InlineData("raraku", 1UL, AiDifficulty.Easy, "B2B828CADAC9DC88 24498 1448")] // M7-3b (tech / ability ids by faction order; outcomes unchanged): was 0D877B9258F20265
-    [InlineData("pale_hills", 1UL, AiDifficulty.Normal, "2E5531DF16DDEA11 36000 3483")] // M7-3b (tech / ability ids by faction order; outcomes unchanged): was A0884E7E95EEA8AB; pre-M5-9a: 69C4358E67DF7FC3 34219 3144
-    [InlineData("pale_hills", 1UL, AiDifficulty.Easy, "42DF7252D93BC98E 36000 2486")] // M7-3b (tech / ability ids by faction order; outcomes unchanged): was 07EC9909C8DDF1C3; pre-M5-9a: 62F16C733AF6D9C8 36000 2601
-    [InlineData("pale_hills", 3UL, AiDifficulty.Normal, "B812C76579CC4AE2 28517 2459")] // M7-3b (tech / ability ids by faction order; outcomes unchanged): was 9753F06856D81476; pre-M5-9a: C9CB142CF3C97C88 29562 3103
-    [InlineData("pale_hills", 3UL, AiDifficulty.Easy, "0C9E51DFCBF08050 33508 3033")] // M7-3b (tech / ability ids by faction order; outcomes unchanged): was BC6868F49655A4DE; pre-M5-9a: 4FF13AE84024D0BB 33524 3075
-    [InlineData("vathar_crossing", 1UL, AiDifficulty.Normal, "EDB60FD8CE0D203B 23219 1495")] // M7-3b (tech / ability ids by faction order; outcomes unchanged): was 72BC8BD819A35B0F; pre-M5-9a: 4FA98DA390936D9B 22794 1395
-    [InlineData("vathar_crossing", 1UL, AiDifficulty.Easy, "642A59FFA8E6EF34 36000 1798")] // M7-3b (tech / ability ids by faction order; outcomes unchanged): was 325B1E0137F84D8D
+    [InlineData("raraku", 1UL, AiDifficulty.Normal, "89895C96A3BAEA61 25238 1788")] // M6-S10 (the Keep-corner cure, gatherOverlap 0.5): was ABF56AB721E8B0DC 28193 1531; M7-3b (tech / ability ids by faction order; outcomes unchanged): was 4765275972CD8BD8; pre-M5-9a: E0612240C3E713D2 28083 1476
+    [InlineData("raraku", 1UL, AiDifficulty.Easy, "F475E235D4DC5585 32047 3393")] // M6-S10 (the Keep-corner cure, gatherOverlap 0.5): was B2B828CADAC9DC88 24498 1448; M7-3b (tech / ability ids by faction order; outcomes unchanged): was 0D877B9258F20265
+    [InlineData("pale_hills", 1UL, AiDifficulty.Normal, "08C5B82961984DB2 36000 2925")] // M6-S10 (the Keep-corner cure, gatherOverlap 0.5): was 2E5531DF16DDEA11 36000 3483; M7-3b (tech / ability ids by faction order; outcomes unchanged): was A0884E7E95EEA8AB; pre-M5-9a: 69C4358E67DF7FC3 34219 3144
+    [InlineData("pale_hills", 1UL, AiDifficulty.Easy, "91A60B09763056AB 36000 2130")] // M6-S10 (the Keep-corner cure, gatherOverlap 0.5): was 42DF7252D93BC98E 36000 2486; M7-3b (tech / ability ids by faction order; outcomes unchanged): was 07EC9909C8DDF1C3; pre-M5-9a: 62F16C733AF6D9C8 36000 2601
+    [InlineData("pale_hills", 3UL, AiDifficulty.Normal, "0AB9B0B17DF4FACD 27501 2539")] // M6-S10 (the Keep-corner cure, gatherOverlap 0.5): was B812C76579CC4AE2 28517 2459; M7-3b (tech / ability ids by faction order; outcomes unchanged): was 9753F06856D81476; pre-M5-9a: C9CB142CF3C97C88 29562 3103
+    [InlineData("pale_hills", 3UL, AiDifficulty.Easy, "6B4D02834976BA44 21671 1226")] // M6-S10 (the Keep-corner cure, gatherOverlap 0.5): was 0C9E51DFCBF08050 33508 3033; M7-3b (tech / ability ids by faction order; outcomes unchanged): was BC6868F49655A4DE; pre-M5-9a: 4FF13AE84024D0BB 33524 3075
+    [InlineData("vathar_crossing", 1UL, AiDifficulty.Normal, "05FF8F5BE84E914C 23359 1458")] // M6-S10 (the Keep-corner cure, gatherOverlap 0.5): was EDB60FD8CE0D203B 23219 1495; M7-3b (tech / ability ids by faction order; outcomes unchanged): was 72BC8BD819A35B0F; pre-M5-9a: 4FA98DA390936D9B 22794 1395
+    [InlineData("vathar_crossing", 1UL, AiDifficulty.Easy, "B7607296410EA90A 28279 1792")] // M6-S10 (the Keep-corner cure, gatherOverlap 0.5): was 642A59FFA8E6EF34 36000 1798; M7-3b (tech / ability ids by faction order; outcomes unchanged): was 325B1E0137F84D8D
     public void TheNonHardPins_WithNormalStrengthZero_PlayAsBeforeThisTask(string map, ulong seed, AiDifficulty first, string before)
     {
         GameData zero = NormalStrengthZero.Value;

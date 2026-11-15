@@ -324,16 +324,16 @@ Where the step was sent before D32, on Raraku against the Whirlwind at 8:35, the
 
 **Houses at the cap (D32, 2026-11-14, measured on the shipped files; `QA/Content/AiHouseRuleReportTests.MenuMapNormal_HouseSources_Report` and `MenuMapNormal_TwelfthHouse_Report`).**
 Since M5-4f the executor skips a house step once the population cap is the hard cap (100): the step is done with no
-command sent and no Hut placed. On the menu's map (20 minutes, the other seat idle): Normal, seed 1: the cap reaches 100 at 1146 s; the last Hut step (step 16) is never done; skipped at the hard cap: step 15; 10 Huts stand at 20:00, 0 past the cap. As on the other pages, the 12th Hut step measured taken out: without the 12th Hut step (step 16) on the same seed, the cap reaches 100 at 1146 s, and 10 Huts stand at 20:00, 0 past the cap. The step stays: the
+command sent and no Hut placed. On the menu's map (20 minutes, the other seat idle): Normal, seed 1: the cap reaches 100 at 1044 s; the last Hut step (step 16) is done at a cap of 100; skipped at the hard cap: steps 15, 16; 10 Huts stand at 20:00, 0 past the cap. As on the other pages, the 12th Hut step measured taken out: without the 12th Hut step (step 16) on the same seed, the cap reaches 100 at 1044 s, and 10 Huts stand at 20:00, 0 past the cap. The step stays: the
 second Longhouse (+10 pop, D32's expansion) brings the cap to 100 with 10 Huts, so the 11th Hut step (step 15) is
 skipped and the 12th is never reached on this seed; a seat that loses or never builds the second Longhouse needs both,
 and they cost nothing until they are reached.
 
 **Spending on the menu's map (D32, 2026-11-14, gathering gold 0.85 / wood 0.75 a second; `Content/AiSpendingReportTests.GeneratedNormal_Spending_Report`).**
 Against an idle seat, 12 forests and 8 mines (the menu's), 20 minutes. Normal, seed 1 (the smallest seed in 1-50 whose
-Normal pick is this opening): the idle base falls at 491 s; in hand at 5 min 80 gold / 230 wood; the first wave at 342
-s; Age II in at 489 s. Easy, seed 1 (Easy always plays the first opening): the idle base falls at 523 s; in hand at 5
-min 95 gold / 90 wood; the first wave at 344 s; Age II in at 506 s. Against an active opponent on the same map and seed
+Normal pick is this opening): the idle base falls at 466 s; in hand at 5 min 230 gold / 150 wood; the first wave at 316
+s; Age II in at 436 s. Easy, seed 1 (Easy always plays the first opening): the idle base falls at 494 s; in hand at 5
+min 290 gold / 105 wood; the first wave at 318 s; Age II in at 450 s. Against an active opponent on the same map and seed
 (`QA/Content/TeblorOpeningQaTests`): a Normal Teblor seat sends its first wave at 340 s, is in Age II at 466 s and still
 stands at 20:00 against a Normal Malazan; against a Normal Whirlwind it sends its first wave at 362 s, is in Age II at
 464 s and is beaten at 910 s (BUG-1240's "beaten before Age II" is gone on this seed; the Whirlwind match is the balance

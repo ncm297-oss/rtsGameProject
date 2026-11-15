@@ -40,17 +40,17 @@ public class StandardPresetPinQaTests
     public static IEnumerable<object[]> SaveSceneRows() => new[]
     {
         new object[] { "cross_map_seed1", 0x45F973087C0BB1D1UL },
-        new object[] { "menu_seed1", 0x26E357F1BE3C0050UL }, // M7-3b (tech / ability ids by faction order; outcomes unchanged): was 0xB400016A35D7EAE4
-        new object[] { "menu_seed2", 0x160CBEC456604B92UL }, // M7-3b (tech / ability ids by faction order; outcomes unchanged): was 0x2D3366B692C0C11F
-        new object[] { "menu_seed3", 0x85B2AC16EAAD8AAEUL }, // M7-3b (tech / ability ids by faction order; outcomes unchanged): was 0x752D3D910C14CAD0
-        new object[] { "menu_seed4", 0x23F8F1DC74AFABAAUL }, // M7-3b (tech / ability ids by faction order; outcomes unchanged): was 0xF0BD10D5898E482E
-        new object[] { "menu_seed5", 0xF7CACD436ABDD097UL }, // M7-3b (tech / ability ids by faction order; outcomes unchanged): was 0x8C33CBEB0F2A0DBE
-        new object[] { "four_seats_256", 0x39B9C71EFF58A8EDUL }, // M7-3b (tech / ability ids by faction order; outcomes unchanged): was 0x2FAB4CEE371B9051
+        new object[] { "menu_seed1", 0xF317565055B71435UL }, // M6-S10 (the Keep-corner cure, gatherOverlap 0.5): was 0x26E357F1BE3C0050; M7-3b (tech / ability ids by faction order; outcomes unchanged): was 0xB400016A35D7EAE4
+        new object[] { "menu_seed2", 0xFAB47B44E324D14EUL }, // M6-S10 (the Keep-corner cure, gatherOverlap 0.5): was 0x160CBEC456604B92; M7-3b (tech / ability ids by faction order; outcomes unchanged): was 0x2D3366B692C0C11F
+        new object[] { "menu_seed3", 0x6B72258D9692FCB2UL }, // M6-S10 (the Keep-corner cure, gatherOverlap 0.5): was 0x85B2AC16EAAD8AAE; M7-3b (tech / ability ids by faction order; outcomes unchanged): was 0x752D3D910C14CAD0
+        new object[] { "menu_seed4", 0x0886FE189A0F1D3DUL }, // M6-S10 (the Keep-corner cure, gatherOverlap 0.5): was 0x23F8F1DC74AFABAA; M7-3b (tech / ability ids by faction order; outcomes unchanged): was 0xF0BD10D5898E482E
+        new object[] { "menu_seed5", 0xF8289D270E1FBEBDUL }, // M6-S10 (the Keep-corner cure, gatherOverlap 0.5): was 0xF7CACD436ABDD097; M7-3b (tech / ability ids by faction order; outcomes unchanged): was 0x8C33CBEB0F2A0DBE
+        new object[] { "four_seats_256", 0xADA94BABBFE8F123UL }, // M6-S10 (the Keep-corner cure, gatherOverlap 0.5): was 0x39B9C71EFF58A8ED; M7-3b (tech / ability ids by faction order; outcomes unchanged): was 0x2FAB4CEE371B9051
         new object[] { "surround_brawl", 0xEAC1911851154EACUL },
         new object[] { "casts_and_sandstorm", 0x935E1BEC9EB4AB88UL }, // M7-3b (tech / ability ids by faction order; outcomes unchanged): was 0xEB8381CBBA4DFAC2
         new object[] { "stealth_beside_detector", 0x1C2D174FA705C278UL },
         new object[] { "construction_and_queue", 0x69A2FE2D3AC47B7CUL }, // M7-3b (tech / ability ids by faction order; outcomes unchanged): was 0x5808EE95CC66BA62
-        new object[] { "felled_tree_and_razed_building", 0x4D9635AD3817048CUL },
+        new object[] { "felled_tree_and_razed_building", 0xDB9C008D7897FE1EUL }, // M6-S10 (the Keep-corner cure, gatherOverlap 0.5): was 0x4D9635AD3817048C
         new object[] { "defeated_seat", 0x7D61B9F483FC4098UL },
     };
 
@@ -67,13 +67,13 @@ public class StandardPresetPinQaTests
 
     public static IEnumerable<object[]> AiRows() => new[]
     {
-        new object[] { 1, 2, 0, false, 0xE143B6FF4C1F0907UL }, // M7-3b (tech / ability ids by faction order; outcomes unchanged): was 0xEF1691714BF6A76D
-        new object[] { 2, 2, 1, false, 0xAB3897C77A93E4D9UL }, // M7-3b (tech / ability ids by faction order; outcomes unchanged): was 0x947084EC8CD14723; D27 (BUG-1163/BUG-1185, Hard gatherBonus 0.4): was 0x08DAC14990BB29C5 (M5-4c-2 fix round 2 (BUG-1123: the pulled-back rejoin): was 0xA796F8D89925CDD1 (fix round 1, BUG-1121 focus rule; before it 0x070CC85BB2A3B390 (M5-4c slice 2; before it 0x244EB8E19CE2992F))); seat 1 is Hard (gather bonus, focus fire, pull-back)
-        new object[] { 3, 3, 2, false, 0xB75CF4749B3539D5UL }, // M7-3b (tech / ability ids by faction order; outcomes unchanged): was 0x79FE6C459CD45DF7; D27 (BUG-1163/BUG-1185, Hard gatherBonus 0.4): was 0xFCD8F85C768FCED4 (M5-4c-2 fix round 1; before it 0xFB6DD578FA7A165E (M5-4c slice 2; 0x0FDF27B5B49AE41A; M5-4d slice 2: 0x112526C6B3861467)); seat 0 is Hard
-        new object[] { 4, 4, 1, false, 0x79EDC5037F9A86E8UL }, // M7-3b (tech / ability ids by faction order; outcomes unchanged): was 0x7F27FD9426E1139D; D27 (BUG-1163/BUG-1185, Hard gatherBonus 0.4): was 0xFB6A7E60CAB35D32 (M5-4c-2 fix round 1; before it 0xE204EB9DE6D0FBF9 (M5-4c slice 2; 0xC01AABF0FFE171A9)); seat 1 is Hard
-        new object[] { 5, 2, 2, false, 0xB9910B57CF833B26UL }, // M7-3b (tech / ability ids by faction order; outcomes unchanged): was 0xC0BAEAB03FDA4C71; D27 (BUG-1163/BUG-1185, Hard gatherBonus 0.4): was 0x19A8D59E908C2B31 (M5-9a (the Hard seat's counter shift; seat 1 is Normal, its shift too): was 0x12C3558D5A1F3C6C (M5-4c-2 fix round 2); before it 0x81B9C98852D87A97 (fix round 1; before it 0xAD97F301BBCD12EE (M5-4c slice 2; 0x017E948DC0620D8B))); seat 0 is Hard
-        new object[] { 3, 3, 0, true, 0x0A86C3D619E460B6UL }, // M7-3b (tech / ability ids by faction order; outcomes unchanged): was 0x86C5700D13A97656; D27 (BUG-1163/BUG-1185, Hard gatherBonus 0.4): was 0x3257C07089F858CA (M5-4c slice 2; before it 0x44BFA38FE0466396 (M5-4d slice 2: 0xCFA79548E71F2987)); seat 2 is Hard
-        new object[] { 1, 4, -1, false, 0x93FB225B467A1CAEUL }, // M7-3b (tech / ability ids by faction order; outcomes unchanged): was 0x0D5D208D3FE10FD7; the 2v2 (human + three AIs)
+        new object[] { 1, 2, 0, false, 0x47092529EB1B0243UL }, // M6-S10: was 0xE143B6FF4C1F0907; M7-3b (tech / ability ids by faction order; outcomes unchanged): was 0xEF1691714BF6A76D
+        new object[] { 2, 2, 1, false, 0x40C55800C00D63F0UL }, // M6-S10: was 0xAB3897C77A93E4D9; M7-3b (tech / ability ids by faction order; outcomes unchanged): was 0x947084EC8CD14723; D27 (BUG-1163/BUG-1185, Hard gatherBonus 0.4): was 0x08DAC14990BB29C5 (M5-4c-2 fix round 2 (BUG-1123: the pulled-back rejoin): was 0xA796F8D89925CDD1 (fix round 1, BUG-1121 focus rule; before it 0x070CC85BB2A3B390 (M5-4c slice 2; before it 0x244EB8E19CE2992F))); seat 1 is Hard (gather bonus, focus fire, pull-back)
+        new object[] { 3, 3, 2, false, 0x75674B5840B44A8FUL }, // M6-S10: was 0xB75CF4749B3539D5; M7-3b (tech / ability ids by faction order; outcomes unchanged): was 0x79FE6C459CD45DF7; D27 (BUG-1163/BUG-1185, Hard gatherBonus 0.4): was 0xFCD8F85C768FCED4 (M5-4c-2 fix round 1; before it 0xFB6DD578FA7A165E (M5-4c slice 2; 0x0FDF27B5B49AE41A; M5-4d slice 2: 0x112526C6B3861467)); seat 0 is Hard
+        new object[] { 4, 4, 1, false, 0x5C447394DD2E08B5UL }, // M6-S10: was 0x79EDC5037F9A86E8; M7-3b (tech / ability ids by faction order; outcomes unchanged): was 0x7F27FD9426E1139D; D27 (BUG-1163/BUG-1185, Hard gatherBonus 0.4): was 0xFB6A7E60CAB35D32 (M5-4c-2 fix round 1; before it 0xE204EB9DE6D0FBF9 (M5-4c slice 2; 0xC01AABF0FFE171A9)); seat 1 is Hard
+        new object[] { 5, 2, 2, false, 0x8AE08947E87C6F48UL }, // M6-S10: was 0xB9910B57CF833B26; M7-3b (tech / ability ids by faction order; outcomes unchanged): was 0xC0BAEAB03FDA4C71; D27 (BUG-1163/BUG-1185, Hard gatherBonus 0.4): was 0x19A8D59E908C2B31 (M5-9a (the Hard seat's counter shift; seat 1 is Normal, its shift too): was 0x12C3558D5A1F3C6C (M5-4c-2 fix round 2); before it 0x81B9C98852D87A97 (fix round 1; before it 0xAD97F301BBCD12EE (M5-4c slice 2; 0x017E948DC0620D8B))); seat 0 is Hard
+        new object[] { 3, 3, 0, true, 0xED1BE72E188657A9UL }, // M6-S10: was 0x0A86C3D619E460B6; M7-3b (tech / ability ids by faction order; outcomes unchanged): was 0x86C5700D13A97656; D27 (BUG-1163/BUG-1185, Hard gatherBonus 0.4): was 0x3257C07089F858CA (M5-4c slice 2; before it 0x44BFA38FE0466396 (M5-4d slice 2: 0xCFA79548E71F2987)); seat 2 is Hard
+        new object[] { 1, 4, -1, false, 0x7E57C75AD5C9CCA3UL }, // M6-S10: was 0x93FB225B467A1CAE; M7-3b (tech / ability ids by faction order; outcomes unchanged): was 0x0D5D208D3FE10FD7; the 2v2 (human + three AIs)
     };
 
     [Theory]

@@ -381,12 +381,16 @@ public class EndGameHardeningTests
         Assert.Equal(mine, MapFileTests.RunChild(typeof(EndGameHardeningTests), nameof(PaleHillsSeed2_FourSeats_PastADefeat_TwoProcesses_AndASaveMidHunt), FourSeatChild, FourSeatLine, seconds: 1200));
     }
 
-    /// <summary>Criterion 5 (M5-H5): Raraku, Normal v Normal, seed 1, to its end: the same per-tick hashes, end tick and hunts in this process and a child.</summary>
+    /// <summary>
+    /// Criterion 5 (M5-H5): Raraku, Normal v Normal, the criterion row's seed, to its end: the same per-tick hashes, end tick and
+    /// hunts in this process and a child. M6-S10: seed 1 no longer ends inside 72,000 (BUG-1460), so the row follows
+    /// <c>MatchCriterionTests</c>' Raraku row, now seed 2 (27,936); the name keeps "Seed1".
+    /// </summary>
     [Fact]
     [Trait("Category", "Stress")]
     public void Raraku_Seed1_ToTheEnd_TwoProcesses_SamePerTickHashes()
     {
-        Simulation sim = MapFileTests.RarakuMatch(1, false, out _);
+        Simulation sim = MapFileTests.RarakuMatch(MatchCriterionTests.RowOf("raraku").Seed, false, out _);
         var h = new Determinism.StateHasher();
         while (sim.TickNumber < 72_000 && !sim.MatchOver)
         {

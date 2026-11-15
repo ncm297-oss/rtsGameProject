@@ -12,6 +12,15 @@ public static class EconomyConstants
     public const int RetryTicks = 20;
 
     /// <summary>
+    /// M6-S10 (BUG-1431): a footprint walker stops on a touching groupmate (crowded arrival) only within this many meters of its
+    /// stand point: <see cref="Reach"/> less the point's <see cref="GoalInset"/> along both axes (a corner cell's point), so a
+    /// worker that stops so is always in reach. Before, a mate nearer the point stopped it wherever it stood, and a mate that
+    /// held the cell from another walk (working a node in reach of the Keep, or the next node of a shared cell) stopped it
+    /// 1.3-2 m out on every retry.
+    /// </summary>
+    public const float QueueArrival = Reach - GoalInset * 1.41421356f;
+
+    /// <summary>
     /// How far (meters) outside the footprint edge a gather walk aims: half the slack between
     /// <see cref="Reach"/> and <see cref="MovementConstants.ArrivalDistance"/>, so a walker that arrives
     /// (within ArrivalDistance of that point) is always in reach. Since M4-2a (BUG-0146) a footprint walker walks on to

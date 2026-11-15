@@ -115,12 +115,12 @@ public class HardKnobsPinTests
         return new Vector2Pair(gold, wood);
     }
 
-    /// <summary>The pins, printed by the pre-slice tree (6f6414b).</summary>
+    /// <summary>The pins, printed by the pre-slice tree (6f6414b); re-measured once for M6-S10 (the Keep-corner cure and <c>gatherOverlap</c> 0.5 move every gathering scene: workers stand and walk on other ticks).</summary>
     internal static class PreSlice
     {
-        internal const string NormalFocus = "22 70CFF929E0F12D3A";
-        internal const string NormalPullBack = "33 4C4C9DA505D74655";
-        internal const string NormalGathering = "C90D590E1657F974 gold 40 wood 65";
-        internal const string HumanGathering = "85474C30A384F903 gold 380 wood 300";
+        internal const string NormalFocus = "23 C8DE0B325DEE0613"; // was "22 70CFF929E0F12D3A" before M6-S10
+        internal const string NormalPullBack = "34 9F7D2403D68883B4"; // was "33 4C4C9DA505D74655" before M6-S10
+        internal const string NormalGathering = "25A00CD5A9A7D1E3 gold 40 wood 75"; // was "C90D590E1657F974 gold 40 wood 65" before M6-S10
+        internal const string HumanGathering = "0C4333A3B6958AA2 gold 380 wood 300"; // was "85474C30A384F903 gold 380 wood 300" before M6-S10
     }
 }

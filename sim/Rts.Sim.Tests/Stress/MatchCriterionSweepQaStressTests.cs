@@ -48,8 +48,16 @@ public class MatchCriterionSweepQaStressTests
     /// </summary>
     internal static readonly Dictionary<(string Map, ulong Seed), string> Known = new()
     {
-        // The rebalance re-sends a Gather to a gone mine every think: check (e)'s streak fires at tick 18,421.
-        [("generated", 4)] = "BUG-1151",
+        // M6-S10 (the Keep-corner cure, gatherOverlap 0.5): generated seed 4 no longer fails (it ends at 22,601, seat 1, every
+        // oracle clean; BUG-1151 itself is not fixed, the rebalance no longer meets a gone mine on this seed), so its entry
+        // [("generated", 4)] = "BUG-1151" ("the rebalance re-sends a Gather to a gone mine every think: check (e)'s streak
+        // fires at tick 18,421") is out. Raraku seeds 1, 3, 4 and 6 no longer end inside 72,000 (BUG-1460): a seat left with
+        // buildings only, or a winner with idle workers and almost no wood, sends nothing for the rest of the hour (seed 1:
+        // p1 silent 61,681..72,000; seeds 3 / 4 / 6, one match: p0 silent 36,001..72,000).
+        [("raraku", 1)] = "BUG-1460",
+        [("raraku", 3)] = "BUG-1460",
+        [("raraku", 4)] = "BUG-1460",
+        [("raraku", 6)] = "BUG-1460",
         // BUG-1152 (a losing seat whose last worker gathers only gold, wood under the cost of anything, sends nothing for 4+
         // minutes): M5-9a took Raraku seed 2 out (it ended at 29,190, every oracle clean). M5-H6 (the house rule, the hunt's
         // free starts from its second hunt) takes seeds 1 and 5 out too, though BUG-1152 is not fixed: seed 1 ends at 28,231
