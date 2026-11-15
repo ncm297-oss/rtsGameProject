@@ -112,18 +112,26 @@ public class DR38ShadowPageQaTests
         Assert.True(numberColumns.Length == 0, string.Join("\n", numberColumns));
     }
 
-    /// <summary>The probe above is live: the same copy reports the Radius cell (and only from the number columns, that one).</summary>
-    [Fact]
-    public void SummonWraithsRow_TheAbilityPinReadsItsNumberColumns()
+    /// <summary>
+    /// The probe above is live (QA D-H9, tightened after BUG-1450 item 2): the same copy with the page's Radius "—" written as
+    /// "1 m" or the Cooldown moved reports exactly that column.
+    /// </summary>
+    [Theory]
+    [InlineData("| — | 1.0 s | 50 s |", "| 1 m | 1.0 s | 50 s |", "Radius")]
+    [InlineData("| — | 1.0 s | 50 s |", "| — | 1.0 s | 55 s |", "Cooldown")]
+    public void SummonWraithsRow_TheAbilityPinReadsItsNumberColumns(string find, string replace, string column)
     {
-        AbilityContentTests.Result r = CompareSummonRow();
+        AbilityContentTests.Result r = CompareSummonRow(row =>
+        {
+            Assert.Contains(find, row, StringComparison.Ordinal);
+            return row.Replace(find, replace, StringComparison.Ordinal);
+        });
         string[] numberColumns = r.Problems.Where(p =>
             Regex.IsMatch(p, @"'Summon Wraiths' (Kind|Range|Radius|Cast|Cooldown|Duration):", RegexOptions.CultureInvariant)).ToArray();
-        // Today exactly the Radius cell; when BUG-1450 item 2 is fixed (page or pin) this becomes empty: update both tests.
-        Assert.True(numberColumns.All(p => p.Contains("'Summon Wraiths' Radius:", StringComparison.Ordinal)), string.Join("\n", numberColumns));
+        Assert.True(numberColumns.Length == 1 && numberColumns[0].Contains($"'Summon Wraiths' {column}:", StringComparison.Ordinal), string.Join("\n", numberColumns));
     }
 
-    private static AbilityContentTests.Result CompareSummonRow()
+    private static AbilityContentTests.Result CompareSummonRow(Func<string, string>? editRow = null)
     {
         GameData data = AiScenes.DataWith(dir =>
         {
@@ -143,7 +151,7 @@ public class DR38ShadowPageQaTests
         List<string> lines = PageTables.FactionLines("teblor").ToList();
         int frenzy = lines.FindIndex(l => l.StartsWith("| Blood-oil Frenzy |", StringComparison.Ordinal));
         Assert.True(frenzy >= 0);
-        lines.Insert(frenzy + 1, shadowRow);
+        lines.Insert(frenzy + 1, editRow == null ? shadowRow : editRow(shadowRow));
         return AbilityContentTests.Compare(data, data.Abilities, "teblor", lines.ToArray());
     }
 

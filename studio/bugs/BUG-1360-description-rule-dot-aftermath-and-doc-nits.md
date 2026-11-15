@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S4 |
-| Status | open |
+| Status | fixed (D-H9, verified by QA 2026-11-15-0506) |
 | Found | 2026-11-13-2306, task D-H8 |
 | System | `sim/Rts.Sim.Tests/Content/AbilityContentTests.cs` (the description-number rule) |
-| Fixed by | |
+| Fixed by | D-H9 (session 2026-11-15-0506) |
 
 ## Repro
 1. In `QA/Content/DH8DescriptionRuleQaTests.AnAftermathOfBurning_IsReadAsItsOwnKind`, add
@@ -28,3 +28,10 @@
 ## Notes
 Found while attacking BUG-1330's fix (D-H8). The developer already noted a related limit: an ability that itself applies
 the aftermath's status (for example Slowed) would have its own "Slowed N%" read as the aftermath. No data does that today.
+
+## Fix (D-H9)
+- Item 1: the aftermath-duration link allows an optional damage-rate phrase in parentheses between the status name and
+  "for" (`AbilityContentTests.ParenRate`); the rate is still read on its own as a damage per second. Rows in
+  `DH8DescriptionRuleQaTests.AnAftermathOfBurning_IsReadAsItsOwnKind`: "(5 damage a second) for 4 seconds" passes,
+  "(6 damage a second)" and "for 3 seconds" fail.
+- Item 2: the doubled `<summary>` above `Role` removed.

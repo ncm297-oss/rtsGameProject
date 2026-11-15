@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S4 |
-| Status | open |
+| Status | fixed (D-H9, verified by QA 2026-11-15-0506) |
 | Found | 2026-11-14-2156, task D-R38 (QA) |
 | System | docs (`docs/factions/shadow.md`) |
-| Fixed by | |
+| Fixed by | D-H9 (session 2026-11-15-0506) |
 
 ## Repro
 1. **G14 lists an existing field as wanted.** shadow.md "Schema gaps (D-R38)" G14, "Field wanted": "a per-faction
@@ -37,3 +37,13 @@ As above.
 Also noted (no change asked for): the Shadow bonus name "Children of Shadow" and the Teblor bonus "Children of the
 Mountains" share the faction word "Children" (`FactionWords`). That only matters to generic texts, so nothing breaks,
 but the owner may want distinct bonus names.
+
+## Fix (D-H9)
+- Item 1: G14's "Field wanted" names only the per-faction `ai.json` `counters` override and says why the `unique` answer that
+  loads today in the shared rule is not enough (it would send every faction's unique against Ranged and Casters).
+- Item 2: the Edur Ram's difference row split in two (Cost on its own row, "150 / 120" against "200 / 150"), one value per
+  label; no number changed.
+- Item 3: shadow.md "Decisions (D-R38)": the Producer's answers (docs/01 2026-11-15 (a) item (3)), one line a question.
+- Q4 (the "Warrior" collision): `UnitContentTests` E and `BuildingContentTests` F blank out the faction's own unit and
+  building names before the foreign-name check (`Content/OwnNames`); rows `E_OwnNamesAreBlankedFirst_AForeignNameStillFails`,
+  `F_OwnNamesAreBlankedFirst_AForeignUnitStillFails`.

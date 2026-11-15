@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S3 |
-| Status | open |
+| Status | fixed (D-H9, verified by QA 2026-11-15-0506) |
 | Found | 2026-11-14-2156, task D-R38 (QA) |
 | System | docs (`docs/factions/shadow.md`), content pins (`Content/PassiveContentTests`, `Content/AbilityContentTests`, `Content/PagePinReadinessTests`) |
-| Fixed by | |
+| Fixed by | D-H9 (session 2026-11-15-0506) |
 
 ## Repro
 1. **Passives skipped silently.** Remove the `Skip` from
@@ -47,3 +47,12 @@ Both cells pass `PagePinReadinessTests` and then go wrong in the pins:
 - Fix for 2 is the Producer's choice between the page and the pin. The pin side matches how the loader thinks about it
   (BUG-0452: a spawn-only summon "has no radius"), so "—" is arguably the right word.
 - Neither item blocks D-R38's criteria: the readiness check is structural and reports 0 problems.
+
+## Fix (D-H9)
+- Item 1: shadow.md writes "Passive **Shadowed**:" and "Passive **Pack Hunter**:". `PagePinReadinessTests` now names any
+  "passive **X**:" (any case) in the unit notes that `PassiveContentTests.PagePassives` does not read, with the page and the
+  bullet's line (`AShadowPassiveThePinDoesNotRead_IsOneProblemNamingTheLine`, 3 rows).
+- Item 2: the pin side. `AbilityContentTests` accepts "—" for the Radius of a summon whose effects are all `spawn` (radius 0,
+  the loader's shape); "0 m" still passes there; any other ability with "—" for Radius is read against its data and fails
+  (`AMutatedTelasFireCell_FailsNamingAbilityAndColumn` "| — |" row, `ASummonsRadiusDash_IsAcceptedOnlyForSpawnEffectsOnly`).
+- Both `DR38ShadowPageQaTests` rows un-skipped, bodies unedited; both pass.
