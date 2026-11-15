@@ -125,6 +125,7 @@ public class PagePinReadinessTests
                 int own = bullets.Count(b => b.StartsWith(name + ":", StringComparison.Ordinal) || b.StartsWith(name + " (", StringComparison.Ordinal));
                 if (own > 1) problems.Add($"{page} Unit notes: {own} notes for '{name}' (UnitContentTests H reads one)");
             }
+            UnreadPassiveProblems(page, lines, notes, problems);
         }
 
         // AbilityContentTests: the shared header (columns by name).
@@ -202,6 +203,35 @@ public class PagePinReadinessTests
                 problems.Add($"{page} Difficulty rows: '{string.Join(", ", t.Value.Rows.Select(r => r[0]))}', expected '{string.Join(", ", AiContentTests.DifficultyRows)}' (AiContentTests J)");
         }
         return problems;
+    }
+
+    /// <summary>"passive **Name**:" in any case: a passive the unit notes announce, whether or not the pin's sentence reads it.</summary>
+    private static readonly Regex AnyPassive = new(@"\bpassive \*\*(?<name>[^*]+)\*\*:", Opts | RegexOptions.IgnoreCase);
+
+    /// <summary>
+    /// BUG-1450: every passive the unit notes announce ("passive **Name**:", any case) is one
+    /// <see cref="PassiveContentTests.PagePassives"/> reads ("Passive **Name**:" in a "**Unit:**" bullet), so a lower-case
+    /// one is named here with its line rather than skipped silently by the passive pin.
+    /// </summary>
+    private static void UnreadPassiveProblems(string page, string[] lines, int notes, List<string> problems)
+    {
+        var read = new List<string>();
+        foreach (PassiveContentTests.PagePassive p in PassiveContentTests.PagePassives(lines, page)) read.Add(p.Name);
+        // Each bullet with its continuation lines joined (as the pin reads it), named by the line it starts on.
+        var bullets = new List<(int Line, string Text)>();
+        for (int i = notes + 1; i < lines.Length && !lines[i].StartsWith('#'); i++)
+        {
+            string line = lines[i].Trim();
+            if (line.StartsWith("- ", StringComparison.Ordinal)) bullets.Add((i + 1, line[2..]));
+            else if (line.Length > 0 && bullets.Count > 0 && lines[i].StartsWith(' ')) bullets[^1] = (bullets[^1].Line, bullets[^1].Text + " " + line);
+        }
+        foreach ((int line, string text) in bullets)
+            foreach (Match m in AnyPassive.Matches(text))
+            {
+                string name = m.Groups["name"].Value.Trim();
+                if (read.Remove(name)) continue;
+                problems.Add($"{page} Unit notes line {line}: '{m.Value}' is not read by PassiveContentTests (write 'Passive **{name}**:' in the unit's '**Unit:**' bullet)");
+            }
     }
 
     /// <summary>AiContentTests A / F and AiAdaptsContentTests: the AI section's shared part and every opening it lists.</summary>
@@ -407,6 +437,29 @@ public class PagePinReadinessTests
         edited[i] = lines[i].Replace(find, replace, StringComparison.Ordinal);
         List<string> problems = Problems("shadow", edited);
         Assert.True(problems.Any(p => p.StartsWith(expected, StringComparison.Ordinal)), $"expected '{expected}', got:\n{string.Join("\n", problems)}");
+    }
+
+    /// <summary>
+    /// BUG-1450: a passive sentence the passive pin does not read is a readiness problem naming the page and the line. shadow.md
+    /// as shipped has none; with one "Passive **" written in lower case it has exactly that one; a sentence outside a
+    /// "**Unit:**" bullet is named the same way.
+    /// </summary>
+    [Theory]
+    [InlineData("Passive **Shadowed**:", "passive **Shadowed**:", "Shadowed")]
+    [InlineData("Passive **Pack Hunter**:", "passive **Pack Hunter**:", "Pack Hunter")]
+    [InlineData("- **Shadow Archer:** Passive **Shadowed**:", "- Shadow Archer: Passive **Shadowed**:", "Shadowed")]
+    public void AShadowPassiveThePinDoesNotRead_IsOneProblemNamingTheLine(string find, string replace, string name)
+    {
+        string[] lines = PageTables.FactionLines("shadow");
+        Assert.Empty(Problems("shadow", lines));
+        int i = Array.FindIndex(lines, l => l.Contains(find, StringComparison.Ordinal));
+        Assert.True(i >= 0, $"shadow.md has no line containing '{find}'");
+        string[] edited = (string[])lines.Clone();
+        edited[i] = lines[i].Replace(find, replace, StringComparison.Ordinal);
+        List<string> problems = Problems("shadow", edited);
+        Assert.True(problems.Count == 1, string.Join("\n", problems));
+        Assert.StartsWith($"shadow.md Unit notes line {i + 1}: ", problems[0], StringComparison.Ordinal);
+        Assert.Contains($"**{name}**:", problems[0], StringComparison.Ordinal);
     }
 
     /// <summary>A pin's typed per-faction table fails naming the table and the page when the data ships a faction it lacks.</summary>

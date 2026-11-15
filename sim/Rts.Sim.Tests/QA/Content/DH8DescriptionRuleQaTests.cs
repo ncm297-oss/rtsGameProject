@@ -108,6 +108,10 @@ public class DH8DescriptionRuleQaTests
     [InlineData("When it ends, the unit is Burning for 5 seconds.", "teblor_frenzied description: '5 seconds' reads as a duration (the aftermath's")]
     [InlineData("When it ends, the unit catches fire.", "teblor_frenzied description: data duration (the aftermath's")]
     [InlineData("When it ends, the unit is Slowed 20% for 4 seconds.", "teblor_frenzied description: '20%' reads as a percentage")]
+    // BUG-1360 (D-H9): the rate in parentheses between the name and "for" keeps the link; a wrong rate or wrong seconds still fail.
+    [InlineData("When it ends, the unit is Burning (5 damage a second) for 4 seconds.", null)]
+    [InlineData("When it ends, the unit is Burning (6 damage a second) for 4 seconds.", "teblor_frenzied description: '6' reads as a damage per second")]
+    [InlineData("When it ends, the unit is Burning (5 damage a second) for 3 seconds.", "teblor_frenzied description: '3 seconds' reads as a duration (the aftermath's")]
     public void AnAftermathOfBurning_IsReadAsItsOwnKind(string tail, string? want)
     {
         GameData d = Status(s =>

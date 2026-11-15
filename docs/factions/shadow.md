@@ -6,7 +6,8 @@ This page is written ahead of the roster (D-R38, 2026-11-14), in the shape the c
 D-R36: `Content/PagePinReadinessTests` checks every section and column below (`ContentFactions.PagesAhead`), and the
 files under `game/data/factions/shadow/` are copied from it the session the schemas below exist. Nothing under
 `game/data/` carries the Shadow yet. Where the design asks for something no loader field holds, the page says so next to
-it and lists it under "Schema gaps (D-R38)"; the player-facing words are under "Owner review (D-R38, proposed)".
+it and lists it under "Schema gaps (D-R38)"; the player-facing words are under "Owner review (D-R38, proposed)", and the
+Producer's answers to the page's open questions under "Decisions (D-R38)" at the end.
 
 ## Lore hook
 
@@ -64,14 +65,14 @@ the Shadow are drawn at the template's size). The Hound of Shadow needs Age II (
 ### Unit notes
 
 - **Edur Warrior:** ×1.5 vs Mounted (docs/02's Line rule). Slightly lighter and faster than template line infantry.
-- **Shadow Archer:** passive **Shadowed**: becomes Stealthed after 3 s without moving or attacking, anywhere (not just
+- **Shadow Archer:** Passive **Shadowed**: becomes Stealthed after 3 s without moving or attacking, anywhere (not just
   forests). The first shot from stealth deals +50% damage. Neither is in the data yet (Schema gaps G1, G2).
 - **Aptorian Stalker:** ×1.5 vs Light. A demon scout with long sight (20 m). Raids and spots.
 - **K'risnan Sorcerer:** splash 1.5 m, detector 10 m. Signature ability **Shadow-step**; gains **Summon Wraiths** with
   Wraith-binding (below).
 - **Edur Ram:** attacks buildings only (`attack.targets` `buildings`). Shares the Battering Ram's base model, dressed in
   blackwood and dark sailcloth (saves art time).
-- **Hound of Shadow (unique, Age II):** passive **Pack Hunter**: +10% damage for each other Hound within 8 m (max +30%).
+- **Hound of Shadow (unique, Age II):** Passive **Pack Hunter**: +10% damage for each other Hound within 8 m (max +30%).
   **At most 7 Hounds alive** at once, as in the legend. Neither is in the data yet (Schema gaps G3, G4).
 
 ### Summoned unit
@@ -102,7 +103,8 @@ page's since 2026-10-02; the "why" is the data track's reading (D-R38) for the o
 | Aptorian Stalker | Speed / Sight | 6.4 / 20 | 6.0 / 16 | The faction's scout: sees and leaves before it is seen |
 | Aptorian Stalker | Cost | 95 / 30 | 90 / 30 | Pays 5 gold for the sight and speed |
 | K'risnan Sorcerer | Cost | 100 / 60 | 100 / 50 | Shadow-step and Summon Wraiths outweigh a damage spell |
-| Edur Ram | Armor / Attack / CD / Range / Speed / Sight / Cost / Train | 6 / 55 / 3.0 / melee / 2.6 / 10 / 150 / 120 / 36 | 4 / 50 / 5.0 / 24 / 2.2 / 18 / 200 / 150 / 40 | A ram, not an engine: the Whirlwind Battering Ram's pattern (6 / 60 / 3.0 / melee / 2.4 / 10 / 160 / 120 / 36), a little lighter; no minimum range or splash, buildings only |
+| Edur Ram | Armor / Attack / CD / Range / Speed / Sight / Train | 6 / 55 / 3.0 / melee / 2.6 / 10 / 36 | 4 / 50 / 5.0 / 24 / 2.2 / 18 / 40 | A ram, not an engine: the Whirlwind Battering Ram's pattern (6 / 60 / 3.0 / melee / 2.4 / 10 / 36), a little lighter; no minimum range or splash, buildings only |
+| Edur Ram | Cost | 150 / 120 | 200 / 150 | The same pattern: the Battering Ram costs 160 / 120 |
 
 ## Abilities
 
@@ -380,7 +382,7 @@ or a gap row below with the field the data track would want (a proposal; the sim
 | G11 | 2nd Edur Longhall next to a forest when army ≥ 14 pop | An `expand` step fires at its trigger (time, pop or workers) near the nearest free gold mine | a step condition `armyPop`, and an expansion site preference `near: "forest"` |
 | G12 | Shadow-steps onto enemy casters and siege | The AI's cast rules know no teleport; its ground rule aims at clumps of enemies | a teleport cast rule: the nearest seen enemy caster or siege within `range`, with own units to carry |
 | G13 | Disengages if losing and re-hides | The retreat goes home at a loss share; it doesn't look for a forest | `retreat.to: "forest"` (fall back to the nearest forest cell instead of the hall) |
-| G14 | Hounds answer enemy Ranged and Casters | `rules.json` `ai.counters` is one rule by slot for every faction and gives the Unique slot nothing (the Teblor's same request, D-R36) | a per-faction `ai.json` `counters` override, or a Unique entry in the shared rule |
+| G14 | Hounds answer enemy Ranged and Casters | `rules.json` `ai.counters` is one rule by slot for every faction and gives the Unique slot nothing (the Teblor's same request, D-R36) | a per-faction `ai.json` `counters` override (the faction's own answer list for an enemy slot). A `unique` answer in the shared `rules.json` `ai.counters` loads today (an answer list takes any slot id), but it is not enough: the shared rule would send every faction's unique (the Sapper, the War-dog, the Zealot) against enemy Ranged and Casters too |
 
 ## Owner review (D-R38, proposed)
 
@@ -432,3 +434,27 @@ tries to flee" and the soft back line: enemy Ranged and enemy Caster. It needs g
 | Caster | Aptorian Stalker, Shadow Archer | Aptorian Stalker, Shadow Archer, Hound of Shadow |
 | Siege | Edur Warrior, Aptorian Stalker | Edur Warrior, Aptorian Stalker |
 | Unique | none | none |
+
+## Decisions (D-R38)
+
+The Producer's answers to the eleven open questions D-R38 returned (Q1-Q11, which lived only in that task's report), as
+docs/01 "2026-11-15 (a)" item (3) settles them: Producer decisions the owner may revisit. One line a question, in docs/01's
+order; the last is Q4. Where the page already reads that way, the line says where.
+
+1. "Taken damage" is any loss of hit points. Already so: "Faction bonus".
+2. `exceptSlots` is `["siege"]` only; the sim's summoned-unit task must show a Wraith is never hidden, else `summoned` joins
+   the list. Already so: "Faction bonus" (the `forestStealth` block and the sentence under it).
+3. A Thrall stays hidden while it chops at a forest edge; flagged for the M8 balance pass.
+   Already so: "Faction bonus" and the Thrall's Owner review description.
+4. The Edur Ram is a melee ram that hits buildings only. Already so: "Units", "Unit notes", "Against docs/02's template".
+5. The Hound of Shadow's `scale` is 1. Already so: the Units table's Scale column.
+6. Losing hit points breaks the Shadow Archer's stand-still stealth, and the +50% first shot is the Archer's alone, from
+   either stealth (forest or stand-still). Already so: Schema gaps G1 and G2.
+7. The 7-Hound cap counts Hounds alive plus queued. Already so: Schema gap G4.
+8. Shadow-step carries own units only: siege stays, Wraiths go. Already so: "own non-siege units" (Abilities, G5).
+9. The faction's `displayName` is "Shadow" and its bonus "Children of Shadow" (the owner's taste: it starts like the
+   Teblor's "Children of the Mountains"). Already so: "Owner review (D-R38, proposed)".
+10. The opening builds a Blackwood Forge because Wraith-binding is researched there. Already so: opening step 22.
+11. (Q4) The content checks that refuse another faction's names blank out the faction's own names first ("Edur Warrior"
+    and "Warrior Lodge" contain the Teblor's "Warrior"); the units keep their names. Done in D-H9: `UnitContentTests` E
+    and `BuildingContentTests` F.

@@ -1,5 +1,6 @@
 using System.Collections.Immutable;
 using System.Globalization;
+using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
 using Rts.Sim.Data;
 using Xunit.Abstractions;
@@ -116,6 +117,7 @@ public class AbilityContentTests
     [InlineData("Range", "| 16 |", "| 18 |")]
     [InlineData("Radius", "| 3 m |", "| 4 m |")]
     [InlineData("Radius", "| 3 m |", "| 3 |")]
+    [InlineData("Radius", "| 3 m |", "| — |")] // BUG-1450: '—' is a spawn-only summon's Radius, not a target-ground ability's
     [InlineData("Cast", "| 0.8 s |", "| 1.0 s |")]
     [InlineData("Cooldown", "| 25 s |", "| 30 s |")]
     [InlineData("Duration", "| 25 s | — |", "| 25 s | 4 s |")]
@@ -135,6 +137,54 @@ public class AbilityContentTests
         Result r = Compare(Data, Data.Abilities, "malazan", lines);
 
         Assert.Contains(r.Problems, p => p.Contains("Telas Fire", StringComparison.Ordinal) && p.Contains(column, StringComparison.Ordinal));
+    }
+
+    /// <summary>
+    /// BUG-1450: a summon's Radius cell on a teblor copy that gives the Shaman a summon "Call Spirits". With spawn effects only
+    /// (the loader's shape: no radius) the page may write '—' or '0 m'; with a status effect too the summon has a radius
+    /// (3 m, which the loader then requires), and '—' against it fails as it does on any other kind.
+    /// </summary>
+    [Theory]
+    [InlineData(false, "—", null)]
+    [InlineData(false, "0 m", null)]
+    [InlineData(true, "3 m", null)]
+    [InlineData(true, "—", "'Call Spirits' Radius: page '—', data 3 m")]
+    public void ASummonsRadiusDash_IsAcceptedOnlyForSpawnEffectsOnly(bool withStatus, string radius, string? want)
+    {
+        GameData data = AiScenes.DataWith(dir =>
+        {
+            dir.EditJson("factions/teblor/abilities.json", root =>
+            {
+                var effects = new JsonArray(new JsonObject { ["kind"] = "spawn", ["unit"] = "teblor_war_dog", ["count"] = 3, ["lifetime"] = 20 });
+                var a = new JsonObject
+                {
+                    ["id"] = "call_spirits", ["displayName"] = "Call Spirits", ["description"] = "Calls 3 beside the caster for 20 seconds.",
+                    ["kind"] = "summon", ["castTime"] = 1.0, ["cooldown"] = 50, ["effects"] = effects,
+                };
+                if (withStatus)
+                {
+                    a["radius"] = 3;
+                    a["affects"] = "enemy_units";
+                    effects.Add(new JsonObject { ["kind"] = "applyStatus", ["status"] = "burning", ["magnitude"] = 10, ["duration"] = 4 });
+                }
+                root["abilities"]!.AsArray().Add(a);
+            });
+            dir.EditJson("factions/teblor/units.json", root =>
+                root["units"]!.AsArray().Single(u => (string)u!["id"]! == "teblor_shaman")!["abilities"]!.AsArray().Add("call_spirits"));
+        });
+        List<string> lines = PageTables.FactionLines("teblor").ToList();
+        int frenzy = lines.FindIndex(l => l.StartsWith("| Blood-oil Frenzy |", StringComparison.Ordinal));
+        Assert.True(frenzy >= 0, "teblor.md has no Blood-oil Frenzy row");
+        lines.Insert(frenzy + 1, $"| Call Spirits | Shaman | Summon | — | {radius} | 1.0 s | 50 s | — | Calls 3 War-dogs beside the caster for 20 s |");
+
+        Result r = Compare(data, data.Abilities, "teblor", lines.ToArray());
+
+        string[] radiusProblems = r.Problems.Where(p => p.Contains("'Call Spirits' Radius:", StringComparison.Ordinal)).ToArray();
+        if (want == null) Assert.True(radiusProblems.Length == 0, string.Join("\n", radiusProblems));
+        else Assert.Contains(radiusProblems, p => p.Contains(want, StringComparison.Ordinal));
+        // Not vacuous: the row was read (its Range "—" and Kind pass on both shapes, so no other number column is named).
+        Assert.DoesNotContain(r.Problems, p => p.Contains("'Call Spirits' Ability:", StringComparison.Ordinal));
+        Assert.DoesNotContain(r.Problems, p => Regex.IsMatch(p, "'Call Spirits' (Kind|Range|Cast|Cooldown|Duration):", RegexOptions.CultureInvariant));
     }
 
     [Fact]
@@ -652,7 +702,6 @@ public class AbilityContentTests
         return problems;
     }
 
-    /// <summary>The data field a description number's words name (BUG-0410).</summary>
     /// <summary>
     /// The data field a description number's words name (BUG-0410). The last three (BUG-1330) are a status row's own numbers,
     /// each read only from its own phrase and each required to be stated: <see cref="DamageBonus"/> "N% more damage",
@@ -738,6 +787,9 @@ public class AbilityContentTests
 
     private const RegexOptions Words = RegexOptions.CultureInvariant | RegexOptions.IgnoreCase;
 
+    /// <summary>An optional " (5 damage a second)" / " (5 fire dmg/s)": a damage-rate phrase in parentheses, the words <see cref="DamageRateAfter"/> reads (BUG-1360).</summary>
+    private const string ParenRate = @"(?:\s*\(\s*\d+(?:\.\d+)?\s+(?:[a-z_]+\s+)?(?:damage|dmg)(?:/s\b|\s+(?:a|per|each|every)\s+second\b)\s*\))?";
+
     /// <summary>
     /// "linger 1 s", "lingers for 1 s", "linger on a unit for 1 s": the linger word at most four words before the number,
     /// in the same phrase (punctuation ends the run of words). Four, not two, since BUG-0500.
@@ -783,7 +835,9 @@ public class AbilityContentTests
         {
             string names = string.Join("|", aftermath.Select(Regex.Escape));
             afterName = new Regex($@"\b(?:{names})(?:\s+by)?\s*$", Words);
-            afterNamePct = new Regex($@"\b(?:{names})(?:\s+by)?(?:\s+\d+(?:\.\d+)?\s?%)?\s+for\s*$", Words);
+            // BUG-1360: a damage over time's rate may sit in parentheses between the name and "for" ("Burning (5 damage a
+            // second) for 4 seconds"); the rate itself is still read on its own as a damage per second.
+            afterNamePct = new Regex($@"\b(?:{names})(?:\s+by)?(?:\s+\d+(?:\.\d+)?\s?%)?{ParenRate}\s+for\s*$", Words);
         }
         var stated = new List<(Role Role, double Value)>();
         foreach (Match m in DescriptionNumber.Matches(description))
@@ -1457,15 +1511,20 @@ public class AbilityContentTests
         // D-R36: a self / aura or summon ability has no range (the loader refuses one); the page writes "—".
         bool rangeless = a.Kind != AbilityKind.TargetGround && a.Range == 0;
         if (rangeless && cell("Range") != "—") yield return ("Range", $"page '{cell("Range")}', data has no range ({kindText}; write '—')");
+        // BUG-1450: a summon whose effects are all spawns has no radius either (the loader refuses one: BUG-0452), so '—' is
+        // its Radius as it is a rangeless kind's Range. Any other ability with '—' for Radius is still read against its data.
+        bool radiusless = a.Kind == AbilityKind.Summon && a.Radius == 0 && a.Effects.Length > 0
+            && a.Effects.All(e => e.Kind == AbilityEffectKind.Spawn);
+        bool radiusDash = radiusless && cell("Radius") == "—";
         foreach ((string column, string suffix, double value) in new[]
         {
             ("Range", "", rangeless ? double.NaN : a.Range),
-            ("Radius", " m", a.Radius),
+            ("Radius", " m", radiusDash ? double.NaN : a.Radius),
             ("Cast", " s", Seconds(a.CastTicks)),
             ("Cooldown", " s", Seconds(a.CooldownTicks)),
         })
         {
-            if (double.IsNaN(value)) continue; // checked above
+            if (double.IsNaN(value)) continue; // checked above, or a spawn-only summon's '—' Radius
             string? problem = NumberProblem(cell(column), suffix, value);
             if (problem != null) yield return (column, problem);
         }

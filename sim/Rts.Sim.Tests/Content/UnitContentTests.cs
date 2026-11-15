@@ -261,13 +261,57 @@ public class UnitContentTests
             Assert.EndsWith(".", d);
             int sentences = d.Split(". ").Length;
             Assert.True(sentences <= 2, $"{u.Key}: {sentences} sentences");
-            foreach (UnitDef o in Data.Units)
-                if (o.Faction != u.Faction) Assert.False(d.Contains(o.DisplayName, StringComparison.Ordinal), $"{u.Key} names {o.DisplayName}");
-            foreach (BuildingDef b in Data.Buildings)
-                if (b.Faction != u.Faction) Assert.False(d.Contains(b.DisplayName, StringComparison.Ordinal), $"{u.Key} names {b.DisplayName}");
-            foreach (FactionDef f in Data.Factions)
-                if (f.Id != u.Faction) Assert.False(d.Contains(f.DisplayName, StringComparison.Ordinal), $"{u.Key} names {f.DisplayName}");
+            List<string> foreign = ForeignNameProblems(Data, u.Key, d, u.Faction, OwnNames.Of(Data, u.Faction));
+            Assert.True(foreign.Count == 0, string.Join("\n", foreign));
         }
+    }
+
+    /// <summary>
+    /// E's "names only own-faction things" for one description: every other faction's unit, building and faction display
+    /// name <paramref name="text"/> says outside the faction's own names <paramref name="own"/> (D-H9: blanked first, so
+    /// "Edur Warrior" is not the Teblor's "Warrior"). <paramref name="faction"/> is -1 for a page written ahead of its data,
+    /// whose every data faction is another.
+    /// </summary>
+    internal static List<string> ForeignNameProblems(GameData d, string key, string text, int faction, IReadOnlyCollection<string> own)
+    {
+        var problems = new List<string>();
+        foreach (UnitDef o in d.Units)
+            if (o.Faction != faction && OwnNames.Names(text, o.DisplayName, own)) problems.Add($"{key} names {o.DisplayName}");
+        foreach (BuildingDef b in d.Buildings)
+            if (b.Faction != faction && OwnNames.Names(text, b.DisplayName, own)) problems.Add($"{key} names {b.DisplayName}");
+        foreach (FactionDef f in d.Factions)
+            if (f.Id != faction && OwnNames.Names(text, f.DisplayName, own)) problems.Add($"{key} names {f.DisplayName}");
+        return problems;
+    }
+
+    /// <summary>
+    /// D-H9 (docs/01 2026-11-15 (a)): E blanks out the faction's own names first. Descriptions in the Shadow's shape, with
+    /// shadow.md's unit and building names as the own names: naming "Edur Warrior" and "Warrior Lodge" passes; the Teblor's
+    /// "Warrior" on its own, or the Malazan "Heavy Infantry", still fails naming the foreign unit.
+    /// </summary>
+    [Theory]
+    [InlineData("Trains the Edur Warrior in a Warrior Lodge, who holds the line.", null)]
+    [InlineData("An Edur Warrior who fights beside any Warrior of the mountains.", "Warrior")]
+    [InlineData("A tall Edur Warrior, heavier than Heavy Infantry.", "Heavy Infantry")]
+    [InlineData("Stronger than a Warrior.", "Warrior")]
+    public void E_OwnNamesAreBlankedFirst_AForeignNameStillFails(string text, string? foreign)
+    {
+        string[] own = ShadowPageNames();
+        Assert.Contains("Edur Warrior", own);
+        Assert.Contains("Warrior Lodge", own);
+        Assert.Contains(Data.Units, u => u.DisplayName == "Warrior" && u.Faction == Data.FindFaction("teblor"));
+        List<string> problems = ForeignNameProblems(Data, "shadow_test", text, -1, own);
+        if (foreign == null) Assert.True(problems.Count == 0, string.Join("\n", problems));
+        else Assert.Equal(new[] { $"shadow_test names {foreign}" }, problems);
+    }
+
+    /// <summary>The Unit and building Name columns of shadow.md, the faction written ahead of its data (D-R38).</summary>
+    internal static string[] ShadowPageNames()
+    {
+        string[] lines = PageTables.FactionLines("shadow");
+        (string[] uh, List<string[]> units) = PageTables.NamedTable(lines, "Units", "shadow.md");
+        (string[] bh, List<string[]> buildings) = PageTables.NamedTable(lines, "Buildings", "shadow.md");
+        return units.Select(r => r[Array.IndexOf(uh, "Unit")]).Concat(buildings.Select(r => r[Array.IndexOf(bh, "Name")])).ToArray();
     }
 
     [Fact]

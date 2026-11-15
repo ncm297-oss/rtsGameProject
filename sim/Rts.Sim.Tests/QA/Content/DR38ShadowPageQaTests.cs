@@ -77,7 +77,7 @@ public class DR38ShadowPageQaTests
     /// reads. shadow.md writes "passive **Shadowed**:" and "passive **Pack Hunter**:" in lower case; the pin's sentence is
     /// "Passive **Name**:" (case-sensitive), so it reads neither and the page-to-data check skips both silently.
     /// </summary>
-    [Fact(Skip = "BUG-1450 item 1 (open): shadow.md's unit notes write 'passive **X**:' in lower case; PassiveContentTests reads only 'Passive **X**:'")]
+    [Fact]
     public void EveryPassiveTheNotesAnnounce_IsReadByThePassivePin()
     {
         string[] lines = Page();
@@ -103,7 +103,7 @@ public class DR38ShadowPageQaTests
     /// spawn-only summon of that name on the Shaman (the loader's own shape for it: no range, no radius, 1.0 s cast, 50 s
     /// cooldown). Its number columns must pass. The page writes Radius "—"; the pin wants "0 m" (it allows "—" for Range only).
     /// </summary>
-    [Fact(Skip = "BUG-1450 item 2 (open): shadow.md writes the spawn-only summon's Radius as '—'; AbilityContentTests reads 'page '—', data 0 m'")]
+    [Fact]
     public void SummonWraithsRow_PassesTheAbilityPin_OnASummonOfTheLoadersShape()
     {
         AbilityContentTests.Result r = CompareSummonRow();

@@ -210,14 +210,60 @@ public class BuildingContentTests
             Assert.True(d.Length <= 160, $"{b.Key}: {d.Length} chars");
             Assert.Equal(d.Trim(), d);
             Assert.EndsWith(".", d);
+            // A trainer names what it trains; nobody names another faction's units.
             foreach (UnitDef u in Data.Units)
-            {
-                bool named = d.Contains(u.DisplayName, StringComparison.Ordinal);
-                // A trainer names what it trains; nobody names another faction's units.
-                if (u.TrainedAt == b.Key) Assert.True(named, $"{b.Key} should name {u.DisplayName}");
-                if (u.Faction != b.Faction) Assert.False(named, $"{b.Key} names {u.DisplayName}");
-            }
+                if (u.TrainedAt == b.Key) Assert.True(d.Contains(u.DisplayName, StringComparison.Ordinal), $"{b.Key} should name {u.DisplayName}");
+            List<string> foreign = ForeignUnitProblems(Data, b.Key, d, b.Faction, OwnNames.Of(Data, b.Faction));
+            Assert.True(foreign.Count == 0, string.Join("\n", foreign));
         }
+    }
+
+    /// <summary>
+    /// F's "nobody names another faction's units" for one description: every other faction's unit display name
+    /// <paramref name="text"/> says outside the faction's own unit and building names <paramref name="own"/> (D-H9: blanked
+    /// first, so "Warrior Lodge" is not the Teblor's "Warrior"). <paramref name="faction"/> is -1 for a page written ahead of
+    /// its data.
+    /// </summary>
+    internal static List<string> ForeignUnitProblems(GameData d, string key, string text, int faction, IReadOnlyCollection<string> own)
+    {
+        var problems = new List<string>();
+        foreach (UnitDef u in d.Units)
+            if (u.Faction != faction && OwnNames.Names(text, u.DisplayName, own)) problems.Add($"{key} names {u.DisplayName}");
+        return problems;
+    }
+
+    /// <summary>
+    /// D-H9 (docs/01 2026-11-15 (a)): F blanks out the faction's own names first. shadow.md's Owner review descriptions of the
+    /// Warrior Lodge and the Shadow Kennels (which say "Edur Warrior" and "Warrior Lodge") pass with shadow.md's names as the
+    /// own names; the Teblor's "Warrior" on its own, or "Heavy Infantry", still fails naming the foreign unit.
+    /// </summary>
+    [Theory]
+    [InlineData("shadow_warrior_lodge", null, null, null)]
+    [InlineData("shadow_kennels", null, null, null)]
+    [InlineData("shadow_warrior_lodge", "the spearman", "the Warrior", "Warrior")]
+    [InlineData("shadow_kennels", "needs a Warrior Lodge", "needs a Warrior", "Warrior")]
+    [InlineData("shadow_warrior_lodge", "the spearman", "the Heavy Infantry", "Heavy Infantry")]
+    public void F_OwnNamesAreBlankedFirst_AForeignUnitStillFails(string id, string? find, string? replace, string? foreign)
+    {
+        string[] own = UnitContentTests.ShadowPageNames();
+        string text = ShadowReviewDescription(id);
+        if (find != null)
+        {
+            Assert.Contains(find, text, StringComparison.Ordinal);
+            text = text.Replace(find, replace, StringComparison.Ordinal);
+        }
+        Assert.Contains("Warrior", text, StringComparison.Ordinal);
+        List<string> problems = ForeignUnitProblems(Data, id, text, -1, own);
+        if (foreign == null) Assert.True(problems.Count == 0, string.Join("\n", problems));
+        else Assert.Equal(new[] { $"{id} names {foreign}" }, problems);
+    }
+
+    /// <summary>The Description cell of <paramref name="id"/>'s row in shadow.md's "Owner review (D-R38, proposed)" table.</summary>
+    private static string ShadowReviewDescription(string id)
+    {
+        string[] lines = PageTables.FactionLines("shadow");
+        int h = PageTables.Heading(lines, "## Owner review (D-R38, proposed)", "shadow.md");
+        return PageTables.FirstTableRows(lines, h, stripBackticks: true).Single(r => r[1] == id)[3];
     }
 
     // docs/02 "Buildings" Requires column, with "Infantry Hall" written as the faction's own hall name on its page.
