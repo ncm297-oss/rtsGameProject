@@ -44,3 +44,10 @@ BUG-1462 lists the malazan / whirlwind prose; these two Teblor ones are missing:
   exclude a worker in reach and gathering. QA's own every-tick check in `KeepCornerCureQaStressTests` (moved at most 2 m
   in 600 ticks, past 1,200 without a delivery) has the same gap and would flag that worker too; its staged rows are green
   today, so nothing there is mis-reported yet. Status stays open on item 1 only.
+
+## Producer answer to item 1 (ACCEPT of 2026-11-15-0506): what "held" means on an every-tick check
+A worker is **held** when, on any tick at or after 1,200 ticks without a delivery (node alive, `GatherNode` set), it
+stands within 2 m of where it was 600 ticks earlier **and in those 600 ticks it was never in reach of its node or of
+a drop-off** (reach = `EconomyConstants.Reach` from the footprint). A worker in reach that is gathering its load or
+depositing is working, not held (fuzz seed 14 at 0: 0.03 m from its node, cargo 14 of 15). The probe moves to the
+every-tick check with this exclusion in the sim's hardening; `PastTheWindowWalking` (0, 14) is accepted as listed.
