@@ -3,7 +3,7 @@
 | Field | Value |
 | --- | --- |
 | Severity | S4 |
-| Status | open |
+| Status | open (items 1, 2, 4 fixed in D32, QA verified 2026-11-14-1246; item 3 is the sim track's) |
 | Found | 2026-11-14-0616, task D31 (QA) |
 | System | tests (`QA/Content`), data layout, docs |
 | Fixed by | |
@@ -30,3 +30,11 @@ As above. No behaviour is affected.
 
 ## Notes
 Item 3 is for the sim track (docs/03 is theirs); items 1, 2 and 4 for the data track's next pass.
+
+## D32 (25aa174), QA verified
+1. Both QA stress files: `Strip` gone, `BloodOilScenes.RemoveWhere` used, the `<summary>` back on `Rows`.
+2. All ten Teblor buildings now read `dropOff`, `scale`, `requires` in that order; the hash is unchanged by the move
+   (`D32PreFixtureTests.OnTheDiffBasesData_BothFixturesLoad`: HEAD's buildings.json with D31's opening hashes to the diff
+   base's 27036D3A2F2BA1CB).
+4. teblor.md now says "an army of 42 pop at 15:00 summed over the 64 matches (0.7 pop a match ...)" and names the other
+   lists' last figure as a 64-match sum.

@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S3 (player-facing text that misdescribes the AI; nothing crashes; the brief asked for the fixture's text as it was) |
-| Status | open |
+| Status | fixed (D32, QA verified 2026-11-14-1246) |
 | Found | 2026-11-14-0616, task D31 (QA) |
 | System | data: `game/data/factions/teblor/ai.json` `openings[0].description` (and `Content/Fixtures/teblor_standard_d29.json`, `docs/factions/teblor.md` openings row and Owner review row, which quote it) |
-| Fixed by | |
+| Fixed by | D32 (25aa174): description "War Lodge and Javelin Ground first, then Age II; four Warriors raid at 8 army pop, then Javelin Throwers and Shamans join them and a second Longhouse goes up." in `ai.json`, `Content/Fixtures/teblor_standard_d32.json` and both teblor.md rows; pinned by `TeblorOpeningFixtureTests.TheShippedOpening_IsTheD32Fixture`, `TeblorRosterPinTests.TheOwnerReviewTable_IsTheFilesWords_CharacterForCharacter_BothWays`, `AiContentTests.A_EachPage_IsItsAiFile_BothWays` and QA's `QA/Content/D32DescriptionQaTests` (each claim backed by a step) |
 
 ## Repro
 1. Read `game/data/factions/teblor/ai.json` `standard`: description "War Lodge and Javelin Ground first, then Age II;
@@ -31,3 +31,11 @@ Producer call (a wording change moves the data hash again, so it waits for the n
   army pop, then Javelin Throwers, Destrier Riders, Shamans, Breakers and War-dogs join in Age II."
 - Changing it touches `TeblorOpeningFixtureTests.TheShippedOpening_IsTheHandOver_PlusItsOwnShare025` (it requires the
   description to equal the fixture's) and the two teblor.md rows; both pins catch a one-sided edit.
+
+## Verification (D32 QA, 2026-11-14-1246)
+- The first raid is still four Warriors from the Warrior-only Age I mix (wave 16 half-pop, Warrior 4 half-pop:
+  `D32DescriptionQaTests.FourWarriorsRaidAt8ArmyPop_IsTheWaveOverAWarriorOnlyAgeIMix`); the text no longer puts Javelin
+  Throwers beside it. The developer narrowed the brief's sentence (no Breakers, Destrier Riders or War-dogs) because none
+  is fielded by 15:00 on the Normal row; QA's own harness agrees (0 / 0 / 0 of 64).
+- One-sided edits: `ai.json` description only (3 classes red), fixture only (2), the page's opening row only (2), the
+  Owner review row only (3). How often the remaining claims hold in play: BUG-1421 item 1.
