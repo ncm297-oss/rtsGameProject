@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S3 |
-| Status | open |
+| Status | fixed (M7-V5, QA verified 2026-11-14-2156: base c32c201 builds 1 warning; head 13e45c5 `--no-incremental` 0 / 0) |
 | Found | 2026-11-14-1246, at ACCEPT (Producer, scratch clone of the three-way tree) |
 | System | view tests (`game/tests/QaM6V21Test.cs`, QA's scene), build hygiene |
-| Fixed by | |
+| Fixed by | M7-V5 (session 2026-11-14-2156, view): `string? why` at line 257; `dotnet build RtsGame.sln --no-incremental` 0 errors / 0 warnings |
 
 ## Repro
 1. The view branch `studio/2026-11-14-1246-view` at 35cceb9 (the QA commit), or the merged tree.
