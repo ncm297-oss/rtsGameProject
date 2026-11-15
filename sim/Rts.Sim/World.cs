@@ -156,6 +156,9 @@ public sealed partial class World
         // M4-H3 (BUG-0461): the cast walk-in's patience and own-blocker range, from the config.
         CastWalkInPatienceTicks = Math.Max(1, (int)MathF.Round(config.CastWalkInPatienceSeconds * SimConstants.TicksPerSecond, MidpointRounding.AwayFromZero));
         CastWalkInBlockerRange = config.CastWalkInBlockerRange;
+        // M6-S9: the gather overlap, from the data (0 = off: movement then never reads the scale).
+        GatherOverlapOn = config.Data.Rules.GatherOverlap > 0f;
+        GatherPairScale = 1f - config.Data.Rules.GatherOverlap;
         // The placer's closings happened before any unit existed; only later ones reset progress marks.
         SeenBlockVersion = NavGrid.BlockVersion;
     }
@@ -597,6 +600,15 @@ public sealed partial class World
 
     /// <summary>M4-H3 (BUG-0461): <see cref="SimConfig.CastWalkInBlockerRange"/> (m).</summary>
     public float CastWalkInBlockerRange { get; }
+
+    /// <summary>
+    /// M6-S9: whether the data's <see cref="RulesDef.GatherOverlap"/> is on (above 0). Derived from the data (its content hash
+    /// covers the value), so never saved or hashed as state.
+    /// </summary>
+    internal bool GatherOverlapOn { get; }
+
+    /// <summary>M6-S9: 1 - <see cref="RulesDef.GatherOverlap"/>: what a gather pair's radii sum is multiplied by in movement (1 when off).</summary>
+    internal float GatherPairScale { get; }
 
     /// <summary>The match setup this world was built from.</summary>
     public SimConfig Config { get; }

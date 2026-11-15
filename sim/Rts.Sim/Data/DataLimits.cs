@@ -44,6 +44,15 @@ public static class DataLimits
     public const double MaxForestStealthDelay = 60;
 
     /// <summary>
+    /// M6-S9: the largest <c>rules.json</c> <c>gatherOverlap</c> (the share of a gather pair's touching distance it may overlap).
+    /// The largest value measured (docs/03 "Implementation (M6-S9)": 0 / 0.25 / 0.5 / 0.75); past it there is no evidence the
+    /// loop still works. It also keeps the pair apart: at 0.75 a pair touches at a quarter of its radii sum and its pack limit
+    /// (<c>MovementConstants.ShoveSpacing</c> of that) is still 0.1 m for two 0.4 m workers, while 1 would let centres coincide,
+    /// where the push away has no direction. The owner asked for "a bit".
+    /// </summary>
+    public const double MaxGatherOverlap = 0.75;
+
+    /// <summary>
     /// M7-3: the most factions <c>common/factions.json</c> may list (and so the most <c>factions/</c> folders). A rule of the
     /// format, not a design number: the setup screen lists every faction in one list and a load bounds its tables.
     /// </summary>

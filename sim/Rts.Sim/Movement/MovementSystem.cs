@@ -26,6 +26,11 @@ namespace Rts.Sim.Movement;
 /// means any standing state: since M3-2 a worker standing on its gather loop (Gathering, Returning)
 /// is shoved, anchors and walks back exactly like an Idle unit. Not yet: formation offsets.
 /// </para>
+/// <para>
+/// M6-S9: every rule that decides touching, spacing, pushing or walls between two units reads their touching distance through
+/// <see cref="PairSum"/>: the radii sum, scaled by <c>1 - rules.json gatherOverlap</c> for a gather pair (two units of one
+/// player both on a gather loop). Off (the field absent or 0) every site computes exactly what it did before.
+/// </para>
 /// </remarks>
 public static class MovementSystem
 {
@@ -145,7 +150,7 @@ public static class MovementSystem
                         int ax = cx + FlowField.OffsetX(d), ay = cy + FlowField.OffsetY(d);
                         aim = grid.CellCenter(ax, ay);
                         onField = true;
-                        if (AimCovered(u, i, aim, near, count, goalCell))
+                        if (AimCovered(world, u, i, aim, near, count, goalCell))
                         {
                             // A unit stands on that center: walking at it would pin us against it, so
                             // aim one cell further along the field (the step check still guards walls).
@@ -188,6 +193,10 @@ public static class MovementSystem
 
             float ri = u.Radius[i];
             int owner = u.Owner[i];
+            // M6-S9: a walker on a gather loop touches its own side's gatherers at the scaled sum (PairSum, written out here:
+            // the hot loop; keep the two in step). Off, the test below is false for every neighbour.
+            bool gathers = world.GatherOverlapOn && u.GatherNode[i].Generation != 0;
+            float pairScale = world.GatherPairScale;
             // Summed in fixed point (FixedAdd): integer addition is associative, so the sums don't
             // depend on the slot order neighbors are visited in (spawn order, M1-4d-3).
             long pushX = 0, pushY = 0, sideX = 0, sideY = 0;
@@ -200,6 +209,7 @@ public static class MovementSystem
                 Vector2 away = pos - u.Position[j];
                 float d2 = away.LengthSquared();
                 float sum = ri + u.Radius[j];
+                if (gathers && u.GatherNode[j].Generation != 0 && u.Owner[j] == owner) sum *= pairScale;
                 float spacing = MovementConstants.ArrivalSpacing * sum;
                 if (d2 < spacing * spacing) crowded = true;
                 bool idle = u.State[j] != UnitState.Moving;
@@ -215,7 +225,7 @@ public static class MovementSystem
                 // A wall within reach of this step's line is in the detour's way; its own group's
                 // units mid-move (just ordered, queued, refused) walk on, so they are followed instead.
                 if (detour && standing && !groupmate && !(sameGroup && !idle)
-                    && DetourInterval(world, ri + u.Radius[j], -away, d2, forward, detourReach, detourWalls, j))
+                    && DetourInterval(world, sum, -away, d2, forward, detourReach, detourWalls, j))
                 {
                     if (world.DetourLo[detourWalls] <= 0f && world.DetourHi[detourWalls] >= 0f) detourCovers = true;
                     detourWalls++;
@@ -288,7 +298,7 @@ public static class MovementSystem
                         bool idle = u.State[j] != UnitState.Moving;
                         bool groupmate = idle && u.GoalCell[j] == goalCell && u.Owner[j] == owner;
                         bool standing = idle || u.Velocity[j] == Vector2.Zero;
-                        SidestepAndQueue(world, u, j, away, away.LengthSquared(), ri + u.Radius[j], idle, standing, groupmate, false, forward, speed, ref sideX, ref sideY, ref queued, ref queuedOnWait);
+                        SidestepAndQueue(world, u, j, away, away.LengthSquared(), PairSum(world, u, i, j), idle, standing, groupmate, false, forward, speed, ref sideX, ref sideY, ref queued, ref queuedOnWait);
                     }
                 }
             }
@@ -316,6 +326,7 @@ public static class MovementSystem
                 // Too tight to stop here: back off along the push alone, and try again next tick.
                 // Counts toward the stuck limit (BUG-0027); at the limit the unit stops anyway.
                 Vector2 back = Constrain(world, grid, u, i, pos, ClampLength(push, speed), near, count, goalCell, false);
+                if (gathers) back = GatherFloor(world, u, i, pos, back, near, count); // M6-S9
                 action[i] = ActBackOff;
                 planned[i] = CanStep(grid, cx, cy, pos + back) ? back : Vector2.Zero;
                 AddShoves(world, u, i, pos, planned[i], near, count, goalCell, false, shove);
@@ -458,6 +469,21 @@ public static class MovementSystem
                         after = MathF.Min(best, afterSliding);
                         act = ActPush;
                     }
+                }
+            }
+            if (gathers)
+            {
+                // M6-S9: the scaled pack limit is a floor between gather pairs (GatherFloor). A step it cuts back is
+                // judged again: no longer progress, it is a stuck (or queued) tick as any other blocked step.
+                Vector2 floored = GatherFloor(world, u, i, pos, step, near, count);
+                if (floored != step)
+                {
+                    step = CanStep(grid, cx, cy, pos + floored) ? floored : Vector2.Zero;
+                    float afterFloor = aimRemaining + Vector2.Distance(aim, pos + step);
+                    after = MathF.Min(best, afterFloor);
+                    if (act == ActWalk && !(afterFloor < best - margin)) act = queued ? ActQueued : ActStuck;
+                    // A push the floor cut to no gain is no push (whose count holds): else a walker held by the floor never gives up.
+                    else if (act == ActPush && !(afterFloor < aimRemaining + Vector2.Distance(aim, pos) - margin)) act = ActStuck;
                 }
             }
             planned[i] = step;
@@ -778,6 +804,68 @@ public static class MovementSystem
 
     /// <summary>True while unit <paramref name="i"/> is on a gather, build or repair loop: its walks go to a stand point beside a footprint (<c>EconomySystem.WalkToFootprint</c>).</summary>
     private static bool OnFootprintWalk(UnitStore u, int i) => u.GatherNode[i].Generation != 0 || u.BuildTarget[i].Generation != 0;
+
+    /// <summary>
+    /// M6-S9: true if units <paramref name="i"/> and <paramref name="j"/> are a gather pair: both alive, of one owner, and both on a
+    /// gather loop (<see cref="UnitStore.GatherNode"/> set: walking to the node, working, walking to the drop-off, delivering).
+    /// </summary>
+    internal static bool IsGatherPair(UnitStore u, int i, int j) =>
+        u.GatherNode[i].Generation != 0 && u.GatherNode[j].Generation != 0 && u.Owner[i] == u.Owner[j] && u.Alive[i] && u.Alive[j];
+
+    /// <summary>
+    /// M6-S9: the distance at which units <paramref name="i"/> and <paramref name="j"/> touch, for every rule that decides touching,
+    /// spacing, pushing or walls: their radii sum, times <see cref="World.GatherPairScale"/> for a gather pair
+    /// (<see cref="IsGatherPair"/>) while <see cref="World.GatherOverlapOn"/>. Off (or any other pair) it is exactly the radii sum,
+    /// the same float expression as before. Written out in Plan's neighbor loop (the hot path); keep the two in step.
+    /// </summary>
+    internal static float PairSum(World world, UnitStore u, int i, int j)
+    {
+        float sum = u.Radius[i] + u.Radius[j];
+        return world.GatherOverlapOn && IsGatherPair(u, i, j) ? sum * world.GatherPairScale : sum;
+    }
+
+    /// <summary>
+    /// M6-S9: walker <paramref name="i"/>'s <paramref name="step"/> cut back so it ends no closer to a gather-pair neighbor
+    /// (start-of-tick positions) than their scaled pack limit, <see cref="MovementConstants.ShoveSpacing"/> x <see cref="PairSum"/>,
+    /// and never goes deeper into one already closer. Toward a neighbor that is Moving (it may step this tick too) it takes
+    /// half the room, so the two together still end at the limit (SqueezeLimit's rule for two shoved units). Only for a walker
+    /// on a gather loop while the overlap is on (callers test that).
+    /// </summary>
+    /// <remarks>
+    /// Why: the overlap push is a share of the overlap, so at a scaled touching distance it shrinks while a walker's step does
+    /// not; two gatherers walking at one stand point (0.4 m Laborers, 0.2 m a tick) closed to 3 % of their radii sum at 0.5 and
+    /// coincided at 0.75. Off, the push alone keeps such a pair near the pack limit (0.33 to 0.41 of the sum measured), so the
+    /// floor is the scaled rule's own. One clip per neighbor in slot order; if that leaves the step entering one already
+    /// passed (neighbors on opposite sides), the step is zero, which every limit allows.
+    /// </remarks>
+    private static Vector2 GatherFloor(World world, UnitStore u, int i, Vector2 pos, Vector2 step, int[] near, int count)
+    {
+        float stepLength = step.Length();
+        if (stepLength == 0f) return step;
+        float scale = world.GatherPairScale, ri = u.Radius[i];
+        int owner = u.Owner[i];
+        Vector2 s = step;
+        for (int pass = 0; pass < 2; pass++)
+        {
+            for (int m = 0; m < count; m++)
+            {
+                int j = near[m];
+                if (j == i || !u.Alive[j] || u.GatherNode[j].Generation == 0 || u.Owner[j] != owner) continue;
+                Vector2 toJ = u.Position[j] - pos;
+                float dist = toJ.Length();
+                float room = MathF.Max(dist - MovementConstants.ShoveSpacing * (ri + u.Radius[j]) * scale, 0f);
+                if (u.State[j] == UnitState.Moving) room *= 0.5f;
+                if (room >= stepLength) continue; // no step this long can reach the limit
+                Vector2 normal = dist > 0f ? toJ / dist : -CoincidentDirection(i, j);
+                float into = Vector2.Dot(s, normal);
+                if (into <= (pass == 0 ? room : room + WallTolerance)) continue; // (the check allows a clip's float noise)
+                if (pass == 1) return Vector2.Zero; // a later clip carried the step back into this one
+                s -= normal * (into - room);
+            }
+            if (s == step) break; // nothing clipped: nothing to check again
+        }
+        return s;
+    }
 
     /// <summary>
     /// For walker heading <paramref name="forward"/>, neighbor <paramref name="j"/> (at
@@ -1200,7 +1288,7 @@ public static class MovementSystem
         if (u.State[j] == UnitState.Moving ? u.Velocity[j] != Vector2.Zero : u.GoalCell[j] == goalCell && u.Owner[j] == u.Owner[i]) return false;
         Vector2 toJ = u.Position[j] - pos;
         float d2 = toJ.LengthSquared();
-        float sum = u.Radius[i] + u.Radius[j];
+        float sum = PairSum(world, u, i, j); // M6-S9
         float reach = sum + stepLength + u.Speed[j];
         if (d2 >= reach * reach) return false;
         float dist = MathF.Sqrt(d2);
@@ -1276,7 +1364,7 @@ public static class MovementSystem
                 if (u.GoalCell[k] >= 0 && !withAnchored) continue;
                 if (InChain(chain, n, k)) continue;
                 Vector2 d = u.Position[k] - pm;
-                float sum = u.Radius[m] + u.Radius[k];
+                float sum = PairSum(world, u, m, k); // M6-S9
                 if (d.LengthSquared() >= sum * sum || Vector2.Dot(d, normal) <= 0f) continue;
                 chain[n++] = k;
             }
@@ -1316,7 +1404,7 @@ public static class MovementSystem
             {
                 int k = near[q];
                 if (k == m || !u.Alive[k] || u.State[k] == UnitState.Moving || u.GoalCell[k] != u.GoalCell[m] || u.Owner[k] != u.Owner[m]) continue;
-                float sum = u.Radius[m] + u.Radius[k];
+                float sum = PairSum(world, u, m, k); // M6-S9
                 if (Vector2.DistanceSquared(pm, u.Position[k]) < sum * sum && !InChain(chain, n, k)) return false;
             }
         }
@@ -1350,7 +1438,9 @@ public static class MovementSystem
             Vector2 toJ = u.Position[j] - pos;
             float dist = toJ.Length();
             Vector2 normal = dist > 0f ? toJ / dist : -CoincidentDirection(i, j);
-            float amount = Vector2.Dot(step, normal) - (dist - ri - u.Radius[j]);
+            // M6-S9: the gap to a gather pair's scaled touching distance; any other pair's is the expression as it was.
+            float gap = world.GatherOverlapOn && IsGatherPair(u, i, j) ? dist - (ri + u.Radius[j]) * world.GatherPairScale : dist - ri - u.Radius[j];
+            float amount = Vector2.Dot(step, normal) - gap;
             if (amount <= 0f) continue;
             Vector2 s = ShoveDirection(world, u, i, j, goalCell, pushArrived, normal) * amount;
             if (s == Vector2.Zero) continue;
@@ -1407,6 +1497,8 @@ public static class MovementSystem
                 s = KeepOffWalls(grid, cx, cy, u.Position[i], u.Radius[i], KeepLinks(world, i, s));
                 // The wall trim can undo SqueezeLimit's trim against an enemy: check the final step.
                 if (!CanStep(grid, cx, cy, u.Position[i] + s) || (enemyNear && ShovedIntoEnemy(world, i, s))) s = Vector2.Zero;
+                // M6-S9: and against the gather pairs' floor, which the wall trim can undo as well.
+                else if (world.GatherOverlapOn && u.GatherNode[i].Generation != 0 && ShovedPastGatherFloor(world, i, s)) s = Vector2.Zero;
             }
             step[i] = s;
         }
@@ -1468,7 +1560,7 @@ public static class MovementSystem
             {
                 int j = near[m];
                 if (j == i || outOfReach[j] || !u.Alive[j] || u.State[j] == UnitState.Moving || u.GoalCell[j] != u.GoalCell[i] || u.Owner[j] != u.Owner[i]) continue;
-                float sum = u.Radius[i] + u.Radius[j];
+                float sum = PairSum(world, u, i, j); // M6-S9
                 linked = Vector2.DistanceSquared(u.Position[i], u.Position[j]) < sum * sum
                     && grid.WorldToCell(u.Position[j], out int jx, out int jy) && IsLegalStep(grid, cx, cy, jx, jy);
             }
@@ -1542,7 +1634,7 @@ public static class MovementSystem
             if (k == i || !u.Alive[k] || u.State[k] == UnitState.Moving || u.GoalCell[k] != u.GoalCell[i] || u.Owner[k] != u.Owner[i]) continue;
             Vector2 toK = u.Position[k] - pos;
             float dist = toK.Length();
-            float sum = u.Radius[i] + u.Radius[k];
+            float sum = PairSum(world, u, i, k); // M6-S9
             if (dist >= sum || dist <= 0f) continue;
             // Largest t in [0, 1] with |toK - t * step| <= reach: still touching k where it stood.
             float reach = sum - 1e-3f;
@@ -1582,12 +1674,43 @@ public static class MovementSystem
             Vector2 normal = dist > 0f ? toK / dist : -CoincidentDirection(i, k);
             // A hair short of the spacing: a shove trimmed to land exactly on it can land a float's
             // rounding (about 1e-5 m this far from the origin) inside it.
-            float room = MathF.Max(dist - MovementConstants.ShoveSpacing * (u.Radius[i] + u.Radius[k]) - ShoveRoundingMargin, 0f);
+            float room = MathF.Max(dist - MovementConstants.ShoveSpacing * PairSum(world, u, i, k) - ShoveRoundingMargin, 0f); // M6-S9: a gather pair's scaled sum
             if (world.ShoveStep[k] != Vector2.Zero) room *= 0.5f;
             float into = Vector2.Dot(step, normal);
             if (into > room) step -= normal * (into - room);
         }
         return ClampLength(step, u.Speed[i]);
+    }
+
+    /// <summary>
+    /// M6-S9: true if shove <paramref name="step"/> of unit <paramref name="i"/> (on a gather loop, the overlap on) goes deeper
+    /// toward a gather-pair neighbor than the room to their scaled pack limit (<see cref="MovementConstants.ShoveSpacing"/> x
+    /// <see cref="PairSum"/>, from where both stand now: walkers have moved), half of it toward one shoved too. Checked on the
+    /// final step: <see cref="KeepOffWalls"/> drops an axis of the step <see cref="SqueezeLimit"/> trimmed, and the rest can
+    /// point into a neighbor (a miner pushed along a mine's edge into the next one, 0.21 of the radii sum at 0.25).
+    /// </summary>
+    private static bool ShovedPastGatherFloor(World world, int i, Vector2 step)
+    {
+        if (step == Vector2.Zero) return false;
+        UnitStore u = world.Units;
+        int[] near = world.Neighbors;
+        Vector2 pos = u.Position[i];
+        float stepLength = step.Length();
+        // The hash holds start-of-tick positions; no unit has moved more than MaxUnitSpeed since.
+        int count = world.Spatial.QueryRadius(pos, u.Radius[i] + world.MaxUnitRadius + 2f * world.MaxUnitSpeed, near);
+        for (int m = 0; m < count; m++)
+        {
+            int k = near[m];
+            if (k == i || !IsGatherPair(u, i, k)) continue;
+            Vector2 toK = u.Position[k] - pos;
+            float dist = toK.Length();
+            float room = MathF.Max(dist - MovementConstants.ShoveSpacing * PairSum(world, u, i, k) - ShoveRoundingMargin, 0f);
+            if (world.ShoveStep[k] != Vector2.Zero) room *= 0.5f;
+            if (room >= stepLength) continue;
+            Vector2 normal = dist > 0f ? toK / dist : -CoincidentDirection(i, k);
+            if (Vector2.Dot(step, normal) > room + WallTolerance) return true;
+        }
+        return false;
     }
 
     /// <summary>
@@ -1778,7 +1901,7 @@ public static class MovementSystem
             {
                 int j = near[m];
                 if (linked[j] || !u.Alive[j] || u.State[j] == UnitState.Moving || u.GoalCell[j] != goalCell || u.Owner[j] != u.Owner[i]) continue;
-                float sum = u.Radius[i] + u.Radius[j];
+                float sum = PairSum(world, u, i, j); // M6-S9
                 if (Vector2.DistanceSquared(pos, u.Position[j]) < sum * sum
                     && grid.WorldToCell(u.Position[j], out int jx, out int jy) && IsLegalStep(grid, cx, cy, jx, jy))
                 {
@@ -1798,14 +1921,14 @@ public static class MovementSystem
     }
 
     /// <summary>True if a unit that is a wall to unit <paramref name="i"/> (see <see cref="Constrain"/>) overlaps a unit of i's radius standing at <paramref name="aim"/>.</summary>
-    private static bool AimCovered(UnitStore u, int i, Vector2 aim, int[] near, int count, int goalCell)
+    private static bool AimCovered(World world, UnitStore u, int i, Vector2 aim, int[] near, int count, int goalCell)
     {
         for (int m = 0; m < count; m++)
         {
             int j = near[m];
             if (j == i || !u.Alive[j]) continue;
             if (u.State[j] == UnitState.Moving ? u.Velocity[j] != Vector2.Zero : u.GoalCell[j] == goalCell && u.Owner[j] == u.Owner[i]) continue; // not a wall: a walker or an arrived groupmate (as in WallLimit)
-            float sum = u.Radius[i] + u.Radius[j];
+            float sum = PairSum(world, u, i, j); // M6-S9
             if (Vector2.DistanceSquared(aim, u.Position[j]) < sum * sum) return true;
         }
         return false;
@@ -1894,7 +2017,9 @@ public static class MovementSystem
             float c = SimMath.Cos(turn), s = SimMath.Sin(turn);
             var dir = new Vector2(forward.X * c - forward.Y * s, forward.X * s + forward.Y * c);
             int j = world.DetourWall[edge];
-            float sum = ri + u.Radius[j];
+            // M6-S9: the edge wall's interval was built from the pair's distance; the tangent and abreast points use it too.
+            // (The flank rule's walls are planted units, never on a gather loop, so for them this is the radii sum.)
+            float sum = PairSum(world, u, i, j);
             float dist = Vector2.Distance(u.Position[j], pos);
             // Where the walker passes the edge wall: along the tangent, and level with it on this side.
             float passAt = MathF.Max(SimMath.Sqrt(MathF.Max(dist * dist - sum * sum, 0f)), ri);

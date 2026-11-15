@@ -127,6 +127,12 @@ public sealed class GameData
         h.Add(r.BuildingSight); // M4-3a
         h.Add(r.StealthProximity); // M4-5
         h.Add(r.RevealTicks);
+        // M6-S9: the gather overlap only when on (a marker, then the value), so data without it hashes as before (M8-1's pattern).
+        if (r.GatherOverlap != 0f)
+        {
+            h.Add(1);
+            h.Add(r.GatherOverlap);
+        }
 
         h.Add(Factions.Length);
         foreach (FactionDef f in Factions)
