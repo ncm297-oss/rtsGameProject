@@ -3,7 +3,7 @@
 | Field | Value |
 | --- | --- |
 | Severity | S4 |
-| Status | open (items 1, 2, 4 fixed in D32, QA verified 2026-11-14-1246; item 3 is the sim track's) |
+| Status | fixed (items 1, 2, 4 by D32 c2fa20e, QA verified 2026-11-14-1246; item 3 by M8-1 62542ff, docs/03's M7-7 table re-printed; set at the 2026-11-14-2156 PLAN) |
 | Found | 2026-11-14-0616, task D31 (QA) |
 | System | tests (`QA/Content`), data layout, docs |
 | Fixed by | |

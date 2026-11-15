@@ -9,6 +9,8 @@ Commit and push after editing, from either machine (or ask Claude to).
 
 ## New
 
+## Processed
+
 - 2026-11-14 · **Gatherers may overlap a bit while collecting (owner, relayed by the watcher session).** Owner thinks
   gatherers should be able to clip through each other somewhat while collecting resources (at a resource node and at the
   drop-off), instead of pushing each other apart. Amount is the owner's taste ("a bit"): please pick a default, put it in
@@ -18,6 +20,12 @@ Commit and push after editing, from either machine (or ask Claude to).
   Teblor special case), scoped to gathering workers only so armies and marching units keep today's separation, and
   deterministic. Sim task with tests; it touches movement, so re-run the replay golden hashes and say why if they change on
   purpose. Related to the Shift-queue and Teblor notes below only in being owner requests; no dependency.
+  → Planned at the 2026-11-14-2156 PLAN as the sim's task, in two sessions on purpose. This session (M6-S9) builds the
+  rule and its knob (`rules.json` `gatherOverlap`: how much of their touching distance two of a player's workers on a
+  gather loop may overlap; 0 = today) switched off, so nothing in your game changes yet, and measures 0.25 / 0.5 / 0.75.
+  Next session ships the value: **my default is 0.5** (they may pass and stand at half their touching distance), which
+  moves the economy, so the AI matches are re-measured and saves stop loading once more. What a worker counts as today:
+  a standing miner is shoved like an idle unit and is a wall to others until shoved. STATE's note says the same.
 
 - 2026-11-14 · **Two requests (owner, relayed by the watcher session).**
   1. **Teblor models, expedited.** The Teblor have no character models at all: `units.json` names seven
@@ -35,8 +43,15 @@ Commit and push after editing, from either machine (or ask Claude to).
      any, rally, abilities, build), close the gaps with the same command flag (no new mechanic), and make the queue
      visible (waypoint line or markers per queued order) if it is not; then tell the owner in STATE what queues and how to
      see it. Sim + view task, with tests; check the replay golden hashes (queued orders touch determinism).
+  → Both planned at the 2026-11-14-2156 PLAN. (1) The five Teblor humanoids are the view's task this session (M7-V5),
+  ahead of every other art slice; the Destrier Rider and the War-dog stay capsules until a horse / dog pack is on disk
+  (already under Waiting on you; my default stands). STATE says when each lands. (2) I audited the code: **Shift already
+  queues every unit order** (move, attack-move, attack, gather, build, repair, abilities, stop, hold; up to 8 per unit;
+  there is no patrol or garrison order, and a rally point is one point per building), with one gap (the first
+  Shift-placed building replaces the queue) and **nothing draws the queue**, which is probably why you had not seen it.
+  So it is a view task: lines and markers for the queued orders plus the gap, right after the Teblor figures (next
+  session). Try it today: select soldiers, right-click, then Shift + right-click two more spots.
 
-## Processed
 
 - 2026-11-12 · **The art call (owner): look: go.** Keep the Quaternius stack; add outfits + team colour (per the
   Producer's recommendation under STATE's "The art call"). Unblocks the art pass (M6 criterion 5's second half).
