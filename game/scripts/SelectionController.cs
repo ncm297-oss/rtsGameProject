@@ -73,6 +73,10 @@ public partial class SelectionController : Node
     // Per unit type: in the worker slot (gathers on a right click on a node).
     private bool[] _isWorkerType = Array.Empty<bool>();
 
+    // M6-V22: the order reader for the first Shift-placed building's rule, built once for the world it reads.
+    private OrderPath? _orders;
+    private World? _ordersOf;
+
     // M6-V16: per player, whether it is the local player's enemy (World.IsEnemy), built once for the world it was read from.
     private bool[] _enemies = Array.Empty<bool>();
     private World? _enemiesOf;
@@ -782,9 +786,11 @@ public partial class SelectionController : Node
     /// What a green placement click orders (M3-V2): one <c>Build</c> of <paramref name="typeId"/> anchored at
     /// <paramref name="anchor"/> per selected live worker (the first to apply places the site, the rest join it: docs/03
     /// M3-3), queued when <paramref name="queued"/>; one Command sound. Returns the Builds enqueued: 0 with no worker or
-    /// when they don't all fit the command queue.
+    /// when they don't all fit the command queue. M6-V22: with <paramref name="queueBehindEndingOrders"/> each worker's Build
+    /// is queued when <see cref="OrderPath.QueuesBehind"/> says it is on an order that ends, else it replaces (the first
+    /// Shift placement of a ghost).
     /// </summary>
-    public int OrderBuild(int typeId, int anchor, bool queued)
+    public int OrderBuild(int typeId, int anchor, bool queued, bool queueBehindEndingOrders = false)
     {
         if (!OrdersEnabled) return 0;
         if (_runner?.Simulation is not Simulation sim) return 0;
@@ -799,8 +805,14 @@ public partial class SelectionController : Node
         }
         System.Numerics.Vector2 point = PlacementGhost.AnchorPoint(world.NavGrid, anchor);
         UnitStore u = world.Units;
+        if (queueBehindEndingOrders && !ReferenceEquals(_ordersOf, world))
+        {
+            _orders = OrderPathView.NewReader(world);
+            _ordersOf = world;
+        }
         foreach (EntityHandle h in Selection.Items)
-            if (_isWorkerType[u.TypeId[h.Index]]) sim.Enqueue(Command.Build(LocalPlayer, h, typeId, point, queued));
+            if (_isWorkerType[u.TypeId[h.Index]])
+                sim.Enqueue(Command.Build(LocalPlayer, h, typeId, point, queued || (queueBehindEndingOrders && _orders!.QueuesBehind(h.Index))));
         _issued[(int)CommandKind.Build] += workers;
         _sfx?.Play(SfxEvent.Command);
         return workers;

@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S3 |
-| Status | open |
+| Status | fixed (M6-S10, 2026-11-15-0506) |
 | Found | 2026-11-14-2156, task M6-S9 (found by the game-dev while writing the gather-overlap fuzz; id given and re-measured by QA) |
 | System | sim: economy (`EconomySystem.StartReturn` / `WalkToFootprint` stand points), movement (BUG-0146's footprint walk) |
-| Fixed by | |
+| Fixed by | M6-S10: `MovementSystem.QueuesBehind` + `EconomyConstants.QueueArrival` |
 
 ## Repro
 1. `sim/Rts.Sim.Tests/Movement/GatherOverlapFuzzTests.Run(0, 4, tripWindow: true)` with the overlap **off** (the shipped
@@ -43,3 +43,13 @@ seeds 2-16 that makes 6 of 54 with the knob off. This is the root of every crite
 changes which seeds hit it (5 / 54 at 0.25, 2 / 54 at 0.5, 1 / 54 at 0.75). Severity stays S3 (shipped behaviour, slower
 income, no hang), but it now blocks M6-S9's criterion 7 as written. It should be scheduled before or with the slice that
 ships the knob.
+
+## Fix (M6-S10, developer)
+Diagnosis (docs/03 "Implementation (M6-S10)", stage 0; `Stress/KeepCornerWedgeDiagnosisTests`): every retry (`Wait` ->
+`StartReturn` / `WalkToNode` -> `WalkToFootprint` -> `StandPoint`) picked the same cell and free point and the walk ended the
+tick it started, by crowded arrival on a touching mate standing with the walker's goal cell and nearer the point (a mate that
+deposited in reach of its node and kept the Keep's stand cell as its goal; at seed 27 one cell is a stand cell of both the
+mine and the Keep), 1.3-2 m out of reach. Cure: a footprint walker stops on such a mate only within `QueueArrival`
+(Reach - GoalInset x sqrt 2 = 1.073 m) of its point, where a stop is in reach. Proof: `GatherOverlapFuzzTests.Bug1431_*`
+(seeds 4 / 22 / 27 / 35 / 44 at 0, red on c684902, green after); `Stress/HeldWorkerSweepStressTests`: no held worker on
+seeds 2-56 at 0 / 0.25 / 0.5 / 0.75 (base: 5 / 4 / 2 / 1 seeds held).

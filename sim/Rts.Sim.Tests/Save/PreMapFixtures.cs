@@ -38,10 +38,18 @@ internal static class PreMapFixtures
     internal static string Folder => Path.Combine(TestDataDir.RepoRoot(), "sim", "Rts.Sim.Tests", "Replays", "premap");
 
     /// <summary>The save fixtures: scene name, the normalized save's length and FNV-1a 64 digest (recorded on ab54ddb; the saves were never re-recorded).</summary>
+    /// <remarks>
+    /// M6-S10 (the Keep-corner cure and <c>gatherOverlap</c> 0.5): both scenes' workers gather from tick 1, so their positions
+    /// and the AI scene's play moved; re-measured once (the format is unchanged: the header bytes and every section's layout
+    /// are the fixture's). Before: <c>("save_menu_seed1", 2017388, 0x31C655C77B98CAF1UL)</c> and
+    /// <c>("save_ai_seed2", 1230475, 0x260D2E7D579BB2FFUL)</c>. The four replay files were rewritten with <see cref="WriteFlag"/>
+    /// in the same move: their headers are byte for byte the ab54ddb ones, only <c>k</c> lines (and the AI scene's commands,
+    /// 81 to 83) moved.
+    /// </remarks>
     internal static readonly (string Name, int Length, ulong Digest)[] SaveDigests =
     {
-        ("save_menu_seed1", 2017388, 0x31C655C77B98CAF1UL),
-        ("save_ai_seed2", 1230475, 0x260D2E7D579BB2FFUL),
+        ("save_menu_seed1", 2017388, 0x706E266D3C78B919UL),
+        ("save_ai_seed2", 1246880, 0x1B8D1E13E92D88EAUL),
     };
 
     /// <summary>The replay fixture names (each <c>Replays/premap/&lt;name&gt;.replay</c>) and the format each must be.</summary>

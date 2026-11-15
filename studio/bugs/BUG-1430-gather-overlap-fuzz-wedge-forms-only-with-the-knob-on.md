@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S3 (filed S2 by QA against criterion 7 as written; re-triaged by the Producer at the 2026-11-14-2156 ACCEPT, see "Producer ruling") |
-| Status | open (gates the session that ships a non-zero `gatherOverlap`; root BUG-1431) |
+| Status | fixed (M6-S10, 2026-11-15-0506; through BUG-1431's cure) |
 | Found | 2026-11-14-2156, task M6-S9 (QA) |
 | System | sim: movement / economy (gather loop at a Keep's corner), tests (`Movement/GatherOverlapFuzzTests`) |
-| Fixed by | |
+| Fixed by | M6-S10 (BUG-1431's rule) |
 
 ## Repro
 1. `dotnet test sim/Rts.Sim.Tests --filter "FullyQualifiedName~GatherOverlapQaStressTests.Bug1430" --logger "console;verbosity=detailed"`
@@ -107,3 +107,9 @@ seeds, against 6 with the knob off.
   green (`EconomyFuzz_Seeds2To16_NoWedgeOnlyTheKnobForms` at 0.25 and 0.75, `Bug1430_*` x2,
   `WiderSeedSweep_17To56_BreachesByValue`) or re-state them as "no more breaches than off, none away from a Keep
   corner" with the figures. They reach `main` red by this ruling (rule 57; Stress only, not in the default loop).
+
+## Fix (M6-S10, developer)
+The five Stress rows red by ruling are green as written on the M6-S10 tree (`GatherOverlapQaStressTests.EconomyFuzz_Seeds2To16_*`
+at 0.25 / 0.75, `Bug1430_*` x2, `GatherOverlapWedgeQaStressTests.WiderSeedSweep_17To56_BreachesByValue`). Seeds past 60 s over
+2-56: off 1 (seed 14, 63.6 s, a worker walking: not held), 0.25 / 0.5 / 0.75 none. QA's `KnownWedges_*` (4) and
+`Seed7AtTheCap_RealRun_*` rows lost their subject (no breach left): re-stated as "no breach", old asserts in comments.

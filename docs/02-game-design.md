@@ -74,8 +74,8 @@ resources for flavor in their display text (e.g. Teblor "Bloodwood" for wood).
 | Drop-off | Town Hall (Gold + Wood) and Camp (Gold + Wood) |
 | Population | Town Hall +10, House +8, hard cap 100 |
 | Pop costs | Integers or half-steps (Andii use 1.5); stored internally as half-pop integers. A queue item that spawns several units (the Teblor war-dog pack: 3) costs each unit's pop, all reserved when the item starts, so it starts only with room for the whole pack |
-| Mine crowding | No hard cap; workers queue at a mine's edge. Revisit if 20 workers on one mine feels wrong |
-| Gatherer overlap | Two of a player's workers that are both on a gather loop (walking to the node, working, walking back, delivering) may overlap a share of their touching distance: `rules.json` `gatherOverlap`, 0 to 0.75. **Off (absent = 0) until its value ships** (owner request 2026-11-14; default to ship 0.5; built and measured in M6-S9, docs/03 "Implementation (M6-S9)"). Armies, idle workers, builders and enemies keep today's separation |
+| Mine crowding | No hard cap; workers queue at a mine's edge. Revisit if 20 workers on one mine feels wrong. A worker queued behind a mate stops only once it is in reach of the mine or drop-off (since M6-S10: before, a mate working beside a Keep could hold a returning worker out of reach for a minute) |
+| Gatherer overlap | Two of a player's workers that are both on a gather loop (walking to the node, working, walking back, delivering) may overlap a share of their touching distance: `rules.json` `gatherOverlap`, 0 to 0.75. **Shipped at 0.5 since M6-S10** (owner request 2026-11-14; built and measured in M6-S9, docs/03 "Implementation (M6-S9)" / "(M6-S10)"). What a player sees: gatherers on a crowded mine or tree line stand and pass about half as far apart as other units, so a 16-24 worker mine is noticeably busier and banks more (24 Laborers on one mine: about 4,000 gold in 5 minutes against 3,600 with the overlap off). Armies, idle workers, builders and enemies keep today's separation |
 
 Workers return cargo to the nearest drop-off automatically and resume gathering. A worker
 ordered to a depleted node looks for the nearest node of the same type within 20 m.
@@ -370,7 +370,7 @@ M6-V18).
 | H | Hold position |
 | M + click | Move (ignore enemies) |
 | P + click | Patrol |
-| Shift + any command | Queue the command (after an ability key, Shift + click keeps the ability armed for the next cast) |
+| Shift + any command | Queue the command, up to 8 a unit (after an ability key, Shift + click keeps the ability armed for the next cast); see "Queued orders" below |
 | Ctrl + 1-9 | Assign control group (units, or a building) |
 | Shift + 1-9 | Add selection to control group (a selected building replaces the group) |
 | 1-9 | Select group (its units, or its building with its command card); double-tap to center the camera on it |
@@ -391,6 +391,22 @@ the 15 grid keys; click a key and press the new one. Esc, Shift / Ctrl / Alt, th
 stay fixed, and a key another command (or grid key) already uses is refused with a line saying which. A control group digit or
 Tab never shares a grid key (with a building selected the digit must still recall its group). Mouse buttons and the
 camera keys are not rebindable yet.
+
+**Queued orders (Shift):** Shift + any unit order adds it to the end of each selected unit's queue instead of
+replacing what it does: move, attack-move, attack (a unit or a building), gather, build, repair, an ability (at a point,
+or a no-target one such as a frenzy), stop and hold position. A unit holds at most **8** queued orders; a ninth is
+ignored. A unit starts its next queued order when it has finished what it is doing (arrived, the target is dead, the
+building is up, the cast is done); stop and hold position end the queue. **A queued order behind a gathering worker
+waits until its gathering ends** (a gather loop runs until it is ordered to stop, so in practice the order waits).
+**Buildings:** with the build menu's ghost, the first Shift-placed building is queued behind what the worker is doing
+when that ends (walking, fighting, building, repairing, or orders it already has queued) and **replaces** it when the
+worker is gathering or idle, so a gatherer starts the building at once; every further Shift placement is queued behind
+the previous one, and clicking the spot you just placed again does nothing. **What you see:** for each selected unit
+of yours, a thin line runs from the unit through its current destination and each queued point, with a small marker at
+every queued point, coloured by order (move green, attack-move orange, attack red, gather gold, build blue, repair teal,
+ability violet; stop and hold position are a wider ring at the point before them). Units sharing a point share its
+marker. A queued attack on an enemy you cannot see shows no marker or line to it until you see it again, and none once
+it is dead. Nothing is drawn for units that are not yours.
 
 **Resources on click:** a left click on a gold mine or a tree selects it alone (no command); the selection panel shows its
 name and how much is left ("2500 Gold left"), live while you see it, else the amount you last saw ("Last seen: ..."). A

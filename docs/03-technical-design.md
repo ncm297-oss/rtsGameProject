@@ -4006,6 +4006,107 @@ Producer's run alone).
   same evening (one other track's `testhost` running, none of the developer's) read 27.49 ms for 400 figures and 2.07 ms
   for 400 capsules, the same 13x ratio: the machine's slow state (handoff, BUG-1170's note), not a figure.
 
+### Implementation (M6-V22)
+
+The owner's Shift-queue request (inbox 2026-11-14): the sim already queued every unit order (8 a unit, docs/03 "Orders
+and unit states") and the view already passed Shift, but nothing drew the queue. This task draws it, closes the one
+building-placement gap, and proves each order kind queues and starts in its turn. No sim change outside `ViewApi`, no
+data, no player-facing text.
+
+- **`ViewApi/OrderPath`** (read only, outside the hash; built once per match over the unit store's own arrays, the
+  buildings, the grid and the data by `OrderPathView.NewReader`, since ViewApi code never names the world or the unit
+  store, QA's source rule): `Fill(unit, span)` writes a unit's `OrderPoint`s in order:
+  its current order's place when it has one (a cast: `CastPoint`, no place for a no-target ability; an explicit Attack
+  (`CombatMode.Ordered`): the target; an attack-move leg: `AnchorPosition`; a build or repair: the site's footprint
+  centre (`Build` while under construction, else `Repair`); a gather loop: `GatherSite`; a plain walk: `Goal`; a
+  retaliating or leashed unit is on no order), then each queue entry (`QueueKind` / `QueuePosition` / `QueueTypeId`):
+  an Attack's target decoded as `UnitStore.QueuedTarget` does (never `QueuePosition` as a point; a test pins the two equal) with `TargetLive` and its position now
+  (a unit's position, a building's footprint centre), a Build at the footprint centre its anchor cell gives
+  (`ConstructionSystem.StartBuild`'s rule), a UseAbility at its point unless the ability is no-target, Stop and
+  HoldPosition with no place. A dead or stale handle gives nothing. `QueuesBehind(slot)` is the building rule
+  below. `OrderPoint` is a plain struct.
+- **The drawing, `game/scripts/OrderPathView`** (node `World3D/OrderPaths`, wired in `Match.Wire` beside the rally
+  marker, given the fog): every frame, for each selected unit the local seat owns, a line from the unit's drawn position
+  through its order points and a marker at each queued point (the current order's point gets the line, no marker, so a
+  marker goes the moment its order starts). Colours by kind: Attack is `TargetRing.RingColor` and UseAbility the cast
+  bar's `AbilityViews.BarFillColor` (the existing order marks); Move green, AttackMove orange, Gather gold, Build blue,
+  Repair teal, Stop off-white, Hold pale yellow. A no-place entry is a wider, lower disc (a ring round the previous
+  point's marker; at the unit itself when it comes first). An Attack is drawn on its target only while the fog shows
+  it (`FogView.ShowsUnit` / `ShowsBuilding`, or a building's ghost with the same generation, as `TargetRing` does): a
+  hidden or dead target gets no marker and no line, and the path continues from the last drawn point. Markers are
+  shared per (kind, point to 1 cm) and lines per (ends to 1 cm, kind), so 200 units on one path draw 8 markers. Two
+  `MultiMesh`es (lines, markers; unshaded, vertex colour, no depth test so a leg up a cliff is not swallowed by the
+  slope), buffers that double while warming up, transforms rewritten only when they moved and colours only when they
+  change: 0 bytes a frame once warm. Line 0.12 m wide (the rally line's), marker radius 0.5 m.
+- **The building gap (Producer decision 2026-11-15, owner may revisit).** `CommandCard.GhostClick`'s first Shift
+  placement of a ghost now calls `SelectionController.OrderBuild(..., queueBehindEndingOrders: true)`: per worker,
+  `OrderPath.QueuesBehind` queues the Build behind an order that ends (a walk, an attack or a fight, a build, a repair, a
+  cast, or orders already queued) and replaces a gather loop or idleness (a loop never ends, and the sim starts a
+  queued order only for an Idle unit: `OrderSystem.Run`). Later Shift placements queue as before; BUG-0122's
+  same-anchor guard is unchanged. The rule reads the sim state of the frame: an order still pending (given in the same
+  tick) is not seen.
+- **Audit** (the shipped data; `OrderQueueViewTest`, each kind queued with Shift behind a 10 m Move through the mouse's
+  entry point):
+
+  | Order kind | Queues | Drawn | Starts in its turn |
+  | --- | --- | --- | --- |
+  | Move (Shift + right click) | yes | green marker at the point | yes (walks it) |
+  | AttackMove (A + Shift click) | yes | orange marker at the point | yes (`CombatMode.AttackMove`) |
+  | Attack on a unit (Shift + right click's Attack) | yes | red marker on the target while seen; none while hidden or dead | yes (`Ordered`, holds it); dropped at its turn if the target died (sim rule) |
+  | Attack on a building | yes | red marker at its footprint centre, or at its ghost's | yes (xUnit `AWorkerWithACurrentMoveAndEightQueuedKinds_ReadsThemInOrder` reads it; the scene row uses a unit target) |
+  | Gather (Shift + right click on a node) | yes | gold marker at the node's centre | yes (on the loop) |
+  | Build (the ghost, Shift click) | yes | blue marker at the footprint centre | yes (the site is placed at its turn) |
+  | Repair (Shift + right click on an own damaged building) | yes | teal marker at the click point | yes |
+  | UseAbility at a point (ability key, Shift click) | yes | violet marker at the point | yes (casting, or walking into range) |
+  | UseAbility with no target (the Frenzy key with Shift) | yes | violet ring at the previous point | yes |
+  | Stop (Shift + S) | yes | off-white ring at the previous point | yes (stops; the rest of the queue goes) |
+  | HoldPosition (Shift + H) | yes | pale yellow ring at the previous point | yes (holds; the rest goes) |
+  | Any order behind a gather loop | yes | yes (from the node) | **no: Request for the sim track below** |
+
+  A ninth order at a full queue is dropped by the sim (`UnitQueueFull`, silently): 8 markers are drawn.
+- **Request for the sim track (not fixed here):** an order queued behind a worker's gather loop never starts, because
+  `OrderSystem.Run` starts a queued order only for an `Idle` unit with no target and a loop is never Idle. Repro:
+  `OrderQueueViewTest`'s `BehindAGatherLoop` row (a Laborer gathering the gold mine nearest player 0's hall on seed 1,
+  Shift + right click on open ground 12 m out: the Move is queued and drawn, and after 1,200 ticks it is still queued
+  and the worker still gathers; printed as "known gap"). A fix could let a queued order end a loop at a natural break
+  (a drop-off), as docs/02 now says it waits "until its gathering ends". The building rule above sidesteps it for the
+  first Shift-placed building.
+- **Tests.** xUnit `ViewApi/OrderPathTests` (a worker walking a Move with eight queued kinds read in order with their
+  places; UseAbility at a point v a no-target cast and Hold; an empty queue; the current attack-move, Attack, gather and
+  build; a queued Attack on a dead target; dead, stale and recycled slots; a short buffer; `QueuesBehind`'s rows; twin
+  sims read every tick v never read, equal hashes for 600 ticks) and `OrderPathAllocationTests` (0 bytes).
+  `game/tests/OrderQueueViewTest` (headless, in the scene loop): the kind rows above (the queue holds it, a marker of
+  the kind within 0.1 m, kept until its turn, the unit starts it, the marker gone), the gather-loop gap row, the ninth
+  order, the building rule ((a) a gatherer and (b) an idle worker build at once, (c) a walker's Build is queued with its
+  Move kept and built when it arrives, (d) houses 1-3 built in turn by a worker already building, (e) BUG-0122's
+  guard), the fog rows (an enemy selected draws nothing; a queued Attack's marker equals `FogView.ShowsUnit` on every
+  frame while its target walks out of the spotter's sight and back; the marker goes when the target dies), and the
+  cost rows. Windowed, `-- --shots <dir>` saves the pictures in a fresh match and `-- --cost` adds frame time and draw
+  calls. **Edited rows:** `CommandCardTest.Placement`'s Shift houses (the three workers are building the hall site from
+  the row before, so the first Shift house would now queue behind it: they are stopped first; the row is about idle
+  workers) and `Bug0122Flood` (two ticks first, so the Repair row's Stops have applied and the three stand idle). No
+  other scene that clicks a ghost with Shift changed.
+- **Cost** (rule 42 asks "alone": two other tracks' `testhost`s were running and could not be stopped; 1152 x 648, vsync
+  off, default zoom, 200 Heavy Infantry, 300 frames a case, `OrderQueueViewTest -- --cost`, 2026-11-15):
+
+  | Case | Frame | Draw calls | `OrderPathView.Sync` | Bytes a frame |
+  | --- | --- | --- | --- | --- |
+  | Nothing selected | 5.44 ms | 3,243 | 0.3 us | 0 |
+  | 200 selected, no orders (rings, portraits) | 5.73 ms | 3,329 | 10.6 us | 0 |
+  | 200 x 8 queued, shared points (8 markers) | 6.15 ms (+0.42 on the idle selection, +0.71 on none) | 3,330 (+1) | 343 us | 0 |
+  | 200 x 8 queued, distinct points (1,600 markers, 1,795 lines) | 6.15 ms (+0.42, +0.71) | 3,330 (+1) | 623 us | 0 |
+
+  The shared case adds under 1.0 ms. Most of `Sync` is the 1,800 path points' lookups and the engine calls for the
+  lines that move with their units (headless: 410 us shared, 520 us distinct).
+- **Questions for the Producer (rule 67), each with a recommendation:**
+  1. At the zoomed-out camera (60 m) the 0.5 m markers and 0.12 m lines are small. Scale them with the camera's zoom?
+     Recommendation: yes, in a later view polish task (no gameplay effect).
+  2. The current order's point has a line but no marker (so a marker means "queued"). Recommendation: keep it.
+  3. Lines and markers ignore depth (drawn over terrain, units and buildings), as waypoints are in other RTS games.
+     Recommendation: keep it; the rally line still uses depth and could follow.
+  4. The first-Shift-building rule reads the frame's sim state, so a Shift placement within the same tick as another
+     order to that worker decides on the older state. Recommendation: accept (one tick, 50 ms).
+
 ## Vision, detection, fog
 
 Fog of war and the high-ground rule are in since M4-3a (`sim/Rts.Sim/Vision/`); the last-known building ghosts, buildings
@@ -4411,7 +4512,7 @@ consumes it.
 | --- | --- |
 | `damage_table.json` | `armorClasses: [{id, displayName}]`, `damageTypes: [{id, displayName, ignoresArmor?, multipliers: {<armorClass>: x}}]`. Every type must list every class. `ignoresArmor` (default false) is how Magic skips armor |
 | `resources.json` | `{ "resources": [ ... ] }`, each `{id, displayName, description, resource, footprint {width, height}}`: `resource` is `gold` or `wood`, footprint sides are cells, 1-4 (`DataLimits.MaxFootprint`). Amounts are not here: a tree holds `rules.json` `treeWood`, a mine `startMines.gold` (M3-1, see "Economy implementation") |
-| `rules.json` | docs/02 Economy table: `startingResources` (M6-S6, replacing `startingGold` / `startingWood`: a list of presets in the setup's order, each `{id, displayName, description?, gold, wood, aiSpendAbove?}`; ids unique snake_case of at most 64 characters, a `standard` entry required, gold and wood 0 to 1,000,000, at most 16 presets; shipped `standard` 200 / 200 and `high` 1000 / 1000, Producer default; `aiSpendAbove` (M6-S6 fix round 1, BUG-1050) optional, 0 to 1,000,000, 0 or left out = off: the AI's spend-down threshold in gold + wood, shipped `high` 200, `standard` none; every field, the count and the order in `ContentHash`), `startingWorkers`, `popCap`, `workerCarry`, `gatherRate {gold, wood}` (per second), `startMines` / `expansionMines {count, gold}`, `treeWood`, `nodeSearchRadius`, `repair {rateFactor, costFactor}` (M3-3), `buildingSight` (M4-3a: meters, above 0 and at most 64, the sight of a building whose entry gives none; shipped 12, a Producer default: docs/02 gives sight only for the Watch Tower), `stealth {proximity, revealSeconds}` (M4-5: meters and seconds, above 0; shipped 3 and 3, docs/02 "Stealth and detection"), `gatherOverlap` (M6-S9, optional: absent = 0 = off; a number from 0 to 0.75, `DataLimits.MaxGatherOverlap`; a JSON null, a non-number, a negative or a value over the cap is one error; `RulesDef.GatherOverlap`, in `ContentHash` only when non-zero; not shipped yet, "Implementation (M6-S9)"). Pop provided by buildings comes with `buildings.json` (M3); the Age II cost with `techs.json` (M3-5) |
+| `rules.json` | docs/02 Economy table: `startingResources` (M6-S6, replacing `startingGold` / `startingWood`: a list of presets in the setup's order, each `{id, displayName, description?, gold, wood, aiSpendAbove?}`; ids unique snake_case of at most 64 characters, a `standard` entry required, gold and wood 0 to 1,000,000, at most 16 presets; shipped `standard` 200 / 200 and `high` 1000 / 1000, Producer default; `aiSpendAbove` (M6-S6 fix round 1, BUG-1050) optional, 0 to 1,000,000, 0 or left out = off: the AI's spend-down threshold in gold + wood, shipped `high` 200, `standard` none; every field, the count and the order in `ContentHash`), `startingWorkers`, `popCap`, `workerCarry`, `gatherRate {gold, wood}` (per second), `startMines` / `expansionMines {count, gold}`, `treeWood`, `nodeSearchRadius`, `repair {rateFactor, costFactor}` (M3-3), `buildingSight` (M4-3a: meters, above 0 and at most 64, the sight of a building whose entry gives none; shipped 12, a Producer default: docs/02 gives sight only for the Watch Tower), `stealth {proximity, revealSeconds}` (M4-5: meters and seconds, above 0; shipped 3 and 3, docs/02 "Stealth and detection"), `gatherOverlap` (M6-S9, optional: absent = 0 = off; a number from 0 to 0.75, `DataLimits.MaxGatherOverlap`; a JSON null, a non-number, a negative or a value over the cap is one error; `RulesDef.GatherOverlap`, in `ContentHash` only when non-zero; shipped 0.5 since M6-S10, "Implementation (M6-S9)" / "(M6-S10)"). Pop provided by buildings comes with `buildings.json` (M3); the Age II cost with `techs.json` (M3-5) |
 | `common/factions.json` | M7-3: `{ "order": ["malazan", "whirlwind"] }`, the faction order: faction id = index in `order`, and unit and building type ids go faction by faction in this order (ordinal within a faction). Every folder under `factions/` must be listed and every entry must have a folder; a repeat, an entry that isn't a snake_case id (or a string) and more than 8 entries (`DataLimits.MaxFactions`) are errors, one each at `order[i]` (a folder not listed: at `order`, naming the folder). Append-only: a new faction adds its id at the end. Not hashed (the keys in id order are). See "Implementation (M7-3)" |
 | `faction.json` | `id` (must equal the folder name), `displayName`, `description`, `bonus {displayName, description}`, `resources {gold, wood: {displayName}}`, `palette {primary, secondary, accent}` as `#RRGGBB`; `regen` (M7-1, optional: absent = no regeneration) `{hpPerSecond, delay}`, both required when the object is there: `hpPerSecond` above 0 and at most 100 (`DataLimits.MaxRegenPerSecond`) and at least 0.05 (one fixed-point unit a tick), to `FactionDef.RegenPerTick` (`round(hpPerSecond x 400 / 20)`: 1 → 20); `delay` seconds, 0 or more, at most 3600, to `FactionDef.RegenDelayTicks` (6 → 120); an unknown key is an error. The Teblor ship one (1 HP/s after 6 s); see "Implementation (M7-1)". `forestStealth` (M8-1, optional: absent = no forest stealth) `{status, delay, exceptSlots}`: `status` (required) a status of kind `stealthed`, to `FactionDef.ForestStealthStatus` (-1 absent); `delay` (required) seconds, at least one tick once converted, at most 60 (`DataLimits.MaxForestStealthDelay`), to `FactionDef.ForestStealthDelayTicks` (3 → 60); `exceptSlots` (optional) unit slot names (`DataLimits.SlotIds`), each once, to `FactionDef.ForestStealthExceptSlots` (a bit per `UnitSlot`); one error per bad field, an unknown key is an error. No shipped faction has one yet (the Shadow: the data track, M8). See "Implementation (M8-1)" |
 | `buildings.json` | `{ "buildings": [ ... ] }`, each `{id, displayName, description, slot, footprint {width, height}, hp, armor, cost {gold, wood}, buildTime, popProvided, dropOff}`: `slot` is one of the ten template slots (`DataLimits.BuildingSlotIds`), footprint sides 1-4 cells, `buildTime` in seconds (to ticks), `popProvided` a multiple of 0.5 (to half-pop), `dropOff` a required bool, `requires` an optional list of tech / building ids (M3-5; resolved and gating placement since M3-6), `sight` optional meters (M4-3a: above 0 and at most 64, default `rules.json` `buildingSight`; shipped 24 on both watch towers, docs/02), `attack` optional (M4-3b: the unit `attack` object; value at least 1, range above 0, an aimed `projectile` required, `targets` not `buildings`; shipped on both watch towers), `detector` optional meters (M4-3b: above 0 and at most 64; shipped 16 on both watch towers; unused until M4-5), `scale` optional (M7-4: the view's model size, 0.5-3.0, default 1; the sim never reads it; since M7-V4 the placeholder box's height, `3 m x scale`, on the footprint's width and depth: "Implementation (M7-V4)"). Ids unique across factions (M3-2, see "Economy implementation"); exactly one building per slot per faction (M3-6, BUG-0010) |
@@ -10100,10 +10201,10 @@ rules are unchanged.
 - **Spending per opening (D21, 2026-10-18, data track: three openings per faction)**
   (`Content/AiSpendingReportTests.GeneratedNormal_Spending_Report`, the menu's map against an idle seat, 20 minutes: one
   Normal run per opening on the smallest seed in 1-50 whose Normal pick it is, plus Easy on seed 1): the idle seat falls
-  at malazan standard Normal seed 1 489 s, malazan crossbow_push Normal seed 5 474 s, malazan cadre_rush Normal seed 7
-  615 s, malazan standard Easy seed 1 497 s, whirlwind standard Normal seed 1 494 s, whirlwind raider_rush Normal seed 2
-  408 s, whirlwind holy_war Normal seed 3 574 s and whirlwind standard Easy seed 1 506 s. Across both factions 2 of those
-  9 marks had wood under 100 with gold at 300 or more, so the report reads "wood binds at some marks only, not the limit
+  at malazan standard Normal seed 1 469 s, malazan crossbow_push Normal seed 5 463 s, malazan cadre_rush Normal seed 7
+  599 s, malazan standard Easy seed 1 479 s, whirlwind standard Normal seed 1 497 s, whirlwind raider_rush Normal seed 2
+  415 s, whirlwind holy_war Normal seed 3 583 s and whirlwind standard Easy seed 1 537 s. Across both factions 3 of those
+  8 marks had wood under 100 with gold at 300 or more, so the report reads "wood binds at some marks only, not the limit
   overall". Re-printed 2026-10-26 (data track, D-R32) for M5-4g's reserve: Age II is now in at 509-616 s on every run
   (its step due at 5:00-8:00), Easy's too; before it, with no reserve and the production manager spending first, it came
   in at 509-1,098 s and the Whirlwind's Easy run never in 20 minutes (the idle seat fell at 498 / 474 / 619 / 497 s and
@@ -10450,6 +10551,11 @@ tests `Ai/CriterionMatch.cs` (the harness), `Ai/MatchCriterionTests`, `CommandRe
   | 2v2 | Vathar Crossing 1, 4 seats | 26,070 = 21:43 (72,000) | team 1 | 14 | 4 | Build Blocked 1, SealsGround 2, UnitInTheWay 1; Gather UnitGone 1; Move UnitGone 1 |
 
   Waves and hunts are the match's totals over its seats. The longest refusal run on any row is 1 think (no command refused twice on one target).
+  **Re-measured for M6-S10** (the Keep-corner cure and `gatherOverlap` 0.5; the table re-printed in "Implementation
+  (M6-S10)"): the literal row is now **Vathar Crossing seed 7** (23,412, seat 0; seed 1 ends at 24,497, past 24,000), the
+  Raraku row **seed 2** (27,936, seat 1; seed 1 no longer ends inside 72,000: BUG-1460), Pale Hills seed 1 42,384, generated
+  seed 2 21,822, the FFA 52,098, the 2v2 57,154 (team 2); every check clean, every row equal in two processes, the bounds
+  unchanged. The table above is M5-H6's.
   **Re-measured for M5-H6** (the house rule, the hunt's free starts from its second hunt, the leg's fixes; "Implementation
   (M5-H6)"): every row moves and every row ends inside its bound with every check clean; before it the table read Vathar
   23,043 (5 waves), Raraku 28,083, Pale Hills 48,858 (Build UnitInTheWay 9, UnitGone 1; UseAbility UnitGone 1), generated
@@ -11910,9 +12016,10 @@ quarter points: two neighbouring starts must stand half the side apart).
 ### Implementation (M6-S9)
 
 2026-11-14. The owner's request (inbox 2026-11-14: gatherers clip through each other "a bit" while collecting) as one generic
-movement rule with one data knob, built **off**: the shipped `rules.json` does not carry the field, so the data hash
-(5353DF8A1473FC6D), the golden replay, every save and every pin are unchanged. The value ships next session as its own hash
-move (docs/01 "2026-11-14 (f)": default 0.5). Code: `Movement/MovementSystem.cs` (`IsGatherPair`, `PairSum`, `GatherFloor`,
+movement rule with one data knob, built **off**: at M6-S9 the shipped `rules.json` did not carry the field, so the data hash
+(5353DF8A1473FC6D), the golden replay, every save and every pin were unchanged. **M6-S10 shipped the value, 0.5** (docs/01
+"2026-11-14 (f)"), as its own hash move (5353DF8A1473FC6D -> B74DC7AE61B4862D) with the Keep-corner cure: "Implementation
+(M6-S10)". Code: `Movement/MovementSystem.cs` (`IsGatherPair`, `PairSum`, `GatherFloor`,
 `ShovedPastGatherFloor`), `World.GatherOverlapOn` / `GatherPairScale`, `RulesDef.GatherOverlap`, `DataLoader.GatherOverlap`,
 `NumberJson` (`Data/DataJson.cs`), `DataLimits.MaxGatherOverlap`.
 
@@ -12133,6 +12240,252 @@ ships a value re-measures the M5-5 rows and decides Pale Hills by rules 43 / 45.
   gathering workers 0.49 / 0.48 ms on against 0.56 / 0.55 ms off (threshold 1 ms), 500 marching + 50 gathering 0.99 ms on
   against 1.04 ms off (threshold 4 ms): the overlap is no slower (fewer stuck and pushing walkers). 0 bytes a tick with the
   knob on (`GatherOverlapTests.Criterion8_...AllocatesNothing`).
+
+### Implementation (M6-S10)
+
+2026-11-15. BUG-1431 (the Keep-corner wedge) cured with one generic movement rule, then the owner's gather overlap shipped
+at 0.5 (`rules.json` `"gatherOverlap": 0.5`). Code: `MovementSystem.QueuesBehind`, `EconomyConstants.QueueArrival`;
+tests `Movement/HeldWorkerProbe` (the word "held"), `Stress/KeepCornerWedgeDiagnosisTests` (stage 0's rows),
+`Stress/HeldWorkerSweepStressTests` (seeds 2-56 at 0 / 0.25 / 0.5 / 0.75), `GatherOverlapFuzzTests.Bug1431_*` (the
+regression rows, default loop).
+
+**Held** (the brief's word, `HeldWorkerProbe`): a live unit with `GatherNode` set whose node is alive, 1,200 ticks without
+a delivery (the fuzz's clock: a new node or order starts it again), within 2 m at the end of them of where it stood 600
+ticks earlier. A worker past 1,200 ticks that kept walking is printed with its route and is not held. (Fix round 1,
+BUG-1464 item 1, not changed: checked on every tick past the clock, the probe flags fuzz seed 14 at 0 at tick 1,240, a
+Teblor Gatherer standing 0.03 m from its node working its load (Gathering, cargo 14 of 15) after a 120 m walk, which
+delivers at 1,272. That moves a gated row on a worker in reach, so the probe still looks once, on the tick the clock
+passes 1,200; an every-tick check would need "held" to exclude a worker gathering in reach, a definition for the Producer.)
+
+**Stage 0, the diagnosis (before any production edit).** Each row is the economy fuzz (`GatherOverlapFuzzTests.Run(overlap,
+seed, tripWindow: false)`, its scene and orders unchanged) under the probe; reproduce any row with `dotnet test
+sim/Rts.Sim.Tests --filter "FullyQualifiedName~KeepCornerWedgeDiagnosisTests" --logger "console;verbosity=detailed"` (on
+the base, c684902 + the probe files; after the cure the same rows print no held worker). Distances: to the footprint's
+rectangle (reach 1.25 m) and to the stand point the walk aims at. "Holds the cell" = a unit of the same owner whose
+`GoalCell` is the walker's goal cell.
+
+| Seed | Value | Held worker (tick) | State | Against the footprint and its stand point | Who holds the stand cell | How each retry ends |
+| --- | --- | --- | --- | --- | --- | --- |
+| 4 | 0 | p1 Laborer, slot 25 (5,465); slot 23 (5,602) | Returning, 10 gold | 1.87 m from the Keep, 1.73 m short of its point (cell 56,94); slot 23 1.08-1.6 m out | slot 28 Gathering, in reach of the mine and the Keep; slots 23 / 24 / 31 Returning, out of reach (held the same way) | every 21 ticks a walk to the same cell that stops the tick it starts, 1.79-1.91 m short, touching slot 24 (slot 23: touching slot 28, 1.53-1.78 m short) |
+| 22 | 0 | p0 Teblor Gatherer (0.75 m), slot 8 (4,029) | Returning, 15 wood | 1.47 m from the Keep, 2.03 m short (cell 82,103) | slot 6 Gathering, in reach of its node and the Keep | stops the tick it starts, 2.03 m short, touching slot 6 |
+| 27 | 0 | p1 Laborer, slot 14 (3,790); slot 8 (5,178) | Gathering (outbound: node leg, empty) | 1.40 m from the mine, 0.63 m from the Keep, 1.29 m short (cell 118,70: a stand cell of **both** the mine and the Keep) | slot 18 Gathering, in reach of both; slot 8 Gathering | stops 1.30-1.51 m short touching slot 18 (slot 8: touching 18, 15 or 9, 1.35-1.57 m short) |
+| 35 | 0 | p0 Laborer, slot 10 (1,214) | Returning, 10 wood | 1.47 m from the Keep, 1.34 m short (cell 68,84) | slot 11 Gathering, in reach of its node and the Keep | stops the tick it starts, 1.34-1.49 m short, touching slot 11 |
+| 44 | 0 | p1 Laborer, slot 20 (1,226) | Returning, 10 wood | 1.57 m from the Keep, 1.45 m short (cell 57,70) | slot 21 Gathering, in reach of its node and the Keep | stops the tick it starts, 1.45-1.61 m short, touching slot 21 |
+| 56 | 0 | none held: slot 28 walks past 60 s (73.2 s) | Gathering | 8.9 m from where it stood 600 ticks before | (walking) | one walk stopped 1.65 m short touching slot 27 (Gathering), the next retry arrived (0.12 m): the gap is a long trip, not a stand |
+| 3 | 0.25 | p0 Laborer, slot 7 (3,048 and again 4,541) | Returning, 10 gold | 1.48-1.53 m from the Keep, 1.39 m short (cell 68,84) | slot 2 Gathering, in reach of the mine and the Keep (slot 3 too) | stops the tick it starts, 1.25-1.42 m short, touching slot 2 |
+| 7 | 0.75 | p1 Teblor Gatherer (0.75 m), slot 35 (5,080) | Moving (node leg, empty) | at the Keep's corner (0.06 m from its footprint), 11.5 m from the mine | (its goal cell is at the mine) | **another cause** (BUG-1430 (2)): each walk gives up after 19 stuck ticks against Idle, loop-ended workers parked at the corner, drops its goal cell, waits 20 ticks and walks into the same corner |
+| 23 | 0.5 | p1 Laborer, slot 17 (4,431) | Returning, 10 gold | 1.41 m from the Keep, 1.30 m short (cell 82,4) | slot 26 Gathering, in reach of the mine and the Keep; slot 24 Returning, out of reach | stops 1.36-1.67 m short touching slot 26 (once slot 23) |
+| 27 | 0.5 | p1 Laborer, slot 14 (1,213); slot 16 (4,261) | Returning, 10 gold | 1.99 m from the Keep, 1.81 m short (cell 118,70, the shared cell); slot 16 1.48 m out (cell 119,70) | slot 16 Gathering, in reach of both; slots 10 / 18 / 20 Returning, out of reach | stops the tick it starts, 1.57 m short, touching slot 16 (slot 16 later: touching slot 12, 1.36 m short) |
+
+**Why every retry ends the same way.** `EconomySystem.Wait` counts `RetryTicks` (20) and calls `StartReturn` (or
+`WalkToNode`), which calls `WalkToFootprint`: the worker's own cell costs nothing extra because one of its stand points is
+free (BUG-0790: nobody's centre within the worker's radius of it; the mate stands 0.4-1 m off it, between the walker and
+the point), so the same cell wins, and `StandPoint` picks the same free point. `OrderSystem.Walk` starts a fresh walk; in
+the same tick's movement the mate, standing (Gathering or Returning) with the walker's goal cell and nearer the point, is a
+**crowded-arrival groupmate** (`touchingArrived`, `QueuesBehind`): the walker stops touching it, 1.3-2 m out of reach, and
+the next tick's `Wait` starts the count again. The mate holds that cell because its own last walk went there: a worker
+that deposits standing in reach of its node too (`Deposit` -> `Stand(Gathering)`, no walk) keeps the Keep's stand cell as
+its goal cell for as long as it works there, and at seed 27 one cell is a stand cell of both the mine and the Keep, so
+mates mining there hold it legitimately. BUG-0146's rule ("a mate nearer the point stops a footprint walker") assumed the
+mate stands at the point, where touching it is in reach (`StandArrival2`); these mates stand anywhere in the cell. Seed 27
+(the outbound worker) is the same mechanism on the node leg, through the shared cell. Seed 56 is not held (a long trip);
+seed 7 at 0.75 is another cause (give-ups against parked Idle workers), which the cure below happens to remove too.
+
+**Stage (a), the cure (knob off).** One generic rule in `MovementSystem.QueuesBehind`: a footprint walker (any worker on a
+gather, build or repair loop, any faction, any node or building footprint) stops on a touching groupmate nearer its stand
+point only while it is itself within `EconomyConstants.QueueArrival` of that point: `Reach - GoalInset x sqrt 2` = 1.073 m,
+so a worker that stops so is in reach of the footprint even at a corner cell's point. Out there it walks on (and, blocked,
+counts toward giving up, re-walks after `RetryTicks` and re-picks its cell as before). A named constant beside `RetryTicks`,
+no data field, no saved state, no format change; the arrival test reads two positions it already had. Before it, BUG-0146's
+rule let any touching mate nearer the point stop the walker wherever it stood.
+
+- **Criterion 2 (knob off, seeds 2-56, `Stress/HeldWorkerSweepStressTests`):** 54 of the 55 seeds built (seed 13's Keep is refused),
+  **no held worker** (base: seeds 4 / 22 / 27 / 35 / 44 held; seed 56 walked past 60 s). Longest gap per seed is printed;
+  the longest is seed 14, 63.6 s, a Teblor Gatherer walking about 120 m round to its node and shoved out of reach twice while
+  working: walking, not held (base 53.8 s). It is the one fuzz row past the 60 s window, so `GatherOverlapFuzzTests` lists it
+  in `PastTheWindowWalking` (the window measured, the held rule asserted) for the Producer's ruling; `KnownWedges` holds no
+  row at any value (its four rows now run 55.6 / 26.0 / 45.5 / 32.9 s). Seeds past 60 s over 2-56: off 1 (base 6), 0.25 0
+  (5), 0.5 0 (2), 0.75 0 (1).
+- **Criterion 3 (knob off, report):** table (a) below, off column against M6-S9's: every row banks at least M6-S9's (mine:
+  Laborers 840 / 1,690 / 2,520 / 3,630 against 840 / 1,620 / 2,440 / 3,430; Gatherers 870 / 1,530 / 2,235 / 2,985 against
+  855 / 1,395 / 2,040 / 2,790; tree line: Laborers 600 / 1,090 / 1,590 / 2,140 against 580 / 1,050 / 1,470 / 1,880;
+  Gatherers 600 / 930 / 1,245 / 1,470 against 570 / 885 / 1,245 / 1,260). Stuck ticks and give-ups rise (a walker out of
+  reach now presses and gives up where it used to stand): 24 Gatherers on the mine 18,133 / 618 against 8,613 / 185.
+  `Stress/WideCrowdStressTests` is unchanged (armies walk no footprint): 500 to 4 points 288.1 v 172.6 mean arrivals (0.4 m
+  v 0.75 m), 128 to 64 goals 112.1 v 58.4, as before.
+
+**Stage (b), the value.** `"gatherOverlap": 0.5` in `game/data/common/rules.json`; data hash 5353DF8A1473FC6D ->
+**B74DC7AE61B4862D**. Saves and recordings made on the old data are refused with the existing message (`DataMismatch`).
+Decided A on a scratch clone (`m6s10-value`: the cure + the value, default loop 9,475 passed / 45 failed / 21 skipped of
+9,541 before any pin moved; the 45 are the pins and rows of stage (c) and the rows diagnosed here). The criterion-10 rows: `AiDeterminismTests...Waves(seed: 1)`,
+`ReachRuleQaTests.NearestForestFarPastTheReach_*` and `ScoutCapQaTests.ASeatPastTheCapBeforeItsFirstScout_*` pass on the
+final tree (the rehearsal's reds were the value without the cure). The others, diagnosed:
+  - `CounterCompositionTests.AHardSeat_ShiftsItsLineShareFurther_ThanANormalSeat` and (new)
+    `ANormalSeat_ThatSawShock_TrainsMoreLine_ThanOneThatDidNot`: red **with the cure alone too** (knob off). In the scene the
+    Malazan seat is wood-bound after its barracks and range stand (gold 312-506 banked, wood 5-10); the seen and unseen runs
+    gather the same 1,890 gold / 1,140 wood and train the same 10 Heavy Infantry / 8 Crossbowmen (Hard 10 / 9): the counter
+    weights never reach a choice, at any window from 120 s to 600 s and on every seed 1-40 that picks the opening (the flat
+    scene does not depend on the seed). On the base the shift was one unit (11 v 10 Line, Normal). Nobody is held and
+    nothing is unplaced: the economy went another way. **Fix round 1: re-staged** (the reason in `Run`'s comment): the
+    weights choose only on a think where both producers are free and the bank pays for one unit. Wood topped up alone
+    leaves the seat producer-bound (11 / 10 both ways); a gold trickle of half the producers' rate is a round robin (6 / 7
+    both ways). So after the producers stand, each tick tops the seat's wood up and replaces the gold its workers deliver
+    with a trickle at the gold-bound boundary (the cheaper unit's gold over the longer train time, from the data), the same
+    in the seen and unseen runs. `ANormalSeat_ThatSawShock_*` is **green** (6 / 3 seen v 5 / 4 unseen: the sighting, the
+    memory and the weights still decide the extra Line). `AHardSeat_ShiftsItsLineShareFurther_*` stays **red** (Normal and
+    Hard both shift 0.111: nine units in the 180 s memory window cannot tell Line x 1.5 from x 2), **listed for the
+    ACCEPT's ruling (rule 57)**; no further staging was tried (a trickle tuned until Hard separates would be fitting the
+    scene to the assertion).
+  - `Content/AiOpeningPairsReportTests` (data track's): seven rows only re-print their Age II cells (done, both pages).
+    (0, 2) seed 3: the Malazan standard opening's first wave (5:47) wipes the Whirlwind holy_war army (12 to 0 by 8:00), the
+    Whirlwind are defeated at 12:29 having sent no wave ("sent no wave", red with the cure alone too). (2, 0) seed 13 (red
+    with the value only): the Whirlwind standard seat is beaten down (army 0, its Town Hall and sites razed from 19:00,
+    defending every think), keeps 4 workers gathering wood with 1,072 gold and four build steps due and not done
+    ("DEAD END"): the side is beaten, not held (traced every 20 s from 15:00: every worker walks its wood loop, two sites
+    were placed and razed). Both: **listed for the ACCEPT's ruling** (the row's seed rule is the smallest pair seed and its
+    cells are the pages' 1st-seed column, so "the next seed" would re-shape the page; a defeated-first side passes, a
+    beaten-but-standing one has no `WhyWaiting` reason).
+- **Criterion 4 (0.5, seeds 2-56):** no held worker; longest 48.5 s (seed 14). At 0.25 and 0.75: no held worker either
+  (base: 3 / 4 / 23 / 27 and 7).
+- **Criterion 6 (0.5, table (a)):** the 16- and 24-worker mine rows bank more than off: Laborers 2,710 / 4,020 against
+  2,520 / 3,630, Gatherers 2,865 / 4,155 against 2,235 / 2,985; the closest gather pair is the floor exactly (0.25 of the
+  sum at 0.5: 0.200 m for two Laborers, 0.375 m for two Gatherers), never closer.
+
+**(a) on the final tree (the cure in; the knob per row; the M6-S9 scene and columns).**
+
+| Node | Worker | N | Overlap | Banked | Trips | Stuck ticks | Give-ups | Closest pair (share of radii sum) | Mean stand gap |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| Mine | Laborer | 5 | 0 | 840 | 84 | 227 | 6 | 0.439 m (0.55) | 1.188 m |
+| Mine | Laborer | 5 | 0.5 | 850 | 85 | 108 | 1 | 0.200 m (0.25) | 1.224 m |
+| Mine | Laborer | 10 | 0 | 1690 | 169 | 533 | 9 | 0.369 m (0.46) | 0.697 m |
+| Mine | Laborer | 10 | 0.5 | 1690 | 169 | 434 | 6 | 0.200 m (0.25) | 0.505 m |
+| Mine | Laborer | 16 | 0 | 2520 | 252 | 3042 | 84 | 0.186 m (0.23) | 0.719 m |
+| Mine | Laborer | 16 | 0.5 | 2710 | 271 | 818 | 10 | 0.200 m (0.25) | 0.400 m |
+| Mine | Laborer | 24 | 0 | 3630 | 363 | 5523 | 153 | 0.137 m (0.17) | 0.702 m |
+| Mine | Laborer | 24 | 0.5 | 4020 | 402 | 1620 | 18 | 0.200 m (0.25) | 0.360 m |
+| Mine | Gatherer | 5 | 0 | 870 | 58 | 875 | 38 | 0.839 m (0.56) | 1.618 m |
+| Mine | Gatherer | 5 | 0.5 | 930 | 62 | 132 | 1 | 0.426 m (0.28) | 0.671 m |
+| Mine | Gatherer | 10 | 0 | 1530 | 102 | 4707 | 179 | 0.427 m (0.28) | 1.348 m |
+| Mine | Gatherer | 10 | 0.5 | 1830 | 122 | 503 | 5 | 0.375 m (0.25) | 0.667 m |
+| Mine | Gatherer | 16 | 0 | 2235 | 149 | 9732 | 343 | 0.348 m (0.23) | 1.257 m |
+| Mine | Gatherer | 16 | 0.5 | 2865 | 191 | 1773 | 42 | 0.375 m (0.25) | 0.734 m |
+| Mine | Gatherer | 24 | 0 | 2985 | 199 | 18133 | 618 | 0.135 m (0.09) | 1.103 m |
+| Mine | Gatherer | 24 | 0.5 | 4155 | 277 | 3516 | 82 | 0.375 m (0.25) | 0.676 m |
+| Tree line | Laborer | 5 | 0 | 600 | 60 | 349 | 9 | 0.355 m (0.44) | 0.853 m |
+| Tree line | Laborer | 5 | 0.5 | 600 | 60 | 242 | 2 | 0.200 m (0.25) | 0.914 m |
+| Tree line | Laborer | 10 | 0 | 1090 | 109 | 2161 | 53 | 0.263 m (0.33) | 0.822 m |
+| Tree line | Laborer | 10 | 0.5 | 1140 | 114 | 939 | 3 | 0.200 m (0.25) | 0.345 m |
+| Tree line | Laborer | 16 | 0 | 1590 | 159 | 5072 | 122 | 0.157 m (0.20) | 0.679 m |
+| Tree line | Laborer | 16 | 0.5 | 1660 | 166 | 2637 | 34 | 0.200 m (0.25) | 0.388 m |
+| Tree line | Laborer | 24 | 0 | 2140 | 214 | 9222 | 229 | 0.043 m (0.05) | 0.666 m |
+| Tree line | Laborer | 24 | 0.5 | 2380 | 238 | 4559 | 56 | 0.200 m (0.25) | 0.414 m |
+| Tree line | Gatherer | 5 | 0 | 600 | 40 | 1673 | 65 | 0.610 m (0.41) | 1.418 m |
+| Tree line | Gatherer | 5 | 0.5 | 675 | 45 | 406 | 9 | 0.375 m (0.25) | 0.898 m |
+| Tree line | Gatherer | 10 | 0 | 930 | 62 | 7876 | 301 | 0.363 m (0.24) | 1.236 m |
+| Tree line | Gatherer | 10 | 0.5 | 1230 | 82 | 1938 | 45 | 0.375 m (0.25) | 0.674 m |
+| Tree line | Gatherer | 16 | 0 | 1245 | 83 | 15609 | 517 | 0.064 m (0.04) | 0.983 m |
+| Tree line | Gatherer | 16 | 0.5 | 1845 | 123 | 4025 | 86 | 0.375 m (0.25) | 1.056 m |
+| Tree line | Gatherer | 24 | 0 | 1470 | 98 | 27613 | 797 | 0.026 m (0.02) | 0.900 m |
+| Tree line | Gatherer | 24 | 0.5 | 2475 | 165 | 8795 | 202 | 0.375 m (0.25) | 0.600 m |
+
+(The 0.25 and 0.75 rows print with `GatherOverlapReport.TableA_*`; table (c) re-printed by `TableC_*`: seeds 2-16 at 0 run
+28.6-63.6 s, at 0.5 23.0-48.5 s.)
+
+**Stage (c), the pins, once, on the final tree.** Every pin below was re-measured on the final tree (the cure and the
+value), each with its old value in a comment; none loosened, skipped or removed.
+
+- **The criterion rows (M5-5; `Stress/MatchRowsM6S10Report`, every check on, to 72,000).** Vathar Crossing seed 1 ends at
+  24,497 (20:24, seat 1), past its 24,000: **the literal row moves to seed 7** (the lowest of seeds 1-8 that ends inside
+  24,000 with a winner and every check clean; seeds 1-8: 24,497 / 30,569 / 27,240 / 27,240 / 27,361 / 27,240 / 23,412 /
+  23,412). `MatchCriterionTests.HalfWay` 11,397 -> 11,706 (half of 23,412); `CliTests.Match_TheLiteralRow_*` plays seed 7
+  (seat 0 wins); `OpeningReserveShareTests.TheRulesValue_*` follows `RowOf("vathar_crossing")`. **Raraku seed 1 no longer
+  ends inside 72,000 (BUG-1460, a finding):** seat 0 is down to buildings alone from about 27,000, seat 1 keeps 17 idle
+  workers, 14 wood and 2 soldiers and razes slowly; no held worker or unhunted lone unit causes it (a seat-0 worker is held
+  by its own parked army 5,000-7,300 and 8,600-10,000: BUG-1461, also on the base). Seeds 1-8: none / 27,936 / none / none /
+  29,569 / none / 28,547 / 28,547; **the Raraku row moves to seed 2** (bound 36,000 by Raraku's rule: 27,936 x 1.1 = 30,730).
+  Pale Hills seed 1 ends again (M6-S9 at 0.5 without the cure: no end): 42,384. The generated row (seed 2) 21,822; seed 1
+  would also qualify now (22,625), the row stays at 2.
+
+  | Row | Map, seed | Ends (bound) | Winner | Waves | Hunts | Refused (kind count) |
+  | --- | --- | --- | --- | --- | --- | --- |
+  | literal | Vathar Crossing 7 | 23,412 = 19:30 (24,000) | seat 0 (Malazan) | 8 | 0 | Build UnitInTheWay 2 |
+  | | Raraku 2 | 27,936 = 23:16 (36,000) | seat 1 (Whirlwind) | 9 | 0 | none |
+  | | Pale Hills 1 | 42,384 = 35:19 (72,000) | seat 1 (Whirlwind) | 14 | 3 | Build UnitInTheWay 3 |
+  | | generated 2 | 21,822 = 18:11 (24,000) | seat 0 | 7 | 0 | none |
+  | FFA | Vathar Crossing 2, 4 seats | 52,098 = 43:24 (72,000) | seat 0 | 25 | 9 | Build SealsGround 2 |
+  | 2v2 | Vathar Crossing 1, 4 seats | 57,154 = 47:37 (72,000) | team 2 | 23 | 8 | Build Blocked 1, SealsGround 2, UnitInTheWay 2 |
+
+  Before M6-S10 (M5-H6's table): Vathar 1 23,322, Raraku 1 28,231, Pale Hills 1 50,140, generated 2 17,053, FFA 56,896,
+  2v2 26,070.
+- **Golden replay** `cross_map_seed1.replay`: header data-hash 5353DF8A1473FC6D -> B74DC7AE61B4862D and its checksum only (its
+  army never gathers; the `k` lines are byte for byte as before); the reason is in `GatherWedgeQaTests`' comment.
+  `FactionOrderTests.TheShippedContentHash_IsTheGoldenHeaders` and `QA/PackQaTests.TheShippedDataHash_IsTheGoldenHeaders`
+  compare dynamically (rule 49) and pass on the regenerated file.
+- **Recordings and saves** (`Save/PreMapFixtures`): the four `Replays/premap/*.replay` rewritten (headers byte for byte; `k`
+  lines, and the AI scene's commands 81 -> 83); save digests `save_menu_seed1` 2,017,388 / 0x31C655C77B98CAF1 -> 2,017,388 /
+  0x706E266D3C78B919, `save_ai_seed2` 1,230,475 / 0x260D2E7D579BB2FF -> 1,246,880 / 0x1B8D1E13E92D88EA (format 10 both).
+  `HuntTests.APreChangeAiRecording_*` plays the rewritten AI fixture. `Replays/seed21_playable.replay` re-recorded from
+  `M3PlayableTest -- --seed 21 --break 19` (7,653 ticks; `GatherWedgeQaTests.CheckpointPrefixTicks` 7,682 -> 7,653).
+- **Digests:** `SharedVisionFfaPinTests` (4 of 5; `surround_brawl` unchanged), `HardKnobsPinTests` (4), `ReserveTwinTests`
+  (3 rows of 12 hashes), `StandardPresetPinQaTests` (7 save scenes + 7 AI rows), `OutcomePinM73bQaTests` (7 + 7; the six
+  scenes that never gather kept theirs: a behaviour change, not a renumbering), `NonHardMatchPinQaTests` (8),
+  `CounterCompositionTests.TheNonHardPins_*` (8): each row's old value is in its comment.
+- **Rows re-staged:** `GatherWedgeTests.FourWorkersQueuedOnATreeOpenOnOneSide_*` (230 against 240 was **wood**, not ticks:
+  two workers deposited in one tick and the check compared each delivery alone; it now sums the tick's loads: the scene's
+  pace, nobody waiting); `EndGameHardeningTests.Raraku_Seed1_ToTheEnd_TwoProcesses_*` follows the Raraku row (seed 2);
+  `MatchCriterionSweepQaStressTests.Known`: generated 4 out (no longer fails), Raraku 1, 3, 4 and 6 in (BUG-1460; the
+  shared list also turns `FarExpandProbeQaStressTests` (raraku, 1)'s extra oracles to print-only, so that row is green);
+  `GatherOverlapFuzzTests.Bug1430_Seed7AtTheCap_*` and QA's `KnownWedges_*` / `Seed7AtTheCap_RealRun_*` re-stated as "no
+  breach" (their wedge is gone).
+- **The data track's rows (handed over for this session):** re-printed from the run, cells and quoted report sentences
+  only (rule 40): the Age II tables' three seed columns on `malazan.md` and `whirlwind.md`
+  (`AiOpeningPairsReportTests`, `QA/Content/D21OpeningsQaTests`), the "Houses at the cap" and "Spending on the menu's map"
+  sentences on all three pages (`QA/Content/D20PinQaTests`, `AiSpendingReportTests`), docs/03's D21 spending bullet (its
+  run list and "3 of those 8 marks"), `QA/Content/TeblorOpeningQaTests` (first wave 6,841 -> 6,321; v Whirlwind (7,241,
+  9,281, 18,218) -> (6,321, 8,581, 20,444); v Malazan (6,801, 9,321, -1) -> (6,461, 8,961, -1)), and
+  `D32PreFixtureTests.OnTheDiffBasesData_*` (its copy takes `gatherOverlap` back out). Sentences those cells make false are
+  listed for the data track (BUG-1462), not rewritten; among them (fix round 1, BUG-1464 item 3) two on `teblor.md`: the
+  Houses-at-the-cap sentence "the 11th Hut step (step 15) is skipped and the 12th is never reached on this seed" (the cell
+  beside it now says step 16 is done at a cap of 100, steps 15 and 16 skipped) and the opening's first waves "at 340 s" /
+  "at 362 s" against a Normal Whirlwind (`TeblorOpeningQaTests` now reads 323 s and 316 s, Age II 448 / 429 s, beaten at
+  1,022 s, not 910 s).
+
+- **Rows red on the final tree, listed for the ACCEPT's ruling (BUG-1462; none is a held worker or an unplaced building):**
+  default loop: `CounterCompositionTests.AHardSeat_*` (the Normal row is green after fix round 1's re-staging) and
+  `AiOpeningPairsReportTests` (0, 2) / (2, 0) (above; neither has an honest next seed: the row's seed rule is the pair's
+  smallest seed, its cell is the pages' 1st-seed column, and the 2nd and 3rd seeds are `D21OpeningsQaTests`' runs), and
+  `QA/Content/DR35ProsePinQaTests.AgeTwoProse_*` / `Malazan_Bug0982Prose_*` (the page prose they pin quotes cells this task
+  re-printed: malazan seeds 32 / 45 and the cadre_rush v raider_rush seeds 8 / 14, whirlwind seeds 9 / 19; the prose and
+  the BUG-0982 threshold table are the data track's to rewrite; criterion 12 allows the sim cells and quoted report
+  sentences only, and these rows pin prose around the cells, so they cannot go green inside it). Stress: `AiOpeningPairsReportTests.Bug0982_*` and
+  `QA/Content/DH6ThresholdQaTests.Bug0982_*` (BUG-0982's rule now picks 14 pop, cadre_rush ships 18: a data measurement for
+  D33), `MapSlice2StressTests...OtherSeeds_EndWithin72000` Raraku 3 / 4 / 6 (BUG-1460; `FarExpandProbeQaStressTests`
+  Raraku 1 is green, not red: the `Known` entry above prints its oracles), `FarExpandProbeQaStressTests` Vathar 2 four seats (p3 silent 7,000 ticks), `StarvedSaveTwoProcessQaStressTests`
+  (Pale Hills seed 1 now ends at 42,384 before any starved wave), `StartingResourcesAiStressTests.EachOpening_AtHigh_*`
+  openings 1 and 2 (high's mean bank over 1.5 x standard's), `QA/ScoutCapQaTests.OneScoutKilled_*(seed: 5)` (12 workers
+  left, bound 14).
+
+- **The Hard v Normal tally** (`Stress/HardVersusNormalTallyQaStressTests`, 42 matches to 72,000; Hard wins / Normal wins /
+  none): **36 / 3 / 3** (was 32 / 8 / 2): Raraku 14 / 0 / 0 (10 / 4 / 0), Pale Hills 12 / 2 / 0 (11 / 1 / 2), Vathar
+  Crossing 10 / 1 / 3 (11 / 3 / 0; the three without a winner by 72,000 are seed 2 with Hard on seat 0 and seeds 7 and 8, one
+  match, with Hard on seat 1). Hard wins more than it loses on every map.
+- **Test rows:** the default loop 9,536 -> 9,545 (+5 `GatherOverlapFuzzTests.Bug1431_*`, +4 `GatherOverlapShippedTests`);
+  Stress +46 (`HeldWorkerSweepStressTests` 4, `KeepCornerWedgeDiagnosisTests` 10, `MatchRowsM6S10Report` 32). No row removed
+  or skipped.
+
+**Questions for the Producer (rule 67), each with the developer's recommendation.**
+1. `GatherOverlapFuzzTests.PastTheWindowWalking` holds (0, seed 14): a worker past 60 s while walking (63.6 s, not held).
+   The fuzz asserts no held worker on that row instead of the window. Recommendation: accept (rule 66: off, the window is a
+   report), or rule it a `KnownWedges`-style exception by name.
+2. The two `CounterCompositionTests` criterion-2 rows: the scene's seat no longer reached a choice between Line and Ranged
+   (wood-bound). Fix round 1 re-staged them on a gold-bound seat (above): the Normal row is green; the Hard-v-Normal row
+   is red (0.111 each). Recommendation: rule the Hard row (accept it red with BUG-1462, or a later task gives it a longer
+   memory window or a larger army so the two strengths can separate).
+3. `AiOpeningPairsReportTests` (0, 2) / (2, 0): recommendation: the data track decides whether "both sides wave" holds for a
+   side wiped before its first wave (D21's rows allow "defeated without a wave"), and whether a beaten-but-standing side
+   (Town Hall razed, defending) is a `WhyWaiting` reason.
+4. Raraku (BUG-1460): four of eight seeds now end with no winner by 72,000. Recommendation: an AI end-game task (the winner
+   razes a building-only loser; idle workers find wood past the reach) before the balance pass.
 
 ## Testing strategy
 

@@ -491,14 +491,16 @@ public partial class CommandCard : Control
     /// selected worker (<see cref="SelectionController.OrderBuild"/>, which plays the Command sound) and the menu closes
     /// unless <paramref name="shift"/> keeps the ghost for another; red, off the map or unresolved this frame: nothing (no
     /// sound). A Shift placement after the first of the same ghost is queued behind it, so the workers build them in turn.
-    /// Returns true if it placed.
+    /// M6-V22 (Producer decision): the first Shift placement is queued, per worker, behind an order that ends (a walk, an
+    /// attack, a build, a repair, orders already queued) and replaces a gather loop or idleness (<see cref="OrderPath.QueuesBehind"/>:
+    /// a gather loop never ends, so a Build queued behind it would never start). Returns true if it placed.
     /// </summary>
     public bool GhostClick(bool shift, Vector2 screen)
     {
         if (!_ghost.Active || !_ghost.ResolveClick(screen, out int anchor)) return false;
         // BUG-0122: a Shift flood on the anchor just placed would queue copies that only join the same site.
         if (shift && _placed > 0 && anchor == _lastPlaced) return false;
-        if (_sel.OrderBuild(_ghost.TypeId, anchor, queued: shift && _placed > 0) == 0) return false;
+        if (_sel.OrderBuild(_ghost.TypeId, anchor, queued: shift && _placed > 0, queueBehindEndingOrders: shift && _placed == 0) == 0) return false;
         _placed++;
         _lastPlaced = anchor;
         if (!shift) CloseMenu();

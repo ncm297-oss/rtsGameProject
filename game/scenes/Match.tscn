@@ -1,4 +1,4 @@
-[gd_scene load_steps=35 format=3]
+[gd_scene load_steps=36 format=3]
 
 [ext_resource type="Script" path="res://scripts/Match.cs" id="1_match"]
 [ext_resource type="Script" path="res://scripts/SimRunner.cs" id="2_runner"]
@@ -30,6 +30,7 @@
 [ext_resource type="Script" path="res://scripts/AbilityViews.cs" id="28_ability"]
 [ext_resource type="Script" path="res://scripts/SoundCues.cs" id="29_cues"]
 [ext_resource type="Script" path="res://scripts/AlertHud.cs" id="30_alerts"]
+[ext_resource type="Script" path="res://scripts/OrderPathView.cs" id="31_paths"]
 
 [sub_resource type="ProceduralSkyMaterial" id="SkyMaterial_1"]
 sky_top_color = Color(0.36, 0.52, 0.72, 1)
@@ -99,6 +100,9 @@ script = ExtResource("8_rings")
 
 [node name="TargetRing" type="Node3D" parent="World3D"]
 script = ExtResource("25_target")
+
+[node name="OrderPaths" type="Node3D" parent="World3D"]
+script = ExtResource("31_paths")
 
 [node name="AbilityViews" type="Node3D" parent="World3D"]
 script = ExtResource("28_ability")

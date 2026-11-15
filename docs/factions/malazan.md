@@ -238,10 +238,8 @@ Whirlwind's raider rush (seed 2: the base was defended at 779 of its 1,200 think
 
 **Houses at the cap (D21, 2026-10-18, D15 C's parked finding measured; `QA/Content/AiHouseRuleReportTests.MenuMapNormal_HouseSources_Report` and `MenuMapNormal_TwelfthHouse_Report`).**
 Since M5-4f the executor skips a house step once the population cap is the hard cap (100): the step is done with no
-command sent and no Billet placed. On the menu's map (20 minutes, the other seat idle): Normal, seed 1: the cap reaches
-100 at 936 s; the last Billet step (step 18) is done at a cap of 100; skipped at the hard cap: step 18; 11 Billets stand
-at 20:00, 0 past the cap. The 12th Billet leaves 6 of its 8 pop unused when it is placed, so D21 measured taking it out:
-without the 12th Billet step (step 18) on the same seed, the cap reaches 100 at 936 s, and 11 Billets stand at 20:00, 0
+command sent and no Billet placed. On the menu's map (20 minutes, the other seat idle): Normal, seed 1: the cap reaches 100 at 782 s; the last Billet step (step 18) is done at a cap of 100; skipped at the hard cap: steps 17, 18; 10 Billets stand at 20:00, 0 past the cap. The 12th Billet leaves 6 of its 8 pop unused when it is placed, so D21 measured taking it out:
+without the 12th Billet step (step 18) on the same seed, the cap reaches 100 at 782 s, and 10 Billets stand at 20:00, 0
 past the cap. Re-printed 2026-10-26 for M5-4g (the reserve saves for the expansion): the second Keep now stands on this
 seed, so the cap reaches 100 with 10 Billets finished and the 12th Billet step is skipped, and the run with and without
 it is the same. Before M5-4g the cap reached 100 at 727 s with the 12th Billet placed at a cap of 90 (12 Billets), and
@@ -250,9 +248,9 @@ opening: at the hard cap it costs nothing, and on a seed where the second Keep d
 
 **Spending on the menu's map (D21, 2026-10-18, gathering gold 0.85 / wood 0.75 a second; `Content/AiSpendingReportTests.GeneratedNormal_Spending_Report`).**
 Against an idle seat, 12 forests and 8 mines (the menu's), 20 minutes. Normal, seed 1 (the smallest seed in 1-50 whose
-Normal pick is this opening): the idle base falls at 489 s; in hand at 5 min 156 gold / 25 wood; the first wave at 338
-s; Age II in at 523 s. Easy, seed 1 (Easy always plays the first opening): the idle base falls at 497 s; in hand at 5
-min 72 gold / 0 wood; the first wave at 332 s; Age II in at 515 s. Age II comes in about 2 minutes after its step is
+Normal pick is this opening): the idle base falls at 469 s; in hand at 5 min 242 gold / 35 wood; the first wave at 342
+s; Age II in at 514 s. Easy, seed 1 (Easy always plays the first opening): the idle base falls at 479 s; in hand at 5
+min 222 gold / 15 wood; the first wave at 314 s; Age II in at 563 s. Age II comes in about 2 minutes after its step is
 due at 6:30: the army is wave-sized by then (the first wave left at 338 s), so the reserve (above) holds the gold for it. Re-printed 2026-10-26 for M5-4g:
 before it Age II came in at 938 s (Normal) and 844 s (Easy), about 8 minutes after its step, and the Normal run razed
 the idle base at 498 s; the 5-minute banks and the first waves did not move. The reserve costs army against an active
@@ -314,14 +312,14 @@ standard (23 in Age I): two Ranges and a crossbow army eat the wood.
 | 26 | time 570 | research | `moranth_supply` | 1 | The faction upgrade (Catapult range + 4 m) |
 
 **Houses at the cap (D21, 2026-10-18; `QA/Content/AiHouseRuleReportTests.MenuMapNormal_HouseSources_Report`).** On the
-menu's map (20 minutes, the other seat idle): Normal, seed 5: the cap reaches 100 at 754 s; the last Billet step (step
+menu's map (20 minutes, the other seat idle): Normal, seed 5: the cap reaches 100 at 708 s; the last Billet step (step
 19) is done at a cap of 100; skipped at the hard cap: steps 18, 19; 10 Billets stand at 20:00, 0 past the cap.
 Re-printed 2026-10-26 for M5-4g: before it the cap reached 100 at 650 s, step 19 was done at a cap of 98, no step was
 skipped and 12 Billets stood.
 
 **Spending on the menu's map (D21, 2026-10-18, gathering gold 0.85 / wood 0.75 a second; `Content/AiSpendingReportTests.GeneratedNormal_Spending_Report`).**
 Against an idle seat, the menu's map, 20 minutes. Normal, seed 5 (the smallest seed in 1-50 whose Normal pick is this
-opening): the idle base falls at 474 s; in hand at 5 min 282 gold / 30 wood; the first wave at 341 s; Age II in at 568 s.
+opening): the idle base falls at 463 s; in hand at 5 min 332 gold / 45 wood; the first wave at 330 s; Age II in at 568 s.
 Re-printed 2026-10-26 for M5-4g (the reserve): Age II came in at 943 s before it; nothing else moved.
 
 **Army composition (`compositions`), weights by pop.** Age I is the two units the Age I steps train, 36 : 24 (60% /
@@ -376,15 +374,12 @@ Range waits for Age II, so Age I trains Heavy Infantry only.
 | 25 | time 570 | research | `moranth_supply` | 1 | The faction upgrade, at the Armory |
 
 **Houses at the cap (D21, 2026-10-18; `QA/Content/AiHouseRuleReportTests.MenuMapNormal_HouseSources_Report`).** On the
-menu's map (20 minutes, the other seat idle): Normal, seed 7: the cap reaches 100 at 780 s; the last Billet step (step
-16) is done at a cap of 100; skipped at the hard cap: steps 15, 16; 10 Billets stand at 20:00, 0 past the cap.
+menu's map (20 minutes, the other seat idle): Normal, seed 7: the cap reaches 100 at 811 s; the last Billet step (step 16) is never done; skipped at the hard cap: step 15; 10 Billets stand at 20:00, 0 past the cap.
 Re-printed 2026-10-26 for M5-4g: before it the cap reached 100 at 835 s, step 16 was done at a cap of 98, no step was
 skipped and 12 Billets stood.
 
 **Spending on the menu's map (D21, 2026-10-18, gathering gold 0.85 / wood 0.75 a second; `Content/AiSpendingReportTests.GeneratedNormal_Spending_Report`).**
-Against an idle seat, the menu's map, 20 minutes. Normal, seed 7 (the smallest seed in 1-50 whose Normal pick is this
-opening): the idle base falls at 615 s; in hand at 5 min 198 gold / 455 wood, at 10 min 188 / 110; the first wave at 487
-s; Age II in at 509 s. Still the fastest Malazan Age II (the others: 523 s and 568 s), though not the step's 6:00: the
+Against an idle seat, the menu's map, 20 minutes. Normal, seed 7 (the smallest seed in 1-50 whose Normal pick is this opening): the idle base falls at 599 s; in hand at 5 min 228 gold / 605 wood; the first wave at 470 s; Age II in at 492 s. Still the fastest Malazan Age II (the others: 523 s and 568 s), though not the step's 6:00: the
 one Barracks still spends gold before 400 piles up, and the reserve waits for an 18-pop army (the first wave, at 487
 s). Re-printed 2026-10-26 for M5-4g: Age II did not move; the idle base fell at 619 s and the 10-minute bank read 99 /
 490 before it.
@@ -627,15 +622,15 @@ loses) seed 19's side rebuilds and lives to 20:00 again (docs/03 "Implementation
 
 | Malazan opening | Whirlwind opening | 1st seed | 2nd seed | 3rd seed |
 | --- | --- | --- | --- | --- |
-| `standard` | `standard` | seed 1: 12:22 | seed 22: 13:08 | seed 26: 11:48 |
-| `standard` | `raider_rush` | seed 2: never (defeated 16:33) | seed 10: 12:00 | seed 21: 8:19 |
-| `standard` | `holy_war` | seed 3: 13:51 | seed 4: 15:19 (defeated 19:53) | seed 6: 8:29 (defeated 15:37) |
-| `crossbow_push` | `standard` | seed 9: 12:19 | seed 32: never (defeated 17:12) | seed 37: 12:50 |
-| `crossbow_push` | `raider_rush` | seed 5: 11:44 | seed 11: 8:47 | seed 19: never |
-| `crossbow_push` | `holy_war` | seed 12: 12:13 | seed 45: 9:28 (defeated 19:02) | seed 71: 9:43 |
-| `cadre_rush` | `standard` | seed 13: 6:05 | seed 16: 8:24 | seed 17: 8:44 |
-| `cadre_rush` | `raider_rush` | seed 7: 8:26 | seed 8: 8:41 (defeated 13:47) | seed 14: never (defeated 14:16) |
-| `cadre_rush` | `holy_war` | seed 20: 8:24 | seed 24: 8:44 | seed 27: 8:33 |
+| `standard` | `standard` | seed 1: 8:34 | seed 22: 11:50 | seed 26: 12:05 |
+| `standard` | `raider_rush` | seed 2: 12:38 | seed 10: 9:51 | seed 21: 8:22 |
+| `standard` | `holy_war` | seed 3: 8:22 | seed 4: 11:36 | seed 6: 12:47 |
+| `crossbow_push` | `standard` | seed 9: 10:53 | seed 32: 14:18 | seed 37: 9:35 |
+| `crossbow_push` | `raider_rush` | seed 5: 9:28 | seed 11: 9:28 | seed 19: never (defeated 16:10) |
+| `crossbow_push` | `holy_war` | seed 12: 10:58 | seed 45: 8:41 | seed 71: 9:55 |
+| `cadre_rush` | `standard` | seed 13: 6:05 | seed 16: 8:10 | seed 17: 8:15 |
+| `cadre_rush` | `raider_rush` | seed 7: 8:24 | seed 8: 8:22 | seed 14: 8:19 (defeated 11:34) |
+| `cadre_rush` | `holy_war` | seed 20: 8:20 | seed 24: 8:28 | seed 27: 8:33 (defeated 18:32) |
 
 Re-printed 2026-11-09 for the sim's M5-H6 (docs/03 "Implementation (M5-H6)"): `crossbow_push` against `holy_war` seed 45
 reaches Age II at 9:28 as before and is now defeated at 19:02 (was standing at 20:00); `cadre_rush` against

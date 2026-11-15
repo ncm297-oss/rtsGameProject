@@ -515,6 +515,11 @@ public partial class CommandCardTest : Node
         Check(!_ghost.Valid && _sim.PendingCommandCount == start, $"click on the hall: valid {_ghost.Valid}, {_sim.PendingCommandCount - start} commands");
 
         // Shift: houses (50 wood each, 50 left: one more fits); the ghost stays up and a second click enqueues again (queued behind the first).
+        // M6-V22: the first Shift placement now queues behind an order that ends (the three are building the hall site), so
+        // they are stopped first: this row is about idle workers (the first click replaces, the second queues).
+        // OrderQueueViewTest has the busy-worker rows.
+        foreach (EntityHandle h in three) _sim.Enqueue(Command.Stop(0, h));
+        Tick(2);
         Key(Godot.Key.Escape);
         Key(Godot.Key.B);
         Key(Godot.Key.Q);
@@ -743,6 +748,9 @@ public partial class CommandCardTest : Node
     // BUG-0122 (2): 25 Shift-clicks on one green anchor in one frame send 3 Builds (one per worker), no queued copies.
     private async Task Bug0122Flood()
     {
+        // M6-V22: the Repair row's Stops (sent with one tick left) apply first, so the three stand idle: the first Shift
+        // placement replaces only for an idle worker or a gatherer now (an order that ends is queued behind).
+        Tick(2);
         SetMoney(50000, 50000);
         List<EntityHandle> three = Workers().Take(3).ToList();
         await Select(three);

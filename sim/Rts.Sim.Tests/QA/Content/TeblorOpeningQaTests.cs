@@ -19,8 +19,9 @@ public class TeblorOpeningQaTests
 
     // Measured 2026-11-11 (D28) on the shipped data: the Teblor's first wave against the idle seat (416 s, as the page's
     // "Spending on the menu's map" says). D31 (2026-11-14): re-measured on the landed opening (V24, its own reserve share
-    // 0.25, the Gatherer's carry 15): 8321 -> 6841 (342 s).
-    private const int FirstWaveTick = 6841;
+    // 0.25, the Gatherer's carry 15): 8321 -> 6841 (342 s). M6-S10 (sim track, the Keep-corner cure and gatherOverlap 0.5:
+    // handed this row for the session): 6841 -> 6321 (316 s).
+    private const int FirstWaveTick = 6321;
 
     private readonly ITestOutputHelper _out;
 
@@ -62,8 +63,11 @@ public class TeblorOpeningQaTests
     /// (2026-11-14), re-measured on the landed opening: both matches see a Teblor wave and Age II; the Malazan one stands.
     /// </summary>
     [Theory]
-    [InlineData("whirlwind", 7241, 9281, 18218)] // D31: wave 362 s, Age II 464 s, beaten 910 s; the Whirlwind sent 1 wave
-    [InlineData("malazan", 6801, 9321, -1)]      // D31: wave 340 s, Age II 466 s, stands at 20:00; the Malazan sent 1 wave
+    // M6-S10 (sim track, the Keep-corner cure and gatherOverlap 0.5): v Whirlwind (7241, 9281, 18218) -> (6321, 8581, 20444),
+    // the Teblor still beaten but 111 s later, 4 waves sent, the Whirlwind 3; v Malazan (6801, 9321, -1) -> (6461, 8961, -1),
+    // the Teblor stand, 2 waves sent, the Malazan 3.
+    [InlineData("whirlwind", 6321, 8581, 20444)] // M6-S10: wave 316 s, Age II 429 s, beaten 1022 s (D31: 362 / 464 / 910 s; the Whirlwind sent 1 wave)
+    [InlineData("malazan", 6461, 8961, -1)]      // M6-S10: wave 323 s, Age II 448 s, stands at 20:00 (D31: 340 / 466 s; the Malazan sent 1 wave)
     public void TheStandardOpening_AgainstANormalAi_Report(string opponent, int firstWave, int ageTwo, int fell)
     {
         GameData d = TestSim.Data;

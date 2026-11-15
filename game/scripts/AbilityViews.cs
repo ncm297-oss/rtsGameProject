@@ -92,7 +92,8 @@ public partial class AbilityViews : Node3D
     private static readonly Color CastRingFill = new(1f, 0.4f, 0.05f, 0f);
     // BUG-0342: a black back read as an empty dash; a dim violet back reads as the bar's empty part.
     private static readonly Color BarBackColor = new(0.28f, 0.2f, 0.38f);
-    private static readonly Color BarFillColor = new(0.85f, 0.55f, 1f);
+    /// <summary>The cast bar's fill colour (M6-V22: also a queued UseAbility's line and marker).</summary>
+    public static readonly Color BarFillColor = new(0.85f, 0.55f, 1f);
 
     /// <summary>The Burning (damage over time) marker's colour: flame.</summary>
     public static readonly Color DamageOverTimeColor = new(1f, 0.42f, 0.05f);
