@@ -20,6 +20,22 @@ two golden data-hash pins and the golden will, by design; the M5-5 rows per docs
 (b): Vathar Crossing 23,322 p1 → 28,729 p0, past its 24,000 bound; Raraku 28,231 → 30,132; **Pale Hills seed 1
 50,140 → does not end in 72,000**). The brief names those rows (rules 41 / 43 / 45).
 
+**PLAN of 2026-11-15-0506 (session 1 / 8 of 2026-11-15; all three tracks GO).** Each track's "Current session
+plan" below is the brief handed to its developer. Done at this PLAN: the inbox (nothing new); the three bug-index
+rows (BUG-1400 and BUG-1391 fixed, BUG-1440 added); `main` (6e41354) on a scratch clone: build `--no-incremental`
+0 / 0, default loop **9,515 / 0 failed / 21 skipped of 9,536 in 26 m 23 s** (beside the rehearsal), smoke PASS; the
+rehearsal of the value (base + `"gatherOverlap": 0.5`): build 0 / 0, default loop **47 failed** (31 sim-owned, 16
+data-owned), scene loop 107 of 107 (`BenchTest` 7.2 s of 7 beside two test hosts, green alone). The Stress pin
+classes were not rehearsed (stopped: the cure moves every one of them again, and M6-S9's table (b) already has the
+M5-5 rows at 0.5). **What the rehearsal changed in the plan:** (1) seven rows assert behaviour, not a number, and
+fail with the value alone (an opening that sends no wave, a Barracks step never done, a seat that never attacks,
+wood fetched 200 m away): the sim brief makes them a gate on the value (criterion 10, outcome B); (2) 16 red rows
+are the data track's: they are handed to the sim by name for this session, and D-H9 lost BUG-1421 items 3-4
+(teblor.md) so the two tracks share no file; (3) the view's Shift-queue brief carries a Producer decision on the
+building gap (a house queued behind a gather loop would never be built, so a gathering or idle worker starts it at
+once). Verified claims: `CommandCard.cs` line 501 reads `queued: shift && _placed > 0`; the order queue's arrays
+are public on `UnitStore`; `tools/asset-manifest.json` holds 11 models; `rules.json` has no `gatherOverlap`.
+
 ## Where things stand
 
 - **`main` after this session = sim 7c99fac + view 06a5af3 + data d15577c** (plus this ACCEPT's studio and docs
@@ -236,6 +252,167 @@ view's hardening (4 / 4), then merged surfaces; 400 mixed figures of eleven type
 
 ## Sim track
 
+### Current session plan (2026-11-15-0506): M6-S10, cure the Keep-corner wedge (BUG-1431), then ship `gatherOverlap` 0.5 with one re-measure of the pins (feature, QA full)
+
+Goal: the owner asked for gatherers that overlap a bit while collecting (inbox 2026-11-14); M6-S9 built the rule
+switched off. This task makes it real: first cure today's wedge in which a worker stands out of reach at a Keep's
+corner for a minute (BUG-1431, the root of every BUG-1430 breach), then put `"gatherOverlap": 0.5` into the shipped
+`game/data/common/rules.json` and re-measure every pin once, on the final tree. It is staged with stop points: if
+the wedge is not cured nothing ships, and if the value misbehaves the fix ships alone.
+
+Scope, in this order (report each stage under its own heading):
+- **Stage 0, the diagnosis, before any production edit** (docs/03 "Implementation (M6-S10)"): trace the held worker
+  in `Movement/GatherOverlapFuzzTests.Run(overlap, seed, tripWindow: true)` with the knob off on seeds 4, 22, 27,
+  35, 44, 56 and with it on at 0.25 / seed 3, 0.75 / seed 7, 0.5 / seeds 23 and 27. One table: seed, value, the
+  worker's state, where it stands against the footprint and its stand point, who holds the stand cell, and why each
+  retry (`EconomySystem.Wait` -> `StartReturn` / `WalkToNode` -> `WalkToFootprint` -> `StandPoint`) ends the same way.
+  Seed 27 (an outbound worker held at its Keep) and seed 56 (6.3 m out) may be other causes: say so.
+- **Stage (a), the cure, knob off.** One generic rule (any worker, any faction, any drop-off or node footprint; no
+  per-type case, no new data field unless the design needs a number, which then goes in `rules.json` or stays a
+  named constant beside `EconomyConstants.RetryTicks` like its neighbours). **No new saved per-unit state and no
+  save or replay format change** (if the cure needs either, that is outcome C below).
+- **Stage (b), the value.** `"gatherOverlap": 0.5` in `game/data/common/rules.json`. The data hash
+  (5353DF8A1473FC6D) moves once: saves and recordings from before are refused with the existing message.
+- **Stage (c), the pins, once, on the final tree** (rules 41 / 43 / 45 / 49 / 51): the lists below.
+- OUT of scope: `game/**` except that one file; `sim/Rts.Sim/ViewApi/**`; any faction file; a change to what a
+  gather pair is or to the floor (BUG-1433 item 1); BUG-1149 / 1151 / 1152 / 1161; Requests 53-56; M8-2; the hunt,
+  except under the "row that stops ending" rule below; changing the fuzz's scene, orders, seeds or window so that
+  it passes (assertions may be added, never removed); the data track's files except the rows named below; this
+  session's data task edits `docs/factions/shadow.md` and the `Content` / `QA/Content` page-shape pins
+  (`AbilityContentTests`, `UnitContentTests`, `BuildingContentTests`, `PagePinReadinessTests`,
+  `DR38ShadowPageQaTests`, `DH8DescriptionRuleQaTests`): do not touch those.
+
+**"Held" (the word the criteria use):** a live unit with `GatherNode` set whose node is alive, 1,200 ticks without
+a delivery (the fuzz's trip), that at the end of those ticks is within 2 m of where it was 600 ticks earlier. A
+worker past 1,200 ticks that kept walking is printed with its route and is not a failure (rule 66: with the knob
+off the unbreached seeds already run to 58.5 s, so the bare 60 s window is a report, not a gate).
+
+Acceptance criteria:
+1. Stage 0's table is in docs/03 and QA can reproduce any row of it from the commands it names.
+2. Knob off (field absent), the fuzz's scene and orders unchanged, seeds 2-56 (less 13 and any seed the harness
+   says cannot be built): **no held worker**. Today six seeds have one (4, 22, 27, 35, 44, 56). The longest gap per
+   seed is printed. `GatherOverlapFuzzTests.KnownWedges` holds no row at 0.
+3. Knob off, report only (rule 48): docs/03 M6-S9 table (a) re-printed beside M6-S9's off column (5 / 10 / 16 / 24
+   workers, Laborer and Gatherer, mine and tree line), and `Stress/WideCrowdStressTests` with both columns. A row
+   banking under 97 % of M6-S9's off figure is explained in the report.
+4. At the shipped 0.5, seeds 2-56: **no held worker** (today seeds 23 and 27 have one). At 0.25 and 0.75: the held
+   seeds are counted and printed against off; one that off does not have is a finding with its trace, not a gate.
+5. The five Stress rows red on `main` by ruling (`GatherOverlapQaStressTests.EconomyFuzz_Seeds2To16_*` at 0.25 and
+   0.75, `Bug1430_*` x2, `GatherOverlapWedgeQaStressTests.WiderSeedSweep_17To56_BreachesByValue`) are green: as
+   written, or re-stated as "no held worker at 0 and at 0.5; at 0.25 / 0.75 the held seeds are these, by name"
+   with the old figures kept in a comment. None is skipped or deleted.
+6. At 0.5 on the final tree: table (a) re-printed; the 16- and 24-worker mine rows bank at least what off banks,
+   for Laborers and for Gatherers (M6-S9: 3,930 v 3,430 and 3,960 v 2,790); no two workers closer than the floor.
+7. Determinism on the shipped data: twins hash-equal every tick for 6,000 ticks; a save at 3,000 continues equal;
+   a replay plays back equal; a save and a recording made on the base's data are refused, not crashed; the save and
+   replay format numbers are unchanged.
+8. 0 bytes allocated per tick in the gather scenes; the Perf rows alone under rule 42, no threshold loosened.
+9. **The sim's pins, re-measured once** (each with the old value in a comment; none loosened, skipped or removed;
+   the count of test rows before and after is in the report). The Producer's rehearsal (the base + the value alone,
+   default loop) had these red, so expect at least them: the golden replay (regenerated; the reason goes in the
+   `GatherWedgeQaTests` comment; no test pins the header's data hash as a literal, rule 49) and the two data-hash
+   pins (`FactionOrderTests.TheShippedContentHash_IsTheGoldenHeaders`,
+   `QA/PackQaTests.TheShippedDataHash_IsTheGoldenHeaders`); `SaveFormatTests.AGeneratedMatch_SavesFormat4_*` (2),
+   `ReplayFormatTests.AGeneratedMatch_RecordsFormats6To8_*` (4), `SharedVisionFfaPinTests` (4),
+   `HardKnobsPinTests` (4), `ReserveTwinTests.AShiftOfZero_*` (3), `HuntTests.APreChangeAiRecording_*`,
+   `CliTests.Match_TheLiteralRow_*`, `GatherWedgeTests.FourWorkersQueuedOnATreeOpenOnOneSide_*` (230 -> 240 ticks
+   in the rehearsal: say whether that is the scene's pace or a worker waiting), `MatchCriterionTests` (the Vathar row and its half-way save); then every
+   class in the handoff's "Pinned matches on `main`" paragraph, Stress included (`StandardPresetPinQaTests`,
+   `NonHardMatchPinQaTests`, the eight `CounterCompositionTests.TheNonHardPins_*`, `OutcomePinM73bQaTests`,
+   `HardKnobsMatchTests`, `ScoutManagerTests`, `GatherBonusTests`, `MapSlice2StressTests`, `HuntStressTests`,
+   `FactionOrderQaTests`, the four `FactionOrderTests` copy pins, the premap AI replay, the Hard v Normal tally).
+   `OutcomePinM73bQaTests`' fingerprints may move (this is a behaviour change, not a renumbering): its comment says so.
+10. **Rows that assert behaviour, not a number: diagnose before touching** (the rehearsal's reds):
+    `AiDeterminismTests.TwoAiSeats_Waves_TwoRuns_SameHashEveryTick(seed: 1)` ("AI 1 never attacked"),
+    `CounterCompositionTests.AHardSeat_ShiftsItsLineShareFurther_ThanANormalSeat` (0.0214 v 0.0234),
+    `QA/ReachRuleQaTests.NearestForestFarPastTheReach_*` (seed 2, cleared 80 and 120: "farthest wood target 201.2 m
+    vs control 116.6 m"), `QA/ScoutCapQaTests.ASeatPastTheCapBeforeItsFirstScout_*` (seed 3: "a gatherer sent
+    151.2 m from the hall (unharmed 150.6)"),
+    and the data track's `Content/AiOpeningPairsReportTests.NormalAiVersusAi_EveryOpeningPair_BothWave_NoDeadEndStep`
+    ("whirlwind (holy_war) sent no wave in 20 minutes on seed 3"; "malazan step 4 (build malazan_barracks): DEAD END,
+    due at 18:41"). For each, the report says what happened in the match (who was beaten or starved, or which
+    worker or builder stood where). **If the cause is a worker or builder held or a building that cannot be
+    placed, the value does not ship (outcome B).** If the match simply went another way, the row takes the next
+    seed by the test's own seed rule, or its scene is re-staged with the reason in a comment; a row with no honest
+    re-staging is listed for the ACCEPT's ruling (rule 57), not edited to pass.
+11. **M5's criterion rows** (`MatchCriterionTests`, docs/03's M5-5 table, the bound comments; M6-S9 measured the
+    value alone: Vathar Crossing 23,322 p1 -> 28,729 p0, Raraku 28,231 -> 30,132, Pale Hills seed 1 50,140 -> no
+    end in 72,000):
+    - The literal 20-minute row (M5 criterion 5): if Vathar Crossing seed 1 ends past 24,000, the literal row
+      moves to the lowest of seeds 1-8 on Vathar Crossing that ends inside 24,000 with a winner and every check
+      clean (the generated row's precedent, M5-9a round 2); if none does, the generated row (24,000) is named the
+      literal row and Vathar seed 1 takes Raraku's rule (the next 6,000 above its end with 10 % slack).
+      `MatchCriterionTests.HalfWay`, `OpeningReserveShareTests.TheRulesValue_OnEveryOpening_*` and
+      `CliTests.Match_TheLiteralRow_*` follow the literal row. Each such move is a finding in the report.
+    - **A row that does not end inside 72,000 is a finding, never a new bound.** Probe it (QA's
+      `Stress/GatherOverlapPaleHillsProbeQaStressTests` shows how). A held worker: the cure is not done (outcome
+      B or C). A lone worker with no loop, no building and no army that the winner never hunts (BUG-1434's second
+      half, BUG-1116): fix the hunt in this task if it is generic and about 60 production lines with a regression
+      row; otherwise the row joins the known stalls with its id and the map's row moves to the lowest of seeds 1-8
+      that ends.
+    - The Hard v Normal tally (32 / 8 / 2 today) is re-measured and reported per map; a map where Hard no longer
+      wins more than it loses is a finding for the data track (Hard's knobs are data), not a gate.
+12. **The data track's rows, handed over by name for this session only** (rule 51 in reverse; the rehearsal's reds).
+    You may re-print the numbers, fixtures and quoted report sentences these pin, in the test file and in the
+    faction page cell it reads (`docs/factions/malazan.md`, `whirlwind.md`, `teblor.md`: cells only, rule 40):
+    `Content/AiSpendingReportTests.GeneratedNormal_PagesAndDocs03_QuoteTheReport`,
+    `Content/AiOpeningPairsReportTests` (the Age II cells), `Content/D32PreFixtureTests.OnTheDiffBasesData_*`
+    (the copy must be the base's data: take the field out, as BUG-1400's fix did; rule 58),
+    `QA/Content/D20PinQaTests.HouseNote_*` (3), `QA/Content/TeblorOpeningQaTests` (3), and any further row of the
+    same kind the final tree turns red in `Content/**` or `QA/Content/**` (name each in the report). A sentence on
+    a page that a re-printed cell makes false is **listed for the data track's next task, not rewritten**; no
+    `displayName` or `description` in `game/data` changes. Run `Content` + `QA/Content` with Stress once on the
+    final tree and list every red opening row with its figures (the Teblor opening's allowances are D33's).
+13. docs: docs/02 "Economy" (the value is shipped and what a player sees), docs/03 "Implementation (M6-S10)"
+    (stage 0's table, the rule, tables, the M5-5 table re-printed, every pin old -> new), and the two docs/03
+    sentences that say the field is not shipped. (docs/01's change log is the Producer's.)
+14. `dotnet build RtsGame.sln --no-incremental` 0 errors / 0 warnings after the last edit (rule 64); the default
+    loop green after the last edit (rule 62); the default loop with Stress red only in rows the report lists for
+    ruling; smoke PASS and the scene loop run once on the final tree (the rehearsal with the value alone: 107 of
+    107, `BenchTest` green alone; you cannot edit `game/tests`, so a scene the cure turns red is named in the
+    report's first lines for the view track).
+
+**The Producer's rehearsal at this PLAN (rule 54; a scratch clone of 6e41354 + `"gatherOverlap": 0.5`, nothing
+else):** build 0 / 0; default loop **9,468 passed / 47 failed / 21 skipped of 9,536** (the base alone: 9,515 / 0 /
+21); scene loop 107 of 107. The 47 are the rows criteria 9, 10 and 12 name: 31 sim-owned (among them the golden
+and the two data-hash pins), 16 data-owned. The cure will move more (every knob-off movement pin).
+
+**Stop points (say which outcome in the report's first line):**
+- **A:** every criterion met: the cure and the value ship together.
+- **B:** criteria 1-3 met, but 4 or 10 fails after two attempts: **the cure ships alone**. The field stays out of
+  `rules.json`, the data hash does not move, criteria 9, 11 and 12 are done for the knob-off change (the golden's
+  `k` lines and the match pins move; the data-hash pins and fixtures do not), criterion 5's rows are re-stated for
+  off only with the value's figures printed, and the report says what the value still needs.
+- **C:** criterion 2 not met after the diagnosis and two designs, or the cure needs new saved state: revert the
+  production change; keep docs/03's diagnosis and any new report-only test; **no pin, golden or data file moves**.
+- Before stage (c): apply the value on a scratch clone named `m6s10-...` (rule 63), run the default loop there, and
+  decide A or B from that run. Do the pins once, after that decision.
+
+Design references: docs/02 "Economy" (mine crowding: no hard cap, workers queue at the edge; the gather-overlap
+paragraph), docs/03 "Implementation (M6-S9)" (the sites, tables (a)-(c), the floor), docs/03 "Implementation
+(M5-5)" (the criterion rows and their bound rules), docs/01 2026-11-14 (f) and 2026-11-15 (a) (0.5 is the default;
+a Stop does not separate a pair), BUG-0146 / BUG-0790 (the footprint walk and its stand points: do not regress
+"a worker queued behind is still in reach").
+
+Tests required: a regression row for the cure that fails on the base (the seed-4 scene, or a small staged scene:
+a Keep, a mine at its corner, returning traffic) in the default loop; the off and 0.5 sweeps of criteria 2 and 4
+(Stress); the determinism rows of 7; the allocation row of 8; the golden and every pin re-measured.
+
+Constraints: no Godot in `Rts.Sim`; no hard-coded stat; no wall clock, no unseeded randomness, no dictionary order
+in a result; no allocation in per-tick code; `MovementSystem.PairSum` and Plan's written-out copy stay in step;
+size about 800 production lines (pins, fixtures, reports and QA's suites are not counted: rule 39); scratch
+folders named `m6s10-...`; end every `testhost` you started (rule 52); bug-file notes come as a patch in the
+scratch folder. Bug ids from 1460.
+
+QA focus (full: the default loop with Stress, then Perf alone under rule 42): the cure on other shapes (a 2 x 2
+depot, a Keep against the map edge and against a cliff, two Keeps side by side, a node touching the Keep, 0.75 m
+Gatherers and a mixed crowd, 40 workers on one mine, a drop-off destroyed while workers return, a node that runs
+out mid-queue); held workers on seeds 57-120 at 0 and 0.5; spawn-order shuffles; the knob switched on one tick
+late; BUG-0146 / BUG-0790's own rows; twins, a save taken while workers overlap, replay; allocation. On the
+pins: diff every bound and count (nothing loosened, skipped or deleted), read each "behaviour" row's explanation
+against a probe of the match, check the literal row's move against the rule above, and run the M5-5 rows with
+checks on. Say which outcome (A / B / C) the evidence supports.
+
 ### Where we are
 M6-S9 on `main`: the gather-overlap rule, off. Counter **2 / 4**. New: BUG-1431 S3 (today's Keep-corner wedge),
 BUG-1430 S3 (the fuzz window; gates the value), BUG-1434 S3 (Pale Hills seed 1), BUG-1433 S4; BUG-1432 wontfix
@@ -282,6 +459,94 @@ the JSON-`null` policy (`forestStealth` / `regen` read it as absent, `reserveArm
 
 ## View track
 
+### Current session plan (2026-11-15-0506): M6-V22, the owner's Shift-queue made visible (feature, QA standard)
+
+Goal: the owner asked to Shift + click to queue orders (inbox 2026-11-14). The sim already queues every unit order
+(8 a unit) and the view already passes Shift; nothing draws the queue, so the owner never saw it. Draw the selected
+units' queued orders, close the one building-placement gap, and prove each order kind queues and starts in turn.
+
+Scope:
+- **A read-only accessor in `sim/Rts.Sim/ViewApi/`** (suggested `OrderPath`): for one unit slot it fills a caller's
+  buffer with the unit's order points in order: where its current order is taking it (if it has one with a place),
+  then each queued entry (`UnitStore.QueueCount` / `QueueKind` / `QueuePosition` / `QueueTypeId`; an Attack entry's
+  target through `QueuedTarget`, never its `QueuePosition` as a point). No tick, state or hash change; xUnit rows
+  for it in the sim test project's ViewApi folder (where the other ViewApi tests live).
+- **The drawing** (a new view script; `Match` wires it as it does the rally line): for every selected unit the
+  local seat owns, a thin line from the unit through its order points and a small marker at each queued point,
+  coloured by order kind with the colours the existing order marks use (`TargetMark`) where one exists. Entries with
+  no place (Stop, Hold) get a marker at the previous point. An Attack entry whose target is dead or not visible to
+  the local seat draws no marker and no segment to it (no fog leak); a visible target's marker follows it. Units that
+  share a queued point share one marker (200 selected units on one path must not draw 1,600 markers). Nothing is
+  drawn for a unit the seat does not own. Buffers are pooled: no allocation per frame once warm.
+- **The building gap** (`CommandCard.GhostClick`, today `queued: shift && _placed > 0`). Producer decision, owner
+  may revisit: the first Shift-placed building is **queued behind what the worker is doing when that is an order
+  that ends** (a move, an attack, a build, a repair, or orders already queued) and **replaces it when the worker is
+  on a gather loop or idle** (a gather loop never ends, so a house queued behind it would never be built; the sim
+  starts a queued order only when the unit is Idle: `OrderSystem` line 32). Decided per worker in the view from sim
+  state it may read (`EconomySystem.OnLoop`, the unit's state, `QueueCount`); later Shift placements queue as today;
+  BUG-0122's same-anchor guard stays.
+- **docs:** docs/02 "Controls" (the Shift row: what queues, the 8-order limit, "a queued order behind a gathering
+  worker waits until its gathering ends", the building rule above, what is drawn) and docs/03 "Implementation
+  (M6-V22)". Record the audit table there (order kind / queues / drawn / starts in turn).
+- OUT of scope: any sim change outside `sim/Rts.Sim/ViewApi/` (an order kind that does not queue or does not start
+  in its turn is written up as a **Request for the sim track** with its repro, not fixed; that includes "queued
+  orders behind a gather loop"); the minimap; rally points; a patrol or garrison order; new keybinds; player-facing
+  text (none is needed; if you find you need a word, it goes in data, not C#); models, bars, BUG-1441 (next
+  session's hardening); `tools/**`; `game/data/**`.
+
+Acceptance criteria:
+1. `dotnet build RtsGame.sln --no-incremental` 0 errors / 0 warnings after the last edit (rule 64); the default loop
+   (`Category!=Perf&Category!=Stress&Category!=Soak`) green after the last edit (rule 62); smoke PASS; the scene loop
+   green alone (108+ scenes; the rows the handoff lists as flaky under load may be re-run alone).
+2. The accessor: xUnit rows show, for a unit with a current Move and queued Move, AttackMove, Attack (unit and
+   building), Gather, Build, Repair, UseAbility (point and no-target), Stop and Hold entries, the points and kinds in
+   order; an empty queue gives only the current order's point or nothing; a dead or stale slot gives nothing; twin
+   sims, one read every tick and one never read, have the same state hash every tick for 600 ticks.
+3. A new headless scene (`OrderQueueViewTest`) on the shipped data, one row per order kind (Move, AttackMove, Attack,
+   Gather, Build, Repair, UseAbility, Stop, HoldPosition): the order is issued with Shift through the same entry
+   points the mouse uses (`SelectionController` / `CommandCard`), the sim's queue holds it, the drawing shows a
+   marker of that kind at the right world point (within 0.1 m), and when its turn comes the unit starts it and the
+   marker goes. A kind that fails "starts in its turn" because of sim behaviour is reported as a Request with the
+   row marked as a known gap by name (not silently dropped, not skipped without an id).
+4. Fog and ownership rows in that scene: an enemy unit selected draws nothing; a queued Attack on a target that
+   walks out of sight loses its marker the same frame and gets it back when seen again; a dead target's marker goes.
+5. The building rule: rows for (a) a worker on a gather loop, Shift + place: starts at once (as today); (b) an idle
+   worker: at once; (c) a worker walking a Move, Shift + place: built after it arrives, the Move is not cancelled;
+   (d) a worker building house 1, Shift + place house 2 and 3: built in turn (as today); (e) BUG-0122's guard still
+   refuses a second Shift click on the anchor just placed.
+6. A ninth order to a unit with 8 queued is dropped by the sim (`UnitQueueFull`): the drawing shows 8 and no error
+   line is printed.
+7. Cost, measured alone (rule 42) and reported, not a gate: 200 selected units with 8 queued orders each (shared
+   points) and 200 with 8 distinct points each: added frame time and draw calls against nothing selected. More than
+   1.0 ms added in the shared case is a finding to explain. 0 bytes allocated per frame after warm-up is pass / fail
+   (measure as `QaM6V20Test` does, after a forced collection).
+8. Pictures on the shipped data (windowed, `--screenshot` or the scene's own capture), left in your scratch folder
+   with their paths in the report: 12 soldiers with a Move + two queued Moves + a queued Attack; a worker with three
+   queued buildings; a mixed queue at the default zoom and zoomed out. Look at them before reporting.
+9. docs/02 and docs/03 updated as above; no C# string that a player reads.
+
+Design references: docs/02 "Controls" (Shift + any command: queue the command; Shift after an ability key keeps the
+ability armed), docs/03 "Orders and unit states" (the queue: 8 entries, a queued order arriving at a full queue is
+dropped, a non-queued order clears it), CLAUDE.md rules 3, 7 and 8.
+
+Tests required: the ViewApi xUnit rows (criterion 2), `OrderQueueViewTest` (3-6), the cost rows (7). Existing scenes
+that click a ghost with Shift (`grep GhostClick game/tests`) must still pass unedited, or the report names each
+edited row and why.
+
+Constraints: the view never writes sim state (commands only); views hold no gameplay state (the drawing is rebuilt
+from the sim each frame or on change, never the source of truth); ViewApi is read-only and outside the state hash;
+no per-frame allocation; the developer cannot write `studio/**` (bug notes come as a patch in the scratch folder);
+a scratch folder is named `m6v22-...` (rule 63); end every Godot and `testhost` you started (rule 52).
+
+QA focus (standard): the default loop, the scene loop, the Stress rows this touches (none expected). Attack: the
+fog leak (an Attack entry on a hidden or dead target, a target that changes owner or dies while queued, a building
+target); a stale slot reused by a new unit while its old owner's path is cached; selection changes mid-frame (select
+200, deselect, select an enemy); a save loaded with queued orders and a replay being watched (does the path draw,
+and does it leak the other seat's orders?); the building rule's five rows plus a worker carrying cargo on its way
+back (still a gather loop?), a builder whose site is cancelled, a Shift placement that the sim refuses; the 8-entry
+limit; allocation and cost at 200 units; that no existing scene was edited to pass. Run the scene loop before any
+bench, and any timing row alone.
+
 ### Where we are
 M7-V5 on `main`. Counter **3 / 4**. 107 scenes, all green alone. Fixed: BUG-1412, BUG-1410. New: BUG-1441 S4 (bars and
 marks 1-1.4 m above a giant's head; a foot off a ramp; the javelin into the ground; Casting plays `idle`), BUG-1440's
@@ -312,6 +577,69 @@ outfits and differ by prop only; the Shaman's robe is a tunic in the player's co
 ---
 
 ## Data track
+
+### Current session plan (2026-11-15-0506): D-H9, the data's clean-up pulled forward (hardening, QA light)
+
+Goal: close the page and pin debts D-R38 left, so the Shadow roster can land file by file as its schemas arrive.
+Pulled forward one session because the sim ships the gather value now: **this task moves no game data, no hash and
+measures no opening**, and stays out of every file the sim re-pins this session.
+
+Scope (in this order; each item is its own small commit-sized step in the report):
+- **BUG-1450.** (1) `docs/factions/shadow.md`: capitalise "Passive" in the Shadowed and Pack Hunter sentences.
+  (2) `Content/AbilityContentTests`: "—" is accepted for the Radius of a summon with spawn effects only, as it
+  already is for the Range of a rangeless kind; any other kind with "—" for Radius still fails. (3)
+  `Content/PagePinReadinessTests` flags a `passive **X**:` bullet that `PassiveContentTests.PagePassives` does not
+  read (so a lower-case one is a readiness problem naming the page and line). (4) Remove the two `Skip`s in
+  `QA/Content/DR38ShadowPageQaTests` (the rows must pass as written; do not edit their bodies).
+- **The own-names pins** (D-R38's Q4; docs/01 2026-11-15 (a), last sentence): `Content/UnitContentTests` (check E)
+  and `Content/BuildingContentTests` (check F, about line 216) blank out the faction's own unit and building display
+  names before the "names nobody else's things" check. Rows: a Shadow-shaped description naming "Edur Warrior" and
+  "Warrior Lodge" passes; a description that names the Teblor's "Warrior" on its own, or "Heavy Infantry", still
+  fails and the message names the foreign unit; the three shipped factions' results are unchanged.
+- **BUG-1451.** G14's "Field wanted" names only the per-faction `counters` override (say that a `unique` answer in
+  the shared rule loads today and why it is not enough); the Edur Ram difference row reads one value per label
+  (cost as "150 G / 120 W" or split rows).
+- **The Producer's answers to Q1-Q11 on the page** (rule 67): a short "Decisions (D-R38)" section in shadow.md,
+  one line a question, from docs/01's 2026-11-15 (a) row item (3). Where the page already reads as decided, the
+  line points at the section. Do not change a number or a name.
+- **BUG-1360.** (1) `AbilityContentTests`' description rule lets a damage-rate phrase in parentheses sit between a
+  status name and "for N seconds" ("Burning (5 damage a second) for 4 seconds" passes; the wrong rate or the wrong
+  seconds still fail); add the bug's `InlineData` row to `QA/Content/DH8DescriptionRuleQaTests` or a new class.
+  (2) The doubled `<summary>` above `Role`.
+- OUT of scope: any byte under `game/data/**`; any C# outside `sim/Rts.Sim.Tests/Content/` and `QA/Content/`;
+  `docs/factions/teblor.md`, `malazan.md`, `whirlwind.md` (**the sim re-prints cells there this session**: BUG-1421
+  items 3-4 wait for D33); these test files, which the sim track edits this session: `Content/AiSpendingReportTests`,
+  `Content/D32PreFixtureTests`, `Content/Fixtures/**`, `QA/Content/D20PinQaTests` and any other content class that
+  measures a match or an opening; BUG-1420 and BUG-1421 (D33); renaming a Shadow unit; the owner's taste questions.
+
+Acceptance criteria:
+1. `git diff --stat` against the base shows only `docs/factions/shadow.md` and files under
+   `sim/Rts.Sim.Tests/Content/` and `sim/Rts.Sim.Tests/QA/Content/`, none of them in the out-of-scope list; no
+   `game/data` byte; the two golden data-hash pins pass unedited.
+2. BUG-1450: both un-skipped QA rows pass unedited; `PagePinReadinessTests` reports 0 problems for shadow.md and
+   one problem for a copy with a lower-case `passive **X**:` bullet; a Radius "—" on a non-summon ability fails.
+3. Own names: the rows above; `UnitContentTests` and `BuildingContentTests` give the same result as the base for
+   malazan, whirlwind and teblor (same test count passed, none newly skipped).
+4. BUG-1451 and the Decisions section: on the page; `PagePinReadinessTests` and every pin that reads shadow.md
+   still report 0 problems.
+5. BUG-1360: the new row passes, two wrong-number variants fail, every existing description row is unchanged.
+6. `dotnet build RtsGame.sln --no-incremental` 0 / 0 after the last edit; the default loop green after the last
+   edit (rule 62), with the two fewer skips named in the count.
+
+Design references: `docs/factions/shadow.md` (the page is the source; "Schema gaps (D-R38)", "Against docs/02's
+template", the unit notes), docs/02 "Factions" (the template the difference rows compare against), docs/01
+2026-11-15 (a) item (3) for the answers. No number in docs/02 or on the page changes.
+
+Tests required: listed per item; each fix has a row that failed before it (BUG-1450's two un-skipped rows count).
+
+Constraints: content tests read the shipped data and the pages, never a literal copy of a number; a test about
+"every shipped faction" iterates the data's factions; no file outside the list; scratch folders named `dh9-...`
+(rule 63); bug-file notes come as a patch in the scratch folder.
+
+QA focus (light: the task's filters + the default loop, never the full suite): each relaxed check is still a
+check (mutate the page and the data both ways: a real foreign name inside an own name, e.g. a Shadow description
+naming "Warrior" alone next to "Edur Warrior"; "—" for a Radius the data has; a parenthesis that hides a wrong
+duration); the Decisions section says what docs/01 says, no more; no file from the sim's list was touched.
 
 ### Where we are
 D-R38 on `main`: the Shadow page pin-ready; no data byte moved. Counter **3 / 4**. Fixed: BUG-1400. New: **BUG-1450
