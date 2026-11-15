@@ -66,6 +66,7 @@ public class GatherWedgeTests
         for (int t = 1; t <= 600; t++)
         {
             sim.Tick();
+            int delivered = 0;
             for (int k = 0; k < hs.Length; k++)
             {
                 int i = hs[k].Index;
@@ -73,14 +74,17 @@ public class GatherWedgeTests
                 if (lastCargo[k] > 0 && u.Cargo[i] == 0)
                 {
                     deliveries[k]++;
-                    // Wood rises by the whole load on every delivery.
-                    Assert.Equal(wood + lastCargo[k], w.Wood[0]);
-                    wood = w.Wood[0];
+                    delivered += lastCargo[k];
                 }
                 lastCargo[k] = u.Cargo[i];
                 int run = wedged.Tick(w, k, i);
                 if (run > worstWedge) (worstWedge, worstUnit, worstTick) = (run, i, t);
             }
+            // Wood rises by the whole load on every delivery. M6-S10: summed over the tick, since two workers can deposit in
+            // one tick (they did at 0.5: the check read 230 against 240, the second load of that tick, not a wait; it compared
+            // each delivery on its own before).
+            Assert.Equal(wood + delivered, w.Wood[0]);
+            wood = w.Wood[0];
         }
         Assert.Equal(w.Wood[0], wood); // nothing else moved the total
         _out.WriteLine($"deliveries {string.Join(", ", deliveries)}; wood {w.Wood[0]}; tree left {w.Resources.Remaining[tree.Index]}; " +

@@ -14,8 +14,9 @@ namespace Rts.Sim.Tests;
 /// two players, each a Keep beside a mine with a seeded number of Laborers (half on the mine, half on the nearest tree) and
 /// Teblor Gatherers, every one sent to a node within a 30 m walk of its Keep, and seeded re-orders to other such nodes all along
 /// (the rows at 0 are the control: the same invariants but the floor hold off). Seeds 2-16 at 0 / 0.25 / 0.5 / 0.75 (1 and 13
-/// can't be built: <see cref="Seeds"/>); four rows measure the trip window instead of asserting it, each named with its bug
-/// (<see cref="KnownWedges"/>). Every tick: no
+/// can't be built: <see cref="Seeds"/>); M6-S10: <see cref="KnownWedges"/> is empty (BUG-1431 cured), one row measures the trip
+/// window instead of asserting it because its worker passes 60 s walking (<see cref="PastTheWindowWalking"/>), and every row
+/// asserts no held worker (<see cref="HeldWorkerProbe"/>). Every tick: no
 /// NaN, no unit on a blocked cell, no gather pair past its scaled pack limit, and every worker on its loop delivers at least
 /// once in every 60 s while its node lives (a new node or a new order starts its clock again); income above zero for both.
 /// </summary>
@@ -40,12 +41,27 @@ public class GatherOverlapFuzzTests
     /// <see cref="Bug1430_Seed3AtAQuarter_IsTheDropOffWedgeTheKnobOffHasToo"/>); fixing them changes the shipped game's movement or
     /// economy (a hash move), outside M6-S9. 0.5 has none: its longest gap on every seed is at most 51.4 s.
     /// </summary>
-    private static readonly (double Overlap, ulong Seed, string Why)[] KnownWedges =
+    /// <remarks>
+    /// M6-S10 (BUG-1431 cured: a footprint walker stops on a touching groupmate only within <c>EconomyConstants.QueueArrival</c>
+    /// of its stand point): all four rows are gone and every row asserts the window again. They were
+    /// (0, 4) "BUG-1431: a returning worker out of reach at a Keep's corner, 68.1 s, knob off",
+    /// (0.25, 3) "the same worker at the same Keep corner as at 0 (58.5 s there), 74.6 s",
+    /// (0.25, 4) "the same Keep corner as at 0 (68.1 s there), 70.7 s" and
+    /// (0.75, 7) "a 0.75 m walker held at a Keep's corner by parked loop-ended Idle workers, 81.7 s"
+    /// (now 55.6 / 26.0 / 45.5 / 32.9 s).
+    /// </remarks>
+    private static readonly (double Overlap, ulong Seed, string Why)[] KnownWedges = { };
+
+    /// <summary>
+    /// M6-S10: rows where a worker passes the 60 s window <b>while walking</b> (not held: <see cref="HeldWorkerProbe"/>), the
+    /// window measured and the held rule asserted instead; each with its trace. Listed for the Producer's ruling (rule 66: with
+    /// the knob off the window is a report, not a gate). Not a wedge: <see cref="KnownWedges"/> holds no row at 0.
+    /// </summary>
+    private static readonly (double Overlap, ulong Seed, string Why)[] PastTheWindowWalking =
     {
-        (0.0, 4, "BUG-1431: a returning worker out of reach at a Keep's corner, 68.1 s, knob off"),
-        (0.25, 3, "BUG-1430 / BUG-1431: the same worker at the same Keep corner as at 0 (58.5 s there), 74.6 s"),
-        (0.25, 4, "BUG-1431: the same Keep corner as at 0 (68.1 s there), 70.7 s"),
-        (0.75, 7, "BUG-1430: a 0.75 m walker held at a Keep's corner by parked loop-ended Idle workers (no gather pair standing in reach), 81.7 s"),
+        (0.0, 14, "M6-S10, knob off: 63.6 s (53.8 s before the cure). A Teblor Gatherer spawned 4-12 m from its Keep walks the long way "
+            + "round (about 120 m) to its node (t26-t680, 32 s), is shoved out of reach twice while working (t750, t1010) and "
+            + "re-walks, then works its 15 in reach and delivers: walking, never held"),
     };
 
     /// <summary>Every fuzz seed at 0 (the control), 0.25, 0.5 and 0.75.</summary>
@@ -60,6 +76,8 @@ public class GatherOverlapFuzzTests
     {
         foreach ((double o, ulong s, string why) in KnownWedges)
             if (o == overlap && s == seed) return why;
+        foreach ((double o, ulong s, string why) in PastTheWindowWalking)
+            if (o == overlap && s == seed) return why;
         return null;
     }
 
@@ -68,9 +86,31 @@ public class GatherOverlapFuzzTests
     public void EconomyFuzz_InvariantsHold_EveryWorkerKeepsDelivering(double overlap, ulong seed)
     {
         string? known = KnownWedge(overlap, seed);
-        Result r = Run(overlap, seed, tripWindow: known == null);
+        var probe = new HeldWorkerProbe(96);
+        Result r = Run(overlap, seed, tripWindow: known == null, watch: probe.Watch);
         _out.WriteLine(r.Line + (known == null ? "" : $" (trip window measured, not asserted: {known})"));
+        foreach (string k in probe.Walkers) _out.WriteLine("  past 60 s, walking: " + k);
         Assert.True(r.Income0 > 0 && r.Income1 > 0, $"income {r.Income0} / {r.Income1}");
+        // M6-S10 (added): no held worker in any row (BUG-1431).
+        Assert.True(probe.Held.Count == 0, "held: " + string.Join("\n", probe.Held));
+    }
+
+    /// <summary>
+    /// M6-S10 regression (BUG-1431): the five knob-off fuzz seeds of seeds 2-56 that had a held worker on the base (a worker
+    /// stopped 1.3-2 m out of reach on every retry, touching a mate that held its stand cell from another walk: docs/03
+    /// "Implementation (M6-S10)", stage 0). No held worker on any of them now.
+    /// </summary>
+    [Theory]
+    [InlineData(4UL)]
+    [InlineData(22UL)]
+    [InlineData(27UL)]
+    [InlineData(35UL)]
+    [InlineData(44UL)]
+    public void Bug1431_TheKeepCornerSeeds_KnobOff_NoWorkerHeld(ulong seed)
+    {
+        (HeldWorkerProbe probe, Result r) = HeldWorkerProbe.Run(0, seed);
+        _out.WriteLine($"{r.Line}; held {probe.Held.Count}");
+        Assert.True(probe.Held.Count == 0, "held: " + string.Join("\n", probe.Held));
     }
 
     /// <summary>BUG-1433: seed 13's second Keep is refused; the harness says the scene can't be built (it threw a bare "no Keep").</summary>
@@ -132,7 +172,10 @@ public class GatherOverlapFuzzTests
             if (passing) passers[i]++;
         });
         foreach (string line in crossed) _out.WriteLine(line);
-        Assert.NotEmpty(crossed); // the wedge this row explains (BUG-1430); once it is gone, so is the row's subject
+        // M6-S10: the wedge this row explained is gone (seed 7 at 0.75 now runs to 32.9 s), so the row's subject is too. It
+        // asserted Assert.NotEmpty(crossed) (the wedge present, every crosser clear of standing gather pairs); re-stated as
+        // "no worker passes the window" (any crosser still has the standing-pair check above).
+        Assert.Empty(crossed);
     }
 
     /// <summary>

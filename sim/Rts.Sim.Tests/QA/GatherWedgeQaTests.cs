@@ -73,13 +73,18 @@ public class GatherWedgeQaTests
     // at 11:30 and Armor at 12:00 (AI openings, words included, are in GameData.ContentHash; the Stone Cairn's scale field
     // moved in buildings.json, which loads the same). The golden's one seat is a Malazan human seat, so its k lines are
     // byte for byte as before (header data-hash and checksum only).
+    // M6-S10 (sim track, BUG-0750's rule): regenerated once more, 5353DF8A1473FC6D -> B74DC7AE61B4862D, because the gather
+    // overlap shipped: common/rules.json gains "gatherOverlap": 0.5 (hashed when non-zero, RulesDef.GatherOverlap). The
+    // golden's army never gathers and the M6-S10 cure (EconomyConstants.QueueArrival) reads only footprint walkers, so its
+    // k lines are byte for byte as before (header data-hash and checksum only).
 
     /// <summary>
     /// Ticks the replay must still match its recorded checkpoints: all of them (M4-H1, BUG-0211; before the re-recording
     /// only the first 19, the setup before the M4-2a fix changed the match, and from M4-3a none; M4-V5's re-recording,
-    /// BUG-0273, held 12,131; M5-4f's, 7,682).
+    /// BUG-0273, held 12,131; M5-4f's, 7,682; M6-S10's, 7,653: the Keep-corner cure and gatherOverlap 0.5 moved the game from
+    /// checkpoint 63 on, so it was re-recorded from M3PlayableTest -- --seed 21 --break 19 on the M6-S10 tree).
     /// </summary>
-    private const int CheckpointPrefixTicks = 7682;
+    private const int CheckpointPrefixTicks = 7653;
 
     // M4-V5 (BUG-0273): re-recorded from M3PlayableTest -- --seed 21 --break 19 on the M4-3b tree, whose scene builds on
     // explored ground (the old recording built a House on unexplored ground at tick 616, which placement refuses since M4-3b).

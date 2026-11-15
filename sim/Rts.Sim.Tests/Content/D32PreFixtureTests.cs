@@ -122,7 +122,13 @@ public class D32PreFixtureTests(ITestOutputHelper output)
     [Fact]
     public void OnTheDiffBasesData_BothFixturesLoad()
     {
-        GameData before = AiScenes.DataWithAi("teblor", root => root["openings"]![0] = D32TeblorOpeningReportTests.D31());
+        // M6-S10 (sim track, handed this row for the session; rule 58): the diff base's data had no gatherOverlap, so the
+        // copy takes the shipped 0.5 back out too (as BUG-1400's fix took the landing's rows out of its "off" copy).
+        GameData before = AiScenes.DataWith(dir =>
+        {
+            dir.EditJson("factions/teblor/ai.json", root => root["openings"]![0] = D32TeblorOpeningReportTests.D31());
+            dir.EditJson("common/rules.json", r => r.Remove("gatherOverlap"));
+        });
         Assert.Equal(PreHash, before.ContentHash());
         byte[] bytes = Convert.FromBase64String(File.ReadAllText(Fixture("save_teblor_ai.b64")));
         Assert.Equal(SaveError.None, SaveTestRun.TryLoad(before, bytes));

@@ -787,8 +787,16 @@ public static class MovementSystem
     /// behind it stopped there for good, its every retry ending on the spot (the queue behind it "arrived" against it).
     /// Any other walk stops on any touching groupmate, as before.
     /// </summary>
-    private static bool QueuesBehind(UnitStore u, int i, int j, Vector2 pos, Vector2 goal) =>
-        !OnFootprintWalk(u, i) || Vector2.DistanceSquared(u.Position[j], goal) < Vector2.DistanceSquared(pos, goal);
+    private static bool QueuesBehind(UnitStore u, int i, int j, Vector2 pos, Vector2 goal)
+    {
+        if (!OnFootprintWalk(u, i)) return true;
+        float own2 = Vector2.DistanceSquared(pos, goal);
+        // M6-S10 (BUG-1431): and only within QueueArrival of the point, where a stop is in reach of the footprint. A mate that
+        // holds the goal cell from another walk (working a node in reach of the Keep) stood anywhere in the cell, and every
+        // retry stopped on it out of reach.
+        const float queue2 = Economy.EconomyConstants.QueueArrival * Economy.EconomyConstants.QueueArrival;
+        return own2 <= queue2 && Vector2.DistanceSquared(u.Position[j], goal) < own2;
+    }
 
     /// <summary>
     /// Squared meters within which a footprint walker counts as on its stand point (M4-2a, BUG-0146): its slack inside

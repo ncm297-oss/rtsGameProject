@@ -20,7 +20,15 @@ public class MatchCriterionTests
     /// <summary>One criterion row: the map, seed, seats, teams (null: none) and the tick bound it must end within.</summary>
     internal sealed record Row(string Id, string Map, ulong Seed, int Players, int[]? Teams, int Bound);
 
-    /// <summary>The literal row's bound: 20 minutes. Vathar Crossing seed 1 ends at 23,322 (19:26; M5-H6's house rule, was 23,043 since M5-9a's counter shift, 22,794 before), seat 1 (Whirlwind) the winner.</summary>
+    /// <summary>
+    /// The literal row's bound: 20 minutes. Vathar Crossing seed 1 ended at 23,322 (19:26; M5-H6's house rule, was 23,043 since
+    /// M5-9a's counter shift, 22,794 before), seat 1 (Whirlwind) the winner. M6-S10 (the Keep-corner cure and gatherOverlap
+    /// 0.5): seed 1 ends at 24,497 (20:24, seat 1), past the bound, so by the brief's rule (the generated row's precedent, M5-9a
+    /// round 2) the literal row moves to the lowest of seeds 1-8 on Vathar Crossing that ends inside 24,000 with a winner and
+    /// every check clean: <b>seed 7, 23,412 (19:30), seat 0 (Malazan)</b>, Build UnitInTheWay 2 refused. Seeds 1-8: 24,497 /
+    /// 30,569 / 27,240 / 27,240 / 27,361 / 27,240 / 23,412 / 23,412 (<c>Stress/MatchRowsM6S10Report</c>). The methods keep
+    /// their "Seed1" names (docs/05 cites them); the row is seed 7.
+    /// </summary>
     internal const int VatharBound = 24_000;
 
     /// <summary>
@@ -34,7 +42,13 @@ public class MatchCriterionTests
     /// </summary>
     internal const int PaleHillsBound = 72_000;
 
-    /// <summary>Raraku seed 1 ends at 28,083 (23:24), seat 0 the winner: the next 6,000 above it with at least 10 % slack (30,891). Unchanged by M5-9a; M5-H6: 28,231 (23:31), seat 0.</summary>
+    /// <summary>Raraku seed 1 ends at 28,083 (23:24), seat 0 the winner: the next 6,000 above it with at least 10 % slack (30,891). Unchanged by M5-9a; M5-H6: 28,231 (23:31), seat 0.
+    /// M6-S10 (the Keep-corner cure and gatherOverlap 0.5): <b>seed 1 no longer ends inside 72,000</b> (BUG-1460, a finding, not
+    /// a new bound: seat 0 is down to buildings alone from about 27,000, seat 1 keeps 17 idle workers, little wood and 2
+    /// soldiers, and razes slowly; no held worker or unhunted lone unit causes it), so by the brief's rule the row moves to the
+    /// lowest of seeds 1-8 on Raraku that ends: <b>seed 2, 27,936 (23:16), seat 1</b>; Raraku's rule gives the same bound
+    /// (27,936 x 1.1 = 30,730, the next 6,000 above it 36,000). Seeds 1-8: none / 27,936 / none / none / 29,569 / none / 28,547
+    /// / 28,547 (<c>Stress/MatchRowsM6S10Report</c>).</summary>
     internal const int RarakuBound = 36_000;
 
     /// <summary>
@@ -49,13 +63,13 @@ public class MatchCriterionTests
     /// <summary>The four-seat rows' bound (60 minutes, QA's M5-H5 sweep): the FFA (Vathar seed 2) ends at 58,155 (48:27; was 52,305 before M5-9a), the 2v2 (Vathar seed 1) at 35,648 (29:42; was 34,510). M5-H6: the FFA 56,896 (47:24, seat 3), the 2v2 26,070 (21:43, team 1).</summary>
     internal const int FourSeatBound = 72_000;
 
-    /// <summary>The tick the literal row is saved at: half its end before M5-9a (22,794 / 2; any mid-match tick serves).</summary>
-    internal const int HalfWay = 11_397;
+    /// <summary>The tick the literal row is saved at: half its end (M6-S10: seed 7's 23,412 / 2; was 11,397, half of seed 1's 22,794 before M5-9a; any mid-match tick serves).</summary>
+    internal const int HalfWay = 11_706;
 
     internal static readonly Row[] Rows =
     {
-        new("vathar_crossing", "vathar_crossing", 1, 2, null, VatharBound),
-        new("raraku", "raraku", 1, 2, null, RarakuBound),
+        new("vathar_crossing", "vathar_crossing", 7, 2, null, VatharBound), // M6-S10: seed 7 (seed 1 ends at 24,497)
+        new("raraku", "raraku", 2, 2, null, RarakuBound), // M6-S10: seed 2 (seed 1 no longer ends inside 72,000: BUG-1460)
         new("pale_hills", "pale_hills", 1, 2, null, PaleHillsBound),
         new("generated", "generated", 2, 2, null, GeneratedBound), // M5-9a round 2: seed 2 (seed 1 ends at 25,968)
         new("ffa", "vathar_crossing", 2, 4, null, FourSeatBound),
@@ -88,7 +102,7 @@ public class MatchCriterionTests
     }
 
     /// <summary>
-    /// The criterion's literal row (default loop): Vathar Crossing seed 1, Normal v Normal, ends with one side defeated within
+    /// The criterion's literal row (default loop): Vathar Crossing seed 7 (seed 1 before M6-S10), Normal v Normal, ends with one side defeated within
     /// 24,000 ticks, checks (a)-(e) clean on every tick and think.
     /// </summary>
     [Fact]

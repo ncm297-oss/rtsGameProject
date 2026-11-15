@@ -37,8 +37,8 @@ public class GatherOverlapReport
 
     /// <summary>
     /// <see cref="GatherOverlapFuzzTests"/>' scene on its seeds (2-16 without 13) at every value, the trip window only measured:
-    /// per run the longest a worker on its loop went without a trip (its node alive), and the income. Shows the four wedges the
-    /// fuzz's rows measure instead of asserting (GatherOverlapFuzzTests.KnownWedges: BUG-1430, BUG-1431).
+    /// per run the longest a worker on its loop went without a trip (its node alive), and the income. At M6-S9 it showed the four
+    /// wedges the fuzz's rows measured instead of asserting (BUG-1430, BUG-1431); M6-S10 cured them (none left).
     /// </summary>
     [Fact]
     public void TableC_EconomyFuzz_LongestGapWithoutATrip()

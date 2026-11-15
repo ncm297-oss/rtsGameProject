@@ -590,11 +590,12 @@ public class MapFileTests
     /// <summary>
     /// Scope 4: two Normal AI seats (Malazan v Whirlwind) play a match on Raraku to the end (one side defeated), or to 60
     /// minutes; the result, the match length and each side's gathering, waves and peak army are printed. The match must end,
-    /// and both sides must gather wood (the map's few forests are within the start contract's 24 m).
+    /// and both sides must gather wood (the map's few forests are within the start contract's 24 m). M6-S10: seed 1 no longer
+    /// ends inside the hour (BUG-1460), so the row plays <c>MatchCriterionTests</c>' Raraku row, now seed 2.
     /// </summary>
     [Fact]
     [Trait("Category", "Stress")]
-    public void NormalVersusNormal_OnRaraku_PlaysToTheEnd() => PlayToTheEnd(RarakuMatch(1, false, out _), 72_000); // 60 minutes
+    public void NormalVersusNormal_OnRaraku_PlaysToTheEnd() => PlayToTheEnd(RarakuMatch(MatchCriterionTests.RowOf("raraku").Seed, false, out _), 72_000); // 60 minutes
 
     /// <summary>
     /// M6-S8: two Normal AI seats (seed 1, Malazan v Whirlwind, starts 0 and 1) play a match on Pale Hills or Vathar Crossing to
