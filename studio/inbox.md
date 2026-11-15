@@ -9,6 +9,16 @@ Commit and push after editing, from either machine (or ask Claude to).
 
 ## New
 
+- 2026-11-14 · **Gatherers may overlap a bit while collecting (owner, relayed by the watcher session).** Owner thinks
+  gatherers should be able to clip through each other somewhat while collecting resources (at a resource node and at the
+  drop-off), instead of pushing each other apart. Amount is the owner's taste ("a bit"): please pick a default, put it in
+  data as a knob (not a C# literal), and say in STATE what you chose. Today the sim separates every pair with an overlap
+  push (`MovementSystem`, `MovementConstants` separation shares; Idle units are shoved, holding / attacking ones are
+  walls); check what a Gathering or drop-off-queuing worker counts as there. Keep it generic (any worker, any faction, no
+  Teblor special case), scoped to gathering workers only so armies and marching units keep today's separation, and
+  deterministic. Sim task with tests; it touches movement, so re-run the replay golden hashes and say why if they change on
+  purpose. Related to the Shift-queue and Teblor notes below only in being owner requests; no dependency.
+
 - 2026-11-14 · **Two requests (owner, relayed by the watcher session).**
   1. **Teblor models, expedited.** The Teblor have no character models at all: `units.json` names seven
      (`teblor/teblor_gatherer`, `_warrior`, `_javelin_thrower`, `_destrier_rider`, `_shaman`, `_breaker`, `_war_dog`) and none
