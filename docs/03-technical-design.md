@@ -3321,6 +3321,11 @@ was built and no `ai.castMinOwnFighting` knob exists**: the brief built one only
   ready thinks and 2+ attacking in 0. It counts every ready, non-casting Shaman, not only the free ones the ability manager
   would send, reads enemies from the world rather than the fogged view, and splits at 5:00 rather than at the first army
   unit. The army it counts is the same.
+  **Note (Producer, 2026-11-14-1246 ACCEPT): the table above is D31's opening.** D32 landed in the same session and
+  changed the shipped `standard` opening (data hash 5353DF8A1473FC6D). D32's opening on this report
+  (`FRENZY_REPORT_OPENING=Content/Fixtures/teblor_standard_d32.json`; the data's developer and its QA, the same figures):
+  a Shaman in 5 of 32 matches (the first at 11:24-12:36), 8 casts sent / 8 landed, defeated 10. The sim re-prints the
+  table when it next reads the report (Request 53's second half).
 - **The cause: too few Shamans.** The AI never has one by 15:00: with the shipped opening (V24 at 0.25) the Teblor reaches
   Age II in 25 of 32 matches and builds the Circle in 11, is defeated in 13, and trains no Shaman before 15:00 (its 10 %
   composition share loses to the Warriors at a small army). **Whether a fielded Shaman stands with the army is not

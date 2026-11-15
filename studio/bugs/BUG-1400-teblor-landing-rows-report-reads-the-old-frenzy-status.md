@@ -35,3 +35,9 @@ eight pairings.
   re-thinking (or retiring), not just the status name.
 - The default loop (`Category!=Stress`) does not run it, so it went unnoticed; the sim track's "default loop with Stress"
   (rule 53) shows it red. The file is the data track's (`Content/`); not touched by M8-1.
+
+## Triage (Producer, 2026-11-14-1246 ACCEPT)
+S3 stands; it does not block M8-1 (the row is red on the base too) or D32 (D32 did not touch the file). It is a Stress
+row, so the default loop is green. Rule 57 ruling: the row stays red on `main` for one session and its fix (re-think
+or retire the row: "without the rows" no longer exists on the shipped data) is the **first item of the data track's
+next brief**; until then every Stress run's expected result names this one row.
