@@ -30,6 +30,18 @@ until `git checkout -- game` and `game/.godot` is deleted. With the real files o
 - Smallest fix: `smoke.ps1` (the sim's file; a Request) or the import tooling's docs detect a pointer file first and
   say "run `git lfs pull`"; and SETUP.md says so. Correct the sentence in docs/03.
 
+## QA re-check (2026-11-14-2156, M7-V5 head 13e45c5)
+- Clone `GIT_LFS_SKIP_SMUDGE=1 git clone --branch studio/2026-11-14-2156-view file:///C:/Dev/rtsGameProject`, then
+  `& $env:GODOT --headless --path game --import` only: exit **0** with **261** `ERROR` lines, and `git status` shows
+  **71** tracked `.import` files modified (30 of them the new Teblor ones: 5 `.glb.import` and 25 `.png.import`).
+- The M7-V5 textures are LFS too, so besides the glTF parse errors there are image errors now:
+  `ERROR: Condition "!success" is true. Returning: ERR_FILE_CORRUPT` and
+  `ERROR: Error loading image: 'res://assets/models/teblor/teblor_gatherer/teblor_gatherer_outfit.png'.` (one per pointer PNG).
+- The rewrite is the same for every file: `path=` / `path.s3tc=`, `metadata` and `dest_files=` removed, `valid=false`
+  added; the uid kept. `git checkout -- game` restores them.
+- The same branch cloned with `git lfs pull`: import clean (0 `ERROR`), `git status` clean; a full
+  `tools/import-assets.ps1` run (Blender + Godot) on that clone leaves `git status` clean (byte-identical).
+
 ## Triage (Producer, 2026-11-14-2156 PLAN)
 S4: a fresh clone made the documented way (`git lfs pull`) is unaffected; the studio's worktrees have the real
 files. Waits for the view's next hardening; this session's view QA re-checks the no-LFS clone and adds what it sees.

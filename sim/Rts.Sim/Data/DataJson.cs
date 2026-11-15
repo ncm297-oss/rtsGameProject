@@ -42,6 +42,48 @@ internal sealed class RulesJson
     public double? BuildingSight { get; set; }
     public StealthJson? Stealth { get; set; }
     public AiRulesJson? Ai { get; set; }
+    public NumberJson? GatherOverlap { get; set; } // M6-S9, optional: absent = 0; a JSON null is an error, so it is read as NumberJson
+}
+
+/// <summary>
+/// M6-S9: an optional number whose JSON <c>null</c> must be told apart from an absent field (a <c>double?</c> reads both as
+/// null). Absent leaves the property null; any present value reads as one of these (<see cref="NumberJsonConverter"/>).
+/// </summary>
+[JsonConverter(typeof(NumberJsonConverter))]
+internal sealed class NumberJson
+{
+    internal NumberJson(JsonTokenType token, double value)
+    {
+        Token = token;
+        Value = value;
+    }
+
+    /// <summary>The JSON token the value was: <see cref="JsonTokenType.Number"/>, <see cref="JsonTokenType.Null"/>, or anything else (a string, an object, a list, true / false).</summary>
+    internal JsonTokenType Token { get; }
+
+    /// <summary>The number for a <see cref="JsonTokenType.Number"/> token (positive infinity when it does not fit a double); 0 otherwise.</summary>
+    internal double Value { get; }
+}
+
+/// <summary>Reads any JSON value (null too: <see cref="HandleNull"/>) into a <see cref="NumberJson"/>, skipping a non-number's content; the loader reports the kind.</summary>
+internal sealed class NumberJsonConverter : JsonConverter<NumberJson>
+{
+    public override bool HandleNull => true;
+
+    public override NumberJson Read(ref Utf8JsonReader reader, System.Type typeToConvert, JsonSerializerOptions options)
+    {
+        JsonTokenType token = reader.TokenType;
+        if (token == JsonTokenType.Number)
+            return new NumberJson(token, reader.TryGetDouble(out double v) ? v : double.PositiveInfinity);
+        reader.Skip();
+        return new NumberJson(token, 0);
+    }
+
+    public override void Write(Utf8JsonWriter writer, NumberJson value, JsonSerializerOptions options)
+    {
+        if (value.Token == JsonTokenType.Number) writer.WriteNumberValue(value.Value);
+        else writer.WriteNullValue();
+    }
 }
 
 // M6-S6: one rules.json "startingResources" preset.

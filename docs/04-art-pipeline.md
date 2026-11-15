@@ -53,6 +53,8 @@ so a model doesn't take it (its clip and the cargo marker show what it does); ca
 M6-V21 (Producer default, owner may revisit): the Heavy Infantry's team parts are its jerkin, pauldron **and its big shield**
 (a box prop drawn on the team surface, "Unit models, as built"); the Raider's jerkin and hood; the Desert Archer's as the
 Crossbowman's; the Camp Follower's tunic as the Laborer's.
+M7-V5 (developer's pick, owner may revisit): the Teblor Gatherer's and Shaman's tunic (the Peasant body), the Warrior's and
+Breaker's jerkin and pauldron, the Javelin Thrower's jerkin (the Ranger body; no pauldron, so it reads apart from the Warrior).
 
 ### Faction palettes and silhouettes
 
@@ -177,7 +179,7 @@ in the licensing log.
 | Horses (Lancer, Horse Raider, Rider) | Quaternius animal pack horse + Universal Base Character rider | AI-generated |
 | Catapult | Kenney Castle Kit | Kit-bash in Blender |
 | Battering Ram / Edur Ram | Kit-bash (Medieval Village pieces + wheels) | AI-generated |
-| Teblor | Universal Base Character (male) at 1.5× + outfits | MPFB2 giant body; AI-generated |
+| Teblor | Universal Base Character (male) at 1.5× + outfits. **As built (M7-V5):** Gatherer, Warrior, Javelin Thrower, Shaman and Breaker (the two outfits on disk recoloured, the pack's `Hair_Long`, props as boxes; "Unit models, as built"). The Destrier Rider and the War-dog stay capsules until a horse / dog source is chosen | MPFB2 giant body; AI-generated |
 | War-dogs | Quaternius dog/wolf if present | **AI-generated** |
 | Hounds of Shadow | Quaternius wolf at 1.6×, dark material | **AI-generated** |
 | Aptorian Stalker | — | **AI-generated** |
@@ -300,6 +302,40 @@ tools/
   plays. The builder writes the model's map onto its armature node as glTF extras (`{"clips": {...}}`, the only extras in the
   file); Godot imports them as the node's `extras` metadata, and `UnitModels` gives each model type its own
   `AnimationLibrary` of the shared clips under the state names (docs/03 "Implementation (M6-V21)").
+- **Third slice (M7-V5): the five Teblor humanoids** (eleven model types). The two outfits on disk recoloured to the Teblor
+  palette, the pack's long hair, props as boxes in bloodwood. Each file holds the **base figure** (1.84-1.85 m, as every
+  other model); the view draws it at the data's `scale` (1.5: 2.76-2.78 m), uniformly, feet on the ground, and the rings
+  keep the data radius (docs/03 "Implementation (M7-V5)"). No size is baked into a file or typed in C#.
+
+  | Type | Outfit parts (team parts in bold) | Outfit tint | Props (bloodwood `#5e3324`, sRGB) | Triangles |
+  | --- | --- | --- | --- | --- |
+  | Teblor Gatherer | Peasant **body**, arms, legs, feet; long hair | earth brown `#6b5038` 0.55 | a wood-cutting tool (a 0.8 m haft and a head; `hand_r`, placed by `TreeChopping_Loop`'s first frame) | 2,724 |
+  | Teblor Warrior | Ranger **body**, **pauldron**, arms, legs, boots; long hair | bloodwood red-brown `#7a3b2a` 0.6 | a huge wooden greatsword (grip, guard, a 1.18 x 0.18 m blade; `hand_r`, `Sword_Attack`'s first frame) | 2,765 |
+  | Teblor Javelin Thrower | Ranger **body**, arms, legs, boots; long hair | furs grey-brown `#8a7660` 0.6, brightness 1.2 | a 1.5 m javelin in `hand_r` (`OverhandThrow` at 30 %) and three javelins on the back (`spine_03`) | 2,609 |
+  | Teblor Shaman | Peasant **body**, arms, legs, feet; long hair | bone white `#d6cbb3` 0.7, brightness 1.8 | a 1.7 m staff with a knob (`hand_r`, held upright at `Idle_Loop`'s first frame) | 2,736 |
+  | Teblor Breaker | Ranger **body**, **pauldron**, arms, bracers, legs, boots; long hair | dark earth `#4f3a2a` 0.65, brightness 0.8 | a great maul (a 1 m haft, a 0.24 x 0.26 x 0.40 m head; `hand_r`, `Sword_Attack`'s first frame) | 2,802 |
+
+  Each has five 512² textures (hair, head, outfit, skin, team) and six surfaces (the five roles and the props' one
+  `bloodwood` material), 65 bones, one `team` surface. **What stands in (developer's default, owner may revisit):** hair:
+  the Universal Base Characters' `Hair_Long` (rigged to `Head`), decimated to 400-450 triangles and tinted near-black brown
+  (`#2a1d15`, brightness 0.4); furs: none on disk, so the outfits' tints carry the palette (the Javelin Thrower's grey-brown
+  "furs", the Shaman's bone white) and the long hair the silhouette; weapons: boxes, as M6-V21's. The Javelin Thrower's hand
+  javelin stands above the head in the rest pose, so a model's height in the tests is measured without the props' own
+  surfaces. Sizes (Git LFS): the five models with their textures 12,364,925 bytes (11.8 MB); the library 312,660 bytes
+  (267,832 before its two new clips); all the art pass's generated binaries 24,767,612 bytes (23.6 MB).
+- **Manifest additions (M7-V5)**, each opt-in, so the six earlier entries build byte-identically: a part's `alignBone`
+  (`Head`) moves the part by the difference between that bone in its own armature and in the model's (the pack's
+  `Hair_Long` is rigged on an armature whose `Head` is 5 cm lower than the male base character's); a tint's `brightness`
+  scales the tinted texture (a tint alone keeps each texel's brightness, so light hair stayed light and a dark outfit
+  dark); a model's `propColourSpace: "srgb"` names its prop colours as they show on screen (the builder converts them to the
+  linear base colour glTF holds). Without it a prop's hex is written as the linear value itself, as M6-V20 / V21 built:
+  those props show lighter than their hex (the crossbow's `#4a3626` draws about `#937f6c`); left as it is (re-cutting
+  them is BUG-1411's).
+- **Stale extracted textures (fixed in M7-V5).** Godot re-extracts a model's texture beside it only when the `.png.import`
+  names the md5 Godot wrote (`generator_parameters`), and the script's `.import` rewrite dropped it, so a changed tint never
+  reached the game (no texture had changed since M6-V20, so nothing showed it). The script now gives each rebuilt model's
+  texture imports a placeholder md5 before the Godot import: every texture is extracted again (the same bytes when nothing
+  changed: the six earlier models' files are byte-identical after a run) and keeps its uid.
 - The view: `UnitViews` draws a type whose file loads as its model, any other type as its capsule (docs/03 "Implementation
   (M6-V20)").
 
@@ -401,6 +437,24 @@ which also renames to snake_case. Findings:
   clip; `Spell_Simple_Shoot` (an open-hand cast) and `OverhandThrow` were considered and rejected, so the Desert Archer keeps
   `Pistol_Shoot`, its bow held upright in the extended hand. A real draw needs the Mixamo Pro Longbow pack retargeted
   (out of M6-V21's scope).
+- **The Teblor clips (M7-V5).** The library has nine clips: the seven above, `attack_throw` (UAL2 `OverhandThrow`, 1.33 s:
+  a one-armed overhand throw with a step) and `attack_cast` (UAL1 `Spell_Simple_Shoot`, 0.5 s: an open hand thrust forward,
+  the libraries' one spell release). Every Teblor state maps to a clip:
+
+  | Type | idle | walk | attack | gather_gold / gather_wood / build | Returning, Casting |
+  | --- | --- | --- | --- | --- | --- |
+  | Gatherer | `idle` | `walk` | `attack_melee` | `gather_gold` / `gather_wood` / `build` (the workers') | `idle` |
+  | Warrior, Breaker | `idle` | `walk` | `attack_melee` | (never in those states) | `idle` |
+  | Javelin Thrower | `idle` | `walk` | `attack_throw` | (never) | `idle` |
+  | Shaman | `idle` | `walk` | `attack_cast` (its attack is a magic bolt) | (never) | `idle` (Blood-oil Frenzy's 0.5 s cast) |
+
+  Why: the Gatherer swings its tool, so its melee attack is the sword swing, not the Laborer's empty-handed `Pistol_Shoot`
+  jab. `OverhandThrow` is the only throw in UAL1 / UAL2 (M6-V21 rejected it for the bow; a javelin is what it is for). For
+  the cast, `Spell_Simple_Shoot` was chosen over `Spell_Simple_Idle_Loop` (2.1 s, hands held out, no release) and
+  `Spell_Simple_Enter` / `_Exit` (0.54 / 0.44 s, a raise and a lower). The Breaker's maul swings with the one-handed
+  `Sword_Attack` (no two-handed heavy blow in either library short enough for one hit: UAL2 `Sword_Heavy_Combo` is 4.33 s);
+  BUG-1411's look at `Sword_Regular_A/B/C` would cover it too. The `Casting` state plays `idle` for every model type, as
+  M6-V20 set (`UnitViews.ClipFor`); a cast clip for that state is a view change, not done here.
 - **No finger tracks (M6-VH7, BUG-1321).** The library carries 25 of the rig's 65 bones: the import deletes the 40 finger
   bones (`thumb_`, `index_`, `middle_`, `ring_`, `pinky_`, 01-03 and the `_04_leaf` ends, both hands; the manifest's
   `library.dropBonePrefixes`, checked against `dropBoneCount` 40) and their curves before export, so each clip has 75 tracks
@@ -422,9 +476,9 @@ Every third-party asset in the repo gets a row, added in the same commit that im
 
 | Asset / pack | Author | Source URL | License | Version / date | Used for |
 | --- | --- | --- | --- | --- | --- |
-| Quaternius – Universal Base Characters (Standard) | Quaternius | <https://quaternius.com/packs/universalbasecharacters.html> | CC0 1.0 (pack's `License_Standard.txt`) | Standard (free) edition, no version number; downloaded 2026-10-08 | Look test (M6-V10): `Superhero_Male_FullBody.gltf` + `.bin` + 7 textures in `game/assets/models/looktest/`, from `asset-sources/Universal Base Characters[Standard]/Universal Base Characters[Standard]/Base Characters/Godot - UE/`. **M6-V20:** the head of `SuperHero_Male` (the vertices weighted to `Head` / `neck_01`, decimated) and its base colour texture cut to 512² (`<id>_head.png`), inside `malazan_laborer.glb` and `malazan_crossbowman.glb` (`tools/asset-manifest.json`; the licence file is read at each import). **M6-V21:** the same head and texture inside `malazan_heavy_infantry.glb`, `whirlwind_camp_follower.glb`, `whirlwind_raider.glb` and `whirlwind_desert_archer.glb` (no new source file) |
-| Quaternius – Universal Animation Library 1 and 2 (Standard) | Quaternius | <https://quaternius.com/packs/universalanimationlibrary.html> | CC0 1.0 (each pack's `License.txt`) | UAL1 Standard and UAL2 Standard, no version numbers; downloaded 2026-10-08 | Look test (M6-V10): `UAL1_Standard.glb` (no root motion), from `asset-sources/Universal Animation Library[Standard]/Universal Animation Library[Standard]/Unreal-Godot/`. **M6-V20:** six clips re-exported into `game/assets/animations/universal_humanoid.glb`: `Idle_Loop`, `Walk_Loop`, `Pistol_Shoot`, `Fixing_Kneeling` from `UAL1_Standard.glb`, `Farm_Harvest`, `TreeChopping_Loop` from `asset-sources/Universal Animation Library 2[Standard]/Universal Animation Library 2[Standard]/Unreal-Godot/UAL2_Standard.glb`; the `Pistol_Shoot` pose also places the crossbow (licence files read at each import). **M6-V21:** `Sword_Attack` from the same `UAL1_Standard.glb` added to the library as `attack_melee` (seven clips); its first frame places the Heavy Infantry's sword and the Raider's blade, `Idle_Loop`'s the shield and helmet, `Pistol_Shoot`'s the bow (no new source file) |
-| Quaternius – Modular Character Outfits – Fantasy (Standard) | Quaternius | <https://quaternius.com/packs/modularcharacteroutfitsfantasy.html> | CC0 1.0 (pack's `License_Standard.txt`, read at each import by `tools/import-assets.ps1`) | Standard (free) edition, no version number; downloaded 2026-10-08 | M6-V20: from `asset-sources/Modular Character Outfits - Fantasy[Standard]/Modular Character Outfits - Fantasy[Standard]/Exports/glTF (Godot-Unreal)/Outfits/`: `Male_Peasant.gltf` (body, arms, legs, feet) in `game/assets/models/malazan/malazan_laborer/malazan_laborer.glb`; `Male_Ranger.gltf` (body, hood, pauldron, arms, legs, boots; not the bracers or belts) in `.../malazan_crossbowman/malazan_crossbowman.glb`; **M6-V21:** from the same two files (no new source file), `Male_Ranger.gltf` (body, pauldron, arms, **bracers**, legs, boots) in `.../malazan_heavy_infantry/malazan_heavy_infantry.glb`, (body, hood, arms, legs, boots) in `game/assets/models/whirlwind/whirlwind_raider/whirlwind_raider.glb`, (body, hood, pauldron, arms, legs, boots) in `.../whirlwind_desert_archer/whirlwind_desert_archer.glb`, and `Male_Peasant.gltf` (body, arms, legs, feet) in `.../whirlwind_camp_follower/whirlwind_camp_follower.glb`; decimated, textures (`T_Peasant_BaseColor`, `T_Ranger_BaseColor`, `T_Regular_Male_Dark_BaseColor`) cut from 4096² / 2048² to 512², tinted, and a grey team copy; the extracted `<id>_<role>.png` beside each model |
+| Quaternius – Universal Base Characters (Standard) | Quaternius | <https://quaternius.com/packs/universalbasecharacters.html> | CC0 1.0 (pack's `License_Standard.txt`) | Standard (free) edition, no version number; downloaded 2026-10-08 | Look test (M6-V10): `Superhero_Male_FullBody.gltf` + `.bin` + 7 textures in `game/assets/models/looktest/`, from `asset-sources/Universal Base Characters[Standard]/Universal Base Characters[Standard]/Base Characters/Godot - UE/`. **M6-V20:** the head of `SuperHero_Male` (the vertices weighted to `Head` / `neck_01`, decimated) and its base colour texture cut to 512² (`<id>_head.png`), inside `malazan_laborer.glb` and `malazan_crossbowman.glb` (`tools/asset-manifest.json`; the licence file is read at each import). **M6-V21:** the same head and texture inside `malazan_heavy_infantry.glb`, `whirlwind_camp_follower.glb`, `whirlwind_raider.glb` and `whirlwind_desert_archer.glb` (no new source file). **M7-V5:** the same head inside the five `game/assets/models/teblor/<id>/<id>.glb`, and a new file from the same pack and licence: `Hairstyles/Rigged to Head Bone/glTF (Godot -Unreal)/Hair_Long.gltf` (+ `.bin`, `T_Hair_2_BaseColor.png`), decimated, moved onto the male `Head`, its texture cut to 512² and darkened (`<id>_hair.png`) |
+| Quaternius – Universal Animation Library 1 and 2 (Standard) | Quaternius | <https://quaternius.com/packs/universalanimationlibrary.html> | CC0 1.0 (each pack's `License.txt`) | UAL1 Standard and UAL2 Standard, no version numbers; downloaded 2026-10-08 | Look test (M6-V10): `UAL1_Standard.glb` (no root motion), from `asset-sources/Universal Animation Library[Standard]/Universal Animation Library[Standard]/Unreal-Godot/`. **M6-V20:** six clips re-exported into `game/assets/animations/universal_humanoid.glb`: `Idle_Loop`, `Walk_Loop`, `Pistol_Shoot`, `Fixing_Kneeling` from `UAL1_Standard.glb`, `Farm_Harvest`, `TreeChopping_Loop` from `asset-sources/Universal Animation Library 2[Standard]/Universal Animation Library 2[Standard]/Unreal-Godot/UAL2_Standard.glb`; the `Pistol_Shoot` pose also places the crossbow (licence files read at each import). **M6-V21:** `Sword_Attack` from the same `UAL1_Standard.glb` added to the library as `attack_melee` (seven clips); its first frame places the Heavy Infantry's sword and the Raider's blade, `Idle_Loop`'s the shield and helmet, `Pistol_Shoot`'s the bow (no new source file). **M7-V5:** `Spell_Simple_Shoot` from `UAL1_Standard.glb` as `attack_cast` and `OverhandThrow` from `UAL2_Standard.glb` as `attack_throw` (nine clips); `TreeChopping_Loop`, `Sword_Attack`, `OverhandThrow` and `Idle_Loop` poses place the Teblor props (no new source file) |
+| Quaternius – Modular Character Outfits – Fantasy (Standard) | Quaternius | <https://quaternius.com/packs/modularcharacteroutfitsfantasy.html> | CC0 1.0 (pack's `License_Standard.txt`, read at each import by `tools/import-assets.ps1`) | Standard (free) edition, no version number; downloaded 2026-10-08 | M6-V20: from `asset-sources/Modular Character Outfits - Fantasy[Standard]/Modular Character Outfits - Fantasy[Standard]/Exports/glTF (Godot-Unreal)/Outfits/`: `Male_Peasant.gltf` (body, arms, legs, feet) in `game/assets/models/malazan/malazan_laborer/malazan_laborer.glb`; `Male_Ranger.gltf` (body, hood, pauldron, arms, legs, boots; not the bracers or belts) in `.../malazan_crossbowman/malazan_crossbowman.glb`; **M6-V21:** from the same two files (no new source file), `Male_Ranger.gltf` (body, pauldron, arms, **bracers**, legs, boots) in `.../malazan_heavy_infantry/malazan_heavy_infantry.glb`, (body, hood, arms, legs, boots) in `game/assets/models/whirlwind/whirlwind_raider/whirlwind_raider.glb`, (body, hood, pauldron, arms, legs, boots) in `.../whirlwind_desert_archer/whirlwind_desert_archer.glb`, and `Male_Peasant.gltf` (body, arms, legs, feet) in `.../whirlwind_camp_follower/whirlwind_camp_follower.glb`; **M7-V5:** from the same two files (no new source file), `Male_Peasant.gltf` (body, arms, legs, feet) in `game/assets/models/teblor/teblor_gatherer/` and `.../teblor_shaman/`, `Male_Ranger.gltf` (body, pauldron, arms, legs, boots) in `.../teblor_warrior/`, (body, arms, legs, boots) in `.../teblor_javelin_thrower/`, (body, pauldron, arms, bracers, legs, boots) in `.../teblor_breaker/`; decimated, textures (`T_Peasant_BaseColor`, `T_Ranger_BaseColor`, `T_Regular_Male_Dark_BaseColor`) cut from 4096² / 2048² to 512², tinted, and a grey team copy; the extracted `<id>_<role>.png` beside each model |
 | Quaternius – Ultimate Fantasy RTS | Quaternius | <https://quaternius.com/packs/ultimatefantasyrts.html> | CC0 1.0 (pack's `License.txt`; its header says "Ultimate Platformer Pack", a slip in the pack) | Aug 2022 (folder `quaternius-ultimate-fantasy-rts-2022-08`) | Look test (M6-V10): `Barracks_FirstAge_Level1.fbx`, from `asset-sources/quaternius-ultimate-fantasy-rts-2022-08/Ultimate Fantasy RTS - Aug 2022/FBX/` |
 | Epic Stock Media – Board Game: Sound Set Kit for Tabletop and Digital Games (Sonniss GDC 2026) | Epic Stock Media | <https://sonniss.com/gameaudiogdc> | Sonniss GDC Game Audio Bundle licence: royalty-free, commercial use, no attribution; raw files not redistributed or resold (bundle's `License - GDC Game Audio.pdf`, `Readme.txt`) | GDC 2026 bundle, downloaded 2026-10-08 (`asset-sources/sonniss-gdc-2026/`) | SFX (M6-V12): `ui/select_1.wav` from `UIClick_UI Button Analog Vintage Double Click Neutral Dry Press 11_ESM_BG.wav`; `building/building_done_1.wav` from `GAMEBoard_Event Board Reset Organic Multiple Pieces Wood Small 02_ESM_BG.wav` |
 | Cinematic Sound Design – UI Interaction Elements (Sonniss GDC 2026) | Cinematic Sound Design | <https://sonniss.com/gameaudiogdc> | Sonniss GDC Game Audio Bundle licence: royalty-free, commercial use, no attribution; raw files not redistributed or resold (bundle's `License - GDC Game Audio.pdf`, `Readme.txt`) | GDC 2026 bundle, downloaded 2026-10-08 (`asset-sources/sonniss-gdc-2026/`) | SFX (M6-V12): `ui/command_1.wav` from `Accept Boing Crunch.wav`; `ui/refused_1.wav` from `Deny Muted.wav`; `ui/ready_2.wav` from `Ting Coins.wav` |

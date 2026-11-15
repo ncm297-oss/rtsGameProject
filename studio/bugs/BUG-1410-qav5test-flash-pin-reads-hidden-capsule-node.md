@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S3 |
-| Status | open |
+| Status | fixed (M7-V5, QA verified 2026-11-14-2156: on a scratch clone with a model's flash overlay never cleared, QaV5Test FAILs "phase 2: new unit inherited a flash"; reverted, PASS) |
 | Found | 2026-11-14-1246, task M6-V21 (QA) |
 | System | view tests (unit models) |
-| Fixed by | |
+| Fixed by | M7-V5 (session 2026-11-14-2156, view): `QaV5Test` phase 2 reads `ModelMeshOf(slot) ?? ViewOf(slot)` and `ShownLit`; red on a scratch copy whose model flash is never cleared (the old check stayed green there), green on the branch; `QaV5Test` added to docs/03 M6-V21's list |
 
 ## Repro
 1. `game/tests/QaV5Test.cs` line 203, phase 2 (a freed slot reused at once by a new Heavy Infantry):

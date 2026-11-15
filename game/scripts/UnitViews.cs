@@ -537,7 +537,8 @@ public partial class UnitViews : Node3D
             ModelNodeCount++;
         }
         // The slot's node sits at the capsule's centre (the cargo marker's frame); the model's feet go to the ground. A data
-        // scale other than 1 scales the model uniformly (M6-V20; no shipped model type has one).
+        // scale other than 1 scales the model uniformly (M6-V20; since M7-V5 the Teblor figures, 1.5: the file holds the
+        // base figure, the size comes from the data alone).
         float s = _modelScale[type];
         _model[slot]!.Transform = new Transform3D(Basis.Identity.Scaled(new Vector3(s, s, s)), new Vector3(0f, -_halfHeight[type], 0f));
     }

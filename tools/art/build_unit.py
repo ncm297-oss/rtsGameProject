@@ -99,6 +99,19 @@ def keep_bone_region(obj, bones, threshold):
     bm.free()
 
 
+def align_to_bone(obj, src_arm, dst_arm, bone, model_id):
+    """M7-V5: moves a part's vertices by where `bone` sits in the model's armature less where it sits in the part's own
+    (the pack's Hair_Long is rigged on an armature whose Head is 5 cm lower than the male base character's), so the part
+    sits on the model's bone in the rest pose it is bound in."""
+    if bone not in src_arm.data.bones or bone not in dst_arm.data.bones:
+        fail(f"{model_id}: alignBone {bone} is not in both armatures")
+    src = src_arm.matrix_world @ src_arm.data.bones[bone].head_local
+    dst = dst_arm.matrix_world @ dst_arm.data.bones[bone].head_local
+    delta = obj.matrix_world.inverted().to_3x3() @ (dst - src)
+    for v in obj.data.vertices:
+        v.co += delta
+
+
 def base_colour_source(material):
     """The image and UV map name feeding a glTF-imported material's Base Color (None if it has no texture)."""
     if material is None or material.node_tree is None:
@@ -141,6 +154,19 @@ def hex_rgb(text):
     return [int(text[i:i + 2], 16) / 255.0 for i in (0, 2, 4)]
 
 
+def srgb_to_linear(rgb):
+    """The linear value of sRGB channels (the IEC 61966-2-1 curve), what a glTF base colour factor holds."""
+    return [c / 12.92 if c <= 0.04045 else ((c + 0.055) / 1.055) ** 2.4 for c in rgb]
+
+
+def prop_rgb(model, text):
+    """A prop's flat colour as the material's linear base colour. M7-V5: a model whose "propColourSpace" is "srgb" names
+    its prop colours as they show on screen (converted here); without it the hex is written as the linear value itself,
+    as M6-V20 / V21 built (those colours show lighter than their hex: the crossbow's #4a3626 draws about #937f6c)."""
+    rgb = hex_rgb(text)
+    return srgb_to_linear(rgb) if model.get("propColourSpace", "linear") == "srgb" else rgb
+
+
 LUMA = np.array([0.2126, 0.7152, 0.0722], dtype=np.float32)
 
 
@@ -165,7 +191,10 @@ def processed_image(src, name, size, tint, work, team_shade=None):
             rgb = np.array(hex_rgb(tint["colour"]), dtype=np.float32)
             rgb = rgb / max(float(rgb @ LUMA), 1e-3)
             a = float(tint["amount"])
-            px[:, :3] = np.clip(px[:, :3] * (1.0 - a) + lum[:, None] * rgb[None, :] * a, 0.0, 1.0)
+            # M7-V5: an optional "brightness" scales the result (the tint alone keeps each texel's brightness, so a light
+            # hair texture stays light and a dark outfit dark: Teblor dark hair, a bone-white robe).
+            b = float(tint.get("brightness", 1.0))
+            px[:, :3] = np.clip((px[:, :3] * (1.0 - a) + lum[:, None] * rgb[None, :] * a) * b, 0.0, 1.0)
         img.pixels.foreach_set(px.ravel())
     os.makedirs(work, exist_ok=True)
     img.filepath_raw = os.path.join(work, name + ".png")
@@ -304,6 +333,8 @@ def build_model(manifest, model, src_root, repo, work):
         part_arm = next(o for o in objs if o.type == 'ARMATURE')
         if arm is None:
             arm = part_arm
+        if "alignBone" in part:
+            align_to_bone(obj, part_arm, arm, part["alignBone"], model["id"])
         if obj.parent is not arm:
             obj.parent = arm
             for m in obj.modifiers:
@@ -357,7 +388,7 @@ def build_model(manifest, model, src_root, repo, work):
             if prop_colours.get(name) != prop["colour"]:
                 fail(f"{model['id']}: prop material {name} is also a role or has two colours")
         else:
-            materials[name] = flat_material(name, colour=hex_rgb(prop["colour"]), roughness=0.8)
+            materials[name] = flat_material(name, colour=prop_rgb(model, prop["colour"]), roughness=0.8)
             prop_colours[name] = prop["colour"]
         props.append(build_prop(prop, arm, pose, materials[name], uv))
 

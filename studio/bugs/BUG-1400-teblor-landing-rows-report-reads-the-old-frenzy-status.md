@@ -3,7 +3,7 @@
 | Field | Value |
 | --- | --- |
 | Severity | S3 |
-| Status | open |
+| Status | fixed (D-R38, 2026-11-14-2156, a7de249: `Make(rows: false)` builds the off copy with the landing taken out; `Content/TeblorLandingOffCopyTests` in the default loop; QA: the row alone 2 / 2, its class 3 / 3) |
 | Found | 2026-11-14-1246, task M8-1 (QA, sim track; not caused by M8-1) |
 | System | data track content tests (`sim/Rts.Sim.Tests/Content/`) |
 | Fixed by | |

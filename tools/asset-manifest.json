@@ -20,6 +20,8 @@
       "walk": "UAL1/Walk_Loop",
       "attack": "UAL1/Pistol_Shoot",
       "attack_melee": "UAL1/Sword_Attack",
+      "attack_throw": "UAL2/OverhandThrow",
+      "attack_cast": "UAL1/Spell_Simple_Shoot",
       "gather_gold": "UAL2/Farm_Harvest",
       "gather_wood": "UAL2/TreeChopping_Loop",
       "build": "UAL1/Fixing_Kneeling"
@@ -235,6 +237,199 @@
         "idle": "idle",
         "walk": "walk",
         "attack": "attack"
+      }
+    },
+    {
+      "id": "teblor_gatherer",
+      "destination": "game/assets/models/teblor/teblor_gatherer/teblor_gatherer.glb",
+      "maxTriangles": 3000,
+      "textureSize": 512,
+      "yawDegrees": 180,
+      "materials": { "MI_Peasant": "outfit", "MI_Regular_Male": "skin", "MI_Superhero_Male": "head", "MI_Hair_2": "hair" },
+      "teamRole": "outfit",
+      "propColourSpace": "srgb",
+      "tints": { "outfit": { "colour": "#6b5038", "amount": 0.55 }, "hair": { "colour": "#2a1d15", "amount": 0.85, "brightness": 0.4 } },
+      "parts": [
+        { "source": "Modular Character Outfits - Fantasy[Standard]/Modular Character Outfits - Fantasy[Standard]/Exports/glTF (Godot-Unreal)/Outfits/Male_Peasant.gltf", "mesh": "Male_Peasant_Body", "triangles": 700, "team": true },
+        { "source": "Modular Character Outfits - Fantasy[Standard]/Modular Character Outfits - Fantasy[Standard]/Exports/glTF (Godot-Unreal)/Outfits/Male_Peasant.gltf", "mesh": "Male_Peasant_Arms", "triangles": 550 },
+        { "source": "Modular Character Outfits - Fantasy[Standard]/Modular Character Outfits - Fantasy[Standard]/Exports/glTF (Godot-Unreal)/Outfits/Male_Peasant.gltf", "mesh": "Male_Peasant_Legs", "triangles": 300 },
+        { "source": "Modular Character Outfits - Fantasy[Standard]/Modular Character Outfits - Fantasy[Standard]/Exports/glTF (Godot-Unreal)/Outfits/Male_Peasant.gltf", "mesh": "Male_Peasant_Feet", "triangles": 250 },
+        { "source": "Universal Base Characters[Standard]/Universal Base Characters[Standard]/Base Characters/Godot - UE/Superhero_Male_FullBody.gltf", "mesh": "SuperHero_Male", "triangles": 450, "keepBones": ["Head", "neck_01"], "keepThreshold": 0.5 },
+        { "source": "Universal Base Characters[Standard]/Universal Base Characters[Standard]/Hairstyles/Rigged to Head Bone/glTF (Godot -Unreal)/Hair_Long.gltf", "mesh": "Hair_Long", "triangles": 450, "alignBone": "Head" }
+      ],
+      "props": [
+        {
+          "name": "tool", "bone": "hand_r", "material": "bloodwood", "colour": "#5e3324",
+          "pose": { "source": "UAL2", "clip": "TreeChopping_Loop", "at": 0.0 },
+          "offset": [0.0, 0.0, 0.0],
+          "boxes": [
+            { "at": [0.0, -0.25, 0.0], "size": [0.04, 0.8, 0.04] },
+            { "at": [0.0, -0.6, 0.07], "size": [0.05, 0.1, 0.2] }
+          ]
+        }
+      ],
+      "clips": {
+        "idle": "idle",
+        "walk": "walk",
+        "attack": "attack_melee",
+        "gather_gold": "gather_gold",
+        "gather_wood": "gather_wood",
+        "build": "build"
+      }
+    },
+    {
+      "id": "teblor_warrior",
+      "destination": "game/assets/models/teblor/teblor_warrior/teblor_warrior.glb",
+      "maxTriangles": 3000,
+      "textureSize": 512,
+      "yawDegrees": 180,
+      "materials": { "MI_Ranger": "outfit", "MI_Regular_Male": "skin", "MI_Superhero_Male": "head", "MI_Hair_2": "hair" },
+      "teamRole": "outfit",
+      "propColourSpace": "srgb",
+      "tints": { "outfit": { "colour": "#7a3b2a", "amount": 0.6 }, "hair": { "colour": "#2a1d15", "amount": 0.85, "brightness": 0.4 } },
+      "parts": [
+        { "source": "Modular Character Outfits - Fantasy[Standard]/Modular Character Outfits - Fantasy[Standard]/Exports/glTF (Godot-Unreal)/Outfits/Male_Ranger.gltf", "mesh": "Male_Ranger_Body", "triangles": 600, "team": true },
+        { "source": "Modular Character Outfits - Fantasy[Standard]/Modular Character Outfits - Fantasy[Standard]/Exports/glTF (Godot-Unreal)/Outfits/Male_Ranger.gltf", "mesh": "Male_Ranger_Acc_Pauldron", "triangles": 180, "team": true },
+        { "source": "Modular Character Outfits - Fantasy[Standard]/Modular Character Outfits - Fantasy[Standard]/Exports/glTF (Godot-Unreal)/Outfits/Male_Ranger.gltf", "mesh": "Male_Ranger_Arms", "triangles": 500 },
+        { "source": "Modular Character Outfits - Fantasy[Standard]/Modular Character Outfits - Fantasy[Standard]/Exports/glTF (Godot-Unreal)/Outfits/Male_Ranger.gltf", "mesh": "Male_Ranger_Legs", "triangles": 300 },
+        { "source": "Modular Character Outfits - Fantasy[Standard]/Modular Character Outfits - Fantasy[Standard]/Exports/glTF (Godot-Unreal)/Outfits/Male_Ranger.gltf", "mesh": "Male_Ranger_Feet_Boots", "triangles": 300 },
+        { "source": "Universal Base Characters[Standard]/Universal Base Characters[Standard]/Base Characters/Godot - UE/Superhero_Male_FullBody.gltf", "mesh": "SuperHero_Male", "triangles": 400, "keepBones": ["Head", "neck_01"], "keepThreshold": 0.5 },
+        { "source": "Universal Base Characters[Standard]/Universal Base Characters[Standard]/Hairstyles/Rigged to Head Bone/glTF (Godot -Unreal)/Hair_Long.gltf", "mesh": "Hair_Long", "triangles": 450, "alignBone": "Head" }
+      ],
+      "props": [
+        {
+          "name": "greatsword", "bone": "hand_r", "material": "bloodwood", "colour": "#5e3324",
+          "pose": { "source": "UAL1", "clip": "Sword_Attack", "at": 0.0 },
+          "offset": [0.0, 0.0, 0.0],
+          "boxes": [
+            { "at": [0.0, 0.09, 0.0], "size": [0.04, 0.22, 0.04] },
+            { "at": [0.0, -0.05, 0.0], "size": [0.06, 0.05, 0.28] },
+            { "at": [0.0, -0.66, 0.0], "size": [0.07, 1.18, 0.18] }
+          ]
+        }
+      ],
+      "clips": {
+        "idle": "idle",
+        "walk": "walk",
+        "attack": "attack_melee"
+      }
+    },
+    {
+      "id": "teblor_javelin_thrower",
+      "destination": "game/assets/models/teblor/teblor_javelin_thrower/teblor_javelin_thrower.glb",
+      "maxTriangles": 3000,
+      "textureSize": 512,
+      "yawDegrees": 180,
+      "materials": { "MI_Ranger": "outfit", "MI_Regular_Male": "skin", "MI_Superhero_Male": "head", "MI_Hair_2": "hair" },
+      "teamRole": "outfit",
+      "propColourSpace": "srgb",
+      "tints": { "outfit": { "colour": "#8a7660", "amount": 0.6, "brightness": 1.2 }, "hair": { "colour": "#2a1d15", "amount": 0.85, "brightness": 0.4 } },
+      "parts": [
+        { "source": "Modular Character Outfits - Fantasy[Standard]/Modular Character Outfits - Fantasy[Standard]/Exports/glTF (Godot-Unreal)/Outfits/Male_Ranger.gltf", "mesh": "Male_Ranger_Body", "triangles": 600, "team": true },
+        { "source": "Modular Character Outfits - Fantasy[Standard]/Modular Character Outfits - Fantasy[Standard]/Exports/glTF (Godot-Unreal)/Outfits/Male_Ranger.gltf", "mesh": "Male_Ranger_Arms", "triangles": 500 },
+        { "source": "Modular Character Outfits - Fantasy[Standard]/Modular Character Outfits - Fantasy[Standard]/Exports/glTF (Godot-Unreal)/Outfits/Male_Ranger.gltf", "mesh": "Male_Ranger_Legs", "triangles": 300 },
+        { "source": "Modular Character Outfits - Fantasy[Standard]/Modular Character Outfits - Fantasy[Standard]/Exports/glTF (Godot-Unreal)/Outfits/Male_Ranger.gltf", "mesh": "Male_Ranger_Feet_Boots", "triangles": 300 },
+        { "source": "Universal Base Characters[Standard]/Universal Base Characters[Standard]/Base Characters/Godot - UE/Superhero_Male_FullBody.gltf", "mesh": "SuperHero_Male", "triangles": 400, "keepBones": ["Head", "neck_01"], "keepThreshold": 0.5 },
+        { "source": "Universal Base Characters[Standard]/Universal Base Characters[Standard]/Hairstyles/Rigged to Head Bone/glTF (Godot -Unreal)/Hair_Long.gltf", "mesh": "Hair_Long", "triangles": 450, "alignBone": "Head" }
+      ],
+      "props": [
+        {
+          "name": "javelin", "bone": "hand_r", "material": "bloodwood", "colour": "#5e3324",
+          "pose": { "source": "UAL2", "clip": "OverhandThrow", "at": 0.3 },
+          "offset": [0.0, 0.0, 0.0],
+          "boxes": [
+            { "at": [0.0, -0.15, 0.0], "size": [0.03, 1.5, 0.03] },
+            { "at": [0.0, -0.93, 0.0], "size": [0.05, 0.08, 0.05] }
+          ]
+        },
+        {
+          "name": "quiver", "bone": "spine_03", "material": "bloodwood", "colour": "#5e3324",
+          "pose": { "source": "UAL1", "clip": "Idle_Loop", "at": 0.0 },
+          "offset": [0.0, 0.0, 0.0],
+          "boxes": [
+            { "at": [0.06, 0.2, -0.12], "size": [0.025, 0.025, 0.9], "rotation": [12, 0, 6] },
+            { "at": [-0.02, 0.21, -0.1], "size": [0.025, 0.025, 0.9], "rotation": [10, 0, -4] },
+            { "at": [0.12, 0.19, -0.14], "size": [0.025, 0.025, 0.86], "rotation": [14, 0, 14] }
+          ]
+        }
+      ],
+      "clips": {
+        "idle": "idle",
+        "walk": "walk",
+        "attack": "attack_throw"
+      }
+    },
+    {
+      "id": "teblor_shaman",
+      "destination": "game/assets/models/teblor/teblor_shaman/teblor_shaman.glb",
+      "maxTriangles": 3000,
+      "textureSize": 512,
+      "yawDegrees": 180,
+      "materials": { "MI_Peasant": "outfit", "MI_Regular_Male": "skin", "MI_Superhero_Male": "head", "MI_Hair_2": "hair" },
+      "teamRole": "outfit",
+      "propColourSpace": "srgb",
+      "tints": { "outfit": { "colour": "#d6cbb3", "amount": 0.7, "brightness": 1.8 }, "hair": { "colour": "#2a1d15", "amount": 0.85, "brightness": 0.4 } },
+      "parts": [
+        { "source": "Modular Character Outfits - Fantasy[Standard]/Modular Character Outfits - Fantasy[Standard]/Exports/glTF (Godot-Unreal)/Outfits/Male_Peasant.gltf", "mesh": "Male_Peasant_Body", "triangles": 700, "team": true },
+        { "source": "Modular Character Outfits - Fantasy[Standard]/Modular Character Outfits - Fantasy[Standard]/Exports/glTF (Godot-Unreal)/Outfits/Male_Peasant.gltf", "mesh": "Male_Peasant_Arms", "triangles": 550 },
+        { "source": "Modular Character Outfits - Fantasy[Standard]/Modular Character Outfits - Fantasy[Standard]/Exports/glTF (Godot-Unreal)/Outfits/Male_Peasant.gltf", "mesh": "Male_Peasant_Legs", "triangles": 300 },
+        { "source": "Modular Character Outfits - Fantasy[Standard]/Modular Character Outfits - Fantasy[Standard]/Exports/glTF (Godot-Unreal)/Outfits/Male_Peasant.gltf", "mesh": "Male_Peasant_Feet", "triangles": 250 },
+        { "source": "Universal Base Characters[Standard]/Universal Base Characters[Standard]/Base Characters/Godot - UE/Superhero_Male_FullBody.gltf", "mesh": "SuperHero_Male", "triangles": 450, "keepBones": ["Head", "neck_01"], "keepThreshold": 0.5 },
+        { "source": "Universal Base Characters[Standard]/Universal Base Characters[Standard]/Hairstyles/Rigged to Head Bone/glTF (Godot -Unreal)/Hair_Long.gltf", "mesh": "Hair_Long", "triangles": 450, "alignBone": "Head" }
+      ],
+      "props": [
+        {
+          "name": "staff", "bone": "hand_r", "material": "bloodwood", "colour": "#5e3324",
+          "pose": { "source": "UAL1", "clip": "Idle_Loop", "at": 0.0 },
+          "offset": [0.0, 0.0, 0.0],
+          "boxes": [
+            { "at": [0.0, 0.0, 0.12], "size": [0.045, 0.045, 1.7] },
+            { "at": [0.0, 0.0, 1.0], "size": [0.12, 0.12, 0.16] },
+            { "at": [0.0, 0.0, 1.14], "size": [0.06, 0.06, 0.14] }
+          ]
+        }
+      ],
+      "clips": {
+        "idle": "idle",
+        "walk": "walk",
+        "attack": "attack_cast"
+      }
+    },
+    {
+      "id": "teblor_breaker",
+      "destination": "game/assets/models/teblor/teblor_breaker/teblor_breaker.glb",
+      "maxTriangles": 3000,
+      "textureSize": 512,
+      "yawDegrees": 180,
+      "materials": { "MI_Ranger": "outfit", "MI_Regular_Male": "skin", "MI_Superhero_Male": "head", "MI_Hair_2": "hair" },
+      "teamRole": "outfit",
+      "propColourSpace": "srgb",
+      "tints": { "outfit": { "colour": "#4f3a2a", "amount": 0.65, "brightness": 0.8 }, "hair": { "colour": "#2a1d15", "amount": 0.85, "brightness": 0.4 } },
+      "parts": [
+        { "source": "Modular Character Outfits - Fantasy[Standard]/Modular Character Outfits - Fantasy[Standard]/Exports/glTF (Godot-Unreal)/Outfits/Male_Ranger.gltf", "mesh": "Male_Ranger_Body", "triangles": 600, "team": true },
+        { "source": "Modular Character Outfits - Fantasy[Standard]/Modular Character Outfits - Fantasy[Standard]/Exports/glTF (Godot-Unreal)/Outfits/Male_Ranger.gltf", "mesh": "Male_Ranger_Acc_Pauldron", "triangles": 180, "team": true },
+        { "source": "Modular Character Outfits - Fantasy[Standard]/Modular Character Outfits - Fantasy[Standard]/Exports/glTF (Godot-Unreal)/Outfits/Male_Ranger.gltf", "mesh": "Male_Ranger_Arms", "triangles": 450 },
+        { "source": "Modular Character Outfits - Fantasy[Standard]/Modular Character Outfits - Fantasy[Standard]/Exports/glTF (Godot-Unreal)/Outfits/Male_Ranger.gltf", "mesh": "Male_Ranger_Arms_Bracer", "triangles": 150 },
+        { "source": "Modular Character Outfits - Fantasy[Standard]/Modular Character Outfits - Fantasy[Standard]/Exports/glTF (Godot-Unreal)/Outfits/Male_Ranger.gltf", "mesh": "Male_Ranger_Legs", "triangles": 300 },
+        { "source": "Modular Character Outfits - Fantasy[Standard]/Modular Character Outfits - Fantasy[Standard]/Exports/glTF (Godot-Unreal)/Outfits/Male_Ranger.gltf", "mesh": "Male_Ranger_Feet_Boots", "triangles": 300 },
+        { "source": "Universal Base Characters[Standard]/Universal Base Characters[Standard]/Base Characters/Godot - UE/Superhero_Male_FullBody.gltf", "mesh": "SuperHero_Male", "triangles": 400, "keepBones": ["Head", "neck_01"], "keepThreshold": 0.5 },
+        { "source": "Universal Base Characters[Standard]/Universal Base Characters[Standard]/Hairstyles/Rigged to Head Bone/glTF (Godot -Unreal)/Hair_Long.gltf", "mesh": "Hair_Long", "triangles": 400, "alignBone": "Head" }
+      ],
+      "props": [
+        {
+          "name": "maul", "bone": "hand_r", "material": "bloodwood", "colour": "#5e3324",
+          "pose": { "source": "UAL1", "clip": "Sword_Attack", "at": 0.0 },
+          "offset": [0.0, 0.0, 0.0],
+          "boxes": [
+            { "at": [0.0, -0.3, 0.0], "size": [0.05, 1.0, 0.05] },
+            { "at": [0.0, -0.82, 0.0], "size": [0.24, 0.26, 0.4] }
+          ]
+        }
+      ],
+      "clips": {
+        "idle": "idle",
+        "walk": "walk",
+        "attack": "attack_melee"
       }
     }
   ]

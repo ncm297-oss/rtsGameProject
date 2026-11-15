@@ -1,331 +1,70 @@
 # Handoff: brief for the next session
 
-Written by the Producer at the ACCEPT of session **2026-11-14-1246** (session 2 / 8 of 2026-11-14, started 12:46, about 8 hours).
-Sim **M8-1** ACCEPT (feature, 0 fix rounds, QA full PASS_WITH_ISSUES), view **M6-V21** ACCEPT (0, QA standard
-PASS_WITH_ISSUES), data **D32** ACCEPT (0, QA standard PASS_WITH_ISSUES). **M5 8 / 9 (criterion 6 owner-only), M6 5 / 10,
-M7 3 / 4, M8 started (0 / 3).** Counters: **sim 1 / 4, view 2 / 4, data 2 / 4**. Bug ids next session: **sim 1430+, view
-1440+, data 1450+**. Open S1 / S2: none. The next session is 3 / 8 of 2026-11-14 (or 1 / 8 of the 15th).
+Written by the Producer at the ACCEPT of session **2026-11-14-2156** (session 3 / 8 of 2026-11-14, started 21:56; the
+ACCEPT ran from 03:45 on the 15th, about 7 hours in all). Sim **M6-S9** ACCEPT (feature, 1 fix round, QA full FAIL on
+two criteria the Producer corrected at the ACCEPT: rule 66), view **M7-V5** ACCEPT (0, QA standard PASS_WITH_ISSUES),
+data **D-R38** ACCEPT (0, QA light PASS_WITH_ISSUES). **M5 8 / 9 (criterion 6 owner-only), M6 5 / 10, M7 3 / 4, M8
+0 / 3.** Counters: **sim 2 / 4, view 3 / 4, data 3 / 4**. Bug ids next session: **sim 1460+, view 1470+, data
+1480+**. Open S1 / S2: none. The next session is **1 / 8 of 2026-11-15**.
 
-**The inbox holds three owner requests from 2026-11-14, not yet processed (they landed after the PLAN): process them
-first at the next PLAN; inbox requests come before roadmap work.** (1) Gatherers may overlap a bit while collecting
-(sim; a data knob; movement). (2) Teblor models first: the five humanoids at the front of the art queue (view). (3)
-Shift-click queues orders: audit what queues, close gaps, make the queue visible (sim + view).
+**Next session in one line (proposal):** sim **M6-S10: BUG-1431 (the Keep-corner drop-off wedge), then the shipped
+value `gatherOverlap` 0.5, one hash move** (feature, QA full; staged, nothing ships if the wedge is not cured) · view
+**the owner's Shift-queue made visible** (feature, QA standard) · data **D-H9, the hardening pulled forward** (light,
+no hash move: BUG-1450 first, the own-names pins, BUG-1451, Q1-Q11 onto the page, BUG-1421 items 3-4, BUG-1360).
 
-**Next session in one line (proposal):** sim **the gatherer-overlap request** (feature, QA full; a `rules.json` knob,
-one hash move, the golden and the AI pins re-measured: rules 41 / 43 / 45) · view **the Teblor humanoids** (BUG-1412 and
-BUG-1410 first; feature, QA standard) · data **a light task with no hash move** (BUG-1400 first; BUG-1421 items 3-4,
-BUG-1360; or the Shadow page made pin-ready), because the sim moves the economy and the hash that session.
-
-## Current session plan (2026-11-14-2156, session 3 / 8 of 2026-11-14; written at the PLAN)
-
-Inbox processed (both notes, three requests). All three tracks GO, all feature sessions (counters sim 1 / 4, view 2 / 4,
-data 2 / 4 before this session). Bug ids: sim 1430+, view **1441+** (the Producer filed BUG-1440 at this PLAN), data
-1450+. `main` at f07b849 on a scratch clone (rule 38): build `--no-incremental` 0 errors / 1 warning (BUG-1412, the
-view's first item), the default loop 9,359 / 0 failed / 19 skipped of 9,378 in 21 m 24 s alone, smoke PASS (with the
-real LFS files). Expected red: the one Stress row of BUG-1400 (the data's first item).
-
-**What the Producer found at the PLAN (the Shift-queue audit, from the code):** every unit order already takes the
-queue flag in the sim (`Command.QueuedFlag`: Move, AttackMove, Attack, Gather, Build, Repair, UseAbility, Stop,
-HoldPosition; 8 entries a unit) and the view passes Shift on every one of them (right-click context orders, attack-move,
-abilities, the minimap, Stop / Hold), with one gap: the **first** Shift-placed building replaces the queue
-(`CommandCard.GhostClick`: `queued: shift && _placed > 0`). Nothing draws the queue. There is no patrol or garrison
-order; a rally point is a building's single point, not a unit order. An order queued behind a Gather waits until the
-loop ends (the node runs out), by design. So the request is a **view task** (draw the queue, close the first-build
-gap, a scene per order kind); the sim owes nothing unless that task finds a kind that does not start. It is the view's
-task **right after the Teblor humanoids** (ahead of merged surfaces: an inbox request comes before roadmap work).
-
-**The gatherer overlap is two sessions on purpose:** this session builds the rule with the knob absent = off (nothing
-shipped moves, every pin must hold untouched) and measures candidate values; the next session ships the value in
-`rules.json` (one hash move, the golden regenerated, the AI pins re-measured by rules 41 / 43 / 45; rule 54's
-rehearsal at that PLAN). Producer default to ship: **0.5** (two gathering workers may stand or pass at half their
-touching distance), unless this session's table says otherwise. The data track moves no hash in either session.
-
-### Sim track: M6-S9 (feature, QA full)
-
-**Title:** Build the gather-loop overlap rule and its `rules.json` knob (off by default), and measure candidate values.
-
-Goal: the owner asked (inbox 2026-11-14) that gatherers clip through each other "a bit" while collecting instead of
-pushing each other apart. Build it as one generic movement rule with one data knob: two workers of the same player that
-are both on a gather loop count a shorter touching distance between them. This slice builds the rule with the knob
-absent = off (bit-identical to today), proves it on test data, and measures what candidate values do to income and to AI
-matches. The shipped value lands next session as its own hash move.
-
-Scope:
-- Schema: `game/data/common/rules.json` field `gatherOverlap` (a number, 0 ≤ v ≤ a cap below 1 that you choose and
-  justify; absent = 0 = today). A JSON null, a string, a negative or a value over the cap is a load error.
-  `RulesDef.GatherOverlap`. It enters the data content hash only when non-zero (as M8-1 did for `forestStealth`), so
-  the shipped hash 5353DF8A1473FC6D and the golden replay do not move. **The shipped `rules.json` is not edited.**
-- The rule (Producer decision): a **gather pair** is two live units of the same owner that both have `GatherNode` set
-  (the whole loop: walking to the node, harvesting, walking to the drop-off, delivering). For a gather pair,
-  `MovementSystem` uses `(radius_i + radius_j) × (1 − gatherOverlap)` wherever it uses the pair's radii sum to decide
-  touching, spacing, pushing or walls (the overlap push, `ArrivalSpacing` / crowded, `ShoveSpacing` and the pack
-  limit, the standing-wall limit, the sidestep / detour / queue reach, shoves). Every other pair is untouched: a
-  gatherer and a soldier, a gatherer and an Idle worker, a builder or repairer (`BuildTarget`), any enemy, any
-  footprint. If a site provably does not matter you may leave it on the full sum; docs/03 lists which sites use the
-  pair distance and which do not, with the reason.
-- No new per-unit state is expected (the predicate reads `GatherNode`, already hashed and saved). If you find you need
-  any, stop and report instead of changing a save or replay format.
-- A measurement report (Stress category, no bound, printed into docs/03): on copies of the shipped data with
-  `gatherOverlap` 0 / 0.25 / 0.5 / 0.75: (a) 5, 10, 16 and 24 workers on one gold mine beside a hall, and on a tree
-  line, for 5 game minutes, for the Malazan Laborer (0.4 m) and the Teblor Gatherer (0.75 m, carry 15): resources
-  banked, trips, stuck ticks, give-ups, the smallest pair distance seen; (b) Normal v Normal on the menu's default
-  map and the three named maps, seed 1, at 0 and 0.5: the result tick, gold + wood gathered by 10:00, whether the
-  match still ends. Keep (b) under about 15 minutes alone. These figures choose the shipped value at the next PLAN.
-- OUT of scope: any byte under `game/data/**`; regenerating the golden; re-pinning or re-bounding any existing test;
-  any `MovementConstants` value; Build / Repair walkers; armies and marching units; the view; the Shift-queue; `game/**`.
-- Size: uncertain work, about 800 changed lines of production code and its own tests (QA's suites and the report
-  don't count).
-
-Acceptance criteria:
-1. Loader: absent and 0 load as 0; a valid value loads; null, a string, a negative, a value over the cap and NaN are
-   load errors naming the file and field. `DataValidationTests` green. The shipped content hash is unchanged (the two
-   golden data-hash pins pass unedited).
-2. Off is identical: with the knob absent, the default loop and the Stress pin classes pass with **no existing
-   expected value, digest, bound or golden edited** (the diff shows none). Any pin that moves fails this criterion;
-   no M5-5 row, tally or opening pin is expected to move (rules 41 / 43 / 45: nothing to re-measure this session).
-3. On, at 0.5 on test data: (a) two gather-loop workers of one player meeting head-on between node and drop-off pass
-   with their centres closer than the radii sum, and neither collects a stuck tick; (b) 12 workers on one mine reach a
-   steady state where gather pairs stand closer than at 0, no two centres ever closer than the scaled pack limit less
-   float tolerance (nobody coincides), and the bank after 5 minutes is not lower than at 0 (lower is a finding to
-   explain, not a bound to loosen); (c) for 0.4 m, 0.75 m and mixed radii.
-4. Scope holds: a scene with no gather pair in it (a marching army through standing soldiers; a soldier walking
-   through a mining line; an Idle worker beside miners; a builder beside miners; two players' workers on one mine)
-   gives the same position for every non-gather pair interaction as at 0: where the scene has no gather pair at all,
-   the state hash is equal tick for tick at 0 and 0.5.
-5. Leaving the loop: a worker overlapped with another gets a Move or Stop; the pair separates under today's rules
-   within 2 s, and no unit's step in a tick exceeds its speed plus the overlap removed (no teleport).
-6. Determinism with the knob on: two runs equal tick for tick over a 5-minute economy scene; the result does not
-   depend on spawn / slot order (the existing permutation pattern); a save mid-scene loads and continues to the same
-   hashes; a recorded replay plays back equal.
-7. Invariant fuzz with the knob at 0.25 / 0.5 / 0.75 (economy fuzz): no NaN, no unit on a blocked cell, every worker
-   keeps delivering (no worker without a trip for 60 s while its node lives), income above zero.
-8. Cost: 0 bytes allocated per tick with the knob on; the gather Perf rows hold their existing thresholds with the
-   knob on (report the figures; a Perf failure counts only alone, rule 42).
-9. The report's table is in docs/03 "Implementation (M6-S9)", dated, with the rule, the predicate, the sites, the
-   knob's range and "absent = off; hashed only when non-zero". docs/02 "Economy" gets one row: the knob, off until its
-   value ships.
-10. `dotnet build RtsGame.sln --no-incremental` after the last edit: 0 errors and no warning beyond BUG-1412's one
-    (the view fixes it this session). The full default loop after the last edit (rule 62). Every test process you
-    started is ended (rule 52).
-
-Design references: inbox 2026-11-14 (the owner's words); docs/03 "Local movement" and the `MovementSystem` remarks
-(two passes from start-of-tick state, fixed-point push sums, "Idle" = any standing state incl. Gathering / Returning);
-`MovementConstants` (`ArrivalSpacing` 0.6, `ShoveSpacing` 0.5, the separation shares); `EconomyConstants.Reach` 1.25 and
-`GoalInset` (BUG-0146: a queued worker must stay in reach of the footprint); docs/03 "Implementation (M8-1)" for the
-"hashed only when present" pattern; docs/02 "Economy".
-
-Tests required: loader tests; scene tests for criteria 3-5 (xUnit, test data via the existing gather maps); the
-determinism, save and replay rows of criterion 6; the fuzz of criterion 7; an allocation row; the Stress report. The
-replay golden tests run unedited. A helper that forges the rule must tolerate shipped data that later carries it
-(rule 58).
-
-Constraints: no stat in C# (the amount is data; only the cap is a named constant with a reason); no allocation in
-per-tick code (the neighbor loop is the hot path; Debug builds don't inline, mind the written-out copies that must
-stay in step); float sums stay in fixed point where they are today; no `Dictionary` / `HashSet` iteration; no Godot;
-golden hashes untouched. Bug-file updates as a patch in your scratchpad (you cannot write `studio/**`). A scratch
-clone, if you need one, is named `m6s9-...` (rule 63).
-
-QA focus (full): attack "off is identical" first (the golden, the two data-hash pins, `GatherWedgeQaTests`, the M5-5
-rows and the Stress pin classes, unedited). Then the rule on: a mine wrapped by 24 and 40 workers, a mine in a
-1-cell pocket (`GatherPocketStressTests`' maps), a drop-off against a cliff, node exhaustion with 24 overlapped workers
-re-targeting at once, a worker killed while overlapped, a hall destroyed mid-delivery, enemy workers sharing a mine,
-an army ordered through the mining line, 0.75 m Gatherers at 0.75 overlap, the knob at the cap and just over it.
-Look for workers that end out of `Reach` of the footprint (BUG-0146's shape), a wedge that only forms with the knob
-on, any pair that separates with a jump, slot-order dependence (shuffle spawn order, 20 seeds), a save taken while
-pairs overlap. `WideCrowdStressTests` at 0: both columns unchanged. Perf alone under rule 42. Rule 65: end with
-`--no-incremental` on the commit that holds QA's files.
-
-### View track: M7-V5 (feature, QA standard)
-
-**Title:** Make the five Teblor humanoids figures (BUG-1412, BUG-1410 and the M6-V21 bench table first).
-
-Goal: the owner asked (inbox 2026-11-14) for the Teblor on screen sooner: today all seven Teblor unit types are
-capsules. Build the Gatherer, Warrior, Javelin Thrower, Shaman and Breaker as animated, team-coloured figures with the
-import tooling, the way docs/04 plans, so a Teblor match shows giants instead of capsules. The Destrier Rider and the
-War-dog stay capsules (no horse or dog pack on disk: the owner's download, already under Waiting on you).
-
-Scope:
-- First, small: **BUG-1412** (`game/tests/QaM6V21Test.cs` line 257: `string? why`; the build is 0 / 0 again);
-  **BUG-1410** (`QaV5Test` line 203 reads `ModelMeshOf(slot) ?? ViewOf(slot)`; show the check red with the flash
-  disabled, green with it; add the scene to docs/03's list); docs/03 "Implementation (M6-V21)"'s bench table replaced
-  by the Producer's alone figures, dated 2026-11-14: 400 figures 10.11 ms while 90 %+ alive (worst 1 % 14.52), 400
-  capsules 0.77 ms; 1,000 figures 26.87 ms (worst 1 % 32.79), 1,000 capsules 1.29 ms; 4,542 / 12,219 draw calls.
-- Five manifest entries in `tools/asset-manifest.json`, built by `tools/import-assets.ps1` / `tools/art/build_unit.py`
-  into `game/assets/models/teblor/<id>/<id>.glb` (the paths `units.json` already names): the Universal Base Character
-  (male), the two outfits on disk (Peasant, Ranger) recoloured to the Teblor palette (docs/04 "Faction palettes":
-  earth brown, bloodwood red-brown, bone white, furs), long hair if the pack parts allow, props as boxes (a wooden
-  greatsword for the Warrior, javelins, the Shaman's staff, the Breaker's great club or maul, the Gatherer's tool),
-  team colour on one `team` surface. Blender 5.2 and `asset-sources/` are in the owner's main checkout
-  (`C:\Dev\rtsGameProject\asset-sources`, read only).
-- **Size (Producer decision):** a figure is drawn at its base height × the data's `scale` (1.5: about 2.7-2.85 m),
-  scaled uniformly, feet on the ground; it is not stretched to the 1.5 m room. The selection ring, target ring and
-  corpse disc keep the data radius (0.75 m). The factor comes from the data, never a C# literal or a baked size.
-- Clips: the Gatherer the worker clips; Warrior and Breaker `attack_melee`; the Javelin Thrower a throw clip and the
-  Shaman a cast clip if UAL1 / UAL2 hold one (add it to the library), else the nearest clip with the reason in
-  docs/04. Every state a type can be in maps to a clip (no T-pose).
-- `tools/asset-manifest.json`, `tools/import-assets.ps1` and `tools/art/**` are yours; the rest of `tools/**` is not.
-- If five do not fit, the Gatherer, Warrior and Javelin Thrower are the minimum; say so in the first lines of the
-  report and the other two become the next task.
-- OUT of scope: the Destrier Rider and the War-dog; Teblor buildings; merged surfaces or any change to how figures
-  are drawn or animated beyond what a 1.5× figure needs; the Shift-queue display (the next view task); `game/data/**`;
-  `sim/**` outside `ViewApi`; re-cutting existing Malazan / Whirlwind figures (BUG-1411 waits).
-
-Acceptance criteria:
-1. `dotnet build RtsGame.sln --no-incremental`: 0 errors / 0 warnings (BUG-1412).
-2. BUG-1410: `QaV5Test` reads the drawn mesh; red with the flash disabled (shown once, on a scratch copy), green on
-   the branch.
-3. docs/03's M6-V21 bench table carries the Producer's figures above.
-4. The five `.glb` files exist at the paths `units.json` names, each from a manifest entry; each at most 3,000
-   triangles, 512² textures, the shared 65-bone skeleton, one `team` surface; a second run of the import on a fresh
-   clone is byte-identical.
-5. On the shipped data: `ModelViewTest` has a row per new type (11 model types; the Rider and the dog capsules, with
-   no `ERROR` line); a Teblor figure's drawn height is the base figure's × the data `scale` within 2 %, read from the
-   data; its ring radius is 0.75 m.
-6. Each new type plays the mapped clip in each of its sim states, checked by `Animation` identity as M6-V21 did; no
-   state without a clip.
-7. Pictures (rule 56: the shipped data), written to a new scratch folder `m7v5-shots` and listed in the report: each
-   type close up; the five in a row beside a Malazan Heavy Infantry and a Laborer at the default zoom, in two player
-   colours; a Teblor base with Gatherers mining and chopping; a fight of Teblor against Malazan figures. The Producer
-   judges: giants read as giants, the five can be told apart at the default zoom, the player's colour is visible.
-8. The bench alone (rules 42 / 61): 400 and 1,000 mixed figures including the Teblor types, with the capsule figure
-   from the same window, reading the "while 90 %+ alive" column. 400 figures at or under 16.7 ms (the Producer re-runs
-   it alone); 1,000 is reported, not gated.
-9. `tools/qa/smoke.ps1` PASS; the scene loop all green (105 + what you add); the full default loop after the last
-   edit (rule 62).
-10. docs/04 (the Teblor rows of the coverage plan, the clip table, what stands in for hair, furs and weapons; the
-    licensing log only if a new source is used) and docs/03 "Implementation (M7-V5)" (the size rule, the scene list).
-    Report the size of the art pass's binaries in LFS.
-
-Design references: docs/04 "Scale and dimensions" (Teblor ~2.7 m, 1.5×), "Team color", "Faction palettes and
-silhouettes" (1.5× scale, long hair, huge wooden swords), "Import process", "Animation setup"; docs/factions/teblor.md
-(the roster, what each unit carries); docs/03 "Implementation (M6-V20)", "(M6-V21)", "(M7-V3c)" (a unit is drawn as wide
-as the room it takes for capsules; `scale` is height); docs/01 change log 2026-11-14 (f).
-
-Tests required: `ModelViewTest` rows; a scene row for the drawn height from the data `scale` (a forged scale of 1.25
-gives 1.25×); clip-identity rows per type; `QaV5Test` fixed. A new scene that reads a slot's own mesh reads
-`ModelMeshOf(slot) ?? ViewOf(slot)`.
-
-Constraints: views hold no gameplay state; no stat or size in C#; player-facing text only from data; binaries through
-Git LFS (types already in `.gitattributes`); no raw pack committed; never download; scratch folders named `m7v5-...`
-and created new (rule 63); end every Godot and test host you start (rule 52); rule 64.
-
-QA focus (standard): the default loop, the scene loop, smoke. Then: a fresh clone with `git lfs pull` + import (byte
-identity, no `ERROR`); a clone without LFS (pointer files: the Producer saw the import print glTF `ERROR` lines and
-leave `.import` files modified at this PLAN, BUG-1440 S4: add what you see to it, do not fix it here); a Teblor match
-on the shipped data at game speeds 0.5 / 1 / 2 and paused; a forged `scale` of 1 and 2 on a Teblor type (the figure
-follows, the ring does not); figures at the cliff edge and on ramps (feet on the ground at 1.5×); 100 Gatherers on a
-mine (hands and props through each other is fine, floating is not); selection, health bars, status marks and the
-Regenerating cue sit above a 2.8 m head, not inside it; fog: an enemy giant leaving sight; corpses. The bench alone
-(rule 42), base against head. Pictures of all of it for the Producer. Rule 65.
-
-### Data track: D-R38 (feature, QA light)
-
-**Title:** Make the Shadow page pin-ready and list what the schemas lack (BUG-1400 first).
-
-Goal: the sim changes the gather rules this session and ships their value next session, so no opening is measured
-and no data hash moves on this track meanwhile (rule 41). Use the time to do for the Shadow what D-R36 did for the
-Teblor: put `docs/factions/shadow.md` into the shape the content pins read, check its numbers against docs/02's
-templates, and list every mechanic the schemas on `main` cannot express yet, so the roster can land the session its
-schemas exist.
-
-Scope:
-- First: **BUG-1400** (rule 57). `Content/TeblorLandingOpeningReportTests.TheRows_ChangeTheMatch_FromTheFirstFrenzyOn_Report`
-  compares "without the rows" against "with the rows", and the shipped data has carried the rows since D31. Re-build
-  the "off" side from a copy with the rows removed, or retire the row with the reason in the file. Either way the
-  Stress run of `Content` and `QA/Content` ends with 0 failed.
-- `docs/factions/shadow.md` in the Malazan / Teblor shape: Units with the `Id` / `Targets` / `Spawn` / `Scale` columns
-  and every column the pins read; the faction bonus as the exact `forestStealth` block docs/03 "For the data track
-  (M8-1)" gives; a Techs table; Abilities with the fields the ability schema has; Buildings; Difficulty; "AI build
-  order (Normal)" with one opening written as steps the `ai.json` schema can hold.
-- `ContentFactions.PagesAhead` gains `shadow`; `PagePinReadinessTests` reports 0 problems for the page.
-- A section "Schema gaps (D-R38)": each mechanic on the page that no loader field expresses today, one row each with
-  the field you would want (the Shadow Archer's stand-still stealth and +50 % first shot; Pack Hunter's bonus per
-  other Hound within 8 m, max +30 %; at most 7 Hounds alive; Shadow-step's group teleport; Summon Wraiths, a summoned
-  unit with a lifetime, no cost, no pop and never stealthed; a ram that attacks buildings only, if `targets` does not
-  cover it; anything else you find). Return them as proposed "Requests for the sim track" text in the report.
-- A section "Owner review (D-R38, proposed)": `displayName` and `description` for every unit, building, tech, ability
-  and the opening (at most 144 characters, no release name leaked, the `FactionWords` rules), and a counters proposal.
-- A list of open questions for the Producer (a page cell that contradicts docs/02 or a built rule, e.g. the bonus
-  text "or taken damage" against M8-1's rule; whether the Wraith is under `exceptSlots`), each with your recommendation.
-- OUT of scope: any byte under `game/data/**` (no Shadow folder yet, no hash move); any C# outside
-  `sim/Rts.Sim.Tests/Content/` and `sim/Rts.Sim.Tests/QA/Content/`; measuring any opening; BUG-1420 / D33 (after the
-  gather value ships); BUG-1421 and BUG-1360 (the data's next hardening).
-
-Acceptance criteria:
-1. BUG-1400: the row is green or retired with its reason; `dotnet test sim/Rts.Sim.Tests --filter
-   "FullyQualifiedName~Rts.Sim.Tests.Content|FullyQualifiedName~Rts.Sim.Tests.QA.Content"` (Stress included): 0 failed.
-2. `PagePinReadinessTests`: 0 problems for `shadow.md` with `shadow` in `PagesAhead`; removing one section from a
-   copy of the page fails naming the page, the section and the pin that reads it.
-3. Every number on the page either equals docs/02's template for its slot or is listed as a deliberate difference
-   with one line of why; the page's totals (cost, pop, train times) are consistent between its tables and its AI
-   order.
-4. "Schema gaps (D-R38)" is complete: every mechanic in the page's unit notes, abilities and bonus appears either as
-   "expressible today: field X" (with the loader field named) or as a gap row.
-5. "Owner review (D-R38, proposed)" holds a name and a description for every row the roster will ship; none over 144
-   characters; no release name from the page's codename table appears.
-6. The open questions are listed with a recommendation each.
-7. `git diff` touches only `docs/factions/shadow.md`, `sim/Rts.Sim.Tests/Content/**` and
-   `sim/Rts.Sim.Tests/QA/Content/**`. Build `--no-incremental` adds no warning; the default loop is green after the
-   last edit (rule 62); test processes ended (rule 52).
-
-Design references: docs/factions/shadow.md; docs/02 "Units" template table, "Stealth and detection", "Buildings",
-"AI"; docs/factions/teblor.md and malazan.md as the shape; docs/03 "Implementation (M8-1)" "For the data track
-(M8-1)"; the session log 2026-11-10-1236 (D-R36).
-
-Tests required: the `PagesAhead` row and its mutation check; BUG-1400's row re-built (or its retirement recorded).
-No new pin on values that are not shipped.
-
-Constraints: no C# outside the two content test folders; no `game/data` byte; player-facing text proposals follow
-the data rules (codenames only); scratch folders named `dr38-...` (rule 63); the bug patch for BUG-1400 goes in your
-scratchpad.
-
-QA focus (light: the task's filters + the default loop, never the full suite): run BUG-1400's row alone and with its
-class; run the page through the pins' own parsers the way `TeblorPageParseQaTests` did (substituted ids) and look for
-a stray number or a column the parser skips silently; check ten page cells against docs/02 by hand; check the gap
-list against `DataJson.cs` field by field (a "gap" that already has a field, or a field claimed that does not exist);
-count the characters of every proposed description.
+**At the PLAN, first:** (1) the inbox; (2) set the README index rows of **BUG-1400** and **BUG-1391** to fixed and add
+a row for **BUG-1440** (their files say so already; the rows sit beside the view's edits, so the Producer left them to
+avoid a conflict); (3) **rule 54's rehearsal for the value:** on a scratch clone of `main` add `"gatherOverlap": 0.5`
+to `game/data/common/rules.json`, run the default loop and the Stress pin classes, and list every row that moves (the
+two golden data-hash pins and the golden will, by design; the M5-5 rows per docs/03 "Implementation (M6-S9)" table
+(b): Vathar Crossing 23,322 p1 → 28,729 p0, past its 24,000 bound; Raraku 28,231 → 30,132; **Pale Hills seed 1
+50,140 → does not end in 72,000**). The brief names those rows (rules 41 / 43 / 45).
 
 ## Where things stand
 
-- **`main` after this session = sim 7b1a0f5 + view 35cceb9 + data c2fa20e** (plus this ACCEPT's studio files). The
-  Producer's scratch clone of that tree (`acc1246` in the session scratchpad; conflicts only in
-  `studio/bugs/README.md` and `studio/qa/coverage.md`, both sides kept): build `--no-incremental` **0 errors / 1
-  warning (BUG-1412)**; the default loop **9,359 / 0 failed / 19 skipped of 9,378 in 20 m 28 s (beside the scene loop)**; smoke **PASS**; the scene loop **105 of 105, first pass**.
-- **Forest stealth is a rule, on test data only (M8-1).** `faction.json` `forestStealth { status, delay, exceptSlots }`;
-  `ForestStealthSystem` runs in phase 5 before `StealthSystem.Run`; per-unit state in `UnitStore.Forest`
-  (`ForestStealthStore`: `LastAttackTick`, `Held`), allocated, hashed (state-word bit 22) and saved (`FRST` after
-  `REGN`) only when the data has a faction with the block; one status entry is shared with a timed stealth
-  (`StatusSystem.Hold`). No shipped file, pin, digest or format moved (`CurrentVersion` 10). docs/03 "Implementation
-  (M8-1)" has **"For the data track (M8-1)"** (the exact block the Shadow `faction.json` will carry) and "For the view
-  (M8-1)" (nothing new is needed). Cost alone: forest brawl 1.21 ms a tick, 0 bytes; 2,000 hidden units 0.73 ms.
-- **Six unit types are figures (M6-V21)**, the clips follow the game speed, the Heavy Infantry and the Raider swing a
-  sword clip, the Archer keeps the one-handed shot (no bow clip in UAL1 / UAL2). **The Producer's bench, alone (load
-  3-4 %, no other test host): 400 figures 10.11 ms while 90 %+ alive (worst 1 % 14.52; limit 16.7), 400 capsules
-  0.77 ms; 1,000 figures 26.87 ms (worst 1 % 32.79), 1,000 capsules 1.29 ms; 4,542 / 12,219 draw calls.** docs/03
-  "Implementation (M6-V21)" still prints the developer's figures (11.26 / 28.17, two other test hosts running): the
-  view's next task replaces them with these.
-- **The Teblor AI's second pass shipped (D32, variant X7, `ai.json` alone).** Data hash and golden header
-  **5353DF8A1473FC6D** (was 27036D3A2F2BA1CB); the golden's 15 `k` lines unchanged; save format 10. Every save and
-  recording from before is refused `DataMismatch` (fixtures in `Content/Fixtures/pre_d32/`). 64 Normal matches: the
-  target on 8 of 8 seeds, defeated 10 (was 14), a Shaman in 27 (was 4), a second Longhouse in 18 (was 0), Age II by
-  10:00 in 55, a wave in 62. **The price (BUG-1420 S3): Breakers, Destrier Riders and War-dogs are fielded in 0 of 64
-  on Normal (as before) and are now gone on Easy (Breakers 8 -> 0) and Hard (Breakers 22 -> 0, Riders 18 -> 5, dogs
-  8 -> 0, the Anointing 43 -> 19)**; Hard is beaten less (18 -> 10). The "64 matches" are 34 distinct ones on Normal /
-  Hard (the named maps barely vary by seed).
-- **The Frenzy report on D32's opening** (`FRENZY_REPORT_OPENING=Content/Fixtures/teblor_standard_d32.json`, 32
-  matches on the menu's map): a Shaman in 5, 8 casts sent / 8 landed, defeated 10. On the 64-match row 22 casts
-  landed in 18 matches. So a fielded Shaman does cast with today's rule; Request 53's second half is a reading, not
-  yet a rule. docs/03 "Implementation (M7-7)"'s table is D31's opening (a Producer note under it says so). The
-  report's "army pop 15:00 (sum)" reads 0 for both openings with 19 undefeated matches: nobody has looked at why.
-- **Why the expansion waited (D32):** gold, not list order: the bank held the Longhouse's cost in 36 of 22,926 thinks,
-  and "base defended" was true in 14,088 thinks, which switches the reserve off. Two Requests for the sim track are
-  in STATE (54: count only a real raid as "defended"; 55: a `train` step that may spend through an earlier step's
-  reserve).
+- **`main` after this session = sim 7c99fac + view 06a5af3 + data d15577c** (plus this ACCEPT's studio and docs
+  files). The Producer's scratch clone of that tree (`acc2156` in the session scratchpad; conflicts only in
+  `studio/bugs/README.md` and `studio/qa/coverage.md`, both sides kept; docs/03 merged by itself): build
+  `--no-incremental` **0 errors / 0 warnings**; the default loop **9,515 / 0 failed / 21 skipped of 9,536 in 22 m 18 s (beside the scene loop)**; smoke **PASS**; the scene loop
+  **107 of 107, first pass**.
+- **The gather-overlap rule is on `main`, off.** `rules.json` `gatherOverlap` (absent = 0 = off; 0 to 0.75,
+  `DataLimits.MaxGatherOverlap`; hashed only when non-zero; JSON `null` is an error, told from absent by `NumberJson`).
+  A gather pair = two live units of one owner with `GatherNode` set. `MovementSystem.PairSum` is the pair's touching
+  distance at every site (written out in Plan's neighbor loop: keep the two in step); `GatherFloor` /
+  `ShovedPastGatherFloor` keep a gather pair at `ShoveSpacing × PairSum` or more (on for any value above 0: BUG-1433).
+  `World.GatherOverlapOn` / `GatherPairScale` are derived from the data, never saved. The shipped hash
+  **5353DF8A1473FC6D**, the golden, save format 10 and every pin are unchanged; no existing test file was edited.
+  docs/03 "Implementation (M6-S9)" has the sites, the tables (a) income, (b) four AI matches at 0 / 0.5, (c) the fuzz.
+- **What the tables say:** 24 Laborers on one mine bank 3,430 / 3,630 / 3,930 / 4,080 at 0 / 0.25 / 0.5 / 0.75; 24
+  Gatherers 2,790 / 3,450 / 3,960 / 4,320; five workers: no change. At 0.75 workers stand 0.17-0.24 m apart (drawn as
+  one). **0.5 stays the value to ship.** Matches at 0.5: the menu map ends 6,286 ticks sooner, Vathar's winner flips
+  (28,729, past its bound), Raraku 1,901 later, Pale Hills seed 1 does not end (seat 1 is left with one worker from
+  tick 66,000 that is never hunted: BUG-1434 / BUG-1116's shape, not an economy wedge).
+- **The fuzz's 60 s trip window does not hold with the knob off** (BUG-1431: a returning worker 1.3-1.5 m out of
+  reach at a Keep's corner behind mates whose goal cell is the Keep's stand cell; also an outbound worker held at its
+  Keep, seed 27). Seeds past 60 s over seeds 2-56: off 6, 0.25 5, 0.5 2 (seed 23 knob-only: 77.7 s against 42.1 s;
+  seed 27: 90.8 against 89.8), 0.75 1 (seed 7). Which (seed, value) breaches is chance: the knob switched on one
+  tick late moves them.
+- **Five Stress rows are red on `main` by ruling (rule 57; none in the default loop):**
+  `GatherOverlapQaStressTests.EconomyFuzz_Seeds2To16_NoWedgeOnlyTheKnobForms` at 0.25 and 0.75, `Bug1430_*` x2,
+  `GatherOverlapWedgeQaStressTests.WiderSeedSweep_17To56_BreachesByValue`. BUG-1400's row is green again. M6-S10 turns
+  them green (BUG-1431 cured) or re-states them as "no more breaches than off, none away from a Keep corner". **Two
+  sessions red = the fix becomes the whole task.**
+- **Eleven unit types are figures (M7-V5):** the five Teblor humanoids joined (Gatherer, Warrior, Javelin Thrower,
+  Shaman, Breaker), drawn at the data `scale` 1.5 (2.76-2.78 m; the file holds the 1.84 m base figure), rings on the
+  0.75 m radius. New library clips `attack_throw` (UAL2 `OverhandThrow`) and `attack_cast` (UAL1
+  `Spell_Simple_Shoot`). New `build_unit.py` hooks: `alignBone`, tint `brightness`, `propColourSpace: "srgb"`.
+  **`tools/import-assets.ps1` now marks each rebuilt model's texture imports stale so Godot re-extracts them** (before,
+  a changed tint never reached the game). The Destrier Rider and the War-dog are capsules. **Bench alone (Producer):
+  400 figures 11.41 ms while 90 %+ alive (worst 1 % 15.67), 1,000 figures 29.20 ms** (QA, base
+  against head: 10.20 → 11.14 and 27.32 → 29.32; draw calls 4,542 → 5,200 and 12,073 → 13,969).
+- **The Shadow page is pin-ready (D-R38):** `docs/factions/shadow.md` in the Teblor / Malazan shape, `PagesAhead =
+  { "shadow" }`, 0 readiness problems; "Schema gaps (D-R38)" G1-G14 (STATE Request 56); "Owner review (D-R38,
+  proposed)" (24 names and descriptions, the longest 131 characters). The Producer's answers to the developer's
+  Q1-Q11 are docs/01 2026-11-15 (a); D-H9 writes them onto the page.
 - **The stray empty `C:\Dev\rtsGameProject\ModelShots.cs` is still in the owner's main checkout** (on the owner's list).
-- **After integration, at the PLAN:** set BUG-1391 to fixed (items 1, 2, 4 by D32; item 3 by M8-1: the Producer could
-  not edit it in the sim worktree without a conflict with the data's edit).
 
-## Standing rules (1-65)
+## Standing rules (1-67)
 
 
 Unchanged 1-51 (38: the Producer runs every suite on a scratch `git archive` / clone, never in a worktree; 39: generated map content
@@ -387,8 +126,37 @@ right after the Teblor humanoids**, and every art brief still reports the 400- a
 the `GatherWedgeQaTests` comment and in the ACCEPT's `COMMIT_SUMMARY`; the Producer checks the comment.
 (`SameGameDataHashes` is the name of the rule in that class's comments, not a test method: do not write it as a
 criterion's test name again.)
+**66 (new, 2026-11-14-2156):** at PLAN every invariant criterion ("no worker ...", "every pair ...", "within N s") is
+checked two ways before it is written as pass / fail: **does it hold today with the feature off** (if not, or if the
+out-of-scope list forbids what would make it hold, it is written "measure and report, against off": rule 48), and
+**can it hold together with every other criterion** (M6-S9: criterion 5's Stop clause against criterion 4, criterion
+7's 60 s window against "off is identical"; both cost a fix round and an ACCEPT by ruling). A criterion QA shows to be
+the brief's error is corrected in the session log by name, never passed silently.
+**67 (new):** a developer's open questions for the Producer are written where QA can read them (a "Questions for the
+Producer" section of the page or docs section the task owns, each with the recommendation); the Producer's answers
+go to docs/01 and the next task writes them in (D-R38: Q1-Q11 lived only in the returned report).
+**61 (amended again 2026-11-14-2156):** the order after the Teblor humanoids is the owner's Shift-queue request, the
+view's hardening (4 / 4), then merged surfaces; 400 mixed figures of eleven types are at 11.1-11.4 ms alone (worst 1 % 15.4-15.7).
 
 ## Watch-outs (all tracks)
+- **New this session:** five Stress rows are red on `main` by ruling (BUG-1430; listed under "Where things stand"):
+  a "default loop with Stress" run expects exactly those five. `main` builds **0 errors / 0 warnings** again.
+- **`gatherOverlap` is absent from the shipped `rules.json`.** A helper that forges it must tolerate shipped data that
+  later carries it (rule 58; `GatherOverlapScenes` writes or removes the field itself). Any value above 0 turns the
+  gather floor on; "off" is the field absent or 0, and only that is bit-identical to before.
+- **Eleven unit types are models** (Laborer, Crossbowman, Heavy Infantry; Camp Follower, Raider, Desert Archer; the
+  Teblor Gatherer, Warrior, Javelin Thrower, Shaman, Breaker); ten are capsules (`ModelViewTest` prints "11 models,
+  10 capsules; teblor capsules: [teblor_destrier_rider teblor_war_dog]"). A count of model types is read from
+  `tools/asset-manifest.json`, never a literal (`QaM6V21Test` row 1). A model file holds the 1.84 m base figure; the
+  data `scale` is applied by the view. Bars and marks still use the capsule's height (BUG-1441).
+- **Session length:** 2026-11-14-2156 ran about 7 hours (builders and QA about 6; one sim fix round; the lock was
+  refreshed four times). QA full on the sim beside a standard and a light pass still gave default loops of 1 h 4 m
+  to 1 h 15 m against 22 m alone. Next session the sim is on QA full again with pin re-measures: keep the data task
+  light and tell the view's QA to run its bench last.
+- **The third faction's order of work now:** M6-S10 (the wedge + the gather value; every opening measurement is
+  redone after it) -> data **D33** (BUG-1420) as the start of the balance pass -> the sim reads the Frenzy report
+  again (Request 53 part two). The Teblor humanoids are done; the Rider and the dog wait on the owner's packs. M7
+  criterion 4 is ticked after the balance pass; the end-of-M7 hardening follows it.
 - **Three factions ship now.** A fixture that means "the two original factions" uses `TestSim.TwoFactionData`,
   `TestDataDir.CopyOfShippedTwoFactions()` / `CutToFirstFactions(2)` (sim) or `ThirdFactionForge` (view, cut to two).
   A pin about "every shipped unit" must be true for the Teblor too (a bite, a pack, a scale, a self-cast aura, radius
@@ -397,7 +165,7 @@ criterion's test name again.)
   class count). A single-type 0.75 m crowd arrives about 40% less often than a 0.4 m one on the crowd sweep's maps
   (`Stress/WideCrowdStressTests`, a report with no bound): 500 to 4 points 172.6 v 288.1 mean arrivals, 128 to 64 goals
   58.4 v 112.1. If a sim task changes movement, re-run it and print both columns.
-- **The scene loop is all green: 105 scenes** (QA's `QaM6V21Test` is new; `QaM6V21Shots` and `ModelShots` are windowed tools, not in the loop). `QaM6V20Test`
+- **The scene loop is all green: 107 scenes** (`TeblorModelTest` and QA's `QaM7V5Test` are new; `QaM6V21Shots` and `ModelShots` are windowed tools, not in the loop). `QaM6V20Test`
   samples after a forced collection (objects flat at 3,252); BUG-1350 is fixed by cause, so an ERROR line there is a
   finding. Rows that flake under load are listed below; any other red row is a finding.
 - **Model animation is manual:** every model's `AnimationPlayer` is in manual mode and `UnitViews._Process` advances it
@@ -407,10 +175,6 @@ criterion's test name again.)
   paused); a replay that has reached its end is not paused, so its figures keep moving in place (a small view item).
   Each model type has its own `AnimationLibrary` (state names -> the shared clips, from the clip map in the `.glb`'s
   glTF extras); a slot's type and model are set before the fog check.
-- **Six unit types are models** (Laborer, Crossbowman, Heavy Infantry; Camp Follower, Raider, Desert Archer); 15 of the
-  two first factions' types and all seven Teblor types are capsules. A scene that reads a slot's own mesh, overlay or
-  material for a model type reads nothing that is drawn (BUG-1410: `QaV5Test` line 203): read `ModelMeshOf(slot) ??
-  ViewOf(slot)`.
 - **Unit models are on by default** (`UnitViews.UseModels`; `--placeholder-art` forces capsules). Five scenes pin capsules
   and set it false: `EconomyViewTest`, `QaM6V3Test`, `QaM7V3cTest`, `ScaleViewTest`, `ShellTest`. A new scene that reads a
   slot node's own mesh or material must do the same or read `ModelMeshOf`. The model files are Git LFS: a clone needs
@@ -426,11 +190,6 @@ criterion's test name again.)
 - **Two tracks must not both move the data hash in one session** (each regenerates the golden's header and checksum:
   a certain conflict). A sim task that ships a value in `game/data/common/**` and a data task that ships a faction
   file are planned in different sessions, or one of them lands test data only.
-- **A red Stress row on `main`, by ruling (rule 57): `Content/TeblorLandingOpeningReportTests.TheRows_ChangeTheMatch_FromTheFirstFrenzyOn_Report`**
-  (BUG-1400, red since D31; the default loop does not run it). First item of the data's next brief; until then a
-  "default loop with Stress" run expects exactly this one failure.
-- **`main` builds 0 errors / 1 warning** until BUG-1412 is fixed (`game/tests/QaM6V21Test.cs` line 257, `string?`):
-  first item of the view's next brief.
 - **Every data change moves the golden header now** (the Teblor use `damageBonus`, `onEnd`, `statusDuration`, a
   building `scale`, `carry` and a per-opening share): batch data changes into one hash move a session, and say in the
   report that older saves and recordings stop loading.
@@ -471,92 +230,83 @@ criterion's test name again.)
   three rows, `HuntStressTests.FourAiSeats_OnPaleHills_Seed1_KnownStall`, `RegenQaTests` rows for BUG-1165 (2) / 1166 (2); the view's
   `QaM7V1Test` zoom-40 1.5 head row; `DebugOverlayTest`'s 1 ms frame row flakes under three-track load (passes on a rerun).
 - **Criterion 6 of M5 (the owner wins on Easy, loses to Hard) is owner-only:** M5 is signed off the session the owner's note lands.
-- **The third faction's order of work now:** the sim's gatherer-overlap change (the owner's request; it moves the
-  economy, so every opening measurement is redone after it) -> data **D33** (BUG-1420: Breakers, Riders and War-dogs
-  back in the army without losing the Shamans and the expansion; BUG-1421) as the start of the balance pass -> the
-  sim reads the Frenzy report again (Request 53's second half) -> the Teblor models (the view's next task, the
-  owner's request). M7 criterion 4 is ticked after the balance pass and the Teblor models; the end-of-M7 hardening
-  follows it.
 
-- **Session length:** 2026-11-13-1118 ran 9.5 hours, 2026-11-13-2306 about 6, 2026-11-14-0616 about 6, **2026-11-14-1246
-  about 8** (no fix round; QA full on the sim beside two standard passes, every default loop 1 h 26 m to 2 h 12 m
-  beside the others against about 21 m alone). A full-tier sim task beside two measuring tasks is too much for this
-  PC: when the sim is on QA full, give one of the other tracks a light task.
 
 ---
 
 ## Sim track
 
 ### Where we are
-M8-1 on `main`: forest stealth on test data. Counter **1 / 4**. Fixed: BUG-1370, BUG-1391 item 3. No new sim bug
-(BUG-1400 was found by the sim's QA but is the data's file). Debt: BUG-1161's three alias names S4, BUG-1149 / 1151 /
-1152 S3, BUG-1150 S4, BUG-1010; notes: `[0]` lookups left in `FrenzyRulesLoaderTests`, `StatusDurationTechTests`,
-`DataContentHashTests`, QA's `M7H1QaTests`; a JSON `null` block loads as absent in `forestStealth` / `regen` but is an
-error in `reserveArmyShare` (pick one policy at the next hardening); QA's first combined run had one failure that did
-not recur and could not be named (watch for a load-sensitive row).
+M6-S9 on `main`: the gather-overlap rule, off. Counter **2 / 4**. New: BUG-1431 S3 (today's Keep-corner wedge),
+BUG-1430 S3 (the fuzz window; gates the value), BUG-1434 S3 (Pale Hills seed 1), BUG-1433 S4; BUG-1432 wontfix
+(Producer decision). Debt: BUG-1161's three alias names S4, BUG-1149 / 1151 / 1152 S3, BUG-1150 S4, BUG-1010; notes:
+`[0]` lookups left in `FrenzyRulesLoaderTests`, `StatusDurationTechTests`, `DataContentHashTests`, QA's `M7H1QaTests`;
+the JSON-`null` policy (`forestStealth` / `regen` read it as absent, `reserveArmyShare` and `gatherOverlap` refuse it:
+`NumberJson` shows how to tell them apart).
 
 ### Next task candidates
-1. **The owner's request: gatherers may overlap a bit while collecting** (inbox 2026-11-14; feature, QA **full**:
-   movement). At the PLAN:
-   - Read `MovementSystem`'s separation and what a Gathering / Returning / drop-off-queuing worker counts as there
-     (the note says idle units are shoved, holding and attacking ones are walls). Generic: any worker of any faction,
-     only while gathering at a node or waiting / delivering at a drop-off; armies and marching units keep today's
-     separation.
-   - The amount is a data knob in `game/data/common/rules.json` (the sim's file), not a C# literal. Producer default
-     to record in docs/01 and STATE: the share of the separation push kept between two such workers (propose 0.5;
-     1 = today). Decide at the PLAN whether the shipped value changes this session (then: one hash move, the golden
-     regenerated with the reason, older saves refused once more, and **the data track gets no hash move that
-     session**) or the schema lands on test data first.
-   - **It moves the economy, so it moves every AI match.** Rules 41 / 43 / 45: name the M5-5 rows, the Hard v Normal
-     tally, the opening pins and the content report rows expected to move; re-measure the bounds and docs/03's tables
-     in the same commit; a row that stops ending is a finding. Size it as uncertain work (about 800 lines; QA's
-     suites don't count). The golden replay tests re-run; say why if the `k` lines change.
-2. **The owner's request: Shift-click queues orders, the sim half** (inbox 2026-11-14). Audit which unit orders append
-   with the queue flag today (move, attack-move, attack, gather, repair, garrison, patrol if any, rally, abilities,
-   build); close the gaps with the same flag, no new mechanic; expose the queued orders to the view read-only if
-   `ViewApi` lacks them (that part may be the view's). The view then draws the queue. Tests per order kind; golden re-run.
-3. **M8-2: the Shadow Archer's stand-still stealth and its +50 % first shot**, schema first, test data only (QA full).
-4. **Requests 54 / 55** (from D32): "base defended" counts only a real raid; a `train` step may spend through an
-   earlier step's reserve. Each changes Normal AI behaviour (rules 43 / 45): plan with a data task that re-measures.
-5. **Request 53, part two:** read the Frenzy report on `main` (D32's opening is the shipped column now), re-print
-   docs/03's table, look at why "army pop 15:00 (sum)" is 0; a cast rule only if a fielded Shaman standing with the
-   army does not cast (today's figures say it does).
-6. A hardening with no opening measurement beside it: BUG-1149 / 1151 / 1152, BUG-1161's names.
+1. **M6-S10: BUG-1431, then the shipped value, one hash move** (feature, QA **full**; uncertain: about 800 production
+   lines; the pin re-measures don't count). Stages, in this order, each reported:
+   - **(a) The wedge, knob off.** Cure the drop-off wedge at a Keep's corner (the returning worker that arrives out of
+     reach behind mates whose goal cell is the Keep's stand cell and retries the same way; and the outbound worker held
+     at its Keep, seed 27) by a generic rule, no new per-unit state if possible. Proof: `GatherOverlapFuzzTests` and
+     QA's sweep with the knob **off** over seeds 2-56: no worker past 60 s while its node lives (today 6 seeds).
+     `KnownWedges` empties. This moves knob-off movement: the golden's `k` lines and the AI pins move here.
+   - **(b) The value.** `"gatherOverlap": 0.5` in `game/data/common/rules.json` (the data hash moves once; older saves
+     and recordings refused; fixtures as D32 did). QA's five red rows green, or re-stated against off with the
+     figures if a knob-only breach remains (then say which and why).
+   - **(c) The pins, once, on the final tree** (rules 41 / 43 / 45): the golden regenerated with the reason in the
+     `GatherWedgeQaTests` comment; the two data-hash pins; the M5-5 rows and docs/03's M5-5 table; the Hard v Normal
+     tally; `StandardPresetPinQaTests`, `NonHardMatchPinQaTests`, `OutcomePinM73bQaTests` (outcomes must hold or the
+     report says which changed and why), the openings' content report rows the data track owns are **named and
+     handed over, not edited** (rule 51 in reverse: list them for D33).
+   - **Pale Hills seed 1 (rule 45, decide in the brief):** if it does not end, that is BUG-1434 / BUG-1116 (the hunt
+     never finds a lone worker), not the overlap. Preferred: fix the hunt for a lone loop-less worker in the same
+     task if it is a few lines; else the row moves to the known-stalls list with its id and M5-5's criterion row is
+     re-pointed to another seed that ends on all three maps (a finding in the report, not a silent re-bound).
+   - **Terminal rule:** if (a) is not cured inside the slice, stop there: report, ship nothing, the knob stays off
+     and no pin moves. The data track moves no hash that session.
+   - `WideCrowdStressTests`: both columns re-printed (movement changed).
+2. **M8-2: the Shadow Archer's stand-still stealth** (Request 56 G1; then G2 the first-shot bonus), schema first,
+   test data only (QA full).
+3. **Requests 54 / 55** (from D32). Each changes Normal AI behaviour (rules 43 / 45): plan with a data task that
+   re-measures; best batched with a session that already moves the pins.
+4. **Request 53, part two:** read the Frenzy report on `main`, re-print docs/03's table, explain "army pop 15:00
+   (sum)" 0.
+5. **Request 56 G3-G8** (Pack Hunter, `maxAlive`, teleport, the summoned slot, a tech that grants an ability, the
+   AI's summon cast), one or two a session.
+6. A hardening with no opening measurement beside it: BUG-1149 / 1151 / 1152, BUG-1161's names, BUG-1433, the
+   JSON-`null` policy.
 
 ---
 
 ## View track
 
 ### Where we are
-M6-V21 on `main`. Counter **2 / 4**. 105 scenes, all green. New: **BUG-1412 S3** (the build warning in `QaM6V21Test`,
-filed by the Producer), **BUG-1410 S3** (`QaV5Test`'s flash check reads a node a model never draws on), **BUG-1411 S4**
-(look nits: the sword clip's wind-up reads as a T-pose up close; Ochre / Bone players tint the Whirlwind figures one
-tone; soldier types carry unused worker clips). Older: BUG-1381 S4, BUG-1177 item 2 (the owner's taste), BUG-1115
-item 4. What reads badly on the pictures (the developer, QA and the Producer agree): the Camp Follower in a player's
-colour is nearly the Laborer; the Heavy Infantry's box helmet is a pale block and the shield is edge-on from the
-side; the Archer's bow hangs level at the hip; the Raider's blade is a thin line at the default zoom; player 1's
-slate is close to the grey Malazan outfits.
+M7-V5 on `main`. Counter **3 / 4**. 107 scenes, all green alone. Fixed: BUG-1412, BUG-1410. New: BUG-1441 S4 (bars and
+marks 1-1.4 m above a giant's head; a foot off a ramp; the javelin into the ground; Casting plays `idle`), BUG-1440's
+addendum (a no-LFS clone: 261 `ERROR` lines, 71 `.import` files rewritten). Older: BUG-1411 S4, BUG-1381 S4, BUG-1177
+item 2 (the owner's taste), BUG-1115 item 4. What reads badly on the pictures: the five Teblor wear the same two
+outfits and differ by prop only; the Shaman's robe is a tunic in the player's colour, not bone white.
 
 ### Next task candidates
-1. **The owner's request: the Teblor humanoids first** (inbox 2026-11-14; feature, QA standard). **First, small:
-   BUG-1412** (`string? why` at `QaM6V21Test.cs` line 257; the build is 0 / 0 again), **BUG-1410** (`QaV5Test` reads
-   `ModelMeshOf(slot) ?? view`; add it to docs/03's list), and docs/03 "Implementation (M6-V21)"'s bench table replaced
-   by the Producer's alone figures (above). Then the Gatherer, Warrior, Javelin Thrower, Shaman and Breaker: the
-   Universal Base Character at the data's `scale` 1.5 on a 0.75 m radius, the two outfits recoloured to the Teblor
-   palette (docs/04 "Style guide"), props as boxes (a javelin, a great club or blade, the Shaman's staff), team colour
-   on one `team` surface, clip maps (the Gatherer the worker clips, the Javelin Thrower a throw if the libraries hold
-   one). If five is too many for one slice, the Gatherer, Warrior and Javelin Thrower first. The Destrier Rider and the
-   War-dog stay capsules (no horse or dog pack on disk: the owner's download, already under Waiting on you).
-   `ModelViewTest` per type; pictures on the shipped data beside a Malazan soldier (rule 56: the real 0.75 m giants);
-   the 400- and 1,000-figure bench alone. `tools/asset-manifest.json`, `tools/import-assets.ps1` and `tools/art/**`
-   are the view's. Rules 62 / 64 / 65.
-2. **Merged surfaces** (rule 61 as amended: the task right after the Teblor humanoids): one material and one atlas a
-   model in the import tooling, every model re-generated; target 1,000 figures measured alone, reported against 16.7 ms.
-3. **The owner's request: the Shift-queue made visible** (a line or markers per queued order for the selection),
-   after the sim's audit says what queues; check first what the view already draws.
-4. Small: figures at a finished replay keep moving in place (`AnimationRate` is 0 only under a paused tree); BUG-1411
-   item 1 (try UAL2 `Sword_Regular_A/B/C`).
-5. The view's part of M8 criterion 1 (stealth visuals for a forest-hidden unit) once a roster ships the block.
+1. **The owner's request: the Shift-queue made visible** (inbox 2026-11-14; feature, QA standard). From the PLAN's
+   audit: every unit order takes the queue flag in the sim (`Command.QueuedFlag`; 8 entries a unit) and the view
+   passes Shift on all of them; the one gap is the first Shift-placed building (`CommandCard.GhostClick`: `queued:
+   shift && _placed > 0`). Build: the selected units' queued orders drawn (a line from the unit through each queued
+   point, a marker per order kind; hidden for enemies and under fog); the first Shift-placed building joins the
+   queue; a scene row per order kind (Move, AttackMove, Attack, Gather, Build, Repair, UseAbility, Stop, Hold) that
+   the order is queued, drawn, and starts when its turn comes. If the queue is not readable from the view, a
+   read-only accessor in `sim/Rts.Sim/ViewApi/` (no tick or hash change); if an order kind does not start, that is a
+   Request for the sim, not a fix here. Pictures on the shipped data. No allocation per frame for the lines.
+2. **The view's hardening** (the counter is 4 / 4 after task 1): BUG-1441 item 1 first (bars, status and cast marks
+   and the cargo marker follow the drawn figure's height, not the capsule's: every Teblor match shows it), a Casting
+   clip (`attack_cast`) for a type that has one, BUG-1411, BUG-1440 (the import refuses pointer files with one clear
+   line and touches no tracked file), BUG-1381, figures at a finished replay.
+3. **Merged surfaces** (rule 61): one material and one atlas a model, every model re-generated; 400 figures are at
+   11.1-11.4 ms of 16.7 with eleven types, worst 1 % 15.4-15.7.
+4. The Destrier Rider and the War-dog once a horse / dog pack is on disk (owner); Teblor buildings.
+5. The view's part of M8 criterion 1 once a roster ships the block.
 6. An owner item (".NET 10 installed", templates, music, the sound notes, "models: ...") whenever one lands.
 
 ---
@@ -564,23 +314,23 @@ slate is close to the grey Malazan outfits.
 ## Data track
 
 ### Where we are
-D32 on `main`: the Teblor AI's second pass. Counter **2 / 4**. Fixed: BUG-1390, BUG-1391 items 1, 2, 4. New:
-**BUG-1420 S3** (Breakers, Riders and War-dogs off the field), **BUG-1421 S4** (five small items), and **BUG-1400 S3**
-(a Stress report row red since D31, found by the sim's QA: the data's file). Open: BUG-1360 S4.
+D-R38 on `main`: the Shadow page pin-ready; no data byte moved. Counter **3 / 4**. Fixed: BUG-1400. New: **BUG-1450
+S3** (two page cells the real pins read differently; two QA rows skipped on it), BUG-1451 S4. Open: BUG-1420 S3,
+BUG-1421 S4, BUG-1360 S4.
 
 ### Next task candidates
-1. **BUG-1400 first, whatever the task** (rule 57): `Content/TeblorLandingOpeningReportTests.TheRows_ChangeTheMatch_FromTheFirstFrenzyOn_Report`
-   compares "without the rows" against "with the rows", and the shipped data carries the rows since D31: re-think it
-   against a copy with the rows removed, or retire it with the reason.
-2. **If the sim ships the gatherer-overlap value next session (a hash move and a changed economy): a light task with
-   no hash move.** BUG-1421 items 3-4 (pin or date-label the page's measured figures; the two unwrapped lines; the
-   192 KB fixture's size and name), BUG-1360; or **the Shadow page made pin-ready** (as D-R36 did for the Teblor:
-   `docs/factions/shadow.md` cells checked against docs/02 and the schemas that exist, the open questions listed for
-   the Producer). No opening is measured beside a sim task that moves the economy (rule 41).
-3. **D33: Breakers, Destrier Riders and War-dogs back in the Teblor army** (BUG-1420; BUG-1421 items 1, 2, 5), the
-   start of the balance pass against Malazan and Whirlwind, **on the economy as it is after the sim's gather change**.
-   Measure Easy, Normal and Hard this time (the D32 brief measured Normal only: the Producer's miss), the mirror too,
-   and count distinct matches (the named maps give 1-3 outcomes over 8 seeds). Keep the Shamans (27) and the second
-   Longhouse (18); the tooltip follows what most matches do. One hash move. The For-your-review table as always.
-4. The owner's answers if any land ("teblor ai: early raid", the Teblor table, "teblor buildings: 1.5", "opening
-   text: ...", "Frenzy text: ...", the counters, `goldShare`, BUG-0780, `counterStrength`).
+1. **D-H9, the data's hardening pulled forward** (light; **no hash move and no opening measured: the sim ships the
+   gather value that session**). In order: **BUG-1450** (capitalise "Passive" twice in shadow.md; `AbilityContentTests`
+   accepts "—" for the Radius of a summon with spawn effects only, as it does for Range; `PagePinReadinessTests` flags
+   a `passive **` bullet that `PagePassives` does not read; un-skip QA's two rows); **the own-names pins** (the
+   developer's Q4: `UnitContentTests` E and `BuildingContentTests` F blank out the faction's own unit and building
+   names before the "names only own-faction things" check, with a row showing "Edur Warrior" / "Warrior Lodge" pass
+   and a real foreign name still fails); **BUG-1451** (G14's wording, the Edur Ram row's labels); **the Producer's
+   answers to Q1-Q11 on the page** (docs/01 2026-11-15 (a), as a short "Decisions (D-R38)" section); BUG-1421 items
+   3-4; BUG-1360. Only `docs/factions/**` and the two content test folders.
+2. **D33: Breakers, Destrier Riders and War-dogs back in the Teblor army** (BUG-1420; BUG-1421 items 1, 2, 5), the
+   start of the balance pass, **on the economy after M6-S10** (the session after it lands). Measure Easy, Normal and
+   Hard and the mirror; count distinct matches. Keep the Shamans (27) and the second Longhouse (18). One hash move.
+3. The owner's answers if any land ("Shadow names ok", "teblor ai: early raid", the Teblor table, "teblor buildings:
+   1.5", "opening text: ...", "Frenzy text: ...", the counters, `goldShare`, BUG-0780, `counterStrength`).
+4. The Shadow roster, file by file, as Request 56's schemas reach `main`.
