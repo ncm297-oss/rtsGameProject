@@ -93,17 +93,73 @@ public class CounterCompositionTests
             NextThink(sim);
             Assert.True(sim.TickNumber < 9000, "no barracks and crossbow range by 7:30");
         }
+        // M6-S10 re-staging (rule 57 / criterion 10). From M6-S10 (the Keep-corner cure, gatherOverlap 0.5) this flat seat is
+        // wood-bound once its producers stand (gold 312-506 banked, wood 5-10): the seen and unseen runs trained the same
+        // 10 Line / 8 Ranged (Hard 10 / 9) and the counter weights never chose (on c684902: 11 v 10 Line, Normal). The weights
+        // decide only on a think where both producers are free and the bank pays for one unit. Wood topped up alone leaves the
+        // seat producer-bound (11 / 10 both ways); a gold trickle of half the two producers' rate is a round robin (the
+        // producer that just trained is busy while the other is paid for: 6 / 7 both ways). So, from here on, each tick:
+        // player 0's wood is topped up to WoodTopUp and the gold its workers deliver is replaced by a trickle at the gold-bound
+        // boundary, the cheaper unit's gold over the longer train time (both from the data): the bank pays for a unit no
+        // faster than a producer finishes one, so each purchase is the weights' choice. Seen and unseen runs get the same
+        // staging; the AI, the sighting and the memory are untouched. Normal: 6 / 3 seen v 5 / 4 unseen.
         int line = Unit("malazan_heavy_infantry"), ranged = Unit("malazan_crossbowman");
         int lineBefore = ai.Live[line] + ai.Queued[line], rangedBefore = ai.Live[ranged] + ai.Queued[ranged];
         List<EntityHandle> raiders = Spawn(sim, Unit("whirlwind_horse_raider"), 8, seen);
-        NextThink(sim);
+        var purse = new Purse(sim, line, ranged);
+        purse.Think();
         Free(sim, raiders);
         int[] count = (int[])ai.Board.SeenSlotCount.Clone(), tick = (int[])ai.Board.SeenSlotTick.Clone();
         int end = sim.TickNumber + 180 * Tps;
-        while (sim.TickNumber < end) NextThink(sim);
+        while (sim.TickNumber < end) purse.Think();
         _out.WriteLine($"{difficulty} seen {seen}: sighting at {sim.TickNumber - 180 * Tps}, line {lineBefore} -> {ai.Live[line] + ai.Queued[line]}, "
-            + $"ranged {rangedBefore} -> {ai.Live[ranged] + ai.Queued[ranged]}, memory [{string.Join(",", count)}] at [{string.Join(",", tick)}]");
+            + $"ranged {rangedBefore} -> {ai.Live[ranged] + ai.Queued[ranged]}, memory [{string.Join(",", count)}] at [{string.Join(",", tick)}], "
+            + $"gold {sim.World.Gold[0]} wood {sim.World.Wood[0]} at the end");
         return (ai.Live[line] + ai.Queued[line], ai.Live[ranged] + ai.Queued[ranged], count, tick);
+    }
+
+    /// <summary>Player 0's wood the criterion-2 run keeps topped up after its producers stand (M6-S10 re-staging; see <see cref="Run"/>).</summary>
+    private const int WoodTopUp = 2000;
+
+    /// <summary>
+    /// M6-S10 re-staging of the criterion-2 run (see <see cref="Run"/>): each tick tops player 0's wood up to
+    /// <see cref="WoodTopUp"/>, takes back the gold its workers delivered in the tick and pays a trickle instead,
+    /// min(Line gold, Ranged gold) / max(Line train ticks, Ranged train ticks) per tick, carried in a remainder so none is lost.
+    /// </summary>
+    private sealed class Purse
+    {
+        private readonly Simulation _sim;
+        private readonly long _num, _den; // gold per tick = _num / _den: the gold-bound boundary
+        private long _carry;
+
+        public Purse(Simulation sim, int line, int ranged)
+        {
+            _sim = sim;
+            UnitDef l = sim.World.Data.Units[line], r = sim.World.Data.Units[ranged];
+            _num = Math.Min(l.CostGold, r.CostGold);
+            _den = Math.Max(l.TrainTicks, r.TrainTicks);
+        }
+
+        public void Think()
+        {
+            // Tick by tick (as NextThink): the seat thinks at the start of a tick, before that tick's deliveries, so it
+            // never sees gold the purse takes back before its Train applies.
+            int think = _sim.AiOf(0)!.ThinkTicks;
+            do Tick(); while ((_sim.TickNumber - 1) % think != 0);
+        }
+
+        private void Tick()
+        {
+            World w = _sim.World;
+            if (w.Ledger.Wood[0] < WoodTopUp) w.Ledger.Wood[0] = WoodTopUp;
+            int delivered = w.GatheredGold[0];
+            _sim.Tick();
+            delivered = w.GatheredGold[0] - delivered;
+            _carry += _num;
+            int paid = (int)(_carry / _den);
+            _carry -= paid * _den;
+            w.Ledger.Gold[0] = Math.Max(0, w.Ledger.Gold[0] - delivered) + paid;
+        }
     }
 
     /// <summary>Criterion 2 (a) and (c): a Normal seat that saw 8 Horse Raiders once trains more Line than the same seat and seed that did not; the unseen run's memory is all zeros.</summary>
@@ -119,6 +175,8 @@ public class CounterCompositionTests
     }
 
     /// <summary>Criterion 2 (b): the same sighting moves a Hard seat's Line share further than a Normal seat's (strength 1 against 0.5).</summary>
+    // M6-S10: red on the re-staged run (see Run): Normal and Hard both go 5 / 4 unseen -> 6 / 3 seen, shift 0.111 each; nine
+    // units in the 180 s memory window cannot tell Line weighted x 1.5 from x 2. Listed for the ACCEPT's ruling (BUG-1462).
     [Fact]
     public void AHardSeat_ShiftsItsLineShareFurther_ThanANormalSeat()
     {

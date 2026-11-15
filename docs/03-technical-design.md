@@ -12150,7 +12150,11 @@ regression rows, default loop).
 
 **Held** (the brief's word, `HeldWorkerProbe`): a live unit with `GatherNode` set whose node is alive, 1,200 ticks without
 a delivery (the fuzz's clock: a new node or order starts it again), within 2 m at the end of them of where it stood 600
-ticks earlier. A worker past 1,200 ticks that kept walking is printed with its route and is not held.
+ticks earlier. A worker past 1,200 ticks that kept walking is printed with its route and is not held. (Fix round 1,
+BUG-1464 item 1, not changed: checked on every tick past the clock, the probe flags fuzz seed 14 at 0 at tick 1,240, a
+Teblor Gatherer standing 0.03 m from its node working its load (Gathering, cargo 14 of 15) after a 120 m walk, which
+delivers at 1,272. That moves a gated row on a worker in reach, so the probe still looks once, on the tick the clock
+passes 1,200; an every-tick check would need "held" to exclude a worker gathering in reach, a definition for the Producer.)
 
 **Stage 0, the diagnosis (before any production edit).** Each row is the economy fuzz (`GatherOverlapFuzzTests.Run(overlap,
 seed, tripWindow: false)`, its scene and orders unchanged) under the probe; reproduce any row with `dotnet test
@@ -12221,8 +12225,16 @@ final tree (the rehearsal's reds were the value without the cure). The others, d
     gather the same 1,890 gold / 1,140 wood and train the same 10 Heavy Infantry / 8 Crossbowmen (Hard 10 / 9): the counter
     weights never reach a choice, at any window from 120 s to 600 s and on every seed 1-40 that picks the opening (the flat
     scene does not depend on the seed). On the base the shift was one unit (11 v 10 Line, Normal). Nobody is held and
-    nothing is unplaced: the economy went another way. No honest re-staging within the brief (a richer seat trains
-    everything both ways): **listed for the ACCEPT's ruling (rule 57)**, left red.
+    nothing is unplaced: the economy went another way. **Fix round 1: re-staged** (the reason in `Run`'s comment): the
+    weights choose only on a think where both producers are free and the bank pays for one unit. Wood topped up alone
+    leaves the seat producer-bound (11 / 10 both ways); a gold trickle of half the producers' rate is a round robin (6 / 7
+    both ways). So after the producers stand, each tick tops the seat's wood up and replaces the gold its workers deliver
+    with a trickle at the gold-bound boundary (the cheaper unit's gold over the longer train time, from the data), the same
+    in the seen and unseen runs. `ANormalSeat_ThatSawShock_*` is **green** (6 / 3 seen v 5 / 4 unseen: the sighting, the
+    memory and the weights still decide the extra Line). `AHardSeat_ShiftsItsLineShareFurther_*` stays **red** (Normal and
+    Hard both shift 0.111: nine units in the 180 s memory window cannot tell Line x 1.5 from x 2), **listed for the
+    ACCEPT's ruling (rule 57)**; no further staging was tried (a trickle tuned until Hard separates would be fitting the
+    scene to the assertion).
   - `Content/AiOpeningPairsReportTests` (data track's): seven rows only re-print their Age II cells (done, both pages).
     (0, 2) seed 3: the Malazan standard opening's first wave (5:47) wipes the Whirlwind holy_war army (12 to 0 by 8:00), the
     Whirlwind are defeated at 12:29 having sent no wave ("sent no wave", red with the cure alone too). (2, 0) seed 13 (red
@@ -12320,7 +12332,8 @@ value), each with its old value in a comment; none loosened, skipped or removed.
 - **Rows re-staged:** `GatherWedgeTests.FourWorkersQueuedOnATreeOpenOnOneSide_*` (230 against 240 was **wood**, not ticks:
   two workers deposited in one tick and the check compared each delivery alone; it now sums the tick's loads: the scene's
   pace, nobody waiting); `EndGameHardeningTests.Raraku_Seed1_ToTheEnd_TwoProcesses_*` follows the Raraku row (seed 2);
-  `MatchCriterionSweepQaStressTests.Known`: generated 4 out (no longer fails), Raraku 1 and 4 in (BUG-1460);
+  `MatchCriterionSweepQaStressTests.Known`: generated 4 out (no longer fails), Raraku 1, 3, 4 and 6 in (BUG-1460; the
+  shared list also turns `FarExpandProbeQaStressTests` (raraku, 1)'s extra oracles to print-only, so that row is green);
   `GatherOverlapFuzzTests.Bug1430_Seed7AtTheCap_*` and QA's `KnownWedges_*` / `Seed7AtTheCap_RealRun_*` re-stated as "no
   breach" (their wedge is gone).
 - **The data track's rows (handed over for this session):** re-printed from the run, cells and quoted report sentences
@@ -12330,16 +12343,23 @@ value), each with its old value in a comment; none loosened, skipped or removed.
   run list and "3 of those 8 marks"), `QA/Content/TeblorOpeningQaTests` (first wave 6,841 -> 6,321; v Whirlwind (7,241,
   9,281, 18,218) -> (6,321, 8,581, 20,444); v Malazan (6,801, 9,321, -1) -> (6,461, 8,961, -1)), and
   `D32PreFixtureTests.OnTheDiffBasesData_*` (its copy takes `gatherOverlap` back out). Sentences those cells make false are
-  listed for the data track (BUG-1462), not rewritten.
+  listed for the data track (BUG-1462), not rewritten; among them (fix round 1, BUG-1464 item 3) two on `teblor.md`: the
+  Houses-at-the-cap sentence "the 11th Hut step (step 15) is skipped and the 12th is never reached on this seed" (the cell
+  beside it now says step 16 is done at a cap of 100, steps 15 and 16 skipped) and the opening's first waves "at 340 s" /
+  "at 362 s" against a Normal Whirlwind (`TeblorOpeningQaTests` now reads 323 s and 316 s, Age II 448 / 429 s, beaten at
+  1,022 s, not 910 s).
 
 - **Rows red on the final tree, listed for the ACCEPT's ruling (BUG-1462; none is a held worker or an unplaced building):**
-  default loop: the two `CounterCompositionTests` rows and `AiOpeningPairsReportTests` (0, 2) / (2, 0) (above), and
+  default loop: `CounterCompositionTests.AHardSeat_*` (the Normal row is green after fix round 1's re-staging) and
+  `AiOpeningPairsReportTests` (0, 2) / (2, 0) (above; neither has an honest next seed: the row's seed rule is the pair's
+  smallest seed, its cell is the pages' 1st-seed column, and the 2nd and 3rd seeds are `D21OpeningsQaTests`' runs), and
   `QA/Content/DR35ProsePinQaTests.AgeTwoProse_*` / `Malazan_Bug0982Prose_*` (the page prose they pin quotes cells this task
   re-printed: malazan seeds 32 / 45 and the cadre_rush v raider_rush seeds 8 / 14, whirlwind seeds 9 / 19; the prose and
-  the BUG-0982 threshold table are the data track's to rewrite). Stress: `AiOpeningPairsReportTests.Bug0982_*` and
+  the BUG-0982 threshold table are the data track's to rewrite; criterion 12 allows the sim cells and quoted report
+  sentences only, and these rows pin prose around the cells, so they cannot go green inside it). Stress: `AiOpeningPairsReportTests.Bug0982_*` and
   `QA/Content/DH6ThresholdQaTests.Bug0982_*` (BUG-0982's rule now picks 14 pop, cadre_rush ships 18: a data measurement for
-  D33), `MapSlice2StressTests...OtherSeeds_EndWithin72000` Raraku 3 / 4 / 6 and `FarExpandProbeQaStressTests` Raraku 1
-  (BUG-1460), `FarExpandProbeQaStressTests` Vathar 2 four seats (p3 silent 7,000 ticks), `StarvedSaveTwoProcessQaStressTests`
+  D33), `MapSlice2StressTests...OtherSeeds_EndWithin72000` Raraku 3 / 4 / 6 (BUG-1460; `FarExpandProbeQaStressTests`
+  Raraku 1 is green, not red: the `Known` entry above prints its oracles), `FarExpandProbeQaStressTests` Vathar 2 four seats (p3 silent 7,000 ticks), `StarvedSaveTwoProcessQaStressTests`
   (Pale Hills seed 1 now ends at 42,384 before any starved wave), `StartingResourcesAiStressTests.EachOpening_AtHigh_*`
   openings 1 and 2 (high's mean bank over 1.5 x standard's), `QA/ScoutCapQaTests.OneScoutKilled_*(seed: 5)` (12 workers
   left, bound 14).
@@ -12356,9 +12376,10 @@ value), each with its old value in a comment; none loosened, skipped or removed.
 1. `GatherOverlapFuzzTests.PastTheWindowWalking` holds (0, seed 14): a worker past 60 s while walking (63.6 s, not held).
    The fuzz asserts no held worker on that row instead of the window. Recommendation: accept (rule 66: off, the window is a
    report), or rule it a `KnownWedges`-style exception by name.
-2. The two `CounterCompositionTests` criterion-2 rows: the scene's seat no longer reaches a choice between Line and Ranged
-   (wood-bound). Recommendation: a sim task re-stages them on a seat that is gold-bound at the sighting (e.g. its wood
-   topped up each think, as `ReserveTwinTests` tops up both banks), so the counter weights pick.
+2. The two `CounterCompositionTests` criterion-2 rows: the scene's seat no longer reached a choice between Line and Ranged
+   (wood-bound). Fix round 1 re-staged them on a gold-bound seat (above): the Normal row is green; the Hard-v-Normal row
+   is red (0.111 each). Recommendation: rule the Hard row (accept it red with BUG-1462, or a later task gives it a longer
+   memory window or a larger army so the two strengths can separate).
 3. `AiOpeningPairsReportTests` (0, 2) / (2, 0): recommendation: the data track decides whether "both sides wave" holds for a
    side wiped before its first wave (D21's rows allow "defeated without a wave"), and whether a beaten-but-standing side
    (Town Hall razed, defending) is a `WhyWaiting` reason.
