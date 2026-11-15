@@ -263,6 +263,14 @@ whether the zone's statuses take it and whether the zone hides it (the ground is
   stealthed.
 - Stealth sources: Shadow's faction bonus (forest stealth), the Shadow Archer's stand-still
   stealth. Other factions have no stealth.
+- **Forest stealth** (Shadow's "Children of Shadow"; docs/01 "2026-11-14 (d)"):
+  - "In or next to a forest cell" means the unit's own cell or one of the 8 cells round it holds a standing
+    tree. A felled tree stops counting, and the stealth ends the tick the unit is no longer beside one.
+  - "Hasn't attacked or taken damage for 3 s" counts from the moment its attack lands or its cast resolves
+    (the moment the Revealed rule uses) and from any loss of hit points. The 3 s is a number of the
+    faction's bonus in its data, separate from the 3 s reveal time.
+  - Gathering is not attacking: a worker chopping at a forest edge stays hidden (flagged for the M8 balance
+    pass).
 - Stealthed friendly units render semi-transparent for their owner.
 
 ## Vision and fog of war

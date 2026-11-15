@@ -229,6 +229,38 @@ public class DataValidationTests
         Assert.Contains(message, e.Message);
     }
 
+    /// <summary>
+    /// M8-1: <c>faction.json</c> <c>forestStealth</c> (optional): <c>status</c> a status of kind <c>stealthed</c>, <c>delay</c>
+    /// seconds of at least a tick and at most 60, both required; <c>exceptSlots</c> optional, known unit slot names, each once;
+    /// an unknown key is an error. One error each, at <c>factions/malazan/faction.json</c>.
+    /// </summary>
+    [Theory]
+    [InlineData("{\"delay\": 3}", "forestStealth.status", "missing required field")]
+    [InlineData("{\"status\": \"invisible\", \"delay\": 3}", "forestStealth.status", "unknown status 'invisible'")]
+    [InlineData("{\"status\": \"slowed\", \"delay\": 3}", "forestStealth.status", "status 'slowed' is of kind 'slow', not 'stealthed'")]
+    [InlineData("{\"status\": \"revealed\", \"delay\": 3}", "forestStealth.status", "is of kind 'revealed', not 'stealthed'")]
+    [InlineData("{\"status\": \"stealthed\"}", "forestStealth.delay", "missing required field")]
+    [InlineData("{\"status\": \"stealthed\", \"delay\": 0}", "forestStealth.delay", "must be positive")]
+    [InlineData("{\"status\": \"stealthed\", \"delay\": -3}", "forestStealth.delay", "must be positive")]
+    [InlineData("{\"status\": \"stealthed\", \"delay\": 0.01}", "forestStealth.delay", "rounds to 0 ticks")]
+    [InlineData("{\"status\": \"stealthed\", \"delay\": 60.5}", "forestStealth.delay", "above the maximum 60 s")]
+    [InlineData("{\"status\": \"stealthed\", \"delay\": 1e300}", "forestStealth.delay", "above the maximum 60 s")]
+    [InlineData("{\"status\": \"stealthed\", \"delay\": 3, \"exceptSlots\": [\"catapult\"]}", "forestStealth.exceptSlots[0]", "unknown slot 'catapult'")]
+    [InlineData("{\"status\": \"stealthed\", \"delay\": 3, \"exceptSlots\": [\"siege\", \"worker\", \"siege\"]}", "forestStealth.exceptSlots[2]", "slot 'siege' is listed twice")]
+    [InlineData("{\"status\": \"stealthed\", \"delay\": 3, \"exceptSlots\": [null]}", "forestStealth.exceptSlots[0]", "missing required field")]
+    [InlineData("{\"status\": \"stealthed\", \"delay\": 3, \"linger\": 1}", null, "linger")]
+    [InlineData("{\"status\": \"stealthed\", \"delay\": \"long\"}", null, "expected a number")]
+    [InlineData("{\"status\": \"stealthed\", \"delay\": 3, \"exceptSlots\": \"siege\"}", "$.forestStealth.exceptSlots", "wrong type of value")]
+    public void BrokenFactionForestStealth_YieldsExactlyOneError(string block, string? path, string message)
+    {
+        using TestDataDir dir = TestDataDir.CopyOfShipped();
+        dir.EditJson("factions/malazan/faction.json", r => r["forestStealth"] = JsonNode.Parse(block));
+        DataError e = Assert.Single(DataLoader.LoadAll(dir.Path).Errors);
+        Assert.Equal("factions/malazan/faction.json", e.File);
+        if (path != null) Assert.Equal(path, e.Path);
+        Assert.Contains(message, e.Message);
+    }
+
     [Fact]
     public void DuplicateUnitId_AcrossFactions_YieldsOneErrorAtSecondDefinition()
     {

@@ -146,6 +146,15 @@ public sealed class GameData
             foreach (int id in f.Units) h.Add(id);
             h.Add(f.RegenPerTick); // M7-1
             h.Add(f.RegenDelayTicks);
+            // M8-1: the forest stealth only when the file carries it (a marker, then every field), so data without it hashes
+            // as before; any field away from its default counts, so each one moves the hash on its own.
+            if (f.ForestStealthStatus >= 0 || f.ForestStealthDelayTicks != 0 || f.ForestStealthExceptSlots != 0)
+            {
+                h.Add(1);
+                h.Add(f.ForestStealthStatus);
+                h.Add(f.ForestStealthDelayTicks);
+                h.Add(f.ForestStealthExceptSlots);
+            }
         }
 
         h.Add(Units.Length);
@@ -538,6 +547,17 @@ public sealed class GameData
     {
         h.Add(items.Length);
         foreach (float f in items) h.Add(f);
+    }
+
+    /// <summary>
+    /// M8-1: whether any faction has the forest-stealth bonus (<see cref="FactionDef.HasForestStealth"/>). With one, every
+    /// world on this data keeps, hashes and saves the forest's per-unit state; without, none exists (docs/03 "Implementation (M8-1)").
+    /// </summary>
+    public bool AnyForestStealth()
+    {
+        foreach (FactionDef f in Factions)
+            if (f.HasForestStealth) return true;
+        return false;
     }
 
     /// <summary>Unit id for a string id, or -1.</summary>

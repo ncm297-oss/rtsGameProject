@@ -44,5 +44,8 @@ public sealed partial class ResourceStore
         if (!r.Check(live == Capacity - _freeCount)) return;
         for (int k = 0; k < _freeCount; k++)
             if (!r.Check((uint)_freeList[k] < (uint)Capacity && !_alive[_freeList[k]])) return;
+        // M8-1: the forest stealth's wood cells are derived from the live nodes just read (a footprint past the map's edge
+        // is refused above by the anchor check only, so the rebuild clamps to the grid).
+        RebuildWoodCells();
     }
 }

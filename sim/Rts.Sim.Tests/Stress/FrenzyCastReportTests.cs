@@ -27,6 +27,8 @@ namespace Rts.Sim.Tests.Stress;
 /// opening's own <c>reserveArmyShare</c> once it carries one (D31's 0.25), else D31's provisional 0.5. One more opening can
 /// be measured from a file named by <see cref="OpeningVariable"/> (the data track's read-only run). Rule 41: these figures
 /// are on this branch's rules; the data track's V24 re-measure on <c>main</c> is a different harness and not comparable.
+/// M8-1 (BUG-1370): "landed" and the ready test read the Frenzy's own slot in the Shaman's list (<see cref="FrenzySlot"/>),
+/// not slot 0, so an ability listed before it moves nothing (<c>Abilities/FrenzyReportSlotTests</c>).
 /// </summary>
 [Trait("Category", "Stress")]
 public class FrenzyCastReportTests(ITestOutputHelper output)
@@ -158,6 +160,47 @@ public class FrenzyCastReportTests(ITestOutputHelper output)
         throw new InvalidOperationException("no Teblor 'standard' opening");
     }
 
+    /// <summary>
+    /// BUG-1370: the Frenzy's own slot in the Shaman's ability list (<see cref="UnitStore.AbilityReadyTick"/> and the view's
+    /// ready tick are per slot), found by id, so an ability the data track lists before it moves nothing.
+    /// </summary>
+    internal static int FrenzySlot(GameData data, int shaman)
+    {
+        int slot = data.Units[shaman].Abilities.IndexOf(data.FindAbility(BloodOilScenes.FrenzyAbility));
+        Assert.True(slot >= 0, "the Shaman does not list the Frenzy");
+        return slot;
+    }
+
+    /// <summary>
+    /// The "landed" column: a cast of the Frenzy that lands moves its ready tick at the Frenzy's slot (0 from the spawn); a
+    /// reused slot starts the mark again. <see cref="Step"/> runs after every tick.
+    /// </summary>
+    internal sealed class LandedCounter(int capacity, int shaman, int frenzySlot)
+    {
+        private readonly int[] _readyWas = new int[capacity], _generationWas = new int[capacity];
+        private readonly int _frenzySlot = frenzySlot;
+
+        /// <summary>Frenzy casts landed so far.</summary>
+        public int Landed { get; private set; }
+
+        /// <summary>Counts the casts that landed in the last tick for <paramref name="p"/>'s Shamans; returns how many Shamans it has alive.</summary>
+        public int Step(World w, int p)
+        {
+            int alive = 0;
+            UnitStore us = w.Units;
+            for (int s = 0; s < us.Capacity; s++)
+            {
+                if (!us.Alive[s] || us.Owner[s] != p || us.TypeId[s] != shaman) continue;
+                alive++;
+                if (us.Generation[s] != _generationWas[s]) (_generationWas[s], _readyWas[s]) = (us.Generation[s], 0);
+                int ready = us.AbilityReadyTick[s * DataLimits.MaxUnitAbilities + _frenzySlot];
+                if (ready > _readyWas[s]) Landed++;
+                _readyWas[s] = ready;
+            }
+            return alive;
+        }
+    }
+
     /// <summary>Plays one match to 15:00 and measures the Teblor seat at every think.</summary>
     internal static Match Play(string config, GameData data, string opponent, ulong seed, bool teblorSecond, int startShamans = 0)
     {
@@ -174,6 +217,7 @@ public class FrenzyCastReportTests(ITestOutputHelper output)
         AbilityDef frenzy = data.Abilities[data.FindAbility(BloodOilScenes.FrenzyAbility)];
         Assert.Contains(data.Units[shaman].Abilities, a => a == frenzy.Id);
         float r2 = frenzy.Radius * frenzy.Radius;
+        int frenzySlot = FrenzySlot(data, shaman); // BUG-1370: its own slot, not slot 0
         var m = new Match { Config = config, Opponent = opponent, Seed = seed, Seat = p };
 
         // The ability manager's own sends this think: the caster was free (it runs last, so no later order hides it).
@@ -186,13 +230,12 @@ public class FrenzyCastReportTests(ITestOutputHelper output)
         };
         ai.ThoughtForTests = a =>
         {
-            Measure(a, m, shaman, r2, castThisThink);
+            Measure(a, m, shaman, frenzySlot, r2, castThisThink);
             castThisThink.Clear();
         };
 
         int circle = data.FindBuilding("teblor_shamans_circle");
-        var readyWas = new int[w.Units.Capacity];
-        var generationWas = new int[w.Units.Capacity];
+        var landed = new LandedCounter(w.Units.Capacity, shaman, FrenzySlot(data, shaman));
         while (sim.TickNumber < Fifteen)
         {
             sim.Tick();
@@ -202,18 +245,8 @@ public class FrenzyCastReportTests(ITestOutputHelper output)
             if (m.CircleAt < 0 && now % Tps == 0 && Has(w, p, circle)) m.CircleAt = now;
             if (m.DefeatedAt < 0 && w.IsDefeated(p)) m.DefeatedAt = now;
             if (m.OpponentDefeatedAt < 0 && w.IsDefeated(1 - p)) m.OpponentDefeatedAt = now;
-            int alive = 0;
-            var us = w.Units;
-            for (int s = 0; s < us.Capacity; s++)
-            {
-                if (!us.Alive[s] || us.Owner[s] != p || us.TypeId[s] != shaman) continue;
-                alive++;
-                // A landed cast moves the ready tick (0 from the spawn); a reused slot starts the mark again.
-                if (us.Generation[s] != generationWas[s]) (generationWas[s], readyWas[s]) = (us.Generation[s], 0);
-                int ready = us.AbilityReadyTick[s * DataLimits.MaxUnitAbilities];
-                if (ready > readyWas[s]) m.Landed++;
-                readyWas[s] = ready;
-            }
+            int alive = landed.Step(w, p);
+            m.Landed = landed.Landed;
             if (m.FirstShaman < 0 && alive > 0) m.FirstShaman = now;
             if (now == Five) m.Shamans5 = alive;
             if (now == Ten) m.Shamans10 = alive;
@@ -230,7 +263,7 @@ public class FrenzyCastReportTests(ITestOutputHelper output)
     /// the army is own army units not of the caster's type, so a second Shaman beside the first is not "the army"; the
     /// think counts in the phase it falls in (after the seat's first non-Shaman army unit, or before).
     /// </summary>
-    private static void Measure(AiPlayer ai, Match m, int shaman, float r2, HashSet<int> castThisThink)
+    private static void Measure(AiPlayer ai, Match m, int shaman, int frenzySlot, float r2, HashSet<int> castThisThink)
     {
         int armyN = 0;
         Vector2 sum = Vector2.Zero;
@@ -253,7 +286,7 @@ public class FrenzyCastReportTests(ITestOutputHelper output)
             int slot = ai.ArmySlots[k];
             if (!ai.View.TryGetUnit(slot, out SeenUnit u) || u.TypeId != shaman) continue;
             if (!castThisThink.Contains(slot) && !Free(ai, slot, u)) continue;
-            if (!ai.View.TryGetAbilityReady(slot, 0, out int ready) || ready > ai.Stamp) continue;
+            if (!ai.View.TryGetAbilityReady(slot, frenzySlot, out int ready) || ready > ai.Stamp) continue;
             any = true;
             if (u.State == UnitState.Attacking) shamanAttacking = true;
             int enemies = 0, s = -1;

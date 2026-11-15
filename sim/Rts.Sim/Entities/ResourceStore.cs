@@ -135,8 +135,48 @@ public sealed partial class ResourceStore
         _remaining[index] = amount;
         ResourceDef def = _defs[typeId];
         _grid.SetResource(cell % _grid.Width, cell / _grid.Width, def.FootprintWidth, def.FootprintHeight);
+        if (_woodCells != null && def.Resource == ResourceKind.Wood) MarkWood(cell, def, true);
         handle = new EntityHandle(index, _generation[index]);
         return true;
+    }
+
+    // M8-1: one bit per map cell, set while a live wood node (a standing tree) covers it; null unless a match seats a faction
+    // with the forest stealth (TrackWoodCells). Derived from the live nodes, never hashed or saved: rebuilt at a load.
+    private ulong[]? _woodCells;
+
+    /// <summary>
+    /// M8-1: starts keeping which cells a live wood node covers (<see cref="IsWoodCell"/>), built from the nodes alive now and
+    /// kept by every spawn and every felling after. The world calls it before its placer runs, in a match whose seats have
+    /// the forest stealth; a load rebuilds it after reading the store.
+    /// </summary>
+    internal void TrackWoodCells()
+    {
+        _woodCells ??= new ulong[(_grid.Width * _grid.Height + 63) / 64];
+        RebuildWoodCells();
+    }
+
+    /// <summary>M8-1: whether map cell <paramref name="cell"/> (in range, <c>y * Width + x</c>) holds a standing tree. False when the store does not keep wood cells.</summary>
+    internal bool IsWoodCell(int cell) => _woodCells != null && (_woodCells[cell >> 6] & (1UL << (cell & 63))) != 0;
+
+    private void RebuildWoodCells()
+    {
+        if (_woodCells == null) return;
+        Array.Clear(_woodCells);
+        for (int i = 0; i < _highWater; i++)
+            if (_alive[i] && _defs[_typeId[i]].Resource == ResourceKind.Wood) MarkWood(_cell[i], _defs[_typeId[i]], true);
+    }
+
+    private void MarkWood(int anchor, ResourceDef def, bool on)
+    {
+        int w = _grid.Width, x0 = anchor % w, y0 = anchor / w;
+        int x1 = Math.Min(x0 + def.FootprintWidth, w), y1 = Math.Min(y0 + def.FootprintHeight, _grid.Height); // a forged save's node may overhang
+        for (int y = y0; y < y1; y++)
+            for (int x = x0; x < x1; x++)
+            {
+                int c = y * w + x;
+                if (on) _woodCells![c >> 6] |= 1UL << (c & 63);
+                else _woodCells![c >> 6] &= ~(1UL << (c & 63));
+            }
     }
 
     /// <summary>
@@ -160,6 +200,7 @@ public sealed partial class ResourceStore
         ResourceDef def = _defs[_typeId[index]];
         int cell = _cell[index];
         _grid.ClearResource(cell % _grid.Width, cell / _grid.Width, def.FootprintWidth, def.FootprintHeight);
+        if (_woodCells != null && def.Resource == ResourceKind.Wood) MarkWood(cell, def, false); // M8-1: felled
         _alive[index] = false;
         _typeId[index] = 0;
         _cell[index] = -1;

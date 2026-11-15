@@ -38,6 +38,12 @@ public static class DataLimits
     public const double MaxStatusDamageBonus = 4;
 
     /// <summary>
+    /// M8-1: the longest <c>faction.json</c> <c>forestStealth.delay</c> in seconds. Far above any designed delay
+    /// (docs/factions/shadow.md: 3 s, 5 s as the first balance fix); a delay past a minute is a stealth nobody sees.
+    /// </summary>
+    public const double MaxForestStealthDelay = 60;
+
+    /// <summary>
     /// M7-3: the most factions <c>common/factions.json</c> may list (and so the most <c>factions/</c> folders). A rule of the
     /// format, not a design number: the setup screen lists every faction in one list and a load bounds its tables.
     /// </summary>

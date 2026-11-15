@@ -109,6 +109,7 @@ public static class AbilitySystem
             // M4-5: a cast resolving from stealth reveals the caster, before its effects (a stealth it casts on itself from
             // the open doesn't).
             StealthSystem.OnAttackOrCast(world, i);
+            if (world.AnyForestStealth) ForestStealthSystem.OnAttackOrCast(world, i); // M8-1: the forest's wait starts again
             Resolve(world, caster, u.Owner[i], a, point);
         }
     }

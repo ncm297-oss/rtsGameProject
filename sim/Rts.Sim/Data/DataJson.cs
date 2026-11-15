@@ -130,6 +130,7 @@ internal sealed class FactionJson
     public ResourceNamesJson? Resources { get; set; }
     public PaletteJson? Palette { get; set; }
     public RegenJson? Regen { get; set; } // M7-1, optional
+    public ForestStealthJson? ForestStealth { get; set; } // M8-1, optional
 }
 
 // M7-1: faction.json "regen", the faction's regeneration (both fields required when the object is present).
@@ -137,6 +138,15 @@ internal sealed class RegenJson
 {
     public double? HpPerSecond { get; set; }
     public double? Delay { get; set; }
+}
+
+// M8-1: faction.json "forestStealth", the Shadow page's "Children of Shadow" as a generic bonus: status and delay
+// required, exceptSlots optional (none excepted when absent).
+internal sealed class ForestStealthJson
+{
+    public string? Status { get; set; }
+    public double? Delay { get; set; }
+    public List<string?>? ExceptSlots { get; set; }
 }
 
 internal sealed class TextJson

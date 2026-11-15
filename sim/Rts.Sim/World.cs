@@ -47,6 +47,7 @@ public sealed partial class World
         WoodPerTickOf = GatherRates(config, config.Data.Rules.WoodPerTick);
         InitRegen(config); // M7-1: World.Regen.cs
         Units = new UnitStore(config.UnitCapacity, _ledger, Techs);
+        InitForestStealth(config); // M8-1: World.ForestStealth.cs (after the unit store, whose per-unit state it may allocate)
         _rngs = new SimRng[RngStream.Count(config.PlayerCount)];
         for (int i = 0; i < _rngs.Length; i++)
             _rngs[i] = new SimRng(config.Seed, (ulong)i);
@@ -61,6 +62,8 @@ public sealed partial class World
         // Resources before the flow-field cache, so its step mask starts from the grid with them.
         // The placer draws from the map stream after the terrain did, and nothing when counts are 0.
         Resources = new ResourceStore(config.ResourceCapacity, NavGrid, config.Data);
+        // M8-1: the forest stealth reads which cells hold a standing tree; kept only in a match that seats the bonus.
+        if (AnyForestStealth) Resources.TrackWoodCells();
         if (placeResources)
             ResourcePlacement = file != null ? MapFile.Place(file, Resources, config.Data) // M6-S7: draws nothing
                 : ResourcePlacer.Place(config.Map, NavGrid, Resources, config.Data, ref _rngs[RngStream.MapGen]);
