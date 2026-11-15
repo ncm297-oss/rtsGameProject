@@ -75,6 +75,7 @@ resources for flavor in their display text (e.g. Teblor "Bloodwood" for wood).
 | Population | Town Hall +10, House +8, hard cap 100 |
 | Pop costs | Integers or half-steps (Andii use 1.5); stored internally as half-pop integers. A queue item that spawns several units (the Teblor war-dog pack: 3) costs each unit's pop, all reserved when the item starts, so it starts only with room for the whole pack |
 | Mine crowding | No hard cap; workers queue at a mine's edge. Revisit if 20 workers on one mine feels wrong |
+| Gatherer overlap | Two of a player's workers that are both on a gather loop (walking to the node, working, walking back, delivering) may overlap a share of their touching distance: `rules.json` `gatherOverlap`, 0 to 0.75. **Off (absent = 0) until its value ships** (owner request 2026-11-14; default to ship 0.5; built and measured in M6-S9, docs/03 "Implementation (M6-S9)"). Armies, idle workers, builders and enemies keep today's separation |
 
 Workers return cargo to the nearest drop-off automatically and resume gathering. A worker
 ordered to a depleted node looks for the nearest node of the same type within 20 m.

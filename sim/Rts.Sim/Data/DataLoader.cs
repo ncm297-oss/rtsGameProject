@@ -356,7 +356,29 @@ public static partial class DataLoader
             // M4-5: required; a missing object is one error.
             StealthProximity = stealth == null ? 0f : (float)c.Sight(stealth.Proximity, "stealth.proximity", "rules", "proximity"),
             RevealTicks = stealth == null ? 0 : c.Ticks(stealth.RevealSeconds, "stealth.revealSeconds", 1),
+            GatherOverlap = GatherOverlap(c, j.GatherOverlap), // M6-S9
         };
+    }
+
+    /// <summary>
+    /// M6-S9: <c>gatherOverlap</c>, optional (absent = 0, off): a number from 0 to <see cref="DataLimits.MaxGatherOverlap"/>. A JSON
+    /// null, a value that isn't a number, a negative and a value over the cap are one error each, and read as 0.
+    /// </summary>
+    private static float GatherOverlap(Checker c, NumberJson? j)
+    {
+        const string p = "gatherOverlap";
+        if (j == null) return 0f;
+        if (j.Token == JsonTokenType.Null)
+            c.Error(p, "null is not a number (leave the field out for no overlap)");
+        else if (j.Token != JsonTokenType.Number)
+            c.Error(p, "wrong type of value: expected a number");
+        else if (!(j.Value >= 0))
+            c.Error(p, $"{j.Value} must not be negative");
+        else if (!(j.Value <= DataLimits.MaxGatherOverlap))
+            c.Error(p, $"{j.Value} is above the maximum {DataLimits.MaxGatherOverlap}");
+        else
+            return (float)j.Value;
+        return 0f;
     }
 
     /// <summary>

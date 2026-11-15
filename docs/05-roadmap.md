@@ -961,7 +961,11 @@ open S1 / S2. Retro below; open S3 / S4 listed there.)_
       Gatherer carries 15 (BUG-1241 fixed: Age II and a wave by 10:00 in 6 of 8 on 8 of 8 seeds, 64 matches); the ten
       buildings carry `scale` 1.25 and the view draws it as height (M7-V4). **Not ticked; left:** the balance pass (no second
       Longhouse by 15:00 in 64 matches, defeated by 15:00 in 14, a Shaman in 4: the data's D32 first), the opening's tooltip
-      (BUG-1390), models and animations (the art pass, unit by unit).)
+      (BUG-1390), models and animations (the art pass, unit by unit).) **M7-V5, 2026-11-14-2156: five of the seven Teblor
+      unit types are animated figures** (Gatherer, Warrior, Javelin Thrower, Shaman, Breaker; drawn at the data `scale`
+      1.5, about 2.76 m; a throw and a cast clip added to the library). **Not ticked; left:** the Destrier Rider and the
+      War-dog (no horse or dog pack on disk: the owner's download), Teblor buildings, and the balance pass (D33, after the
+      gather-overlap value ships).
 
 ## M8 — Shadow
 
@@ -971,7 +975,8 @@ open S1 / S2. Retro below; open S3 / S4 listed there.)_
       part `FRST` written only when the data has the bonus (format 10 unchanged, the shipped hash unchanged); docs/03
       "Implementation (M8-1)". **Not ticked:** no shipped faction carries the block (the Shadow roster is the data
       track's), the Shadow Archer's stand-still stealth is M8-2, the view's stealth visuals for a forest-hidden unit are
-      checked once a roster ships.)
+      checked once a roster ships.) **D-R38, 2026-11-14-2156: `docs/factions/shadow.md` is pin-ready** (0 readiness
+      problems; its "Schema gaps (D-R38)" G1-G14 list what the sim still owes before a roster can ship: STATE Request 56).
 - [ ] Hounds (pack bonus, 7-alive limit), Aptorian Stalker, Shadow-step, Summon Wraiths.
 - [ ] Shadow AI with ambush behavior; models; balance pass (watch early-game stealth, see faction page).
 

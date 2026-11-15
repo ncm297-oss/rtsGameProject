@@ -512,6 +512,9 @@ accepts up to 1024 because the generator stress suites use it; gameplay on such 
   offsets can return at M2 with group commands.)
 - **Shoving:** idle friendly units step aside for moving ones. Holding units don't move.
 - **Collision:** hard push-out from blocked cells; soft unit-unit separation.
+- **Gather overlap (M6-S9):** two of a player's workers both on a gather loop touch at their radii sum × (1 −
+  `rules.json` `gatherOverlap`), in every rule that decides touching, spacing, pushing or walls; every other pair keeps
+  the radii sum. Off (absent) until its value ships; see "Implementation (M6-S9)".
 - **Flying units** (Great Raven) ignore the nav grid and separation from ground units.
 
 **Implementation (M1-4b):** first half only. `Command.Move(player, unit, target)` orders one
@@ -4408,7 +4411,7 @@ consumes it.
 | --- | --- |
 | `damage_table.json` | `armorClasses: [{id, displayName}]`, `damageTypes: [{id, displayName, ignoresArmor?, multipliers: {<armorClass>: x}}]`. Every type must list every class. `ignoresArmor` (default false) is how Magic skips armor |
 | `resources.json` | `{ "resources": [ ... ] }`, each `{id, displayName, description, resource, footprint {width, height}}`: `resource` is `gold` or `wood`, footprint sides are cells, 1-4 (`DataLimits.MaxFootprint`). Amounts are not here: a tree holds `rules.json` `treeWood`, a mine `startMines.gold` (M3-1, see "Economy implementation") |
-| `rules.json` | docs/02 Economy table: `startingResources` (M6-S6, replacing `startingGold` / `startingWood`: a list of presets in the setup's order, each `{id, displayName, description?, gold, wood, aiSpendAbove?}`; ids unique snake_case of at most 64 characters, a `standard` entry required, gold and wood 0 to 1,000,000, at most 16 presets; shipped `standard` 200 / 200 and `high` 1000 / 1000, Producer default; `aiSpendAbove` (M6-S6 fix round 1, BUG-1050) optional, 0 to 1,000,000, 0 or left out = off: the AI's spend-down threshold in gold + wood, shipped `high` 200, `standard` none; every field, the count and the order in `ContentHash`), `startingWorkers`, `popCap`, `workerCarry`, `gatherRate {gold, wood}` (per second), `startMines` / `expansionMines {count, gold}`, `treeWood`, `nodeSearchRadius`, `repair {rateFactor, costFactor}` (M3-3), `buildingSight` (M4-3a: meters, above 0 and at most 64, the sight of a building whose entry gives none; shipped 12, a Producer default: docs/02 gives sight only for the Watch Tower), `stealth {proximity, revealSeconds}` (M4-5: meters and seconds, above 0; shipped 3 and 3, docs/02 "Stealth and detection"). Pop provided by buildings comes with `buildings.json` (M3); the Age II cost with `techs.json` (M3-5) |
+| `rules.json` | docs/02 Economy table: `startingResources` (M6-S6, replacing `startingGold` / `startingWood`: a list of presets in the setup's order, each `{id, displayName, description?, gold, wood, aiSpendAbove?}`; ids unique snake_case of at most 64 characters, a `standard` entry required, gold and wood 0 to 1,000,000, at most 16 presets; shipped `standard` 200 / 200 and `high` 1000 / 1000, Producer default; `aiSpendAbove` (M6-S6 fix round 1, BUG-1050) optional, 0 to 1,000,000, 0 or left out = off: the AI's spend-down threshold in gold + wood, shipped `high` 200, `standard` none; every field, the count and the order in `ContentHash`), `startingWorkers`, `popCap`, `workerCarry`, `gatherRate {gold, wood}` (per second), `startMines` / `expansionMines {count, gold}`, `treeWood`, `nodeSearchRadius`, `repair {rateFactor, costFactor}` (M3-3), `buildingSight` (M4-3a: meters, above 0 and at most 64, the sight of a building whose entry gives none; shipped 12, a Producer default: docs/02 gives sight only for the Watch Tower), `stealth {proximity, revealSeconds}` (M4-5: meters and seconds, above 0; shipped 3 and 3, docs/02 "Stealth and detection"), `gatherOverlap` (M6-S9, optional: absent = 0 = off; a number from 0 to 0.75, `DataLimits.MaxGatherOverlap`; a JSON null, a non-number, a negative or a value over the cap is one error; `RulesDef.GatherOverlap`, in `ContentHash` only when non-zero; not shipped yet, "Implementation (M6-S9)"). Pop provided by buildings comes with `buildings.json` (M3); the Age II cost with `techs.json` (M3-5) |
 | `common/factions.json` | M7-3: `{ "order": ["malazan", "whirlwind"] }`, the faction order: faction id = index in `order`, and unit and building type ids go faction by faction in this order (ordinal within a faction). Every folder under `factions/` must be listed and every entry must have a folder; a repeat, an entry that isn't a snake_case id (or a string) and more than 8 entries (`DataLimits.MaxFactions`) are errors, one each at `order[i]` (a folder not listed: at `order`, naming the folder). Append-only: a new faction adds its id at the end. Not hashed (the keys in id order are). See "Implementation (M7-3)" |
 | `faction.json` | `id` (must equal the folder name), `displayName`, `description`, `bonus {displayName, description}`, `resources {gold, wood: {displayName}}`, `palette {primary, secondary, accent}` as `#RRGGBB`; `regen` (M7-1, optional: absent = no regeneration) `{hpPerSecond, delay}`, both required when the object is there: `hpPerSecond` above 0 and at most 100 (`DataLimits.MaxRegenPerSecond`) and at least 0.05 (one fixed-point unit a tick), to `FactionDef.RegenPerTick` (`round(hpPerSecond x 400 / 20)`: 1 → 20); `delay` seconds, 0 or more, at most 3600, to `FactionDef.RegenDelayTicks` (6 → 120); an unknown key is an error. The Teblor ship one (1 HP/s after 6 s); see "Implementation (M7-1)". `forestStealth` (M8-1, optional: absent = no forest stealth) `{status, delay, exceptSlots}`: `status` (required) a status of kind `stealthed`, to `FactionDef.ForestStealthStatus` (-1 absent); `delay` (required) seconds, at least one tick once converted, at most 60 (`DataLimits.MaxForestStealthDelay`), to `FactionDef.ForestStealthDelayTicks` (3 → 60); `exceptSlots` (optional) unit slot names (`DataLimits.SlotIds`), each once, to `FactionDef.ForestStealthExceptSlots` (a bit per `UnitSlot`); one error per bad field, an unknown key is an error. No shipped faction has one yet (the Shadow: the data track, M8). See "Implementation (M8-1)" |
 | `buildings.json` | `{ "buildings": [ ... ] }`, each `{id, displayName, description, slot, footprint {width, height}, hp, armor, cost {gold, wood}, buildTime, popProvided, dropOff}`: `slot` is one of the ten template slots (`DataLimits.BuildingSlotIds`), footprint sides 1-4 cells, `buildTime` in seconds (to ticks), `popProvided` a multiple of 0.5 (to half-pop), `dropOff` a required bool, `requires` an optional list of tech / building ids (M3-5; resolved and gating placement since M3-6), `sight` optional meters (M4-3a: above 0 and at most 64, default `rules.json` `buildingSight`; shipped 24 on both watch towers, docs/02), `attack` optional (M4-3b: the unit `attack` object; value at least 1, range above 0, an aimed `projectile` required, `targets` not `buildings`; shipped on both watch towers), `detector` optional meters (M4-3b: above 0 and at most 64; shipped 16 on both watch towers; unused until M4-5), `scale` optional (M7-4: the view's model size, 0.5-3.0, default 1; the sim never reads it; since M7-V4 the placeholder box's height, `3 m x scale`, on the footprint's width and depth: "Implementation (M7-V4)"). Ids unique across factions (M3-2, see "Economy implementation"); exactly one building per slot per faction (M3-6, BUG-0010) |
@@ -11903,6 +11906,233 @@ quarter points: two neighbouring starts must stand half the side apart).
   pin, M6-SH1), and every generated-map pin row is unmoved.
 - **Not in this slice:** the maps' final text (data track), biome art, water, per-map AI openings, an AI that hunts an enemy's
   last units (Vathar's first draft), BUG-1058 / 1059.
+
+### Implementation (M6-S9)
+
+2026-11-14. The owner's request (inbox 2026-11-14: gatherers clip through each other "a bit" while collecting) as one generic
+movement rule with one data knob, built **off**: the shipped `rules.json` does not carry the field, so the data hash
+(5353DF8A1473FC6D), the golden replay, every save and every pin are unchanged. The value ships next session as its own hash
+move (docs/01 "2026-11-14 (f)": default 0.5). Code: `Movement/MovementSystem.cs` (`IsGatherPair`, `PairSum`, `GatherFloor`,
+`ShovedPastGatherFloor`), `World.GatherOverlapOn` / `GatherPairScale`, `RulesDef.GatherOverlap`, `DataLoader.GatherOverlap`,
+`NumberJson` (`Data/DataJson.cs`), `DataLimits.MaxGatherOverlap`.
+
+- **The knob.** `rules.json` `gatherOverlap`: the share of their touching distance a gather pair may overlap. **Absent = 0 =
+  off; hashed only when non-zero** (a marker, then the value: M8-1's pattern, so data without it hashes as before). Range 0
+  to 0.75 (`DataLimits.MaxGatherOverlap`): the largest value measured below; past it there is no evidence the loop works, and
+  at 0.75 the pair's pack limit is still 0.1 m for two 0.4 m workers, where 1 would let centres coincide (no direction to
+  push). A JSON `null`, a non-number (a string, `true`, an object, a list), a negative and a value over the cap are one error
+  each naming `common/rules.json` and `gatherOverlap`; `NaN` / `Infinity` are not JSON (one malformed-file error at that
+  field). `null` is told from "absent" by `NumberJson`, whose converter reads every token (a `double?` reads both as null).
+- **The predicate.** A **gather pair** is two live units of the same owner that both have `UnitStore.GatherNode` set: the
+  whole loop (walking to the node, working, walking to the drop-off, delivering), not only at the node. A builder or repairer
+  (`BuildTarget`; a Build clears `GatherNode`), an Idle worker, a soldier, another player's worker: never. No new per-unit
+  state: `GatherNode` is already hashed and saved, so the save and replay formats are unchanged.
+- **The rule.** For a gather pair, `MovementSystem` uses `(r_i + r_j) x (1 - gatherOverlap)` (`PairSum`) wherever it used the
+  pair's radii sum to decide touching, spacing, pushing or walls; for every other pair `PairSum` is the radii sum by the same
+  float expression as before, and with the knob off no site reads the scale at all (bit-identical: the golden, the data-hash
+  pins and every pin class pass unedited). The sites that take the pair distance:
+  - Plan's neighbor loop (written out, the hot path; `PairSum` is its copy for the rest): crowded arrival
+    (`ArrivalSpacing`), the detour's wall intervals and reach, the queue reach (`QueueRange`), the sidestep reach
+    (`AvoidRange`), the overlap push and the pack limit (`ShoveSpacing`), touching an arrived groupmate; the detour's re-run
+    (`SidestepAndQueue`) and its edge tangent (`DetourTurn`); `AimCovered`.
+  - Walls: `WallLimit` (the gap and the reach a standing gatherer allows a walking one).
+  - Shoves: `AddShoves` (the overlap a step leaves), `BuildChain` (who touches the shoved line), `ChainHoldsItsGroups`,
+    `SqueezeLimit` (the shove's pack limit), `KeepLinks`.
+  - Anchors: `SettleBackedOff`, `RecheckAnchors` (touching links of a blob).
+  - Left on the radii sum, because they provably never see a gather pair: `Constrain`'s plug cone, `IsHardWall`, `IsPlug` /
+    `SearchPlug`, `StandsHard`, `TouchesEnemy`, `ShovedIntoEnemy` (hard units are another player's, or own holders and planted
+    units; a Gather clears `Hold`, and an Attack / Stop / Hold / Move clears the loop); `OwnFighterAhead`, `OwnPlantedInWay`,
+    `FlankTurn`, `FlankBlockOf`, `StrikesOurTarget` (planted Attacking / Casting units only); `WalkerNear` (the flank rule's
+    crowd test, read only beside an own planted line). `StandArrival2` is one walker's own two radii (a worker queued behind
+    must still be in reach of the footprint, BUG-0146), not a pair: unchanged. The spatial queries keep their radii (the
+    scaled sum only shrinks a reach). `EconomySystem`'s stand points (`StandPointSpacing` walker radii apart) are outside
+    movement and unchanged: workers still pick spread points, and only pack closer when the points are taken.
+- **The floor (found while measuring, gather pairs only).** Scaling alone let two gatherers walking at one stand point
+  close to 3 % of their radii sum at 0.5 and coincide at 0.75: the overlap push is a share of the overlap, so at a scaled
+  touching distance it shrinks while a walker's step (0.2 m a tick) does not. So the scaled pack limit, `ShoveSpacing x
+  PairSum`, is a floor between gather pairs: `GatherFloor` cuts a gathering walker's step so it ends no closer than that to a
+  gather-pair neighbor (half the room toward one that is Moving, SqueezeLimit's rule for two shoved units; a step it cuts
+  back is judged again for progress), and `ShovedPastGatherFloor` checks a shoved gatherer's final step (KeepOffWalls can
+  undo SqueezeLimit's trim along a mine's edge: 0.21 of the sum at 0.25 before the check). Off, the push alone keeps such
+  pairs near the pack limit only by the numbers' luck (0.33-0.41 of the sum in the 12-worker rows), and the tree rows below
+  show two Laborers 2.8 cm apart at 0 (16 at the tree line, 0.03 of the sum): today's rules have no floor between walkers.
+- **Tests.** `Data/GatherOverlapLoaderTests` (criterion 1); `Movement/GatherOverlapTests` (3: head-on on the leg, 12 on one
+  mine for 0.4 m / 0.75 m / mixed; 4: the predicate, four scenes with no gather pair hash-equal tick for tick at 0 and 0.5,
+  three with gather pairs keeping the radii sum for every other pair, the two-player one with both Keeps west of the mine so
+  the sides meet; 5: leaving the loop; 6: twins, save at 3,000 continued,
+  replay played back and refused on data with the knob off, spawn-order rows; 8: allocation);
+  `Movement/GatherOverlapFuzzTests` (7: seeds 2-16 without 13 at 0 / 0.25 / 0.5 / 0.75, 56 rows, four named in
+  `KnownWedges`; the two BUG-1430 rows; seed 13's can't-be-built row); `Movement/GatherOverlapPerfTests` (8, Perf); `Movement/GatherOverlapReport`
+  (Stress: the tables). Scenes: `Movement/GatherOverlapScenes` (each copy writes or removes the field itself, rule 58).
+
+**(a) One mine (50,000 gold, so the pace is measured, not the mine running out) 10 m from a Keep, and a two-deep line of 72
+trees 20 m from it (all sent to its middle tree), 5 game minutes, flat 48 x 40 map.** Banked = gold + wood delivered; trips
+= deliveries; stuck ticks = a walker's stuck count rising while it walks; give-ups = a walker on its loop stopping without
+its goal; closest pair = the smallest centre distance between two of the workers (its share of their radii sum); mean stand
+gap = over the second half, a worker working at its node to its nearest other worker.
+
+| Node | Worker | N | Overlap | Banked | Trips | Stuck ticks | Give-ups | Closest pair (share of radii sum) | Mean stand gap |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| Mine | Laborer | 5 | 0 | 840 | 84 | 85 | 0 | 0.516 m (0.65) | 0.661 m |
+| Mine | Laborer | 5 | 0.25 | 850 | 85 | 72 | 0 | 0.300 m (0.38) | 0.677 m |
+| Mine | Laborer | 5 | 0.5 | 850 | 85 | 95 | 0 | 0.200 m (0.25) | 0.557 m |
+| Mine | Laborer | 5 | 0.75 | 850 | 85 | 226 | 0 | 0.100 m (0.12) | 0.168 m |
+| Mine | Laborer | 10 | 0 | 1620 | 162 | 330 | 4 | 0.391 m (0.49) | 0.695 m |
+| Mine | Laborer | 10 | 0.25 | 1660 | 166 | 283 | 2 | 0.300 m (0.37) | 0.622 m |
+| Mine | Laborer | 10 | 0.5 | 1670 | 167 | 194 | 0 | 0.200 m (0.25) | 0.483 m |
+| Mine | Laborer | 10 | 0.75 | 1700 | 170 | 264 | 0 | 0.100 m (0.12) | 0.212 m |
+| Mine | Laborer | 16 | 0 | 2440 | 244 | 1323 | 23 | 0.282 m (0.35) | 0.782 m |
+| Mine | Laborer | 16 | 0.25 | 2550 | 255 | 863 | 13 | 0.300 m (0.38) | 0.603 m |
+| Mine | Laborer | 16 | 0.5 | 2660 | 266 | 655 | 10 | 0.200 m (0.25) | 0.408 m |
+| Mine | Laborer | 16 | 0.75 | 2720 | 272 | 610 | 0 | 0.100 m (0.12) | 0.241 m |
+| Mine | Laborer | 24 | 0 | 3430 | 343 | 2796 | 36 | 0.119 m (0.15) | 0.754 m |
+| Mine | Laborer | 24 | 0.25 | 3630 | 363 | 1475 | 18 | 0.300 m (0.38) | 0.581 m |
+| Mine | Laborer | 24 | 0.5 | 3930 | 393 | 1290 | 15 | 0.200 m (0.25) | 0.445 m |
+| Mine | Laborer | 24 | 0.75 | 4080 | 408 | 829 | 0 | 0.100 m (0.12) | 0.179 m |
+| Mine | Gatherer | 5 | 0 | 855 | 57 | 423 | 14 | 0.803 m (0.54) | 1.527 m |
+| Mine | Gatherer | 5 | 0.25 | 930 | 62 | 129 | 1 | 0.766 m (0.51) | 1.222 m |
+| Mine | Gatherer | 5 | 0.5 | 900 | 60 | 166 | 1 | 0.405 m (0.27) | 0.891 m |
+| Mine | Gatherer | 5 | 0.75 | 900 | 60 | 153 | 0 | 0.187 m (0.12) | 0.748 m |
+| Mine | Gatherer | 10 | 0 | 1395 | 93 | 1087 | 12 | 0.664 m (0.44) | 1.391 m |
+| Mine | Gatherer | 10 | 0.25 | 1770 | 118 | 530 | 3 | 0.564 m (0.38) | 1.064 m |
+| Mine | Gatherer | 10 | 0.5 | 1815 | 121 | 302 | 1 | 0.375 m (0.25) | 0.629 m |
+| Mine | Gatherer | 10 | 0.75 | 1800 | 120 | 425 | 6 | 0.188 m (0.13) | 0.510 m |
+| Mine | Gatherer | 16 | 0 | 2040 | 136 | 3655 | 81 | 0.443 m (0.30) | 1.340 m |
+| Mine | Gatherer | 16 | 0.25 | 2415 | 161 | 2060 | 31 | 0.563 m (0.38) | 1.056 m |
+| Mine | Gatherer | 16 | 0.5 | 2715 | 181 | 1254 | 24 | 0.375 m (0.25) | 0.779 m |
+| Mine | Gatherer | 16 | 0.75 | 2910 | 194 | 479 | 3 | 0.187 m (0.12) | 0.404 m |
+| Mine | Gatherer | 24 | 0 | 2790 | 186 | 8613 | 185 | 0.208 m (0.14) | 1.126 m |
+| Mine | Gatherer | 24 | 0.25 | 3450 | 230 | 4321 | 80 | 0.563 m (0.38) | 0.970 m |
+| Mine | Gatherer | 24 | 0.5 | 3960 | 264 | 2289 | 29 | 0.375 m (0.25) | 0.726 m |
+| Mine | Gatherer | 24 | 0.75 | 4320 | 288 | 909 | 5 | 0.187 m (0.12) | 0.359 m |
+| Tree line | Laborer | 5 | 0 | 580 | 58 | 459 | 15 | 0.274 m (0.34) | 0.869 m |
+| Tree line | Laborer | 5 | 0.25 | 600 | 60 | 216 | 2 | 0.300 m (0.38) | 0.614 m |
+| Tree line | Laborer | 5 | 0.5 | 600 | 60 | 177 | 0 | 0.200 m (0.25) | 0.629 m |
+| Tree line | Laborer | 5 | 0.75 | 600 | 60 | 171 | 0 | 0.100 m (0.12) | 0.174 m |
+| Tree line | Laborer | 10 | 0 | 1050 | 105 | 1321 | 13 | 0.062 m (0.08) | 0.738 m |
+| Tree line | Laborer | 10 | 0.25 | 1090 | 109 | 1001 | 9 | 0.300 m (0.37) | 0.625 m |
+| Tree line | Laborer | 10 | 0.5 | 1130 | 113 | 752 | 1 | 0.200 m (0.25) | 0.386 m |
+| Tree line | Laborer | 10 | 0.75 | 1160 | 116 | 721 | 1 | 0.100 m (0.12) | 0.232 m |
+| Tree line | Laborer | 16 | 0 | 1470 | 147 | 3086 | 42 | 0.028 m (0.03) | 0.680 m |
+| Tree line | Laborer | 16 | 0.25 | 1540 | 154 | 2077 | 15 | 0.300 m (0.37) | 0.549 m |
+| Tree line | Laborer | 16 | 0.5 | 1680 | 168 | 1683 | 7 | 0.200 m (0.25) | 0.389 m |
+| Tree line | Laborer | 16 | 0.75 | 1690 | 169 | 1470 | 7 | 0.100 m (0.12) | 0.195 m |
+| Tree line | Laborer | 24 | 0 | 1880 | 188 | 5986 | 88 | 0.038 m (0.05) | 0.651 m |
+| Tree line | Laborer | 24 | 0.25 | 1990 | 199 | 3545 | 40 | 0.300 m (0.37) | 0.507 m |
+| Tree line | Laborer | 24 | 0.5 | 2290 | 229 | 2750 | 16 | 0.200 m (0.25) | 0.398 m |
+| Tree line | Laborer | 24 | 0.75 | 2400 | 240 | 2719 | 7 | 0.100 m (0.12) | 0.238 m |
+| Tree line | Gatherer | 5 | 0 | 570 | 38 | 740 | 18 | 0.585 m (0.39) | 1.532 m |
+| Tree line | Gatherer | 5 | 0.25 | 630 | 42 | 485 | 9 | 0.563 m (0.38) | 1.235 m |
+| Tree line | Gatherer | 5 | 0.5 | 675 | 45 | 329 | 7 | 0.375 m (0.25) | 0.956 m |
+| Tree line | Gatherer | 5 | 0.75 | 675 | 45 | 225 | 2 | 0.188 m (0.13) | 0.639 m |
+| Tree line | Gatherer | 10 | 0 | 885 | 59 | 2120 | 35 | 0.613 m (0.41) | 1.279 m |
+| Tree line | Gatherer | 10 | 0.25 | 1080 | 72 | 1984 | 40 | 0.563 m (0.38) | 1.018 m |
+| Tree line | Gatherer | 10 | 0.5 | 1185 | 79 | 1146 | 17 | 0.375 m (0.25) | 0.739 m |
+| Tree line | Gatherer | 10 | 0.75 | 1305 | 87 | 901 | 4 | 0.187 m (0.12) | 0.463 m |
+| Tree line | Gatherer | 16 | 0 | 1245 | 83 | 6522 | 169 | 0.161 m (0.11) | 1.833 m |
+| Tree line | Gatherer | 16 | 0.25 | 1500 | 100 | 3905 | 69 | 0.562 m (0.37) | 0.871 m |
+| Tree line | Gatherer | 16 | 0.5 | 1665 | 111 | 2216 | 24 | 0.375 m (0.25) | 0.628 m |
+| Tree line | Gatherer | 16 | 0.75 | 1860 | 124 | 1473 | 6 | 0.187 m (0.12) | 0.372 m |
+| Tree line | Gatherer | 24 | 0 | 1260 | 84 | 17006 | 348 | 0.090 m (0.06) | 0.955 m |
+| Tree line | Gatherer | 24 | 0.25 | 1665 | 111 | 8337 | 175 | 0.562 m (0.37) | 0.811 m |
+| Tree line | Gatherer | 24 | 0.5 | 2160 | 144 | 4375 | 71 | 0.375 m (0.25) | 0.589 m |
+| Tree line | Gatherer | 24 | 0.75 | 2625 | 175 | 2832 | 25 | 0.187 m (0.12) | 0.356 m |
+
+**(b) Normal v Normal (Malazan v Whirlwind), seed 1, at 0 and 0.5:** the menu's map (generated, 12 forests, 8 mines) and the
+three named maps; result tick (bound 72,000), gold + wood gathered by 10:00, whether the match ends.
+
+| Map | Overlap | Result tick | Winner | Gold + wood gathered by 10:00 (p0 / p1) | Ends |
+| --- | --- | --- | --- | --- | --- |
+| menu (generated) | 0 | 27919 (23:15) | p0 | 5610 / 4730 | yes |
+| menu (generated) | 0.5 | 21633 (18:01) | p0 | 6100 / 4850 | yes |
+| Vathar Crossing | 0 | 23322 (19:26) | p1 | 4470 / 4560 | yes |
+| Vathar Crossing | 0.5 | 28729 (23:56) | p0 | 5340 / 4710 | yes |
+| Raraku | 0 | 28231 (23:31) | p0 | 5560 / 4610 | yes |
+| Raraku | 0.5 | 30132 (25:06) | p0 | 5760 / 4450 | yes |
+| Pale Hills | 0 | 50140 (41:47) | p1 | 5180 / 4520 | yes |
+| Pale Hills | 0.5 | 72000 (60:00) | none | 5410 / 4590 | no (bound 72000) |
+
+**(c) The economy fuzz's scene (criterion 7) on seeds 2-16, the 60 s trip window measured, not asserted:** the longest a
+worker on its loop went without a trip (its node alive), and the income. Seed 13 can't be built (its second Keep is
+refused; the harness says so); seed 1 has a Keep with no node within the fuzz's 30 m walk. Bold: past the window.
+
+| Seed | 0: longest gap (s), income p0 / p1 | 0.25: longest gap (s), income p0 / p1 | 0.5: longest gap (s), income p0 / p1 | 0.75: longest gap (s), income p0 / p1 |
+| --- | --- | --- | --- | --- |
+| 2 | 49.8, 2450 / 1455 | 49.6, 2450 / 1475 | 36.8, 2470 / 1470 | 35.2, 2425 / 1460 |
+| 3 | 58.5, 1915 / 1745 | **74.6**, 2030 / 1885 | 37.9, 2320 / 1915 | 33.1, 2370 / 1905 |
+| 4 | **68.1**, 2400 / 2185 | **70.7**, 2400 / 2425 | 51.4, 2430 / 2440 | 39.4, 2380 / 2440 |
+| 5 | 41.7, 720 / 1800 | 39.4, 720 / 1830 | 33.8, 720 / 1855 | 33.9, 710 / 1870 |
+| 6 | 42.7, 2455 / 785 | 37.5, 2415 / 790 | 38.9, 2465 / 810 | 37.5, 2435 / 800 |
+| 7 | 52.7, 2440 / 2190 | 45.8, 2470 / 2225 | 40.8, 2430 / 2410 | **81.7**, 2400 / 2400 |
+| 8 | 40.8, 2135 / 2450 | 39.5, 2220 / 2450 | 39.2, 2250 / 2450 | 34.2, 2260 / 2470 |
+| 9 | 47.4, 1350 / 2310 | 29.6, 1360 / 2435 | 28.4, 1370 / 2450 | 28.8, 1370 / 2420 |
+| 10 | 44.7, 2550 / 1650 | 45.1, 2640 / 1680 | 42.1, 2710 / 1685 | 42.0, 2790 / 1695 |
+| 11 | 49.7, 1670 / 2250 | 49.7, 1690 / 2445 | 34.0, 1760 / 2440 | 27.5, 1770 / 2475 |
+| 12 | 40.2, 1690 / 1550 | 43.1, 1710 / 1605 | 36.8, 1680 / 1620 | 34.7, 1690 / 1635 |
+| 14 | 53.8, 2405 / 2220 | 51.4, 2425 / 2435 | 48.1, 2370 / 2445 | 48.7, 2415 / 2440 |
+| 15 | 42.5, 1380 / 2000 | 37.0, 1455 / 2000 | 37.0, 1450 / 2015 | 36.9, 1490 / 2025 |
+| 16 | 57.4, 2100 / 1390 | 45.0, 2165 / 1355 | 45.2, 2200 / 1370 | 45.2, 2210 / 1370 |
+
+**Reading.** Every value raises a crowded node's pace and cuts stuck ticks and give-ups; with 5 workers nothing
+changes (within 2 trips). At 24 workers on the mine: Laborers bank 3,430 at 0 and 3,630 / 3,930 / 4,080 at 0.25 / 0.5 /
+0.75, Gatherers 2,790 and 3,450 / 3,960 / 4,320 (+42 % at 0.5); 24 Gatherers on the tree line give up 348 times at 0 and
+175 / 71 / 25 times. Against 0.75: Laborers working a node stand 0.17-0.24 m from their nearest (0.4 m each: two drawn
+as one), five Laborers on a mine collect more stuck ticks than at 0 (226 against 85), and one fuzz seed's worker goes 82 s without a trip
+(seed 7, BUG-1430 below; 52.7 s at 0). Against 0.25: the gain is small (24 Laborers on the
+mine +6 %), 10 Gatherers on the tree line give up more than at 0 (40 against 35), and the drop-off wedge below runs 71-75 s
+on two seeds. **On seeds 2-16, 0.5 is the only value whose fuzz gaps all stay under 60 s (at most 51.4 s, all 14 seeds;
+QA's wider sweep of seeds 17-56 breaks it too: seed 23 at 77.7 s, 42.1 s off, and seed 27 at 90.8 s, 89.8 s off; seeds
+past 60 s over seeds 2-56: off 6, 0.25 5, 0.5 2, 0.75 1, so the knob makes the wedge rarer, not gone), and with it a crowded node's
+workers stand at half to two thirds of their distance at 0 from their nearest (12 Laborers on the mine 0.40 m against
+0.78).** The matches (b) move: at 0.5 each side gathers more by 10:00 (up to +870 on Vathar), Vathar Crossing's
+winner flips (seat 1 at 23,322, seat 0 at 28,729: past its 24,000 bound), the
+menu's map ends 6,286 ticks sooner, Raraku 1,901 later, and **Pale Hills seed 1 no longer ends inside 72,000 ticks** (50,140 at
+0). At 0 every row equals its M5-5 pin (23,322 / 28,231 / 50,140): the off path is the shipped game. So the session that
+ships a value re-measures the M5-5 rows and decides Pale Hills by rules 43 / 45.
+
+- **The floor at a small value (BUG-1433).** The floor is on for any value above 0, and off has none, so the knob is not
+  continuous at 0: at 0.001, 24 Laborers' gather pairs never come closer than 0.50 of their radii sum (0.15 off), and at
+  0.25 their closest is 0.38. A small value makes gather pairs *stiffer* than off at their closest, while still packing
+  them closer on average (mean stand gap 0.58 m at 0.25 against 0.75 m off). Choose a value with that in mind; a floor
+  that fades in with the value would be a new design.
+- **Wedges past the fuzz's 60 s window (BUG-1430, BUG-1431): today's rules, not the scaled distance.** Four (value, seed)
+  rows of table (c) pass 60 s; the fuzz measures their window instead of asserting it, each named in
+  `GatherOverlapFuzzTests.KnownWedges` (every other invariant still asserted every tick; every other row of the 56 asserts
+  the window). (1) **A drop-off wedge at a Keep's corner (BUG-1431)**: a worker returning with a load arrives by the pack
+  1.3-1.5 m from the footprint, out of reach, behind mates that mine standing in reach of the mine and the Keep at once
+  (they never walk off) and still hold the Keep's stand cell as their goal cell, so each retry arrives the same way. Seed 4
+  at 0 (68.1 s) and 0.25 (70.7 s); seed 3 at 0.25 (74.6 s) is the same worker at the same corner as at 0 (58.5 s there:
+  `Bug1430_Seed3AtAQuarter_IsTheDropOffWedgeTheKnobOffHasToo`). 0.5 / 0.75 shorten it (at most 51.4 s). (2) **A 0.75 m
+  walker held at a Keep's corner (seed 7 at 0.75)**: the gap between the corner and its own side's Idle workers parked there
+  (loops ended when their trees ran out) is narrower than its 1.5 m width, and each retry starts a fresh walk (stuck count 0)
+  into the same corner, so it never gives up or goes round. From 20 s to 55 s of its wait no gather pair stands within
+  movement's reach of it (`Bug1430_Seed7AtTheCap_NoGatherPairStandsInMovementReachOfTheWedgedWalker`); the two that come
+  into reach are 0.4 m Laborers walking past it through that gap. So the scale is read for it only for those passers; the
+  knob made the scene (more trips, trees run out sooner, more workers parked at the Keep), not the wedge. At 57 s the fuzz
+  re-orders a parked Laborer onto a loop, it presses in and shoves the walker free at 60 s; the gap then runs to 81.7 s for
+  the trip still owed. Curing either wedge changes the shipped game's movement or economy (a hash move, the golden and the
+  pins), outside this slice: criterion 7 holds at 0.5 on seeds 2-16 only, not at 0.25 or 0.75, and not on seeds 23 and
+  27 of QA's wider sweep. **Producer ruling (ACCEPT, 2026-11-14-2156):** the 60 s window does not hold with the knob off
+  either (6 of 54 seeds), so it was "measure and report" for this slice (rule 66); the session that ships a value fixes
+  BUG-1431 in the same hash move and turns QA's five red Stress rows green or re-states them against off. And today's
+  rules have no floor between walkers: off, two Laborers came within 2.8 cm (16 at the tree line).
+- **Criterion 5, Stop (BUG-1432).** A worker leaving the loop with a Move is back at the radii sum in 3-5 ticks. With a Stop
+  beside a mate that keeps working, both stand, and standing units never push apart under today's rules (off, two Idle
+  Laborers spawned 0.4 m apart are 0.4 m apart 1,200 ticks later): they separate when the mate next walks (230 ticks for
+  two Laborers, 56 for a mixed pair), or when a walker shoves the stopped, goal-less one. Within the slice it can't be met:
+  the Stop ends the pair (an Idle worker and a gatherer), and criterion 4 keeps that pair on today's rules. Meeting it needs
+  either a standing-overlap rule for every pair (separating standing units; a hash move off too) or an exception to
+  criterion 4 (a "just left the loop" separation, knob-on only, which needs per-unit state or a rule on the Stop itself).
+  No rule was added. **Producer decision (ACCEPT, 2026-11-14-2156; owner may revisit): the criterion is amended, a Stop
+  separates the pair when either unit next moves** (BUG-1432 closed as wontfix; docs/01 2026-11-15 (a)).
+- **Spawn order.** Two workers on a mine run bit-equal in either spawn order at 0 and 0.5 for 2.5 minutes; four do not, at
+  0 either (first difference tick 1,568 off, 404 at 0.5): the economy phase and the wall clips go in slot order, as
+  `LocalMovementTests`' column row says. Same seed and commands give the same hash (the twins rows).
+- **Cost.** `GatherOverlapPerfTests` holds `GatherPerfTests`' thresholds with the knob at 0.5 (Debug, each row in its own
+  process, the off row then the on row; the data track's one test host was running, so near but not under rule 42): 200
+  gathering workers 0.49 / 0.48 ms on against 0.56 / 0.55 ms off (threshold 1 ms), 500 marching + 50 gathering 0.99 ms on
+  against 1.04 ms off (threshold 4 ms): the overlap is no slower (fewer stuck and pushing walkers). 0 bytes a tick with the
+  knob on (`GatherOverlapTests.Criterion8_...AllocatesNothing`).
 
 ## Testing strategy
 

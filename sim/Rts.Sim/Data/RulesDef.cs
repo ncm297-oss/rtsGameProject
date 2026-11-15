@@ -61,4 +61,10 @@ public sealed class RulesDef
     public float StealthProximity { get; init; }
     /// <summary>M4-5 (<c>stealth.revealSeconds</c>, in ticks): how long a stealthed unit stays Revealed after its attack lands or its cast resolves; at least 1.</summary>
     public int RevealTicks { get; init; }
+    /// <summary>
+    /// M6-S9 (<c>gatherOverlap</c>, optional: absent = 0 = off): the share of their touching distance two live units of one player
+    /// that are both on a gather loop may overlap: movement uses their radii sum x (1 - this) for that pair (docs/03
+    /// "Implementation (M6-S9)"). 0 to <see cref="DataLimits.MaxGatherOverlap"/>. In <see cref="GameData.ContentHash"/> only when non-zero.
+    /// </summary>
+    public float GatherOverlap { get; init; }
 }
