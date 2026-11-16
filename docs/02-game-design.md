@@ -397,7 +397,10 @@ replacing what it does: move, attack-move, attack (a unit or a building), gather
 or a no-target one such as a frenzy), stop and hold position. A unit holds at most **8** queued orders; a ninth is
 ignored. A unit starts its next queued order when it has finished what it is doing (arrived, the target is dead, the
 building is up, the cast is done); stop and hold position end the queue. **A queued order behind a gathering worker
-waits until its gathering ends** (a gather loop runs until it is ordered to stop, so in practice the order waits).
+waits for its current trip only:** a worker walking out to its node with nothing carried starts the queue at once; one
+working at its node or walking back loaded fills up as usual, delivers the load and then starts the queue instead of walking
+out again; with no drop-off of its own standing it starts the queue at once and keeps what it carries. (So a queued gather
+with more orders behind it ends as soon as it starts with nothing carried; the last gather in a queue loops as usual.)
 **Buildings:** with the build menu's ghost, the first Shift-placed building is queued behind what the worker is doing
 when that ends (walking, fighting, building, repairing, or orders it already has queued) and **replaces** it when the
 worker is gathering or idle, so a gatherer starts the building at once; every further Shift placement is queued behind

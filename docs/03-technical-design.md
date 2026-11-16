@@ -1140,7 +1140,9 @@ or recycled handle or another player's unit; a Move or AttackMove also for a tar
   (it arrived, gave up, stopped, or was never ordered) with a queued order pops the head and starts
   it through the same code as the unqueued order, except that a popped Move or AttackMove keeps the
   rest of the queue. A popped `Stop` or `HoldPosition` is terminal: it drops the rest. A unit that
-  gave up on a leg still starts the next one.
+  gave up on a leg still starts the next one. A worker on a gather loop is never Idle while the loop runs, so since
+  M6-S11 the loop itself ends for a queue once the trip in hand is done (phase 4; see "Implementation (M6-S11)") and
+  this phase 7 starts it.
 - **Storage** (no per-unit lists): `UnitStore.Hold` (bool per slot), `QueueCount` (int per slot),
   and flat `QueueKind` / `QueuePosition` arrays of `Capacity * QueueCapacity` entries (slot i's
   queue starts at `i * QueueCapacity`, head first; entries past the count are always default).
@@ -12486,6 +12488,72 @@ value), each with its old value in a comment; none loosened, skipped or removed.
    (Town Hall razed, defending) is a `WhyWaiting` reason.
 4. Raraku (BUG-1460): four of eight seeds now end with no winner by 72,000. Recommendation: an AI end-game task (the winner
    razes a building-only loser; idle workers find wood past the reach) before the balance pass.
+
+### Implementation (M6-S11)
+
+2026-11-15. Two parts: BUG-1462's red counter row made honest (tests only), then Request 57 (docs/01 2026-11-15 (b)
+item 5): an order Shift-queued behind a gathering worker starts once the worker's current trip is done.
+
+**Part 1, the counter row (outcome A).** `CounterCompositionTests.AHardSeat_ShiftsItsLineShareFurther_ThanANormalSeat`
+was red because the re-staged run (M6-S10's gold trickle, `Purse`) trains nine units inside the 180 s memory window, and
+the deficit pick (fewest live + queued per unit of weight) gives the same ninth unit at Line x 1.5 and x 2: with Heavy
+Infantry 35 / Crossbowmen 30 and all-Shock memory, Normal weighs Line 52.5 and Hard 70, and after 9 units both have
+picked 6 Line (the counts first part at the 10th unit and keep apart from the 13th on). The row now runs `RunWide`: the
+same scene, seed, sighting and purse rule, with a second barracks and crossbow range spawned finished the think the first
+pair stands and the purse paid twice the one-pair boundary (each pair its own boundary's worth), so each producer still
+trains only what the weights pick and 17-18 units land inside the same window. `Run` (one pair) is unchanged and still
+holds the Normal row and QA's controls. Measured (Line / Crossbowmen trained after the sighting):
+
+| Difficulty | `counterStrength` | Staging | Seen | Unseen | Line share shift |
+| --- | --- | --- | --- | --- | --- |
+| Normal | 0.5 | one pair (`Run`) | 6 / 3 | 5 / 4 | 0.111 |
+| Hard | 1 | one pair (`Run`) | 6 / 3 | 5 / 4 | 0.111 |
+| Normal | 0.5 | two pairs (`RunWide`) | 11 / 6 | 10 / 8 | 0.092 |
+| Hard | 1 | two pairs (`RunWide`) | 12 / 5 | 10 / 8 | 0.150 |
+| Normal | 0 | two pairs | 10 / 8 | 10 / 8 | 0 |
+| Hard | 0 | two pairs | 10 / 8 | 10 / 8 | 0 |
+| Hard | 0 | one pair | 5 / 4 | 5 / 4 | 0 |
+
+The wide counts are the deficit pick's own sequence (17 units: Normal 11 Line, Hard 12; 18 units at the baseline 35 / 30:
+10). The strength-0 controls are `CounterRestageQaTests.WithStrengthZero_TheSightingChangesNothing_ForEachDifficultyAndStaging`
+(Hard on one pair; Normal and Hard on two). The `hard > normal` assertion and the three `FirstTrain` pick rows are as
+they were.
+
+**Part 2, the rule.** `EconomySystem.Step` (phase 4), for a unit on a gather loop with `QueueCount > 0`, first asks
+`EndsForQueue`: the loop ends now (`EndLoop`: Idle, goal-less, cargo kept) when the worker has no trip left to finish
+(nothing carried and not in reach of its node: walking out, waiting out of reach, or its node gone) or none it can finish
+(no own drop-off stands). Otherwise the trip runs exactly as with no queue: it fills up (or its node runs out and the
+depleted-node rule moves it to the next node of the kind, as today), walks back and delivers, and `Deposit`, after crediting
+the ledger as always, ends the loop instead of walking out again. Phase 7 (`OrderSystem.Run`, unchanged) starts the head
+of the queue the same tick, and the rest follows as for any unit. Wherever a loop already ended in Idle (node gone and
+none other, no drop-off for a full load) nothing changed: the queue starts as before. With an empty queue no line of the
+loop runs differently (the check is behind `QueueCount > 0`), so no AI match moves: the AI never queues an order.
+
+- **No new state, no format change** (save 10, replay 9 / 6): the rule reads the queue count, the cargo, the gather
+  node and the drop-offs, all already saved. No number: the "in reach" test is the loop's own `EconomyConstants.Reach`.
+- **A consequence of the rule as written:** a popped `Gather` with more orders behind it is a loop with a queue that
+  starts with nothing carried, so it ends the tick after it starts (the next order starts then); the last `Gather` in a
+  queue loops as usual. Whether a queued Gather followed by more orders should do one trip first is the Producer's call
+  (BUG-1490 proposed): it cannot be told from the saved state (nothing records that the queue was there when the loop began).
+- **No drop-off and nothing carried:** the brief names "carrying cargo, no drop-off: at once"; a worker in reach of its
+  node with nothing carried and no drop-off also starts the queue at once (it has no trip it could finish). The literal
+  alternative (work until it carries one unit, then go) was not built.
+- **Measured (rule 66), `Stress/GatherQueueFuzzStressTests`** (12 seeds x 4,000 ticks, 24 Laborers, an order stream of
+  every kind queued and unqueued, nine-at-once bursts): every invariant held (no queue entry lost or duplicated,
+  `QueueCount` 0-8, no Gathering / Returning worker without a node, cargo left a worker only by a delivery or the
+  documented kind-switch drop). Overlap 0.5: 424 queues landed behind a loop, 413 started, longest wait 1,429 ticks (71.5
+  s: a worker sent across the map to a far node walking its load back), 11 still waiting at the end (each Moving or Gathering
+  with part of a load when the run stopped). Off: 416 / 403, longest 1,740 ticks (87.0 s, the same shape), 12 open. No held worker
+  (BUG-1463's shapes) was seen waiting; one that is held cannot deliver, so its queue would wait with it.
+- **Tests:** `Economy/GatherQueueTests` (criteria 2-4 and the Idle cases: gold and wood, a Laborer and a Teblor Gatherer,
+  every queued kind working and walking back), `GatherQueueDeterminismTests` (twins 6,000 ticks plus the replay; a save
+  taken while workers finish a trip with orders queued, loaded and followed 2,000 ticks), `GatherQueueAllocationTests`
+  (0 bytes), the fuzz above (Stress). Re-stated rows: `ViewApi/OrderPathTests.QueuesBehind_*` (its queued gatherer stood
+  walking out with no drop-off, which now starts the Move at once; it now stands in reach of its tree with a Keep on the
+  map) and `Stress/EconomyFuzzStressTests.HostileGatherStream_*`'s discard oracle (a delivery and a kind switch in one
+  tick is now possible: the switched load less the tick's deliveries not given up by units that kept their kind).
+- **For the view track:** `game/tests/OrderQueueViewTest`'s `BehindAGatherLoop` row (its "known gap" line goes) and
+  `ViewApi/OrderPath.QueuesBehind` (the first Shift-placed building still replaces a gather loop until the view follows).
 
 ## Testing strategy
 
