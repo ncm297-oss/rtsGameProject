@@ -2,8 +2,8 @@
 
 | Field | Value |
 | --- | --- |
-| Severity | S3 |
-| Status | open (proposed by the M6-S11 developer; confirmed and widened by M6-S11 QA) |
+| Severity | S4 (filed S3 by QA; rare input, no crash, no determinism or AI effect) |
+| Status | open (Producer decision at the 2026-11-15-1536 ACCEPT, docs/01 2026-11-15 (c) item 2: the intended rule is exactly one trip for a queued Gather with orders behind it, built by the first sim task that changes the save format; until then the behaviour stands and docs/02 says so) |
 | Found | 2026-11-15-1536, task M6-S11 |
 | System | economy / orders: the gather loop with a Shift queue (`EconomySystem.EndsForQueue`, `OrderSystem.Execute` Gather) |
 | Fixed by | |
@@ -38,3 +38,6 @@ or one full trip (in reach). Not a crash or a determinism problem; the rule as t
   node"; (b) a per-unit "loop started from the queue" flag (save format bump) so a popped Gather does exactly one trip;
   (c) the view refuses to queue a Gather anywhere but last.
 - No AI match can see this (the AI never queues).
+
+## Producer ruling (2026-11-15-1536)
+Option (b): a saved per-unit "this loop was started from the queue" flag, so a popped Gather with orders behind it makes exactly one trip wherever the worker stands. Not worth a save-format bump of its own: it rides on the first sim task that changes the save format anyway (M8-2's stand-still stealth is the likely one). docs/02 "Queued orders (Shift)" was corrected at the ACCEPT to say what happens today. QA's pin `QA/GatherQueueQaTests.Bug1490_APoppedGatherWithOrdersBehind_RunsATripOnlyWhenItPopsInReach` and the developer's `GatherQueueTests.APoppedGather_WithOrdersBehindIt_*` are re-stated by that task.

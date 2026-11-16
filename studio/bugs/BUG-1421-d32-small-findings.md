@@ -3,7 +3,7 @@
 | Field | Value |
 | --- | --- |
 | Severity | S4 |
-| Status | open |
+| Status | open (items 1, 2, 5: D33; items 3-4 fixed by D-R39, session 2026-11-15-1536: the measured figures pinned or labelled as dated, the long lines wrapped, the fixture renamed `save_teblor_frenzy.b64`) |
 | Found | 2026-11-14-1246, task D32 (QA) |
 | System | data (`game/data/factions/teblor/ai.json` `standard`), docs (`docs/factions/teblor.md`), tests (`Content/Fixtures/pre_d32/`) |
 | Fixed by | |

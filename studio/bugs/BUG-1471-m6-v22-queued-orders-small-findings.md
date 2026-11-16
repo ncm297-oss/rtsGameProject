@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S4 |
-| Status | open |
+| Status | open (item 3 only; items 1-2 fixed by M6-VH8, session 2026-11-15-1536, verified by QA; item 3 is Request 58 for the sim track; the same-tick gap in item 2 is BUG-1501) |
 | Found | 2026-11-15-0506, task M6-V22 (QA) |
 | System | view: queued-orders drawing and the first Shift-placed building (`OrderPathView`, `OrderPath.QueuesBehind`) |
-| Fixed by | |
+| Fixed by | M6-VH8 (items 1-2; item 3 a Request) |
 
 ## Repro
 1. **The mixed picture.** `& $env:GODOT --path game res://tests/OrderQueueViewTest.tscn -- --shots <dir>`, then open
@@ -39,3 +39,14 @@ Item 1: pick a tree in sight of the mixed group, or frame the shot on the whole 
 (for example, replace when the queue is full, or show the existing refusal alert when a queued Build is refused). The
 developer's question 4 (a Shift placement in the same tick as another order to that worker decides on the older state)
 belongs with these.
+
+## Fix (M6-VH8)
+1. The mixed picture is re-staged 12 m from the tree it gathers, with its own held enemy; the camera frames the box of
+   the markers. `OrderQueueViewTest` prints "7 of 7 markers in frame" at 40 m and 60 m, headless and windowed.
+2. `SelectionController.OrderBuild` leaves out a worker whose Build would be queued onto a full queue; with none left,
+   nothing is sent, the Refused sound plays and the ghost stays armed without counting the click (rows "full queue" and
+   "one full and one idle worker").
+3. Not built: the sim drops a queued Build refused at its turn silently and exposes nothing the view can read for it.
+   Request for the sim track (docs/03 "Implementation (M6-VH8)"): a per-tick list of queued orders dropped at their turn
+   (unit, owner, kind, the Build's `PlacementError`) behind a read-only `ViewApi` accessor; the view would then play the
+   Refused sound and show the `ui.json` `placement` text over the unit. Item 3 stays open.

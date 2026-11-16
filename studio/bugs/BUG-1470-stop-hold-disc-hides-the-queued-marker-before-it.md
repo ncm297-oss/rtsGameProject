@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S3 |
-| Status | open |
+| Status | fixed (M6-VH8, session 2026-11-15-1536; verified by QA on re-taken pictures at 20 / 40 / 60 m; `OrderQueueViewTest` ring rows, `QaM6VH8Test` row R) |
 | Found | 2026-11-15-0506, task M6-V22 (QA) |
 | System | view: queued-orders drawing (`game/scripts/OrderPathView.cs`) |
-| Fixed by | |
+| Fixed by | M6-VH8 |
 
 ## Repro
 1. `& $env:GODOT --path game res://tests/OrderQueueViewTest.tscn -- --shots <dir>` (windowed).
@@ -34,3 +34,12 @@ depth test. The headless rows (`FindMarker`) only check the instance data, so th
 Possible fixes (the developer's call): draw the no-place entries as a real ring (an annulus or a torus mesh), or give
 them their own `MultiMesh` with a lower `RenderPriority` so they draw first. A scene row could check the drawing order
 (no-place instances before the marker they surround, or a ring mesh).
+
+## Fix (M6-VH8)
+A no-place entry (Stop, Hold, a no-target cast) is now a real ring: a flat torus (`OrderPathView.RingMesh`, hole 0.7 of its
+outer radius: 0.63 m against the 0.5 m marker) in its own multimesh (`RingsNode`), drawn after the lines and before the
+markers (render priorities 1 / 2 / 3). A second no-place entry at the same point is the next ring out (no overlap). The red
+Attack marker and the violet cast marker show inside their rings in `queue-mixed-*.png` (20, 40, 60 m). Regression rows in
+`OrderQueueViewTest` ("rings"): the ring mesh is a torus whose hole is wider than a marker, its own multimesh, drawn before
+the discs (a filled disc over the marker, as before, fails all three); a Move disc, a Stop ring round it, a Hold ring round
+that, without overlap. Status: fixed, awaiting QA.

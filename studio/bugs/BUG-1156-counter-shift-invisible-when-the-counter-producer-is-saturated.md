@@ -47,3 +47,6 @@ trained totals with saturated producers.
 - The edges of the formula itself are clean (`CounterMemoryQaTests.TheShare_AtTheFormulasEdges_*`,
   `ASeenSlotWithNoCounter_ShiftsNothing`), and the fog oracle holds on every think of the pinned matches
   (`Stress/StarvedWaveProbeQaStressTests`).
+
+## M6-S11 (2026-11-15-1536)
+The Hard-v-Normal row was red since M6-S10 because nine units inside the 180 s memory window cannot tell Line x 1.5 (Normal) from x 2 (Hard): the deficit pick gives the same ninth unit. With two producer pairs (17-18 units in the window, same purse rule, same seed) the shift is Normal 0.092 (11 / 6 seen v 10 / 8 unseen) and Hard 0.150 (12 / 5); strength-0 controls read 0 for both. So the counter shift shows only once a seat trains about ten or more units inside the window: one more measurement for this bug, no fix (the margin is one unit on one seed).

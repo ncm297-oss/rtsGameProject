@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S4 |
-| Status | open |
+| Status | fixed (D-R39, session 2026-11-15-1536: the Decisions list is bullets, "(Q4)" kept; verified by QA) |
 | Found | 2026-11-15-0506, task D-H9 (QA) |
 | System | docs (`docs/factions/shadow.md`) |
-| Fixed by | |
+| Fixed by | D-R39 |
 
 ## Repro
 1. Open `docs/factions/shadow.md`, section "## Decisions (D-R38)".

@@ -12554,6 +12554,14 @@ loop runs differently (the check is behind `QueueCount > 0`), so no AI match mov
   tick is now possible: the switched load less the tick's deliveries not given up by units that kept their kind).
 - **For the view track:** `game/tests/OrderQueueViewTest`'s `BehindAGatherLoop` row (its "known gap" line goes) and
   `ViewApi/OrderPath.QueuesBehind` (the first Shift-placed building still replaces a gather loop until the view follows).
+- **Producer's rulings at the ACCEPT (2026-11-15-1536; docs/01 2026-11-15 (c)).** (1) BUG-1490: the intended rule is
+  "a queued Gather with more orders behind it makes exactly one trip"; it needs a saved per-unit flag, so it is built by
+  the first sim task that changes the save format anyway (not a format bump of its own). Until then the behaviour above
+  stands and docs/02 says so. (2) A worker in reach of its node with nothing carried and no drop-off starts its queue at
+  once: accepted as built. (3) M6-S10's rows described above as red are green again on `main`: the Hard counter row by
+  part 1 here; `AiOpeningPairsReportTests` (0, 2) / (2, 0) and the two `DR35ProsePinQaTests` rows by the data track's
+  D-R39 (the same session). (4) Requests the view's M6-VH8 raised for the sim (STATE Requests 58 / 59): a per-tick list of
+  queued orders dropped at their turn behind a read-only ViewApi accessor, and an LFS-pointer check in `tools/qa/smoke.ps1`.
 
 ## Testing strategy
 

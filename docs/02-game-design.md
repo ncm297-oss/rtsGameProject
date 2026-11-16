@@ -395,21 +395,27 @@ camera keys are not rebindable yet.
 **Queued orders (Shift):** Shift + any unit order adds it to the end of each selected unit's queue instead of
 replacing what it does: move, attack-move, attack (a unit or a building), gather, build, repair, an ability (at a point,
 or a no-target one such as a frenzy), stop and hold position. A unit holds at most **8** queued orders; a ninth is
-ignored. A unit starts its next queued order when it has finished what it is doing (arrived, the target is dead, the
+ignored (a Shift-placed building for a worker whose queue is full is refused with the "no" sound, and the ghost stays
+up). A unit starts its next queued order when it has finished what it is doing (arrived, the target is dead, the
 building is up, the cast is done); stop and hold position end the queue. **A queued order behind a gathering worker
 waits for its current trip only:** a worker walking out to its node with nothing carried starts the queue at once; one
 working at its node or walking back loaded fills up as usual, delivers the load and then starts the queue instead of walking
-out again; with no drop-off of its own standing it starts the queue at once and keeps what it carries. (So a queued gather
-with more orders behind it ends as soon as it starts with nothing carried; the last gather in a queue loops as usual.)
+out again; with no drop-off of its own standing it starts the queue at once and keeps what it carries. The last gather in
+a queue loops as usual. **A queued gather with more orders behind it** should make exactly one trip and then go on
+(Producer decision 2026-11-15 (c), owner may revisit); **today it does not yet:** it is skipped when the worker starts it
+out of reach of the node (the usual case) and makes one trip when it starts within reach (BUG-1490; the one-trip rule
+needs a saved flag, so it lands with the next save-format change).
 **Buildings:** with the build menu's ghost, the first Shift-placed building is queued behind what the worker is doing
 when that ends (walking, fighting, building, repairing, or orders it already has queued) and **replaces** it when the
 worker is gathering or idle, so a gatherer starts the building at once; every further Shift placement is queued behind
 the previous one, and clicking the spot you just placed again does nothing. **What you see:** for each selected unit
 of yours, a thin line runs from the unit through its current destination and each queued point, with a small marker at
 every queued point, coloured by order (move green, attack-move orange, attack red, gather gold, build blue, repair teal,
-ability violet; stop and hold position are a wider ring at the point before them). Units sharing a point share its
-marker. A queued attack on an enemy you cannot see shows no marker or line to it until you see it again, and none once
-it is dead. Nothing is drawn for units that are not yours.
+ability violet; stop and hold position are a wider ring at the point before them, and a second one at the same point is
+the next ring out). Units sharing a point share its marker. Markers, rings and lines grow when the camera is zoomed out,
+so they stay readable at the farthest zoom. A queued attack on an enemy you cannot see shows no marker or line to it
+until you see it again, and none once it is dead. Nothing is drawn for units that are not yours. The queue is also drawn
+while watching a replay (your seat's units).
 
 **Resources on click:** a left click on a gold mine or a tree selects it alone (no command); the selection panel shows its
 name and how much is left ("2500 Gold left"), live while you see it, else the amount you last saw ("Last seen: ..."). A

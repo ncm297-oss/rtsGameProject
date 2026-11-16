@@ -27,3 +27,6 @@ Cause not traced (candidates: the seat defends every think while two enemy soldi
 production; the opening's worker step is long done and nothing re-arms it). It is half of why BUG-1460's matches don't end:
 the loser cannot rebuild, and the winner (17 idle workers, the nearest wood 41.8 m from its drop-offs, 2 soldiers) cannot
 finish. Not a held worker: neither seat has a worker on a loop.
+
+## Note from D-R39 (2026-11-15-1536, BUG-1510 item 2)
+A second shape of the same pattern: `AiOpeningPairsReportTests` (malazan 2, whirlwind 0) seed 13: the Whirlwind seat's Town Hall is razed, it keeps 4 workers, 1,072 gold and 257 wood to 20:00 and never rebuilds a hall. The report now reads that seat as "beaten: hall lost" (by the brief), so the row no longer flags it: the hardening's fix should cover "workers and gold, no hall" as well as "a hall and gold, no worker", with this seed as a row.
