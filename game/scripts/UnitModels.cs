@@ -117,6 +117,168 @@ public sealed class UnitModels
             _libs[t] = lib;
             _lengths[t] = lengths;
         }
+        // M6-VH8 (BUG-1441 item 2): each model type's highest bone over every clip its players hold, for the overlays' line.
+        var sampling = System.Diagnostics.Stopwatch.StartNew();
+        _topBone = new float[n];
+        _topBoneName = new string[n];
+        _topBoneClip = new string[n];
+        for (int t = 0; t < n; t++)
+        {
+            _topBoneName[t] = _topBoneClip[t] = "";
+            _topBone[t] = float.NaN;
+            if (_scenes[t] == null) continue;
+            Rig? rig = RigOf(_scenes[t]!, PathFor(data.Units[t].Model));
+            if (rig == null) continue; // no skeleton: NaN, and the view keeps the capsule's top
+            (float top, string bone, string clip) = (float.MinValue, "", "");
+            AnimationLibrary? lib = _libs[t];
+            if (lib == null || lib.GetAnimationList().Count == 0) (top, bone) = ClipTop(rig, null);
+            else
+                foreach (StringName name in lib.GetAnimationList())
+                {
+                    (float y, string b) = ClipTop(rig, lib.GetAnimation(name));
+                    if (y > top) (top, bone, clip) = (y, b, name.ToString());
+                }
+            _topBone[t] = top;
+            _topBoneName[t] = bone;
+            _topBoneClip[t] = clip;
+        }
+        TopBoneMs += sampling.Elapsed.TotalMilliseconds;
+    }
+
+    /// <summary>Milliseconds spent finding the types' highest bones since the program started (a test counter: the first Bind of a run samples, later ones read the cache).</summary>
+    public static double TopBoneMs { get; private set; }
+
+    private readonly float[] _topBone;
+    private readonly string[] _topBoneName, _topBoneClip;
+
+    /// <summary>
+    /// Type <paramref name="type"/>'s highest bone in meters above its feet at scale 1 (the file's base figure), over every
+    /// clip its players hold, sampled 17 times a clip (M6-VH8, BUG-1441 item 2; the rest pose when it has no clip); NaN for a
+    /// capsule type or a model without a skeleton. Bones named <c>root</c> or with <c>ik</c> in their name, and the skeleton's parentless bone, don't count.
+    /// </summary>
+    public float TopBone(int type) => Has(type) ? _topBone[type] : float.NaN;
+
+    /// <summary>The bone that reaches <see cref="TopBone"/>, and the state clip it does it in (empty for a capsule type or the rest pose).</summary>
+    public (string Bone, string Clip) TopBoneOf(int type) => Has(type) ? (_topBoneName[type], _topBoneClip[type]) : ("", "");
+
+    /// <summary>Samples a clip is read at for <see cref="TopBone"/> (at 0, 1/16, ... and 16/16 of its length).</summary>
+    public const int TopBoneSamples = 16;
+
+    // A model file's skeleton: its bones' names, parents, rest poses, the skeleton node's place in the model, and which
+    // bones count for the top. Read once per file per run.
+    private sealed class Rig
+    {
+        public string[] Names = Array.Empty<string>();
+        public int[] Parent = Array.Empty<int>();
+        public Transform3D[] Rest = Array.Empty<Transform3D>();
+        public bool[] Counted = Array.Empty<bool>();
+        public Transform3D ToModel = Transform3D.Identity;
+        // The skeleton's content (bone names, parents, rest poses, place in the model): files with the same rig share
+        // their clips' results (the eleven model files today are two or three rigs).
+        public string Signature = "";
+    }
+
+    private static readonly Dictionary<string, Rig?> Rigs = new();
+    // Per (rig signature, clip instance): the clip's highest counted bone and its name (a clip the tests swap in is another instance).
+    private static readonly Dictionary<(string, ulong), (float Top, string Bone)> ClipTops = new();
+
+    private static Rig? RigOf(PackedScene scene, string path)
+    {
+        if (Rigs.TryGetValue(path, out Rig? known)) return known;
+        Node probe = scene.Instantiate();
+        Rig? rig = null;
+        Godot.Collections.Array<Node> found = probe.FindChildren("*", "Skeleton3D", true, false);
+        if (found.Count > 0 && found[0] is Skeleton3D skel && skel.GetBoneCount() > 0)
+        {
+            int n = skel.GetBoneCount();
+            rig = new Rig { Names = new string[n], Parent = new int[n], Rest = new Transform3D[n], Counted = new bool[n] };
+            for (int b = 0; b < n; b++)
+            {
+                rig.Names[b] = skel.GetBoneName(b);
+                rig.Parent[b] = skel.GetBoneParent(b);
+                rig.Rest[b] = skel.GetBoneRest(b);
+                string lower = rig.Names[b].ToLowerInvariant();
+                rig.Counted[b] = rig.Parent[b] >= 0 && lower != "root" && !lower.Contains("ik", StringComparison.Ordinal);
+            }
+            // The skeleton's place under the model's root (the root's own transform is the view's: scale and offset).
+            for (Node? x = skel; x != null && x != probe; x = x.GetParent())
+                if (x is Node3D n3) rig.ToModel = n3.Transform * rig.ToModel;
+            var sig = new System.Text.StringBuilder();
+            sig.Append(rig.ToModel.ToString());
+            for (int b = 0; b < n; b++) sig.Append('|').Append(rig.Names[b]).Append(',').Append(rig.Parent[b]).Append(',').Append(rig.Rest[b].ToString());
+            rig.Signature = sig.ToString();
+        }
+        probe.Free();
+        Rigs[path] = rig;
+        return rig;
+    }
+
+    // The highest counted bone (model space, scale 1) over TopBoneSamples + 1 poses of clip `anim` on `rig` (the rest pose
+    // for null). The pose is the clip's track values where it has them, else the bone's rest (a fresh player's pose).
+    private static (float Top, string Bone) ClipTop(Rig rig, Animation? anim)
+    {
+        (string, ulong) key = (rig.Signature, anim?.GetInstanceId() ?? 0);
+        if (anim != null && ClipTops.TryGetValue(key, out var known)) return known;
+        int nb = rig.Names.Length;
+        int tracks = anim?.GetTrackCount() ?? 0;
+        var trackBone = new int[tracks];
+        for (int t = 0; t < tracks; t++)
+        {
+            trackBone[t] = -1;
+            Animation.TrackType type = anim!.TrackGetType(t);
+            if (type is not (Animation.TrackType.Position3D or Animation.TrackType.Rotation3D or Animation.TrackType.Scale3D)) continue;
+            NodePath path = anim.TrackGetPath(t);
+            if (path.GetSubNameCount() > 0) trackBone[t] = Array.IndexOf(rig.Names, path.GetSubName(0).ToString());
+        }
+        var pos = new Vector3[nb];
+        var rot = new Quaternion[nb];
+        var scale = new Vector3[nb];
+        var global = new Transform3D[nb];
+        var done = new bool[nb];
+        float top = float.MinValue;
+        string bone = "";
+        int samples = anim == null ? 0 : TopBoneSamples;
+        for (int k = 0; k <= samples; k++)
+        {
+            double time = anim == null ? 0.0 : anim.Length * k / samples;
+            for (int b = 0; b < nb; b++)
+            {
+                pos[b] = rig.Rest[b].Origin;
+                rot[b] = rig.Rest[b].Basis.GetRotationQuaternion();
+                scale[b] = rig.Rest[b].Basis.Scale;
+                done[b] = false;
+            }
+            for (int t = 0; t < tracks; t++)
+            {
+                int b = trackBone[t];
+                if (b < 0) continue;
+                switch (anim!.TrackGetType(t))
+                {
+                    case Animation.TrackType.Position3D: pos[b] = anim.PositionTrackInterpolate(t, time); break;
+                    case Animation.TrackType.Rotation3D: rot[b] = anim.RotationTrackInterpolate(t, time); break;
+                    default: scale[b] = anim.ScaleTrackInterpolate(t, time); break;
+                }
+            }
+            for (int b = 0; b < nb; b++)
+            {
+                if (!rig.Counted[b]) continue;
+                float y = (rig.ToModel * Global(rig, b, pos, rot, scale, global, done)).Origin.Y;
+                if (y > top) (top, bone) = (y, rig.Names[b]);
+            }
+        }
+        if (anim != null) ClipTops[key] = (top, bone);
+        return (top, bone);
+    }
+
+    // Bone b's pose in skeleton space: its parent's times its own (Godot's bone pose: rotation then scale, at the position).
+    private static Transform3D Global(Rig rig, int b, Vector3[] pos, Quaternion[] rot, Vector3[] scale, Transform3D[] global, bool[] done)
+    {
+        if (done[b]) return global[b];
+        var local = new Transform3D(new Basis(rot[b]) * Basis.FromScale(scale[b]), pos[b]);
+        int parent = rig.Parent[b];
+        global[b] = parent >= 0 ? Global(rig, parent, pos, rot, scale, global, done) * local : local;
+        done[b] = true;
+        return global[b];
     }
 
     /// <summary>A unit model's file for a data <c>model</c> stem: <c>{ModelRoot}{model}/{last segment}.glb</c>.</summary>

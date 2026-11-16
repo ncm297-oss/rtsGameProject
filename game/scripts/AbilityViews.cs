@@ -339,6 +339,12 @@ public partial class AbilityViews : Node3D
         _radius = Ring("RadiusRing");
     }
 
+    /// <summary>Per unit type, the height the cast bar, status marks and cue words sit over (M6-VH8: <see cref="UnitViews.OverlayLines"/>, set before <see cref="Bind"/>); null uses each type's capsule top (<see cref="UnitViews.DrawnHeight"/>).</summary>
+    public float[]? OverlayLines { get; set; }
+
+    /// <summary>The height above the ground the cast bar, status marks and cue words of type <paramref name="type"/> sit over since <see cref="Bind"/>.</summary>
+    public float OverlayLineOf(int type) => _bodyTop[type];
+
     /// <summary>Creates the bar, ring, marker, flash and zone disc pools; call once before the first <see cref="Sync"/>.</summary>
     /// <param name="playerRgb">Per player, its colour (0xRRGGBB) for an enemy zone's rim; null draws every enemy rim <see cref="EnemyZoneRimColor"/>.</param>
     /// <param name="zoneCapacity">The world's <see cref="ZoneStore.Capacity"/>.</param>
@@ -351,7 +357,8 @@ public partial class AbilityViews : Node3D
         if (_runner != null) _runner.Ticked += OnTicked;
         _sel = selection;
         _bodyTop = new float[data.Units.Length];
-        for (int t = 0; t < _bodyTop.Length; t++) _bodyTop[t] = UnitViews.DrawnHeight(data.Units[t]); // M7-V1: the drawn top
+        // M7-V1: the drawn top; M6-VH8: a model type's figure as drawn (UnitViews.OverlayLines) when the match gives it.
+        for (int t = 0; t < _bodyTop.Length; t++) _bodyTop[t] = OverlayLines is float[] lines && t < lines.Length ? lines[t] : UnitViews.DrawnHeight(data.Units[t]);
         _barSlot = new int[unitCapacity];
         _circleSlot = new int[unitCapacity];
         _barFillShown = new float[unitCapacity];

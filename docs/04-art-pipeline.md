@@ -448,6 +448,12 @@ which also renames to snake_case. Findings:
   | Javelin Thrower | `idle` | `walk` | `attack_throw` | (never) | `idle` |
   | Shaman | `idle` | `walk` | `attack_cast` (its attack is a magic bolt) | (never) | `idle` (Blood-oil Frenzy's 0.5 s cast) |
 
+  The table lists what each type plays. A type's players **hold** more than that (BUG-1411 item 3, M6-VH8): a state its
+  clip map does not name plays the library clip of the state's own name (the pre-M6-V21 rule), so every type, a soldier
+  too, holds `gather_gold`, `gather_wood` and `build` (references to the shared clips, no copies) though only a worker is
+  ever in those states. The overlays' line (docs/03 "Implementation (M6-VH8)") is measured over every clip a type holds,
+  so today every model type's highest bone is a finger of the raised hand in `gather_wood`.
+
   Why: the Gatherer swings its tool, so its melee attack is the sword swing, not the Laborer's empty-handed `Pistol_Shoot`
   jab. `OverhandThrow` is the only throw in UAL1 / UAL2 (M6-V21 rejected it for the bow; a javelin is what it is for). For
   the cast, `Spell_Simple_Shoot` was chosen over `Spell_Simple_Idle_Loop` (2.1 s, hands held out, no release) and
