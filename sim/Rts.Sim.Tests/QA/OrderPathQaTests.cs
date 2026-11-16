@@ -1,5 +1,6 @@
 using System.Numerics;
 using Rts.Sim.Commands;
+using Rts.Sim.Data;
 using Rts.Sim.Economy;
 using Rts.Sim.Entities;
 using Rts.Sim.Orders;
@@ -275,5 +276,98 @@ public class OrderPathQaTests(Xunit.Abstractions.ITestOutputHelper output)
             };
             sim.Enqueue(c);
         }
+    }
+
+    // QA M6-V23: a worker (Laborer or Teblor Gatherer, gold or wood) caught at a seeded point of its loop gets the first
+    // Shift-placed building the view's way (queued when QueuesBehind says so, which it must on a loop). Whatever the phase,
+    // the Build starts within the run, nothing carried is lost (bank + cargo never falls except by the site's price), the
+    // worker holds no cargo when it starts (it had none, or delivered first: a drop-off stands), the queue empties and the
+    // loop ends; the reader, read every tick, leaves the hash equal to a never-read twin's. No position or tick is pinned.
+    [Theory]
+    [InlineData(1)]
+    [InlineData(2)]
+    [InlineData(3)]
+    [InlineData(4)]
+    [InlineData(5)]
+    [InlineData(6)]
+    [InlineData(7)]
+    [InlineData(8)]
+    [InlineData(9)]
+    [InlineData(10)]
+    [InlineData(11)]
+    [InlineData(12)]
+    public void AFirstShiftBuildBehindALoop_AtAnyPhase_StartsAndLosesNothing(int seed)
+    {
+        var rng = new Random(seed);
+        int gatherer = TestSim.Data.FindUnit("teblor_gatherer");
+        int type = seed % 4 < 2 ? Laborer : gatherer;
+        bool wood = seed % 2 == 0;
+        int wait = rng.Next(0, 700);
+        Vector2 offset = new((float)rng.NextDouble() * 4f - 2f, (float)rng.NextDouble() * 3f);
+        (Simulation sim, EntityHandle worker) = GatherScene(seed, type, wood, offset);
+        (Simulation twin, EntityHandle twinWorker) = GatherScene(seed, type, wood, offset);
+        World w = sim.World;
+        UnitStore u = w.Units;
+        int i = worker.Index;
+        Assert.True(EconomySystem.OnLoop(u, i), "the worker is not on a loop");
+        OrderPath reader = OrderPathTests.Reader(w);
+        for (int t = 0; t < wait; t++)
+        {
+            sim.Tick();
+            twin.Tick();
+            if (EconomySystem.OnLoop(u, i)) Assert.True(reader.QueuesBehind(i), $"tick {t}: on its loop ({u.State[i]}, cargo {u.Cargo[i]}) the rule said replace");
+        }
+        Assert.True(EconomySystem.OnLoop(u, i), $"after {wait} ticks the worker is off its loop ({u.State[i]})");
+        string phase = $"{u.State[i]}, cargo {u.Cargo[i]}";
+        bool queue = reader.QueuesBehind(i);
+        Assert.True(queue, $"{phase}: the first Shift placement would replace the loop");
+        int anchor = 40 * w.NavGrid.Width + 36;
+        Vector2 point = PlacementGhost.AnchorPoint(w.NavGrid, anchor);
+        sim.Enqueue(Command.Build(0, worker, Billet, point, queue));
+        twin.Enqueue(Command.Build(0, twinWorker, Billet, point, queue));
+        BuildingDef billet = TestSim.Data.Buildings[Billet];
+        int cost = billet.CostGold + billet.CostWood;
+        long Wealth() => w.Gold[0] + w.Wood[0] + u.Cargo[i];
+        long before = Wealth();
+        int startedAt = -1, cargoAtStart = -1, fell = 0;
+        for (int t = 0; t < 4000 && startedAt < 0; t++)
+        {
+            bool site = w.Buildings.SlotAt(36, 40) >= 0;
+            sim.Tick();
+            twin.Tick();
+            long now = Wealth();
+            bool placed = !site && w.Buildings.SlotAt(36, 40) >= 0;
+            if (now - before + (placed ? cost : 0) < 0) fell++;
+            before = now;
+            if (u.BuildTarget[i].Generation != 0)
+            {
+                startedAt = t;
+                cargoAtStart = u.Cargo[i];
+            }
+            OrderPoint[] p = Read(sim, worker);
+            Assert.All(p, x => Assert.True(float.IsFinite(x.Point.X) && float.IsFinite(x.Point.Y)));
+        }
+        output.WriteLine($"seed {seed} ({TestSim.Data.Units[type].Key}, {(wood ? "wood" : "gold")}): placed at {phase} after {wait} ticks; started {startedAt} ticks later with cargo {cargoAtStart}; wealth fell {fell} times");
+        Assert.True(startedAt >= 0, $"{phase}: the queued Build never started");
+        Assert.Equal(0, fell);
+        Assert.Equal(0, cargoAtStart);
+        Assert.Equal(0, u.QueueCount[i]);
+        Assert.False(EconomySystem.OnLoop(u, i));
+        Assert.Equal(twin.StateHash(), sim.StateHash());
+    }
+
+    private static (Simulation, EntityHandle) GatherScene(int seed, int type, bool wood, Vector2 offset)
+    {
+        // An explored map (a Build needs explored ground, M4-3b), two seats; the seed varies the phase, not the sim.
+        Simulation sim = BuildMaps.NewSim(ResourceMaps.Flat(48, 48), units: 16, players: 2);
+        World w = sim.World;
+        if (wood) ResourceMaps.Spawn(w, ResourceMaps.Tree, 10, 30, ResourceMaps.TreeWood);
+        else ResourceMaps.Spawn(w, ResourceMaps.Mine, 9, 29, 5000);
+        Assert.True(w.Buildings.Spawn(0, Depot, 10 * w.NavGrid.Width + 34, out _));
+        BuildMaps.SetTotals(sim, 0, 5000, 5000);
+        EntityHandle worker = Place(sim, 0, type, At(sim, 10, 24) + offset);
+        sim.Enqueue(Command.Gather(0, worker, At(sim, 10, 30)));
+        Apply(sim);
+        return (sim, worker);
     }
 }
