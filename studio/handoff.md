@@ -1,5 +1,7 @@
 # Handoff: brief for the next session
 
+**Amended after the owner's 21:42 inbox note: the sim's M6-SH2 now starts with BUG-1520 (a construction site is
+not a drop-off); view and data unchanged.**
 **PLAN of session 2026-11-15-2136 (session 3 / 8, started 21:36): sim GO M6-SH2 (hardening, QA full) · view GO
 M6-V23 (feature, QA standard) · data STOP (cheap; rule 41).** The briefs are under each track's "Current session
 plan" below. Everything else in this file is the 1536 ACCEPT's handoff, unchanged.
@@ -289,7 +291,20 @@ AI on Raraku runs out of wood in reach and neither fetches far wood nor attacks 
 a give-up loop against standing own units (BUG-1463 / 1461). Fix the causes, leave every row green or honestly
 re-stated, re-measure the match pins once.
 
+**Amended at the PLAN (owner's inbox note of 2026-11-15, 21:42): item 0 below comes first.** Bug ids for new
+findings start at 1521 (BUG-1520 is the owner's bug).
+
 Scope, in this order:
+- **0. BUG-1520 (owner's playtest bug, first): a construction site is not a drop-off.**
+  `EconomySystem.InReachOfDropOff` and `NearestDropOff` test `Alive`, `Owner` and `def.DropOff` but never
+  `UnderConstruction`, so workers deliver at a Camp, hut or hall the moment it is placed. Fix both, and check every
+  other "is there a drop-off" reader (`EndsForQueue`, `Deposit`, the return leg's walk, the AI's and ViewApi's
+  readers: report what you found; ViewApi is read, not edited) and anything else that treats a site as finished
+  (training, research, rally: report). The rule: only a finished building is a drop-off; a worker walking to a site
+  re-picks the nearest finished drop-off; with none it does what a worker with no drop-off does today (it keeps
+  its cargo and delivers once one is finished, the site included). A finished drop-off that is damaged or being
+  repaired still counts. Any faction, any drop-off building. It changes gather behaviour, so it lands before
+  A-E and rides the one pin move.
 - **A. BUG-1465.** Trace first (`Stress/RarakuStallProbeQaStressTests`, Raraku seed 1, seat 0 from tick 30,000), then
   fix generically: (a) a seat with a finished worker-training building, no worker, free population and the gold for
   one trains one, also while it defends and after its opening's worker steps are done; (b) a seat with at least one
@@ -368,8 +383,16 @@ Acceptance criteria:
     scene loop run once at the end, a red scene listed as "the view's", not fixed.
 12. docs/02 (the AI retrains, rebuilds, the wood rule), docs/03 "Implementation (M6-SH2)" (causes, old → new tables,
     "Questions for the Producer"), bug-file updates as a patch in the scratchpad.
+13. BUG-1520, tests that fail on the base: a loaded worker in reach of its own drop-off **site** banks nothing and
+    keeps its cargo; with a finished drop-off farther away it walks there and delivers; with none it keeps its
+    cargo and delivers within 200 ticks of the site finishing; a worker already walking to a site when the rule
+    lands (a save from the base loaded) re-picks. Rows for gold and wood, a hall and a Camp-type building, Laborer and
+    Teblor Gatherer; a queued order behind the loop (`EndsForQueue`) with only a site standing starts at once,
+    cargo kept. Resource conservation holds (`EconomyFuzzStressTests`). docs/02 says "finished" where it describes
+    drop-offs. The report says whether the golden and which pins moved because of this item alone (measure it before
+    A-C, so its effect is known apart from theirs).
 
-Design references: docs/02 "AI" (the starved charge, the far expansion, the gather reach, the defense), docs/03
+Design references: docs/02 "Economy" (gathering, drop-offs) and "Buildings" (construction); docs/02 "AI" (the starved charge, the far expansion, the gather reach, the defense), docs/03
 "Implementation (M6-S10)", "(M5-9a)", "(M5-9b)", "(M5-4d)", "(M6-S7)" (the gather reach), "(M5-5)" (the pin table);
 `rules.json` `ai` block (`starvedWaveAfter` 60, `starvedMinArmy` 1, `farExpandReach` 384, `gatherReach` 64, `expandHallReach` 40);
 BUG-1460 / 1461 / 1462 / 1463 / 1464 / 1465 / 1510 item 2.
@@ -382,7 +405,11 @@ allocation in per-tick code; no `Dictionary` / `HashSet` order in results; `SimM
 PID of every `dotnet test` / Godot you start and end only those. Rule 62: the full default loop after the last edit.
 Rule 63: scratch folders named `m6sh2-...`. Rule 64. You cannot write `studio/**`.
 
-**QA focus (full):** (1) the retrain rule under a camping enemy: does a seat feed workers to two soldiers at its door
+**QA focus (full):** (0) BUG-1520: every drop-off building of all three factions as a site (placed, half built,
+cancelled, destroyed while a worker walks to it, finished while a worker waits beside it with cargo); a worker
+building the site itself while loaded; the only hall razed and its rebuild site standing; 30 loaded workers
+around one site (do they wedge or wander?); the AI's economy on a fresh match (does its first Camp delay its wood?);
+gold and wood banked equal what was carried, to the unit; save / load with a worker mid-walk to a site. (1) the retrain rule under a camping enemy: does a seat feed workers to two soldiers at its door
 for ever (count workers trained and lost over 20 minutes; compare gold spent), and does a retrained worker actually
 gather; zero workers with a full queue, at the population cap, with the trainer under construction or destroyed
 mid-training. (2) The rebuild: no site, an enemy on the old site, two halls lost in one tick, gold arriving a little

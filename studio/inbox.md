@@ -9,6 +9,8 @@ Commit and push after editing, from either machine (or ask Claude to).
 
 ## New
 
+## Processed
+
 - 2026-11-15 · **Bug (owner playtest, relayed by the watcher session): workers can deposit resources at a woodcutter's
   hut before it is fully built.** Please treat it as a bug fix with a regression test that fails first, ahead of roadmap
   work. Likely cause, read from the code (not run): `EconomySystem.InReachOfDropOff` and `EconomySystem.NearestDropOff`
@@ -22,8 +24,11 @@ Commit and push after editing, from either machine (or ask Claude to).
   deterministic. A sim task with tests; it changes gather behaviour, so re-run the replay golden hashes and say why if they
   change on purpose. Also worth a look: does anything else treat a site as finished (training, research, rally)? The
   production paths already check it.
-
-## Processed
+  → Confirmed in the code and filed as **BUG-1520** at the 2026-11-15-2136 PLAN (the note landed while I was planning;
+  the plan was amended before any builder started). It is the **first item of the sim's task this session** (M6-SH2),
+  with tests that fail first: a site is not a drop-off until it is finished; a worker heading for one goes to the
+  nearest finished drop-off, or keeps its load until one is finished. It runs in the same task as the clean-up because
+  it changes gathering, and the AI test matches are re-measured once for both.
 
 - 2026-11-14 · **Gatherers may overlap a bit while collecting (owner, relayed by the watcher session).** Owner thinks
   gatherers should be able to clip through each other somewhat while collecting resources (at a resource node and at the
