@@ -22,8 +22,8 @@ namespace Rts.Game.Tests;
 /// real Match scene and shipped data. Rows: selection churn (200 selected with 8 shared points, cleared, an enemy, a mix,
 /// a selected unit that dies and whose slot a new own unit takes; 0 bytes in the mixed case); a queued Attack on an enemy
 /// building never seen (no marker, no leg); a queued Attack whose target dies and whose slot a new, seen enemy takes (no
-/// marker on the newcomer); the building rule for a worker carrying cargo home and a builder whose site was cancelled
-/// (both replace); a first Shift placement queued behind a walk that the sim refuses when its turn comes (no money: no
+/// marker on the newcomer); the building rule for a worker carrying cargo home (queued behind its trip since M6-V23; it
+/// replaced before) and a builder whose site was cancelled (replaces); a first Shift placement queued behind a walk that the sim refuses when its turn comes (no money: no
 /// site, the worker idle, the marker gone); a save written with queued orders and loaded into a new match draws the same
 /// markers once the unit is selected again.
 /// </summary>
@@ -302,10 +302,17 @@ public partial class QaM6V22Test : Node
         if (Check(U.Cargo[carrier.Index] > 0 && U.State[carrier.Index] == UnitState.Moving, $"cargo: the worker never walked home with cargo in {t} ticks ({U.State[carrier.Index]}, cargo {U.Cargo[carrier.Index]})"))
         {
             (List<Command> sent, int anchor) = await ShiftPlace(carrier, Passable(_hall - _away * 10f));
-            Check(sent.Count == 1 && sent[0].Kind == CommandKind.Build && !sent[0].IsQueued, $"cargo: a worker walking its load home sent {Describe(sent)}, want one Build replacing the loop");
+            // M6-V23, re-stated: the Build was sent unqueued and replaced the loop at once (the site placed in the applying
+            // tick); now it is queued behind the trip: the worker delivers the load first, then places the site.
+            Check(sent.Count == 1 && sent[0].Kind == CommandKind.Build && sent[0].IsQueued, $"cargo: a worker walking its load home sent {Describe(sent)}, want one queued Build");
             Apply();
-            Check(U.BuildTarget[carrier.Index].Generation != 0 && SiteAt(anchor) >= 0, $"cargo: build {U.BuildTarget[carrier.Index]}, site {SiteAt(anchor)}");
-            GD.Print($"cargo: walking home with {U.Cargo[carrier.Index]} cargo after {t} ticks, Shift + place replaced the loop");
+            int carried = U.Cargo[carrier.Index];
+            Check(U.BuildTarget[carrier.Index].Generation == 0 && SiteAt(anchor) < 0 && EconomySystem.OnLoop(U, carrier.Index) && carried > 0,
+                $"cargo: after the applying tick build {U.BuildTarget[carrier.Index]}, site {SiteAt(anchor)}, on loop {EconomySystem.OnLoop(U, carrier.Index)}, cargo {carried}: want still walking home");
+            int waited = RunUntil(() => U.BuildTarget[carrier.Index].Generation != 0, 3000);
+            Check(U.BuildTarget[carrier.Index].Generation != 0 && SiteAt(anchor) >= 0 && U.Cargo[carrier.Index] == 0,
+                $"cargo: {waited} ticks on build {U.BuildTarget[carrier.Index]}, site {SiteAt(anchor)}, cargo {U.Cargo[carrier.Index]} (delivered first)");
+            GD.Print($"cargo: walking home with {carried} cargo after {t} ticks, Shift + place queued; delivered, then building {waited} ticks later");
         }
 
         // A builder whose site is cancelled, then a first Shift placement: it stands idle, so the Build replaces.

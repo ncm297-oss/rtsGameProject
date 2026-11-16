@@ -261,9 +261,10 @@ public class OrderPathTests
         Assert.Empty(Read(sim, a, room: 0));
     }
 
-    // The first Shift-placed building's rule: replace a gather loop or idleness, queue behind an order that ends.
+    // The first Shift-placed building's rule: replace idleness, queue behind an order that ends or a gather loop (M6-V23: a
+    // loop with a queue ends after the trip in hand, M6-S11).
     [Fact]
-    public void QueuesBehind_ReplacesAGatherLoopOrIdle_QueuesBehindAnOrderThatEnds()
+    public void QueuesBehind_ReplacesIdle_QueuesBehindAGatherLoopOrAnOrderThatEnds()
     {
         Simulation sim = Flat(units: 32);
         World w = sim.World;
@@ -297,8 +298,8 @@ public class OrderPathTests
         OrderPath reader = Reader(w);
         Assert.False(reader.QueuesBehind(idle.Index), "idle: replace");
         Assert.True(reader.QueuesBehind(walker.Index), "walking a Move: queue");
-        Assert.False(reader.QueuesBehind(gatherer.Index), "gather loop: replace");
-        Assert.False(reader.QueuesBehind(gathererQueued.Index), "gather loop with a queue (it finishes its trip first, M6-S11): replace");
+        Assert.True(reader.QueuesBehind(gatherer.Index), "gather loop: queue (M6-V23)");
+        Assert.True(reader.QueuesBehind(gathererQueued.Index), "gather loop with a queue (it finishes its trip first, M6-S11): queue (M6-V23)");
         Assert.True(reader.QueuesBehind(builder.Index), "building: queue");
         Assert.True(reader.QueuesBehind(attacker.Index), "attacking: queue");
         Assert.Equal(CombatMode.Ordered, u.Mode[attacker.Index]);

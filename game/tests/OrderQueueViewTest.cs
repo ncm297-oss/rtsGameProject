@@ -27,12 +27,16 @@ namespace Rts.Game.Tests;
 /// A + click, the ghost, the ability click, S / H, the context order), the sim's queue holds it, a marker of that kind is
 /// drawn at the right point (0.1 m), and when its turn comes the unit starts it and the marker goes; (4) an enemy selected
 /// draws nothing, a queued Attack's marker follows the fog frame by frame as its target walks out of sight and back, and
-/// goes when the target dies; (5) the first Shift-placed building: a gatherer and an idle worker build at once, a walker
-/// builds after it arrives (its Move kept), a builder builds houses 1, 2 and 3 in turn, and BUG-0122's guard holds; (6) a
+/// goes when the target dies; (5) the first Shift-placed building: a gatherer given a plain placement and an idle worker
+/// build at once, a walker builds after it arrives (its Move kept), a builder builds houses 1, 2 and 3 in turn, and
+/// BUG-0122's guard holds; M6-V23: behind a gather loop (BehindAGatherLoop: a loaded worker delivers its full load, then
+/// builds; (a2) walking out empty-handed it builds from the tick the command applies; (a3) a second Shift placement queues
+/// behind the first; (a4, a match of its own) with no drop-off standing it builds at once and keeps its cargo); (6) a
 /// ninth queued order is dropped by the sim and 8 markers are drawn; (7) 0 bytes a frame once warm, and the drawing's cost
 /// with 200 selected units, 8 shared and 8 distinct points each (reported). M6-VH8: (9) a Shift-placed building for a worker
 /// whose queue is full is refused (nothing sent, the Refused sound, the ghost kept and the click not counted), and with one
-/// full and one idle worker only the idle one builds; (10) BUG-1470: a no-place entry is a torus ring in its own multimesh
+/// full and one idle worker only the idle one builds; M6-V23 (BUG-1501): a Shift-queued Move and a Build inside one tick
+/// onto a queue of 7 refuse the Build, and the count resets after the tick; (10) BUG-1470: a no-place entry is a torus ring in its own multimesh
 /// drawn before the markers, its hole wider than the marker it surrounds, the next one out round it; (11) markers, rings
 /// and lines sized by the zoom (on-screen pixels at 60, 40 and 20 m, checked against a minimum and a maximum); the mixed
 /// queue with all 7 markers in frame at 40 and 60 m (BUG-1471 item 1); (12) a recorded match replayed to its end: the
@@ -116,6 +120,12 @@ public partial class OrderQueueViewTest : Node
         await ZoomRows();
         await FogRows();
         await CostRows();
+        await EndMatch();
+        // M6-V23: the no-drop-off row razes player 0's hall, so it gets a match of its own.
+        _usedAnchors.Clear();
+        await StartMatch();
+        Stage(24f);
+        await NoDropOffRow();
         await EndMatch();
         // The mixed queue in a fresh match, on open ground away from the base and the rows' units: headless it checks the
         // staging and that every marker is in frame (BUG-1471 item 1); windowed with --shots it also saves the pictures.
@@ -295,31 +305,55 @@ public partial class OrderQueueViewTest : Node
         await BehindAGatherLoop();
     }
 
-    // Known gap, a Request for the sim track (not this task's to fix): an order queued behind a gather loop never starts,
-    // because the sim starts a queued order only when the unit is Idle (OrderSystem.Run) and a loop never is. The row
-    // proves the drawing (node, then the queued point) and records the gap; it fails only if the drawing is wrong.
+    // M6-V23 (was M6-V22's "known gap" row: a queued order behind a loop never started until M6-S11). A loaded worker on a
+    // gather loop at the mine nearest the finished hall (in reach of its node, a drop-off standing), one Shift placement of
+    // a house: the Build is sent queued and drawn, the worker keeps working, delivers its full load (the bank rises by it,
+    // less the house's price when the site goes down in the same tick), then walks to the site and builds; nothing carried is
+    // lost. No exact position or tick is pinned (the sim track tunes gather movement).
     private async Task BehindAGatherLoop()
     {
         EntityHandle worker = Spawn(0, _laborer, Passable(MineCenter() + _away * 4f));
+        int i = worker.Index;
         _sim.Enqueue(Command.Gather(0, worker, MineCenter()));
         Apply();
-        _sel.SelectOnly(worker);
-        await Frames();
-        System.Numerics.Vector2 p = OpenGround(MineCenter() + _away * 12f);
-        Input.ActionPress("order_queue");
-        Vector2 px = await OnScreen(p);
-        _sel.ContextTarget(px, out p, out _);
-        RightClick(px);
-        Input.ActionRelease("order_queue");
+        RunUntil(() => U.State[i] == UnitState.Gathering && U.Cargo[i] > 0, 1500);
+        if (!Check(EconomySystem.OnLoop(U, i) && U.State[i] == UnitState.Gathering && U.Cargo[i] > 0,
+                $"behind a gather loop: the worker is not working its node with a load (state {U.State[i]}, cargo {U.Cargo[i]})")) return;
+        (List<Command> sent, int anchor) = await ShiftPlace(worker, Passable(_hall + _perp * 12f));
+        Check(sent.Count == 1 && sent[0].Kind == CommandKind.Build && sent[0].IsQueued, $"behind a gather loop: sent {Describe(sent)}, want one queued Build");
         Apply();
+        _sel.SelectOnly(worker);
         _view.Sync(W, 1f);
-        Check(EconomySystem.OnLoop(U, worker.Index) && U.QueueCount[worker.Index] == 1 && FindMarker(CommandKind.Move, p, false) >= 0,
-            $"behind a gather loop: on loop {EconomySystem.OnLoop(U, worker.Index)}, queue {U.QueueCount[worker.Index]}, Move marker at {p}: {Markers()}");
-        Tick(1200);
-        bool waits = U.QueueCount[worker.Index] == 1 && EconomySystem.OnLoop(U, worker.Index);
-        if (waits)
-            _gaps.Add("Request for the sim track: a Move queued behind a worker's gather loop has not started after 1,200 ticks (60 s) and never will while the loop runs (OrderSystem.Run starts a queued order only for an Idle unit)");
-        GD.Print($"behind a gather loop: queued Move drawn at {p}; after 1,200 ticks still queued: {waits}");
+        System.Numerics.Vector2 centre = anchor >= 0 ? StartBase.FootprintCenter(G, _data.Buildings[_house], anchor) : default;
+        Check(EconomySystem.OnLoop(U, i) && U.QueueCount[i] == 1 && U.QueueKind[i * OrderConstants.QueueCapacity] == CommandKind.Build && SiteAt(anchor) < 0
+              && FindMarker(CommandKind.Build, centre, false) >= 0,
+            $"behind a gather loop: on loop {EconomySystem.OnLoop(U, i)}, queue {U.QueueCount[i]}, site {SiteAt(anchor)}, Build marker at {centre}: {Markers()}");
+        int carry = _data.CarryOf(_laborer), cost = _data.Buildings[_house].CostGold;
+        int delivered = -1, bankRise = int.MinValue, lost = 0, ticks = 0, builtAt = -1;
+        bool siteBeforeDelivery = false;
+        for (; ticks < 3000 && builtAt < 0; ticks++)
+        {
+            int cargo = U.Cargo[i], gold = W.Gold[0];
+            bool siteBefore = SiteAt(anchor) >= 0;
+            _sim.Tick();
+            if (delivered < 0)
+            {
+                if (U.Cargo[i] == 0 && cargo > 0)
+                {
+                    delivered = cargo;
+                    bool placedNow = !siteBefore && SiteAt(anchor) >= 0;
+                    bankRise = W.Gold[0] - gold + (placedNow ? cost : 0);
+                }
+                else if (U.Cargo[i] < cargo) lost += cargo - U.Cargo[i];
+                else if (siteBefore || U.BuildTarget[i].Generation != 0) siteBeforeDelivery = true;
+            }
+            if (delivered >= 0 && U.State[i] == UnitState.Building) builtAt = ticks;
+        }
+        Check(delivered == carry && bankRise == carry && lost == 0 && !siteBeforeDelivery,
+            $"behind a gather loop: delivered {delivered} (carry {carry}), bank rose {bankRise}, lost {lost}, started the Build before delivering {siteBeforeDelivery}");
+        Check(builtAt >= 0 && SiteAt(anchor) >= 0 && B.UnderConstruction[SiteAt(anchor)] && U.QueueCount[i] == 0 && !EconomySystem.OnLoop(U, i),
+            $"behind a gather loop: building {builtAt >= 0} after {ticks} ticks, site {SiteAt(anchor)}, queue {U.QueueCount[i]}, on loop {EconomySystem.OnLoop(U, i)}");
+        GD.Print($"behind a gather loop: a loaded worker, Shift + place a house: queued and drawn; delivered its full load ({delivered}, the bank +{bankRise}), then built (building {builtAt} ticks after the placement)");
         _sel.Selection.Clear();
         _sim.Enqueue(Command.Stop(0, worker));
         Apply();
@@ -434,7 +468,8 @@ public partial class OrderQueueViewTest : Node
     private async Task BuildingRule()
     {
         System.Numerics.Vector2 yard = Passable(_t + _perp * 14f);
-        // (a) A worker on a gather loop: replaced at once.
+        // (a) A worker on a gather loop, a plain placement (no Shift): replaced at once (M6-V23: with Shift it now queues,
+        // the BehindAGatherLoop row and (a2) / (a3) below; this row was the Shift placement replacing the loop).
         EntityHandle gatherer = Spawn(0, _laborer, Passable(MineCenter() + _away * 4f));
         Apply();
         System.Numerics.Vector2 mine = MineCenter();
@@ -443,12 +478,65 @@ public partial class OrderQueueViewTest : Node
         Tick(10);
         if (Check(EconomySystem.OnLoop(U, gatherer.Index), "(a) the worker is not on a gather loop"))
         {
-            (List<Command> sent, int anchor) = await ShiftPlace(gatherer, Passable(U.Position[gatherer.Index] - _away * 8f));
-            Check(sent.Count == 1 && sent[0].Kind == CommandKind.Build && !sent[0].IsQueued, $"(a) gatherer: sent {Describe(sent)}, want one Build replacing the loop");
+            (List<Command> sent, int anchor) = await ShiftPlace(gatherer, Passable(U.Position[gatherer.Index] - _away * 8f), shift: false);
+            Check(sent.Count == 1 && sent[0].Kind == CommandKind.Build && !sent[0].IsQueued, $"(a) gatherer, plain placement: sent {Describe(sent)}, want one Build replacing the loop");
             Apply();
             Check(U.BuildTarget[gatherer.Index].Generation != 0 && !EconomySystem.OnLoop(U, gatherer.Index) && SiteAt(anchor) >= 0,
                 $"(a) gatherer: build {U.BuildTarget[gatherer.Index]}, on loop {EconomySystem.OnLoop(U, gatherer.Index)}, site {SiteAt(anchor)}");
-            GD.Print($"(a) a gatherer, Shift + place: the Build replaced the loop at once (site {SiteAt(anchor)})");
+            GD.Print($"(a) a gatherer, plain place: the Build replaced the loop at once (site {SiteAt(anchor)})");
+        }
+
+        // (a2) A worker walking out to its node empty-handed (out of reach): the Shift placement is queued, and the worker
+        // starts it in the tick the command applies (the sim ends the loop for a queue when no trip is in hand: M6-S11).
+        EntityHandle walkingOut = Spawn(0, _laborer, Passable(mine + _away * 12f));
+        _sim.Enqueue(Command.Gather(0, walkingOut, mine));
+        Apply();
+        if (Check(EconomySystem.OnLoop(U, walkingOut.Index) && U.State[walkingOut.Index] == UnitState.Moving && U.Cargo[walkingOut.Index] == 0
+                  && System.Numerics.Vector2.Distance(U.Position[walkingOut.Index], mine) > 6f,
+                $"(a2) the worker is not walking out empty-handed (state {U.State[walkingOut.Index]}, cargo {U.Cargo[walkingOut.Index]}, {System.Numerics.Vector2.Distance(U.Position[walkingOut.Index], mine):0.0} m from the mine)"))
+        {
+            (List<Command> sent, int anchor) = await ShiftPlace(walkingOut, Passable(_hall - _perp * 12f));
+            Check(sent.Count == 1 && sent[0].Kind == CommandKind.Build && sent[0].IsQueued, $"(a2) walking out: sent {Describe(sent)}, want one queued Build");
+            // A command sent between ticks applies in the second tick after it (Simulation.Enqueue stamps the next tick
+            // number): after the first the worker still walks its loop with the Build pending; the second applies it.
+            _sim.Tick();
+            bool waiting = _sim.PendingCommandCount == 1 && EconomySystem.OnLoop(U, walkingOut.Index) && U.BuildTarget[walkingOut.Index].Generation == 0;
+            _sim.Tick();
+            Check(waiting && _sim.PendingCommandCount == 0 && U.BuildTarget[walkingOut.Index].Generation != 0 && SiteAt(anchor) >= 0 && !EconomySystem.OnLoop(U, walkingOut.Index)
+                  && U.QueueCount[walkingOut.Index] == 0,
+                $"(a2) walking out: pending before the applying tick {waiting}; after it build {U.BuildTarget[walkingOut.Index]}, site {SiteAt(anchor)}, on loop {EconomySystem.OnLoop(U, walkingOut.Index)}, queue {U.QueueCount[walkingOut.Index]}");
+            GD.Print($"(a2) a worker walking out empty-handed, Shift + place: queued, building from the tick it applied (site {SiteAt(anchor)})");
+        }
+
+        // (a3) A loaded worker at its node: two Shift placements, the second queued behind the first (both queued, the
+        // worker still on its loop finishing its trip).
+        EntityHandle twice = Spawn(0, _laborer, Passable(mine - _away * 4f));
+        _sim.Enqueue(Command.Gather(0, twice, mine));
+        Apply();
+        int ti = twice.Index;
+        RunUntil(() => U.State[ti] == UnitState.Gathering && U.Cargo[ti] > 0, 1500);
+        if (Check(EconomySystem.OnLoop(U, ti) && U.State[ti] == UnitState.Gathering && U.Cargo[ti] > 0, $"(a3) the worker is not working its node with a load ({U.State[ti]}, cargo {U.Cargo[ti]})"))
+        {
+            int h1 = GreenAnchor(_house, Passable(_hall + _perp * 20f));
+            if (Check(h1 >= 0 && await OpenGhost(_house, twice), "(a3) no house spot or ghost"))
+            {
+                int from = _sim.PendingCommandCount;
+                Input.ActionPress("order_queue");
+                LeftClick(await Aim(_house, h1));
+                int h2 = GreenAnchor(_house, Passable(_hall + _perp * 20f + _away * 6f));
+                if (h2 >= 0) LeftClick(await Aim(_house, h2));
+                Input.ActionRelease("order_queue");
+                List<Command> sent = Pending(from);
+                _card.CloseMenu();
+                Apply();
+                Check(h2 >= 0 && sent.Count == 2 && sent.All(c => c.Kind == CommandKind.Build && c.IsQueued),
+                    $"(a3) two Shift placements on a gatherer: sent {Describe(sent)}, want two queued Builds");
+                int head = ti * OrderConstants.QueueCapacity;
+                Check(EconomySystem.OnLoop(U, ti) && U.QueueCount[ti] == 2 && U.QueueKind[head] == CommandKind.Build && U.QueueKind[head + 1] == CommandKind.Build
+                      && SiteAt(h1) < 0 && SiteAt(h2) < 0,
+                    $"(a3) two Shift placements on a gatherer: on loop {EconomySystem.OnLoop(U, ti)}, queue {U.QueueCount[ti]}, sites {SiteAt(h1)} / {SiteAt(h2)}");
+                GD.Print($"(a3) a loaded gatherer, two Shift placements: both queued behind its trip ({U.QueueCount[ti]} in its queue)");
+            }
         }
 
         // (b) An idle worker: at once.
@@ -523,19 +611,52 @@ public partial class OrderQueueViewTest : Node
         Check(done1 >= 0 && start2 >= done1 && done2 > start2 && start3 >= done2 && done3 > start3,
             $"(d) houses in turn: 1 done {done1}, 2 placed {start2} done {done2}, 3 placed {start3} done {done3}");
         GD.Print($"(d) houses 1-3 in turn: 1 done at tick {done1}, 2 placed {start2} done {done2}, 3 placed {start3} done {done3}; (e) the second click on 3's anchor refused");
-        foreach (EntityHandle h in new[] { gatherer, idle, walker, builder }) _sim.Enqueue(Command.Stop(0, h));
+        foreach (EntityHandle h in new[] { gatherer, walkingOut, twice, idle, walker, builder }) _sim.Enqueue(Command.Stop(0, h));
         Apply();
     }
 
-    // Selects the worker alone, opens a house ghost and Shift-clicks a green spot near `near`; returns the commands and the anchor.
-    private async Task<(List<Command> Sent, int Anchor)> ShiftPlace(EntityHandle worker, System.Numerics.Vector2 near)
+    // (a4) M6-V23: with no drop-off of its own standing, a loaded worker on its loop starts the Shift-placed building at
+    // once (in the tick the command applies) and keeps what it carries (M6-S11's rule). The hall, the one drop-off, is
+    // razed between ticks (a direct state edit; the player keeps its units, so it is not defeated).
+    private async Task NoDropOffRow()
+    {
+        System.Numerics.Vector2 mine = MineCenter();
+        EntityHandle worker = Spawn(0, _laborer, Passable(mine + _away * 4f));
+        int i = worker.Index;
+        _sim.Enqueue(Command.Gather(0, worker, mine));
+        Apply();
+        RunUntil(() => U.State[i] == UnitState.Gathering && U.Cargo[i] > 0, 1500);
+        if (!Check(EconomySystem.OnLoop(U, i) && U.State[i] == UnitState.Gathering && U.Cargo[i] > 0,
+                $"(a4) the worker is not working its node with a load (state {U.State[i]}, cargo {U.Cargo[i]})")) return;
+        int razed = 0;
+        for (int k = 0; k < B.Capacity; k++)
+        {
+            if (!B.Alive[k] || B.Owner[k] != 0 || !_data.Buildings[B.TypeId[k]].DropOff) continue;
+            DamageMethod.Invoke(B, new object[] { B.HandleOf(k), B.Hp[k] });
+            razed++;
+        }
+        int standing = 0;
+        for (int k = 0; k < B.Capacity; k++) if (B.Alive[k] && B.Owner[k] == 0 && _data.Buildings[B.TypeId[k]].DropOff) standing++;
+        if (!Check(razed > 0 && standing == 0, $"(a4) razed {razed} drop-offs, {standing} still standing")) return;
+        int cargo = U.Cargo[i];
+        (List<Command> sent, int anchor) = await ShiftPlace(worker, Passable(_hall + _perp * 12f));
+        Check(sent.Count == 1 && sent[0].Kind == CommandKind.Build && sent[0].IsQueued, $"(a4) no drop-off: sent {Describe(sent)}, want one queued Build");
+        Apply(); // ticks until the command applies: its last tick is the one it applies in
+        Check(_sim.PendingCommandCount == 0 && U.BuildTarget[i].Generation != 0 && SiteAt(anchor) >= 0 && !EconomySystem.OnLoop(U, i) && U.Cargo[i] == cargo,
+            $"(a4) no drop-off: after the applying tick build {U.BuildTarget[i]}, site {SiteAt(anchor)}, on loop {EconomySystem.OnLoop(U, i)}, cargo {U.Cargo[i]} (had {cargo})");
+        GD.Print($"(a4) no drop-off standing, a loaded gatherer, Shift + place: queued, building from the tick it applied, its {U.Cargo[i]} cargo kept");
+    }
+
+    // Selects the worker alone, opens a house ghost and Shift-clicks (a plain click without `shift`) a green spot near
+    // `near`; returns the commands and the anchor.
+    private async Task<(List<Command> Sent, int Anchor)> ShiftPlace(EntityHandle worker, System.Numerics.Vector2 near, bool shift = true)
     {
         int anchor = GreenAnchor(_house, near);
         if (!Check(anchor >= 0, $"no green house spot near {near}")) return (new List<Command>(), -1);
         if (!Check(await OpenGhost(_house, worker), "the house ghost did not open")) return (new List<Command>(), anchor);
         Vector2 px = await Aim(_house, anchor);
         int start = _sim.PendingCommandCount;
-        Input.ActionPress("order_queue");
+        if (shift) Input.ActionPress("order_queue");
         LeftClick(px);
         Input.ActionRelease("order_queue");
         List<Command> sent = Pending(start);
@@ -627,8 +748,55 @@ public partial class OrderQueueViewTest : Node
         _card.CloseMenu();
         Apply();
         GD.Print($"one full and one idle worker: the idle one got the Build ({Describe(sent)}), the full one nothing");
+
+        // M6-V23 (BUG-1501): a worker at 7 queued, a Shift-queued Move and then a Shift-placed Build inside one tick: the
+        // Move counts against the queue, so the Build is refused; after a tick the count resets (once the worker's walk ends
+        // and its queue is back at 7, the same click is sent).
+        EntityHandle seven = Spawn(0, _laborer, Passable(_t - _perp * 20f));
+        int si = seven.Index;
+        System.Numerics.Vector2 near = Passable(U.Position[si] + _away * 4f);
+        goal = Passable(U.Position[si] + _away * 30f);
+        _sim.Enqueue(Command.Move(0, seven, near));
+        for (int k = 0; k < OrderConstants.QueueCapacity - 1; k++) _sim.Enqueue(Command.Move(0, seven, Passable(goal + _perp * (2f + 2f * k)), queued: true));
+        Apply();
+        if (!Check(U.QueueCount[si] == OrderConstants.QueueCapacity - 1, $"move then build: the worker holds {U.QueueCount[si]}, want {OrderConstants.QueueCapacity - 1}")) return;
+        int a3 = GreenAnchor(_house, U.Position[si] - _perp * 6f);
+        if (!Check(a3 >= 0 && await OpenGhost(_house, seven), "move then build: no house spot or ghost")) return;
+        px = await Aim(_house, a3);
+        await Gap();
+        start = _sim.PendingCommandCount;
+        refused = _sfx.PlayCount(SfxEvent.Refused);
+        drops = _sel.RefusedBuilds;
+        _sel.Order(CommandKind.Move, new Vector2(goal.X, goal.Y), queued: true);
+        int counted = _sel.PendingQueuedOrders(_sim, si);
+        Input.ActionPress("order_queue");
+        LeftClick(px);
+        Input.ActionRelease("order_queue");
+        sent = Pending(start);
+        Check(counted == 1 && sent.Count == 1 && sent[0].Kind == CommandKind.Move && _sfx.PlayCount(SfxEvent.Refused) == refused + 1 && _sel.RefusedBuilds == drops + 1,
+            $"move then build in one tick onto 7: counted {counted}, sent {Describe(sent)}, {_sfx.PlayCount(SfxEvent.Refused) - refused} Refused, {_sel.RefusedBuilds - drops} refusals (want 1, the Move only, 1, 1)");
+        // A command sent between ticks applies in the second tick after it (Simulation.Enqueue stamps the next tick number):
+        // after the first it is still pending and still counted; after the tick it applies in, the count is 0 and the
+        // queue holds it.
+        _sim.Tick();
+        int stillCounted = _sel.PendingQueuedOrders(_sim, si), stillPending = _sim.PendingCommandCount - start;
+        Apply();
+        Check(stillCounted == 1 && stillPending == 1 && _sel.PendingQueuedOrders(_sim, si) == 0 && U.QueueCount[si] == OrderConstants.QueueCapacity,
+            $"move then build: one tick on counted {stillCounted} ({stillPending} pending); applied, counted {_sel.PendingQueuedOrders(_sim, si)}, queue {U.QueueCount[si]} (want 1, 1, 0, {OrderConstants.QueueCapacity})");
+        int popped = RunUntil(() => U.QueueCount[si] < OrderConstants.QueueCapacity, 400);
+        await Gap();
+        start = _sim.PendingCommandCount;
+        Input.ActionPress("order_queue");
+        LeftClick(px);
+        Input.ActionRelease("order_queue");
+        sent = Pending(start);
+        Check(U.QueueCount[si] == OrderConstants.QueueCapacity - 1 && sent.Count == 1 && sent[0].Kind == CommandKind.Build && sent[0].IsQueued,
+            $"move then build: {popped} ticks later the queue holds {U.QueueCount[si]} and the same click sent {Describe(sent)} (want 7 and one queued Build)");
+        _card.CloseMenu();
+        Apply();
+        GD.Print($"move then build in one tick onto 7: the Build refused (the Move counted); after the tick the count was 0, and with the queue back at 7 the click was sent");
         _sel.Selection.Clear();
-        foreach (EntityHandle h in new[] { full, full2, free }) _sim.Enqueue(Command.Stop(0, h));
+        foreach (EntityHandle h in new[] { full, full2, free, seven }) _sim.Enqueue(Command.Stop(0, h));
         Apply();
     }
 

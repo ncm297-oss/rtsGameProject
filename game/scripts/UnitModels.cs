@@ -35,11 +35,16 @@ public sealed class UnitModels
     /// <summary>The material name that marks a model's team surface (docs/04 "Team color").</summary>
     public const string TeamMaterialName = "team";
 
-    /// <summary>docs/04's clip names, in <see cref="Clip"/> order.</summary>
-    public static readonly StringName[] ClipNames = { "idle", "walk", "attack", "gather_gold", "gather_wood", "build" };
+    /// <summary>
+    /// docs/04's clip names, in <see cref="Clip"/> order. M6-V23 (BUG-1441 item 4): the Casting state's slot is named after
+    /// the library's one spell clip, <c>attack_cast</c>, so by the usual rule (a state the clip map does not name plays the
+    /// library clip of its own name) every model type whose library holds that clip plays it while casting, with no
+    /// re-import; a type without it plays idle (<see cref="UnitViews"/>' fallback).
+    /// </summary>
+    public static readonly StringName[] ClipNames = { "idle", "walk", "attack", "gather_gold", "gather_wood", "build", "attack_cast" };
 
     /// <summary>Clip indices into <see cref="ClipNames"/>.</summary>
-    public enum Clip { Idle, Walk, Attack, GatherGold, GatherWood, Build }
+    public enum Clip { Idle, Walk, Attack, GatherGold, GatherWood, Build, Cast }
 
     private static readonly Dictionary<string, PackedScene?> Loaded = new();
     private static AnimationLibrary? _library;

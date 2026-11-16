@@ -17,9 +17,10 @@ namespace Rts.Game;
 /// <remarks>
 /// Rebuilt from the sim every frame, never the source of truth. An entry with no place (Stop, Hold, a no-target ability)
 /// is a ring round the previous point (M6-VH8, BUG-1470: a flat torus whose hole is wider than a marker, in its own
-/// <see cref="MultiMesh"/> drawn before the markers, so the marker inside stays visible); a second no-place entry at the
-/// same point is the next ring out. Markers, rings and lines grow with the camera's zoom past <see cref="MarkerFullZoom"/>
-/// and <see cref="LineFullZoom"/> (M6-VH8), so they still read at the farthest zoom. An Attack entry is drawn on its
+/// <see cref="MultiMesh"/> drawn before the markers, so the marker inside stays visible); every other ring at the same
+/// point, from this unit or another selected one (M6-V23, BUG-1500), is the next ring out. Markers, rings and lines grow
+/// with the camera's zoom past <see cref="MarkerFullZoom"/> and <see cref="LineFullZoom"/> (M6-VH8), so they still read at
+/// the farthest zoom. An Attack entry is drawn on its
 /// target only while the local player's fog shows it (a building's remembered ghost counts, as for
 /// <see cref="TargetRing"/>): a hidden or dead target gets no marker and no line to it, and the path goes on from the last
 /// drawn point. Lines, rings and markers are drawn over the terrain (no depth test), so a leg up a cliff stays visible.
@@ -46,12 +47,12 @@ public partial class OrderPathView : Node3D
     /// </summary>
     public const float RingInner = 0.7f;
 
-    /// <summary>Rings nest at most this many steps out at one point (a fourth no-place entry there shares the third's ring).</summary>
+    /// <summary>Rings nest at most this many steps out at one point (a fourth ring there, from any selected unit, is drawn at the third's radius).</summary>
     public const int MaxRingLevel = 2;
 
     /// <summary>
     /// Zoom (camera height, m) up to which markers and rings keep their size; above it they grow in proportion (the cargo
-    /// cube's and the hp bars' rule, M6-VH8): at the farthest zoom (60 m) a marker is 1 m wide.
+    /// cube's and the hp bars' rule, M6-VH8): at the farthest zoom (60 m) a marker is 1 m in radius, 2 m wide.
     /// </summary>
     public const float MarkerFullZoom = UnitViews.CargoFullZoom;
 
@@ -114,6 +115,8 @@ public partial class OrderPathView : Node3D
     private OrderPath? _reader;
     private World? _readerOf;
     private readonly Dictionary<PathKey, int> _markerAt = new(), _segmentAt = new();
+    // Per point (1 cm) this frame: rings already drawn round it, over every selected unit (BUG-1500 item 1).
+    private readonly Dictionary<PathKey, int> _ringsAt = new();
 
     // Per marker / segment drawn this frame (index < count), pooled.
     private Vector3[] _mPos = new Vector3[StartCapacity];
@@ -258,6 +261,7 @@ public partial class OrderPathView : Node3D
         SegmentCount = 0;
         _markerAt.Clear();
         _segmentAt.Clear();
+        _ringsAt.Clear();
         if (_sel != null)
         {
             FogView? fog = Fog?.Refreshed(world);
@@ -273,20 +277,20 @@ public partial class OrderPathView : Node3D
                 int n = _reader!.Fill(h, _path);
                 if (n == 0) continue;
                 Vector3 prev = UnitViews.GroundPoint(world, h.Index, alpha);
-                int level = 0; // rings this unit already drew round prev: the next one goes outside them
+                int run = 0; // the first entry after the last drawn point: the no-place entries from here ring prev
                 for (int k = 0; k < n; k++)
                 {
                     ref OrderPoint p = ref _path[k];
                     if (!p.HasPlace)
                     {
-                        if (!p.IsCurrent) AddMarker(p.Kind, prev, noPlace: true, Math.Min(level++, MaxRingLevel));
+                        if (!p.IsCurrent) AddRing(p.Kind, prev, Occurrence(run, k));
                         continue;
                     }
                     if (!Resolve(world, fog, in p, alpha, out Vector3 at)) continue;
                     AddSegment(prev, at, p.Kind);
-                    if (!p.IsCurrent) AddMarker(p.Kind, at, noPlace: false, 0);
+                    if (!p.IsCurrent) AddMarker(new PathKey(Q(at.X), Q(at.Z), 0, 0, (int)p.Kind * 2), p.Kind, at, noPlace: false, 0);
                     prev = at;
-                    level = 0;
+                    run = k + 1;
                 }
             }
         }
@@ -328,9 +332,33 @@ public partial class OrderPathView : Node3D
 
     private static int Q(float v) => (int)MathF.Round(v / ShareDistance);
 
-    private void AddMarker(CommandKind kind, Vector3 at, bool noPlace, int level)
+    // How many queued no-place entries of entry k's kind come before it in this unit's run [run, k) round one point: its
+    // Stop is the first Stop there, a second Stop the second, and so on.
+    private int Occurrence(int run, int k)
     {
-        var key = new PathKey(Q(at.X), Q(at.Z), level, 0, (int)kind * 2 + (noPlace ? 1 : 0));
+        int seen = 0;
+        for (int j = run; j < k; j++)
+            if (!_path[j].HasPlace && !_path[j].IsCurrent && _path[j].Kind == _path[k].Kind) seen++;
+        return seen;
+    }
+
+    // A no-place entry's ring round `at` (BUG-1500 item 1): rings are told apart per point by (kind, how many of that kind
+    // the unit has there before it), so units with the same end orders share their rings, while another unit's other kind
+    // at the point is a new ring. Each new ring at a point takes the next level out, counted per point across every
+    // selected unit (one unit's Stop and another's Hold nest), up to MaxRingLevel.
+    private void AddRing(CommandKind kind, Vector3 at, int occurrence)
+    {
+        int qx = Q(at.X), qz = Q(at.Z);
+        var key = new PathKey(qx, qz, occurrence, 1, (int)kind * 2 + 1);
+        if (_markerAt.ContainsKey(key)) return;
+        var point = new PathKey(qx, qz, 0, 0, -1);
+        _ringsAt.TryGetValue(point, out int used);
+        _ringsAt[point] = used + 1;
+        AddMarker(key, kind, at, noPlace: true, Math.Min(used, MaxRingLevel));
+    }
+
+    private void AddMarker(PathKey key, CommandKind kind, Vector3 at, bool noPlace, int level)
+    {
         int k = MarkerCount;
         if (!_markerAt.TryAdd(key, k)) return;
         if (k >= _mPos.Length) GrowMarkers();
@@ -475,7 +503,8 @@ public partial class OrderPathView : Node3D
         _lines.VisibleInstanceCount = SegmentCount;
     }
 
-    // A marker's (x, z, ring level, kind) or a leg's (x1, z1, x2, z2, kind) in 1 cm steps.
+    // A disc's (x, z, 0, 0, kind code), a ring's (x, z, occurrence, 1, kind code), a ring point's (x, z, 0, 0, -1) or a
+    // leg's (x1, z1, x2, z2, kind) in 1 cm steps.
     private readonly struct PathKey : IEquatable<PathKey>
     {
         private readonly int _a, _b, _c, _d, _e;

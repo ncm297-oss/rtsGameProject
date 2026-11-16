@@ -87,15 +87,16 @@ public sealed class OrderPath
     }
 
     /// <summary>
-    /// The first Shift-placed building's rule (M6-V22, Producer decision): true when worker <paramref name="slot"/>'s Build
-    /// should be queued behind what it is doing, an order that ends (a walk, an attack or a fight, a build, a repair, a cast,
-    /// or orders already queued); false when it should replace it, a gather loop (it never ends, so a queued Build would
-    /// never start: the sim starts a queued order only when the unit is Idle) or nothing at all. False for a dead slot.
+    /// The first Shift-placed building's rule (M6-V22, Producer decision; M6-V23 for the loop): true when worker
+    /// <paramref name="slot"/>'s Build should be queued behind what it is doing: an order that ends (a walk, an attack or a
+    /// fight, a build, a repair, a cast, or orders already queued) or a gather loop (since M6-S11 a loop with a queue ends
+    /// when the trip in hand is done: walking out empty-handed or with no drop-off standing the Build starts at once, working
+    /// or loaded the worker delivers first). False when it is doing nothing (an idle worker starts at once) or the slot is dead.
     /// </summary>
     public bool QueuesBehind(int slot)
     {
         if ((uint)slot >= (uint)_alive.Length || !_alive[slot]) return false;
-        if (OnLoop(slot)) return false;
+        if (OnLoop(slot)) return true;
         if (_queueCount[slot] > 0) return true;
         if (_buildTarget[slot].Generation != 0 || _target[slot].Generation != 0 || _castAbility[slot] >= 0) return true;
         return _state[slot] == UnitState.Moving;

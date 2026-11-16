@@ -23,9 +23,10 @@ namespace Rts.Game.Tests;
 /// the real Match scene and shipped data. Rows:
 /// (R) rings: a Stop queued after a Stop nests one ring out; four no-place entries stop at <see cref="OrderPathView.MaxRingLevel"/>;
 ///     a Hold as the only queued order is a ring with no disc in it; two units with the same Stop at one point share a ring;
-///     two units with a Stop and a Hold at one point (printed: they are drawn at the same radius);
+///     two units with a Stop and a Hold at one point nest at two radii (M6-V23, BUG-1500 item 1; it printed one radius);
 /// (F) full queue: 30 workers, 15 with 8 queued and 15 idle, a queued Build reaches only the 15; all 30 full: nothing sent,
-///     one Refused sound, the refusal counted; a second queued Build before the tick for a worker at 7 (printed);
+///     one Refused sound, the refusal counted; a second queued Build before the tick for a worker at 7 is refused (M6-V23,
+///     BUG-1501; it printed both sent);
 /// (Z) zoom changed every frame while a queue is drawn: the drawn factors follow the camera; windowed, the ring and disc
 ///     instance transforms read back at the expected radius;
 /// (O) overlay line: capsule types (models off) unchanged and the cargo marker where it was; per model type the gap over
@@ -174,9 +175,20 @@ public partial class QaM6VH8Test : Node
         await Frames();
         _view.Sync(W, 1f);
         var shared = new List<string>();
+        int stopRing = -1, holdRing = -1;
         for (int k = 0; k < _view.MarkerCount; k++)
-            if (_view.MarkerNoPlace(k)) shared.Add($"{_view.MarkerKind(k)} level {_view.MarkerLevel(k)} radius {_view.MarkerDrawnRadius(k):0.00} m");
+        {
+            if (!_view.MarkerNoPlace(k)) continue;
+            shared.Add($"{_view.MarkerKind(k)} level {_view.MarkerLevel(k)} radius {_view.MarkerDrawnRadius(k):0.00} m");
+            if (_view.MarkerKind(k) == CommandKind.Stop && Near(_view.MarkerPoint(k), q)) stopRing = k;
+            if (_view.MarkerKind(k) == CommandKind.HoldPosition && Near(_view.MarkerPoint(k), q)) holdRing = k;
+        }
         GD.Print($"(R) a Stop (unit a) and a Hold (unit b) at one point: [{string.Join("; ", shared)}]");
+        // M6-V23 (BUG-1500 item 1), re-stated: was printed only (both at level 0, one radius); now the two rings nest.
+        Check(stopRing >= 0 && holdRing >= 0 && _view.RingsNode.Multimesh.VisibleInstanceCount == 2
+              && _view.MarkerLevel(stopRing) != _view.MarkerLevel(holdRing)
+              && MathF.Abs(_view.MarkerDrawnRadius(stopRing) - _view.MarkerDrawnRadius(holdRing)) > 0.1f,
+            $"(R) a Stop (unit a) and a Hold (unit b) at one point: [{string.Join("; ", shared)}], want two rings at different radii");
         if (Windowed && _shots != null)
         {
             _camera.SetZoom(CameraLimits.MinZoom);
@@ -257,7 +269,8 @@ public partial class QaM6VH8Test : Node
         list = Pending(start);
         Check(sent == 0 && list.Count == 0, $"(F) 30 full, first Shift placement behind their walks: returned {sent}, sent {list.Count}, want 0 and 0");
 
-        // A worker at 7: two queued Builds before the tick both pass the view's check; the sim drops the second.
+        // A worker at 7: two queued Builds before the tick. M6-V23 (BUG-1501), re-stated: both passed the view's check and
+        // the sim dropped the second (printed "1 and 1"); now the first is sent and the second refused in the view.
         EntityHandle seven = workers[0];
         _sim.Enqueue(Command.Move(0, seven, far));
         for (int j = 0; j < OrderConstants.QueueCapacity - 1; j++) _sim.Enqueue(Command.Move(0, seven, Passable(far + _perp * (j + 1)), queued: true));
@@ -268,10 +281,14 @@ public partial class QaM6VH8Test : Node
         drops = _sel.RefusedBuilds;
         int first = _sel.OrderBuild(_house, anchor, queued: true);
         await Gap();
+        refused = _sfx.PlayCount(SfxEvent.Refused);
         int second = _sel.OrderBuild(_house, anchor2 >= 0 ? anchor2 : anchor, queued: true);
+        int refusedSounds = _sfx.PlayCount(SfxEvent.Refused) - refused;
         int pending = Pending(start).Count;
         Apply();
-        GD.Print($"(F) a worker at 7 queued, two queued Builds in one tick: view returned {first} and {second} ({pending} sent, {_sel.RefusedBuilds - drops} refused in the view); queue after the tick {U.QueueCount[seven.Index]}");
+        GD.Print($"(F) a worker at 7 queued, two queued Builds in one tick: view returned {first} and {second} ({pending} sent, {_sel.RefusedBuilds - drops} refused in the view, {refusedSounds} Refused sound); queue after the tick {U.QueueCount[seven.Index]}");
+        Check(first == 1 && second == 0 && pending == 1 && _sel.RefusedBuilds - drops == 1 && refusedSounds == 1 && U.QueueCount[seven.Index] == OrderConstants.QueueCapacity,
+            $"(F) worker at 7, two queued Builds in one tick: returned {first} and {second}, {pending} sent, {_sel.RefusedBuilds - drops} refused, {refusedSounds} Refused sounds, queue {U.QueueCount[seven.Index]} (want 1, 0, 1, 1, 1, {OrderConstants.QueueCapacity})");
         _sel.Selection.Clear();
         foreach (EntityHandle h in workers) _sim.Enqueue(Command.Stop(0, h));
         Apply();

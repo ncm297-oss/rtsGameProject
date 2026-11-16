@@ -406,13 +406,17 @@ a queue loops as usual. **A queued gather with more orders behind it** should ma
 out of reach of the node (the usual case) and makes one trip when it starts within reach (BUG-1490; the one-trip rule
 needs a saved flag, so it lands with the next save-format change).
 **Buildings:** with the build menu's ghost, the first Shift-placed building is queued behind what the worker is doing
-when that ends (walking, fighting, building, repairing, or orders it already has queued) and **replaces** it when the
-worker is gathering or idle, so a gatherer starts the building at once; every further Shift placement is queued behind
-the previous one, and clicking the spot you just placed again does nothing. **What you see:** for each selected unit
+(walking, fighting, building, repairing, orders it already has queued, or gathering) and an idle worker starts it at
+once. Behind gathering it waits for the trip in hand only, as above: a worker walking out to its node with nothing
+carried starts the building at once, one working at its node or walking back loaded delivers its load first and then
+goes to build, and one with no drop-off of its own standing starts at once and keeps what it carries. A placement
+without Shift still makes a gatherer drop what it is doing and build at once. Every further Shift placement is queued
+behind the previous one, and clicking the spot you just placed again does nothing. A Shift placement for a worker whose
+queue is full (counting orders given a moment ago that have not reached it yet) is refused with the "no" sound. **What you see:** for each selected unit
 of yours, a thin line runs from the unit through its current destination and each queued point, with a small marker at
 every queued point, coloured by order (move green, attack-move orange, attack red, gather gold, build blue, repair teal,
-ability violet; stop and hold position are a wider ring at the point before them, and a second one at the same point is
-the next ring out). Units sharing a point share its marker. Markers, rings and lines grow when the camera is zoomed out,
+ability violet; stop and hold position are a wider ring at the point before them, and a second one at the same point,
+from the same unit or another selected one, is the next ring out). Units sharing a point share its marker. Markers, rings and lines grow when the camera is zoomed out,
 so they stay readable at the farthest zoom. A queued attack on an enemy you cannot see shows no marker or line to it
 until you see it again, and none once it is dead. Nothing is drawn for units that are not yours. The queue is also drawn
 while watching a replay (your seat's units).

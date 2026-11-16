@@ -78,6 +78,14 @@ public partial class SelectionController : Node
     private OrderPath? _orders;
     private World? _ordersOf;
 
+    // M6-V23 (BUG-1501): per unit slot, the queued unit orders this controller sent that the sim has not applied yet (not
+    // in the unit's queue), so the full-queue Build check counts them. A command sent while the tick number is T is due at
+    // T + 1 and applies in the tick that starts at T + 1 (Simulation.Enqueue / CountDue), so two batches can be pending:
+    // the latest (due _sentDue) and the one before it (due _sentDue - 1). Input bookkeeping only: a batch reads as 0 once
+    // the tick it was due in has run, and everything does when the world changes.
+    private int[] _sentDue = Array.Empty<int>(), _sentCount = Array.Empty<int>(), _sentPrevCount = Array.Empty<int>();
+    private World? _sentOf;
+
     // M6-V16: per player, whether it is the local player's enemy (World.IsEnemy), built once for the world it was read from.
     private bool[] _enemies = Array.Empty<bool>();
     private World? _enemiesOf;
@@ -527,7 +535,7 @@ public partial class SelectionController : Node
     private void SendCast(Simulation sim, int abilityId, int caster, int index, System.Numerics.Vector2 point, bool queued)
     {
         var h = new EntityHandle(caster, sim.World.Units.Generation[caster]);
-        sim.Enqueue(Command.UseAbility(LocalPlayer, h, index, point, queued));
+        SendUnitOrder(sim, Command.UseAbility(LocalPlayer, h, index, point, queued));
         _sentCasts.Note(sim.World.TickNumber + 1, abilityId, h); // Enqueue stamps it for the next tick number
         LastCaster = h;
         _issued[(int)CommandKind.UseAbility]++;
@@ -788,10 +796,12 @@ public partial class SelectionController : Node
     /// <paramref name="anchor"/> per selected live worker (the first to apply places the site, the rest join it: docs/03
     /// M3-3), queued when <paramref name="queued"/>; one Command sound. Returns the Builds enqueued: 0 with no worker or
     /// when they don't all fit the command queue. M6-V22: with <paramref name="queueBehindEndingOrders"/> each worker's Build
-    /// is queued when <see cref="OrderPath.QueuesBehind"/> says it is on an order that ends, else it replaces (the first
-    /// Shift placement of a ghost). M6-VH8 (BUG-1471 item 2): a worker whose Build would be queued onto a full queue
+    /// is queued when <see cref="OrderPath.QueuesBehind"/> says it is busy (an order that ends, or since M6-V23 a gather
+    /// loop, which the sim ends after the trip in hand), else it replaces (an idle worker: the first Shift placement of a
+    /// ghost). M6-VH8 (BUG-1471 item 2): a worker whose Build would be queued onto a full queue
     /// (<see cref="OrderConstants.QueueCapacity"/>) gets none; when that leaves no worker, nothing is sent, the Refused
-    /// sound plays and 0 is returned (the ghost does not count it as placed).
+    /// sound plays and 0 is returned (the ghost does not count it as placed). M6-V23 (BUG-1501): the full count includes the
+    /// queued orders this controller sent the worker that the sim has not applied yet (<see cref="PendingQueuedOrders"/>).
     /// </summary>
     public int OrderBuild(int typeId, int anchor, bool queued, bool queueBehindEndingOrders = false)
     {
@@ -821,8 +831,8 @@ public partial class SelectionController : Node
         {
             if (!_isWorkerType[u.TypeId[h.Index]]) continue;
             bool queue = queued || (queueBehindEndingOrders && _orders!.QueuesBehind(h.Index));
-            if (queue && u.QueueCount[h.Index] >= OrderConstants.QueueCapacity) continue;
-            sim.Enqueue(Command.Build(LocalPlayer, h, typeId, point, queue));
+            if (queue && u.QueueCount[h.Index] + PendingQueuedOrders(sim, h.Index) >= OrderConstants.QueueCapacity) continue;
+            SendUnitOrder(sim, Command.Build(LocalPlayer, h, typeId, point, queue));
             sent++;
         }
         if (sent == 0)
@@ -838,6 +848,46 @@ public partial class SelectionController : Node
 
     /// <summary>Placements <see cref="OrderBuild"/> refused because every selected worker's queue was full (M6-VH8, BUG-1471 item 2).</summary>
     public int RefusedBuilds { get; private set; }
+
+    /// <summary>
+    /// Queued (Shift) unit orders this controller sent unit slot <paramref name="slot"/> that the sim has not applied yet,
+    /// so not in its queue (M6-V23, BUG-1501); 0 once the tick they apply in has run. Unqueued orders sent meanwhile are not
+    /// subtracted (the check errs toward refusing, never toward a silent drop).
+    /// </summary>
+    public int PendingQueuedOrders(Simulation sim, int slot)
+    {
+        if (!ReferenceEquals(_sentOf, sim.World) || (uint)slot >= (uint)_sentDue.Length) return 0;
+        int due = _sentDue[slot], now = sim.TickNumber;
+        // A batch due at D is still pending while the tick number is at most D (the tick starting at D applies it).
+        return (due >= now ? _sentCount[slot] : 0) + (due - 1 >= now ? _sentPrevCount[slot] : 0);
+    }
+
+    // Every unit order this controller gives goes through here: enqueued, and a queued one counted for its slot until the
+    // tick it applies in has run (BUG-1501).
+    private void SendUnitOrder(Simulation sim, Command command)
+    {
+        sim.Enqueue(command);
+        if (!command.IsQueued) return;
+        World world = sim.World;
+        if (!ReferenceEquals(_sentOf, world))
+        {
+            _sentDue = new int[world.Units.Capacity]; // once per match (the unit store never grows)
+            _sentCount = new int[world.Units.Capacity];
+            _sentPrevCount = new int[world.Units.Capacity];
+            Array.Fill(_sentDue, int.MinValue / 2);
+            _sentOf = world;
+        }
+        int slot = command.Unit.Index;
+        if ((uint)slot >= (uint)_sentDue.Length) return;
+        int due = sim.TickNumber + 1; // Simulation.Enqueue's stamp
+        if (_sentDue[slot] != due)
+        {
+            _sentPrevCount[slot] = _sentDue[slot] == due - 1 ? _sentCount[slot] : 0;
+            _sentCount[slot] = 0;
+            _sentDue[slot] = due;
+        }
+        _sentCount[slot]++;
+    }
 
     // The site the last Cancel was sent for, and the tick it was sent between (BUG-0126 item 4); cleared with the match (BUG-0250 item 3).
     private int _cancelSlot = -1, _cancelGeneration, _cancelTick = -1;
@@ -1019,7 +1069,7 @@ public partial class SelectionController : Node
         if (_runner?.Simulation is not Simulation sim) return false;
         Selection.Prune(sim.World.Units.Alive, sim.World.Units.Generation);
         if (Selection.Count == 0 || !RoomFor(sim, Selection.Count, "Attack")) return false;
-        foreach (EntityHandle h in Selection.Items) sim.Enqueue(Command.Attack(LocalPlayer, h, target, isBuilding, queued));
+        foreach (EntityHandle h in Selection.Items) SendUnitOrder(sim, Command.Attack(LocalPlayer, h, target, isBuilding, queued));
         _issued[(int)CommandKind.Attack] += Selection.Count;
         _sfx?.Play(SfxEvent.Command);
         TargetRing?.Show(target, isBuilding);
@@ -1202,10 +1252,10 @@ public partial class SelectionController : Node
         System.Numerics.Vector2 anchorPoint = site >= 0 ? PlacementGhost.AnchorPoint(world.NavGrid, b.Cell[site]) : target;
         foreach (EntityHandle h in Selection.Items)
         {
-            if (!_isWorkerType[u.TypeId[h.Index]]) sim.Enqueue(Command.Move(LocalPlayer, h, target, queued));
-            else if (work == CommandKind.Gather) sim.Enqueue(Command.Gather(LocalPlayer, h, target, queued));
-            else if (work == CommandKind.Repair) sim.Enqueue(Command.Repair(LocalPlayer, h, target, queued));
-            else sim.Enqueue(Command.Build(LocalPlayer, h, siteType, anchorPoint, queued));
+            if (!_isWorkerType[u.TypeId[h.Index]]) SendUnitOrder(sim, Command.Move(LocalPlayer, h, target, queued));
+            else if (work == CommandKind.Gather) SendUnitOrder(sim, Command.Gather(LocalPlayer, h, target, queued));
+            else if (work == CommandKind.Repair) SendUnitOrder(sim, Command.Repair(LocalPlayer, h, target, queued));
+            else SendUnitOrder(sim, Command.Build(LocalPlayer, h, siteType, anchorPoint, queued));
         }
         _issued[(int)work] += workers;
         _issued[(int)CommandKind.Move] += Selection.Count - workers;
@@ -1259,7 +1309,7 @@ public partial class SelectionController : Node
         }
         foreach (EntityHandle h in Selection.Items)
         {
-            sim.Enqueue(kind switch
+            SendUnitOrder(sim, kind switch
             {
                 CommandKind.Move => Command.Move(LocalPlayer, h, target, queued),
                 CommandKind.AttackMove => Command.AttackMove(LocalPlayer, h, target, queued),

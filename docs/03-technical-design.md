@@ -4057,7 +4057,8 @@ data, no player-facing text.
   cast, or orders already queued) and replaces a gather loop or idleness (a loop never ends, and the sim starts a
   queued order only for an Idle unit: `OrderSystem.Run`). Later Shift placements queue as before; BUG-0122's
   same-anchor guard is unchanged. The rule reads the sim state of the frame: an order still pending (given in the same
-  tick) is not seen.
+  tick) is not seen. **Changed by M6-V23:** a gather loop queues too (M6-S11 ends a loop for a queue after the trip in
+  hand); see "Implementation (M6-V23)".
 - **Audit** (the shipped data; `OrderQueueViewTest`, each kind queued with Shift behind a 10 m Move through the mouse's
   entry point):
 
@@ -4074,10 +4075,10 @@ data, no player-facing text.
   | UseAbility with no target (the Frenzy key with Shift) | yes | violet ring at the previous point | yes |
   | Stop (Shift + S) | yes | off-white ring at the previous point | yes (stops; the rest of the queue goes) |
   | HoldPosition (Shift + H) | yes | pale yellow ring at the previous point | yes (holds; the rest goes) |
-  | Any order behind a gather loop | yes | yes (from the node) | **no: Request for the sim track below** |
+  | Any order behind a gather loop | yes | yes (from the node) | **no: Request for the sim track below** (since M6-S11: yes, after the trip in hand; M6-V23 made the row a pass row) |
 
   A ninth order at a full queue is dropped by the sim (`UnitQueueFull`, silently): 8 markers are drawn.
-- **Request for the sim track (not fixed here):** an order queued behind a worker's gather loop never starts, because
+- **Request for the sim track (not fixed here; done by M6-S11):** an order queued behind a worker's gather loop never starts, because
   `OrderSystem.Run` starts a queued order only for an `Idle` unit with no target and a loop is never Idle. Repro:
   `OrderQueueViewTest`'s `BehindAGatherLoop` row (a Laborer gathering the gold mine nearest player 0's hall on seed 1,
   Shift + right click on open ground 12 m out: the Move is queued and drawn, and after 1,200 ticks it is still queued
@@ -4133,6 +4134,7 @@ ViewApi or data file changed.
   priorities 1 / 2 / 3, no depth test). The marker inside stays visible whatever the order. A second no-place entry at
   the same point (a Stop, then a Hold) is the next ring out (`1 / RingInner` wider, so the rings touch and never overlap;
   at most three rings deep, `MaxRingLevel`). docs/02's sentence ("a wider ring at the point before them") is now true.
+  (Since M6-V23 the levels are counted per point across the selection's units: BUG-1500 item 1.)
 - **Sized by the zoom** (docs/01 2026-11-15 (b) item 6). `OrderPathView.Camera` (the match's camera, set in `Match.Wire`):
   markers and rings keep their size up to `MarkerFullZoom` (30 m, the cargo cube's and the hp bars' rule) and grow in
   proportion above it; lines keep `LineWidth` up to `LineFullZoom` (20 m, the nearest zoom) and widen in proportion
@@ -4161,7 +4163,8 @@ ViewApi or data file changed.
   3.75 m). The line is 0.13-0.24 m over the head's crown in any pose (the head bone's highest point plus its
   rest distance to the rest-pose top), and the hp bar's lower edge is 0.36-0.46 m over the figure's rest-pose top. Every type's highest bone is a finger
   of the raised hand in `gather_wood`, which every library holds (docs/04 "Animation setup", BUG-1411 item 3), so a
-  soldier's line is about 0.16 m higher than its own clips need; if the libraries stop holding the worker clips, the line
+  soldier's line is about 0.21 m higher than its own clips need (a giant's about 0.32 m: BUG-1500 item 3, measured by
+  QA over the clips each type plays, the highest a `Head` in `walk`); if the libraries stop holding the worker clips, the line
   follows by itself. The ten capsule types are unchanged.
 - **A full queue's building (BUG-1471 item 2).** `SelectionController.OrderBuild`: a worker whose Build would be queued
   (a later Shift placement, or the first one behind an order that ends) onto a full queue (`OrderConstants.QueueCapacity`,
@@ -4188,7 +4191,7 @@ ViewApi or data file changed.
 - **Figures at a replay's end** (item 7). `UnitViews.AnimationRate` is 0 once the runner's `PlaybackState` is `Ended` or
   `Stopped`, so the figures stand as the last tick left them (in the shell the banner also pauses the tree; a match
   without the shell, a test or a tool, kept them moving in place).
-- **Not done:** the Casting clip (item 6, BUG-1441 item 4). No model needs a re-import (the Shaman's library already holds
+- **Not done:** the Casting clip (item 6, BUG-1441 item 4; done by M6-V23, which named the seventh slot after the library clip, so no pinned row moved). No model needs a re-import (the Shaman's library already holds
   `attack_cast`), but a Casting state needs a clip slot of its own (a seventh `UnitModels.Clip`) or a `ClipFor` that knows
   the type. The first breaks QA's `QaM6VH7Test` row 1 (it checks every `Clip` against the shared library by name), the
   second the contract `QaM6V20Test` row 9 and `TeblorModelTest` read (the playing clip is `ClipFor`'s), so it waits for a
@@ -4251,6 +4254,81 @@ ViewApi or data file changed.
      Recommendation: add a text such as "Orders full" in a data task and show it on the ghost.
   3. Stop and Hold rings are close in colour (off-white, pale yellow) at 60 m. Recommendation: keep; both end the queue,
      and the ring's place says which order it follows.
+
+### Implementation (M6-V23)
+
+The last part of the owner's Shift-queue request (inbox 2026-11-14), on top of the sim's M6-S11 rule (a loop with a
+queue ends once the trip in hand is done), and three leftovers. View code, `ViewApi/OrderPath`, view tests and docs;
+no sim rule, state, hash, data or asset changed.
+
+- **The first Shift-placed building queues behind a gather loop.** `OrderPath.QueuesBehind` is true for a worker on a
+  loop (it was false: a queued order behind a loop never started before M6-S11); an idle worker still gets an unqueued
+  Build. So the first Shift placement of a ghost (`CommandCard.GhostClick` -> `SelectionController.OrderBuild(...,
+  queueBehindEndingOrders: true)`) is queued for a gatherer, and the sim decides when it starts: walking out to its node
+  with nothing carried (out of reach), at once, in the tick the command applies; working at its node or walking back
+  loaded, after it delivers that load (the bank rises by it); with no own drop-off standing, at once, its cargo kept. A
+  placement without Shift still replaces the loop at once. Later Shift placements queue as before.
+- **Ring levels per point (BUG-1500 item 1).** `OrderPathView` tells rings apart per point by (kind, how many of that
+  kind the unit already has there), so units with the same end orders still share their rings, and gives each new ring
+  at a point the next level out, counted across every selected unit (a per-frame point -> rings drawn table beside the
+  marker table, cleared each frame, allocation-free once warm). One unit's Stop and another's Hold at one point are two
+  rings (1.20 m and 1.71 m at the default zoom) instead of one over the other. One unit's nesting is unchanged (Stop,
+  Stop, Hold, Stop: levels 0, 1, 2, 2), as is the three-ring cap. When units' end orders differ, the ring order at the
+  point is first-seen, not each unit's own order (a unit whose Hold is level 0 because another's Hold came first and whose
+  Stop is level 1 reads inside-out). Items 2-3 (docs): `MarkerFullZoom`'s summary says 1 m in radius, 2 m wide at 60 m;
+  "Implementation (M6-VH8)" says 0.21 m (a man) / 0.32 m (a giant).
+- **The full-queue check counts orders not yet applied (BUG-1501).** Every unit order the selection controller gives goes
+  through one `SendUnitOrder`; a queued one is counted for its unit slot until the tick it applies in has run.
+  `Simulation.Enqueue` stamps a command for tick number + 1 and the tick that starts at that number applies it, so a
+  command sent between ticks applies in the second tick after it and two batches can be pending: the bookkeeping keeps
+  the latest batch's due tick and count and the count of the batch before it (three ints per unit slot, made once per
+  world). `PendingQueuedOrders(sim, slot)` reads it; `OrderBuild`'s check is `QueueCount + PendingQueuedOrders >= 8`. So two
+  Shift placements inside one tick onto a queue of 7 send one and refuse one (the Refused sound once), and a Shift-queued
+  Move then a Build onto 7 refuses the Build. An unqueued order sent meanwhile (which clears the queue) is not
+  subtracted: the check errs toward refusing, never toward a silent drop. Input bookkeeping, never gameplay state.
+- **The cast gesture (BUG-1441 item 4).** `UnitModels.Clip` gains a seventh slot, `Cast`, named `attack_cast` (the
+  library's one spell clip, docs/04 "The Teblor clips"), and `UnitViews.ClipFor` maps `Casting` to it. By the existing
+  rule (a state the clip map does not name plays the library clip of its own name) every model type's players hold it
+  with no re-import, so a casting Teblor Shaman plays `attack_cast` (0.5 s, the Frenzy's cast time); a type whose library
+  lacks it plays `idle` through `PlayClip`'s fallback, with no warning. No model lacks it today (every model type holds
+  the shared clip); the scene forges a library without it. Naming the slot after the library clip kept QA's
+  `QaM6VH7Test` row 1 (every slot against the shared library by name: 0.5 s, 3.3 far samples a loop), `QaM6V20Test` row
+  9 and `TeblorModelTest` (the playing clip is `ClipFor`'s, the library's by identity) green unedited. The overlay line
+  did not move (the highest bone is still `gather_wood`'s raised hand). Capsule types are unchanged (no player).
+- **Tests.** `ViewApi/OrderPathTests.QueuesBehind_ReplacesIdle_QueuesBehindAGatherLoopOrAnOrderThatEnds` (was
+  `QueuesBehind_ReplacesAGatherLoopOrIdle_QueuesBehindAnOrderThatEnds`; its "gather loop" and "gather loop with a queue"
+  rows False -> True) and QA's `OrderPathQaTests.AWorkerCarryingCargoHome_IsStillOnItsLoop_QueuesNotReplaces` (was
+  `..._ReplacesNotQueues`; `QueuesBehind` on a loop False -> True every tick) and the fuzz's loop row (False -> True).
+  `OrderQueueViewTest`: `BehindAGatherLoop` is a pass row (a loaded worker at the mine nearest the finished hall, one
+  Shift placement: queued and drawn, it delivers its full load and the bank rises by it, then builds; it printed a
+  "known gap" before), the building rule's (a) is now a plain placement (no Shift) on a gatherer, new (a2) walking out
+  empty-handed builds from the applying tick, (a3) two Shift placements on a loaded gatherer both queue, (a4) in a match
+  of its own with the hall razed the loaded worker builds at once with its cargo kept, and the full-queue rows gain the
+  Shift-queued Move then Build onto 7 (refused; one tick on the Move still counted, applied the count 0, and once the
+  queue is back at 7 the same click is sent). QA's `QaM6VH8Test` row R's Stop / Hold line was printed only (one radius)
+  and is now checked (two rings, different radii); row F's last line was printed "1 and 1" and is now checked (1 and
+  0, one Refused sound, queue 8). QA's `QaM6V22Test` cargo row (a worker walking its load home: an unqueued Build
+  replacing the loop) is re-stated: a queued Build, the worker still on its loop after the applying tick, then it
+  delivers and builds. New `game/tests/CastClipTest` (the casting Shaman plays the library's `attack_cast`, then `idle`;
+  a library without it plays `idle`; models off, the capsule; windowed with `-- --shots <dir>` the Shaman mid-cast).
+  No scene pins an AI match or a gatherer's position or tick count (the sim tunes gather movement this session); the
+  scenes that need a drop-off use the finished hall. QA's `QaV3Test` flick sweep (BUG-0109: 200 Shift clicks with two
+  workers and no tick between most of them) gains a "refused (queues full)" count: those clicks were sent before and the
+  sim dropped them past a queue of 8; now the view refuses them, and the row's "green but neither built nor ignored"
+  check (still 0) no longer sees them (the run: 62 built, 38 refused, 0 green missed).
+- **Cost** (rule 42 / 61; 2026-11-16, 1600 x 900, `ModelShots --bench 30 --vsync off`; the sim track's `testhost` ran
+  throughout and could not be stopped; none of the developer's own processes running): 400 figures 9.46 ms average,
+  **10.47 ms while 90 %+ alive** (M6-VH8: 11.03), worst 1 % 15.85 ms, 5,209 draw calls; 400 capsules
+  (`--placeholder-art`, the same window) 0.77 ms, 0.76 ms while 90 %+ alive (M6-VH8: 0.84), worst 1 % 2.63 ms, 143 draw
+  calls. Nothing here adds a draw call; the cast clip is one more reference in each type's library.
+- **Questions for the Producer (rule 67), each with a recommendation:**
+  1. Rings from several units at one point nest in first-seen order, so a unit's own Stop-then-Hold can read inside-out
+     when another unit's Hold is drawn first. Recommendation: accept (rare; every order at the point is visible).
+  2. The pending count does not subtract an unqueued order sent in the same window (which clears the queue when it
+     applies), so a Shift placement right after a plain order onto a full queue is refused once. Recommendation: accept
+     (one tick; refusing is the safe side).
+  3. Every model type now plays `attack_cast` while casting, a Malazan caster too once it has a model. Recommendation:
+     keep; a type that wants another gesture names it under `attack_cast` in its clip map at its next import.
 
 ## Vision, detection, fog
 

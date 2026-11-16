@@ -425,7 +425,8 @@ which also renames to snake_case. Findings:
   `walk` (UAL1 `Walk_Loop`, in place), `attack` (UAL1 `Pistol_Shoot`: UAL 1 and 2 Standard have no crossbow, bow or rifle
   clip; the one-armed shot aims the crossbow, and the Laborer uses the same clip, a jab with an empty hand, until a
   per-weapon `attack_<weapon>` clip lands), `gather_gold` (UAL2 `Farm_Harvest`: no pick swing in either library),
-  `gather_wood` (UAL2 `TreeChopping_Loop`), `build` (UAL1 `Fixing_Kneeling`). `cast`, `hit` and `death` come with the slices
+  `gather_wood` (UAL2 `TreeChopping_Loop`), `build` (UAL1 `Fixing_Kneeling`). `cast` (since M6-V23 the Casting state's slot,
+  named `attack_cast`: see "The Teblor clips"), `hit` and `death` come with the slices
   that need them.
 - **Per-weapon attack (M6-V21).** The library has seven clips: the six above and `attack_melee` (UAL1 `Sword_Attack`, 1.53 s:
   a one-handed slash with a lunge, about one loop per 1.5 s melee cooldown). Each model's clip map says what its `attack` is:
@@ -446,7 +447,7 @@ which also renames to snake_case. Findings:
   | Gatherer | `idle` | `walk` | `attack_melee` | `gather_gold` / `gather_wood` / `build` (the workers') | `idle` |
   | Warrior, Breaker | `idle` | `walk` | `attack_melee` | (never in those states) | `idle` |
   | Javelin Thrower | `idle` | `walk` | `attack_throw` | (never) | `idle` |
-  | Shaman | `idle` | `walk` | `attack_cast` (its attack is a magic bolt) | (never) | `idle` (Blood-oil Frenzy's 0.5 s cast) |
+  | Shaman | `idle` | `walk` | `attack_cast` (its attack is a magic bolt) | (never) | Returning `idle`; Casting `attack_cast` since M6-V23 (Blood-oil Frenzy's 0.5 s cast) |
 
   The table lists what each type plays. A type's players **hold** more than that (BUG-1411 item 3, M6-VH8): a state its
   clip map does not name plays the library clip of the state's own name (the pre-M6-V21 rule), so every type, a soldier
@@ -459,8 +460,10 @@ which also renames to snake_case. Findings:
   the cast, `Spell_Simple_Shoot` was chosen over `Spell_Simple_Idle_Loop` (2.1 s, hands held out, no release) and
   `Spell_Simple_Enter` / `_Exit` (0.54 / 0.44 s, a raise and a lower). The Breaker's maul swings with the one-handed
   `Sword_Attack` (no two-handed heavy blow in either library short enough for one hit: UAL2 `Sword_Heavy_Combo` is 4.33 s);
-  BUG-1411's look at `Sword_Regular_A/B/C` would cover it too. The `Casting` state plays `idle` for every model type, as
-  M6-V20 set (`UnitViews.ClipFor`); a cast clip for that state is a view change, not done here.
+  BUG-1411's look at `Sword_Regular_A/B/C` would cover it too. The `Casting` state played `idle` for every model type, as
+  M6-V20 set (`UnitViews.ClipFor`); since M6-V23 it plays `attack_cast` (the seventh state slot is named after it, so every
+  type holds it by the state-name rule; a library without it plays `idle`). The other rows' Casting column reads `idle`
+  for types that never cast; a caster among them would play `attack_cast` too.
 - **No finger tracks (M6-VH7, BUG-1321).** The library carries 25 of the rig's 65 bones: the import deletes the 40 finger
   bones (`thumb_`, `index_`, `middle_`, `ring_`, `pinky_`, 01-03 and the `_04_leaf` ends, both hands; the manifest's
   `library.dropBonePrefixes`, checked against `dropBoneCount` 40) and their curves before export, so each clip has 75 tracks

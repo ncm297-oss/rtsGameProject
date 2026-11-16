@@ -614,7 +614,7 @@ public partial class QaV3Test : Node
         await Frames();
         Vector2 view = GetViewport().GetVisibleRect().Size;
         var rng = new Random(109);
-        int built = 0, wrongAnchor = 0, ignored = 0, redOrOff = 0, maxCallsPerFrame = 0, sameAnchor = 0, missedGreen = 0;
+        int built = 0, wrongAnchor = 0, ignored = 0, redOrOff = 0, maxCallsPerFrame = 0, sameAnchor = 0, missedGreen = 0, refusedFull = 0;
         Input.ActionPress("order_queue");
         for (int i = 0; i < 200; i++)
         {
@@ -628,7 +628,7 @@ public partial class QaV3Test : Node
             ulong frame = Engine.GetProcessFrames();
             int expect = AnchorUnder(pb, type);
             bool expectGreen = expect >= 0 && W.CanPlace(0, type, expect, out _);
-            int ig = _ghost.ClicksIgnored, start = _sim.PendingCommandCount;
+            int ig = _ghost.ClicksIgnored, start = _sim.PendingCommandCount, refusedBefore = _sel.RefusedBuilds;
             LeftClick(pb);
             _ghost.ScreenOverride = pb; // the cursor is where it clicked
             List<Command> s = Pending(start);
@@ -638,6 +638,10 @@ public partial class QaV3Test : Node
                 if (!s.All(x => x.Kind == CommandKind.Build && x.Position == PlacementGhost.AnchorPoint(G, expect))) wrongAnchor++;
             }
             else if (_ghost.ClicksIgnored > ig) ignored++;
+            // M6-V23 (BUG-1501): a click whose Builds would all land on full queues (counting those sent but not applied
+            // yet: this flood sends up to 64 commands between ticks) is refused by the view (Refused sound); before, the view
+            // sent them (counted built here) and the sim dropped them silently past a queue of 8.
+            else if (_sel.RefusedBuilds > refusedBefore) refusedFull++;
             else if (expectGreen && expect != drawn) missedGreen++;
             else redOrOff++;
             if (expect == drawn) sameAnchor++;
@@ -653,7 +657,7 @@ public partial class QaV3Test : Node
         Tick(2);
         CancelOwnSites();
         await Frames();
-        GD.Print($"BUG-0109 flick sweep (test path): 200 clicks, {built} built, {wrongAnchor} at a wrong anchor, {ignored} ignored (call spent), {missedGreen} green but not built, {redOrOff} red/off, {sameAnchor} on the drawn anchor; max CanPlace calls per frame {maxCallsPerFrame}");
+        GD.Print($"BUG-0109 flick sweep (test path): 200 clicks, {built} built, {wrongAnchor} at a wrong anchor, {ignored} ignored (call spent), {missedGreen} green but not built, {refusedFull} refused (queues full, M6-V23), {redOrOff} red/off, {sameAnchor} on the drawn anchor; max CanPlace calls per frame {maxCallsPerFrame}");
         Check(wrongAnchor == 0, $"BUG-0109: {wrongAnchor} flick clicks built away from the click's anchor");
         Check(maxCallsPerFrame <= 1, $"BUG-0109: {maxCallsPerFrame} CanPlace calls in one frame");
         Check(missedGreen == 0, $"flick: {missedGreen} green clicks neither built nor counted as ignored");

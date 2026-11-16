@@ -573,7 +573,7 @@ public partial class UnitViews : Node3D
         _model[slot]!.Transform = new Transform3D(Basis.Identity.Scaled(new Vector3(s, s, s)), new Vector3(0f, -_halfHeight[type], 0f));
     }
 
-    /// <summary>The clip a model shows for slot <paramref name="slot"/>'s sim state (M6-V20): standing, moving, attacking, and a worker's three states.</summary>
+    /// <summary>The clip a model shows for slot <paramref name="slot"/>'s sim state (M6-V20): standing, moving, attacking, a worker's three states, and casting (M6-V23; played as idle by a type whose library lacks the cast clip).</summary>
     public static UnitModels.Clip ClipFor(World world, int slot)
     {
         UnitStore u = world.Units;
@@ -582,11 +582,12 @@ public partial class UnitViews : Node3D
             case UnitState.Moving: return UnitModels.Clip.Walk;
             case UnitState.Attacking: return UnitModels.Clip.Attack;
             case UnitState.Building: return UnitModels.Clip.Build;
+            case UnitState.Casting: return UnitModels.Clip.Cast;
             case UnitState.Gathering:
                 EntityHandle node = u.GatherNode[slot];
                 ResourceKind kind = world.Resources.IsAlive(node) ? world.Data.Resources[world.Resources.TypeId[node.Index]].Resource : u.CargoKind[slot];
                 return kind == ResourceKind.Wood ? UnitModels.Clip.GatherWood : UnitModels.Clip.GatherGold;
-            default: return UnitModels.Clip.Idle; // Idle, Returning (standing with a load), Casting
+            default: return UnitModels.Clip.Idle; // Idle, Returning (standing with a load)
         }
     }
 

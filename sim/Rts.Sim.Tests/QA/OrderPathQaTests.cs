@@ -37,9 +37,10 @@ public class OrderPathQaTests(Xunit.Abstractions.ITestOutputHelper output)
     }
 
     // A worker walking a full load to the drop-off (Moving, GatherNode still set) is on its gather loop: a first Shift
-    // placement replaces (a Build queued behind it would never start). Same while it stands Returning or Gathering.
+    // placement queues (M6-V23: since M6-S11 the loop ends for a queue once the trip in hand is delivered; it replaced
+    // before, when a Build queued behind a loop never started). Same while it stands Returning or Gathering.
     [Fact]
-    public void AWorkerCarryingCargoHome_IsStillOnItsLoop_ReplacesNotQueues()
+    public void AWorkerCarryingCargoHome_IsStillOnItsLoop_QueuesNotReplaces()
     {
         Simulation sim = Flat(units: 16);
         World w = sim.World;
@@ -57,7 +58,7 @@ public class OrderPathQaTests(Xunit.Abstractions.ITestOutputHelper output)
             if (!EconomySystem.OnLoop(u, worker.Index)) continue;
             if (u.State[worker.Index] == UnitState.Gathering) sawGathering = true;
             if (u.Cargo[worker.Index] > 0 && u.State[worker.Index] == UnitState.Moving) sawWalkingHome = true;
-            Assert.False(reader.QueuesBehind(worker.Index), $"tick {t}: on its loop ({u.State[worker.Index]}, cargo {u.Cargo[worker.Index]}) the rule said queue");
+            Assert.True(reader.QueuesBehind(worker.Index), $"tick {t}: on its loop ({u.State[worker.Index]}, cargo {u.Cargo[worker.Index]}) the rule said replace");
             OrderPoint[] p = Read(sim, worker);
             Assert.True(p.Length == 1 && p[0].IsCurrent && p[0].Kind == CommandKind.Gather, $"tick {t}: path {p.Length} [{(p.Length > 0 ? p[0].Kind : CommandKind.Noop)}]");
         }
@@ -150,7 +151,8 @@ public class OrderPathQaTests(Xunit.Abstractions.ITestOutputHelper output)
 
     // Seeded command fuzz (every order kind, queued or not, to live, dead and stale handles), the reader read on every slot
     // every tick: the path's shape matches the store, every point is finite and on the map, a live Attack point is the
-    // target's position, the building rule never queues behind a loop, and the read sim hashes as a never-read twin.
+    // target's position, the building rule always queues behind a loop (M6-V23; it never did before), and the read sim
+    // hashes as a never-read twin.
     [Theory]
     [InlineData(1UL)]
     [InlineData(2UL)]
@@ -213,7 +215,7 @@ public class OrderPathQaTests(Xunit.Abstractions.ITestOutputHelper output)
                     if (!p.IsCurrent) queuedSeen++;
                     points++;
                 }
-                if (EconomySystem.OnLoop(u, i)) Assert.False(reader.QueuesBehind(i));
+                if (EconomySystem.OnLoop(u, i)) Assert.True(reader.QueuesBehind(i)); // M6-V23: was False (a loop replaced)
             }
             ulong before = a.StateHash();
             Assert.Equal(before, a.StateHash());

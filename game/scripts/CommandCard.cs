@@ -492,8 +492,10 @@ public partial class CommandCard : Control
     /// unless <paramref name="shift"/> keeps the ghost for another; red, off the map or unresolved this frame: nothing (no
     /// sound). A Shift placement after the first of the same ghost is queued behind it, so the workers build them in turn.
     /// M6-V22 (Producer decision): the first Shift placement is queued, per worker, behind an order that ends (a walk, an
-    /// attack, a build, a repair, orders already queued) and replaces a gather loop or idleness (<see cref="OrderPath.QueuesBehind"/>:
-    /// a gather loop never ends, so a Build queued behind it would never start). Returns true if it placed.
+    /// attack, a build, a repair, orders already queued) and replaces idleness (<see cref="OrderPath.QueuesBehind"/>). M6-V23:
+    /// it is queued behind a gather loop too; the sim (M6-S11) lets a worker walking out empty-handed, or with no drop-off
+    /// standing, start it at once, and one working or loaded deliver first. A placement without Shift replaces whatever
+    /// the worker does. Returns true if it placed.
     /// </summary>
     public bool GhostClick(bool shift, Vector2 screen)
     {
