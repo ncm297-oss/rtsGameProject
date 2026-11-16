@@ -9,6 +9,20 @@ Commit and push after editing, from either machine (or ask Claude to).
 
 ## New
 
+- 2026-11-15 · **Bug (owner playtest, relayed by the watcher session): workers can deposit resources at a woodcutter's
+  hut before it is fully built.** Please treat it as a bug fix with a regression test that fails first, ahead of roadmap
+  work. Likely cause, read from the code (not run): `EconomySystem.InReachOfDropOff` and `EconomySystem.NearestDropOff`
+  (`sim/Rts.Sim/Economy/EconomySystem.cs`, around lines 418-450) test only `Alive`, `Owner` and `def.DropOff`, never
+  `b.UnderConstruction`, so a construction site of any drop-off building (the Lumber Camp-type hut, the Keep, any faction)
+  counts as a depot from the moment it is placed. The AI side already skips sites (`AiPlayer.cs` around line 444 and
+  `DefenseManager.cs` around line 399 test `OwnBuildingSites`), so the player's gatherers and the AI's economy disagree.
+  Fix both functions (and check any other "is there a drop-off" query, e.g. the loop-ending test near `EconomySystem.cs:96`
+  and `Deposit`) so a site is not a depot until construction finishes; workers already walking to a site should re-pick
+  the nearest finished depot, or wait with their cargo if none exists. Generic (every faction, every drop-off building),
+  deterministic. A sim task with tests; it changes gather behaviour, so re-run the replay golden hashes and say why if they
+  change on purpose. Also worth a look: does anything else treat a site as finished (training, research, rally)? The
+  production paths already check it.
+
 ## Processed
 
 - 2026-11-14 · **Gatherers may overlap a bit while collecting (owner, relayed by the watcher session).** Owner thinks
