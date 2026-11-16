@@ -1,0 +1,32 @@
+# BUG-1534: Stress row `StarvedPickOracleQaStressTests.AStampedThink_SendsNoTrain(raraku, 5)` red, not named in the M6-SH2 report: the retrain sends a worker Train on a starved think
+
+| Field | Value |
+| --- | --- |
+| Severity | S2 (Stress red outside the rows M6-SH2's criterion 11 allows; two documented AI rules now disagree and neither the docs nor the row says which wins) |
+| Status | open |
+| Found | 2026-11-15-2136, task M6-SH2 (QA) |
+| System | AI: `BuildOrderExecutor.Retrain` (BUG-1465 (a)) against the M5-9a starved rule's oracle |
+| Fixed by | |
+
+## Repro
+1. `dotnet test sim/Rts.Sim.Tests --filter "FullyQualifiedName~StarvedPickOracleQaStressTests"`
+2. Row `(raraku, 5, Normal, 2, 72000)` fails: `seat 0 tick 27960: stamped starved (since 26900) but sent 1 Train; gold 4356,
+   wood 20, pick 0`. The match ends at 31,420, winner p1 (the same end as `MatchRowsM6S10Report`'s Raraku seed 5 on this tree).
+
+## Expected
+The row's oracle (QA, M5-9a round 2): a think that ends with the seat stamped starved sends no Train, because a starved
+seat cannot pay for what production waits for.
+
+## Actual
+Seat 0 has no worker left; the new retrain (docs/02 "AI opponent": "trains one first thing ... whatever its build order
+says") sends a worker Train on a think where the seat is stamped starved. The row is not among the base's red rows
+(M6-S10: seed 5 ends at 29,569). QA ran it on base + item 0 only (no retrain): **green**, the match ends at 31,089, seat 0
+stamped on 322 thinks with no Train on any of them; the retrain is the only new Train source. The Train itself looks right (a worker is how a starved seat gets the kind it lacks), so this is the
+oracle meeting a new rule, not a wrong Train.
+
+## Notes
+- For the Producer: rule which wins. If the retrain may run on a starved think (QA's reading of docs/02), the row's oracle
+  should exempt a worker Train sent while the seat has no worker (`ai.WorkerCount == 0`), with the reason in the row, and
+  docs/02's starved paragraph should say so. QA did not edit the row (no loosening without a ruling).
+- Not in the developer's "for ruling" list; the developer's Stress run must have missed it or run a filter that did not
+  include `StarvedPickOracleQaStressTests`.
