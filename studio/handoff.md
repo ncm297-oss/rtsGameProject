@@ -269,6 +269,104 @@ Producer ruling may be skipped by the conductor; the session log says so.
 
 ## Sim track
 
+### Current session plan (2026-11-15-1536, session 2 / 8): M6-S11, feature, QA full
+
+**Make the red Hard-counter row honest, then let a gathering worker with Shift-queued orders finish its trip and start them (Request 57).**
+
+Goal: two things, in this order. (1) `CounterCompositionTests.AHardSeat_ShiftsItsLineShareFurther_ThanANormalSeat` is
+red on `main` by ruling (BUG-1462, rule 57) and is this task's first item. (2) The owner asked for Shift-queued
+orders; one gap is left in the sim: an order queued behind a gather loop never starts (`OrderSystem.Run` starts a
+queue only for an Idle unit). Decision (docs/01 2026-11-15 (b) item 5): the worker finishes its current trip, then
+starts the queue.
+
+Scope:
+- Part 1, tests only (`sim/Rts.Sim.Tests/Ai/`): either **outcome A**, a staging that can tell Line x 1.5 (Normal,
+  `counterStrength` 0.5) from x 2 (Hard, 1.0) honestly (more units inside the memory window: a longer window from
+  the data, two producers of each kind, or several seeds summed; the same purse for both difficulties; a strength-0
+  control for Normal and Hard that shows shift 0), or **outcome B**, the finding with numbers that Hard does not
+  out-shift Normal at any army size an AI seat reaches by its third wave (at least three army sizes or windows
+  measured); then the row is re-stated as that measurement with BUG-1156's id in its comment. The `hard > normal`
+  assertion is never weakened to `>=` to pass, and the three `FirstTrain` pick assertions stay as they are.
+- Part 2, production (`sim/Rts.Sim/Orders/`, `sim/Rts.Sim/Economy/`; about 100-300 lines with tests): a unit on a
+  gather loop (`EconomySystem.OnLoop`) with `QueueCount > 0`:
+  - carrying nothing and not yet at its node (walking out): ends the loop and starts the queue at the next phase 7;
+  - otherwise it finishes the trip exactly as it would without a queue (fills up or the node runs out, walks back,
+    delivers, the ledger credited as always) and then, instead of walking out again, ends the loop and starts the
+    queue;
+  - wherever a loop leaves the worker Idle today (node gone and no other, and so on) the queue starts as today; a
+    worker that carries cargo and has no drop-off standing starts the queue at once and keeps its cargo.
+  - Generic: any worker type, any node kind, any faction, any queued order kind (Move, AttackMove, Attack, Gather on
+    another node, Build, Repair, Stop, Hold). A worker with an empty queue behaves bit for bit as on `main`.
+- Docs: docs/02 "Queued orders (Shift)": replace only the sentence "A queued order behind a gathering worker waits
+  until its gathering ends ..." with the new rule (leave the Buildings and "What you see" sentences: the view track
+  follows next session); docs/03 "Implementation (M6-S11)".
+- OUT of scope: BUG-1460 / 1463 / 1465 / 1461 / 1464 and the Stress rows red by ruling (the hardening, next
+  session); any AI behaviour change; any match pin, bound or `Known` list edit; any byte under `game/data/**`; any
+  save or replay format change; `game/**` (the view's `OrderQueueViewTest` row and `ViewApi/OrderPath.QueuesBehind`
+  are the view track's); the four data-track rows red on `main`; `docs/factions/**`.
+
+Acceptance criteria:
+1. `AHardSeat_*` is green by outcome A, or re-stated by outcome B with the measured table in docs/03 and in a patch
+   for BUG-1156 (the developer cannot write `studio/**`: a patch file in the scratchpad). The report says which
+   outcome and why in its first lines. No production code changes for part 1.
+2. A worker walking out empty with a queued Move starts the Move within 2 ticks of the command applying.
+3. A worker working at its node, or walking back loaded, with a queued order: delivers once (gathered totals rise
+   by its load, as without the queue), does not walk out again, and starts the queued order at the next phase 7
+   after the delivery; the rest of the queue follows as for any unit. Rows for gold and wood, a Laborer and a Teblor
+   Gatherer, and for each queued kind listed in Scope (a queued Gather on another node ends at the new node's loop;
+   a queued Build builds; a queued Stop / Hold leaves it standing with the queue dropped).
+4. An unqueued order to such a worker still replaces everything at once, as today (cargo kept).
+5. No new saved state and no format change (save 10, replay 9 / 6). If the rule cannot be said from the existing
+   queue, cargo and loop state, stop and report "needs a format bump" with the reason; do not build it.
+6. Determinism: twin runs equal over 6,000 ticks with queued orders landing on gathering workers; a save taken
+   while a worker is finishing its trip with orders queued loads and continues to the same hashes; a recording of
+   it replays with every checkpoint equal.
+7. **No AI match moves.** Every pin, bound and `Known` list is unedited (the diff shows it), and the pin classes
+   pass as on `main`. The golden `seed21_playable.replay` is unchanged; if (and only if) the recording itself holds
+   a queued order behind a gather loop, say so in the report's first lines, regenerate it in the same commit, and
+   put the reason in the `GatherWedgeQaTests` comment.
+8. Invariant fuzz (a `Trait("Category","Stress")` class is fine): random queued and unqueued orders onto gathering
+   workers over many seeds: no queue entry lost or duplicated, `QueueCount` in 0-8, no worker left on a loop with
+   `GatherNode` cleared, cargo never lost except by delivery. **Measure and report, not pass / fail (rule 66):** the
+   longest wait from "queued behind a loop" to "started", with the gather overlap at 0.5 and off; a worker that is
+   held (BUG-1463's shapes) cannot deliver, so its queue waits: report how many, do not fix.
+9. Per-tick code allocates 0 bytes (an allocation row, `[Collection(SerialCollection.Name)]`); no Perf threshold
+   changed.
+10. Sim tests that pin today's "waits forever" are re-stated to the new rule and listed in the report (old → new).
+11. docs/02 and docs/03 as in Scope. The report's first lines name, for the view track: `game/tests/OrderQueueViewTest`
+    `BehindAGatherLoop` (its "known gap" line goes away) and `ViewApi/OrderPath.QueuesBehind` (the first
+    Shift-placed building still replaces a gather loop until the view follows).
+12. `dotnet build RtsGame.sln --no-incremental` 0 errors / 0 warnings after the last edit (rule 64); the full
+    default loop run after the last edit (rule 62) is **red only in these four rows, which this task does not own
+    and must not touch (rule 68):** `Content/AiOpeningPairsReportTests.NormalAiVersusAi_EveryOpeningPair_BothWave_NoDeadEndStep`
+    (0, 2) and (2, 0), `QA/Content/DR35ProsePinQaTests.AgeTwoProse_MatchesTheAgeTwoTables` and
+    `Malazan_Bug0982Prose_MatchesTheThresholdTable`. Smoke PASS. Any other red row is a finding.
+
+Design references: docs/01 change log 2026-11-15 (b) items 4-5; docs/02 "Queued orders (Shift)" (8 orders a unit;
+stop and hold end the queue) and "Economy" (the gather loop, carry, `gatherOverlap`); docs/03 "Orders and unit
+states", "Implementation (M6-V22)" (what the view reads), "Implementation (M5-9a)" and BUG-1156 (the counter shift,
+`counterStrength`, the 180 s memory window).
+
+Tests required: unit rows per criteria 2-4; the determinism, save and replay rows of 6; the fuzz class of 8; the
+allocation row of 9; `CounterRestageQaTests`' strength-0 control extended to Hard (outcome A) or the measurement
+row (outcome B). Replay golden tests re-run.
+
+Constraints: no Godot in `Rts.Sim`; no stat literal in C# (the rule has no number; if one appears it goes to
+`rules.json` and that is out of scope: report instead); no allocation per tick; phase order unchanged (queue starts
+stay in phase 7, slot order); scratch clones named `m6s11-...` (rule 63); end every test process you start
+(rule 52); bug ids 1490+.
+
+**QA focus (full):** try to move an AI match: run the pin classes and the default loop with Stress once on the
+final commit and compare the red list with BUG-1462's (exactly those Stress rows, no other; the default loop exactly
+the four data rows). Attack the rule: queue onto a worker in each loop phase (walking out empty, walking out with
+old cargo of the other kind, one swing from full, walking back, at the drop-off the tick it delivers, the tick the
+node dies, the tick the drop-off is razed), 8 queued then a ninth, a queued Gather on the same node, a queued Build
+it cannot afford at its turn, 200 workers on one mine all queued a Move in one tick, Teblor Gatherers at a 2 x 2
+depot (BUG-1463's shape: report the wait), an order queued then an unqueued one in the same tick, save / load on
+every one of those ticks. Check outcome A or B of part 1 by reading the staging: is the purse equal both ways, does
+the control read 0, is anything loosened. Run the view's `OrderQueueViewTest` scene alone on the sim's branch and
+say whether it stays green. Perf alone, last (rule 42). End with the `--no-incremental` build (rule 65).
+
 ### Where we are
 M6-S10 on `main`: BUG-1431's cure + `gatherOverlap` 0.5, every pin re-measured once. Counter **3 / 4**. Fixed:
 BUG-1430, BUG-1431. New: **BUG-1460** S3 (Raraku seeds 1, 3, 4, 6 do not end), **BUG-1465** S3 (a seat with a Keep
@@ -312,6 +410,94 @@ QA's `M7H1QaTests`; the JSON-`null` policy.
 
 ## View track
 
+### Current session plan (2026-11-15-1536, session 2 / 8): M6-VH8, hardening, QA standard
+
+**The view's clean-up: the queued Stop / Hold ring, queue markers sized by zoom, bars above the giants' heads, feedback for a dropped queued building, older nits.**
+
+Goal: the view's hardening session (counter 4 / 4). It works the view's debt, most visible first: what the owner
+sees when he tries the Shift-queue drawing and the Teblor figures that landed in the last two sessions.
+
+Scope, in this order (items 1-4 are required; 5-9 as far as the size budget of about 1,500 changed lines allows,
+each one finished or left alone, and the report says which were left):
+1. **BUG-1470 (S3):** a queued Stop / Hold / no-target cast is a ring round the marker before it (a real ring mesh,
+   or its own MultiMesh drawn first), so the marker inside stays visible, as docs/02 "Queued orders" says.
+2. **Queue markers and lines sized by the camera's zoom** (docs/01 2026-11-15 (b) item 6): readable at the farthest
+   zoom (60 m) and not oversized at the nearest (20 m). Any size number lives where the rally line's and the
+   existing markers' sizes live; no new player-facing text.
+3. **BUG-1441 item 2:** hp bar, cast bar, status marks, cue words and the cargo marker sit just above the drawn
+   figure's head for a model type (taken from the model as drawn, e.g. its skeleton or bounds at the data `scale`,
+   not a per-type literal), and above the capsule for a capsule type, as today.
+4. **BUG-1471:** item 2: a Shift-placed building for a worker whose queue is full (8) is refused in the view with
+   the existing refusal feedback, and the ghost does not count it as placed; item 3: when a queued Build is
+   refused at its turn the player gets the existing refusal feedback (text only from `ui.json`), **only if the view
+   can know it from what the sim already exposes or a read-only `ViewApi` accessor; if it needs a new sim event,
+   write it as a Request for the sim track in the report and do not build it**; item 1: the mixed picture is
+   re-staged so all seven markers are in frame.
+5. A scene row: queued orders are drawn while watching a replay (own-seat rule as in a match).
+6. **BUG-1441 item 4:** a Casting unit plays its type's `attack_cast` clip when its library has one, else idle;
+   only if it needs no re-import of a model binary (else leave it and say so).
+7. Figures stop animating when a watched replay has reached its end.
+8. Docs sentences: BUG-1381 items 2-3 (docs/03), BUG-1411 item 3 (docs/04's clip-map table), BUG-1440 (correct
+   the "never an `ERROR`" sentence in docs/03 to "the runtime loader"; the `smoke.ps1` check is the sim's file: a
+   Request, not built here).
+9. BUG-1441 item 3 (the javelin through the ground) only if it is a prop offset in `tools/art/**` with a
+   byte-identical re-import of every other model.
+- OUT of scope: any change to what the first Shift-placed building does behind a gather loop and
+  `OrderQueueViewTest`'s `BehindAGatherLoop` row (next session, after the sim's Request 57 is on `main`); merged
+  surfaces; new models; BUG-1441 item 1 (foot placement), BUG-1411 items 1-2 and BUG-1177 item 2 (the owner's
+  taste); `sim/**` outside `sim/Rts.Sim/ViewApi/**` (read-only accessors) and its tests; `game/data/**`;
+  `tools/**` other than `tools/asset-manifest.json`, `tools/import-assets.ps1`, `tools/art/**`; **docs/02's
+  "Queued orders (Shift)" paragraph (the sim track edits it this session: write the view's wording changes in
+  docs/03 "Implementation (M6-VH8)" and list any docs/02 sentence that should follow for the Producer).**
+
+Acceptance criteria:
+1. BUG-1470: in `OrderQueueViewTest`'s mixed pictures the red Attack marker and the violet cast marker are visible
+   inside the Stop / Hold ring (look at the pictures and attach them), and a headless row fails if the ring is
+   drawn as a filled disc over the marker again (the ring's mesh or the draw order is checked, not only instance
+   data).
+2. Zoom: at zoom 60 a marker's size on screen is at least the developer's stated minimum in pixels and at zoom 20
+   at most the stated maximum (a scene row prints and checks both); pictures at 20, 40 and 60 attached.
+3. Bars: for each of the eleven model types the overlay line is above the highest bone of every clip (QA's
+   `QaM7V5Test` row A stays green, unedited) and no more than a stated margin above that highest bone (a new row
+   prints the gap per type; state the margin, about 0.3 m; today a giant's is over 1 m); the ten capsule types are
+   unchanged. A picture of a hurt Teblor
+   Warrior beside a hurt Heavy Infantry attached.
+4. BUG-1471 item 2: with 8 orders queued, a Shift-placed building plays the refusal feedback, nothing is sent,
+   and the ghost stays armed; item 3 built with a scene row, or reported as a Request with what the sim would have
+   to expose; item 1: the scene prints 7 of 7 markers in frame.
+5. Items 5-9: each one done with its scene row or doc line, or listed as not done.
+6. Cost: the queue drawing at 200 selected stays within +0.2 ms of M6-V22's figures (shared +0.45 ms, distinct
+   +0.74 ms) and allocates 0 bytes a frame; the 400- and 1,000-figure bench reported alone with the capsule figure
+   from the same window (rule 61). **Measure and report**, run alone (rule 42); no timing threshold loosened.
+7. The scene loop is green: 109 scenes plus any new one (say the new count), each run alone if `BenchTest` /
+   `MinimapTest` / `DebugOverlayTest` flake under load. Smoke PASS.
+8. `dotnet build RtsGame.sln --no-incremental` 0 errors / 0 warnings after the last edit; the full default loop
+   after the last edit is **red in exactly the five rows ruled on `main`, none of which this task owns or may
+   touch (rule 68):** `CounterCompositionTests.AHardSeat_ShiftsItsLineShareFurther_ThanANormalSeat`,
+   `AiOpeningPairsReportTests` (0, 2) and (2, 0), `DR35ProsePinQaTests.AgeTwoProse_MatchesTheAgeTwoTables` and
+   `Malazan_Bug0982Prose_MatchesTheThresholdTable`.
+9. docs/03 "Implementation (M6-VH8)" says what changed in plain words; bug notes for 1470 / 1471 / 1441 / 1411 /
+   1440 / 1381 come as a patch in the scratchpad.
+
+Design references: docs/02 "Queued orders (Shift)" ("stop and hold position are a wider ring at the point before
+them"); docs/03 "Implementation (M6-V22)", "Implementation (M7-V5)", "Implementation (M7-V4)"; docs/04 (clip maps);
+docs/01 2026-11-15 (b) item 6.
+
+Tests required: scene rows for criteria 1-4 (in `OrderQueueViewTest` or a new scene), the replay row, ViewApi
+tests for any new accessor (in the view's ViewApi test files); pictures looked at before reporting.
+
+Constraints: views hold no gameplay state; player-facing text only from data; `ViewApi` source may not name
+`World` or `UnitStore` and never changes sim state or the hash; no allocation per frame in the drawing; a model
+count is read from `tools/asset-manifest.json`; scratch clones named `m6vh8-...` (rule 63); never kill another
+track's Godot or `testhost`, end your own (rule 52); bug ids 1500+.
+
+**QA focus (standard):** look at the pictures first (ring over marker at 20 / 40 / 60 m, Teblor bars against the
+head with every clip including the raised-hand ones, a giant on a ramp, a hurt giant behind a building). Attack: a
+Stop queued after a Stop, a Hold as the only queued order, a ring at a point shared by two units, 8 queued then a
+Shift building with one and with 30 workers selected (some full, some not), zoom changed while a queue is drawn,
+the replay row with the watched seat switched, capsule types (`--placeholder-art`) unchanged. Run the timing rows
+alone and the bench last; the default loop once (expect exactly the five).
+
 ### Where we are
 M6-V22 on `main`. Counter **4 / 4: the next session is the view's hardening.** 109 scenes (check the count in the
 loop's last line). New: **BUG-1470** S3 (a queued Stop / Hold / no-target cast disc covers the marker before it),
@@ -339,6 +525,81 @@ marker: keep; no depth test: keep; the one-tick-old state: accepted.
 ---
 
 ## Data track
+
+### Current session plan (2026-11-15-1536, session 2 / 8): D-R39, feature, QA light
+
+**Make the four red content rows honest after the gather change: the faction pages' sentences and the AI-openings report. No game data moves.**
+
+Goal: four of the five rows red on `main` by ruling (BUG-1462, rule 57) are the data track's and are this task's
+first item. M6-S10 changed the economy and re-printed table cells on the faction pages; the sentences beside them
+and the opening-pair report now disagree with the game. Bring pages and report back to what the game does, and
+write down what the measurements say for the balance pass (D33).
+
+Scope, in this order:
+1. `QA/Content/DR35ProsePinQaTests.AgeTwoProse_MatchesTheAgeTwoTables` and
+   `Malazan_Bug0982Prose_MatchesTheThresholdTable`: rewrite the prose on `docs/factions/malazan.md` and
+   `docs/factions/whirlwind.md` to the cells M6-S10 re-printed (Malazan seeds 32 / 45, `cadre_rush` v
+   `raider_rush` seeds 8 / 14, Whirlwind seeds 9 / 13 / 19). Where a pin holds a literal the re-printed cell no
+   longer matches (for example "seed 45: 9:28 (defeated 19:02)", "| seed 13: never |", a "(was ...)" figure), read
+   the value from the table by pattern as the lines beside it do, or update the literal to the cell; list every pin
+   edit old → new. No assertion is removed and none is weakened to a looser match.
+2. `Content/AiOpeningPairsReportTests.NormalAiVersusAi_EveryOpeningPair_BothWave_NoDeadEndStep`:
+   - (malazan 0, whirlwind 2), seed 3: the Malazan standard opening's first wave (5:47) wipes the `holy_war` army
+     and the Whirlwind are defeated at 12:29 with no wave sent. Measure `holy_war` against all three Malazan
+     openings over the row's seeds. If `holy_war` falls before its first wave is due in most of them, that is a
+     balance finding for D33: write the table on whirlwind.md and re-state the row as "a side defeated before its
+     first wave is due is reported, not failed", with the reason in the test's comment. If it is this one seed,
+     say so and re-state the same way for that case only.
+   - (malazan 2, whirlwind 0), seed 13: a beaten Whirlwind seat (Town Hall razed, four steps due) is reported
+     "DEAD END". The report gets a "beaten: hall lost" reason for a seat whose hall is razed (test logic in
+     `Content/`); a seat that still has its hall and cannot place a step still fails as before.
+3. `docs/factions/teblor.md`: the sentences M6-S10 listed as false (the Hut steps 15 / 16; the first waves
+   323 s / 316 s; Age II 448 / 429 s; beaten at 1,022 s) and BUG-1421 items 3-4 (label the measured figures as
+   dated measurements or pin them; wrap the two long lines; the oversized fixture's name only if it is a rename
+   inside `Content/Fixtures/`).
+4. BUG-1480: `docs/factions/shadow.md` "Decisions (D-R38)" as bullets (keep the "(Q4)" tag).
+- OUT of scope: **any byte under `game/data/**`** (if a measurement says a number must move, write it up as a
+  finding for D33 and stop there: no data hash move this session); D33 itself (BUG-1420, BUG-0982's 14 v 18 pop:
+  the `Bug0982_*` Stress rows stay as they are); `CounterCompositionTests.AHardSeat_*` (the sim's row); any C#
+  outside `sim/Rts.Sim.Tests/Content/` and `sim/Rts.Sim.Tests/QA/Content/`; any doc outside `docs/factions/**`
+  (a docs/02 or docs/03 sentence that is now false is listed in the report for the Producer).
+
+Acceptance criteria:
+1. The two `DR35ProsePinQaTests` rows are green; every sentence they read is true to the table cell beside it
+   (QA spot-checks cells against a fresh run of the measuring test); pin edits listed old → new.
+2. The (0, 2) row is green by the re-statement, with the `holy_war` table (three Malazan openings by the row's
+   seeds: first wave due, wave sent or not, defeated at) on whirlwind.md and "one seed" or "most seeds" said in the
+   report's first lines. A side that is alive, has its producers and still sends no wave by the bound fails as
+   before (a row or a forged case proves the re-statement did not hide that).
+3. The (2, 0) row is green: a razed-hall seat reads "beaten: hall lost"; a forged case with the hall standing and
+   an unplaceable step still reads "DEAD END" and fails.
+4. teblor.md and shadow.md as in Scope 3-4; no pinned sentence on any page is false (the whole `Content` and
+   `QA/Content` subset is green).
+5. `git diff --stat` shows nothing under `game/data/**` and no C# outside the two content test folders; the data
+   hash is B74DC7AE61B4862D as on `main`.
+6. `dotnet build RtsGame.sln --no-incremental` 0 errors / 0 warnings after the last edit; the full default loop
+   after the last edit is **red only in `CounterCompositionTests.AHardSeat_ShiftsItsLineShareFurther_ThanANormalSeat`,
+   which this task does not own and must not touch (rule 68).**
+7. The report ends with the review table for the owner: every changed sentence that states a number (page,
+   old → new, one-line why), and the D33 findings in plain words. Open questions for the Producer go in a
+   "Questions for the Producer" section of the page concerned (rule 67).
+
+Design references: `docs/factions/malazan.md`, `whirlwind.md`, `teblor.md` (the Age II tables, "Houses at the
+cap", "The opening, measured (D32)"), `shadow.md` "Decisions (D-R38)"; docs/03 "Implementation (M6-S10)" (the
+old → new list of re-printed cells and the sentences handed to the data track); docs/02 "AI" (openings, waves);
+BUG-1462, BUG-1421, BUG-1480, BUG-1464 item 3.
+
+Tests required: the four rows green as above; the two forged cases of criteria 2-3; nothing skipped.
+
+Constraints: data validation and the content pins run on every change; no player-facing text in C#; a foreign
+faction's name on a page only as `Content/OwnNames.cs` allows; scratch clones named `dr39-...` (rule 63); end every
+test process you start (rule 52); bug ids 1510+.
+
+**QA focus (light):** the task's filters plus the default loop once (expect only the sim's `AHardSeat_*` row
+red). Read the two re-statements for anything that now passes when it should fail: forge a seat that is alive and
+never sends a wave, and a hall-standing dead end, and see both fail. Spot-check five rewritten sentences on each
+page against a fresh run of their measuring test. Confirm no byte under `game/data/**` moved and the data hash.
+Do not run Stress.
 
 ### Where we are
 D-H9 on `main`: no data byte moved. Counter **0 / 4** (D-H9 was the hardening). Fixed: BUG-1450, BUG-1451, BUG-1360.
