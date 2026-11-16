@@ -441,20 +441,20 @@ The Producer's answers to the eleven open questions D-R38 returned (Q1-Q11, whic
 docs/01 "2026-11-15 (a)" item (3) settles them: Producer decisions the owner may revisit. One line a question, in docs/01's
 order; the last is Q4. Where the page already reads that way, the line says where.
 
-1. "Taken damage" is any loss of hit points. Already so: "Faction bonus".
-2. `exceptSlots` is `["siege"]` only; the sim's summoned-unit task must show a Wraith is never hidden, else `summoned` joins
-   the list. Already so: "Faction bonus" (the `forestStealth` block and the sentence under it).
-3. A Thrall stays hidden while it chops at a forest edge; flagged for the M8 balance pass.
-   Already so: "Faction bonus" and the Thrall's Owner review description.
-4. The Edur Ram is a melee ram that hits buildings only. Already so: "Units", "Unit notes", "Against docs/02's template".
-5. The Hound of Shadow's `scale` is 1. Already so: the Units table's Scale column.
-6. Losing hit points breaks the Shadow Archer's stand-still stealth, and the +50% first shot is the Archer's alone, from
-   either stealth (forest or stand-still). Already so: Schema gaps G1 and G2.
-7. The 7-Hound cap counts Hounds alive plus queued. Already so: Schema gap G4.
-8. Shadow-step carries own units only: siege stays, Wraiths go. Already so: "own non-siege units" (Abilities, G5).
-9. The faction's `displayName` is "Shadow" and its bonus "Children of Shadow" (the owner's taste: it starts like the
-   Teblor's "Children of the Mountains"). Already so: "Owner review (D-R38, proposed)".
-10. The opening builds a Blackwood Forge because Wraith-binding is researched there. Already so: opening step 22.
-11. (Q4) The content checks that refuse another faction's names blank out the faction's own names first ("Edur Warrior"
-    and "Warrior Lodge" contain the Teblor's "Warrior"); the units keep their names. Done in D-H9: `UnitContentTests` E
-    and `BuildingContentTests` F.
+- "Taken damage" is any loss of hit points. Already so: "Faction bonus".
+- `exceptSlots` is `["siege"]` only; the sim's summoned-unit task must show a Wraith is never hidden, else `summoned` joins
+  the list. Already so: "Faction bonus" (the `forestStealth` block and the sentence under it).
+- A Thrall stays hidden while it chops at a forest edge; flagged for the M8 balance pass.
+  Already so: "Faction bonus" and the Thrall's Owner review description.
+- The Edur Ram is a melee ram that hits buildings only. Already so: "Units", "Unit notes", "Against docs/02's template".
+- The Hound of Shadow's `scale` is 1. Already so: the Units table's Scale column.
+- Losing hit points breaks the Shadow Archer's stand-still stealth, and the +50% first shot is the Archer's alone, from
+  either stealth (forest or stand-still). Already so: Schema gaps G1 and G2.
+- The 7-Hound cap counts Hounds alive plus queued. Already so: Schema gap G4.
+- Shadow-step carries own units only: siege stays, Wraiths go. Already so: "own non-siege units" (Abilities, G5).
+- The faction's `displayName` is "Shadow" and its bonus "Children of Shadow" (the owner's taste: it starts like the
+  Teblor's "Children of the Mountains"). Already so: "Owner review (D-R38, proposed)".
+- The opening builds a Blackwood Forge because Wraith-binding is researched there. Already so: opening step 22.
+- (Q4) The content checks that refuse another faction's names blank out the faction's own names first ("Edur Warrior"
+  and "Warrior Lodge" contain the Teblor's "Warrior"); the units keep their names. Done in D-H9: `UnitContentTests` E
+  and `BuildingContentTests` F.

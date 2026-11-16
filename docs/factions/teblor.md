@@ -299,7 +299,9 @@ in 35, defeated by 15:00 in 14, no second Longhouse finished by 15:00, and an ar
 rule fixed before the measurement was "0.25 if it meets 6 of 8, else 0.5", so 0.25 ships.
 
 **The opening, measured (D32, 2026-11-14, on the files that ship; `Content/TeblorLandedShareReportTests` row `shipped`,
-the variants in `Content/D32TeblorOpeningReportTests`).** The same 64 matches (Normal against Normal to 15:00, four maps,
+the variants in `Content/D32TeblorOpeningReportTests`).** A dated measurement: the figures in this paragraph and the next
+were measured on 2026-11-14, before the sim's M6-S10 gather change (2026-11-15), and no test checks them; re-run the two
+reports to bring them up to date. The same 64 matches (Normal against Normal to 15:00, four maps,
 seeds 1-8). The target (Age II and a wave by 10:00 in 6 of a seed's 8) on 8 of 8 seeds; of the 64, Age II by 10:00 in 55,
 a wave by 10:00 in 62, a second Longhouse finished by 15:00 in 18, every building kind of the opening in 18, the
 Anointing in 20, defeated by 15:00 in 10; a Shaman fielded in 27, with 22 Blood-oil Frenzy casts landed in 18 of them;
@@ -322,11 +324,16 @@ beside it at 8:00: the Carver and the Breakers Hall wait until 10:00, the Anoint
 Where the step was sent before D32, on Raraku against the Whirlwind at 8:35, the site was razed and never placed again
 (an expansion is not rebuilt, docs/02).
 
-**Houses at the cap (D32, 2026-11-14, measured on the shipped files; `QA/Content/AiHouseRuleReportTests.MenuMapNormal_HouseSources_Report` and `MenuMapNormal_TwelfthHouse_Report`).**
+**Houses at the cap (D32, 2026-11-14, measured on the shipped files;
+`QA/Content/AiHouseRuleReportTests.MenuMapNormal_HouseSources_Report` and `MenuMapNormal_TwelfthHouse_Report`).**
 Since M5-4f the executor skips a house step once the population cap is the hard cap (100): the step is done with no
-command sent and no Hut placed. On the menu's map (20 minutes, the other seat idle): Normal, seed 1: the cap reaches 100 at 1044 s; the last Hut step (step 16) is done at a cap of 100; skipped at the hard cap: steps 15, 16; 10 Huts stand at 20:00, 0 past the cap. As on the other pages, the 12th Hut step measured taken out: without the 12th Hut step (step 16) on the same seed, the cap reaches 100 at 1044 s, and 10 Huts stand at 20:00, 0 past the cap. The step stays: the
-second Longhouse (+10 pop, D32's expansion) brings the cap to 100 with 10 Huts, so the 11th Hut step (step 15) is
-skipped and the 12th is never reached on this seed; a seat that loses or never builds the second Longhouse needs both,
+command sent and no Hut placed. On the menu's map (20 minutes, the other seat idle): Normal, seed 1: the cap reaches 100
+at 1044 s; the last Hut step (step 16) is done at a cap of 100; skipped at the hard cap: steps 15, 16; 10 Huts stand at
+20:00, 0 past the cap. As on the other pages, the 12th Hut step measured taken out: without the 12th Hut step (step 16)
+on the same seed, the cap reaches 100 at 1044 s, and 10 Huts stand at 20:00, 0 past the cap. The step stays: the second
+Longhouse (+10 pop, D32's expansion) brings the cap to 100 with 10 Huts, so both the 11th and the 12th Hut steps (steps
+15 and 16) are skipped at the hard cap on this seed (re-measured 2026-11-15 after the sim's M6-S10 gather change; before
+it step 15 was skipped and step 16 never reached); a seat that loses or never builds the second Longhouse needs both,
 and they cost nothing until they are reached.
 
 **Spending on the menu's map (D32, 2026-11-14, gathering gold 0.85 / wood 0.75 a second; `Content/AiSpendingReportTests.GeneratedNormal_Spending_Report`).**
@@ -334,10 +341,12 @@ Against an idle seat, 12 forests and 8 mines (the menu's), 20 minutes. Normal, s
 Normal pick is this opening): the idle base falls at 466 s; in hand at 5 min 230 gold / 150 wood; the first wave at 316
 s; Age II in at 436 s. Easy, seed 1 (Easy always plays the first opening): the idle base falls at 494 s; in hand at 5
 min 290 gold / 105 wood; the first wave at 318 s; Age II in at 450 s. Against an active opponent on the same map and seed
-(`QA/Content/TeblorOpeningQaTests`): a Normal Teblor seat sends its first wave at 340 s, is in Age II at 466 s and still
-stands at 20:00 against a Normal Malazan; against a Normal Whirlwind it sends its first wave at 362 s, is in Age II at
-464 s and is beaten at 910 s (BUG-1240's "beaten before Age II" is gone on this seed; the Whirlwind match is the balance
-pass's).
+(`QA/Content/TeblorOpeningQaTests`, re-measured 2026-11-15 after the sim's M6-S10 gather change; its rows pin the ticks
+and `TheOpponentSentence_QuotesTheReportRows` this sentence): a Normal Teblor seat sends its first wave at 323 s, is in
+Age II at 448 s and still stands at 20:00 against a Normal Malazan; against a Normal Whirlwind it sends its first wave at
+316 s, is in Age II at 429 s and is defeated at 1,022 s (D31's runs, 2026-11-14: 340 s and 466 s against the Malazan;
+362 s, 464 s and beaten at 910 s against the Whirlwind). BUG-1240's "beaten before Age II" is gone on this seed; the
+Whirlwind match is the balance pass's.
 
 ## Difficulty
 

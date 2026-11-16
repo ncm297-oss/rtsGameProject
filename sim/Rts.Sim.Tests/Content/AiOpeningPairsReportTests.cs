@@ -11,7 +11,8 @@ namespace Rts.Sim.Tests.Content;
 /// the match itself. Asserted: both sides started a wave, and no step is a dead end: at 20:00 every step of each side is
 /// done or legitimately waiting, which is one of (a) its <c>pop</c> trigger was never reached, (b) the side was defeated
 /// first, (c) a house step at the hard cap, or one of the reasons <see cref="WhyWaiting"/> lists (a requirement not had
-/// yet, its gold or wood not in hand, no known free mine, its building razed; M5-9a: a build step with no worker alive). Everything else
+/// yet, its gold or wood not in hand, no known free mine, its building razed; M5-9a: a build step with no worker alive;
+/// D-R39: "beaten: hall lost", no finished town hall of the side's stands). Everything else
 /// is printed for the owner: the first wave, Age II, the defeat, the steps done. D-H6: a step waiting on gold or wood also
 /// prints since when it has been due, how long it waited and the banks at the end; a wait over 5:00 is marked as
 /// BUG-0981's pattern (printed, not failed: since the sim's M5-4g the AI reserves for a due step, but only while its army
@@ -19,6 +20,16 @@ namespace Rts.Sim.Tests.Content;
 /// measures <c>cadre_rush</c>'s wave threshold against <c>raider_rush</c>. D-R32 (2026-10-26): each pairing run also pins
 /// its cells of both pages' "Age II against ..." table (<see cref="AssertAgeTwoCells"/>; the 2nd and 3rd seeds are
 /// <c>QA/Content/D21OpeningsQaTests</c>' runs).
+/// <para>
+/// D-R39 (2026-11-15, after the sim's M6-S10 gather change) re-states "both sides started a wave" for one named case
+/// (<see cref="DefeatedBeforeDue"/>): that side, defeated before its first wave was ever due (<see cref="NoWave"/>), is
+/// reported, not failed. On (0, 2) seed 3 the Malazan standard opening's first wave (5:47) wipes the <c>holy_war</c> army
+/// (14 pop at its peak, its wave waits for 20) and the Whirlwind fall at 12:29 with their wave never due.
+/// <c>Content/HolyWarFirstWaveReportTests</c> measured <c>holy_war</c> against all three Malazan openings on each pairing's
+/// three seeds: this is one seed of nine (the other eight send their first wave by 10:09 and stand at 20:00; whirlwind.md
+/// "The holy war's first wave"), so the allowance is this case only. Any other side defeated without a wave, a side alive
+/// at 20:00 without one, or the named side if its wave was due before it fell, still fails.
+/// </para>
 /// <para>
 /// Reads the AI through its internals (<c>InternalsVisibleTo</c>): <c>Simulation.AiOf</c>, <c>AiPlayer.Opening</c>,
 /// <c>AiPlayer.HouseType</c>, <c>Blackboard.WavesStarted</c>, <c>StepDueTick</c>, <c>StepDone</c>. Everything else is world state.
@@ -71,6 +82,7 @@ public class AiOpeningPairsReportTests
         var ageTwo = new[] { -1, -1 };
         var defeated = new[] { -1, -1 };
         var defendingThinks = new int[2];
+        var firstDue = new[] { -1, -1 };
         var timeline = new List<string>();
         for (int t = 0; t < Ticks; t++)
         {
@@ -92,6 +104,7 @@ public class AiOpeningPairsReportTests
                 if (ageTwo[p] < 0 && w.Age(p) >= 2) ageTwo[p] = sim.TickNumber;
                 if (defeated[p] < 0 && w.IsDefeated(p)) defeated[p] = sim.TickNumber;
                 if (sim.TickNumber % ai.ThinkTicks == 0 && ai.Board.Defending) defendingThinks[p]++;
+                if (firstDue[p] < 0 && defeated[p] < 0 && sim.TickNumber % ai.ThinkTicks == 0 && WaveDue(sim, ai)) firstDue[p] = sim.TickNumber;
             }
         }
         clock.Stop();
@@ -104,24 +117,90 @@ public class AiOpeningPairsReportTests
             AiPlayer ai = sim.AiOf(p)!;
             string side = d.Factions[ai.Faction].Key;
             _out.WriteLine($"  {side}: waves started {ai.Board.WavesStarted} (first at {Sec(firstWave[p])}); Age II at {Sec(ageTwo[p])}; defeated {(defeated[p] < 0 ? "no" : "at " + Sec(defeated[p]))}; thinks defending {defendingThinks[p]}; pop {w.HalfPop[p] / 2.0} / cap {w.HalfPopCap[p] / 2.0}; gold {w.Gold[p]}, wood {w.Wood[p]}");
-            var waiting = new List<string>();
-            int done = 0;
-            for (int i = 0; i < ai.Opening.BuildOrder.Length; i++)
-            {
-                if (ai.Board.StepDone[i]) { done++; continue; }
-                AiStep s = ai.Opening.BuildOrder[i];
-                string? why = WhyWaiting(sim, ai, s, i, defeated[p]);
-                string text = $"step {i + 1} ({AiContentTests.StepText(s)}): {why ?? "DEAD END (due at " + Sec(ai.Board.StepDueTick[i]) + ", not done)"}";
-                waiting.Add(text);
-                if (why == null) deadEnds.Add($"{side} {text}");
-            }
+            List<string> waiting = Waiting(sim, ai, defeated[p], deadEnds, out int done);
             _out.WriteLine($"  {side}: steps done {done} / {ai.Opening.BuildOrder.Length}; waiting: {(waiting.Count == 0 ? "none" : string.Join("; ", waiting))}");
             int longWaits = waiting.Count(x => x.Contains(LongWaitFlag, StringComparison.Ordinal));
             if (longWaits > 0) _out.WriteLine($"  {side}: {longWaits} step(s) due over 5:00 and still short of gold or wood at 20:00 (BUG-0981's pattern, left by M5-4g's gated reserve; not a failure)");
-            if (ai.Board.WavesStarted == 0) deadEnds.Add($"{side} ({ai.Opening.Id}) sent no wave in 20 minutes on seed {seed}");
+            bool named = Array.IndexOf(DefeatedBeforeDue, (malazan, whirlwind, seed, p)) >= 0;
+            string? noWave = NoWave(side, ai.Opening.Id, seed, ai.Board.WavesStarted, defeated[p], firstDue[p], named, out bool fails);
+            if (noWave != null && fails) deadEnds.Add(noWave);
+            else if (noWave != null) _out.WriteLine($"  {noWave}");
         }
         Assert.True(deadEnds.Count == 0, string.Join("\n", deadEnds));
         AssertAgeTwoCells(malazan, whirlwind, 1, seed, ageTwo, defeated);
+    }
+
+    /// <summary>
+    /// Every step of <paramref name="ai"/>'s opening not done, as the report prints it ("step 3 (...): reason"); a step
+    /// with no <see cref="WhyWaiting"/> reason reads "DEAD END" and is added to <paramref name="deadEnds"/> (the row's
+    /// failures). <paramref name="done"/> counts the steps done.
+    /// </summary>
+    internal static List<string> Waiting(Simulation sim, AiPlayer ai, int defeatedTick, List<string> deadEnds, out int done)
+    {
+        string side = sim.World.Data.Factions[ai.Faction].Key;
+        var waiting = new List<string>();
+        done = 0;
+        for (int i = 0; i < ai.Opening.BuildOrder.Length; i++)
+        {
+            if (ai.Board.StepDone[i]) { done++; continue; }
+            AiStep s = ai.Opening.BuildOrder[i];
+            string? why = WhyWaiting(sim, ai, s, i, defeatedTick);
+            string text = $"step {i + 1} ({AiContentTests.StepText(s)}): {why ?? "DEAD END (due at " + Sec(ai.Board.StepDueTick[i]) + ", not done)"}";
+            waiting.Add(text);
+            if (why == null) deadEnds.Add($"{side} {text}");
+        }
+        return waiting;
+    }
+
+    /// <summary>
+    /// D-R39: the "both sides started a wave" verdict for one side; null when it sent a wave. A <paramref name="named"/>
+    /// side (<see cref="DefeatedBeforeDue"/>) defeated before its first wave was due (<paramref name="firstDueTick"/> never,
+    /// or not before <paramref name="defeatedTick"/>) is reported with <paramref name="fails"/> false; any other side
+    /// without a wave fails as before, and so does the named one alive at the end or defeated after its wave was due. A
+    /// named side that now waves is printed, to be taken out of the list (a failure, so the list cannot go stale).
+    /// </summary>
+    internal static string? NoWave(string side, string opening, ulong seed, int wavesStarted, int defeatedTick, int firstDueTick, bool named, out bool fails)
+    {
+        fails = false;
+        if (wavesStarted > 0 && !named) return null;
+        if (named && wavesStarted == 0 && defeatedTick >= 0 && (firstDueTick < 0 || firstDueTick >= defeatedTick))
+            return $"{side} ({opening}) sent no wave on seed {seed}: defeated at {Sec(defeatedTick)} before its first wave was due (reported, not failed)";
+        fails = true;
+        if (wavesStarted > 0) return $"{side} ({opening}) on seed {seed} now sends a wave: take it out of DefeatedBeforeDue";
+        return defeatedTick >= 0
+            ? $"{side} ({opening}) sent no wave in 20 minutes on seed {seed}: defeated at {Sec(defeatedTick)}, its first wave due at {Sec(firstDueTick)}"
+            : $"{side} ({opening}) sent no wave in 20 minutes on seed {seed}";
+    }
+
+    /// <summary>
+    /// D-R39: the one named side the no-wave rule reports instead of failing (Malazan opening, Whirlwind opening, seed,
+    /// player): measured one seed of nine for <c>holy_war</c> (<c>Content/HolyWarFirstWaveReportTests</c>), a balance
+    /// finding for D33, not a pattern.
+    /// </summary>
+    internal static readonly (int Malazan, int Whirlwind, ulong Seed, int Player)[] DefeatedBeforeDue = { (0, 2, 3, 1) };
+
+    /// <summary>
+    /// D-R39: whether <paramref name="ai"/>'s first wave is due now, from world state: its live army (every unit, so at
+    /// least the free ones the military counts) meets the opening's <c>attack</c> pop and cost scaled by the difficulty's
+    /// wave size, as <c>MilitaryManager.TryStart</c> asks, or the starved charge is due. The earliest tick a wave could start.
+    /// </summary>
+    internal static bool WaveDue(Simulation sim, AiPlayer ai)
+    {
+        if (ai.StarvedWaveDue) return true;
+        var u = sim.World.Units;
+        GameData d = sim.World.Data;
+        int half = 0, cost = 0, count = 0;
+        for (int s = 0; s < u.Capacity; s++)
+        {
+            if (!u.Alive[s] || u.Owner[s] != ai.Player) continue;
+            UnitDef def = d.Units[u.TypeId[s]];
+            if (def.Slot == UnitSlot.Worker) continue;
+            half += def.HalfPop;
+            cost += def.UnitWorth;
+            count++;
+        }
+        float scale = ai.Knobs.WaveSizeMultiplier;
+        return count > 0 && half >= ai.Opening.AttackMinHalfPop * scale && cost >= ai.Opening.AttackMinCost * scale;
     }
 
     /// <summary>
@@ -278,9 +357,11 @@ public class AiOpeningPairsReportTests
     /// tech or building it requires not had yet (the step that gives it is itself waiting); its gold or wood not in hand
     /// now (since M5-4g the AI reserves for a due step only while its army is wave-sized and the base is not defended, so
     /// production can still spend first, docs/03 "Implementation (M5-4g)"; the wait's length is printed and one over <see cref="LongWaitTicks"/> marked, BUG-0981); an <c>expand</c> with no known free mine (the AI's own view, as the executor asks it); a step whose
-    /// building stands no more (a <c>build</c> step completes once; a razed Forge leaves its research waiting).
+    /// building stands no more (a <c>build</c> step completes once; a razed Forge leaves its research waiting); D-R39: the
+    /// side has no finished town hall left ("beaten: hall lost": its hall razed, it is beaten down, not held; a side whose
+    /// hall stands and that cannot place a step is still a dead end).
     /// </summary>
-    private static string? WhyWaiting(Simulation sim, AiPlayer ai, AiStep s, int i, int defeatedAt)
+    internal static string? WhyWaiting(Simulation sim, AiPlayer ai, AiStep s, int i, int defeatedAt)
     {
         World w = sim.World;
         GameData d = w.Data;
@@ -324,8 +405,12 @@ public class AiOpeningPairsReportTests
         if (s.Action == AiStepAction.Research && !Stands(sim, p, x => d.Buildings[x].Slot == d.Techs[s.Target].ResearchedAtSlot))
             return $"no finished {d.Techs[s.Target].ResearchedAtSlot} stands (razed?)";
         if (s.Action == AiStepAction.Train && w.HalfPop[p] + d.Units[s.Target].HalfPop > w.HalfPopCap[p]) return "the population is at its cap";
+        if (!Stands(sim, p, x => d.Buildings[x].Slot == BuildingSlot.TownHall)) return HallLost;
         return null;
     }
+
+    /// <summary>D-R39: the reason a step waits on a side with no finished town hall left (see <see cref="WhyWaiting"/>).</summary>
+    internal const string HallLost = "beaten: hall lost (no finished town hall of the side's stands)";
 
     /// <summary>Whether a finished building of <paramref name="player"/>'s whose type passes <paramref name="type"/> stands.</summary>
     private static bool Stands(Simulation sim, int player, Func<int, bool> type)

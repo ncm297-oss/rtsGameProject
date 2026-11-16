@@ -33,7 +33,11 @@ public class D32PreFixtureTests(ITestOutputHelper output)
         return (string)ui[section]![key]!;
     }
 
-    /// <summary>The save: a Shaman's Blood-oil Frenzy running on a Warrior, on a 12-cell flat map (<c>pre_d31</c>'s pattern), 40 ticks after the cast.</summary>
+    /// <summary>
+    /// The save: a Shaman's Blood-oil Frenzy running on a Warrior, on a 12-cell flat map (<c>pre_d31</c>'s pattern), 40 ticks
+    /// after the cast. Its file is <c>save_teblor_frenzy.b64</c> (D-R39, BUG-1421 item 4: renamed from
+    /// <c>save_teblor_ai.b64</c>, the bytes unchanged; it holds no AI seat).
+    /// </summary>
     private static byte[] MakeSave()
     {
         GameData d = TestSim.Data;
@@ -81,16 +85,16 @@ public class D32PreFixtureTests(ITestOutputHelper output)
         if (Environment.GetEnvironmentVariable(WriteVariable) != "1") return;
         Assert.True(TestSim.Data.ContentHash() == PreHash, $"the fixtures are written on the diff base's data ({PreHash:X16}), not {TestSim.Data.ContentHash():X16}");
         Directory.CreateDirectory(Path.GetDirectoryName(Fixture("x"))!);
-        File.WriteAllText(Fixture("save_teblor_ai.b64"), Convert.ToBase64String(MakeSave()));
+        File.WriteAllText(Fixture("save_teblor_frenzy.b64"), Convert.ToBase64String(MakeSave()));
         ReplayFormat.WriteFile(MakeRecording(), Fixture("replay_teblor_train.replay"));
-        output.WriteLine($"wrote {Fixture("save_teblor_ai.b64")} and {Fixture("replay_teblor_train.replay")}");
+        output.WriteLine($"wrote {Fixture("save_teblor_frenzy.b64")} and {Fixture("replay_teblor_train.replay")}");
     }
 
     /// <summary>The save made before D32 carries the diff base's hash and is refused DataMismatch, no sim back; the player reads <c>save.data_mismatch</c>.</summary>
     [Fact]
     public void ASaveMadeBeforeD32_IsRefusedForItsDataHash_WithTheUiText()
     {
-        byte[] bytes = Convert.FromBase64String(File.ReadAllText(Fixture("save_teblor_ai.b64")));
+        byte[] bytes = Convert.FromBase64String(File.ReadAllText(Fixture("save_teblor_frenzy.b64")));
         ulong saved = BitConverter.ToUInt64(bytes, SaveBytes.HeaderOffsets(bytes).DataHash);
         Assert.Equal(PreHash, saved);
         Assert.NotEqual(saved, TestSim.Data.ContentHash());
@@ -130,7 +134,7 @@ public class D32PreFixtureTests(ITestOutputHelper output)
             dir.EditJson("common/rules.json", r => r.Remove("gatherOverlap"));
         });
         Assert.Equal(PreHash, before.ContentHash());
-        byte[] bytes = Convert.FromBase64String(File.ReadAllText(Fixture("save_teblor_ai.b64")));
+        byte[] bytes = Convert.FromBase64String(File.ReadAllText(Fixture("save_teblor_frenzy.b64")));
         Assert.Equal(SaveError.None, SaveTestRun.TryLoad(before, bytes));
         Assert.Equal(ReplayError.None, ReplayFormat.TryReadFile(Fixture("replay_teblor_train.replay"), out Replay? replay));
         ReplayResult result = ReplayPlayer.Run(replay!, before);

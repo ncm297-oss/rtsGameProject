@@ -480,8 +480,11 @@ every Whirlwind opening against every Malazan opening on the pairing's three sma
 and 3rd `QA/Content/D21OpeningsQaTests`'; each run pins its cell here and on malazan.md's twin table ("Age II against
 the Whirlwind"). Under M5-4g no Whirlwind side fell, and the two sides without Age II (`standard` against
 `crossbow_push` seed 9 and against `cadre_rush` seed 13) stood at 20:00 knowing no gold node, so their Age II can't be
-reserved (docs/03 "Implementation (M5-4g)"). Since the sim's M5-9a (2026-11-08) seed 9's side is defeated at 19:36,
-still without Age II; seed 13's still stands at 20:00 without it.
+reserved (docs/03 "Implementation (M5-4g)"). Since the sim's M6-S10 (2026-11-15, the gather change) seed 9's side
+reaches Age II at 9:59 (from the sim's M5-9a until M6-S10 it was defeated at 19:36 without it); seed 13's still stands at
+20:00 without Age II, beaten down: its Town Hall razed, 4 workers left. Three Whirlwind sides now fall: `holy_war`
+against `standard` seed 3 at 12:29 (before its first wave was due, see "The holy war's first wave" below), `raider_rush`
+against `crossbow_push` seed 11 at 18:34, without Age II, and `standard` against `cadre_rush` seed 17 at 16:27.
 
 | Whirlwind opening | Malazan opening | 1st seed | 2nd seed | 3rd seed |
 | --- | --- | --- | --- | --- |
@@ -495,5 +498,35 @@ still without Age II; seed 13's still stands at 20:00 without it.
 | `holy_war` | `crossbow_push` | seed 12: 9:10 | seed 45: 7:35 | seed 71: 10:31 |
 | `holy_war` | `cadre_rush` | seed 20: 8:58 | seed 24: 9:10 | seed 27: 8:58 |
 
-Re-printed 2026-11-09 for the sim's M5-H6 (docs/03 "Implementation (M5-H6)"): `raider_rush` against `crossbow_push` seed
-19 now reaches Age II at 10:34 (was 10:21).
+Re-printed 2026-11-15 for the sim's M6-S10 (docs/03 "Implementation (M6-S10)"): `raider_rush` against `crossbow_push`
+seed 19 now reaches Age II at 10:04 (was 10:34 from the sim's M5-H6, and 10:21 before it).
+
+## The holy war's first wave (D-R39, 2026-11-15)
+
+Measured by `Content/HolyWarFirstWaveReportTests`, which pins this table to its output cell for cell, after the sim's
+M6-S10 gather change. On the first seed of `holy_war` against the Malazan `standard` (seed 3, `Content/AiOpeningPairsReportTests`'
+run) the Malazan first wave wipes the `holy_war` army and the side is defeated at 12:29 without sending a wave. To see
+whether that is the opening or the seed: `holy_war` against each Malazan opening, two Normal AI seats on the menu's map
+(12 forests, 8 mines), 20 minutes, on each pairing's three smallest seeds in 1-500 (the Age II table's seeds). The
+`holy_war` columns: when its first wave was due (its army at the opening's 20 army pop and their cost, or the starved
+charge), its first wave and the waves sent, its defeat and its largest army (read once a second).
+
+| Malazan opening | seed | Malazan first wave | `holy_war` wave due | `holy_war` first wave (waves) | `holy_war` defeated at | `holy_war` peak army pop |
+| --- | --- | --- | --- | --- | --- | --- |
+| `standard` | 3 | 5:47 | never | never (0) | 12:29 | 14 |
+| `standard` | 4 | 5:48 | 8:16 | 8:16 (3) | never | 25 |
+| `standard` | 6 | 6:08 | 7:46 | 7:49 (5) | never | 37 |
+| `crossbow_push` | 12 | 6:03 | 7:46 | 7:46 (3) | never | 26 |
+| `crossbow_push` | 45 | 5:42 | 7:25 | 7:45 (5) | never | 70 |
+| `crossbow_push` | 71 | 5:46 | 8:55 | 10:09 (4) | never | 30 |
+| `cadre_rush` | 20 | 10:18 | 7:04 | 7:04 (6) | never | 57 |
+| `cadre_rush` | 24 | 8:19 | 7:40 | 7:40 (4) | never | 26 |
+| `cadre_rush` | 27 | 9:56 | 7:01 | 7:01 (4) | never | 74 |
+
+**What it says (a finding for the balance pass, D33; no data changed).** One seed of nine: `holy_war` falls before its
+first wave is due only on seed 3. On the other eight it reaches its 20 pop between 7:01 and 8:55, sends 3 to 6 waves and
+stands at 20:00. The Malazan `standard` and `crossbow_push` openings send their first wave at 5:42 to 6:08, before
+`holy_war`'s is due on every one of their six seeds; on seed 3 that wave met a 14-pop army that never grew back. The
+latest Whirlwind wave (20 army pop) is the price of the opening's early Age II, and seed 3 shows the risk; the measurement
+does not say the threshold is wrong. So `Content/AiOpeningPairsReportTests` names this one case
+(`DefeatedBeforeDue`: reported, not failed) and fails any other side that sends no wave.

@@ -95,47 +95,68 @@ public class DR35ProsePinQaTests
             Assert.Contains(rule, text, StringComparison.Ordinal);
     }
 
-    /// <summary>The BUG-0982 paragraph's seed 8 / 14 defeats and the re-print note are the 18-pop table rows' cells.</summary>
+    /// <summary>
+    /// The BUG-0982 paragraph's defeats and re-print notes are the threshold table's cells. D-R39 (2026-11-15, after the
+    /// sim's M6-S10): seed 8 no longer falls at every threshold (it waves at all three and stands at 18 and 16 pop), so the
+    /// check that its defeat is one value at every threshold now checks that it waves at every threshold, stands at 18 and
+    /// 16 and falls at 14, each cell read from the table; seed 14's defeat is still one value at every threshold; and the
+    /// Age II table's twin cells (the same shipped runs) are read against the threshold table's 18-pop row.
+    /// </summary>
     [Fact]
     public void Malazan_Bug0982Prose_MatchesTheThresholdTable()
     {
         string page = Joined("malazan");
-        string Defeat(string pop, int seed) =>
-            Regex.Match(page, @"\| " + Regex.Escape(pop) + @" \| " + seed + @" \| [^|]+\| [^|]+\| ([^|]+?) \|").Groups[1].Value;
-        string d8 = Defeat("18 / 1,332", 8), d14 = Defeat("18 / 1,332", 14);
-        Assert.Matches(@"^\d+:\d\d$", d8);
+        Match Row(string pop, int seed) =>
+            Regex.Match(page, @"\| " + Regex.Escape(pop) + @" \| " + seed + @" \| ([^|]+?) \| ([^|]+?) \| ([^|]+?) \| ([^|]+?) \|");
+        string Defeat(string pop, int seed) => Row(pop, seed).Groups[3].Value;
+        string d14 = Defeat("18 / 1,332", 14);
         Assert.Matches(@"^\d+:\d\d$", d14);
         foreach (string pop in new[] { "16 / 1,184", "14 / 1,036" })
-        {
-            Assert.Equal(d8, Defeat(pop, 8));
             Assert.Equal(d14, Defeat(pop, 14));
-        }
-        Assert.Contains($"are destroyed (seed 8 at {d8}, 14 at {d14}, 18 at", page, StringComparison.Ordinal);
-        Assert.Contains($"at every threshold seed 8 now falls at {d8} (was", page, StringComparison.Ordinal);
-        Assert.Contains($"and seed 14 at {d14} (was", page, StringComparison.Ordinal);
-        Assert.Contains($"`raider_rush` seed 8 falls at {d8} (was 13:50) and seed 14 at {d14} (was 15:03)", page, StringComparison.Ordinal);
-        Assert.Contains($"seed 8: 8:41 (defeated {d8}) | seed 14: never (defeated {d14}) |", page, StringComparison.Ordinal);
+        string w8 = Regex.Match(Row("18 / 1,332", 8).Groups[1].Value, @"^(\d+:\d\d) \(\d+\)$").Groups[1].Value;
+        Assert.NotEqual("", w8);
+        foreach (string pop in new[] { "16 / 1,184", "14 / 1,036" })
+            Assert.Matches(@"^\d+:\d\d \(\d+\)$", Row(pop, 8).Groups[1].Value);
+        Assert.Equal("never", Defeat("18 / 1,332", 8));
+        Assert.Equal("never", Defeat("16 / 1,184", 8));
+        string d8At14 = Defeat("14 / 1,036", 8);
+        Assert.Matches(@"^\d+:\d\d$", d8At14);
+        Assert.Contains($"are destroyed (seed 14 at {d14}, 18 at", page, StringComparison.Ordinal);
+        Assert.Contains($"seeds 7 and 8 wave and stand at 20:00, seed 8 first at {w8}", page, StringComparison.Ordinal);
+        Assert.Contains($"at 14 seed 8 is destroyed at {d8At14} where at 18 it stands", page, StringComparison.Ordinal);
+        Assert.Contains($"at every threshold seed 14 now falls at {d14} (was", page, StringComparison.Ordinal);
+        Assert.Contains($"(at 18 pop first at {w8},", page, StringComparison.Ordinal);
+        string a8 = Row("18 / 1,332", 8).Groups[2].Value, a14 = Row("18 / 1,332", 14).Groups[2].Value;
+        Assert.Matches(@"^\d+:\d\d$", a8);
+        Assert.Matches(@"^\d+:\d\d$", a14);
+        Assert.Contains($"`raider_rush` seed 8 reaches Age II at {a8} (was 8:41) and stands at 20:00 (was destroyed at 13:47), and seed 14 reaches Age II at {a14} (was never) and falls at {d14} (was 14:16)", page, StringComparison.Ordinal);
+        Assert.Contains($"seed 8: {a8} | seed 14: {a14} (defeated {d14}) |", page, StringComparison.Ordinal);
     }
 
-    /// <summary>The Age II tables' prose: seed 32's defeat (Malazan) and seed 9's defeat and seed 19's Age II (Whirlwind).</summary>
+    /// <summary>
+    /// The Age II tables' prose: seeds 32 and 45 (Malazan) and seeds 9, 13 and 19 (Whirlwind). D-R39 (2026-11-15, after the
+    /// sim's M6-S10): seeds 32, 45 and 9 now reach Age II and stand at 20:00, so each is read as a cell with no defeat and
+    /// its sentence says so.
+    /// </summary>
     [Fact]
     public void AgeTwoProse_MatchesTheAgeTwoTables()
     {
         string m = Joined("malazan"), w = Joined("whirlwind");
-        string m32 = Regex.Match(m, @"seed 32: never \(defeated (\d+:\d\d)\)").Groups[1].Value;
+        string m32 = Regex.Match(m, @"\| seed 32: (\d+:\d\d) \|").Groups[1].Value;
         Assert.NotEqual("", m32);
-        Assert.Contains($"`crossbow_push` seed 32 is defeated at {m32} (", m, StringComparison.Ordinal);
-        string m45 = Regex.Match(m, @"seed 45: (\d+:\d\d) \(defeated (\d+:\d\d)\)").Value;
-        Assert.Contains("seed 45: 9:28 (defeated 19:02)", m45, StringComparison.Ordinal);
-        Assert.Contains("seed 45 reaches Age II at 9:28 as before and is now defeated at 19:02", m, StringComparison.Ordinal);
+        Assert.Contains($"`crossbow_push` seed 32 reaches Age II at {m32} and stands at 20:00", m, StringComparison.Ordinal);
+        string m45 = Regex.Match(m, @"\| seed 45: (\d+:\d\d) \|").Groups[1].Value;
+        Assert.NotEqual("", m45);
+        Assert.Contains($"seed 45 reaches Age II at {m45} (was 9:28) and stands at 20:00 again (was defeated at 19:02", m, StringComparison.Ordinal);
 
-        string w9 = Regex.Match(w, @"seed 9: never \(defeated (\d+:\d\d)\)").Groups[1].Value;
+        string w9 = Regex.Match(w, @"\| seed 9: (\d+:\d\d) \|").Groups[1].Value;
         Assert.NotEqual("", w9);
-        Assert.Contains($"seed 9's side is defeated at {w9}, still without Age II", w, StringComparison.Ordinal);
+        Assert.Contains($"seed 9's side reaches Age II at {w9}", w, StringComparison.Ordinal);
         Assert.Contains("| seed 13: never |", w, StringComparison.Ordinal);
+        Assert.Contains("seed 13's still stands at 20:00 without Age II", w, StringComparison.Ordinal);
         string w19 = Regex.Match(w, @"\| `raider_rush` \| `crossbow_push` \|[^\n]*?seed 19: (\d+:\d\d) \|").Groups[1].Value;
         Assert.NotEqual("", w19);
-        Assert.Contains($"seed 19 now reaches Age II at {w19} (was 10:21)", w, StringComparison.Ordinal);
+        Assert.Contains($"seed 19 now reaches Age II at {w19} (was 10:34", w, StringComparison.Ordinal);
     }
 
     private static void AssertCaught(TestDataDir dir, string faction, string expected)

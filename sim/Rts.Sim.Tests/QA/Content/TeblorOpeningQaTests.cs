@@ -62,12 +62,25 @@ public class TeblorOpeningQaTests
     /// a wave or reached Age II (D28: v Whirlwind (-1, -1, 12991), 649 s; v Malazan (-1, -1, 16376), 818 s). D31
     /// (2026-11-14), re-measured on the landed opening: both matches see a Teblor wave and Age II; the Malazan one stands.
     /// </summary>
-    [Theory]
     // M6-S10 (sim track, the Keep-corner cure and gatherOverlap 0.5): v Whirlwind (7241, 9281, 18218) -> (6321, 8581, 20444),
     // the Teblor still beaten but 111 s later, 4 waves sent, the Whirlwind 3; v Malazan (6801, 9321, -1) -> (6461, 8961, -1),
-    // the Teblor stand, 2 waves sent, the Malazan 3.
-    [InlineData("whirlwind", 6321, 8581, 20444)] // M6-S10: wave 316 s, Age II 429 s, beaten 1022 s (D31: 362 / 464 / 910 s; the Whirlwind sent 1 wave)
-    [InlineData("malazan", 6461, 8961, -1)]      // M6-S10: wave 323 s, Age II 448 s, stands at 20:00 (D31: 340 / 466 s; the Malazan sent 1 wave)
+    // the Teblor stand, 2 waves sent, the Malazan 3. D-R39: the rows moved from InlineData to this list, unchanged, so the
+    // page's sentence is pinned to the same numbers (TheOpponentSentence_QuotesTheReportRows).
+    internal static readonly (string Opponent, int FirstWave, int AgeTwo, int Fell)[] OpponentRows =
+    {
+        ("whirlwind", 6321, 8581, 20444), // M6-S10: wave 316 s, Age II 429 s, beaten 1022 s (D31: 362 / 464 / 910 s; the Whirlwind sent 1 wave)
+        ("malazan", 6461, 8961, -1),      // M6-S10: wave 323 s, Age II 448 s, stands at 20:00 (D31: 340 / 466 s; the Malazan sent 1 wave)
+    };
+
+    public static TheoryData<string, int, int, int> Opponents()
+    {
+        var rows = new TheoryData<string, int, int, int>();
+        foreach (var r in OpponentRows) rows.Add(r.Opponent, r.FirstWave, r.AgeTwo, r.Fell);
+        return rows;
+    }
+
+    [Theory]
+    [MemberData(nameof(Opponents))]
     public void TheStandardOpening_AgainstANormalAi_Report(string opponent, int firstWave, int ageTwo, int fell)
     {
         GameData d = TestSim.Data;
@@ -82,5 +95,23 @@ public class TeblorOpeningQaTests
             + $"({(first < 0 ? "never" : $"{first / Tps} s")}), waves {waves}, Age II {age}, the Teblor defeated at tick {defeated} "
             + $"({(defeated < 0 ? "stands" : $"{defeated / Tps} s")}); {opponent} waves {sim.AiOf(1)!.Board.WavesStarted}, defeated {sim.World.IsDefeated(1)}");
         Assert.Equal((firstWave, ageTwo, fell), (first, age, defeated));
+    }
+
+    /// <summary>
+    /// D-R39 (BUG-1421 item 3, BUG-1464 item 3): teblor.md's "Spending on the menu's map" sentence about the active
+    /// opponents quotes <see cref="OpponentRows"/> in whole seconds (a tick / 20, rounded down), so a re-measure that moves a
+    /// row fails here until the sentence moves with it.
+    /// </summary>
+    [Fact]
+    public void TheOpponentSentence_QuotesTheReportRows()
+    {
+        string page = System.Text.RegularExpressions.Regex.Replace(string.Join(" ", PageTables.FactionLines("teblor").Select(l => l.Trim())), @"\s+", " ");
+        static string S(int tick) => (tick / Tps).ToString("#,0", System.Globalization.CultureInfo.InvariantCulture) + " s";
+        var m = OpponentRows.Single(r => r.Opponent == "malazan");
+        var w = OpponentRows.Single(r => r.Opponent == "whirlwind");
+        Assert.Equal(-1, m.Fell);
+        Assert.True(w.Fell >= 0, "the Whirlwind row no longer defeats the Teblor: re-word the sentence");
+        Assert.Contains($"a Normal Teblor seat sends its first wave at {S(m.FirstWave)}, is in Age II at {S(m.AgeTwo)} and still stands at 20:00 against a Normal Malazan; "
+            + $"against a Normal Whirlwind it sends its first wave at {S(w.FirstWave)}, is in Age II at {S(w.AgeTwo)} and is defeated at {S(w.Fell)} (", page, StringComparison.Ordinal);
     }
 }
