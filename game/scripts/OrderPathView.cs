@@ -16,14 +16,17 @@ namespace Rts.Game;
 /// </summary>
 /// <remarks>
 /// Rebuilt from the sim every frame, never the source of truth. An entry with no place (Stop, Hold, a no-target ability)
-/// is a wider marker at the previous point. An Attack entry is drawn on its target only while the local player's fog
-/// shows it (a building's remembered ghost counts, as for <see cref="TargetRing"/>): a hidden or dead target gets no
-/// marker and no line to it, and the path goes on from the last drawn point. Lines and markers are drawn over the
-/// terrain (no depth test), so a leg up a cliff stays visible. Units sharing a queued point share its
-/// marker, and shared legs share their line (200 units on one path draw 8 markers, not 1,600). Two
-/// <see cref="MultiMesh"/>es (lines, markers), one draw call each; buffers grow while warming up and are reused, so a
-/// steady frame allocates nothing. The shown instances are also kept in managed arrays for tests (the headless dummy
-/// renderer keeps no instance data). Holds view state only.
+/// is a ring round the previous point (M6-VH8, BUG-1470: a flat torus whose hole is wider than a marker, in its own
+/// <see cref="MultiMesh"/> drawn before the markers, so the marker inside stays visible); a second no-place entry at the
+/// same point is the next ring out. Markers, rings and lines grow with the camera's zoom past <see cref="MarkerFullZoom"/>
+/// and <see cref="LineFullZoom"/> (M6-VH8), so they still read at the farthest zoom. An Attack entry is drawn on its
+/// target only while the local player's fog shows it (a building's remembered ghost counts, as for
+/// <see cref="TargetRing"/>): a hidden or dead target gets no marker and no line to it, and the path goes on from the last
+/// drawn point. Lines, rings and markers are drawn over the terrain (no depth test), so a leg up a cliff stays visible.
+/// Units sharing a queued point share its marker, and shared legs share their line (200 units on one path draw 8 markers,
+/// not 1,600). Three <see cref="MultiMesh"/>es (lines, rings, markers, drawn in that order), one draw call each; buffers
+/// grow while warming up and are reused, so a steady frame allocates nothing. The shown instances are also kept in managed
+/// arrays for tests (the headless dummy renderer keeps no instance data). Holds view state only.
 /// </remarks>
 public partial class OrderPathView : Node3D
 {
@@ -33,8 +36,36 @@ public partial class OrderPathView : Node3D
     /// <summary>A marker's radius, its height and its lift above the ground, in meters.</summary>
     public const float MarkerRadius = 0.5f, MarkerHeight = 0.1f, MarkerLift = 0.18f;
 
-    /// <summary>A no-place marker (Stop, Hold, a no-target cast) is this much wider and sits lower, a ring round the point's own marker.</summary>
+    /// <summary>A no-place entry's ring (Stop, Hold, a no-target cast): its outer radius over <see cref="MarkerRadius"/>, and its lift.</summary>
     public const float NoPlaceScale = 1.8f, NoPlaceLift = 0.12f;
+
+    /// <summary>
+    /// A ring's hole over its outer radius (M6-VH8, BUG-1470): 0.7 x 0.9 m = 0.63 m, wider than the 0.5 m marker inside, so a
+    /// ring never covers its marker. The next ring out at the same point is 1 / <see cref="RingInner"/> wider, so it starts
+    /// where the one inside ends.
+    /// </summary>
+    public const float RingInner = 0.7f;
+
+    /// <summary>Rings nest at most this many steps out at one point (a fourth no-place entry there shares the third's ring).</summary>
+    public const int MaxRingLevel = 2;
+
+    /// <summary>
+    /// Zoom (camera height, m) up to which markers and rings keep their size; above it they grow in proportion (the cargo
+    /// cube's and the hp bars' rule, M6-VH8): at the farthest zoom (60 m) a marker is 1 m wide.
+    /// </summary>
+    public const float MarkerFullZoom = UnitViews.CargoFullZoom;
+
+    /// <summary>Zoom up to which the lines keep <see cref="LineWidth"/>; above it they widen in proportion, so a line is as wide on screen at 60 m as at 20 m.</summary>
+    public const float LineFullZoom = CameraLimits.MinZoom;
+
+    /// <summary>The render priorities of the lines, the rings and the markers: drawn in this order, each over the last (no depth test).</summary>
+    public const int LinePriority = 1, RingPriority = 2, MarkerPriority = 3;
+
+    /// <summary>The size factor at camera zoom <paramref name="zoom"/> for a size kept up to <paramref name="fullZoom"/>: 1, or zoom / fullZoom above it (1 for no zoom).</summary>
+    public static float ZoomScale(float zoom, float fullZoom) => float.IsFinite(zoom) ? Math.Max(1f, zoom / fullZoom) : 1f;
+
+    /// <summary>The outer radius (m, at size factor 1) of the ring <paramref name="level"/> steps out from its point (0: the first ring).</summary>
+    public static float RingRadius(int level) => MarkerRadius * NoPlaceScale / MathF.Pow(RingInner, Math.Clamp(level, 0, MaxRingLevel));
 
     /// <summary>Points closer than this (meters) share a marker; legs whose ends are this close share a line.</summary>
     public const float ShareDistance = 0.01f;
@@ -76,32 +107,41 @@ public partial class OrderPathView : Node3D
 
     private SimRunner? _runner;
     private SelectionController? _sel;
-    private MultiMeshInstance3D _linesNode = null!, _markersNode = null!;
-    private MultiMesh _lines = null!, _markers = null!;
+    private MultiMeshInstance3D _linesNode = null!, _ringsNode = null!, _markersNode = null!;
+    private MultiMesh _lines = null!, _rings = null!, _markers = null!;
+    private TorusMesh _ringMesh = null!;
     private readonly OrderPoint[] _path = new OrderPoint[OrderPath.MaxPoints];
     private OrderPath? _reader;
     private World? _readerOf;
     private readonly Dictionary<PathKey, int> _markerAt = new(), _segmentAt = new();
 
-    // Per marker / segment drawn this frame (index < count), pooled; the colour each instance was last given.
+    // Per marker / segment drawn this frame (index < count), pooled.
     private Vector3[] _mPos = new Vector3[StartCapacity];
     private CommandKind[] _mKind = new CommandKind[StartCapacity];
     private bool[] _mNoPlace = new bool[StartCapacity];
-    private Color[] _mShown = new Color[StartCapacity];
+    private int[] _mLevel = new int[StartCapacity];
     private Vector3[] _sFrom = new Vector3[StartCapacity], _sTo = new Vector3[StartCapacity];
     private CommandKind[] _sKind = new CommandKind[StartCapacity];
     private Color[] _sShown = new Color[StartCapacity];
-    // What each instance's transform was last written from, so a frame rewrites only what moved (engine calls cost).
-    private Vector3[] _mWritten = new Vector3[StartCapacity], _sWrittenFrom = new Vector3[StartCapacity], _sWrittenTo = new Vector3[StartCapacity];
-    private bool[] _mWrittenRing = new bool[StartCapacity];
+    // Per disc / ring instance (its index in its own multimesh): what its transform was last written from, so a frame
+    // rewrites only what moved (engine calls cost), and the colour it was last given.
+    private Vector3[] _dWritten = new Vector3[StartCapacity], _rWritten = new Vector3[StartCapacity];
+    private int[] _rWrittenLevel = new int[StartCapacity];
+    private Color[] _dShown = new Color[StartCapacity], _rShown = new Color[StartCapacity];
+    private Vector3[] _sWrittenFrom = new Vector3[StartCapacity], _sWrittenTo = new Vector3[StartCapacity];
+    // The size factors the written transforms used (a zoom change rewrites them all).
+    private float _writtenMarkerZoom = 1f, _writtenLineZoom = 1f;
 
     /// <summary>The fog whose rule hides Attack targets (M4-V4); null shows every live target.</summary>
     public FogOfWar? Fog { get; set; }
 
+    /// <summary>The camera whose zoom sizes the drawing (M6-VH8); null keeps the base sizes.</summary>
+    public RtsCamera? Camera { get; set; }
+
     /// <summary>The player whose selected units are drawn (the local seat).</summary>
     public int LocalPlayer { get; set; } = SelectionController.LocalPlayer;
 
-    /// <summary>Markers drawn this frame.</summary>
+    /// <summary>Markers drawn this frame (discs and rings).</summary>
     public int MarkerCount { get; private set; }
 
     /// <summary>Line segments drawn this frame.</summary>
@@ -116,8 +156,23 @@ public partial class OrderPathView : Node3D
     /// <summary>Marker <paramref name="k"/>'s order kind.</summary>
     public CommandKind MarkerKind(int k) => _mKind[k];
 
-    /// <summary>True when marker <paramref name="k"/> is an entry with no place of its own (drawn at the previous point).</summary>
+    /// <summary>True when marker <paramref name="k"/> is an entry with no place of its own (a ring round the previous point).</summary>
     public bool MarkerNoPlace(int k) => _mNoPlace[k];
+
+    /// <summary>How many rings out from its point marker <paramref name="k"/> is drawn (0 for a disc or the first ring; M6-VH8).</summary>
+    public int MarkerLevel(int k) => _mLevel[k];
+
+    /// <summary>Marker <paramref name="k"/>'s drawn outer radius in meters this frame: the disc's, or its ring's, at the zoom.</summary>
+    public float MarkerDrawnRadius(int k) => (_mNoPlace[k] ? RingRadius(_mLevel[k]) : MarkerRadius) * MarkerZoomScale;
+
+    /// <summary>The size factor markers and rings were drawn at this frame (<see cref="ZoomScale"/> of the camera's zoom over <see cref="MarkerFullZoom"/>).</summary>
+    public float MarkerZoomScale { get; private set; } = 1f;
+
+    /// <summary>The size factor the lines were drawn at this frame (over <see cref="LineFullZoom"/>).</summary>
+    public float LineZoomScale { get; private set; } = 1f;
+
+    /// <summary>A line's drawn width in meters this frame.</summary>
+    public float LineDrawnWidth => LineWidth * LineZoomScale;
 
     /// <summary>Segment <paramref name="k"/>'s ends (on the ground, before the lift).</summary>
     public (Vector3 From, Vector3 To) Segment(int k) => (_sFrom[k], _sTo[k]);
@@ -125,34 +180,48 @@ public partial class OrderPathView : Node3D
     /// <summary>Segment <paramref name="k"/>'s order kind (the kind of the point it leads to).</summary>
     public CommandKind SegmentKind(int k) => _sKind[k];
 
-    /// <summary>The line and marker nodes (one draw call each).</summary>
+    /// <summary>The line, ring and marker nodes (one draw call each).</summary>
     public MultiMeshInstance3D LinesNode => _linesNode;
+
+    /// <inheritdoc cref="LinesNode"/>
+    public MultiMeshInstance3D RingsNode => _ringsNode;
 
     /// <inheritdoc cref="LinesNode"/>
     public MultiMeshInstance3D MarkersNode => _markersNode;
 
+    /// <summary>The mesh every no-place entry's ring is drawn with: a torus of outer radius 1 and hole <see cref="RingInner"/>.</summary>
+    public TorusMesh RingMesh => _ringMesh;
+
     public override void _Ready()
     {
-        _lines = NewMulti(new BoxMesh { Size = Vector3.One });
-        _markers = NewMulti(new CylinderMesh { TopRadius = 1f, BottomRadius = 1f, Height = 1f, RadialSegments = 16, Rings = 1 });
+        // Drawn in render-priority order (no depth test): lines, then rings, then markers on top. One multimesh for discs and
+        // rings drew a Stop's disc over the marker it surrounds (BUG-1470).
+        _lines = NewMulti(new BoxMesh { Size = Vector3.One }, LinePriority);
+        _ringMesh = new TorusMesh { InnerRadius = RingInner, OuterRadius = 1f, Rings = 24, RingSegments = 6 };
+        _rings = NewMulti(_ringMesh, RingPriority);
+        _markers = NewMulti(new CylinderMesh { TopRadius = 1f, BottomRadius = 1f, Height = 1f, RadialSegments = 16, Rings = 1 }, MarkerPriority);
         _linesNode = new MultiMeshInstance3D { Name = "Lines", Multimesh = _lines, CastShadow = GeometryInstance3D.ShadowCastingSetting.Off };
+        _ringsNode = new MultiMeshInstance3D { Name = "Rings", Multimesh = _rings, CastShadow = GeometryInstance3D.ShadowCastingSetting.Off };
         _markersNode = new MultiMeshInstance3D { Name = "Markers", Multimesh = _markers, CastShadow = GeometryInstance3D.ShadowCastingSetting.Off };
         AddChild(_linesNode);
+        AddChild(_ringsNode);
         AddChild(_markersNode);
-        Array.Fill(_mShown, Unset);
+        Array.Fill(_dShown, Unset);
+        Array.Fill(_rShown, Unset);
         Array.Fill(_sShown, Unset);
-        Array.Fill(_mWritten, NoPoint);
+        Array.Fill(_dWritten, NoPoint);
+        Array.Fill(_rWritten, NoPoint);
         Array.Fill(_sWrittenFrom, NoPoint);
     }
 
-    private static MultiMesh NewMulti(PrimitiveMesh mesh)
+    private static MultiMesh NewMulti(PrimitiveMesh mesh, int priority)
     {
         // Drawn over the terrain: a straight leg up or down a cliff would otherwise vanish into the slope (waypoints read
         // as an overlay, as in other RTS games).
         mesh.Material = new StandardMaterial3D
         {
             ShadingMode = BaseMaterial3D.ShadingModeEnum.Unshaded, VertexColorUseAsAlbedo = true, AlbedoColor = Colors.White,
-            NoDepthTest = true, RenderPriority = 1,
+            NoDepthTest = true, RenderPriority = priority,
         };
         return new MultiMesh
         {
@@ -204,18 +273,20 @@ public partial class OrderPathView : Node3D
                 int n = _reader!.Fill(h, _path);
                 if (n == 0) continue;
                 Vector3 prev = UnitViews.GroundPoint(world, h.Index, alpha);
+                int level = 0; // rings this unit already drew round prev: the next one goes outside them
                 for (int k = 0; k < n; k++)
                 {
                     ref OrderPoint p = ref _path[k];
                     if (!p.HasPlace)
                     {
-                        if (!p.IsCurrent) AddMarker(p.Kind, prev, noPlace: true);
+                        if (!p.IsCurrent) AddMarker(p.Kind, prev, noPlace: true, Math.Min(level++, MaxRingLevel));
                         continue;
                     }
                     if (!Resolve(world, fog, in p, alpha, out Vector3 at)) continue;
                     AddSegment(prev, at, p.Kind);
-                    if (!p.IsCurrent) AddMarker(p.Kind, at, noPlace: false);
+                    if (!p.IsCurrent) AddMarker(p.Kind, at, noPlace: false, 0);
                     prev = at;
+                    level = 0;
                 }
             }
         }
@@ -257,15 +328,16 @@ public partial class OrderPathView : Node3D
 
     private static int Q(float v) => (int)MathF.Round(v / ShareDistance);
 
-    private void AddMarker(CommandKind kind, Vector3 at, bool noPlace)
+    private void AddMarker(CommandKind kind, Vector3 at, bool noPlace, int level)
     {
-        var key = new PathKey(Q(at.X), Q(at.Z), 0, 0, (int)kind * 2 + (noPlace ? 1 : 0));
+        var key = new PathKey(Q(at.X), Q(at.Z), level, 0, (int)kind * 2 + (noPlace ? 1 : 0));
         int k = MarkerCount;
         if (!_markerAt.TryAdd(key, k)) return;
         if (k >= _mPos.Length) GrowMarkers();
         _mPos[k] = at;
         _mKind[k] = kind;
         _mNoPlace[k] = noPlace;
+        _mLevel[k] = level;
         MarkerCount = k + 1;
     }
 
@@ -289,12 +361,19 @@ public partial class OrderPathView : Node3D
         Array.Resize(ref _mPos, size);
         Array.Resize(ref _mKind, size);
         Array.Resize(ref _mNoPlace, size);
-        _mShown = new Color[size];
-        Array.Fill(_mShown, Unset); // a new instance buffer holds no colours or transforms
-        _mWritten = new Vector3[size];
-        Array.Fill(_mWritten, NoPoint);
-        _mWrittenRing = new bool[size];
+        Array.Resize(ref _mLevel, size);
+        // Both instance buffers hold one instance per marker slot; a new buffer holds no colours or transforms.
+        _dShown = new Color[size];
+        _rShown = new Color[size];
+        Array.Fill(_dShown, Unset);
+        Array.Fill(_rShown, Unset);
+        _dWritten = new Vector3[size];
+        _rWritten = new Vector3[size];
+        Array.Fill(_dWritten, NoPoint);
+        Array.Fill(_rWritten, NoPoint);
+        _rWrittenLevel = new int[size];
         _markers.InstanceCount = size;
+        _rings.InstanceCount = size;
         Grows++;
     }
 
@@ -313,28 +392,65 @@ public partial class OrderPathView : Node3D
         Grows++;
     }
 
-    // Writes this frame's instances: transforms every frame (units and targets move), colours only when they change.
+    // Writes this frame's instances: transforms only for what moved (units and targets move) or when the zoom changed the
+    // sizes, colours only when they change. Discs go to the marker multimesh, no-place entries to the ring multimesh.
     private void Write()
     {
+        float zoom = Camera?.Zoom ?? float.NaN;
+        float zm = ZoomScale(zoom, MarkerFullZoom), zl = ZoomScale(zoom, LineFullZoom);
+        MarkerZoomScale = zm;
+        LineZoomScale = zl;
+        if (zm != _writtenMarkerZoom)
+        {
+            Array.Fill(_dWritten, NoPoint);
+            Array.Fill(_rWritten, NoPoint);
+            _writtenMarkerZoom = zm;
+        }
+        if (zl != _writtenLineZoom)
+        {
+            Array.Fill(_sWrittenFrom, NoPoint);
+            _writtenLineZoom = zl;
+        }
+        int discs = 0, rings = 0;
         for (int k = 0; k < MarkerCount; k++)
         {
-            bool ring = _mNoPlace[k];
-            if (_mWritten[k] != _mPos[k] || _mWrittenRing[k] != ring)
-            {
-                float r = MarkerRadius * (ring ? NoPlaceScale : 1f);
-                Vector3 at = _mPos[k] + new Vector3(0f, (ring ? NoPlaceLift : MarkerLift) + MarkerHeight / 2f, 0f);
-                _markers.SetInstanceTransform(k, new Transform3D(Basis.FromScale(new Vector3(r, MarkerHeight, r)), at));
-                _mWritten[k] = _mPos[k];
-                _mWrittenRing[k] = ring;
-            }
             Color c = ColorOf(_mKind[k]);
-            if (_mShown[k] != c)
+            if (_mNoPlace[k])
             {
-                _markers.SetInstanceColor(k, c);
-                _mShown[k] = c;
+                int r = rings++;
+                int level = _mLevel[k];
+                if (_rWritten[r] != _mPos[k] || _rWrittenLevel[r] != level)
+                {
+                    float radius = RingRadius(level) * zm, height = MarkerHeight * zm;
+                    // The torus's tube is (1 - RingInner) tall at scale 1: flattened to the marker's height.
+                    Vector3 at = _mPos[k] + new Vector3(0f, NoPlaceLift + height / 2f, 0f);
+                    _rings.SetInstanceTransform(r, new Transform3D(Basis.FromScale(new Vector3(radius, height / (1f - RingInner), radius)), at));
+                    _rWritten[r] = _mPos[k];
+                    _rWrittenLevel[r] = level;
+                }
+                if (_rShown[r] != c)
+                {
+                    _rings.SetInstanceColor(r, c);
+                    _rShown[r] = c;
+                }
+                continue;
+            }
+            int d = discs++;
+            if (_dWritten[d] != _mPos[k])
+            {
+                float radius = MarkerRadius * zm, height = MarkerHeight * zm;
+                Vector3 at = _mPos[k] + new Vector3(0f, MarkerLift + height / 2f, 0f);
+                _markers.SetInstanceTransform(d, new Transform3D(Basis.FromScale(new Vector3(radius, height, radius)), at));
+                _dWritten[d] = _mPos[k];
+            }
+            if (_dShown[d] != c)
+            {
+                _markers.SetInstanceColor(d, c);
+                _dShown[d] = c;
             }
         }
-        _markers.VisibleInstanceCount = MarkerCount;
+        _markers.VisibleInstanceCount = discs;
+        _rings.VisibleInstanceCount = rings;
         var lift = new Vector3(0f, LineLift, 0f);
         for (int k = 0; k < SegmentCount; k++)
         {
@@ -344,7 +460,7 @@ public partial class OrderPathView : Node3D
                 Vector3 dir = b - a;
                 float length = dir.Length();
                 // The box's local Z runs along the leg, scaled to its length (as the rally line).
-                Basis basis = Basis.LookingAt(dir / length, Vector3.Up) * Basis.FromScale(new Vector3(LineWidth, LineThickness, length));
+                Basis basis = Basis.LookingAt(dir / length, Vector3.Up) * Basis.FromScale(new Vector3(LineWidth * zl, LineThickness * zl, length));
                 _lines.SetInstanceTransform(k, new Transform3D(basis, (a + b) / 2f));
                 _sWrittenFrom[k] = _sFrom[k];
                 _sWrittenTo[k] = _sTo[k];
@@ -359,7 +475,7 @@ public partial class OrderPathView : Node3D
         _lines.VisibleInstanceCount = SegmentCount;
     }
 
-    // A marker's (x, z, kind) or a leg's (x1, z1, x2, z2, kind) in 1 cm steps.
+    // A marker's (x, z, ring level, kind) or a leg's (x1, z1, x2, z2, kind) in 1 cm steps.
     private readonly struct PathKey : IEquatable<PathKey>
     {
         private readonly int _a, _b, _c, _d, _e;

@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S4 |
-| Status | open |
+| Status | open (docs corrected by M6-VH8, session 2026-11-15-1536; the `smoke.ps1` check is Request 59 for the sim track) |
 | Found | 2026-11-14-2156, at PLAN (Producer, scratch clone of `main` f07b849 made with `GIT_LFS_SKIP_SMUDGE=1`) |
 | System | view: asset import, `tools/qa/smoke.ps1`, docs (the handoff's and docs/03's "a pointer file gives the capsule and one warning, never an `ERROR`") |
-| Fixed by | |
+| Fixed by | M6-VH8 (docs) |
 
 ## Repro
 1. `GIT_LFS_SKIP_SMUDGE=1 git clone <repo> x` (the `.glb` files are pointer text).
@@ -45,3 +45,9 @@ until `git checkout -- game` and `game/.godot` is deleted. With the real files o
 ## Triage (Producer, 2026-11-14-2156 PLAN)
 S4: a fresh clone made the documented way (`git lfs pull`) is unaffected; the studio's worktrees have the real
 files. Waits for the view's next hardening; this session's view QA re-checks the no-LFS clone and adds what it sees.
+
+## M6-VH8
+docs/03 "Which types" now reads "never an `ERROR` line from the runtime loader" and says the import step on LFS pointer
+files does print glTF and image `ERROR` lines and rewrites the `.import` files. Request for the sim track (its file):
+`tools/qa/smoke.ps1` could detect a pointer file under `game/assets/` before the import and stop with "run `git lfs pull`
+first". Open until that lands.

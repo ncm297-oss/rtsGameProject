@@ -3,7 +3,7 @@
 | Field | Value |
 | --- | --- |
 | Severity | S3 |
-| Status | open |
+| Status | open (**Stress rows only**, the sim's hardening; the five default-loop rows are green since session 2026-11-15-1536: `AHardSeat_*` by M6-S11 outcome A, the four content rows by D-R39; the Producer's scratch clone of the three-way tree confirms) |
 | Found | 2026-11-15-0506, task M6-S10 (developer) |
 | System | tests: AI behaviour rows over the changed economy |
 | Fixed by | |
@@ -57,3 +57,6 @@ corrected in the session log. None of the five is a held worker, an unplaced bui
 - The Stress rows listed above stay red under the same ruling with their ids (BUG-1460, BUG-1152's family, BUG-0982's
   14 v 18 pop for D33, `StarvedSaveTwoProcess`, `StartingResourcesAi` 1 / 2, `ScoutCap.OneScoutKilled(5)`); they go to
   the sim's hardening (counter 4 / 4 after the next feature session).
+
+## 2026-11-15-1536 (ACCEPT)
+The five default-loop rows ruled red at 0506 are green: `CounterCompositionTests.AHardSeat_ShiftsItsLineShareFurther_ThanANormalSeat` (M6-S11, the two-producer-pair staging `RunWide`; Normal 11 / 6 seen v 10 / 8 unseen, Hard 12 / 5; strength-0 controls read 0), `AiOpeningPairsReportTests` (0, 2) and (2, 0) and `DR35ProsePinQaTests` x2 (D-R39). Still red by the ruling, exactly as listed above and re-confirmed by M6-S11's QA on a47318f (16 rows): the Stress rows. They are two sessions red after this one, so they are the sim's next task (the hardening), each green or re-stated with its id. Note for D33: `Bug0982_*` x2 stay red on their pick check (the rule picks 14, the file ships 18); the page's threshold table was re-printed by D-R39.

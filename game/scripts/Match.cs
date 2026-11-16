@@ -229,6 +229,7 @@ public partial class Match : Node3D
         var combat = GetNode<CombatViews>("World3D/CombatViews");
         combat.Fog = fog;
         combat.MaxHp = units.MaxHp; // one max-hp fill a frame for the bars and the hit flash (BUG-0490)
+        combat.OverlayLines = units.OverlayLines; // M6-VH8: over a model's head, not its capsule's top
         combat.Bind(data, sim.World.Units.Capacity, playerRgb);
         combat.Runner = _runner;
         combat.Camera = camera;
@@ -252,9 +253,11 @@ public partial class Match : Node3D
         var orderPaths = GetNode<OrderPathView>("World3D/OrderPaths");
         orderPaths.Init(_runner, selection);
         orderPaths.Fog = fog;
+        orderPaths.Camera = camera; // M6-VH8: markers and lines sized by the zoom
         var abilityViews = GetNode<AbilityViews>("World3D/AbilityViews");
         abilityViews.Fog = fog;
         abilityViews.Camera = camera;
+        abilityViews.OverlayLines = units.OverlayLines; // M6-VH8: as the hp bars
         abilityViews.Bind(data, sim.World.Units.Capacity, _runner, selection, playerRgb: playerRgb, zoneCapacity: sim.World.Zones.Capacity);
         abilityViews.Sound = GetNode<Sfx>("Sfx"); // M5-V1: the lost-cast sound
 

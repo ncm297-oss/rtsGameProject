@@ -85,6 +85,12 @@ public partial class CombatViews : Node3D
     /// <summary>The fog (M4-V4): its hide rule drops hidden units' bars, and its materials draw the markers; set before <see cref="Bind"/>. Null draws everything.</summary>
     public FogOfWar? Fog { get; set; }
 
+    /// <summary>Per unit type, the height the bars sit over (M6-VH8: <see cref="UnitViews.OverlayLines"/>, set before <see cref="Bind"/>); null uses each type's capsule top (<see cref="UnitViews.DrawnHeight"/>).</summary>
+    public float[]? OverlayLines { get; set; }
+
+    /// <summary>The height above the ground the bars of type <paramref name="type"/> sit over since <see cref="Bind"/> (the bar's centre is <see cref="BarGap"/> times the zoom factor above it).</summary>
+    public float BarLineOf(int type) => _bodyTop[type];
+
     /// <summary>The per-slot maximum hp the bars read (BUG-0490: <c>Match</c> sets <see cref="UnitViews.MaxHp"/> before <see cref="Bind"/>, so one fill a frame serves both); null (or shorter than the unit store) at <see cref="Bind"/> makes an own one.</summary>
     public SlotMaxHp? MaxHp { get; set; }
 
@@ -172,8 +178,8 @@ public partial class CombatViews : Node3D
         _barTypeScale = new float[data.Units.Length];
         for (int t = 0; t < _bodyTop.Length; t++)
         {
-            // M7-V1: over the drawn body, its length following the data scale.
-            _bodyTop[t] = UnitViews.DrawnHeight(data.Units[t]);
+            // M7-V1: over the drawn body; M6-VH8: a model type's figure as drawn (UnitViews.OverlayLines) when the match gives it.
+            _bodyTop[t] = OverlayLines is float[] lines && t < lines.Length ? lines[t] : UnitViews.DrawnHeight(data.Units[t]);
             _barTypeScale[t] = BarScaleFor(data.Units[t].Scale);
         }
         _corpseColors = new Color[playerRgb.Length];

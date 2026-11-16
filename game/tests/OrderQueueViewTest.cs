@@ -15,6 +15,7 @@ using Rts.Sim.Entities;
 using Rts.Sim.Map;
 using Rts.Sim.Orders;
 using Rts.Sim.Pathfinding;
+using Rts.Sim.Replays;
 using Rts.Sim.ViewApi;
 
 namespace Rts.Game.Tests;
@@ -29,13 +30,19 @@ namespace Rts.Game.Tests;
 /// goes when the target dies; (5) the first Shift-placed building: a gatherer and an idle worker build at once, a walker
 /// builds after it arrives (its Move kept), a builder builds houses 1, 2 and 3 in turn, and BUG-0122's guard holds; (6) a
 /// ninth queued order is dropped by the sim and 8 markers are drawn; (7) 0 bytes a frame once warm, and the drawing's cost
-/// with 200 selected units, 8 shared and 8 distinct points each (reported).
+/// with 200 selected units, 8 shared and 8 distinct points each (reported). M6-VH8: (9) a Shift-placed building for a worker
+/// whose queue is full is refused (nothing sent, the Refused sound, the ghost kept and the click not counted), and with one
+/// full and one idle worker only the idle one builds; (10) BUG-1470: a no-place entry is a torus ring in its own multimesh
+/// drawn before the markers, its hole wider than the marker it surrounds, the next one out round it; (11) markers, rings
+/// and lines sized by the zoom (on-screen pixels at 60, 40 and 20 m, checked against a minimum and a maximum); the mixed
+/// queue with all 7 markers in frame at 40 and 60 m (BUG-1471 item 1); (12) a recorded match replayed to its end: the
+/// own soldier's queue drawn, the enemy's not, and the figures still.
 /// </summary>
 /// <remarks>
 /// Headless: <c>&amp; $env:GODOT --headless --path game res://tests/OrderQueueViewTest.tscn</c>; prints "ORDER QUEUE VIEW TEST
 /// PASS" and exits 0, or each failure and exits 1. The test ticks the sim itself (runner disabled). Windowed with
 /// <c>-- --shots &lt;dir&gt;</c> it saves the pictures (12 soldiers' queue, a worker's three queued buildings, a mixed queue at the
-/// default zoom and zoomed out); with <c>-- --cost</c> it also reports frame time and draw calls (vsync off).
+/// default zoom, zoomed out and zoomed in); with <c>-- --cost</c> it also reports frame time and draw calls (vsync off).
 /// </remarks>
 public partial class OrderQueueViewTest : Node
 {
@@ -57,6 +64,7 @@ public partial class OrderQueueViewTest : Node
     private OrderPathView _view = null!;
     private FogOfWar _fog = null!;
     private RtsCamera _camera = null!;
+    private Sfx _sfx = null!;
     private string? _shots;
     private bool _cost;
 
@@ -103,26 +111,41 @@ public partial class OrderQueueViewTest : Node
         await KindRows();
         await NinthOrder();
         await BuildingRule();
+        await FullQueueBuilding();
+        await RingRows();
+        await ZoomRows();
         await FogRows();
         await CostRows();
         await EndMatch();
-        if (_shots == null || DisplayServer.GetName() == "headless") return;
-        // The pictures in a fresh match, on open ground away from the base and the rows' units.
+        // The mixed queue in a fresh match, on open ground away from the base and the rows' units: headless it checks the
+        // staging and that every marker is in frame (BUG-1471 item 1); windowed with --shots it also saves the pictures.
         _usedAnchors.Clear();
         await StartMatch();
         Stage(50f);
         await Pictures();
         await EndMatch();
+        await ReplayRows();
     }
 
-    private async Task StartMatch()
+    private async Task StartMatch(bool record = false)
     {
         _match = GD.Load<PackedScene>("res://scenes/Match.tscn").Instantiate<Match>();
         AddChild(_match);
-        _match.Start(_data, LaunchOptions.Parse(new[] { "--seed", "1", "--units", "0", "--mute" }));
         _runner = _match.GetNode<SimRunner>("SimRunner");
+        if (record) _runner.RecordCheckpointInterval = 20;
+        _match.Start(_data, LaunchOptions.Parse(new[] { "--seed", "1", "--units", "0", "--mute" }));
         _runner.ProcessMode = ProcessModeEnum.Disabled; // the test ticks the sim itself
         _sim = _runner.Simulation!;
+        Open();
+        Check(_view.Fog == _fog, "the match did not give the order paths the fog");
+        Check(_view.Camera == _camera, "the match did not give the order paths the camera");
+        Tick(2);
+        await Frames();
+    }
+
+    // The match's nodes this scene reads (a live match's or a replay's).
+    private void Open()
+    {
         _sel = _match.GetNode<SelectionController>("SelectionController");
         _card = _match.GetNode<CommandCard>("Hud/CommandCard");
         _ghost = _match.GetNode<BuildGhost>("World3D/BuildGhost");
@@ -130,9 +153,7 @@ public partial class OrderQueueViewTest : Node
         _fog = _match.GetNode<FogOfWar>("World3D/FogOfWar");
         _camera = _match.GetNode<RtsCamera>("RtsCamera");
         _camera.EdgePanEnabled = false;
-        Check(_view.Fog == _fog, "the match did not give the order paths the fog");
-        Tick(2);
-        await Frames();
+        _sfx = _match.GetNode<Sfx>("Sfx");
     }
 
     private async Task EndMatch()
@@ -145,7 +166,7 @@ public partial class OrderQueueViewTest : Node
 
     // The staging: ids from data, the frame (the hall, a direction toward the map's middle and across it), money, an
     // enemy Raider holding 16 m across from the test ground with a holding own Laborer 5 m from it as its spotter.
-    private void Stage(float ground)
+    private void Stage(float ground, bool money = true)
     {
         _hi = _data.FindUnit("malazan_heavy_infantry");
         _laborer = StartBase.UnitOfSlot(_data, W.FactionOf(0), UnitSlot.Worker);
@@ -160,7 +181,7 @@ public partial class OrderQueueViewTest : Node
         _away = System.Numerics.Vector2.Normalize(middle - _hall);
         _perp = new System.Numerics.Vector2(-_away.Y, _away.X);
         _t = Passable(_hall + _away * ground);
-        SetMoney(50000, 50000);
+        if (money) SetMoney(50000, 50000); // a direct state edit: off for a recorded match (its replay would not match)
         // On the test ground's level (a unit below a plateau does not see onto it: docs/02 "High ground").
         System.Numerics.Vector2 e = default;
         float level = Height(_t);
@@ -536,6 +557,244 @@ public partial class OrderQueueViewTest : Node
         return _card.GhostActive && _ghost.TypeId == type;
     }
 
+    // ---- (9) BUG-1471 item 2: a Shift-placed building for a worker whose queue is full ----
+
+    private async Task FullQueueBuilding()
+    {
+        // A worker walking a Move with 8 queued Moves: the Build would be dropped by the sim, so the view refuses it.
+        EntityHandle full = Spawn(0, _laborer, Passable(_t - _perp * 12f));
+        Apply();
+        System.Numerics.Vector2 goal = Passable(U.Position[full.Index] + _away * 30f);
+        _sim.Enqueue(Command.Move(0, full, goal));
+        for (int k = 0; k < OrderConstants.QueueCapacity; k++) _sim.Enqueue(Command.Move(0, full, Passable(goal + _perp * (2f + 2f * k)), queued: true));
+        Apply();
+        if (!Check(U.QueueCount[full.Index] == OrderConstants.QueueCapacity, $"full queue: the worker holds {U.QueueCount[full.Index]}, want {OrderConstants.QueueCapacity}")) return;
+        int anchor = GreenAnchor(_house, U.Position[full.Index] + _perp * 6f);
+        if (!Check(anchor >= 0 && await OpenGhost(_house, full), "full queue: no house spot or ghost")) return;
+        Vector2 px = await Aim(_house, anchor);
+        await Gap();
+        int start = _sim.PendingCommandCount, refused = _sfx.PlayCount(SfxEvent.Refused), command = _sfx.PlayCount(SfxEvent.Command), drops = _sel.RefusedBuilds;
+        Input.ActionPress("order_queue");
+        LeftClick(px);
+        Input.ActionRelease("order_queue");
+        List<Command> sent = Pending(start);
+        Check(sent.Count == 0, $"full queue: sent {Describe(sent)}, want nothing");
+        Check(_sfx.PlayCount(SfxEvent.Refused) == refused + 1 && _sfx.PlayCount(SfxEvent.Command) == command && _sel.RefusedBuilds == drops + 1,
+            $"full queue: {_sfx.PlayCount(SfxEvent.Refused) - refused} Refused and {_sfx.PlayCount(SfxEvent.Command) - command} Command sounds, {_sel.RefusedBuilds - drops} refusals (want 1, 0, 1)");
+        Check(_card.GhostActive && _ghost.TypeId == _house, $"full queue: the ghost went down (active {_card.GhostActive})");
+        // Not counted as placed: with the queue emptied, a Shift click on the same anchor is again the ghost's first
+        // placement (an idle worker: an unqueued Build), not a later one (queued) nor BUG-0122's same-anchor refusal.
+        _sim.Enqueue(Command.Stop(0, full));
+        Apply();
+        await Gap();
+        start = _sim.PendingCommandCount;
+        Input.ActionPress("order_queue");
+        LeftClick(px);
+        Input.ActionRelease("order_queue");
+        sent = Pending(start);
+        Check(sent.Count == 1 && sent[0].Kind == CommandKind.Build && !sent[0].IsQueued && sent[0].Unit == full,
+            $"full queue, then emptied: sent {Describe(sent)}, want one unqueued Build (the refused click was not counted as placed)");
+        _card.CloseMenu();
+        Apply();
+        GD.Print($"full queue: a Shift placement for a worker with {OrderConstants.QueueCapacity} queued sent nothing, played Refused once, kept the ghost; emptied, the same click built at once");
+
+        // Two workers, one full and one idle: the idle one gets the Build, the full one nothing, and the placement counts.
+        EntityHandle full2 = Spawn(0, _laborer, Passable(_t - _perp * 16f));
+        EntityHandle free = Spawn(0, _laborer, Passable(_t - _perp * 18f));
+        Apply();
+        goal = Passable(U.Position[full2.Index] + _away * 30f);
+        _sim.Enqueue(Command.Move(0, full2, goal));
+        for (int k = 0; k < OrderConstants.QueueCapacity; k++) _sim.Enqueue(Command.Move(0, full2, Passable(goal + _perp * (2f + 2f * k)), queued: true));
+        Apply();
+        _sel.Selection.Clear();
+        _sel.Selection.Add(full2);
+        _sel.Selection.Add(free);
+        await Frames();
+        int a2 = GreenAnchor(_house, U.Position[free.Index] + _perp * 6f);
+        if (!Check(a2 >= 0 && await OpenGhost(_house), "two workers: no house spot or ghost")) return;
+        px = await Aim(_house, a2);
+        await Gap();
+        start = _sim.PendingCommandCount;
+        command = _sfx.PlayCount(SfxEvent.Command);
+        refused = _sfx.PlayCount(SfxEvent.Refused);
+        Input.ActionPress("order_queue");
+        LeftClick(px);
+        Input.ActionRelease("order_queue");
+        sent = Pending(start);
+        Check(sent.Count == 1 && sent[0].Unit == free && !sent[0].IsQueued, $"one full and one idle worker: sent {Describe(sent)}, want one unqueued Build to the idle one");
+        Check(_sfx.PlayCount(SfxEvent.Command) == command + 1 && _sfx.PlayCount(SfxEvent.Refused) == refused,
+            $"one full and one idle worker: {_sfx.PlayCount(SfxEvent.Command) - command} Command and {_sfx.PlayCount(SfxEvent.Refused) - refused} Refused sounds (want 1, 0)");
+        _card.CloseMenu();
+        Apply();
+        GD.Print($"one full and one idle worker: the idle one got the Build ({Describe(sent)}), the full one nothing");
+        _sel.Selection.Clear();
+        foreach (EntityHandle h in new[] { full, full2, free }) _sim.Enqueue(Command.Stop(0, h));
+        Apply();
+    }
+
+    // Sound plays of one event closer than Sfx.MinGapMs are dropped: wait past it before counting.
+    private async Task Gap() => await ToSignal(GetTree().CreateTimer(Sfx.MinGapMs / 1000.0 * 2.0, processAlways: true), SceneTreeTimer.SignalName.Timeout);
+
+    // ---- (10) BUG-1470: a no-place entry is a ring round the marker before it, drawn under it ----
+
+    private async Task RingRows()
+    {
+        // The drawing: a torus whose hole is wider than a marker, in its own multimesh, drawn before the markers. A filled
+        // disc over the marker (the bug) fails here: a cylinder, a hole under the marker, or the rings drawn after the discs.
+        var torus = _view.RingsNode.Multimesh.Mesh as TorusMesh;
+        var ringMat = (_view.RingsNode.Multimesh.Mesh as PrimitiveMesh)?.Material as BaseMaterial3D;
+        var discMat = (_view.MarkersNode.Multimesh.Mesh as PrimitiveMesh)?.Material as BaseMaterial3D;
+        float hole = torus == null ? 0f : torus.InnerRadius / torus.OuterRadius * OrderPathView.RingRadius(0);
+        Check(torus != null && hole > OrderPathView.MarkerRadius,
+            $"ring mesh: {_view.RingsNode.Multimesh.Mesh?.GetType().Name}, hole {hole:0.###} m at the first ring, want a torus whose hole is wider than the {OrderPathView.MarkerRadius} m marker");
+        Check(_view.MarkersNode.Multimesh.Mesh is CylinderMesh && !ReferenceEquals(_view.RingsNode.Multimesh, _view.MarkersNode.Multimesh),
+            "the rings must be their own multimesh, the markers discs");
+        Check(ringMat != null && discMat != null && ringMat.NoDepthTest && discMat.NoDepthTest && ringMat.RenderPriority < discMat.RenderPriority,
+            $"draw order: ring priority {ringMat?.RenderPriority}, marker priority {discMat?.RenderPriority}, want the rings drawn first");
+
+        // A soldier walking a Move, then a queued Move to p, a Stop and a Hold: the Move's disc at p, the Stop's ring round
+        // it and the Hold's ring round that.
+        EntityHandle unit = Spawn(0, _hi, _t);
+        Apply();
+        _sel.SelectOnly(unit);
+        await Frames();
+        System.Numerics.Vector2 goal = Passable(_t + _away * 12f), p = OpenGround(_t + _away * 12f + _perp * 8f);
+        _sim.Enqueue(Command.Move(0, unit, goal));
+        _sim.Enqueue(Command.Move(0, unit, p, queued: true));
+        _sim.Enqueue(Command.Stop(0, unit, queued: true));
+        _sim.Enqueue(Command.HoldPosition(0, unit, queued: true));
+        Apply();
+        _view.Sync(W, 1f);
+        int disc = FindMarker(CommandKind.Move, p, false), stop = FindMarker(CommandKind.Stop, p, true), hold = FindMarker(CommandKind.HoldPosition, p, true);
+        if (!Check(disc >= 0 && stop >= 0 && hold >= 0, $"rings: Move {disc}, Stop {stop}, Hold {hold} at {p}; markers {Markers()}")) return;
+        float discR = _view.MarkerDrawnRadius(disc), stopR = _view.MarkerDrawnRadius(stop), holdR = _view.MarkerDrawnRadius(hold);
+        Check(_view.MarkerLevel(stop) == 0 && _view.MarkerLevel(hold) == 1, $"rings: Stop level {_view.MarkerLevel(stop)}, Hold level {_view.MarkerLevel(hold)}, want 0 and 1");
+        Check(stopR * OrderPathView.RingInner > discR, $"rings: the Stop ring's hole {stopR * OrderPathView.RingInner:0.###} m covers the {discR:0.###} m marker");
+        Check(holdR * OrderPathView.RingInner >= stopR - 1e-4f, $"rings: the Hold ring's hole {holdR * OrderPathView.RingInner:0.###} m overlaps the Stop ring ({stopR:0.###} m)");
+        Check(_view.RingsNode.Multimesh.VisibleInstanceCount == 2 && _view.MarkersNode.Multimesh.VisibleInstanceCount == _view.MarkerCount - 2,
+            $"rings: {_view.RingsNode.Multimesh.VisibleInstanceCount} ring and {_view.MarkersNode.Multimesh.VisibleInstanceCount} disc instances for {_view.MarkerCount} markers");
+        GD.Print($"rings: a Move disc ({discR:0.00} m), the Stop's ring ({stopR * OrderPathView.RingInner:0.00}-{stopR:0.00} m) round it, the Hold's ({holdR * OrderPathView.RingInner:0.00}-{holdR:0.00} m) round that; torus mesh, rings drawn before discs");
+        _sel.Selection.Clear();
+        _sim.Enqueue(Command.Stop(0, unit));
+        Apply();
+        _sim.Enqueue(Command.Move(0, unit, Passable(_t - _away * 8f - _perp * 6f)));
+        Apply();
+    }
+
+    // ---- (11) markers, rings and lines sized by the zoom ----
+
+    /// <summary>At the farthest zoom a marker is at least this wide on a 648 px view, and a line at least this many pixels.</summary>
+    private const float MinMarkerPx = 16f, MinLinePx = 3f;
+
+    /// <summary>At the nearest zoom a marker is at most this wide, a first ring at most this wide, and a line at most this many pixels.</summary>
+    private const float MaxMarkerPx = 32f, MaxRingPx = 56f, MaxLinePx = 4f;
+
+    private async Task ZoomRows()
+    {
+        EntityHandle unit = Spawn(0, _hi, _t);
+        Apply();
+        System.Numerics.Vector2 goal = Passable(_t + _away * 10f), p = OpenGround(_t + _away * 10f - _perp * 10f);
+        _sim.Enqueue(Command.Move(0, unit, goal));
+        _sim.Enqueue(Command.Move(0, unit, p, queued: true));
+        _sim.Enqueue(Command.Stop(0, unit, queued: true));
+        Apply();
+        _sel.SelectOnly(unit);
+        foreach (float zoom in new[] { CameraLimits.MaxZoom, CameraLimits.DefaultZoom, CameraLimits.MinZoom })
+        {
+            _camera.SetZoom(zoom);
+            System.Numerics.Vector2 mid = (goal + p) / 2f;
+            _camera.SetFocus(mid.X, mid.Y);
+            await Frames();
+            _view.Sync(W, 1f);
+            int disc = FindMarker(CommandKind.Move, p, false), ring = FindMarker(CommandKind.Stop, p, true), seg = -1;
+            for (int k = 0; k < _view.SegmentCount; k++) if (System.Numerics.Vector2.Distance(Flat(_view.Segment(k).To), p) < Tolerance) seg = k;
+            if (!Check(disc >= 0 && ring >= 0 && seg >= 0, $"zoom {zoom}: disc {disc}, ring {ring}, leg {seg}; markers {Markers()}")) continue;
+            Vector3 c = _view.MarkerPoint(disc);
+            float discPx = Across(c, Vector3.Right, _view.MarkerDrawnRadius(disc) * 2f);
+            float ringPx = Across(c, Vector3.Right, _view.MarkerDrawnRadius(ring) * 2f);
+            (Vector3 from, Vector3 to) = _view.Segment(seg);
+            Vector3 along = (to - from).Normalized();
+            float linePx = Across((from + to) / 2f + Vector3.Up * OrderPathView.LineLift, new Vector3(-along.Z, 0f, along.X), _view.LineDrawnWidth);
+            GD.Print($"zoom {zoom}: marker {discPx:0.0} px wide ({_view.MarkerDrawnRadius(disc) * 2f:0.00} m), first ring {ringPx:0.0} px, line {linePx:0.0} px ({_view.LineDrawnWidth:0.000} m) on a {GetViewport().GetVisibleRect().Size.Y} px tall view");
+            Check(_view.MarkerZoomScale == OrderPathView.ZoomScale(zoom, OrderPathView.MarkerFullZoom) && _view.LineZoomScale == OrderPathView.ZoomScale(zoom, OrderPathView.LineFullZoom),
+                $"zoom {zoom}: drawn at factors {_view.MarkerZoomScale} / {_view.LineZoomScale}");
+            if (zoom == CameraLimits.MaxZoom)
+                Check(discPx >= MinMarkerPx && linePx >= MinLinePx, $"zoom {zoom}: marker {discPx:0.0} px, line {linePx:0.0} px, want at least {MinMarkerPx} / {MinLinePx} px");
+            if (zoom == CameraLimits.MinZoom)
+                Check(discPx <= MaxMarkerPx && ringPx <= MaxRingPx && linePx <= MaxLinePx,
+                    $"zoom {zoom}: marker {discPx:0.0} px, ring {ringPx:0.0} px, line {linePx:0.0} px, want at most {MaxMarkerPx} / {MaxRingPx} / {MaxLinePx} px");
+        }
+        _sel.Selection.Clear();
+        _sim.Enqueue(Command.Stop(0, unit));
+        Apply();
+        _camera.SetZoom(CameraLimits.DefaultZoom);
+    }
+
+    // The on-screen length (px) of a `length` m span centred on `at` along `dir` (on the ground plane).
+    private float Across(Vector3 at, Vector3 dir, float length)
+    {
+        Vector3 d = dir.Normalized() * (length / 2f);
+        return _camera.UnprojectPosition(at + d).DistanceTo(_camera.UnprojectPosition(at - d));
+    }
+
+    // ---- (12) a replay: queued orders drawn as in a match (own seat only); figures still at its end ----
+
+    private async Task ReplayRows()
+    {
+        // A recorded live match: an own soldier walking far with two queued Moves and a queued Stop, an enemy Raider with a
+        // queued Move. The recording ends while both still hold their queues.
+        await StartMatch(record: true);
+        Stage(24f, money: false);
+        EntityHandle own = Spawn(0, _hi, Passable(_t + _perp * 6f));
+        EntityHandle foe = Spawn(1, _raider, Passable(_t - _perp * 30f));
+        System.Numerics.Vector2 far = Passable(_t + _perp * 6f + _away * 60f);
+        System.Numerics.Vector2 q1 = OpenGround(far + _perp * 10f), q2 = OpenGround(far + _perp * 10f - _away * 10f);
+        _sim.Enqueue(Command.Move(0, own, far));
+        _sim.Enqueue(Command.Move(0, own, q1, queued: true));
+        _sim.Enqueue(Command.Move(0, own, q2, queued: true));
+        _sim.Enqueue(Command.Stop(0, own, queued: true));
+        _sim.Enqueue(Command.Move(1, foe, Passable(_t - _perp * 30f - _away * 40f)));
+        _sim.Enqueue(Command.Move(1, foe, Passable(_t - _perp * 40f - _away * 40f), queued: true));
+        Apply();
+        Tick(40);
+        Replay replay = _runner.Recorder!.ToReplay();
+        await EndMatch();
+
+        _match = GD.Load<PackedScene>("res://scenes/Match.tscn").Instantiate<Match>();
+        AddChild(_match);
+        ReplayError refused = _match.StartReplay(_data, replay, LaunchOptions.Parse(new[] { "--speed", "8", "--mute" }), "order-queue-replay");
+        if (!Check(refused == ReplayError.None, $"replay refused: {refused}")) { await EndMatch(); return; }
+        _runner = _match.GetNode<SimRunner>("SimRunner");
+        _sim = _runner.Simulation!;
+        Open();
+        var units = _match.GetNode<UnitViews>("World3D/UnitViews");
+        double playingRate = units.AnimationRate;
+        ulong start = Time.GetTicksUsec();
+        while (_runner.PlaybackState == PlaybackState.Playing && Time.GetTicksUsec() - start < 20_000_000UL) await Frame();
+        if (!Check(_runner.PlaybackState == PlaybackState.Ended, $"replay: {_runner.PlaybackState} at tick {_sim.TickNumber} of {replay.TickCount}")) { await EndMatch(); return; }
+        Check(U.IsAlive(own) && U.IsAlive(foe) && U.QueueCount[own.Index] == 3 && U.QueueCount[foe.Index] == 1,
+            $"replay: at its end the soldier holds {U.QueueCount[own.Index]} and the Raider {U.QueueCount[foe.Index]} queued orders, want 3 and 1");
+        _sel.SelectOnly(own);
+        await Frames(); // the view draws from its own frame step, as in a match
+        Check(FindMarker(CommandKind.Move, q1, false) >= 0 && FindMarker(CommandKind.Move, q2, false) >= 0 && FindMarker(CommandKind.Stop, q2, true) >= 0 && _view.MarkerCount == 3,
+            $"replay, own soldier selected: markers {Markers()}, want Moves at {q1} and {q2} and the Stop's ring at {q2}");
+        GD.Print($"replay: at its end (tick {_sim.TickNumber}) the own soldier's queue is drawn: {_view.MarkerCount} markers, {_view.SegmentCount} segments");
+        _sel.SelectOnly(foe);
+        await Frames();
+        Check(_view.MarkerCount == 0 && _view.SegmentCount == 0, $"replay, enemy selected: {_view.MarkerCount} markers, {_view.SegmentCount} segments drawn (want none: own seat only)");
+        GD.Print("replay: the enemy Raider selected draws nothing (own seat only, as in a match)");
+
+        // M6-VH8: the figures stand still once the recording has ended (no more ticks come).
+        AnimationPlayer? anim = units.AnimatorOf(own.Index);
+        double before = anim?.CurrentAnimationPosition ?? -1;
+        for (int k = 0; k < 10; k++) await Frame();
+        double after = anim?.CurrentAnimationPosition ?? -1;
+        Check(playingRate == 8.0 && units.AnimationRate == 0.0, $"replay: animation rate {playingRate} while playing, {units.AnimationRate} at its end (want 8 and 0)");
+        Check(anim != null && anim.IsPlaying() && before == after, $"replay: the soldier's clip moved from {before:0.000} to {after:0.000} s over 10 frames after the end");
+        GD.Print($"replay: at its end the figures stand still (rate {units.AnimationRate}, the soldier's {anim?.CurrentAnimation} clip at {after:0.000} s over 10 frames)");
+        await EndMatch();
+    }
+
     // ---- (4) fog and ownership ----
 
     private async Task FogRows()
@@ -781,30 +1040,67 @@ public partial class OrderQueueViewTest : Node
         _sel.SelectOnly(worker);
         await Shot("queue-worker-three-buildings", yard + _away * 9f + _perp * 3f, CameraLimits.DefaultZoom);
 
-        // A mixed queue: a soldier (AttackMove, Attack, Stop), the Mage (Telas Fire, Hold) and a worker (Gather on a tree, Build).
-        System.Numerics.Vector2 mix = OpenGround(_t - _away * 2f + _perp * 18f);
+        // A mixed queue (BUG-1471 item 1: staged round a tree, so the Gather's marker is in frame too): a soldier (AttackMove,
+        // Attack on a seen enemy, Stop), the Mage (Telas Fire at a point, Hold) and a worker (Gather on the tree, Build).
+        System.Numerics.Vector2 tree = NearestTree(_t + _perp * 18f);
+        System.Numerics.Vector2 back = System.Numerics.Vector2.Normalize(_hall - tree);
+        System.Numerics.Vector2 mix = OpenGround(tree + back * 12f);
+        System.Numerics.Vector2 f = System.Numerics.Vector2.Normalize(tree - mix), s = new(-f.Y, f.X);
         EntityHandle soldier = Spawn(0, _hi, mix);
-        EntityHandle mage = Spawn(0, _mage, OpenGround(mix + _perp * 2f));
-        EntityHandle laborer = Spawn(0, _laborer, OpenGround(mix + _perp * 4f));
-        System.Numerics.Vector2 tree = NearestTree(mix + _away * 6f + _perp * 6f);
-        int site = GreenAnchor(_house, mix + _away * 6f + _perp * 8f);
-        _sim.Enqueue(Command.Move(0, soldier, OpenGround(mix + _away * 5f)));
-        _sim.Enqueue(Command.AttackMove(0, soldier, OpenGround(mix + _away * 9f - _perp * 5f), queued: true));
-        _sim.Enqueue(Command.Attack(0, soldier, _enemy, false, queued: true));
+        EntityHandle mage = Spawn(0, _mage, OpenGround(mix + s * 2f));
+        EntityHandle laborer = Spawn(0, _laborer, OpenGround(mix + s * 4f));
+        EntityHandle foe = Spawn(1, _raider, OpenGround(mix + f * 7f - s * 3f));
+        _sim.Enqueue(Command.HoldPosition(1, foe));
+        int site = GreenAnchor(_house, mix + f * 4f + s * 9f);
+        _sim.Enqueue(Command.Move(0, soldier, OpenGround(mix + f * 3f - s * 4f)));
+        _sim.Enqueue(Command.AttackMove(0, soldier, OpenGround(mix + f * 4f - s * 8f), queued: true));
+        _sim.Enqueue(Command.Attack(0, soldier, foe, false, queued: true));
         _sim.Enqueue(Command.Stop(0, soldier, queued: true));
-        _sim.Enqueue(Command.Move(0, mage, OpenGround(mix + _away * 4f + _perp * 3f)));
-        _sim.Enqueue(Command.UseAbility(0, mage, 0, OpenGround(mix + _away * 12f + _perp * 1f), queued: true));
+        _sim.Enqueue(Command.Move(0, mage, OpenGround(mix + f * 3f + s * 1f)));
+        System.Numerics.Vector2 cast = OpenGround(mix + f * 8f + s * 1f);
+        _sim.Enqueue(Command.UseAbility(0, mage, 0, cast, queued: true));
         _sim.Enqueue(Command.HoldPosition(0, mage, queued: true));
-        _sim.Enqueue(Command.Move(0, laborer, OpenGround(mix + _away * 3f + _perp * 6f)));
+        _sim.Enqueue(Command.Move(0, laborer, OpenGround(mix + f * 3f + s * 5f)));
         _sim.Enqueue(Command.Gather(0, laborer, tree, queued: true));
         if (site >= 0) _sim.Enqueue(Command.Build(0, laborer, _house, PlacementGhost.AnchorPoint(G, site), queued: true));
         Apply();
         _sel.Selection.Clear();
         foreach (EntityHandle h in new[] { soldier, mage, laborer }) _sel.Selection.Add(h);
         Tick(4);
-        System.Numerics.Vector2 view = Centre(mix, mix + _away * 12f, mix + _perp * 8f);
+        _view.Sync(W, 1f);
+        Check(_view.MarkerCount == 7 && site >= 0 && FindMarker(CommandKind.Gather, tree, false) >= 0 && FindMarker(CommandKind.Attack, U.Position[foe.Index], false) >= 0,
+            $"mixed queue: site {site}, {_view.MarkerCount} markers, want 7 with the Gather on the tree and the Attack on the Raider: {Markers()}");
+        var points = new List<System.Numerics.Vector2>();
+        for (int k = 0; k < _view.MarkerCount; k++) points.Add(Flat(_view.MarkerPoint(k)));
+        foreach (EntityHandle h in new[] { soldier, mage, laborer }) points.Add(U.Position[h.Index]);
+        System.Numerics.Vector2 view = Centre(points.ToArray());
         await Shot("queue-mixed-default-zoom", view, CameraLimits.DefaultZoom);
+        InFrame("mixed queue at the default zoom", 7);
         await Shot("queue-mixed-zoomed-out", view, CameraLimits.MaxZoom);
+        InFrame("mixed queue zoomed out", 7);
+        // The nearest zoom, on the soldier's Stop ring round its Attack marker and the Mage's Hold ring round its cast marker.
+        await Shot("queue-mixed-zoomed-in", Centre(U.Position[foe.Index], cast), CameraLimits.MinZoom);
+    }
+
+    // Counts this frame's markers whose point is on screen and not under the HUD; checks all `want` are.
+    private void InFrame(string what, int want)
+    {
+        Rect2 screen = GetViewport().GetVisibleRect();
+        var hud = new List<Control>();
+        foreach (string n in new[] { "Minimap", "ResourceBar", "CommandCard", "QueueStrip", "SelectionPanel" })
+            if (_match.GetNodeOrNull<Control>($"Hud/{n}") is Control c && c.IsVisibleInTree()) hud.Add(c);
+        int inside = 0;
+        var outside = new List<string>();
+        for (int k = 0; k < _view.MarkerCount; k++)
+        {
+            Vector3 at = _view.MarkerPoint(k);
+            Vector2 px = _camera.UnprojectPosition(at);
+            bool ok = !_camera.IsPositionBehind(at) && screen.HasPoint(px) && !hud.Exists(c => c.GetGlobalRect().HasPoint(px));
+            if (ok) inside++;
+            else outside.Add($"{_view.MarkerKind(k)} at ({px.X:0},{px.Y:0})");
+        }
+        GD.Print($"{what}: {inside} of {_view.MarkerCount} markers in frame{(outside.Count > 0 ? $" (out: {string.Join(", ", outside)})" : "")}");
+        Check(inside == want && _view.MarkerCount == want, $"{what}: {inside} of {_view.MarkerCount} markers in frame, want {want} of {want}");
     }
 
     private static System.Numerics.Vector2 Centre(params System.Numerics.Vector2[] points)
@@ -837,11 +1133,14 @@ public partial class OrderQueueViewTest : Node
         return best;
     }
 
-    // Puts the shot's content above the HUD: the camera looks north (-z), so the focus moves a little south of it.
+    // Puts the shot's content above the HUD (the camera looks north, -z, so the focus moves a little south of it), lets the
+    // view draw a frame, and saves the picture when windowed with --shots.
     private async Task Shot(string name, System.Numerics.Vector2 focus, float zoom)
     {
         _camera.SetZoom(zoom);
         _camera.SetFocus(focus.X, focus.Y + zoom * 0.1f);
+        await Frames();
+        if (_shots == null || DisplayServer.GetName() == "headless") return;
         for (int i = 0; i < 4; i++) await ToSignal(RenderingServer.Singleton, RenderingServer.SignalName.FramePostDraw);
         string path = $"{_shots}/{name}.png";
         GetViewport().GetTexture().GetImage().SavePng(path);

@@ -4,6 +4,7 @@ using Rts.Sim;
 using Rts.Sim.Commands;
 using Rts.Sim.Data;
 using Rts.Sim.Entities;
+using Rts.Sim.Orders;
 using Rts.Sim.ViewApi;
 
 namespace Rts.Game;
@@ -788,7 +789,9 @@ public partial class SelectionController : Node
     /// M3-3), queued when <paramref name="queued"/>; one Command sound. Returns the Builds enqueued: 0 with no worker or
     /// when they don't all fit the command queue. M6-V22: with <paramref name="queueBehindEndingOrders"/> each worker's Build
     /// is queued when <see cref="OrderPath.QueuesBehind"/> says it is on an order that ends, else it replaces (the first
-    /// Shift placement of a ghost).
+    /// Shift placement of a ghost). M6-VH8 (BUG-1471 item 2): a worker whose Build would be queued onto a full queue
+    /// (<see cref="OrderConstants.QueueCapacity"/>) gets none; when that leaves no worker, nothing is sent, the Refused
+    /// sound plays and 0 is returned (the ghost does not count it as placed).
     /// </summary>
     public int OrderBuild(int typeId, int anchor, bool queued, bool queueBehindEndingOrders = false)
     {
@@ -810,13 +813,31 @@ public partial class SelectionController : Node
             _orders = OrderPathView.NewReader(world);
             _ordersOf = world;
         }
+        // M6-VH8 (BUG-1471 item 2): a Build that would be queued onto a full queue is dropped by the sim (UnitQueueFull), so
+        // such a worker is left out; with none left the placement is refused here (the Refused sound, nothing sent) and the
+        // ghost does not count it.
+        int sent = 0;
         foreach (EntityHandle h in Selection.Items)
-            if (_isWorkerType[u.TypeId[h.Index]])
-                sim.Enqueue(Command.Build(LocalPlayer, h, typeId, point, queued || (queueBehindEndingOrders && _orders!.QueuesBehind(h.Index))));
-        _issued[(int)CommandKind.Build] += workers;
+        {
+            if (!_isWorkerType[u.TypeId[h.Index]]) continue;
+            bool queue = queued || (queueBehindEndingOrders && _orders!.QueuesBehind(h.Index));
+            if (queue && u.QueueCount[h.Index] >= OrderConstants.QueueCapacity) continue;
+            sim.Enqueue(Command.Build(LocalPlayer, h, typeId, point, queue));
+            sent++;
+        }
+        if (sent == 0)
+        {
+            RefusedBuilds++;
+            _sfx?.Play(SfxEvent.Refused);
+            return 0;
+        }
+        _issued[(int)CommandKind.Build] += sent;
         _sfx?.Play(SfxEvent.Command);
-        return workers;
+        return sent;
     }
+
+    /// <summary>Placements <see cref="OrderBuild"/> refused because every selected worker's queue was full (M6-VH8, BUG-1471 item 2).</summary>
+    public int RefusedBuilds { get; private set; }
 
     // The site the last Cancel was sent for, and the tick it was sent between (BUG-0126 item 4); cleared with the match (BUG-0250 item 3).
     private int _cancelSlot = -1, _cancelGeneration, _cancelTick = -1;

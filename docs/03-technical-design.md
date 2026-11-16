@@ -1140,7 +1140,9 @@ or recycled handle or another player's unit; a Move or AttackMove also for a tar
   (it arrived, gave up, stopped, or was never ordered) with a queued order pops the head and starts
   it through the same code as the unqueued order, except that a popped Move or AttackMove keeps the
   rest of the queue. A popped `Stop` or `HoldPosition` is terminal: it drops the rest. A unit that
-  gave up on a leg still starts the next one.
+  gave up on a leg still starts the next one. A worker on a gather loop is never Idle while the loop runs, so since
+  M6-S11 the loop itself ends for a queue once the trip in hand is done (phase 4; see "Implementation (M6-S11)") and
+  this phase 7 starts it.
 - **Storage** (no per-unit lists): `UnitStore.Hold` (bool per slot), `QueueCount` (int per slot),
   and flat `QueueKind` / `QueuePosition` arrays of `Capacity * QueueCapacity` entries (slot i's
   queue starts at `i * QueueCapacity`, head first; entries past the count are always default).
@@ -3717,7 +3719,11 @@ file changed.
   minimap, the rubble, the hit test. **The hit test keeps the 3 m box** (`BuildingPicker.PickRay` with `BoxHeight`, as the
   unit's keeps the sim radius): for the owner, a click on the upper part of a taller building (above 3 m) selects what it
   selected before M7-V4, which is whatever the 3 m box behind the click gives, often nothing, so a tall building is
-  clicked on its lower 3 m.
+  clicked on its lower 3 m. The other way round (BUG-1381 item 2, M6-VH8): a building below scale 1 is drawn shorter than
+  the 3 m box, so the empty air over it up to 3 m still selects it (a 0.5 Barracks, drawn 1.5 m tall, at the default zoom:
+  about 437 pixels of air), and where a unit or another building stands behind that air a click picks the short building
+  instead (units pick first, so only a building behind). No shipped building is below scale 1; if one ships, `PickRay`
+  can take the drawn height.
 - **Scale-1 buildings draw exactly as before:** `EconomyViewTest`'s six `--placeholder-art` pictures (the Malazan bases of
   seeds 1, 6 and 31, hauling, the site, cargo at 60 m), taken at 43ab896 and with this change in one tree, are
   byte-identical for three (seeds 1 and 6, hauling); the other three differ only in the HUD's frames-per-second number, a
@@ -3753,7 +3759,10 @@ docs/04 "Import process" ("Unit models, as built").
 
 - **Which types.** `UnitViews.Bind` makes a `UnitModels`: per type, the file `res://assets/models/<model>/<id>.glb`
   (`UnitDef.Model` is the stem, `<id>` its last segment); no unit id is named in code. A type draws its model when that
-  file loads and has a `team` material; otherwise its capsule. **Fallbacks, never an `ERROR` line:** the source file is
+  file loads and has a `team` material; otherwise its capsule. **Fallbacks, never an `ERROR` line from the runtime
+  loader** (BUG-1440, M6-VH8: the import step is another matter: `godot --import` on a clone whose model and texture files
+  are LFS pointers prints glTF and image `ERROR` lines and rewrites the tracked `.import` files, so smoke FAILs there until
+  `git lfs pull`, `git checkout -- game` and a fresh import): the source file is
   read before `GD.Load` (BUG-0860's lesson: a failed import prints engine errors), so a Git LFS pointer (`version
   https://git-lfs...`) or a non-glTF file gives one warning line per file per run; files that are simply missing (today 19
   types) are one summary warning per run; a model without a `team` surface one warning; a missing library one warning (the
@@ -3960,6 +3969,8 @@ Producer's run alone).
   marks and the cargo marker sit over `DrawnHeight` (the capsule's: `(2 x radius + 1 m) x scale`, 3.75 m for a giant),
   so over a Teblor figure they float about 1 m above its 2.76 m head (above it, never inside it). The Heavy Infantry's
   capsule is 1.8 m, its figure 1.88 m, so the human types sit as before.
+  **Changed by M6-VH8** (BUG-1441 item 2): a model type's overlays sit over its figure as drawn (`UnitViews.OverlayLines`),
+  2.94 m for a giant; see "Implementation (M6-VH8)".
 - **The entries** (docs/04 "Unit models, as built", third slice; the clip map in "Animation setup"): the two outfits on disk
   recoloured to the Teblor palette, the Universal Base Characters' `Hair_Long` on every figure, props as boxes in bloodwood
   (a tool, a greatsword, javelins, a staff, a maul). 2,609-2,802 triangles, five 512² textures, six surfaces, 65 bones, one
@@ -4037,7 +4048,9 @@ data, no player-facing text.
   shared per (kind, point to 1 cm) and lines per (ends to 1 cm, kind), so 200 units on one path draw 8 markers. Two
   `MultiMesh`es (lines, markers; unshaded, vertex colour, no depth test so a leg up a cliff is not swallowed by the
   slope), buffers that double while warming up, transforms rewritten only when they moved and colours only when they
-  change: 0 bytes a frame once warm. Line 0.12 m wide (the rally line's), marker radius 0.5 m.
+  change: 0 bytes a frame once warm. Line 0.12 m wide (the rally line's), marker radius 0.5 m. **Changed by M6-VH8:** a
+  no-place entry is a real ring (a torus in a third multimesh drawn before the markers, BUG-1470), and markers, rings and
+  lines grow with the zoom; see "Implementation (M6-VH8)".
 - **The building gap (Producer decision 2026-11-15, owner may revisit).** `CommandCard.GhostClick`'s first Shift
   placement of a ghost now calls `SelectionController.OrderBuild(..., queueBehindEndingOrders: true)`: per worker,
   `OrderPath.QueuesBehind` queues the Build behind an order that ends (a walk, an attack or a fight, a build, a repair, a
@@ -4106,6 +4119,138 @@ data, no player-facing text.
      Recommendation: keep it; the rally line still uses depth and could follow.
   4. The first-Shift-building rule reads the frame's sim state, so a Shift placement within the same tick as another
      order to that worker decides on the older state. Recommendation: accept (one tick, 50 ms).
+
+### Implementation (M6-VH8)
+
+The view's hardening after M6-V22 and M7-V5: the queued Stop / Hold ring, queue markers sized by the zoom, the overlays
+over the giants' heads, a full queue's Shift-placed building, and older nits. View code, view tests and docs; no sim,
+ViewApi or data file changed.
+
+- **A ring, not a disc (BUG-1470).** A queued Stop, Hold or no-target cast was a wide disc in the markers' own multimesh,
+  drawn after (so over) the marker of the order before it: "attack that, then stop" showed only a white disc on the
+  target. Now it is a ring: a flat torus (`OrderPathView.RingMesh`, hole `RingInner` = 0.7 of its outer radius, so 0.63 m
+  against the 0.5 m marker) in a third multimesh (`RingsNode`), drawn after the lines and before the markers (render
+  priorities 1 / 2 / 3, no depth test). The marker inside stays visible whatever the order. A second no-place entry at
+  the same point (a Stop, then a Hold) is the next ring out (`1 / RingInner` wider, so the rings touch and never overlap;
+  at most three rings deep, `MaxRingLevel`). docs/02's sentence ("a wider ring at the point before them") is now true.
+- **Sized by the zoom** (docs/01 2026-11-15 (b) item 6). `OrderPathView.Camera` (the match's camera, set in `Match.Wire`):
+  markers and rings keep their size up to `MarkerFullZoom` (30 m, the cargo cube's and the hp bars' rule) and grow in
+  proportion above it; lines keep `LineWidth` up to `LineFullZoom` (20 m, the nearest zoom) and widen in proportion
+  above it, so a line is as wide on screen at every zoom. A zoom change rewrites every transform once (the written caches
+  are cleared); a steady frame writes nothing new. Measured on a 1152 x 648 view (`OrderQueueViewTest`'s zoom row):
+
+  | Zoom | Marker | First ring | Line |
+  | --- | --- | --- | --- |
+  | 20 m (nearest) | 28.9 px (1.0 m) | 52.1 px | 3.4 px (0.12 m) |
+  | 40 m (default) | 19.1 px (1.33 m) | 34.4 px | 3.3 px (0.24 m) |
+  | 60 m (farthest) | 19.1 px (2.0 m) | 34.3 px | 3.3 px (0.36 m) |
+
+  The row checks at least 16 px a marker and 3 px a line at 60 m, and at most 32 px a marker, 56 px a ring and 4 px a
+  line at 20 m.
+- **Overlays over the head (BUG-1441 item 2).** `UnitViews.OverlayLines` (per type, made in `Bind`): for a capsule type its
+  capsule's top (`DrawnHeight`), exactly as before; for a model type `(TopBone + ModelHeadRoom) x scale`, where
+  `UnitModels.TopBone(type)` is the highest bone of the model file's skeleton over every clip the type's players hold
+  (17 poses a clip, from the clips' own tracks and the bones' rest poses, computed once per skeleton and clip per run:
+  files with the same rig share the result, about 170 ms at a run's first `Bind`, under load; a model without a skeleton
+  keeps the capsule's top; bones
+  named `root`, with `ik` in their name, or parentless don't count, as in QA's `QaM7V5Test`) and `ModelHeadRoom` is
+  0.18 m. `CombatViews.OverlayLines` and `AbilityViews.OverlayLines` (set by `Match.Wire` before `Bind`; null means the
+  capsule's top, which a scene that binds them alone still gets) and the cargo marker read it; every overlay keeps its
+  own gap above the line (the hp bar's 0.35 m, the cargo marker's 0.3 m). Per model type: highest bone 1.78 m (a man) or
+  2.67 m (a 1.5 giant), line 1.96 m / 2.94 m, gap 0.18 m / 0.27 m (it was 0.02 m / 1.08 m over the capsule's 1.8 m /
+  3.75 m). The line is 0.13-0.24 m over the head's crown in any pose (the head bone's highest point plus its
+  rest distance to the rest-pose top), and the hp bar's lower edge is 0.36-0.46 m over the figure's rest-pose top. Every type's highest bone is a finger
+  of the raised hand in `gather_wood`, which every library holds (docs/04 "Animation setup", BUG-1411 item 3), so a
+  soldier's line is about 0.16 m higher than its own clips need; if the libraries stop holding the worker clips, the line
+  follows by itself. The ten capsule types are unchanged.
+- **A full queue's building (BUG-1471 item 2).** `SelectionController.OrderBuild`: a worker whose Build would be queued
+  (a later Shift placement, or the first one behind an order that ends) onto a full queue (`OrderConstants.QueueCapacity`,
+  8) gets none, since the sim would drop it. When that leaves no worker, nothing is sent, the Refused sound plays
+  (`SfxEvent.Refused`, the lost cast's "no"; no words: `ui.json` has no text for a full queue and this task adds none), 0
+  is returned and the ghost stays armed without counting it as placed (the next click is still the first placement).
+  With some workers full and some not, the others get the Build and the Command sound plays. `RefusedBuilds` counts the
+  refusals for tests.
+- **A queued Build refused at its turn (BUG-1471 item 3): not built; a Request for the sim track.** When a queued Build
+  pops and `ConstructionSystem.StartBuild` refuses (no money, blocked), `OrderSystem.Execute` drops it silently: the unit
+  stands Idle with its queue one shorter, the same state as after other drops. The view could only guess it from
+  frame-to-frame diffs of the queue (several ticks pass in one frame at 8x). **What the sim would expose:** a per-tick
+  list of queued orders dropped at their turn (unit handle, owner, order kind and, for a Build, the `PlacementError`),
+  cleared each tick and read like `World.Deaths` through a read-only `ViewApi` accessor. The view would then play the
+  Refused sound for an own unit and show the `ui.json` `placement` text (for example "Can't afford") over it, as the
+  lost-cast cue words are shown.
+- **The mixed picture re-staged (BUG-1471 item 1).** `OrderQueueViewTest`'s mixed queue now stands 12 m from the tree it
+  gathers, with its own held enemy Raider, and the camera frames the box of the seven markers and three units. Headless
+  and windowed the scene prints "7 of 7 markers in frame" at 40 m and 60 m (screen points not under the HUD). The
+  pictures are taken at 20, 40 and 60 m.
+- **A replay** (item 5): queued orders are drawn while watching a replay, for the local seat's units only, as in a match
+  (the drawing never asked whether the sim is a playback). A replay has no seat switch, so there is no watched seat to
+  change.
+- **Figures at a replay's end** (item 7). `UnitViews.AnimationRate` is 0 once the runner's `PlaybackState` is `Ended` or
+  `Stopped`, so the figures stand as the last tick left them (in the shell the banner also pauses the tree; a match
+  without the shell, a test or a tool, kept them moving in place).
+- **Not done:** the Casting clip (item 6, BUG-1441 item 4). No model needs a re-import (the Shaman's library already holds
+  `attack_cast`), but a Casting state needs a clip slot of its own (a seventh `UnitModels.Clip`) or a `ClipFor` that knows
+  the type. The first breaks QA's `QaM6VH7Test` row 1 (it checks every `Clip` against the shared library by name), the
+  second the contract `QaM6V20Test` row 9 and `TeblorModelTest` read (the playing clip is `ClipFor`'s), so it waits for a
+  task that may re-pin those rows. The javelin through the ground (item 9, BUG-1441 item 3): a prop offset in
+  `tools/art/build_unit.py` needs a Blender re-import of the Javelin Thrower and a byte-identical check of the ten other
+  models; left for an art task.
+- **Docs only:** BUG-1381 item 2 (docs/03 "Implementation (M7-V4)": the 3 m hit box above a building below scale 1;
+  item 3 was already true: "Remembered sites" says picking keeps the foundation's share but not the type's scale),
+  BUG-1411 item 3 (docs/04's clip-map table: what a type holds against what it plays), BUG-1440 (docs/03 "Which types":
+  "never an `ERROR` line from the runtime loader"; the import step on LFS pointers does print them). **Request for the
+  sim track (BUG-1440):** `tools/qa/smoke.ps1` (the sim's file) could look for an LFS pointer under `game/assets/` before
+  the import and stop with "run `git lfs pull` first".
+- **Tests.** New `game/tests/OverlayLineTest` (headless, in the loop): per model type (the count is the asset manifest's)
+  the highest bone over every clip, measured on a real player and skeleton, equals `TopBone x scale` within 2 cm, the line
+  is above it and at most 0.3 m over it (the gap printed per type), it is above the head's crown in every pose, and the
+  hp bar's lower edge clears the rest-pose top (the first `Bind` of a run prints the sampling's time);
+  every capsule type's line is its `DrawnHeight` exactly; in a match the bars and the ability overlays read the same
+  line, a hurt Teblor Warrior's and a hurt Heavy Infantry's bars are drawn, and a carrying Laborer's cargo marker is the
+  gap over its line; windowed with `-- --shots <dir>`, the hurt Warrior beside the hurt Heavy Infantry at 20 and 40 m.
+  `OrderQueueViewTest` gains: the full-queue rows (one worker with 8 queued: nothing sent, one Refused sound, no Command
+  sound, the ghost up, and the same click once the queue is emptied is a first placement; one full and one idle worker:
+  only the idle one's Build), the ring rows (the ring mesh is a torus whose hole is wider than a marker, in its own
+  multimesh drawn before the discs; a Move's disc, a Stop's ring round it and a Hold's ring round that, without
+  overlap), the zoom row (the table above), the mixed queue's in-frame check (now run headless too) and the replay rows
+  (a recorded match replayed to its end: the own soldier's two queued Moves and Stop ring drawn, an enemy's queue not;
+  the animation rate 8 while playing and 0 at the end, the soldier's clip still over 10 frames). QA's `QaM7V5Test` and
+  `QaM6V22Test` are unedited (row A still checks the capsule's `DrawnHeight`, which did not move).
+- **Cost** (rules 42 / 61, 2026-11-15; none of the developer's own test processes running, one other track's `testhost`
+  running throughout, which the developer may not stop). The queue drawing (`OrderQueueViewTest -- --cost`, 1152 x 648,
+  vsync off, default zoom, 200 Heavy Infantry, 300 frames a case):
+
+  | Case | Frame | Draw calls | `OrderPathView.Sync` | Bytes a frame |
+  | --- | --- | --- | --- | --- |
+  | Nothing selected | 5.57 ms | 3,302 | 0.3 us | 0 |
+  | 200 selected, no orders | 5.73 ms | 3,388 | 8.6 us | 0 |
+  | 200 x 8 queued, shared points (8 markers) | 6.10 ms (+0.37 on the idle selection, +0.53 on none) | 3,388 | 289 us | 0 |
+  | 200 x 8 queued, distinct points (1,600 markers, 1,795 lines) | 6.10 ms (+0.37, +0.53) | 3,388 | 383 us | 0 |
+
+  Against M6-V22's +0.45 ms (shared) and +0.74 ms (distinct) on nothing selected: +0.08 ms and -0.21 ms, within the
+  window's wander. The figures (`ModelShots --bench 30 --vsync off`, 1600 x 900, eleven model types; capsules with
+  `--placeholder-art`, the same window):
+
+  | Run | Average | While 90 %+ live | Worst 1 % (90 %+ live) | Draw calls |
+  | --- | --- | --- | --- | --- |
+  | 400 figures | 9.93 ms | **11.03 ms** (M7-V5: 11.00) | 15.22 ms | 5,203 |
+  | 400 capsules | 0.89 ms | 0.84 ms (M7-V5: 0.84) | 2.95 ms | 143 |
+  | 1,000 figures | 32.11 ms | 33.56 ms (M7-V5: 29.22) | 43.76 ms | 13,839 |
+  | 1,000 capsules | 1.47 ms | 1.50 ms (M7-V5: 1.39) | 6.36 ms | 188 |
+
+  The 400 rows match M7-V5's. The 1,000-figure row is 4.3 ms over M7-V5's with the same draw calls (13,839 against
+  13,974), and its capsule row 0.11 ms over: the other track's `testhost` was running for both 1,000 runs and not for the
+  400-figure run, so it reads as the machine's load, not this task's (nothing here adds a draw call or touches the
+  per-frame animation; the overlays read one more float per type at `Bind`). Rule 61's next step is unchanged: merged
+  surfaces.
+- **Questions for the Producer (rule 67), each with a recommendation:**
+  1. Every model type's line is set by `gather_wood`'s raised hand, which soldiers hold but never play (BUG-1411 item 3).
+     Count only the clips a type's map names? Recommendation: not now; decide it with BUG-1411 item 3 (soldier libraries
+     without the worker clips), and the line follows.
+  2. A full queue's Shift-placed building plays the "no" sound with no words (no `ui.json` text exists for it).
+     Recommendation: add a text such as "Orders full" in a data task and show it on the ghost.
+  3. Stop and Hold rings are close in colour (off-white, pale yellow) at 60 m. Recommendation: keep; both end the queue,
+     and the ring's place says which order it follows.
 
 ## Vision, detection, fog
 
@@ -12486,6 +12631,80 @@ value), each with its old value in a comment; none loosened, skipped or removed.
    (Town Hall razed, defending) is a `WhyWaiting` reason.
 4. Raraku (BUG-1460): four of eight seeds now end with no winner by 72,000. Recommendation: an AI end-game task (the winner
    razes a building-only loser; idle workers find wood past the reach) before the balance pass.
+
+### Implementation (M6-S11)
+
+2026-11-15. Two parts: BUG-1462's red counter row made honest (tests only), then Request 57 (docs/01 2026-11-15 (b)
+item 5): an order Shift-queued behind a gathering worker starts once the worker's current trip is done.
+
+**Part 1, the counter row (outcome A).** `CounterCompositionTests.AHardSeat_ShiftsItsLineShareFurther_ThanANormalSeat`
+was red because the re-staged run (M6-S10's gold trickle, `Purse`) trains nine units inside the 180 s memory window, and
+the deficit pick (fewest live + queued per unit of weight) gives the same ninth unit at Line x 1.5 and x 2: with Heavy
+Infantry 35 / Crossbowmen 30 and all-Shock memory, Normal weighs Line 52.5 and Hard 70, and after 9 units both have
+picked 6 Line (the counts first part at the 10th unit and keep apart from the 13th on). The row now runs `RunWide`: the
+same scene, seed, sighting and purse rule, with a second barracks and crossbow range spawned finished the think the first
+pair stands and the purse paid twice the one-pair boundary (each pair its own boundary's worth), so each producer still
+trains only what the weights pick and 17-18 units land inside the same window. `Run` (one pair) is unchanged and still
+holds the Normal row and QA's controls. Measured (Line / Crossbowmen trained after the sighting):
+
+| Difficulty | `counterStrength` | Staging | Seen | Unseen | Line share shift |
+| --- | --- | --- | --- | --- | --- |
+| Normal | 0.5 | one pair (`Run`) | 6 / 3 | 5 / 4 | 0.111 |
+| Hard | 1 | one pair (`Run`) | 6 / 3 | 5 / 4 | 0.111 |
+| Normal | 0.5 | two pairs (`RunWide`) | 11 / 6 | 10 / 8 | 0.092 |
+| Hard | 1 | two pairs (`RunWide`) | 12 / 5 | 10 / 8 | 0.150 |
+| Normal | 0 | two pairs | 10 / 8 | 10 / 8 | 0 |
+| Hard | 0 | two pairs | 10 / 8 | 10 / 8 | 0 |
+| Hard | 0 | one pair | 5 / 4 | 5 / 4 | 0 |
+
+The wide counts are the deficit pick's own sequence (17 units: Normal 11 Line, Hard 12; 18 units at the baseline 35 / 30:
+10). The strength-0 controls are `CounterRestageQaTests.WithStrengthZero_TheSightingChangesNothing_ForEachDifficultyAndStaging`
+(Hard on one pair; Normal and Hard on two). The `hard > normal` assertion and the three `FirstTrain` pick rows are as
+they were.
+
+**Part 2, the rule.** `EconomySystem.Step` (phase 4), for a unit on a gather loop with `QueueCount > 0`, first asks
+`EndsForQueue`: the loop ends now (`EndLoop`: Idle, goal-less, cargo kept) when the worker has no trip left to finish
+(nothing carried and not in reach of its node: walking out, waiting out of reach, or its node gone) or none it can finish
+(no own drop-off stands). Otherwise the trip runs exactly as with no queue: it fills up (or its node runs out and the
+depleted-node rule moves it to the next node of the kind, as today), walks back and delivers, and `Deposit`, after crediting
+the ledger as always, ends the loop instead of walking out again. Phase 7 (`OrderSystem.Run`, unchanged) starts the head
+of the queue the same tick, and the rest follows as for any unit. Wherever a loop already ended in Idle (node gone and
+none other, no drop-off for a full load) nothing changed: the queue starts as before. With an empty queue no line of the
+loop runs differently (the check is behind `QueueCount > 0`), so no AI match moves: the AI never queues an order.
+
+- **No new state, no format change** (save 10, replay 9 / 6): the rule reads the queue count, the cargo, the gather
+  node and the drop-offs, all already saved. No number: the "in reach" test is the loop's own `EconomyConstants.Reach`.
+- **A consequence of the rule as written:** a popped `Gather` with more orders behind it is a loop with a queue that
+  starts with nothing carried, so it ends the tick after it starts (the next order starts then); the last `Gather` in a
+  queue loops as usual. Whether a queued Gather followed by more orders should do one trip first is the Producer's call
+  (BUG-1490 proposed): it cannot be told from the saved state (nothing records that the queue was there when the loop began).
+- **No drop-off and nothing carried:** the brief names "carrying cargo, no drop-off: at once"; a worker in reach of its
+  node with nothing carried and no drop-off also starts the queue at once (it has no trip it could finish). The literal
+  alternative (work until it carries one unit, then go) was not built.
+- **Measured (rule 66), `Stress/GatherQueueFuzzStressTests`** (12 seeds x 4,000 ticks, 24 Laborers, an order stream of
+  every kind queued and unqueued, nine-at-once bursts): every invariant held (no queue entry lost or duplicated,
+  `QueueCount` 0-8, no Gathering / Returning worker without a node, cargo left a worker only by a delivery or the
+  documented kind-switch drop). Overlap 0.5: 424 queues landed behind a loop, 413 started, longest wait 1,429 ticks (71.5
+  s: a worker sent across the map to a far node walking its load back), 11 still waiting at the end (each Moving or Gathering
+  with part of a load when the run stopped). Off: 416 / 403, longest 1,740 ticks (87.0 s, the same shape), 12 open. No held worker
+  (BUG-1463's shapes) was seen waiting; one that is held cannot deliver, so its queue would wait with it.
+- **Tests:** `Economy/GatherQueueTests` (criteria 2-4 and the Idle cases: gold and wood, a Laborer and a Teblor Gatherer,
+  every queued kind working and walking back), `GatherQueueDeterminismTests` (twins 6,000 ticks plus the replay; a save
+  taken while workers finish a trip with orders queued, loaded and followed 2,000 ticks), `GatherQueueAllocationTests`
+  (0 bytes), the fuzz above (Stress). Re-stated rows: `ViewApi/OrderPathTests.QueuesBehind_*` (its queued gatherer stood
+  walking out with no drop-off, which now starts the Move at once; it now stands in reach of its tree with a Keep on the
+  map) and `Stress/EconomyFuzzStressTests.HostileGatherStream_*`'s discard oracle (a delivery and a kind switch in one
+  tick is now possible: the switched load less the tick's deliveries not given up by units that kept their kind).
+- **For the view track:** `game/tests/OrderQueueViewTest`'s `BehindAGatherLoop` row (its "known gap" line goes) and
+  `ViewApi/OrderPath.QueuesBehind` (the first Shift-placed building still replaces a gather loop until the view follows).
+- **Producer's rulings at the ACCEPT (2026-11-15-1536; docs/01 2026-11-15 (c)).** (1) BUG-1490: the intended rule is
+  "a queued Gather with more orders behind it makes exactly one trip"; it needs a saved per-unit flag, so it is built by
+  the first sim task that changes the save format anyway (not a format bump of its own). Until then the behaviour above
+  stands and docs/02 says so. (2) A worker in reach of its node with nothing carried and no drop-off starts its queue at
+  once: accepted as built. (3) M6-S10's rows described above as red are green again on `main`: the Hard counter row by
+  part 1 here; `AiOpeningPairsReportTests` (0, 2) / (2, 0) and the two `DR35ProsePinQaTests` rows by the data track's
+  D-R39 (the same session). (4) Requests the view's M6-VH8 raised for the sim (STATE Requests 58 / 59): a per-tick list of
+  queued orders dropped at their turn behind a read-only ViewApi accessor, and an LFS-pointer check in `tools/qa/smoke.ps1`.
 
 ## Testing strategy
 

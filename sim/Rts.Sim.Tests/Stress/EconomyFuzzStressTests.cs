@@ -129,19 +129,37 @@ public class EconomyFuzzStressTests
             r.Cell.CopyTo(nodeCellBefore);
             r.TypeId.CopyTo(nodeTypeBefore);
             int totalsGold = w.Gold[0] + w.Gold[1], totalsWood = w.Wood[0] + w.Wood[1];
+            int[] gatheredGold = w.GatheredGold.ToArray(), gatheredWood = w.GatheredWood.ToArray(); // M6-S11, the discard below
 
             a.Tick();
             b.Tick();
             Assert.True(a.StateHash() == b.StateHash(), $"seed {seed}: twins differ after tick {a.TickNumber}");
 
-            // The documented discard: a live unit whose cargo kind switched lost the load it carried.
+            // The documented discard: a live unit whose cargo kind switched lost the load it carried. M6-S11: unless it
+            // delivered that load first in the same tick (a worker with orders queued delivers, ends its loop and starts a
+            // queued Gather of the other kind in phase 7). Per player and kind, the deliveries of the tick (the ledger's
+            // gathered count) beyond what units that kept their kind gave up came from switched units, so the discard is
+            // the switched units' loads less that; the conservation check below stays exact.
             long lossGold = 0, lossWood = 0;
-            for (int i = 0; i < capacity; i++)
+            for (int p = 0; p < players; p++)
             {
-                if (!aliveBefore[i] || !u.Alive[i] || genBefore[i] != u.Generation[i]) continue;
-                if (u.CargoKind[i] == kindBefore[i]) continue;
-                if (kindBefore[i] == ResourceKind.Gold) lossGold += cargoBefore[i];
-                else lossWood += cargoBefore[i];
+                long switchedGold = 0, switchedWood = 0, sureGold = 0, sureWood = 0;
+                for (int i = 0; i < capacity; i++)
+                {
+                    if (!aliveBefore[i] || !u.Alive[i] || genBefore[i] != u.Generation[i] || u.Owner[i] != p) continue;
+                    if (u.CargoKind[i] != kindBefore[i])
+                    {
+                        if (kindBefore[i] == ResourceKind.Gold) switchedGold += cargoBefore[i];
+                        else switchedWood += cargoBefore[i];
+                    }
+                    else if (u.Cargo[i] < cargoBefore[i])
+                    {
+                        if (kindBefore[i] == ResourceKind.Gold) sureGold += cargoBefore[i] - u.Cargo[i];
+                        else sureWood += cargoBefore[i] - u.Cargo[i];
+                    }
+                }
+                lossGold += switchedGold - Math.Clamp(w.GatheredGold[p] - gatheredGold[p] - sureGold, 0, switchedGold);
+                lossWood += switchedWood - Math.Clamp(w.GatheredWood[p] - gatheredWood[p] - sureWood, 0, switchedWood);
             }
             goldDiscarded += lossGold;
             woodDiscarded += lossWood;

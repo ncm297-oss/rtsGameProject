@@ -17,12 +17,16 @@ public class CounterRestageQaTests
 
     public CounterRestageQaTests(ITestOutputHelper output) => _out = output;
 
-    private (int Line, int Ranged, int[] Count, int[] Tick) Run(AiDifficulty difficulty, bool seen, GameData? data)
+    private (int Line, int Ranged, int[] Count, int[] Tick) Run(AiDifficulty difficulty, bool seen, GameData? data, string method = "Run")
     {
         var host = new CounterCompositionTests(_out);
-        MethodInfo run = typeof(CounterCompositionTests).GetMethod("Run", BindingFlags.Instance | BindingFlags.NonPublic)!;
+        MethodInfo run = typeof(CounterCompositionTests).GetMethod(method, BindingFlags.Instance | BindingFlags.NonPublic)!;
         return ((int, int, int[], int[]))run.Invoke(host, new object?[] { difficulty, seen, data })!;
     }
+
+    /// <summary>The shipped data with <paramref name="difficulty"/>'s Malazan counterStrength at 0.</summary>
+    private static GameData StrengthZero(AiDifficulty difficulty) =>
+        AiScenes.DataWithAi("malazan", root => root["difficulties"]![difficulty.ToString().ToLowerInvariant()]!["counterStrength"] = 0);
 
     /// <summary>With Normal's counterStrength at 0, the seen run remembers the 8 Shock but trains exactly what the unseen run trains.</summary>
     [Fact]
@@ -32,6 +36,26 @@ public class CounterRestageQaTests
         var seen = Run(AiDifficulty.Normal, true, zero);
         var unseen = Run(AiDifficulty.Normal, false, zero);
         _out.WriteLine($"strength 0: seen {seen.Line} / {seen.Ranged}, unseen {unseen.Line} / {unseen.Ranged}");
+        Assert.Equal(8, seen.Count[(int)UnitSlot.Shock]);
+        Assert.Equal(unseen.Line, seen.Line);
+        Assert.Equal(unseen.Ranged, seen.Ranged);
+    }
+
+    /// <summary>
+    /// M6-S11 (BUG-1462): the strength-0 control extended to Hard and to the wide staging (<c>RunWide</c>, two producers of each
+    /// kind) that the Hard-versus-Normal row now runs: with the difficulty's counterStrength at 0 the seen seat remembers the
+    /// 8 Shock and trains exactly what the unseen seat trains (shift 0), so the row's Hard / Normal gap is the weights'.
+    /// </summary>
+    [Theory]
+    [InlineData(AiDifficulty.Hard, "Run")]
+    [InlineData(AiDifficulty.Normal, "RunWide")]
+    [InlineData(AiDifficulty.Hard, "RunWide")]
+    public void WithStrengthZero_TheSightingChangesNothing_ForEachDifficultyAndStaging(AiDifficulty difficulty, string staging)
+    {
+        GameData zero = StrengthZero(difficulty);
+        var seen = Run(difficulty, true, zero, staging);
+        var unseen = Run(difficulty, false, zero, staging);
+        _out.WriteLine($"{difficulty} {staging} strength 0: seen {seen.Line} / {seen.Ranged}, unseen {unseen.Line} / {unseen.Ranged}");
         Assert.Equal(8, seen.Count[(int)UnitSlot.Shock]);
         Assert.Equal(unseen.Line, seen.Line);
         Assert.Equal(unseen.Ranged, seen.Ranged);

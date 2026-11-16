@@ -54,6 +54,14 @@ public partial class UnitViews : Node3D
     /// </summary>
     public const float CargoFullZoom = 30f;
 
+    /// <summary>
+    /// The room over a model type's highest bone (M6-VH8, BUG-1441 item 2), in meters at scale 1, times the data <c>scale</c>:
+    /// the overlays' line (<see cref="OverlayLine"/>) is this far over the highest bone of any of the figure's clips (0.18 m for
+    /// a man, 0.27 m for a 1.5 giant). Every overlay sits a further gap above the line (the hp bar's <see cref="CombatViews.BarGap"/>,
+    /// the cargo marker's <see cref="CargoGap"/>), so none reaches into the head.
+    /// </summary>
+    public const float ModelHeadRoom = 0.18f;
+
     /// <summary>The camera whose zoom sizes the cargo markers; null keeps <see cref="CargoSize"/>.</summary>
     public RtsCamera? Camera { get; set; }
 
@@ -87,6 +95,7 @@ public partial class UnitViews : Node3D
 
     private CapsuleMesh[] _meshes = Array.Empty<CapsuleMesh>();
     private float[] _halfHeight = Array.Empty<float>();
+    private float[] _overlayLine = Array.Empty<float>();
     private MeshInstance3D?[] _views = Array.Empty<MeshInstance3D?>();
     private int[] _viewType = Array.Empty<int>();
     private int[] _viewOwner = Array.Empty<int>();
@@ -118,6 +127,18 @@ public partial class UnitViews : Node3D
 
     /// <summary>The models of the last <see cref="Bind"/>, or null when <see cref="UseModels"/> was off.</summary>
     public UnitModels? Models => _models;
+
+    /// <summary>
+    /// Per unit type, the height above the ground (m) the overlays sit over (M6-VH8, BUG-1441 item 2): for a model type its
+    /// figure as drawn, the highest bone over every clip (<see cref="UnitModels.TopBone"/>) plus <see cref="ModelHeadRoom"/>,
+    /// times the data <c>scale</c>; for a capsule type <see cref="DrawnHeight"/>, as before. Made in <see cref="Bind"/>; the
+    /// hp bars (<see cref="CombatViews.OverlayLines"/>), the cast bar, status marks and cue words
+    /// (<see cref="AbilityViews.OverlayLines"/>) and the cargo marker read it.
+    /// </summary>
+    public float[] OverlayLines => _overlayLine;
+
+    /// <summary>Type <paramref name="type"/>'s overlay line (<see cref="OverlayLines"/>).</summary>
+    public float OverlayLine(int type) => _overlayLine[type];
 
     /// <summary>True when type <paramref name="type"/> is drawn as a model (M6-V20), false for a capsule.</summary>
     public bool DrawsModel(int type) => _models?.Has(type) == true;
@@ -237,6 +258,12 @@ public partial class UnitViews : Node3D
         _shownClip = new int[unitCapacity];
         Array.Fill(_shownClip, -1);
         _crowd = new CrowdAnimator(unitCapacity);
+        _overlayLine = new float[data.Units.Length];
+        for (int t = 0; t < _overlayLine.Length; t++)
+        {
+            float top = _models?.TopBone(t) ?? float.NaN; // NaN for a capsule type (or a model without a skeleton)
+            _overlayLine[t] = float.IsFinite(top) ? (top + ModelHeadRoom) * data.Units[t].Scale : DrawnHeight(data.Units[t]);
+        }
     }
 
     /// <summary>The state whose tint slot <paramref name="slot"/> shows (<see cref="UnitState.Idle"/>: none).</summary>
@@ -289,9 +316,11 @@ public partial class UnitViews : Node3D
     /// <summary>
     /// How fast the figures' clips run against view time (M6-V21, docs/01 2026-11-14 (d) (f)): the runner's
     /// <see cref="SimRunner.GameSpeed"/> (1 without a runner), so a clip plays at 2x on Fast; 0 while this node can't
-    /// process (the match's tree paused: the pause menu, the match-over banner), so paused figures stand still.
+    /// process (the match's tree paused: the pause menu, the match-over banner), so paused figures stand still; 0 once a
+    /// watched replay has reached its end or stopped (M6-VH8: no more ticks come, so the figures stand as the last tick left them).
     /// </summary>
-    public double AnimationRate => IsInsideTree() && !CanProcess() ? 0.0 : Runner?.GameSpeed ?? 1.0;
+    public double AnimationRate =>
+        (IsInsideTree() && !CanProcess()) || Runner?.PlaybackState is PlaybackState.Ended or PlaybackState.Stopped ? 0.0 : Runner?.GameSpeed ?? 1.0;
 
     /// <summary>Sizes the shared cargo meshes for camera zoom <paramref name="zoom"/> (one write per kind, only when the zoom changed).</summary>
     public void SetCargoZoom(float zoom)
@@ -396,8 +425,9 @@ public partial class UnitViews : Node3D
             MarkerCount++;
         }
         marker.Mesh = _cargoMeshes[cargo];
-        // The body is centred on its node; the marker floats above its top (types differ in height).
-        marker.Position = new Vector3(0f, _halfHeight[type] + CargoGap + CargoSize / 2f, 0f);
+        // The node sits at the capsule's centre; the marker floats over the type's overlay line (the capsule's top, or a
+        // model's figure: M6-VH8), so types of every height carry it just over the head.
+        marker.Position = new Vector3(0f, _overlayLine[type] - _halfHeight[type] + CargoGap + CargoSize / 2f, 0f);
         marker.Visible = true;
     }
 

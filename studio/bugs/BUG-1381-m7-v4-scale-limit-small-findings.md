@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S4 |
-| Status | open |
+| Status | open (item 1 only: nothing ships above scale 1.25; items 2-3 closed in docs by M6-VH8, session 2026-11-15-1536) |
 | Found | 2026-11-14-0616, task M7-V4 (QA) |
 | System | building views (`BuildingViews`), building picking (`BuildingPicker` via `SelectionController`), docs/03 |
-| Fixed by | |
+| Fixed by | M6-VH8 (item 2 docs; item 3 already true) |
 
 Nothing here touches shipped data today: the largest shipped building scale is the Teblor's 1.25 (D31), and none is below 1.
 These are what the allowed range (`DataLimits` 0.5-3.0) does once someone uses its ends.
@@ -43,3 +43,9 @@ Barracks 3x3 at 0.5, Watchtower and Depot 1x1 at 0.5 / 3.0, Billet at 3.0). It p
   out, so `ConstructionSystem.Step` retries its walk every 20 ticks forever. Every Laborer spawned on passable ground, in all
   four directions at 2.6, 3.0 and 4.0 m from the edge, on seeds 1 and 6 and on both anchors, finishes the site (811-818
   ticks). No build-reach defect.
+
+## M6-VH8
+Item 2: docs/03 "Implementation (M7-V4)" now says a building below scale 1 is still picked on the 3 m box (the air over
+it selects it, and wins over a building behind). Item 3 was already true on `main`: "Remembered sites" says picking keeps
+the foundation's share but not the type's scale. Item 1 (the bar off screen above about scale 2.4) is unchanged: nothing
+ships above 1.25.
