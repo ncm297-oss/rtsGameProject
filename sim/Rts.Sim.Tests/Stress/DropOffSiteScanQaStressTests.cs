@@ -14,6 +14,8 @@ namespace Rts.Sim.Tests.Stress;
 /// loads to a far Keep across a 128 x 128 map with 60 other buildings standing, with and without one drop-off site placed:
 /// the mean tick of each is printed, and the site may not add more than a quarter of a millisecond to the mean (the 500-unit
 /// budget is 4 ms). Measured on the M6-SH2 tree, alone: 0.175 ms without the site, 1.167 ms with it (+0.99 ms): BUG-1538.
+/// Fixed in the M6-SH2 fix round (a list of the tick's drop-off sites, <c>World.DropOffSites</c>, made once a tick; a walker
+/// tests only those): 0.191 ms without the site, 0.212 ms with it (+0.021 ms), un-skipped.
 /// </summary>
 [Trait("Category", "Stress")]
 public class DropOffSiteScanQaStressTests(ITestOutputHelper output)
@@ -48,7 +50,7 @@ public class DropOffSiteScanQaStressTests(ITestOutputHelper output)
         return sw.Elapsed.TotalMilliseconds / 300;
     }
 
-    [Fact(Skip = "BUG-1538: one drop-off site standing adds about 1 ms a tick to 400 loaded walkers (WalksToSite scans every building slot per walker per tick)")]
+    [Fact]
     public void FourHundredLoadedWalkers_ASiteStanding_CostsLittle()
     {
         double without = MeanTickMs(Scene(false)), with = MeanTickMs(Scene(true));

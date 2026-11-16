@@ -36,7 +36,7 @@ if ($pointers.Count -gt 0) {
 }
 
 # cmd /c keeps PowerShell 5.1 from turning Godot's stderr into ErrorRecords.
-$import =cmd /c "`"$godot`" --headless --path `"$gamePath`" --import 2>&1"
+$import = cmd /c "`"$godot`" --headless --path `"$gamePath`" --import 2>&1"
 $importExit = $LASTEXITCODE
 $smoke = cmd /c "`"$godot`" --headless --path `"$gamePath`" --quit-after $Frames 2>&1"
 $smokeExit = $LASTEXITCODE

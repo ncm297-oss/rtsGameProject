@@ -1,4 +1,4 @@
-﻿using Rts.Sim.Ai;
+using Rts.Sim.Ai;
 using Rts.Sim.Tests.Save;
 using Xunit.Abstractions;
 

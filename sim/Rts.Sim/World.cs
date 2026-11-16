@@ -69,6 +69,7 @@ public sealed partial class World
                 : ResourcePlacer.Place(config.Map, NavGrid, Resources, config.Data, ref _rngs[RngStream.MapGen]);
         Buildings = new BuildingStore(config.BuildingCapacity, NavGrid, config.Data, _ledger);
         SiteWorkers = new int[config.BuildingCapacity];
+        DropOffSites = new int[config.BuildingCapacity];
         PushedUnits = new int[config.UnitCapacity];
         SpawnCacheCleared = new bool[Plateaus.Count];
         SpawnPlateauFull = new bool[Plateaus.Count];
@@ -267,6 +268,15 @@ public sealed partial class World
 
     /// <summary>Number of entries in <see cref="Hits"/>.</summary>
     internal int HitCount { get; set; }
+
+    /// <summary>
+    /// Scratch for <see cref="Economy.EconomySystem"/> (M6-SH2, BUG-1538): this tick's drop-off sites (any owner, under
+    /// construction), slot order, so a loaded walker tests the few sites rather than every building slot; derived, not hashed.
+    /// </summary>
+    internal int[] DropOffSites { get; }
+
+    /// <summary>Number of entries in <see cref="DropOffSites"/>.</summary>
+    internal int DropOffSiteCount { get; set; }
 
     /// <summary>Scratch for <see cref="CombatSystem"/>: this tick's live building slots, slot order; derived, not hashed.</summary>
     internal int[] CombatBuildings { get; }

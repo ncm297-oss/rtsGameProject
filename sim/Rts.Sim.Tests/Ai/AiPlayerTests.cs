@@ -176,6 +176,7 @@ public class AiPlayerTests
             }
             return -1;
         }
+        var shifted = new List<string>(); // BUG-1532: the checked steps whose first think moved for want of a free builder
         var byStep = new List<int>[steps];
         for (int i = 0; i < steps; i++) byStep[i] = new List<int>();
         int lastThink = -1, lastStep = -1;
@@ -197,15 +198,22 @@ public class AiPlayerTests
             Assert.Equal(sent.Count, sent.Distinct().Count()); // at most one command per step per think
             int from = expectedDue[i] + slack;
             if (def.Openings[0].BuildOrder[i].Action == AiStepAction.Expand) from = Math.Max(from, expandAfter);
-            int firstThink = (from + think - 1) / think * think;
+            int firstThink = (from + think - 1) / think * think, unshifted = firstThink;
             AiStepAction action = def.Openings[0].BuildOrder[i].Action;
             if (action is AiStepAction.Build or AiStepAction.Expand)
                 while (!builderFree.Contains(firstThink) && firstThink < sent[0]) firstThink += think; // M6-SH2: a builder free
             Assert.True(sent[0] >= from, $"{difficulty}: step {i} sent at {sent[0]}, before due {expectedDue[i]} + slack {slack}");
             if (i is 0 or 1 or 2 or 3 or 4 or 9)
+            {
                 Assert.True(sent[0] == firstThink, $"{difficulty}: step {i} sent first at {sent[0]}, not at the first think from {from} ({firstThink})");
+                if (firstThink != unshifted) shifted.Add($"step {i} {unshifted} -> {firstThink}");
+            }
             _out.WriteLine($"{difficulty} step {i} ({def.Openings[0].BuildOrder[i].Action} {def.Openings[0].BuildOrder[i].TargetKey}): due {expectedDue[i]}, sent at {string.Join(", ", sent)}");
         }
+        // BUG-1532: the builder-free shift above is for the one measured wait (Easy: the crossbow range, a think with all five
+        // laborers walking loads past the depot site); a second checked step shifted, or a long wait, fails here.
+        _out.WriteLine($"{difficulty}: shifted for a builder: {(shifted.Count == 0 ? "none" : string.Join("; ", shifted))}");
+        Assert.True(shifted.Count <= 1, $"{difficulty}: more than one checked step waited for a builder: {string.Join("; ", shifted)}");
         Assert.Equal(3, ai.Board.StepQueued[0]);
         Assert.Equal(3, byStep[0].Count); // all accepted: no retry
         Assert.Equal(2, ai.Board.StepQueued[6]);

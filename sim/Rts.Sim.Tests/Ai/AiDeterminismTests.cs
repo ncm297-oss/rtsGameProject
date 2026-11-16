@@ -155,7 +155,9 @@ public class AiDeterminismTests
     /// tick and count the same hunts. Asserted here too: the match ends and a hunt was started. M5-9a: with Normal's counter
     /// shift seed 3 ends at 31,891 with no hunt (the winner razes the rest), so the row plays seed 5 (<see cref="HuntSeed"/>:
     /// ends at 45,358 after one hunt, QA's sweep) to keep a hunt in the two-process proof. M5-9b: the far expansion lengthens
-    /// seed 5 past 72,000 (96,321), so the row plays seed 1 (48,858, one hunt; 50,140 since M5-H6, one hunt).
+    /// seed 5 past 72,000 (96,321), so the row plays seed 1 (48,858, one hunt; 50,140 since M5-H6, one hunt). M6-SH2 (BUG-1533:
+    /// a site is no drop-off, which reshapes every AI match): seed 1 ends at 27,498 with no hunt, so the row plays seed 2
+    /// (42,016, seat 1, 4 hunts, the first at 34,761; the smallest Pale Hills seed that hunts on this tree).
     /// </summary>
     [Fact]
     [Trait("Category", "Stress")]
@@ -183,9 +185,10 @@ public class AiDeterminismTests
 
     /// <summary>
     /// The Pale Hills seed the hunt row plays: 3 until M5-9a, 5 in M5-9a, 1 since M5-9b (see the row: seed 5 now ends only at
-    /// 96,321, past 72,000; seed 1 ends at 48,858 after one hunt).
+    /// 96,321, past 72,000; seed 1 ends at 48,858 after one hunt), 2 since M6-SH2 (BUG-1533: seed 1 ends at 27,498 with no
+    /// hunt; seed 2 ends at 42,016 after 4 hunts). Was 1.
     /// </summary>
-    private const ulong HuntSeed = 1;
+    private const ulong HuntSeed = 2;
 
     /// <summary>M6-S4 criterion 5: two runs of the 2v2 AI match (teams 1, 2, 1, 2; <see cref="AiTeamTests.Match"/>) hash equal after every tick, with the same commands and thinks per seat.</summary>
     [Theory]

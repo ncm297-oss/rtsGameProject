@@ -31,8 +31,9 @@ public static class EconomySystem
     public static void Run(World world)
     {
         UnitStore u = world.Units;
-        // M6-SH2 (BUG-1520): one scan a tick, so the walking re-pick below costs nothing while no drop-off is being built.
-        bool sites = AnyDropOffSite(world);
+        // M6-SH2 (BUG-1520): one scan a tick lists the drop-off sites, so the walking re-pick below costs nothing while none
+        // is being built, and (BUG-1538) a loaded walker then tests the few sites, not every building slot.
+        bool sites = ListDropOffSites(world) > 0;
         for (int i = 0; i < u.Capacity; i++)
         {
             if (u.Alive[i] && OnLoop(u, i)) Step(world, i, sites);
@@ -426,15 +427,15 @@ public static class EconomySystem
     }
 
     /// <summary>Whether unit <paramref name="i"/> stands in reach of one of its player's finished drop-offs (M6-SH2, BUG-1520: a site is none).</summary>
-    private static bool InReachOfDropOff(World world, int i) => InReachOfDropOff(world, world.Units.Owner[i], world.Units.Position[i], finished: true);
+    private static bool InReachOfDropOff(World world, int i) => InReachOfDropOff(world, world.Units.Owner[i], world.Units.Position[i]);
 
-    /// <summary>Whether <paramref name="p"/> is in reach of a live drop-off of <paramref name="owner"/>'s: a finished one, or (false) a site.</summary>
-    private static bool InReachOfDropOff(World world, int owner, Vector2 p, bool finished)
+    /// <summary>Whether <paramref name="p"/> is in reach of a finished drop-off of <paramref name="owner"/>'s.</summary>
+    private static bool InReachOfDropOff(World world, int owner, Vector2 p)
     {
         BuildingStore b = world.Buildings;
         for (int k = 0; k < b.Capacity; k++)
         {
-            if (!b.Alive[k] || b.Owner[k] != owner || b.UnderConstruction[k] == finished) continue;
+            if (!b.Alive[k] || b.Owner[k] != owner || b.UnderConstruction[k]) continue;
             BuildingDef def = world.Data.Buildings[b.TypeId[k]];
             if (def.DropOff && InReach(world.NavGrid, p, b.Cell[k], def.FootprintWidth, def.FootprintHeight)) return true;
         }
@@ -449,7 +450,21 @@ public static class EconomySystem
     {
         int owner = world.Units.Owner[i];
         Vector2 goal = world.Units.Goal[i];
-        return InReachOfDropOff(world, owner, goal, finished: false) && !InReachOfDropOff(world, owner, goal, finished: true);
+        return InReachOfListedSite(world, owner, goal) && !InReachOfDropOff(world, owner, goal);
+    }
+
+    /// <summary>Whether <paramref name="p"/> is in reach of one of <paramref name="owner"/>'s drop-off sites this tick (<see cref="World.DropOffSites"/>).</summary>
+    private static bool InReachOfListedSite(World world, int owner, Vector2 p)
+    {
+        BuildingStore b = world.Buildings;
+        for (int k = 0; k < world.DropOffSiteCount; k++)
+        {
+            int s = world.DropOffSites[k];
+            if (b.Owner[s] != owner) continue;
+            BuildingDef def = world.Data.Buildings[b.TypeId[s]];
+            if (InReach(world.NavGrid, p, b.Cell[s], def.FootprintWidth, def.FootprintHeight)) return true;
+        }
+        return false;
     }
 
     /// <summary>Whether <paramref name="owner"/> has a drop-off under construction.</summary>
@@ -461,13 +476,15 @@ public static class EconomySystem
         return false;
     }
 
-    /// <summary>Whether any player has a drop-off under construction.</summary>
-    private static bool AnyDropOffSite(World world)
+    /// <summary>Lists every player's drop-off sites in <see cref="World.DropOffSites"/> (slot order) and returns their count.</summary>
+    private static int ListDropOffSites(World world)
     {
         BuildingStore b = world.Buildings;
+        int n = 0;
         for (int k = 0; k < b.Capacity; k++)
-            if (b.Alive[k] && b.UnderConstruction[k] && world.Data.Buildings[b.TypeId[k]].DropOff) return true;
-        return false;
+            if (b.Alive[k] && b.UnderConstruction[k] && world.Data.Buildings[b.TypeId[k]].DropOff) world.DropOffSites[n++] = k;
+        world.DropOffSiteCount = n;
+        return n;
     }
 
     /// <summary>Slot of the player's finished drop-off whose footprint center is nearest unit <paramref name="i"/> (ties to the lower slot), or -1 (M6-SH2, BUG-1520: a site is none).</summary>
