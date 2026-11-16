@@ -22,9 +22,9 @@ public class SharedVisionFfaPinTests
     public static IEnumerable<object[]> Scenes() => new[]
     {
         new object[] { "menu_human_vs_ai_seed1", 0xA37C05E655A927ECUL }, // M6-S10 (the Keep-corner cure, gatherOverlap 0.5): was 0x37CF8428520DC8E5
-        new object[] { "menu_human_vs_ai_seed3", 0x1217FD4A2EA8F7E9UL }, // M6-S10: was 0xD4CA1E11BBB6585A
+        new object[] { "menu_human_vs_ai_seed3", 0xC24794957FD66BA4UL }, // M6-SH2 (a site is no drop-off, BUG-1520): was 0x1217FD4A2EA8F7E9; M6-S10: was 0xD4CA1E11BBB6585A
         new object[] { "four_seats_256", 0xADA94BABBFE8F123UL }, // M6-S10: was 0x39B9C71EFF58A8ED; M7-3b (tech / ability ids by faction order; outcomes unchanged): was 0x2FAB4CEE371B9051
-        new object[] { "ai_seed4_4seats_Normal", 0x48378B286A28BC3BUL }, // M6-S10: was 0x3F904F7C7C5EC075; M7-3b (tech ids by faction order): was 0x9D9A10C292023A01; D27 (BUG-1163, Hard gatherBonus 0.4): was 0x47DF11AA7761612F (M5-4c slice 2: was 0x35907C9787F39EEA); seat 1 of the four is Hard
+        new object[] { "ai_seed4_4seats_Normal", 0x68F854D918CBEBBCUL }, // M6-SH2 (BUG-1520, BUG-1465): was 0x48378B286A28BC3B; M6-S10: was 0x3F904F7C7C5EC075; M7-3b (tech ids by faction order): was 0x9D9A10C292023A01; D27 (BUG-1163, Hard gatherBonus 0.4): was 0x47DF11AA7761612F (M5-4c slice 2: was 0x35907C9787F39EEA); seat 1 of the four is Hard
         new object[] { "surround_brawl", 0xEAC1911851154EACUL },
     };
 

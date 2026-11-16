@@ -18,7 +18,7 @@ namespace Rts.Sim.Economy;
 /// A worker is on a gather loop while <see cref="UnitStore.GatherNode"/> is set. It walks with the Move
 /// machinery (state <see cref="UnitState.Moving"/>) to the nearest passable cell 4-adjacent to the node,
 /// works while its center is within <see cref="EconomyConstants.Reach"/> of the footprint
-/// (<see cref="UnitState.Gathering"/>), carries a full load to the nearest own drop-off by straight-line
+/// (<see cref="UnitState.Gathering"/>), carries a full load to the nearest own finished drop-off by straight-line
 /// distance, deposits into the player's total and goes back. Standing out of reach (behind other
 /// workers, or after giving up) it walks again every <see cref="EconomyConstants.RetryTicks"/>. Only
 /// exposed nodes (a passable cell 4-adjacent to the footprint) are gathered, so a forest is eaten from
@@ -31,9 +31,11 @@ public static class EconomySystem
     public static void Run(World world)
     {
         UnitStore u = world.Units;
+        // M6-SH2 (BUG-1520): one scan a tick, so the walking re-pick below costs nothing while no drop-off is being built.
+        bool sites = AnyDropOffSite(world);
         for (int i = 0; i < u.Capacity; i++)
         {
-            if (u.Alive[i] && OnLoop(u, i)) Step(world, i);
+            if (u.Alive[i] && OnLoop(u, i)) Step(world, i, sites);
         }
     }
 
@@ -43,7 +45,7 @@ public static class EconomySystem
     /// <summary>True if the unit's type fills the worker slot (only workers gather).</summary>
     internal static bool IsWorker(World world, int i) => world.Data.Units[world.Units.TypeId[i]].IsWorker;
 
-    private static void Step(World world, int i)
+    private static void Step(World world, int i, bool sites)
     {
         UnitStore u = world.Units;
         // M6-S11: orders Shift-queued behind the loop start once the trip in hand is done (see EndsForQueue).
@@ -61,6 +63,8 @@ public static class EconomySystem
                 if (Retarget(world, i)) WalkToNode(world, i);
                 else EndLoop(u, i);
             }
+            // M6-SH2 (BUG-1520): a load walking to a drop-off site (a save from before the rule) re-picks a finished one now.
+            else if (full && sites && WalksToSite(world, i) && NearestDropOff(world, i) >= 0) StartReturn(world, i);
             return;
         }
         if (full)
@@ -87,7 +91,8 @@ public static class EconomySystem
     /// <summary>
     /// M6-S11 (docs/01 2026-11-15 (b) item 5): whether unit <paramref name="i"/>, on a loop with orders queued behind it, ends
     /// the loop now rather than go on with its trip: it has no trip left to finish (nothing carried and not in reach of its
-    /// node: walking out, or waiting out of reach) or none it can finish (no own drop-off stands; the cargo is kept). Otherwise
+    /// node: walking out, or waiting out of reach) or none it can finish (no own finished drop-off stands, M6-SH2: a site is
+    /// none; the cargo is kept). Otherwise
     /// the trip runs as it would with no queue and <see cref="Deposit"/> ends the loop. Read from the queue, cargo and loop alone.
     /// </summary>
     private static bool EndsForQueue(World world, int i)
@@ -129,7 +134,11 @@ public static class EconomySystem
         }
     }
 
-    /// <summary>A full load: walk to the player's nearest live drop-off (straight line, chosen now); none → Idle, cargo kept.</summary>
+    /// <summary>
+    /// A full load: walk to the player's nearest finished drop-off (straight line, chosen now). None finished but one being
+    /// built (M6-SH2, BUG-1520): stand where it is, cargo kept, and look again every <see cref="EconomyConstants.RetryTicks"/>
+    /// (<see cref="Wait"/>), so it delivers once the site is finished. None at all → Idle, cargo kept.
+    /// </summary>
     private static void StartReturn(World world, int i)
     {
         UnitStore u = world.Units;
@@ -141,7 +150,8 @@ public static class EconomySystem
         int b = NearestDropOff(world, i);
         if (b < 0)
         {
-            EndLoop(u, i);
+            if (OwnsDropOffSite(world, u.Owner[i])) Stand(u, i, UnitState.Returning);
+            else EndLoop(u, i);
             return;
         }
         BuildingDef def = world.Data.Buildings[world.Buildings.TypeId[b]];
@@ -415,20 +425,52 @@ public static class EconomySystem
         return InReach(world.NavGrid, world.Units.Position[i], world.Resources.Cell[n], def.FootprintWidth, def.FootprintHeight);
     }
 
-    private static bool InReachOfDropOff(World world, int i)
+    /// <summary>Whether unit <paramref name="i"/> stands in reach of one of its player's finished drop-offs (M6-SH2, BUG-1520: a site is none).</summary>
+    private static bool InReachOfDropOff(World world, int i) => InReachOfDropOff(world, world.Units.Owner[i], world.Units.Position[i], finished: true);
+
+    /// <summary>Whether <paramref name="p"/> is in reach of a live drop-off of <paramref name="owner"/>'s: a finished one, or (false) a site.</summary>
+    private static bool InReachOfDropOff(World world, int owner, Vector2 p, bool finished)
     {
         BuildingStore b = world.Buildings;
-        int owner = world.Units.Owner[i];
         for (int k = 0; k < b.Capacity; k++)
         {
-            if (!b.Alive[k] || b.Owner[k] != owner) continue;
+            if (!b.Alive[k] || b.Owner[k] != owner || b.UnderConstruction[k] == finished) continue;
             BuildingDef def = world.Data.Buildings[b.TypeId[k]];
-            if (def.DropOff && InReach(world.NavGrid, world.Units.Position[i], b.Cell[k], def.FootprintWidth, def.FootprintHeight)) return true;
+            if (def.DropOff && InReach(world.NavGrid, p, b.Cell[k], def.FootprintWidth, def.FootprintHeight)) return true;
         }
         return false;
     }
 
-    /// <summary>Slot of the player's live drop-off whose footprint center is nearest unit <paramref name="i"/> (ties to the lower slot), or -1.</summary>
+    /// <summary>
+    /// M6-SH2 (BUG-1520): whether unit <paramref name="i"/>'s walk ends in reach of an own drop-off site and of no finished
+    /// drop-off: a return leg begun before sites stopped being drop-offs (a save from before the rule).
+    /// </summary>
+    private static bool WalksToSite(World world, int i)
+    {
+        int owner = world.Units.Owner[i];
+        Vector2 goal = world.Units.Goal[i];
+        return InReachOfDropOff(world, owner, goal, finished: false) && !InReachOfDropOff(world, owner, goal, finished: true);
+    }
+
+    /// <summary>Whether <paramref name="owner"/> has a drop-off under construction.</summary>
+    private static bool OwnsDropOffSite(World world, int owner)
+    {
+        BuildingStore b = world.Buildings;
+        for (int k = 0; k < b.Capacity; k++)
+            if (b.Alive[k] && b.UnderConstruction[k] && b.Owner[k] == owner && world.Data.Buildings[b.TypeId[k]].DropOff) return true;
+        return false;
+    }
+
+    /// <summary>Whether any player has a drop-off under construction.</summary>
+    private static bool AnyDropOffSite(World world)
+    {
+        BuildingStore b = world.Buildings;
+        for (int k = 0; k < b.Capacity; k++)
+            if (b.Alive[k] && b.UnderConstruction[k] && world.Data.Buildings[b.TypeId[k]].DropOff) return true;
+        return false;
+    }
+
+    /// <summary>Slot of the player's finished drop-off whose footprint center is nearest unit <paramref name="i"/> (ties to the lower slot), or -1 (M6-SH2, BUG-1520: a site is none).</summary>
     private static int NearestDropOff(World world, int i)
     {
         BuildingStore b = world.Buildings;
@@ -436,7 +478,7 @@ public static class EconomySystem
         float bestD2 = float.PositiveInfinity;
         for (int k = 0; k < b.Capacity; k++)
         {
-            if (!b.Alive[k] || b.Owner[k] != owner) continue;
+            if (!b.Alive[k] || b.Owner[k] != owner || b.UnderConstruction[k]) continue;
             BuildingDef def = world.Data.Buildings[b.TypeId[k]];
             if (!def.DropOff) continue;
             float d2 = Vector2.DistanceSquared(world.Units.Position[i], Center(world.NavGrid, b.Cell[k], def.FootprintWidth, def.FootprintHeight));

@@ -1,14 +1,17 @@
-using Rts.Sim.Ai;
+﻿using Rts.Sim.Ai;
 using Rts.Sim.Tests.Save;
 using Xunit.Abstractions;
 
 namespace Rts.Sim.Tests.Stress;
 
 /// <summary>
-/// QA, M5-9a round 2, QA focus (g): a save taken mid-stamp in a real match (Pale Hills seed 1 Normal v Normal, shipped data:
+/// QA, M5-9a round 2, QA focus (g): a save taken mid-stamp in a real match (Raraku seed 1 Normal v Normal, shipped data:
 /// the first tick, between thinks, at which a seat's starved stamp is half a window old), loaded in a <b>second process</b>
 /// (a child <c>dotnet test</c> of this row reading the bytes from a file), follows to the same first starved wave (seat and
 /// tick), the same end tick and the same end state hash as the uninterrupted run in this process.
+/// M6-SH2 re-staging (BUG-1462's row; old: Pale Hills seed 1, <c>PaleHillsSeed1_*</c>): since M6-S10 Pale Hills seed 1 ends at
+/// 42,384 before any seat is stamped starved, so the row proved nothing; Raraku seed 1 (the same map sizing, <c>MapMatch</c>)
+/// has its winner starved of wood from about 22,500 and waving on the stamp, which is the row's subject.
 /// </summary>
 [Trait("Category", "Stress")]
 public class StarvedSaveTwoProcessQaStressTests
@@ -48,7 +51,7 @@ public class StarvedSaveTwoProcessQaStressTests
     }
 
     [Fact]
-    public void PaleHillsSeed1_SavedMidStamp_LoadedInAChildProcess_WavesAndEndsTheSame()
+    public void RarakuSeed1_SavedMidStamp_LoadedInAChildProcess_WavesAndEndsTheSame()
     {
         string? path = Environment.GetEnvironmentVariable(Variable);
         if (path != null)
@@ -57,7 +60,7 @@ public class StarvedSaveTwoProcessQaStressTests
             _out.WriteLine(Marker + Follow(child));
             return;
         }
-        Simulation sim = MapFileTests.MapMatch(MapFileTests.PaleHills, 1, false, out _);
+        Simulation sim = MapFileTests.MapMatch("raraku", 1, false, out _);
         int window = sim.AiOf(0)!.Rules.StarvedWaveAfterTicks, savedAt = -1, seat = -1, stamp = -1;
         while (sim.TickNumber < 72_000 && !sim.MatchOver)
         {
@@ -79,7 +82,7 @@ public class StarvedSaveTwoProcessQaStressTests
             Assert.Equal(stamp, SaveTestRun.Load(TestSim.Data, bytes).AiOf(seat)!.Board.StarvedSince);
             string mine = Follow(sim);
             _out.WriteLine($"saved at {savedAt} (seat {seat} stamped at {stamp}, {bytes.Length} bytes); this process: {mine}");
-            string child = MapFileTests.RunChild(typeof(StarvedSaveTwoProcessQaStressTests), nameof(PaleHillsSeed1_SavedMidStamp_LoadedInAChildProcess_WavesAndEndsTheSame),
+            string child = MapFileTests.RunChild(typeof(StarvedSaveTwoProcessQaStressTests), nameof(RarakuSeed1_SavedMidStamp_LoadedInAChildProcess_WavesAndEndsTheSame),
                 Variable, Marker, seconds: 900, value: file);
             _out.WriteLine($"the child: {child}");
             Assert.Equal(mine, child);

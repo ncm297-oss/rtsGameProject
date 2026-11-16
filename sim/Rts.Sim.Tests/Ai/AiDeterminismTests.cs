@@ -58,8 +58,10 @@ public class AiDeterminismTests
     public void TwoAiSeats_DefendedBases_TwoRuns_SameHashEveryTick(ulong seed) => TwoRuns(seed, raiders: 6, ticks: 2000, waves: false, defends: true);
 
     /// <summary>M5-3's waves without raiders: both seats build an army and attack within 6,000 ticks; the waves reach the other base, which defends.</summary>
+    // M6-SH2 re-staging: seed 1 -> 2. Since a construction site stopped taking loads (BUG-1520) the Easy seat's first wave
+    // on seed 1 comes at tick 7,281, past the run (the Hard seat's at 3,841); on seed 2 they wave at 4,131 and 4,121.
     [Theory]
-    [InlineData(1UL)]
+    [InlineData(2UL)]
     [InlineData(7UL)]
     public void TwoAiSeats_Waves_TwoRuns_SameHashEveryTick(ulong seed) => TwoRuns(seed, raiders: 0, ticks: 6000, waves: true, defends: false);
 

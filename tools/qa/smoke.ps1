@@ -23,8 +23,20 @@ if (-not $SkipBuild) {
     if ($LASTEXITCODE -ne 0) { Write-Host "FAIL: dotnet build exit $LASTEXITCODE"; exit 1 }
 }
 
+# Request 59 (BUG-1440): a clone whose LFS binaries other than the .wav clips (models, textures) are pointer text fails
+# the import with glTF ERROR lines and rewrites tracked .import files, so the gate stops first, before any import runs,
+# and says how to fix the clone. The .wav pointers keep BUG-0955's skip below.
+$pointers = @(Get-ChildItem $gamePath -Recurse -File -ErrorAction SilentlyContinue |
+    Where-Object { $_.Extension -ne '.wav' -and $_.FullName -notmatch '\\\.godot\\' -and $_.Length -lt 1024 -and
+        (Get-Content $_.FullName -TotalCount 1 -ErrorAction SilentlyContinue) -like 'version https://git-lfs.github.com/spec/*' })
+if ($pointers.Count -gt 0) {
+    $pointers | Select-Object -First 5 | ForEach-Object { Write-Host "  LFS pointer: $($_.FullName.Substring($gamePath.Length + 1))" }
+    Write-Host "FAIL: $($pointers.Count) file(s) under game/ are Git LFS pointers, not the files: run 'git lfs pull' first (nothing was imported)"
+    exit 3
+}
+
 # cmd /c keeps PowerShell 5.1 from turning Godot's stderr into ErrorRecords.
-$import = cmd /c "`"$godot`" --headless --path `"$gamePath`" --import 2>&1"
+$import =cmd /c "`"$godot`" --headless --path `"$gamePath`" --import 2>&1"
 $importExit = $LASTEXITCODE
 $smoke = cmd /c "`"$godot`" --headless --path `"$gamePath`" --quit-after $Frames 2>&1"
 $smokeExit = $LASTEXITCODE

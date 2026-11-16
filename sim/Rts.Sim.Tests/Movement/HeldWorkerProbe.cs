@@ -35,8 +35,10 @@ internal sealed class HeldWorkerProbe
     private readonly UnitState[] _prevState;
     private readonly int[] _prevOrderTick;
     private readonly List<Walk>[] _walks;
+    private readonly bool[,] _inReach;
+    private readonly bool[] _reported;
 
-    /// <summary>Every held worker seen (one row each, at the tick its clock passed <see cref="HeldTicks"/>).</summary>
+    /// <summary>Every held worker seen (one row a stretch, at the first tick past <see cref="HeldTicks"/> it is held: M6-SH2, BUG-1464 item 1).</summary>
     internal readonly List<string> Held = new();
 
     /// <summary>Workers past <see cref="HeldTicks"/> that had walked more than <see cref="HeldRadius"/> in the last 600 ticks.</summary>
@@ -58,6 +60,8 @@ internal sealed class HeldWorkerProbe
         _prevState = new UnitState[capacity];
         _prevOrderTick = new int[capacity];
         _walks = new List<Walk>[capacity];
+        _inReach = new bool[capacity, Ring];
+        _reported = new bool[capacity];
         for (int i = 0; i < capacity; i++)
         {
             _walks[i] = new List<Walk>();
@@ -90,13 +94,41 @@ internal sealed class HeldWorkerProbe
         }
         _prevState[i] = u.State[i];
         _prevOrderTick[i] = u.OrderTick[i];
+        _inReach[i, now % Ring] = InReachOfWork(w, i);
         Longest = Math.Max(Longest, since);
-        if (since != HeldTicks + 1) return;
-        if (u.GatherNode[i].Generation == 0 || !w.Resources.IsAlive(u.GatherNode[i])) return;
+        // M6-SH2 (BUG-1464 item 1, the Producer's definition): checked on every tick past the clock, one row per stretch; a
+        // worker in reach of its node or a finished drop-off at any tick of the last 600 is working, not held.
+        if (since <= HeldTicks)
+        {
+            _reported[i] = false;
+            return;
+        }
+        if (_reported[i] || u.GatherNode[i].Generation == 0 || !w.Resources.IsAlive(u.GatherNode[i])) return;
         Vector2 then = _trail[i, (now - LookBack) % Ring];
         float moved = Vector2.Distance(then, u.Position[i]);
-        if (moved <= HeldRadius) Held.Add(Describe(sim, i, moved));
-        else Walkers.Add($"unit {i} at tick {now}: {u.State[i]} at {Fmt(u.Position[i])}, {moved:F1} m from where it stood 600 ticks earlier; walks in the last 600 ticks: {Route(i, now)}");
+        bool reached = false;
+        for (int k = 0; k < Ring && !reached; k++) reached = _inReach[i, k];
+        if (moved <= HeldRadius && !reached)
+        {
+            _reported[i] = true;
+            Held.Add(Describe(sim, i, moved));
+        }
+        else if (since == HeldTicks + 1) Walkers.Add($"unit {i} at tick {now}: {u.State[i]} at {Fmt(u.Position[i])}, {moved:F1} m from where it stood 600 ticks earlier; walks in the last 600 ticks: {Route(i, now)}");
+    }
+
+    /// <summary>Whether worker <paramref name="i"/> stands in reach of its live node or of an own finished drop-off.</summary>
+    private static bool InReachOfWork(World w, int i)
+    {
+        UnitStore u = w.Units;
+        if (u.GatherNode[i].Generation != 0 && w.Resources.IsAlive(u.GatherNode[i]) && FootprintGapOfNode(w, i) <= EconomyConstants.Reach) return true;
+        BuildingStore b = w.Buildings;
+        for (int k = 0; k < b.Capacity; k++)
+        {
+            if (!b.Alive[k] || b.Owner[k] != u.Owner[i] || b.UnderConstruction[k]) continue;
+            BuildingDef def = w.Data.Buildings[b.TypeId[k]];
+            if (def.DropOff && FootprintGap(w.NavGrid, u.Position[i], b.Cell[k], def.FootprintWidth, def.FootprintHeight) <= EconomyConstants.Reach) return true;
+        }
+        return false;
     }
 
     private void CloseOpen(int i, int now, string how)
@@ -205,7 +237,7 @@ internal sealed class HeldWorkerProbe
         float bestD = float.PositiveInfinity;
         for (int k = 0; k < b.Capacity; k++)
         {
-            if (!b.Alive[k] || b.Owner[k] != w.Units.Owner[i] || !w.Data.Buildings[b.TypeId[k]].DropOff) continue;
+            if (!b.Alive[k] || b.Owner[k] != w.Units.Owner[i] || b.UnderConstruction[k] || !w.Data.Buildings[b.TypeId[k]].DropOff) continue; // M6-SH2: a site is no drop-off
             BuildingDef def = w.Data.Buildings[b.TypeId[k]];
             float d = Vector2.Distance(w.Units.Position[i], EconomySystem.Center(w.NavGrid, b.Cell[k], def.FootprintWidth, def.FootprintHeight));
             if (d < bestD) { best = k; bestD = d; }

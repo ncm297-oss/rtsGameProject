@@ -97,7 +97,9 @@ public class AiOpeningPairsVerdictTests
     [Fact]
     public void DefeatedBeforeDue_HoldsOnlyTheMeasuredCase()
     {
-        Assert.Equal(new[] { (0, 2, 3UL, 1) }, AiOpeningPairsReportTests.DefeatedBeforeDue);
+        // M6-SH2: the measured case is gone (Content/HolyWarFirstWaveReportTests: 0 of 9 runs since the sim's drop-off rule and
+        // retrain; the row asked for the entry to be taken out), so the list holds nothing. Was { (0, 2, 3, 1) }.
+        Assert.Empty(AiOpeningPairsReportTests.DefeatedBeforeDue);
         Assert.Equal(3UL, AiOpeningSeeds.SmallestPair(0, 2));
     }
 

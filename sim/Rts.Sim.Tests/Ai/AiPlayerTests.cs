@@ -129,13 +129,22 @@ public class AiPlayerTests
         var expectedDue = Enumerable.Repeat(-1, steps).ToArray();
         int worker = Unit("malazan_laborer");
         World w = sim.World;
+        // M6-SH2 (BUG-1520): the thinks at which a builder was free (a laborer Idle, Gathering or Returning, as the AI's
+        // BuilderRank takes one). Since sites stopped taking loads the Easy laborers walk their loads past the depot site to the
+        // Keep, and at 720 all five were walking: the crossbow range's Build waited a think for a builder (sent at 760). A Build
+        // step "can act at once" only with a builder free, so its first send is checked against the first such think.
+        var builderFree = new HashSet<int>();
         for (int t = 0; t < 6000 && !Enumerable.Range(0, steps).All(i => ai.Board.StepDone[i]); t++)
         {
             if (sim.TickNumber % think == 0)
             {
                 int workers = 0;
                 for (int i = 0; i < w.Units.Capacity; i++)
-                    if (w.Units.Alive[i] && w.Units.Owner[i] == 0 && w.Units.TypeId[i] == worker) workers++;
+                    if (w.Units.Alive[i] && w.Units.Owner[i] == 0 && w.Units.TypeId[i] == worker)
+                    {
+                        workers++;
+                        if (w.Units.State[i] is UnitState.Idle or UnitState.Gathering or UnitState.Returning) builderFree.Add(sim.TickNumber);
+                    }
                 for (int i = 0; i < steps; i++)
                 {
                     if (expectedDue[i] >= 0) continue;
@@ -189,6 +198,9 @@ public class AiPlayerTests
             int from = expectedDue[i] + slack;
             if (def.Openings[0].BuildOrder[i].Action == AiStepAction.Expand) from = Math.Max(from, expandAfter);
             int firstThink = (from + think - 1) / think * think;
+            AiStepAction action = def.Openings[0].BuildOrder[i].Action;
+            if (action is AiStepAction.Build or AiStepAction.Expand)
+                while (!builderFree.Contains(firstThink) && firstThink < sent[0]) firstThink += think; // M6-SH2: a builder free
             Assert.True(sent[0] >= from, $"{difficulty}: step {i} sent at {sent[0]}, before due {expectedDue[i]} + slack {slack}");
             if (i is 0 or 1 or 2 or 3 or 4 or 9)
                 Assert.True(sent[0] == firstThink, $"{difficulty}: step {i} sent first at {sent[0]}, not at the first think from {from} ({firstThink})");

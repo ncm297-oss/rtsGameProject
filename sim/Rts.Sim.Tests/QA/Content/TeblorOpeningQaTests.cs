@@ -20,8 +20,8 @@ public class TeblorOpeningQaTests
     // Measured 2026-11-11 (D28) on the shipped data: the Teblor's first wave against the idle seat (416 s, as the page's
     // "Spending on the menu's map" says). D31 (2026-11-14): re-measured on the landed opening (V24, its own reserve share
     // 0.25, the Gatherer's carry 15): 8321 -> 6841 (342 s). M6-S10 (sim track, the Keep-corner cure and gatherOverlap 0.5:
-    // handed this row for the session): 6841 -> 6321 (316 s).
-    private const int FirstWaveTick = 6321;
+    // handed this row for the session): 6841 -> 6321 (316 s). M6-SH2 (sim track, a site is no drop-off; handed): 6321 -> 6401 (320 s).
+    private const int FirstWaveTick = 6401;
 
     private readonly ITestOutputHelper _out;
 
@@ -66,10 +66,14 @@ public class TeblorOpeningQaTests
     // the Teblor still beaten but 111 s later, 4 waves sent, the Whirlwind 3; v Malazan (6801, 9321, -1) -> (6461, 8961, -1),
     // the Teblor stand, 2 waves sent, the Malazan 3. D-R39: the rows moved from InlineData to this list, unchanged, so the
     // page's sentence is pinned to the same numbers (TheOpponentSentence_QuotesTheReportRows).
+    // M6-SH2 (sim track, a site is no drop-off and a beaten AI retrains; handed): v Whirlwind (6321, 8581, 20444) ->
+    // (6421, 8501, -1): the Teblor no longer beaten; v Malazan (6461, 8961, -1) -> (6421, 8501, -1). The page's sentence
+    // (TheOpponentSentence_QuotesTheReportRows) says the Whirlwind defeats the Teblor: its meaning changed, so it is listed
+    // for the Producer's ruling, not re-worded here.
     internal static readonly (string Opponent, int FirstWave, int AgeTwo, int Fell)[] OpponentRows =
     {
-        ("whirlwind", 6321, 8581, 20444), // M6-S10: wave 316 s, Age II 429 s, beaten 1022 s (D31: 362 / 464 / 910 s; the Whirlwind sent 1 wave)
-        ("malazan", 6461, 8961, -1),      // M6-S10: wave 323 s, Age II 448 s, stands at 20:00 (D31: 340 / 466 s; the Malazan sent 1 wave)
+        ("whirlwind", 6421, 8501, -1), // M6-SH2: wave 321 s, Age II 425 s, stands at 20:00 (M6-S10: 316 / 429 s, beaten 1022 s)
+        ("malazan", 6421, 8501, -1),   // M6-SH2: wave 321 s, Age II 425 s, stands at 20:00 (M6-S10: 323 / 448 s)
     };
 
     public static TheoryData<string, int, int, int> Opponents()

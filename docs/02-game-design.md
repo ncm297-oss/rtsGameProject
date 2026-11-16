@@ -71,14 +71,18 @@ resources for flavor in their display text (e.g. Teblor "Bloodwood" for wood).
 | Gather rate | Gold 0.85/s, Wood 0.75/s while working at the node (raised from 0.7 / 0.6 on 2026-10-16, the owner's playtest note: gathering felt slow) |
 | Gold mine | 2 mines of 2,500 at each start location; 2 mines of 2,000 at each expansion |
 | Tree | 100 Wood each; the cell becomes passable when a tree is depleted |
-| Drop-off | Town Hall (Gold + Wood) and Camp (Gold + Wood) |
+| Drop-off | Town Hall (Gold + Wood) and Camp (Gold + Wood), once finished: a construction site is not a drop-off (M6-SH2, BUG-1520) |
 | Population | Town Hall +10, House +8, hard cap 100 |
 | Pop costs | Integers or half-steps (Andii use 1.5); stored internally as half-pop integers. A queue item that spawns several units (the Teblor war-dog pack: 3) costs each unit's pop, all reserved when the item starts, so it starts only with room for the whole pack |
 | Mine crowding | No hard cap; workers queue at a mine's edge. Revisit if 20 workers on one mine feels wrong. A worker queued behind a mate stops only once it is in reach of the mine or drop-off (since M6-S10: before, a mate working beside a Keep could hold a returning worker out of reach for a minute) |
 | Gatherer overlap | Two of a player's workers that are both on a gather loop (walking to the node, working, walking back, delivering) may overlap a share of their touching distance: `rules.json` `gatherOverlap`, 0 to 0.75. **Shipped at 0.5 since M6-S10** (owner request 2026-11-14; built and measured in M6-S9, docs/03 "Implementation (M6-S9)" / "(M6-S10)"). What a player sees: gatherers on a crowded mine or tree line stand and pass about half as far apart as other units, so a 16-24 worker mine is noticeably busier and banks more (24 Laborers on one mine: about 4,000 gold in 5 minutes against 3,600 with the overlap off). Armies, idle workers, builders and enemies keep today's separation |
 
-Workers return cargo to the nearest drop-off automatically and resume gathering. A worker
-ordered to a depleted node looks for the nearest node of the same type within 20 m.
+Workers return cargo to the nearest finished drop-off automatically and resume gathering. A drop-off still being built
+does not take a load: a loaded worker beside its own site walks on to a finished drop-off, and with none finished it waits
+where it stands with its load and delivers once one is finished (the site included); a damaged or repairing drop-off still
+takes loads (the owner's playtest bug, M6-SH2, BUG-1520). A worker with no drop-off of its own at all, finished or being
+built, stops with its load as before. A worker ordered to a depleted node looks for the nearest node of the same type
+within 20 m.
 
 ## Buildings
 
@@ -400,7 +404,8 @@ up). A unit starts its next queued order when it has finished what it is doing (
 building is up, the cast is done); stop and hold position end the queue. **A queued order behind a gathering worker
 waits for its current trip only:** a worker walking out to its node with nothing carried starts the queue at once; one
 working at its node or walking back loaded fills up as usual, delivers the load and then starts the queue instead of walking
-out again; with no drop-off of its own standing it starts the queue at once and keeps what it carries. The last gather in
+out again; with no finished drop-off of its own standing (a site does not count) it starts the queue at once and keeps
+what it carries. The last gather in
 a queue loops as usual. **A queued gather with more orders behind it** should make exactly one trip and then go on
 (Producer decision 2026-11-15 (c), owner may revisit); **today it does not yet:** it is skipped when the worker starts it
 out of reach of the node (the usual case) and makes one trip when it starts within reach (BUG-1490; the one-trip rule
@@ -499,7 +504,11 @@ own cues (select, order, refused, building placed or finished, unit or tech read
   new one by, and never at the hard cap (M5-H6, BUG-1116: a beaten side no longer rebuilds houses it doesn't need). With no Town Hall left and a worker alive, the Town Hall comes
   before every other step: on its old spot when that is free, else as near it as a site is, banking for it when it can't
   pay yet (army production spends only what is above its cost). A lost expansion is not rebuilt yet (built in M5-4d
-  slice 2; [03 Implementation (M5-4d slice 2)](03-technical-design.md#implementation-m5-4d-slice-2)).
+  slice 2; [03 Implementation (M5-4d slice 2)](03-technical-design.md#implementation-m5-4d-slice-2)). A side left with no
+  worker (none alive and none in training) trains one first thing at a finished building that trains workers, when it
+  has the population room and the gold for one, whatever its build order says and even while its base is under attack;
+  with no gold for one it sends nothing (M6-SH2, BUG-1465: a beaten side used to sit on its gold with a finished Town Hall
+  for good; [03 Implementation (M6-SH2)](03-technical-design.md#implementation-m6-sh2)).
 - The AI looks before it attacks uphill: a wave whose target stands on higher ground than the army goes first to the
   top of the ramp nearest the target, onto the target's own plateau, and on to the target once a member is there or the
   target is in its sight. On level ground, or against a target on the army's own level or below, nothing changes (built

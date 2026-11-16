@@ -42,6 +42,7 @@ internal static class BuildOrderExecutor
         Blackboard board = ai.Board;
         var steps = ai.Opening.BuildOrder; // M5-8a: the picked opening's
         int slack = ai.Knobs.BuildOrderSlackTicks;
+        if (Retrain(ai)) ai.ExecutorSent = true; // M6-SH2 (BUG-1465 (a))
         ReopenLost(ai); // M5-4d slice 2
         if (HallFirst(ai)) return;
         bool mayReserve = ai.MayReserve(); // BUG-1021 / BUG-1025: a wave-sized army, the base not defended
@@ -94,6 +95,26 @@ internal static class BuildOrderExecutor
             if (Act(ai, step, ref pending, ai.ReserveStep >= 0)) ai.ExecutorSent = true;
             else if (ai.NoSiteFound) board.StepNoSiteUntil[i] = ai.Now + NoSiteRetryThinks * ai.ThinkTicks;
         }
+    }
+
+    /// <summary>
+    /// M6-SH2 (BUG-1465 (a), docs/02 "AI opponent"): a seat with no live worker and none in a queue sends a Train of a worker
+    /// type at a finished own building that trains it now (population, cost and requires as the view's <c>CanTrain</c> reads
+    /// them; the reserve aside: with no worker nothing else can be bought for long), whatever its opening's steps say and
+    /// whether or not it defends. Worker types in data order. Its command rides <see cref="Blackboard.ProductionPending"/>,
+    /// which nothing judges (no new saved state); the next think sees it in the queue. True when one was sent.
+    /// Workers were trained only by the build order's <c>train</c> steps, so a seat whose workers all died after those
+    /// were done sat on its gold for good (Raraku seed 1: 4,058 gold and a finished Keep, 42,000 ticks).
+    /// </summary>
+    internal static bool Retrain(AiPlayer ai)
+    {
+        if (ai.WorkerCount > 0) return false;
+        bool[] worker = ai.IsWorkerType;
+        for (int t = 0; t < worker.Length; t++)
+            if (worker[t] && ai.Queued[t] > 0) return false;
+        for (int t = 0; t < worker.Length; t++)
+            if (worker[t] && ai.TryTrain(t, emptyQueueOnly: false, ref ai.Board.ProductionPending)) return true;
+        return false;
     }
 
     /// <summary>

@@ -86,8 +86,10 @@ public class DR39ReStatementQaTests
                 if (u.TrainedAtTypeId == b.TypeId[s] && u.Slot != UnitSlot.Worker) producer = true;
         }
         Assert.True(producer, "the holy_war seat has no finished army producer");
-        bool named = Array.IndexOf(AiOpeningPairsReportTests.DefeatedBeforeDue, (0, 2, seed, 1)) >= 0;
-        Assert.True(named);
+        // M6-SH2 re-staging: the side is no longer in DefeatedBeforeDue (on the M6-SH2 tree it survives and waves, so the
+        // report row asked for it to be taken out); the verdict for a named side kept alive with no wave is still the subject,
+        // so the row names it itself, as the next row does.
+        const bool named = true;
         string? text = AiOpeningPairsReportTests.NoWave("whirlwind", ai.Opening.Id, seed, ai.Board.WavesStarted, defeated, due, named, out bool fails);
         Assert.True(fails, text);
         Assert.NotNull(text);

@@ -197,6 +197,9 @@ public class HuntSweepRound2LegQaTests
             if (w.Buildings.Alive[i] && w.Buildings.Owner[i] == 1) Assert.True(w.Buildings.Free(new EntityHandle(i, w.Buildings.Generation[i])));
         for (int i = 0; i < w.Units.Capacity; i++)
             if (w.Units.Alive[i] && (w.Units.Owner[i] == 1 || w.Units.Owner[i] == 0)) w.Units.Free(new EntityHandle(i, w.Units.Generation[i]));
+        // M6-SH2 re-staging: a seat with no worker now trains one (BUG-1465), whose sight changed the sightings the row stages
+        // (interrupts 0 and -1 red). No gold, no worker: player 0 stays worker-less, as the scene meant.
+        BuildMaps.SetTotals(sim, 0, 0, w.Wood[0]);
         int n = AiScenes.FlatSize;
         bool far = interrupts < 0;
         Vector2 park = far ? new Vector2(40, 90) : w.NavGrid.CellCenter(n / 2, n / 2);
