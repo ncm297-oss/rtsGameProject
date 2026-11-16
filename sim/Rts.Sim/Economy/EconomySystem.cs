@@ -46,6 +46,12 @@ public static class EconomySystem
     private static void Step(World world, int i)
     {
         UnitStore u = world.Units;
+        // M6-S11: orders Shift-queued behind the loop start once the trip in hand is done (see EndsForQueue).
+        if (u.QueueCount[i] > 0 && EndsForQueue(world, i))
+        {
+            EndLoop(u, i);
+            return;
+        }
         bool full = u.Cargo[i] >= world.Data.CarryOf(u.TypeId[i]); // M7-7: the worker's own carry, else the rules'
         if (u.State[i] == UnitState.Moving)
         {
@@ -76,6 +82,21 @@ public static class EconomySystem
         if (InReachOfNode(world, i, u.GatherNode[i].Index)) Work(world, i);
         else if (retargeted) WalkToNode(world, i);
         else Wait(world, i, UnitState.Gathering);
+    }
+
+    /// <summary>
+    /// M6-S11 (docs/01 2026-11-15 (b) item 5): whether unit <paramref name="i"/>, on a loop with orders queued behind it, ends
+    /// the loop now rather than go on with its trip: it has no trip left to finish (nothing carried and not in reach of its
+    /// node: walking out, or waiting out of reach) or none it can finish (no own drop-off stands; the cargo is kept). Otherwise
+    /// the trip runs as it would with no queue and <see cref="Deposit"/> ends the loop. Read from the queue, cargo and loop alone.
+    /// </summary>
+    private static bool EndsForQueue(World world, int i)
+    {
+        UnitStore u = world.Units;
+        if (NearestDropOff(world, i) < 0) return true;
+        if (u.Cargo[i] > 0) return false;
+        EntityHandle node = u.GatherNode[i];
+        return !world.Resources.IsAlive(node) || !InReachOfNode(world, i, node.Index);
     }
 
     /// <summary>One tick of work in reach: progress at the owner's rate (<see cref="World.GoldPerTickOf"/>); each whole unit is taken from the node into the cargo.</summary>
@@ -133,6 +154,12 @@ public static class EconomySystem
         // M6-S1: the delivery is the only gathered-resources count (refunds and starting totals add to the total only).
         world.Ledger.Deliver(u.Owner[i], u.CargoKind[i], u.Cargo[i]);
         u.Cargo[i] = 0;
+        // M6-S11: the trip is done; with orders queued it does not walk out again: the loop ends and phase 7 starts them.
+        if (u.QueueCount[i] > 0)
+        {
+            EndLoop(u, i);
+            return;
+        }
         // Back to the same node if it still stands exposed, else the depleted-node rule.
         EntityHandle node = u.GatherNode[i];
         if (!world.Resources.IsAlive(node) || !IsExposed(world, node.Index))

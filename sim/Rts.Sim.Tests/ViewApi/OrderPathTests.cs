@@ -272,7 +272,10 @@ public class OrderPathTests
         EntityHandle idle = Place(sim, 0, Laborer, At(sim, 6, 6));
         EntityHandle walker = Place(sim, 0, Laborer, At(sim, 6, 10));
         EntityHandle gatherer = Place(sim, 0, Laborer, At(sim, 10, 27));
-        EntityHandle gathererQueued = Place(sim, 0, Laborer, At(sim, 12, 27));
+        // M6-S11: in reach of the tree from the start, with a drop-off standing (a Keep in the far corner), so its queued Move
+        // waits for its trip (walking out empty, or with no drop-off, it would start the Move at once).
+        Assert.True(w.Buildings.Spawn(0, GatherMaps.Keep, 42 * w.NavGrid.Width + 42, out _));
+        EntityHandle gathererQueued = Place(sim, 0, Laborer, At(sim, 11, 30));
         EntityHandle builder = Place(sim, 0, Laborer, At(sim, 30, 36));
         EntityHandle idleQueued = Place(sim, 0, Laborer, At(sim, 40, 6));
         EntityHandle attacker = Place(sim, 0, Laborer, At(sim, 20, 16));
@@ -295,7 +298,7 @@ public class OrderPathTests
         Assert.False(reader.QueuesBehind(idle.Index), "idle: replace");
         Assert.True(reader.QueuesBehind(walker.Index), "walking a Move: queue");
         Assert.False(reader.QueuesBehind(gatherer.Index), "gather loop: replace");
-        Assert.False(reader.QueuesBehind(gathererQueued.Index), "gather loop with a queue (it never ends): replace");
+        Assert.False(reader.QueuesBehind(gathererQueued.Index), "gather loop with a queue (it finishes its trip first, M6-S11): replace");
         Assert.True(reader.QueuesBehind(builder.Index), "building: queue");
         Assert.True(reader.QueuesBehind(attacker.Index), "attacking: queue");
         Assert.Equal(CombatMode.Ordered, u.Mode[attacker.Index]);

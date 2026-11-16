@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S4 |
-| Status | open |
+| Status | open (item 2 fixed by M6-VH8, session 2026-11-15-1536, verified by QA: `OverlayLineTest`; item 3 waits for an art task with a re-import, item 4 for a task that may re-pin `QaM6VH7Test` row 1 or `QaM6V20Test` row 9; item 1 is the owner's taste) |
 | Found | 2026-11-14-2156, task M7-V5 (QA) |
 | System | view: unit models (Teblor figures), overlays |
-| Fixed by | |
+| Fixed by | M6-VH8 (item 2) |
 
 ## Repro
 1. `& $env:GODOT --path game --resolution 1600x900 res://tests/QaM7V5Test.tscn -- --shots <dir>` (headless without
@@ -39,3 +39,12 @@ Nothing here breaks a criterion; each is a look item for the Producer / owner:
   drawn height instead of the capsule's), 3 a prop offset for the throw pose, 4 a `cast` clip slot.
 - QA's `game/tests/QaM7V5Test` row A pins the overlays' line above every Teblor clip's highest bone, so a fix to 2 that
   drops the line into a figure turns it red.
+
+## M6-VH8
+- Item 2 fixed: the overlays sit over the drawn figure for a model type (`UnitViews.OverlayLines`: the highest bone of
+  every clip the type holds, plus 0.18 m, times the data scale; a capsule type keeps its capsule's top). Giants: line
+  2.94 m (was 3.75), 0.27 m over the highest bone (a finger in `gather_wood`, 2.67 m); men 1.96 m, 0.18 m over 1.78 m.
+  New scene `OverlayLineTest`; QA's `QaM7V5Test` row A is unedited and green.
+- Item 4 not done: no re-import is needed, but a Casting clip needs a seventh `UnitModels.Clip` (breaks QA's
+  `QaM6VH7Test` row 1) or a type-aware `ClipFor` (moves the contract `QaM6V20Test` row 9 / `TeblorModelTest` read).
+- Item 3 not done: a prop offset needs a Blender re-import (left for an art task). Item 1 is the owner's taste.

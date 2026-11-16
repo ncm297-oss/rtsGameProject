@@ -84,7 +84,53 @@ public class CounterCompositionTests
     /// (Whirlwind Shock) seen for one think (<paramref name="seen"/>) or standing out of every sight, removed after that think;
     /// then three minutes. Returns Heavy Infantry and Crossbowmen live + queued at the end, and the memory after the sighting.
     /// </summary>
-    private (int Line, int Ranged, int[] Count, int[] Tick) Run(AiDifficulty difficulty, bool seen, GameData? data = null)
+    private (int Line, int Ranged, int[] Count, int[] Tick) Run(AiDifficulty difficulty, bool seen, GameData? data = null) =>
+        Stage(difficulty, seen, data, producersEach: 1);
+
+    /// <summary>
+    /// M6-S11 (BUG-1462, outcome A): the criterion-2 run with <see cref="WideProducers"/> barracks and crossbow ranges, the
+    /// extra ones spawned finished the think the first pair stands, and the purse paid that many times the one-pair boundary,
+    /// so each producer still trains only what the weights pick and twice the units land inside the 180 s window. Same purse,
+    /// same sighting, same seed for every difficulty; see <see cref="AHardSeat_ShiftsItsLineShareFurther_ThanANormalSeat"/>.
+    /// </summary>
+    private (int Line, int Ranged, int[] Count, int[] Tick) RunWide(AiDifficulty difficulty, bool seen, GameData? data = null) =>
+        Stage(difficulty, seen, data, WideProducers);
+
+    /// <summary>Barracks and crossbow ranges each the wide run stands (M6-S11): 18 units in the window instead of 9.</summary>
+    private const int WideProducers = 2;
+
+    /// <summary>
+    /// Spawns a finished <paramref name="key"/> for player 0 on the flat scene's west half, at the first anchor (row by row from
+    /// the top) whose footprint and a one-cell margin round it are open, with no unit in them and the never-seal rule kept.
+    /// </summary>
+    private static void SpawnProducer(Simulation sim, string key)
+    {
+        World w = sim.World;
+        int type = w.Data.FindBuilding(key);
+        BuildingDef def = w.Data.Buildings[type];
+        const float cs = Rts.Sim.Map.MapConstants.CellSize;
+        for (int y = 2; y < AiScenes.FlatSize - def.FootprintHeight - 2; y++)
+            for (int x = 2; x < AiScenes.FlatSize / 2 - def.FootprintWidth; x++)
+            {
+                bool open = true;
+                for (int cy = y - 1; cy <= y + def.FootprintHeight && open; cy++)
+                    for (int cx = x - 1; cx <= x + def.FootprintWidth && open; cx++)
+                        open = w.NavGrid.IsPassable(cx, cy) && (w.NavGrid.FlagsAt(cx, cy) & Rts.Sim.Map.NavFlags.Resource) == 0;
+                if (!open || !w.Buildings.Fits(type, y * AiScenes.FlatSize + x) || !w.Seal.KeepsConnected(x, y, def.FootprintWidth, def.FootprintHeight)) continue;
+                for (int i = 0; i < w.Units.Capacity && open; i++)
+                {
+                    if (!w.Units.Alive[i]) continue;
+                    Vector2 p = w.Units.Position[i];
+                    open = p.X < (x - 1) * cs || p.X >= (x + def.FootprintWidth + 1) * cs || p.Y < (y - 1) * cs || p.Y >= (y + def.FootprintHeight + 1) * cs;
+                }
+                if (!open) continue;
+                Assert.True(w.Buildings.Spawn(0, type, y * AiScenes.FlatSize + x, out _));
+                return;
+            }
+        Assert.Fail($"no room for a {key}");
+    }
+
+    private (int Line, int Ranged, int[] Count, int[] Tick) Stage(AiDifficulty difficulty, bool seen, GameData? data, int producersEach)
     {
         Simulation sim = Scene(difficulty, data);
         AiPlayer ai = sim.AiOf(0)!;
@@ -104,15 +150,20 @@ public class CounterCompositionTests
         // faster than a producer finishes one, so each purchase is the weights' choice. Seen and unseen runs get the same
         // staging; the AI, the sighting and the memory are untouched. Normal: 6 / 3 seen v 5 / 4 unseen.
         int line = Unit("malazan_heavy_infantry"), ranged = Unit("malazan_crossbowman");
+        for (int k = 1; k < producersEach; k++)
+        {
+            SpawnProducer(sim, "malazan_barracks");
+            SpawnProducer(sim, "malazan_crossbow_range");
+        }
         int lineBefore = ai.Live[line] + ai.Queued[line], rangedBefore = ai.Live[ranged] + ai.Queued[ranged];
         List<EntityHandle> raiders = Spawn(sim, Unit("whirlwind_horse_raider"), 8, seen);
-        var purse = new Purse(sim, line, ranged);
+        var purse = new Purse(sim, line, ranged, producersEach);
         purse.Think();
         Free(sim, raiders);
         int[] count = (int[])ai.Board.SeenSlotCount.Clone(), tick = (int[])ai.Board.SeenSlotTick.Clone();
         int end = sim.TickNumber + 180 * Tps;
         while (sim.TickNumber < end) purse.Think();
-        _out.WriteLine($"{difficulty} seen {seen}: sighting at {sim.TickNumber - 180 * Tps}, line {lineBefore} -> {ai.Live[line] + ai.Queued[line]}, "
+        _out.WriteLine($"{difficulty} seen {seen} producers {producersEach}: sighting at {sim.TickNumber - 180 * Tps}, line {lineBefore} -> {ai.Live[line] + ai.Queued[line]}, "
             + $"ranged {rangedBefore} -> {ai.Live[ranged] + ai.Queued[ranged]}, memory [{string.Join(",", count)}] at [{string.Join(",", tick)}], "
             + $"gold {sim.World.Gold[0]} wood {sim.World.Wood[0]} at the end");
         return (ai.Live[line] + ai.Queued[line], ai.Live[ranged] + ai.Queued[ranged], count, tick);
@@ -132,11 +183,11 @@ public class CounterCompositionTests
         private readonly long _num, _den; // gold per tick = _num / _den: the gold-bound boundary
         private long _carry;
 
-        public Purse(Simulation sim, int line, int ranged)
+        public Purse(Simulation sim, int line, int ranged, int producersEach = 1)
         {
             _sim = sim;
             UnitDef l = sim.World.Data.Units[line], r = sim.World.Data.Units[ranged];
-            _num = Math.Min(l.CostGold, r.CostGold);
+            _num = (long)Math.Min(l.CostGold, r.CostGold) * producersEach; // M6-S11: each pair of producers its own boundary's worth
             _den = Math.Max(l.TrainTicks, r.TrainTicks);
         }
 
@@ -176,13 +227,16 @@ public class CounterCompositionTests
 
     /// <summary>Criterion 2 (b): the same sighting moves a Hard seat's Line share further than a Normal seat's (strength 1 against 0.5).</summary>
     // M6-S10: red on the re-staged run (see Run): Normal and Hard both go 5 / 4 unseen -> 6 / 3 seen, shift 0.111 each; nine
-    // units in the 180 s memory window cannot tell Line weighted x 1.5 from x 2. Listed for the ACCEPT's ruling (BUG-1462).
+    // units in the 180 s memory window cannot tell Line weighted x 1.5 from x 2 (the deficit pick's 9th unit is the 6th Line at
+    // both weights, BUG-1462). M6-S11 (outcome A): the row runs the wide staging (RunWide: two producers of each kind, twice the
+    // purse), 18 units in the same window, where x 1.5 and x 2 part by a whole unit; CounterRestageQaTests holds its strength-0
+    // controls for Normal and Hard.
     [Fact]
     public void AHardSeat_ShiftsItsLineShareFurther_ThanANormalSeat()
     {
         static double Share((int Line, int Ranged, int[] _, int[] __) r) => (double)r.Line / (r.Line + r.Ranged);
-        double normal = Share(Run(AiDifficulty.Normal, true)) - Share(Run(AiDifficulty.Normal, false));
-        double hard = Share(Run(AiDifficulty.Hard, true)) - Share(Run(AiDifficulty.Hard, false));
+        double normal = Share(RunWide(AiDifficulty.Normal, true)) - Share(RunWide(AiDifficulty.Normal, false));
+        double hard = Share(RunWide(AiDifficulty.Hard, true)) - Share(RunWide(AiDifficulty.Hard, false));
         _out.WriteLine($"line share shift: normal {normal:0.000}, hard {hard:0.000}");
         Assert.True(normal > 0, $"normal shift {normal}");
         Assert.True(hard > normal, $"hard shift {hard} vs normal {normal}");

@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S4 |
-| Status | open |
+| Status | open (item 3 fixed in docs by M6-VH8, session 2026-11-15-1536; items 1-2 are the owner's taste) |
 | Found | 2026-11-14-1246, task M6-V21 (QA) |
 | System | unit models (art / view) |
-| Fixed by | |
+| Fixed by | M6-VH8 (item 3, docs) |
 
 ## Repro
 QA's pictures (windowed, 1600 x 900, shipped data):
@@ -35,3 +35,9 @@ See the items. None breaks a criterion.
 
 ## Notes
 Item 1: the developer's list covers the shield clipping the arms and the edge-on shield side-on, but not this wind-up pose.
+
+## M6-VH8
+Item 3: docs/04's clip-map table now says what a type holds (every state's clip, by the map or the state's own name)
+against what it plays. Note: the overlays' line (M6-VH8) is measured over every held clip, so every model type's line
+is set by `gather_wood`'s raised hand today; dropping the worker clips from soldier libraries would lower a soldier's
+line by about 0.16 m by itself. Items 1-2 stay the owner's.
