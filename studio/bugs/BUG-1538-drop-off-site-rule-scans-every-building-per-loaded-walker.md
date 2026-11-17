@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S3 (a real per-tick cost of the BUG-1520 fix; within the 4 ms budget in QA's scene but about 6x that scene's tick, and it applies to every player whenever any player has a drop-off site) |
-| Status | open |
+| Status | fixed (M6-SH2 fix round 1, verified by QA re-check 1) |
 | Found | 2026-11-15-2136, task M6-SH2 (QA) |
 | System | sim: economy (`EconomySystem.Step` -> `WalksToSite` -> `InReachOfDropOff(..., finished)`) |
-| Fixed by | |
+| Fixed by | M6-SH2 fix round 1 (`World.DropOffSites`) |
 
 ## Repro
 1. Un-skip `sim/Rts.Sim.Tests/Stress/DropOffSiteScanQaStressTests.FourHundredLoadedWalkers_ASiteStanding_CostsLittle`
@@ -33,3 +33,12 @@ pays the full scan, and `&&` skips the second scan only when the first finds not
   (the only case is a save from the base), or gate it per owner and only for walkers whose goal cell lies next to a site.
   Any of these fits rule 5 (no allocation, bounded scans).
 - No Perf threshold covers this: the existing gather Perf rows have no drop-off site standing.
+
+## M6-SH2 fix round 1 (the developer): fixed
+`EconomySystem.Run`'s one scan a tick lists the drop-off sites in `World.DropOffSites` (scratch, not saved); a loaded
+walker tests only those. `Stress/DropOffSiteScanQaStressTests` un-skipped: +0.021 ms a tick (was +0.99 ms). No behaviour change.
+
+## QA re-check 1
+Verified: the row passed inside QA's Stress run beside the default loop (+0.096 ms; 6.1 ms ticks), and alone in the Perf
+run (see the re-check report). QA moved its own row to the Perf category (a wall-clock row runs alone, rule 42) and made it
+take the least of five interleaved samples (was two); the 0.25 ms bound is unchanged.

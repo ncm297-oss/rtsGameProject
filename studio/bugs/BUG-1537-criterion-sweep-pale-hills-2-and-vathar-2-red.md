@@ -3,7 +3,7 @@
 | Field | Value |
 | --- | --- |
 | Severity | S2 (Stress red outside the rows M6-SH2's criterion 11 allows; criterion 3 lets only Raraku rows change in `Known`) |
-| Status | open |
+| Status | open (Pale Hills 2 fixed and verified; Vathar 2 for ruling) |
 | Found | 2026-11-15-2136, task M6-SH2 (QA) |
 | System | AI (gather re-send, BUG-1151 shape; a silent seat, BUG-1152 family), moved by the drop-off rule (BUG-1520) |
 | Fixed by | |
@@ -27,3 +27,19 @@ Every sweep row's checks and oracles clean, or the row in `Known` with an id (cr
 - The Vathar row is the BUG-1152 family (a seat with workers silent for minutes). Its match is the one whose end moved
   from 30,569 to 57,039 (`MatchCriterionTests`' Vathar comment lists seed 2 at 57,039).
 - The retrain plays no part: item 0 alone gives the same results.
+
+## M6-SH2 fix round 1 (the developer)
+- Pale Hills 2: BUG-1151's re-send, fixed (see BUG-1151); the row is green.
+- Vathar Crossing 2: p0 lost its Keep (about 34,000) and is left with one Laborer, 276 gold, 20-70 wood and 10 soldiers
+  (under its opening's wave size, 16 pop); the hall rebuild holds its gold for the Keep (275 / 275) while the one Laborer
+  hauls wood 10 at a time, so nothing is sent for 5,699 ticks; the match ends at 57,039. Not a wedge. Left red, named;
+  adding it to `Known` is the Producer's call (criterion 3).
+
+## QA re-check 1
+- Pale Hills 2: fixed by cause. With BUG-1151's fix taken out the row fails again at 26,461 (the 9-think refusal streak);
+  with it the row is green in QA's Stress run.
+- Vathar 2: still red ("a seat with a worker sent nothing for 5699 ticks: p0 silent 40801..46500; p1 silent 38361..42260"),
+  ends 57,039, p0 wins. The developer's diagnosis fits that line: a seat that holds its gold for a Town Hall while one
+  Laborer hauls the wood. QA did not re-trace it. Criterion 3 lets `Known` change only for Raraku, so extending it to Vathar
+  is the Producer's call. A ruling is needed: the alternative is an AI change, such as spending the 10 soldiers while banking
+  for the hall.

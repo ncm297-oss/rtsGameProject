@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S4 |
-| Status | open |
+| Status | fixed (M6-SH2 fix round 1, verified by QA re-check 1) |
 | Found | 2026-11-15-2136, task M6-SH2 (QA) |
 | System | tests, QA tooling |
-| Fixed by | |
+| Fixed by | M6-SH2 fix round 1 |
 
 ## Repro / Actual
 1. `sim/Rts.Sim.Tests/QA/Content/DR39ReStatementQaTests.cs`: `Assert.True(named)` (the side must be in
@@ -29,3 +29,12 @@ outside the edit.
 ## Notes
 None affects behaviour. The LFS-pointer gate itself works: on a clone made with `GIT_LFS_SKIP_SMUDGE=1`, smoke stops
 before any import with "FAIL: 72 file(s) under game/ are Git LFS pointers ... run 'git lfs pull' first", exit 3.
+
+## M6-SH2 fix round 1 (the developer): fixed
+1. `DR39ReStatementQaTests` asserts the side is not in `DefeatedBeforeDue` (the cross-check kept, the other way round).
+2. `AiPlayerTests.TenStep*` asserts at most one checked step waited for a builder (Easy: step 3, 720 -> 760; Hard: none).
+3. `smoke.ps1`: `$import = cmd /c`. 4. The BOM removed.
+
+## QA re-check 1
+Verified in the diff: the DR39 row asserts the side is not in `DefeatedBeforeDue`; TenStep allows at most one shifted
+checked step; `$import = cmd /c`; no BOM. Both rows green in the default loop.

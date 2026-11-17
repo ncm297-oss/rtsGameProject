@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S2 (Stress red outside the rows M6-SH2's criterion 11 allows; the developer's report says "Stress is red only in rows named here"; the two-process determinism proof of a match with a hunt no longer has a hunt) |
-| Status | open |
+| Status | fixed (re-staged in M6-SH2 fix round 1; judged honest by QA re-check 1) |
 | Found | 2026-11-15-2136, task M6-SH2 (QA) |
 | System | AI end game (hunt) / test premise; moved by the drop-off rule (BUG-1520) |
-| Fixed by | |
+| Fixed by | M6-SH2 fix round 1 (re-staged) |
 
 ## Repro
 1. `dotnet test sim/Rts.Sim.Tests --filter "FullyQualifiedName~AiDeterminismTests.PaleHills_ToTheEndWithAHunt"`
@@ -39,3 +39,12 @@ that hunts on this tree.
   `HuntSeed` to a Pale Hills seed that ends after a hunt on this tree, with the reason in its comment (rules 43 / 45).
 - Hunt-path determinism across processes is otherwise covered only by `MatchCriterionTests.EveryRow_InTwoProcesses_*`
   rows whose matches happen to hunt.
+
+## M6-SH2 fix round 1 (the developer): re-staged
+`HuntSeed` and `MidHuntSeed` 1 -> 2: Pale Hills seed 2 ends at 42,016 after 4 hunts (first at 34,761), the smallest seed
+that hunts on this tree (seeds 1-10 surveyed; seed 1 ends at 27,498 with none).
+
+## QA re-check 1
+Honest re-stage: the oracle (two processes hash equal every tick; a save mid-hunt follows to the end) is unchanged, only the
+seed moved to one that hunts. Both rows green in QA's Stress run (`AiDeterminismTests.PaleHills_ToTheEndWithAHunt_*`
+19 m 20 s; `PaleHills_SavedMidHunt_*` 2 m 56 s).

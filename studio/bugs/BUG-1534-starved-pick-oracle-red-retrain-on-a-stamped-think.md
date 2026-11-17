@@ -3,7 +3,7 @@
 | Field | Value |
 | --- | --- |
 | Severity | S2 (Stress red outside the rows M6-SH2's criterion 11 allows; two documented AI rules now disagree and neither the docs nor the row says which wins) |
-| Status | open |
+| Status | open (for ruling; QA re-check 1 agrees it needs one) |
 | Found | 2026-11-15-2136, task M6-SH2 (QA) |
 | System | AI: `BuildOrderExecutor.Retrain` (BUG-1465 (a)) against the M5-9a starved rule's oracle |
 | Fixed by | |
@@ -30,3 +30,15 @@ oracle meeting a new rule, not a wrong Train.
   docs/02's starved paragraph should say so. QA did not edit the row (no loosening without a ruling).
 - Not in the developer's "for ruling" list; the developer's Stress run must have missed it or run a filter that did not
   include `StarvedPickOracleQaStressTests`.
+
+## M6-SH2 fix round 1 (the developer): for ruling, left red
+(a) Retrain wins: the oracle exempts a worker Train sent while the seat has no worker; docs/02's starved paragraph says
+so; test and docs only, no pin moves. (b) Starved wins: `Retrain` sends nothing while `StarvedSince >= 0`; a behaviour
+change: Raraku seed 5 diverges from 27,960 (now 31,420; with no retrain 31,089), any match whose worker-less seat is stamped
+re-rolls, every pin re-measured again, and a stamped seat with gold and no worker never retrains.
+
+## QA re-check 1
+Still red in QA's Stress run (`AStampedThink_SendsNoTrain (raraku, 5)`). Judgement: a real conflict between two documented
+rules (docs/02: a seat with no worker "trains one first thing ... whatever its build order says"; the starved rule: "it
+waits for that one rather than buy a cheaper one"), so a ruling is needed, not a fix. QA leans to (a): the worker retrain is
+the newer and narrower rule, and a seat with no worker cannot otherwise recover; (a) is test and docs only.

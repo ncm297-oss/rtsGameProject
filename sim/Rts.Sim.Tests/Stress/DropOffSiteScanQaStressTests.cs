@@ -16,8 +16,11 @@ namespace Rts.Sim.Tests.Stress;
 /// budget is 4 ms). Measured on the M6-SH2 tree, alone: 0.175 ms without the site, 1.167 ms with it (+0.99 ms): BUG-1538.
 /// Fixed in the M6-SH2 fix round (a list of the tick's drop-off sites, <c>World.DropOffSites</c>, made once a tick; a walker
 /// tests only those): 0.191 ms without the site, 0.212 ms with it (+0.021 ms), un-skipped.
+/// QA re-check 1: a wall-clock row, so it runs in the Perf category (alone, rule 42), not Stress (run beside other loops it
+/// read +0.33 ms for the developer and +0.096 ms for QA); the bound is unchanged, the estimate is the least of five
+/// interleaved samples of each scene (was two).
 /// </summary>
-[Trait("Category", "Stress")]
+[Trait("Category", "Perf")]
 public class DropOffSiteScanQaStressTests(ITestOutputHelper output)
 {
     private static Simulation Scene(bool site)
@@ -53,9 +56,12 @@ public class DropOffSiteScanQaStressTests(ITestOutputHelper output)
     [Fact]
     public void FourHundredLoadedWalkers_ASiteStanding_CostsLittle()
     {
-        double without = MeanTickMs(Scene(false)), with = MeanTickMs(Scene(true));
-        without = Math.Min(without, MeanTickMs(Scene(false)));
-        with = Math.Min(with, MeanTickMs(Scene(true)));
+        double without = double.MaxValue, with = double.MaxValue;
+        for (int k = 0; k < 5; k++)
+        {
+            without = Math.Min(without, MeanTickMs(Scene(false)));
+            with = Math.Min(with, MeanTickMs(Scene(true)));
+        }
         output.WriteLine($"400 loaded walkers, 61 buildings: mean tick {without:F3} ms with no site, {with:F3} ms with one drop-off site standing (+{with - without:F3} ms)");
         Assert.True(with - without < 0.25, $"a drop-off site adds {with - without:F3} ms a tick");
     }

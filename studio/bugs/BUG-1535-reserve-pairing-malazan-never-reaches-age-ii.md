@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S2 (Stress red outside the rows M6-SH2's criterion 11 allows; an AI seat alive at 20:00 that never reaches Age II) |
-| Status | open |
+| Status | fixed (re-measured in M6-SH2 fix round 1; judged honest by QA re-check 1) |
 | Found | 2026-11-15-2136, task M6-SH2 (QA) |
 | System | AI economy / reserve (M5-4g), moved by the drop-off rule (BUG-1520) |
-| Fixed by | |
+| Fixed by | M6-SH2 fix round 1 (diagnosed, re-measured) |
 
 ## Repro
 1. `dotnet test sim/Rts.Sim.Tests --filter "FullyQualifiedName~ReservePairingsStressTests.Pairing_Twins_AgeTwoForEverySideAlive"`
@@ -42,3 +42,16 @@ or waiting worker behind it. It is a match outcome moved by the rule, not a wedg
 - For the Producer: trace (does the 6:51 wave, sent with the reserve held, throw the economy away?) or re-stage with the
   reason. The developer's report says "Stress is red only in rows named here". This row and BUG-1533 / BUG-1534 show the
   developer's Stress pass did not cover the whole category.
+
+## M6-SH2 fix round 1 (the developer): diagnosed, re-measured
+Minute lines of the Malazan seat (seed 2): raided all match (63 units lost by 20:00, workers 19 at 10:00, 4 at 20:00,
+defending every other minute), one wave (6:51), reserves for Age II and never banks it (gathered gold 2,630 by 10:00,
+3,580 by 20:00). A war it loses slowly, no wedge. `KnownNoAgeTwo` re-measured: the four old sides out, (0, 1, 1, 0) in;
+`NoWaveSides` 3 -> 2. BUG-1151's fix did not move these rows (same lines before and after).
+
+## QA re-check 1
+Judged honest: four exemptions out and one in shrinks `KnownNoAgeTwo` from 4 to 1, so three sides that were exempt are now
+held; `NoWaveSides` is an equality pin re-measured (3 -> 2), and the three bounds are unchanged. QA's Stress run: all 27
+rows green, "TOTALS over 27 runs: no-wave sides 2 (= 2), Malazan waves 83 (>= 79), defeats 7 / 4 (<= 8 / 5), alive without
+Age II 1 of 43", and seed 2 player 0 printed KNOWN. The new entry's diagnosis (a seat raided all match) was not re-traced
+by QA.
