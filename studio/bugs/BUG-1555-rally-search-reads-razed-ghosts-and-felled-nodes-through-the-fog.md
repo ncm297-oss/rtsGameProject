@@ -3,7 +3,7 @@
 | Field | Value |
 | --- | --- |
 | Severity | S3 |
-| Status | open |
+| Status | open (Producer ruling 2026-11-16-2036: a fog leak, small; the rally search must read the seat's memory (a remembered ghost closed, a remembered node closed); first item of the sim's next task that touches the AI, at the latest its next hardening) |
 | Found | 2026-11-16-2036, task M6-12 (M6-S12), QA full |
 | System | AI `PlayerView` (the rally search's map read, `MilitaryManager.NarrowWithin` / `Acceptable`) |
 | Fixed by | |

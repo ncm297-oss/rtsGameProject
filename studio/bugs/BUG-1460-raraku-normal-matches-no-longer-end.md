@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S3 |
-| Status | open (Raraku seed 1 only since M6-SH2; seeds 3 / 4 / 6 end at 25,083) |
+| Status | fixed (M6-S12, 2026-11-16-2036: Raraku seed 1 ends at 24,354 with every sweep oracle clean; the blind re-scout is built for idle workers only, what is left of the decision is BUG-1554 / BUG-1556) |
 | Found | 2026-11-15-0506, task M6-S10 (developer, criterion 11) |
 | System | sim: AI end game (a winner that cannot finish), economy (wood on Raraku) |
-| Fixed by | |
+| Fixed by | M6-S12 (efa7b31): `Stress/M6S12RarakuProbeStressTests`, `Ai/BlindRescoutTests`; `MatchCriterionSweepQaStressTests.Known` entry removed |
 
 ## Repro
 `dotnet test sim/Rts.Sim.Tests --filter "FullyQualifiedName~MatchRowsM6S10Report&DisplayName~raraku" --logger "console;verbosity=detailed"`
@@ -31,3 +31,12 @@ none. Seed 1: the winner (24 workers, 5,638 gold) knows no tree at all (the near
 never explored), its scouts are spent and its starved waves died to towers, so the brief's wood rule had nothing to act
 on and was not built. **Producer decision (docs/01 2026-11-16): a seat short of a resource its army needs that knows no
 node of it sends a worker on the scout's sweep again, past `ai.scoutReplacements`; the next AI task.**
+
+## M6-S12 (2026-11-16-2036, the developer's note, applied by the Producer)
+Rule built (`ScoutManager.Rescout`, after the economy in the think): a seat whose sweep has ended, short of a resource
+its army mix needs, with no worker at it and no live node of it known, sends one worker the economy left idle on the
+sweep again, past `ai.scoutReplacements`; at most one at a time, on the first think of each `ai.scoutAfter` window.
+Raraku Normal v Normal seed 1 ends at 24,354, seat 0 (all three rules). Alone on the base: the re-scout 47,911 (seat 1
+sends unit 32 at 39,600), the rally rule 32,699, the rebalance 27,735. On the full tree no seat is blind with an idle
+worker before the end, so no re-scout fires there. What the idle-only rule leaves open: BUG-1554 (a seat with every
+worker on gold never re-scouts) and BUG-1556 (no cap when each scout is killed).

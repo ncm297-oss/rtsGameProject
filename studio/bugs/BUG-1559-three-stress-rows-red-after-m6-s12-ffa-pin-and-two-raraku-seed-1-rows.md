@@ -64,3 +64,13 @@ The Stress category on a fresh clone of efa7b31 (`dotnet test sim/Rts.Sim.Tests 
   oracle-checked, leaks 0. Retrain twin: Train at 24,261, save at that tick, ran to 26,261. Save sweep: 78 saves.
 - Deviation accepted: the stall is not added to `MatchCriterionSweepQaStressTests.Known`. That dictionary is keyed by
   two-seat matches, and two-seat Pale Hills seed 1 passes, so an entry there would turn the row red ("no longer fails").
+
+## Fix round 1 (the developer's note, applied by the Producer)
+1. FFA seed 1: every seat has its start's gold gathered by 25:00 (8,870 / 8,850 / 8,820 / 8,890, frozen after); p3 out
+   at 55,508, p0 at 107,906; from 70:00 p1 has 0 soldiers and p2 one, neither can train. Gold exhaustion (BUG-1068 /
+   1116 / 1536's shape), not a fault of the M6-S12 rules. Rule 45: the oracle row moved to seed 2 (over at 59,951, p1,
+   4 hunts). The skipped `FourAiSeats_OnPaleHills_Seed1_KnownStall` names BUG-1559 in its Skip reason: **this id stays
+   the label of that stall** beside BUG-1068 / 1116 (the sim's id range was used up). Seed 2 is also
+   `FourAiSeats_OnPaleHills_Seed2_KnownStall`'s match: the twin row is dropped at the next pin move (Producer, Q9).
+2. `M6Sh2DeterminismStressTests` re-staged to Raraku seed 3 (seat 0 retrains for 24,261); green.
+3. `M6Sh2QaStressTests`' save sweep re-staged to Raraku seed 2 (78 saves, bound 60 unchanged); green.

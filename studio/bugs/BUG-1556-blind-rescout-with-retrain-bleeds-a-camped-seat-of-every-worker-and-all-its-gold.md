@@ -3,7 +3,7 @@
 | Field | Value |
 | --- | --- |
 | Severity | S3 |
-| Status | open |
+| Status | open (Producer ruling 2026-11-16-2036, docs/01 2026-11-17: cured together with BUG-1554 by a saved count of blind re-scouts lost, capped by `ai.scoutReplacements`, in the sim's next AI task (a save-format change and a pin move)) |
 | Found | 2026-11-16-2036, task M6-12 (M6-S12), QA full |
 | System | AI scouting (`ScoutManager.Rescout` / `BlindRescoutDue`) with the retrain (`BuildOrderExecutor.Retrain`, BUG-1465) |
 | Fixed by | |

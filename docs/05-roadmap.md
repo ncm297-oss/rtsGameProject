@@ -779,7 +779,15 @@ open S1 / S2. Retro below; open S3 / S4 listed there.)_
       Crossing seed 7 at 19,912; Raraku's row is **seed 3** (25,083; seeds 3 / 4 / 6 end again, seed 1 still does not:
       BUG-1460; seed 2 ends late at 56,940: BUG-1521); Pale Hills seed 1 27,498; the Hard v Normal tally 28 / 10 / 4,
       **Hard behind on Pale Hills at 4 / 6 / 4 (BUG-1522, the balance pass)**; Pale Hills seed 5 no result by 72,000
-      (BUG-1523). No criterion ticked or unticked; docs/03 "Implementation (M6-SH2)".)
+      (BUG-1523). No criterion ticked or unticked; docs/03 "Implementation (M6-SH2)".
+      **M6-S12 (2026-11-16-2036, accepted after one fix round; the AI's rally point off one-cell passages, a rebalance
+      measured from the drop-off, a blind seat's re-scout; every match row re-measured once):** criterion 5's 20-minute
+      row is Vathar Crossing **seed 1** again at 23,244 (seed 7 ends at 30,482); Raraku's row stays seed 3 (27,394) and
+      **Raraku seed 1 ends again at 24,354 (BUG-1460 fixed)**: every Normal v Normal seed 1-8 on all three maps ends;
+      Pale Hills seed 1 33,230, seed 5 57,755 (BUG-1523 closed); the generated row seed 1 (21,876); the Hard v Normal
+      tally 34 / 7 / 1, **Hard ahead on Pale Hills again at 9 / 4 / 1** (BUG-1522 closed by measurement). The four-seat
+      Pale Hills oracle row moved to seed 2 (seed 1 mines the map out: BUG-1559 / BUG-1536's shape). No criterion ticked
+      or unticked; docs/03 "Implementation (M6-S12)".)
 
 ## M6 — Game shell & real art
 
@@ -867,7 +875,7 @@ open S1 / S2. Retro below; open S3 / S4 listed there.)_
       puts a Quaternius Universal Base Character playing a UAL1 clip beside an Ultimate Fantasy RTS building (the stylized stand-in; the
       pack has no characters) and today's capsule under the real camera; screenshots `docs/images/look-test-2026-10-17[-far].png`;
       docs/04 "Look test (M6-V10)" and the first three licensing rows (Quaternius, CC0). Left: the owner's art call, then the real
-      models and animations through the manifest / import script. **2026-11-13:** the owner's art call is made ("look: go": the Quaternius stack with outfits and team colour); the art pass starts with M6-V20 (the import tooling and two Malazan units). **M6-V20, 2026-11-13-1118: the first slice is in**: `tools/import-assets.ps1` + `tools/asset-manifest.json` + `tools/art/build_unit.py` (raw packs → Blender → `.glb`, byte-reproducible), `malazan_laborer` and `malazan_crossbowman` as animated models with a `team` material and six shared clips, three licensing rows. Not ticked: about thirty unit types and every building are still placeholders, and BUG-1321 (400 animated figures 14.5-21 ms a frame) is fixed before more are built.)
+      models and animations through the manifest / import script. **2026-11-13:** the owner's art call is made ("look: go": the Quaternius stack with outfits and team colour); the art pass starts with M6-V20 (the import tooling and two Malazan units). **M6-V20, 2026-11-13-1118: the first slice is in**: `tools/import-assets.ps1` + `tools/asset-manifest.json` + `tools/art/build_unit.py` (raw packs → Blender → `.glb`, byte-reproducible), `malazan_laborer` and `malazan_crossbowman` as animated models with a `team` material and six shared clips, three licensing rows. Not ticked: about thirty unit types and every building are still placeholders, and BUG-1321 (400 animated figures 14.5-21 ms a frame) is fixed before more are built. **M6-V24, 2026-11-16-2036: every unit model is one surface, one material and one texture sheet** (eleven types; draw calls for 400 figures 5,191 → 1,003; 400 figures 11.6 → 6.6 ms a frame, 1,000 figures 29.2 → 16.5 ms, QA's bench; looks unchanged on 110 before / after pictures a side). Not ticked: the unit types and buildings still placeholders, and the Rider and the War-dog wait on a horse / dog pack (the owner's download).)
 - [ ] Real SFX and placeholder music; alerts with sound. (M6-V12, 2026-10-17-2344: **real SFX and the alerts are in**: 16 clips cut from
       the owner's Sonniss GDC 2026 bundle (`tools/audio/trim-wav.ps1` + `sfx-manifest.json`, LFS, docs/04 licensing rows) for 12 events
       (`SfxEvent`); world sounds only for what the local player sees on screen, at most 4 per 100 ms; attack alerts (`ViewApi/AttackAlerts`

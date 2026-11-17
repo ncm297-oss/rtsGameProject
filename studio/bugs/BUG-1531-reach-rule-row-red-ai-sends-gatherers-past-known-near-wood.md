@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S3 (re-rated by the Producer at the ACCEPT: an AI economy weakness on one staged seed, wood banked not lower; it was S2 only while its row was red on the default loop) |
-| Status | open (ruled: oracle stands; row (2, 80) skipped as a known bug; cure decided for the next sim task that changes the AI) |
+| Status | fixed (M6-S12, 2026-11-16-2036: a rebalance's node is measured from the worker's nearest finished drop-off; `Ai/RebalanceFromDropOffTests` red on the base, `ReachRuleQaTests` (2, 80) un-skipped and green, body and bound unchanged) |
 | Found | 2026-11-15-2136, task M6-SH2 (QA) |
 | System | AI economy (gather targeting under the lifted reach); exposed by the drop-off rule (BUG-1520) |
-| Fixed by | |
+| Fixed by | M6-S12 (efa7b31): `Ai/RebalanceFromDropOffTests`, `QA/ReachRuleQaTests` (2, 80) un-skipped |
 
 ## Repro
 1. `dotnet test sim/Rts.Sim.Tests --filter "FullyQualifiedName~ReachRuleQaTests.NearestForestFarPastTheReach"`
@@ -63,3 +63,8 @@ Ruling applied as written: the row `(2UL, 80f)` keeps its body and bound and is 
 `Skip = "BUG-1531 (open, S2): ..."`; the other five rows run and are green in the default loop. Stays open: the decided cure
 (a rebalance's pick measured from the worker's nearest finished drop-off) is the first item of the next sim task that
 changes the AI, and that task un-skips the row.
+
+## M6-S12 (2026-11-16-2036, the developer's note, applied by the Producer)
+`EconomyManager.Rebalance` picks the known node of the wanted kind nearest the worker's nearest own finished drop-off
+(`NearestDropOff`; nearest the worker with none finished). `ReachRuleQaTests` (2, 80): farthest wood target 116.9 m
+against the control's 116.6 m. An idle worker's pick is unchanged (Producer: leave it until a trace shows the fault).

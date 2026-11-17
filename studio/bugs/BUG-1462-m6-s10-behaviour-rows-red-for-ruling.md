@@ -3,7 +3,7 @@
 | Field | Value |
 | --- | --- |
 | Severity | S3 |
-| Status | open (**Stress rows only**, the sim's hardening; the five default-loop rows are green since session 2026-11-15-1536: `AHardSeat_*` by M6-S11 outcome A, the four content rows by D-R39; the Producer's scratch clone of the three-way tree confirms) |
+| Status | closed by measurement (2026-11-16-2036: `StartingResourcesAiStressTests` (1, 0) green on M6-S12's tree, the five KeepCorner rows live under BUG-1463, the far-forest worker bound under BUG-1557; nothing left under this id) |
 | Found | 2026-11-15-0506, task M6-S10 (developer) |
 | System | tests: AI behaviour rows over the changed economy |
 | Fixed by | |
@@ -66,3 +66,8 @@ Row by row: Raraku 3 / 4 / 6 green; `FarExpandProbe` Vathar 2 (4 seats) green; `
 Raraku seed 1, green; `StartingResourcesAi` opening 2 green, **opening 1 against 0 still red** (`crossbow_push` seed 9);
 `ScoutCap` seed 5 green; `KeepCornerCure` **five rows still red** (BUG-1461 / 1463). Red on `main` by ruling after this
 session, Stress only: those six, `MapSlice2StressTests` Pale Hills 5 (BUG-1523) and `Bug0982_*` x2 (D33).
+
+## M6-S12 (2026-11-16-2036)
+`StartingResourcesAiStressTests` (1, 0) green (high's mean bank 238 against 1.5 x 165). `ScoutCapQaTests`' far-forest
+worker bound on seeds 5 / 6 is printed, not asserted, under this id's label in the test (`KnownWorkerLosses`); the
+finding itself is BUG-1557. Closed by measurement.

@@ -3,7 +3,7 @@
 | Field | Value |
 | --- | --- |
 | Severity | S3 |
-| Status | open (needs the Producer's ruling on the re-stated row) |
+| Status | open (Producer ruling 2026-11-16-2036: the re-stated row reaches `main` as a known-bug row; the next sim brief renames its label from BUG-1462 to BUG-1557; the cause, woodcutters sent to forests 147-154 m out beside the enemy, is an AI economy finding for the sim's hardening) |
 | Found | 2026-11-16-2036, task M6-12 (M6-S12), QA full |
 | System | AI economy on a far-forest start (rebalance / re-scout, BUG-1462's family); QA guard `QA/ScoutCapQaTests.OneScoutKilled_At0_200_2000_OnAFarForestStart_Seeds1To10` |
 | Fixed by | |

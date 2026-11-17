@@ -3,7 +3,7 @@
 | Field | Value |
 | --- | --- |
 | Severity | S3 |
-| Status | open |
+| Status | open (Producer ruling 2026-11-16-2036, docs/01 2026-11-17: idle-only stands for now; cured together with BUG-1556 by a saved count of blind re-scouts lost, capped by `ai.scoutReplacements`, in the sim's next AI task (a save-format change and a pin move)) |
 | Found | 2026-11-16-2036, task M6-12 (M6-S12), QA full |
 | System | AI scouting (`ScoutManager.Rescout` / `BlindRescoutDue`, `AiPlayer.PickBuilder(idleOnly)`) |
 | Fixed by | |

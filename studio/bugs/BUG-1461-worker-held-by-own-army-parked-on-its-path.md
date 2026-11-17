@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S3 |
-| Status | open (cause traced in M6-SH2; five `KeepCornerCureQaStressTests` rows still red by ruling, a third session) |
+| Status | fixed (M6-S12, 2026-11-16-2036: the AI's rally point keeps off one-cell passages, `Ai/RallyPassageTests`; held worker-ticks on Raraku seed 1 1,022 -> 261, over QA's 120 seat-runs 30,603 -> 4,118; the movement shape itself stays a report row; edges: BUG-1555, BUG-1558) |
 | Found | 2026-11-15-0506, task M6-S10 (developer, probing BUG-1460) |
 | System | sim: movement (footprint walk give-ups against own standing non-gatherers), economy retry |
-| Fixed by | |
+| Fixed by | M6-S12 (efa7b31): `Ai/RallyPassageTests`, QA's `Stress/M6S12RallySurveyQaStressTests` |
 
 ## Repro
 Raraku, Normal v Normal, seed 1, M6-S10 tree: seat 0's unit 1, after a delivery at (48, 124), walks back toward its mine
@@ -31,3 +31,13 @@ passage shapes and not Raraku's: reverted. Still red at 0.5: `HardShapes` cliff2
 `TwoByTwoDepot` (22, 20) Gatherers, `KeepOnTheMapEdge` (1, 15); `FuzzSeeds57To120` is green. **Producer decision
 (docs/01 2026-11-16): the AI's rally point keeps off one-cell passages (an AI rule); the five synthetic shapes get one
 more bounded trace in the next AI task and are then either cured or re-stated as known-bug rows: no fourth red session.**
+
+## M6-S12 (2026-11-16-2036, the developer's note, applied by the Producer)
+On Raraku seed 1 the "one-cell passage" is not terrain: it is a lane between seat 0's own buildings (cells x 25-27
+open only at row 62), and the nominal rally point (55.98, 127.25) stood in the lower building's footprint at the lane's
+east mouth. Rule built (`MilitaryManager.OffThePassage`): a nominal point with a one-cell passage cell within
+`ai.rallyReach` moves to the nearest open, passage-free point on the same line within `ai.rallyReach`, back toward
+the hall first, then out. On Raraku it steps out to (61.96, 126.88) from tick 3,020. Held worker-ticks in the first
+12,000 ticks: base 1,022, now 261. `Movement/ParkedArmyGatherTests.Bug1461_*` stay report rows (the movement shape is
+unchanged by design; the AI no longer parks there). QA's survey over 120 seat-runs: held worker-ticks 30,603 -> 4,118,
+222 shifted points, none on closed ground, no flap while the target holds. Edges left: BUG-1555, BUG-1558.
