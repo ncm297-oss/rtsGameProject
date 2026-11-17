@@ -91,7 +91,7 @@ public static partial class DataLoader
             c.CurrentFile = $"factions/{folders[f]}/units.json";
             UnitJson u = unitFiles[f]!.Units![i]!;
             int id = unitKeys.IdOf(u.Id!);
-            units[id] = BuildUnit(c, u, $"units[{i}]", id, f, rules, table, projectiles);
+            units[id] = BuildUnit(c, u, $"units[{i}]", id, f, rules, table, projectiles, statuses);
         }
         // BUG-0010: every faction fills the seven unit template slots, one unit each (docs/02 "Faction template").
         for (int f = 0; f < folders.Length; f++)
@@ -737,7 +737,8 @@ public static partial class DataLoader
     public static int RegenPerTick(double hpPerSecond) =>
         (int)Math.Round(hpPerSecond * Combat.CombatConstants.RegenFixedOne / SimConstants.TicksPerSecond, MidpointRounding.AwayFromZero);
 
-    private static UnitDef BuildUnit(Checker c, UnitJson u, string p, int id, int faction, RulesDef? rules, DamageTable? table, ProjectileDef[]? projectiles)
+    private static UnitDef BuildUnit(Checker c, UnitJson u, string p, int id, int faction, RulesDef? rules, DamageTable? table, ProjectileDef[]? projectiles,
+        StatusDef[]? statuses)
     {
         string slotKey = c.Text(u.Slot, p + ".slot");
         int slot = DataLimits.SlotIds.IndexOf(slotKey);
@@ -777,6 +778,9 @@ public static partial class DataLoader
             else
                 c.Error(p + ".pop", $"{u.Id}: pop {itemPop} is above rules.popCap {cap}: it could never start");
         }
+        // M8-2: the optional stand-still stealth (docs/factions/shadow.md "Unit notes", the Shadow Archer).
+        int stillStatus = -1, stillDelay = 0;
+        if (u.StillStealth != null) StillStealth(c, u.StillStealth, p, u.Id, statuses, out stillStatus, out stillDelay);
         return new UnitDef
         {
             Id = id,
@@ -805,7 +809,43 @@ public static partial class DataLoader
             Scale = (float)scale,
             SpawnCount = spawnCount,
             Carry = OptionalCarry(c, u.Carry, p + ".carry", slot == (int)UnitSlot.Worker, u.Id),
+            StillStealthStatus = stillStatus,
+            StillStealthDelayTicks = stillDelay,
         };
+    }
+
+    /// <summary>
+    /// M8-2: <c>units.json</c> <c>stillStealth { status, delay }</c>, as <c>forestStealth</c>'s two fields: <c>status</c>
+    /// (required) names a status of kind <c>stealthed</c>; <c>delay</c> (required) is seconds, at least a tick once converted
+    /// and at most <see cref="DataLimits.MaxForestStealthDelay"/> (the forest's bound). One error per bad field at its path,
+    /// the message naming the unit; a broken <c>statuses.json</c> is reported there, not again here. -1 / 0 after an error.
+    /// </summary>
+    private static void StillStealth(Checker c, StillStealthJson j, string p, string? unit, StatusDef[]? statuses, out int status, out int delayTicks)
+    {
+        status = -1;
+        delayTicks = 0;
+        p += ".stillStealth";
+        if (j.Status == null) c.Error(p + ".status", $"{unit}: missing required field");
+        else if (statuses != null)
+        {
+            int found = -1;
+            for (int s = 0; s < statuses.Length; s++)
+                if (string.Equals(statuses[s].Key, j.Status, StringComparison.Ordinal)) found = s;
+            if (found < 0)
+                c.Error(p + ".status", $"{unit}: unknown status '{j.Status}' (not in common/statuses.json)");
+            else if (statuses[found].Kind != StatusKind.Stealthed)
+                c.Error(p + ".status", $"{unit}: status '{j.Status}' is of kind '{DataLimits.StatusKindIds[(int)statuses[found].Kind]}', not 'stealthed' (stand-still stealth hides the unit)");
+            else status = found;
+        }
+        if (j.Delay is not double d) c.Error(p + ".delay", $"{unit}: missing required field");
+        else if (!(d > 0)) c.Error(p + ".delay", $"{unit}: delay {d} s must be positive");
+        else if (d > DataLimits.MaxForestStealthDelay) c.Error(p + ".delay", $"{unit}: delay {d} s is above the maximum {DataLimits.MaxForestStealthDelay} s");
+        else
+        {
+            int ticks = SecondsToTicks(d);
+            if (ticks < 1) c.Error(p + ".delay", $"{unit}: delay {d} s rounds to {ticks} ticks");
+            else delayTicks = ticks;
+        }
     }
 
     /// <summary>

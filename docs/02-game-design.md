@@ -276,6 +276,16 @@ whether the zone's statuses take it and whether the zone hides it (the ground is
     faction's bonus in its data, separate from the 3 s reveal time.
   - Gathering is not attacking: a worker chopping at a forest edge stays hidden (flagged for the M8 balance
     pass).
+- **Stand-still stealth** (the Shadow Archer's "Shadowed"; docs/01 "2026-11-17 (b)"), a unit type's own rule, anywhere:
+  - The unit is Stealthed once 3 s (a number of its unit type in the data) have passed since each of: its position last
+    changed, its attack last landed or its cast last resolved, and it last lost hit points (a hit that takes none does not
+    count).
+  - "Without moving" means its position did not change, whatever the cause: a walk, a chase, or being pushed aside by
+    another unit all restart the 3 s. Turning on the spot does not. Any move ends the stealth at once (the next tick).
+  - Attacking or casting from stealth reveals it as any stealthed unit (above); losing hit points ends the stealth at
+    once. Detection is the same as for any stealthed unit. A summoned unit never gets it.
+  - A unit under both the forest bonus and its own stand-still rule is hidden while either holds; an ability's stealth on
+    it keeps its own duration.
 - Stealthed friendly units render semi-transparent for their owner.
 
 ## Vision and fog of war

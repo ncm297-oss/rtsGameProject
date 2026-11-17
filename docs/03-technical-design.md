@@ -4779,6 +4779,103 @@ show its Stealthed entry (`TicksRemaining` at least 1 while the forest holds it)
 `UnitStore.Forest.Held` (`Forest` is null on data without the bonus) should a marker ever want to tell the forest's stealth from an
 ability's; nothing reads it today.
 
+### Implementation (M8-2)
+
+M8's second sim slice: the Shadow Archer's stand-still stealth (docs/factions/shadow.md "Unit notes", gap G1) as a generic
+unit field, in the schema and tested on forged data only (no shipped file carries it, so the data hash B74DC7AE61B4862D,
+the golden and every save are unchanged). Readings: docs/01 "2026-11-17 (b)" and docs/02 "Stealth and detection". Code:
+`Abilities/StillStealthSystem.cs`, `Abilities/StillStealthStore.cs` (`UnitStore.Still`), `World.StillStealth.cs`,
+`StatusSystem.Holders` (the held-entry count both stealth rules now share), the hooks in `CombatSystem.HitUnit` /
+`HitBuilding` and `AbilitySystem.Run`; data in `DataLoader.StillStealth`. M8-1's `ForestStealthSystem` is the model.
+
+- **Schema.** `units.json` `stillStealth { status, delay }` (the "Data format" table): `status` a status of kind
+  `stealthed` (`UnitDef.StillStealthStatus`, -1 absent), `delay` seconds of at least a tick, at most 60 (the forest's
+  bound, `DataLimits.MaxForestStealthDelay`; `UnitDef.StillStealthDelayTicks`). JSON `null` reads as absent. One error per
+  bad field at `units[i].stillStealth.<field>`, the message naming the unit
+  (`DataValidationTests.BrokenUnitStillStealth_YieldsExactlyOneError`). `GameData.ContentHash` adds the block (a marker of
+  its own, 2, then both fields) only when a unit carries it.
+- **The rule** (`StillStealthSystem.Run`, phase 5 right after `ForestStealthSystem.Run`, before `StealthSystem.Run`). A
+  live, non-summoned unit whose type carries the field is held while at least `delay` has passed since each of (i) its
+  position last changed, (ii) its attack last landed or its cast last resolved (the forest rule's and the Revealed rule's
+  moment), (iii) it last lost hit points (`HitUnit` with damage above 0; a hit that takes none does not count). It carries
+  the type's status through the status store, so the one predicate, detection (`stealth.proximity`, detectors), Revealed,
+  targeting, the fog and the AI's view treat it as any Stealthed unit (M4-5), with no second path.
+- **"Without moving".** The pass compares each such unit's position with where the last pass saw it
+  (`StillStealthStore.StillAt`, an exact compare): any change, whatever made it (a walk, a chase, a shove, the placement
+  push), counts; the facing is never read, so turning on the spot does not. Movement runs in phase 9, after phase 5, so a
+  change seen in tick T's pass is dated T - 1 (`MovedTick`): a unit whose position last changed in tick t is hidden from
+  tick t + delay's phase 5 (the 3 s Archer: the 60th tick after), and any change ends the stealth in the next phase 5. A
+  unit the pass sees for the first time (its spawn in phase 3, or the first tick) is dated the pass's own tick, so a fresh
+  unit waits its full delay. A unit whose position changed since the last pass is never held in this pass, whatever the
+  delay (for a 1-tick delay this makes the wait 2 ticks).
+- **The held entry, shared.** The store keeps one entry per status id, so the forest (M8-1), the stand-still rule and any
+  timed application of the same status share it. Each rule holding the entry adds one tick to it
+  (`StatusSystem.Holders`: 0, 1 or 2), which `StatusSystem.Run` never counts below (the forest's "never below 1" made
+  general) and which `StatusSystem.Hold` keeps on top of a timed application's duration. Letting go takes the rule's tick
+  back; the entry ends only when no rule holds it and nothing timed is left. So either rule may let go while the other
+  holds, and a timed Stealthed is never shortened or lengthened, in every order of hold / release / apply
+  (`StillStealthHoldTableTests`: 30 orders x 2 durations against a twin with neither rule).
+- **Attack and hp loss.** `HitUnit` / `HitBuilding` / `AbilitySystem.Run` note `LastAttackTick` for a non-summoned unit of
+  a field type (the M4-5 reveal fires there as before; the next phase 5 lets go). `HitUnit` with damage above 0 notes
+  `LastHurtTick` and lets a held unit go at once, so a hidden unit hit in phase 11 is seen for the rest of that tick; a
+  damage-over-time pulse in phase 5 does the same (the countdown's re-find covers it, as for the forest). The rule keeps its
+  own hurt tick rather than `UnitStore.LastDamagedTick`, which a regenerating faction writes on every hit, hp lost or not.
+- **Never.** A summoned unit of a field type is skipped (it keeps no state and is never held). A unit carrying 8 other
+  statuses can't take the entry (the store's cap); it is not held and the next pass tries again.
+- **State, hash, save.** `StillStealthStore`: `MovedTick` (int a slot, -1 unseen), `StillAt` (Vector2), `LastAttackTick`
+  and `LastHurtTick` (int, -1 never) and `Held` (byte), the unit store's `Still`, exist only when the loaded data has a unit
+  type with the field (`GameData.AnyStillStealth()`; null otherwise), reset at spawn and free. Hashed under bit 23 of the
+  unit's state word when any is off its default, after the forest's words. Derived and not hashed: the per-type tables
+  (`World.StillStatusOfType` / `StillDelayOfType`) and `World.StillStealthInData`. Saved as the unit store's `STIL` part
+  after `REGN` (and `FRST` when there is one), written exactly when the data has the field, so `SaveFormat.CurrentVersion`
+  stays 10 and a save on other data is byte for byte what it was (`StillStealthSaveBytesTests` pins two such saves' SHA-256,
+  taken on the base). A save whose part disagrees with the data meets an unexpected tag and is refused `Malformed`; the
+  part is held to the rest at load (a free slot's state is default; every tick is -1 or at most the save's; held is 0 or 1;
+  only a live, non-summoned unit of a field type has state; a held unit carries its type's status with at least its
+  holders' ticks). The replay format is unchanged.
+- **Cost.** Data without the field: one null test in phase 5 (10,000 passes over 2,500 slots: 0.11 ms) and one bool test
+  in each hit and cast. With it, the pass reads each live unit's type, and for a field type a position compare and three
+  tick compares; holding or letting go is a status application or removal. Nothing allocates
+  (`FiveHundredFieldUnits_Ticks_AllocateNothing`: 0 bytes over 120 ticks of 500 field units moving, fighting, hiding).
+  Measured (Debug, 2026-11-17, the report row alone from this track but beside other tracks' test runs on the machine):
+  500 moving units, 600 ticks, three alternating runs, with the field 1.10 / 7.26 / 6.93 ms a tick and without 4.50 / 6.69
+  / 6.41 ms (the machine's noise is wider than the difference); the stand-still pass alone over 500 held units 45 us,
+  against 653 us for M4-5's detection pass over the same 500 carriers: what a held unit costs is the detection it feeds, as
+  for any Stealthed unit.
+- **A crowd.** 12 field Crossbowmen sent to one point 30 m off: each is hidden exactly 60 ticks after its own last position
+  change, 45-59 ticks (2.3-3.0 s) after the group's arrival (the first tick none is Moving); no separation nudge moved any
+  of them after the arrival, so no movement threshold is needed on this evidence
+  (`Report_TwelveFieldUnitsSentToOnePoint_TicksFromArrivalUntilHidden`).
+- **Known limits.** (1) The placement push (a building placed on units, phases 1-4) moves a unit before the pass of the
+  same tick; that change is dated a tick early (T - 1), so such a unit hides one tick sooner than "60 after". (2) As M8-1:
+  a held entry shows one tick more per holder than the timed applications left it. (3) The first-shot bonus (G2) is M8-3.
+- **Tests.** `Data/StillStealthLoaderTests`, `DataValidationTests.BrokenUnitStillStealth_YieldsExactlyOneError`,
+  `DataContentHashTests` (both fields in the reflection row), `Vision/StillStealthTests` (criteria 3-9: the pinned tick,
+  hidden and untargetable, a move, a shove, facing alone, an attack, a cast, hp loss, a 0-damage hit, proximity, a unit
+  detector, summoned, a full status store, a faction without forest stealth, data without the field),
+  `Vision/StillStealthHoldTableTests` (criterion 7), `Vision/StillStealthMatchTests` (twins over 4 seeds x 2,000 ticks with
+  the invariant fuzz after every tick; a save at every 50th tick loaded and continued, in two processes; the state hash;
+  forged saves), `Vision/StillStealthSaveBytesTests`, `Vision/StillStealthPerfTests`. The test copies are
+  `Vision/StillScenes` (the field on five types of all three factions; `Both` adds the Malazan forest block); no shipped
+  file changes.
+
+**For the data track (M8-2).** The Shadow Archer's row in `units.json` carries, beside its other fields:
+
+```json
+"stillStealth": { "status": "stealthed", "delay": 3 }
+```
+
+The field moves the data hash once; land it with the Shadow roster. Summoned units need nothing (never hidden).
+
+**Questions for the Producer (M8-2).**
+
+1. The placement push dates a move a tick early (Known limits (1)). Leave it, or date phase-1-4 changes exactly (the push
+   writes `PrevPosition` too, so it needs its own note to the rule)? Default: leave it.
+2. A 1-tick `delay` behaves as 2 ticks (a unit seen moved is never held in the same pass), and the loader allows 0.05 s.
+   Raise the minimum `delay` instead? Default: leave it (no designed delay is near it).
+3. A worker type with the field would be hidden only while it does not move; gathering walks, so in practice never while
+   it gathers. Is that the wanted reading should a worker ever carry the field? Default: yes (the field is for the Archer).
+
 ## Data format
 
 All definitions are JSON under `game/data/`, loaded by both the game and the tests (tests find the
@@ -4865,7 +4962,7 @@ consumes it.
 | `buildings.json` | `{ "buildings": [ ... ] }`, each `{id, displayName, description, slot, footprint {width, height}, hp, armor, cost {gold, wood}, buildTime, popProvided, dropOff}`: `slot` is one of the ten template slots (`DataLimits.BuildingSlotIds`), footprint sides 1-4 cells, `buildTime` in seconds (to ticks), `popProvided` a multiple of 0.5 (to half-pop), `dropOff` a required bool, `requires` an optional list of tech / building ids (M3-5; resolved and gating placement since M3-6), `sight` optional meters (M4-3a: above 0 and at most 64, default `rules.json` `buildingSight`; shipped 24 on both watch towers, docs/02), `attack` optional (M4-3b: the unit `attack` object; value at least 1, range above 0, an aimed `projectile` required, `targets` not `buildings`; shipped on both watch towers), `detector` optional meters (M4-3b: above 0 and at most 64; shipped 16 on both watch towers; unused until M4-5), `scale` optional (M7-4: the view's model size, 0.5-3.0, default 1; the sim never reads it; since M7-V4 the placeholder box's height, `3 m x scale`, on the footprint's width and depth: "Implementation (M7-V4)"). Ids unique across factions (M3-2, see "Economy implementation"); exactly one building per slot per faction (M3-6, BUG-0010) |
 | `techs.json` | `{ "techs": [ ... ] }` in `common/` (shared by every faction) and in each faction folder (its own), each `{id, displayName, description, researchedAt, cost {gold, wood}, researchTime, requires?, requiresAnyOf?, effects: [{stat, amount, appliesTo {attackType?, tags?, units?, siege?}}]}`: `researchedAt` is a building slot id (a common tech resolves to each faction's building of it; a faction without one is an error), `researchTime` in seconds (to ticks), `requires` tech / building ids (resolved and gating research since M3-6), `requiresAnyOf` `{count, of: [slot ids, or in a faction file its own building ids]}`: met when `count` of the distinct listed slots hold an own finished building (M3-6; shipped on `age_ii` only), `effects` may be empty. `stat` is one of `attack`, `armor`, `range`, `hp`, `abilityCooldown`, `statusDuration` (M7-4) (`DataLimits.TechStatIds`); `amount` is non-zero, whole for attack / armor / hp, meters for range, seconds for ability cooldown and status duration (to ticks, negative shortens it). A `statusDuration` effect takes `statuses` (statuses.json ids, at least one) and no `appliesTo`; no other stat takes `statuses` (see "Implementation (M7-4)"). `appliesTo` is required (`{}` = every unit) except on `statusDuration`; each filter it sets must match: `attackType` a damage type, `tags` any one of the unit's tags (each must be a tag some unit has), `units` unit ids (a faction tech's must be its own), `siege` true / false for the `siege` slot; a `tags` or `units` list set to `[]` is an error (M3-6, BUG-0098). Tech ids are unique across all techs files and may not equal a building id (M3-6); they number the common file's techs first, then each faction's in `common/factions.json` order, ordinal within each file (M7-3b), so a new faction's techs move no shipped id; `DataLimits.AgeTechIds` (`age_ii`) must be a common tech (M3-5, see "Implementation (M3-5)") |
 | `projectiles.json` | `{ "projectiles": [ ... ] }`, each `{id, kind, speed, hitTolerance?, leadSpeed?}`: `kind` `aimed` or `lob`, `speed` m/s (at least 1), `hitTolerance` m (aimed only, 0-2, default 0.3; an error on a lob), `leadSpeed` m/s (aimed only, not negative, default 0 = never leads; an error on a lob). Ids unique; every unit's `attack.projectile` must name one (M4-2b, see "Implementation (M4-2b)") |
-| `units.json` | `{ "units": [ ... ] }`, entries as in the example. `attack` also takes optional `minRange`, `splash` (m), and `friendlyFire` (docs/02 "Combat / Stats"); they default to 0 / false. Melee range is written as `0.5` (edge to edge). `abilities` (M4-4a, optional): ability ids of the unit's own faction, at most 4 (`DataLimits.MaxUnitAbilities`), no repeats; resolved to `UnitDef.Abilities`; shipped on the Cadre Mage (`telas_fire`), the Sapper (`cusser`) and the Priest of the Whirlwind (`sandstorm`). `passives` (M4-4b-3a, optional): at most 2 (`DataLimits.MaxUnitPassives`), one per `trigger` (`DataLimits.PassiveTriggerIds`): `{trigger: whenBelowHp, hpFraction, status, magnitude}` or `{trigger: onDeath, status, magnitude, duration, radius, units}` (see "Implementation (M4-4b-3a)"); resolved to `UnitDef.Passives`; shipped on the Zealot only. `detector` (M4-5, optional): meters, above 0, at most 64 (`UnitDef.Detector`; see "Implementation (M4-5)"). `scale` (M7-1, optional, default 1): the view's model size, 0.5-3.0 (`DataLimits.MinUnitScale` / `MaxUnitScale`), to `UnitDef.Scale`; presentation only, collision stays `radius` (docs/02 "Combat / Stats"); shipped on six Teblor units (1.5). `spawnCount` (M7-2, optional, default 1): units one queue item spawns, a whole number 1-8 (`DataLimits.MaxSpawnCount`), to `UnitDef.SpawnCount`; `cost` and `trainTime` are the item's, `pop` each unit's (see "Implementation (M7-2)"); shipped on the War-dogs (3). `passives` also takes (M7-2) `{trigger: onHit, status, magnitude, duration}`, so at most 3, still one per trigger. `carry` (M7-7, Request 48, optional, a worker only): resources the worker carries a trip, a whole number 1 to 1,000,000, to `UnitDef.Carry`; absent = `rules.json` `workerCarry` (`GameData.CarryOf`; see "Implementation (M7-7)"); shipped on the Teblor Gatherer (15, D31) |
+| `units.json` | `{ "units": [ ... ] }`, entries as in the example. `attack` also takes optional `minRange`, `splash` (m), and `friendlyFire` (docs/02 "Combat / Stats"); they default to 0 / false. Melee range is written as `0.5` (edge to edge). `abilities` (M4-4a, optional): ability ids of the unit's own faction, at most 4 (`DataLimits.MaxUnitAbilities`), no repeats; resolved to `UnitDef.Abilities`; shipped on the Cadre Mage (`telas_fire`), the Sapper (`cusser`) and the Priest of the Whirlwind (`sandstorm`). `passives` (M4-4b-3a, optional): at most 2 (`DataLimits.MaxUnitPassives`), one per `trigger` (`DataLimits.PassiveTriggerIds`): `{trigger: whenBelowHp, hpFraction, status, magnitude}` or `{trigger: onDeath, status, magnitude, duration, radius, units}` (see "Implementation (M4-4b-3a)"); resolved to `UnitDef.Passives`; shipped on the Zealot only. `detector` (M4-5, optional): meters, above 0, at most 64 (`UnitDef.Detector`; see "Implementation (M4-5)"). `scale` (M7-1, optional, default 1): the view's model size, 0.5-3.0 (`DataLimits.MinUnitScale` / `MaxUnitScale`), to `UnitDef.Scale`; presentation only, collision stays `radius` (docs/02 "Combat / Stats"); shipped on six Teblor units (1.5). `spawnCount` (M7-2, optional, default 1): units one queue item spawns, a whole number 1-8 (`DataLimits.MaxSpawnCount`), to `UnitDef.SpawnCount`; `cost` and `trainTime` are the item's, `pop` each unit's (see "Implementation (M7-2)"); shipped on the War-dogs (3). `passives` also takes (M7-2) `{trigger: onHit, status, magnitude, duration}`, so at most 3, still one per trigger. `carry` (M7-7, Request 48, optional, a worker only): resources the worker carries a trip, a whole number 1 to 1,000,000, to `UnitDef.Carry`; absent = `rules.json` `workerCarry` (`GameData.CarryOf`; see "Implementation (M7-7)"); shipped on the Teblor Gatherer (15, D31). `stillStealth` (M8-2, optional; JSON `null` = absent) `{status, delay}`, both required when the object is there: `status` a status of kind `stealthed`, to `UnitDef.StillStealthStatus` (-1 absent); `delay` seconds, at least one tick once converted, at most 60 (the forest's bound, `DataLimits.MaxForestStealthDelay`), to `UnitDef.StillStealthDelayTicks` (3 → 60); one error per bad field at `units[i].stillStealth.<field>`, naming the unit; an unknown key is an error. No shipped unit has it yet (the Shadow Archer: the data track). See "Implementation (M8-2)" |
 | `statuses.json` | `{ "statuses": [ ... ] }` (M4-4a), each `{id, displayName, description, kind, damageType?, sight?, reach?, damageBonus?, onEnd?}`: `kind` `damageOverTime`, `slow`, (M4-4b-2) `blind`, (M4-4b-3a) `frenzied`, (M4-5) `stealthed` / `revealed` (at most one `revealed`), or (M7-1) `regenerating` (`DataLimits.StatusKindIds`; its magnitude is HP per second, above 0, at most 100 and at least 0.05); `damageType` (a damage table type) required on `damageOverTime`, an error on any other kind; `sight` and `reach` (m, above 0, at most 64) required on `blind`, errors on any other kind; (M7-4) `damageBonus` (above 0, at most 4) on `frenzied` only, and `onEnd {status, magnitude, duration}` on any row (see "Implementation (M7-4)"). The magnitude and duration come from the effect applying it (a blind, stealthed or revealed status takes no magnitude). Ids unique; shipped `burning` (magic damage over time), `slowed`, `blinded` (2 / 3, M4-4b-2) and `frenzied` (M4-4b-3a; its magnitude, the attack-speed increase, any fraction above 0, is the applying effect's or passive's), `stealthed` and `revealed` (M4-5, "Implementation (M4-5)"), `regenerating` (M7-1: nothing applies it in shipped data yet; the hook M9's Darkness zone and later abilities use) |
 | `abilities.json` | `{ "abilities": [ ... ] }` (M4-4a, per faction, optional), each `{id, displayName, description, kind, range, radius, castTime, cooldown, duration?, affects, autocast?, effects}`: `kind` `targetGround` or (M4-4b-3a) `selfAura` (`targetUnit`, `summon`: "not supported yet"); `range` m above 0 and at most `DataLimits.MaxSight` (64), required on `targetGround` and an error on `selfAura` (0 included); `radius` m above 0 and at most `DataLimits.MaxAbilityRadius` (16); `castTime` s, 0 or more, to ticks; `cooldown` s above 0, to ticks (at least 1); `duration` s, optional (0), to ticks (required with a `createZone` effect, M4-4b-2); `affects` `enemy_units`, `own_units` or `all_units`; `autocast` only `false` ("not supported yet"); `effects` at least one, each `{kind: damage, type, amount, buildings?, friendlyFire?}` (a whole amount, at least 1; M4-4b-1: `buildings` true also hits other players' buildings as structure, not with `own_units`; `friendlyFire` 0-1, the fraction own units take, above 0 only with `enemy_units`) or `{kind: applyStatus, status, magnitude, duration}` (a `statuses.json` id; magnitude whole and at least 1 for damage over time, above 0 and below 1 for a slow; duration s, at least a tick, and for damage over time a whole number of seconds, at least 1, M4-4b-1); M4-4b-2: `{kind: createZone, blocksVision?, statuses: [{status, magnitude, duration}]}` (at least one status, each by the `applyStatus` rules, a blind status without a magnitude; the ability's `duration`, at least a tick, is then required: the zone's lifetime; at most one per ability); `teleport`, `spawn`: "not supported yet"; a field the effect kind doesn't use is an error. Ids unique across factions, numbered faction by faction in `common/factions.json` order, ordinal within a faction (M7-3b), so a new faction's abilities move no shipped id. Shipped: Malazan `telas_fire`, `cusser` (M4-4b-1); Whirlwind `sandstorm` (M4-4b-2) |
 | `maps/<file>.json` | (M6-S7, optional folder, one file a hand-made map, loaded in the files' names' ordinal order into `GameData.Maps`) `{id, displayName, description, players, size, terrain, ramps?, starts, mines, forests}`: see "Implementation (M6-S7)" for every field and check |
@@ -11640,7 +11737,7 @@ version 2) stores the AI seats too, so every match saves. Code in `sim/Rts.Sim/S
   | `GRID` | the nav grid: every cell's flags and cost, `Version`, `BlockVersion`, `PassableCount` |
   | `RSSC` | the resource store whole (felled trees' freed slots and generations), free list, high-water mark |
   | `BLDG` | the building store whole: construction work, queues (tech flags), progress, rally points, repair accumulators, tower state, free list, high-water mark |
-  | `UNIT` | the unit store whole (every array, `Flank`, `PrevPosition` / `PrevFacing`, order queues, cargo, combat and cast state, the counted population and live flags, the free list, the derived counters), then the statuses whole; then (format 10, M7-1) the tag `REGN` and the regeneration part: `LastDamagedTick` and `RegenAccum` (int32 per slot), the statuses' per-slot regenerating counts (byte) and their total; then (still format 10, M8-1), exactly when the data has a faction with `forestStealth`, the tag `FRST` and the forest part: `ForestStealthStore.LastAttackTick` (int32 per slot) and `Held` (byte per slot) ("Implementation (M8-1)") |
+  | `UNIT` | the unit store whole (every array, `Flank`, `PrevPosition` / `PrevFacing`, order queues, cargo, combat and cast state, the counted population and live flags, the free list, the derived counters), then the statuses whole; then (format 10, M7-1) the tag `REGN` and the regeneration part: `LastDamagedTick` and `RegenAccum` (int32 per slot), the statuses' per-slot regenerating counts (byte) and their total; then (still format 10, M8-1), exactly when the data has a faction with `forestStealth`, the tag `FRST` and the forest part: `ForestStealthStore.LastAttackTick` (int32 per slot) and `Held` (byte per slot) ("Implementation (M8-1)"); then (still format 10, M8-2), exactly when the data has a unit type with `stillStealth`, the tag `STIL` and the stand-still part: `StillStealthStore.MovedTick` (int32 per slot), `StillAt` (two float32 per slot), `LastAttackTick` and `LastHurtTick` (int32 per slot) and `Held` (byte per slot) ("Implementation (M8-2)") |
   | `LEDR` | the ledger: gold, wood, half-pop, provided, cap, kills, losses, live buildings and units, production buildings, `EverBuilt`, `Defeated`, the finished-building counts; then `STAT`, the M6-S1 stats whole (every counter, each tech's tick, the samples and their count) |
   | `TECH` | the researched-tech flags and the bonus sums (stored, not re-summed) |
   | `PROJ` | the projectiles in flight, count and loop bounds |

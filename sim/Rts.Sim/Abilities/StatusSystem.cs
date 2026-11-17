@@ -37,7 +37,6 @@ public static class StatusSystem
         // M7-4: the onEnd applications owed by the unit being counted down (status ids of the ended entries, their sources).
         Span<int> endedStatus = stackalloc int[StatusStore.PerUnit];
         Span<int> endedSource = stackalloc int[StatusStore.PerUnit];
-        byte[]? forestHeld = u.Forest?.Held; // M8-1: null unless the data has a faction with the forest stealth
         for (int i = 0; i < u.Capacity; i++)
         {
             if (s.Count[i] == 0 || !u.Alive[i]) continue;
@@ -60,20 +59,24 @@ public static class StatusSystem
                     if (s.Count[i] < before)
                     {
                         // M8-1: the hp loss let the forest go of a held entry that had nothing timed left, and it ended
-                        // (ForestStealthSystem.OnHpLost); if it stood before this one, this one moved down a place.
+                        // (ForestStealthSystem.OnHpLost; M8-2: or the stand-still rule, StillStealthSystem.OnHpLost); if it
+                        // stood before this one, this one moved down a place.
                         at = s.IndexOf(i, def.Id);
                         k = at - i * StatusStore.PerUnit;
                     }
                 }
-                if (left > 0)
+                // M8-1 / M8-2: a Stealthed entry may carry one held tick for each rule holding it (Holders: the forest, the
+                // stand-still stealth), on top of its timed part; asked only once the count is low enough for it to matter.
+                int holders = left < 2 && def.Kind == StatusKind.Stealthed ? Holders(world, i, def.Id) : 0;
+                if (left > 0 && left >= holders)
                 {
                     k++;
                     continue;
                 }
-                if (forestHeld != null && forestHeld[i] != 0 && def.Kind == StatusKind.Stealthed && def.Id == world.ForestStatusOf[u.Owner[i]])
+                if (holders > 0)
                 {
-                    // M8-1: the forest holds this entry: its timed part (TicksRemaining - 1) has run out, the held tick stays.
-                    s.TicksRemaining[at] = 1;
+                    // The timed part (TicksRemaining - holders) has run out; the held ticks stay.
+                    s.TicksRemaining[at] = holders;
                     k++;
                     continue;
                 }
@@ -123,9 +126,10 @@ public static class StatusSystem
     internal static void Hold(World world, int i, int status, float magnitude, int ticks, int source)
     {
         StatusStore s = world.Units.Statuses;
-        // M8-1: onto an entry the forest stealth holds, a timed application keeps the held tick on top of its own duration
-        // (ForestStealthSystem), so letting go later leaves exactly this duration.
-        if (world.Units.Forest is { } forest && forest.Held[i] != 0 && status == world.ForestStatusOf[world.Units.Owner[i]] && ticks < int.MaxValue) ticks++;
+        // M8-1 / M8-2: onto an entry a stealth rule holds, a timed application keeps the held ticks on top of its own duration
+        // (ForestStealthSystem, StillStealthSystem), so letting go later leaves exactly this duration.
+        int holders = Holders(world, i, status);
+        if (holders > 0 && ticks <= int.MaxValue - holders) ticks += holders;
         int before = s.Count[i];
         bool changed = s.Apply(i, status, magnitude, ticks, source);
         if (!changed) return;
@@ -134,6 +138,21 @@ public static class StatusSystem
         else if (kind == StatusKind.Blind) RecomputeBlind(world, i);
         else if (kind == StatusKind.Stealthed && s.Count[i] > before && s.CountStealth(i, 1)) StealthSystem.OnStealthStarted(world, i);
         else if (kind == StatusKind.Regenerating && s.Count[i] > before) s.CountRegen(i, 1); // M7-1
+    }
+
+    /// <summary>
+    /// M8-1 / M8-2: how many stealth rules hold unit slot <paramref name="i"/>'s entry of <paramref name="status"/> (0 to 2): the
+    /// forest (<see cref="ForestStealthStore.Held"/>, its faction's status) and the stand-still stealth
+    /// (<see cref="StillStealthStore.Held"/>, its type's status). A held entry's <see cref="StatusStore.TicksRemaining"/> is
+    /// its timed part plus this; it never counts down below it. 0 on data with neither rule.
+    /// </summary>
+    internal static int Holders(World world, int i, int status)
+    {
+        UnitStore u = world.Units;
+        int n = 0;
+        if (u.Forest is { } forest && forest.Held[i] != 0 && status == world.ForestStatusOf[u.Owner[i]]) n++;
+        if (u.Still is { } still && still.Held[i] != 0 && status == world.StillStatusOfType[u.TypeId[i]]) n++;
+        return n;
     }
 
     /// <summary>

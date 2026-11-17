@@ -85,6 +85,8 @@ public sealed partial class UnitStore
         // M8-1 (format 10 still): the forest stealth's part, written exactly when the data has a faction with the bonus (the
         // arrays exist then), so a save on other data is the bytes it was.
         Forest?.WriteTo(w);
+        // M8-2 (format 10 still): the stand-still stealth's part, written exactly when the data has a unit type with the field.
+        Still?.WriteTo(w);
     }
 
     /// <summary>
@@ -173,6 +175,12 @@ public sealed partial class UnitStore
             Forest.ReadFrom(r);
             if (r.Failed) return;
         }
+        // M8-2: likewise the stand-still part (STIL), exactly when this data has a unit type with the field.
+        if (Still != null)
+        {
+            Still.ReadFrom(r);
+            if (r.Failed) return;
+        }
 
         int live = 0;
         for (int i = 0; i < Capacity; i++)
@@ -185,6 +193,7 @@ public sealed partial class UnitStore
                 if (!r.Check(LastDamagedTick[i] == -1 && RegenAccum[i] == 0 && Statuses.Count[i] == 0)) return;
                 // M8-1: freeing clears the forest state too.
                 if (Forest != null && !r.Check(Forest.LastAttackTick[i] == -1 && Forest.Held[i] == 0)) return;
+                if (Still != null && !r.Check(!Still.HasState(i))) return; // M8-2: freeing clears it too
                 continue;
             }
             live++;
@@ -193,6 +202,9 @@ public sealed partial class UnitStore
             if (!r.Check(RegenAccum[i] >= 0 && RegenAccum[i] < Combat.CombatConstants.RegenFixedOne && LastDamagedTick[i] >= -1 && LastDamagedTick[i] <= tick)) return;
             // M8-1: likewise the last landed attack; held is 0 or 1 (the world checks it against the faction and the entries).
             if (Forest != null && !r.Check(Forest.LastAttackTick[i] >= -1 && Forest.LastAttackTick[i] <= tick && Forest.Held[i] <= 1)) return;
+            // M8-2: likewise each of the stand-still ticks; held is 0 or 1 (the world checks the type and the entries).
+            if (Still != null && !r.Check(Still.MovedTick[i] >= -1 && Still.MovedTick[i] <= tick && Still.LastAttackTick[i] >= -1
+                && Still.LastAttackTick[i] <= tick && Still.LastHurtTick[i] >= -1 && Still.LastHurtTick[i] <= tick && Still.Held[i] <= 1)) return;
         }
         if (!r.Check(live == Capacity - _freeCount)) return;
         for (int k = 0; k < _freeCount; k++)

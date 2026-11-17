@@ -261,6 +261,40 @@ public class DataValidationTests
         Assert.Contains(message, e.Message);
     }
 
+    /// <summary>
+    /// M8-2: <c>units.json</c> <c>stillStealth</c> (optional): <c>status</c> a status of kind <c>stealthed</c>, <c>delay</c>
+    /// seconds of at least a tick and at most 60 (the forest's bound), both required; an unknown key is an error. One error
+    /// each, at the unit's field, naming the unit.
+    /// </summary>
+    [Theory]
+    [InlineData("{\"delay\": 3}", "units[2].stillStealth.status", "missing required field")]
+    [InlineData("{\"status\": \"invisible\", \"delay\": 3}", "units[2].stillStealth.status", "unknown status 'invisible'")]
+    [InlineData("{\"status\": \"slowed\", \"delay\": 3}", "units[2].stillStealth.status", "status 'slowed' is of kind 'slow', not 'stealthed'")]
+    [InlineData("{\"status\": \"revealed\", \"delay\": 3}", "units[2].stillStealth.status", "is of kind 'revealed', not 'stealthed'")]
+    [InlineData("{\"status\": \"stealthed\"}", "units[2].stillStealth.delay", "missing required field")]
+    [InlineData("{\"status\": \"stealthed\", \"delay\": 0}", "units[2].stillStealth.delay", "must be positive")]
+    [InlineData("{\"status\": \"stealthed\", \"delay\": -3}", "units[2].stillStealth.delay", "must be positive")]
+    [InlineData("{\"status\": \"stealthed\", \"delay\": 0.01}", "units[2].stillStealth.delay", "rounds to 0 ticks")]
+    [InlineData("{\"status\": \"stealthed\", \"delay\": 60.5}", "units[2].stillStealth.delay", "above the maximum 60 s")]
+    [InlineData("{\"status\": \"stealthed\", \"delay\": 1e300}", "units[2].stillStealth.delay", "above the maximum 60 s")]
+    [InlineData("{\"status\": \"stealthed\", \"delay\": 3, \"exceptSlots\": []}", null, "exceptSlots")]
+    [InlineData("{\"status\": \"stealthed\", \"delay\": \"long\"}", null, "expected a number")]
+    [InlineData("\"stealthed\"", "$.units[2].stillStealth", "wrong type of value")]
+    public void BrokenUnitStillStealth_YieldsExactlyOneError(string block, string? path, string message)
+    {
+        using TestDataDir dir = TestDataDir.CopyOfShipped();
+        dir.SetUnitField("malazan", "malazan_crossbowman", "stillStealth", block);
+        DataError e = Assert.Single(DataLoader.LoadAll(dir.Path).Errors);
+        Assert.Equal("factions/malazan/units.json", e.File);
+        if (path != null)
+        {
+            Assert.Equal(path, e.Path);
+            // The loader's own refusals name the unit as well as the field; the JSON reader's name its place in the file.
+            if (!path.StartsWith('$')) Assert.Contains("malazan_crossbowman", e.Message);
+        }
+        Assert.Contains(message, e.Message);
+    }
+
     [Fact]
     public void DuplicateUnitId_AcrossFactions_YieldsOneErrorAtSecondDefinition()
     {

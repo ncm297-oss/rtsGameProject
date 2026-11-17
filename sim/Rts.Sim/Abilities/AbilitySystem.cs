@@ -110,6 +110,7 @@ public static class AbilitySystem
             // the open doesn't).
             StealthSystem.OnAttackOrCast(world, i);
             if (world.AnyForestStealth) ForestStealthSystem.OnAttackOrCast(world, i); // M8-1: the forest's wait starts again
+            if (world.StillStealthInData) StillStealthSystem.OnAttackOrCast(world, i); // M8-2: and the stand-still stealth's
             Resolve(world, caster, u.Owner[i], a, point);
         }
     }

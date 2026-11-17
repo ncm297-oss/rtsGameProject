@@ -48,6 +48,7 @@ public sealed partial class World
         InitRegen(config); // M7-1: World.Regen.cs
         Units = new UnitStore(config.UnitCapacity, _ledger, Techs);
         InitForestStealth(config); // M8-1: World.ForestStealth.cs (after the unit store, whose per-unit state it may allocate)
+        InitStillStealth(config); // M8-2: World.StillStealth.cs (likewise)
         _rngs = new SimRng[RngStream.Count(config.PlayerCount)];
         for (int i = 0; i < _rngs.Length; i++)
             _rngs[i] = new SimRng(config.Seed, (ulong)i);
