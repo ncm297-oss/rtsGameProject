@@ -23,6 +23,210 @@ M6-SH2's brief) and "another track's"; (4) **keep the session short:** M6-SH2's 
 this PC beside other suites. Tell QA to run Stress **once**, after the last behaviour change, and the developer to run
 only the Stress classes it touches plus the pin classes.
 
+## Current session plan (2026-11-16-2036, written at the PLAN; session 1 / 8 of 2026-11-16)
+
+Inbox empty. Base 9e0ebb3, checked by the Producer on scratch clone `prod2036-plan`: build `--no-incremental`
+0 errors / 0 warnings, default loop **9,746 passed / 0 failed / 21 skipped of 9,767 in 41 m 17 s**, smoke PASS. Sim **GO M6-S12** (feature, QA full) · view **GO M6-V24** (feature, QA standard) · data
+**STOP** (cheap, rule 41: M6-S12 moves the AI under every opening measurement and re-prints the pages; D33 next
+session). Bug ids: sim 1550+, view 1560+, data 1570+. All paths absolute, inside the track's own worktree; record
+the PID of every `dotnet test` / Godot started and end only those (rules 52 / 69); scratch folders named
+`m6s12-...` / `m6v24-...` (rule 63).
+
+### Sim track: M6-S12, the AI cures decided on 2026-11-16 (one pin move)
+
+Goal: build the three AI rules decided at the last ACCEPT (docs/01, 2026-11-16 row, item 3) and clear the Stress
+rows that are red on `main` by ruling, so that after this task the only red Stress rows are the data track's two
+`Bug0982_*`. Every AI match pin is re-measured once, after the last behaviour change.
+
+Scope, in this order:
+1. **BUG-1463, the five red `Stress/KeepCornerCureQaStressTests` rows at 0.5** (`KeepAgainstACliff` (28, 25),
+   `TwoByTwoDepot_MineAtItsCorner` (22, 20) Gatherers, `KeepOnTheMapEdge` (1, 15), and the `HardShapes` rows
+   cliff28_25 / depot22_20 / edge1_15). One bounded trace (at most about two hours of work): for each shape, what
+   holds the worker (which unit or footprint, which give-up). If the trace gives one generic cure that frees all
+   five and leaves `Stress/WideCrowdStressTests`' two columns and armies' separation unchanged, build it. Otherwise
+   re-state each row as a known-bug row (`Skip = "BUG-1463: <one-line cause>"`, body and bound unchanged) and put the
+   trace in docs/03. Either way none of the five is red afterwards. Do not repeat M6-SH2's reverted shove change.
+2. **BUG-1461, the AI's rally point keeps off one-cell passages and their mouths.** In
+   `MilitaryManager.RallyPoint`: when the nominal point (`ai.rallyDistance` from the hall toward the enemy) stands in
+   or at the mouth of a passage too narrow for the parked army, take the nearest acceptable point stepping back
+   toward the hall along the same line (the nominal point if none is acceptable). Define "acceptable" from the map's
+   existing walkability / clearance data and existing `ai.*` knobs only; no new data field. If you think a number is
+   needed, use the nearest existing knob and propose the new one under "Questions for the Producer". The point must
+   stay stable (no flapping between thinks: `RallyVersion` rises only when the point really changes).
+   `Movement/ParkedArmyGatherTests.Bug1461_*` become asserted rows on a staged AI seat, or stay report rows with the
+   reason written beside them.
+3. **BUG-1531, a rebalanced gatherer's node is measured from its drop-off.** When `EconomyManager` moves a gatherer
+   from one resource to the other, it picks the known live node of the wanted kind nearest that worker's nearest
+   finished drop-off (not nearest the worker). An idle worker's pick stays as it is unless your trace shows the same
+   fault there (then say so and ask under Questions; do not change it silently). Un-skip `QA/ReachRuleQaTests` row
+   (2, 80) with body and bound unchanged. Re-word "nearest the worker" in docs/02 and docs/03 where it describes a
+   rebalance.
+4. **BUG-1460, a blind seat scouts again.** A seat that is short of a resource its army mix needs and knows no live
+   node of that resource sends one worker on the scout's sweep again, even past `ai.scoutReplacements`. At most one
+   such scout alive at a time; reuse the existing scout timing knobs for when the next may go. Report Raraku Normal
+   v Normal seed 1 after it (ends at which tick, or the probe's reason why not).
+5. **The two other red Stress rows:** `StartingResourcesAiStressTests` (1, 0) (`crossbow_push` seed 9, BUG-1462) and
+   `MapSlice2StressTests` Pale Hills 5 (BUG-1523). Run them after items 2-4. If green, done. If still red, one short
+   trace each; a fix of a few lines may be built, otherwise `Skip = "BUG-...: <cause>"` with body and bound unchanged
+   and the trace in the bug notes.
+6. **The pin move, once, after the last behaviour change:** every class listed in the handoff under "Pinned matches on
+   `main` after M6-SH2", old values kept in "was" comments; docs/03's M5-5 table and bound comments (rule 43); the
+   Hard v Normal tally printed per map (BUG-1522: report only); a table of Raraku / Pale Hills / Vathar seeds 1-8,
+   old → new end tick. Measure the effect of items 2, 3 and 4 apart where it is cheap (one criterion-row table per
+   item on a scratch build), so the cause of each move is known.
+7. **Handed to you by name while the data track is stopped (rules 40 / 68):** the re-printed cells on
+   `docs/factions/malazan.md`, `whirlwind.md`, `teblor.md` and the rows of `Content/AiOpeningPairsReportTests`,
+   `Content/HolyWarFirstWaveReportTests`, `QA/Content/DR35ProsePinQaTests`, `QA/Content/TeblorOpeningQaTests`,
+   `QA/Content/D21OpeningsQaTests` that your re-measure moves. You may re-word a page sentence that a re-printed
+   cell makes false: state what the cell now says and keep the old figure as history. Leave any conclusion about
+   balance for D33.
+
+OUT of scope: any byte under `game/data/**` (no data-hash move; the golden `cross_map_seed1.replay` must not change);
+save and replay formats; BUG-1490; M8-2; Request 58; the `Bug0982_*` Stress rows, malazan.md's BUG-0982 threshold
+table and `DR35ProsePinQaTests.Malazan_Bug0982Prose_*` (stay as they are: D33); BUG-1536 (the owner's question);
+BUG-1537 / 1521 / 1116 / 1522 (report what moves, cure nothing); any Perf threshold; any movement rule that changes
+how armies separate; `sim/Rts.Sim/ViewApi/**`; every file under `game/` (the view track's and the data track's).
+
+Acceptance criteria:
+1. None of the five `KeepCornerCureQaStressTests` rows is red: cured (green, assertion unchanged) or skipped with
+   `BUG-1463` and a cause, with the per-shape trace in docs/03. If cured: `WideCrowdStressTests` prints both columns,
+   unchanged within its run-to-run spread, and the fuzz rows (`FuzzSeeds57To120`, seeds 2-56) stay green.
+2. Rally rule: a new test stages an AI seat whose nominal rally point lies in a one-cell passage mouth and shows the
+   chosen point outside it, on the hall side, identical on two runs and unchanged across 200 thinks with nothing
+   else changing; a second test shows a seat on open ground keeps today's exact point. Both fail or cannot compile
+   on the base for the first, pass for the second.
+3. On Raraku Normal v Normal seed 1, seat 0's rally point is no longer in the passage mouth (print old and new
+   point), and the worker held from tick 5,131 is not held there (measure and report how long any worker of either
+   seat is held in the first 12,000 ticks, before and after).
+4. Rebalance rule: a new test (red on the base) stages a wood gatherer far from home with a mine near it and a mine
+   near its drop-off and shows the rebalance picks the home mine; `ReachRuleQaTests` (2, 80) runs un-skipped and
+   green with body and bound unchanged, and its other five rows stay green.
+5. Re-scout rule: a new test (red on the base) stages a seat past `ai.scoutReplacements` that lacks wood, knows no
+   live tree and has an idle worker, and shows exactly one worker sent on the sweep; a control seat that does know a
+   live tree sends none; no second scout while the first lives.
+6. Raraku seed 1: measure and report (end tick, or the probe's account of why it does not end). Not pass / fail.
+7. `StartingResourcesAiStressTests` (1, 0) and `MapSlice2StressTests` Pale Hills 5 are green, or skipped with their
+   bug id and a traced cause.
+8. Every pin in the handoff's list re-measured once with "was" comments; no bound raised to make a row pass. A
+   pinned criterion row that stops ending (rule 45): move that map's row to the next seed that ends by the
+   criterion's own rule, add the seed to `MatchCriterionSweepQaStressTests.Known` with a new bug id, and report it
+   as a finding at the top of your report.
+9. Determinism: two runs and a save / load twin of a match that uses each new rule (the rally shift, a rebalance, a
+   re-scout) give the same state hash at every checkpoint; the golden replay and the data hash
+   (B74DC7AE61B4862D) are unchanged; `git diff --stat <base> -- game/data` is empty.
+10. No allocation in per-tick code from the new rules (the existing allocation rows stay green; add one for the
+    rally search if it runs on a think).
+11. `dotnet build RtsGame.sln --no-incremental` 0 errors / 0 warnings after the last edit. The default loop
+    (`Category!=Perf&Category!=Stress&Category!=Soak`) run in full after the last edit: 0 failed, skipped at most 20
+    (21 today minus the un-skipped reach row; any other new skip is named with its bug id). The Stress classes you
+    touched plus the Stress pin classes: red only where criterion 1 / 7 / 8 name it, and `Bug0982_*` x2. Do not run
+    the whole Stress category (about 4 hours here); QA runs it once.
+12. `powershell -File tools/qa/smoke.ps1` prints PASS.
+13. Docs in the same commit: docs/02 (the AI's rally, rebalance and scouting sentences), docs/03 "Implementation
+    (M6-S12)" with the traces, the old → new tables and a "Questions for the Producer" section (rule 67), the
+    faction pages' moved cells. Bug-file updates as a patch in your scratchpad (you cannot write `studio/**`).
+
+Design references: docs/01 change log, 2026-11-16 row, items 3 and 4; docs/02 "AI" (rally at `ai.rallyDistance`,
+scouting and `ai.scoutReplacements` near lines 505 and 543, the rebalance); docs/03 "Implementation (M6-SH2)" items
+D and E, "Implementation (M6-S7)" (the reach rule); `studio/bugs/BUG-1460`, `-1461`, `-1463`, `-1531`, `-1462`,
+`-1523`.
+
+Tests required: `Ai/` unit tests for the three rules (each red on the base), the Raraku seed 1 probe, determinism
+twins, the un-skipped reach row, every re-measured pin class.
+
+Constraints: no stat in C# (existing `ai.*` knobs only); the AI reads the world only through its fog-filtered view
+(the re-scout must not read unseen nodes; the rally search may read terrain walkability only as far as the AI
+already may); no `Dictionary` / `HashSet` iteration, no LINQ or closures on a think; `SimMath` for trig; no wall
+clock. A test helper that forges data tolerates the shipped rows (rule 58).
+
+QA focus (full): attack the rally rule on all three hand-made maps and generated maps of 2-4 seats (does any seat's
+point flap, land in water / on a cliff / inside a building footprint, or end so near the hall that the parked army
+blocks its own workers or drop-offs: measure held workers before and after on 8 seeds a map); armies that never
+reach a shifted point (the `ai.rallyReach` "rallied" check); the rebalance with no finished drop-off, with the
+drop-off razed mid-walk, with every home node mined out (falls back to the far node, never to none); the re-scout
+as a drain (a camping enemy killing each scout: workers lost in 20 minutes, bounded?), with zero idle workers, in
+team games, and that it never reads through fog; save / load mid-sweep; a fuzz of 8 seeds with conservation.
+Verify each skip is honest (assertion unchanged, cause traced). Run the default loop on the commit holding your own
+suites, then the Stress category **once**, after the developer's last behaviour change (expected red: `Bug0982_*`
+x2 only), then Perf alone under rule 42 (BUG-1539's row is known flaky). End with a `--no-incremental` build
+(rule 65).
+
+### View track: M6-V24, cheaper figures (merged surfaces) and the cast gesture (BUG-1530)
+
+Goal: every unit model draws as one surface with one material and one texture sheet instead of about five, which
+docs/03 "Implementation (M6-V21)" estimates is worth 4-5 ms a frame at 1,000 figures. Nothing about how a figure
+looks may change. With it, the Shaman's cast gesture starts at the start of the cast and plays once (BUG-1530).
+
+Scope:
+- `tools/art/build_unit.py`, `tools/import-assets.ps1`, `tools/asset-manifest.json` (the view track's): bake each
+  model's role textures (outfit, skin, team, props) into one atlas and one material; keep which texels are team
+  colour in a mask (for example the atlas alpha or a second small texture; your choice, say why). Re-import all
+  eleven model types; the outputs are Git LFS.
+- `game/shaders/team_colour.gdshader`, `game/scripts/UnitModels.cs`, `UnitViews.cs`: the one surface is drawn by the
+  team shader, which tints masked texels only, at today's brightness; one material per model type and player colour
+  as today; fog, hidden / remembered states and `--placeholder-art` behave as today.
+- BUG-1530: a cast clip starts at phase 0 on the tick the unit starts casting and spans the cast once (speed =
+  clip length / cast time, or no loop); other clips keep the crowd phase. If the cast's length is not readable from
+  the view today, add a read-only accessor in `sim/Rts.Sim/ViewApi/` (it may not name `World` or `UnitStore`).
+- Existing scenes that pin a surface count or a team surface index: update the row and list each in the report
+  (the oracle must not get weaker).
+- The bench, last and alone: 400 and 1,000 figures, with the capsule figure from the same window.
+OUT of scope: a shared skeleton or baked animation; new model types (the Rider, the War-dog, buildings, the javelin
+prop); any `game/data/**` file; anything under `sim/` except a read-only `ViewApi` accessor; Request 58; any scene
+that pins an AI match's outcome (the sim's M6-S12 moves them this session); `tools/**` other than the three paths
+above; installing or downloading anything (Blender 5.2.2 and `asset-sources/` in the main checkout are there: read
+them, write nothing into the main checkout).
+
+Acceptance criteria:
+1. Every model type in `tools/asset-manifest.json` (count read from the file, not a literal) imports to exactly one
+   mesh surface with one material; a scene row checks it for every type on the shipped files.
+2. A second run of `tools/import-assets.ps1` gives byte-identical outputs (hashes of every `.glb` printed twice).
+3. Looks the same: for each of the eleven types, a windowed picture before (the base) and after, same camera, in two
+   player colours; you look at each pair and say so. A scene row samples rendered pixels (or the atlas and mask) and
+   shows: a team texel takes the player colour, a non-team texel (skin, a prop) does not change between two player
+   colours. No team colour on skin or weapons that did not have it before; none lost (the Heavy Infantry's shield).
+4. Draw calls for the 400-model bench drop to at most half of the base's figure measured in the same window (today
+   about 5,200); report both.
+5. Frame time, measure and report (alone, rule 42, last): 400 and 1,000 mixed figures, average / while 90 %+ alive /
+   worst 1 %, base v this branch in the same window, plus capsules. A 400-figure result more than 0.5 ms worse than
+   the base in the same window is a finding to explain, not to hide.
+6. BUG-1530: a scene row shows a casting figure's clip position is 0 (within one frame) when the cast starts and
+   that the clip plays exactly once across casts of 0.5 s, 0.8 s and 1.2 s (forged cast times); a walking crowd
+   still starts its clips at different phases.
+7. `--placeholder-art` and an LFS pointer file still give capsules with no `ERROR` line; `ModelViewTest` still
+   prints "11 models, 10 capsules".
+8. If `ViewApi` changed: read-only, its unit test, the state hash of a 600-tick match identical with and without
+   the accessor being called, `TerrainMeshBuilderQaTests.ViewApiSource_HasNoSimMutatorsOrTickCalls` green.
+9. `dotnet build RtsGame.sln --no-incremental` 0 / 0; the default loop 0 failed in full after the last edit; smoke
+   PASS; the scene loop all green (113 + yours; the rows known to flake under load re-run alone).
+10. Docs in the same commit: docs/03 "Implementation (M6-V24)" (the atlas layout, the mask, the bench tables,
+    "Questions for the Producer"), docs/04 where it describes materials per model, and the size of the art pass's
+    binaries before and after. Pictures copied for the owner are named in the report (the Producer files them).
+
+Design references: docs/03 "Implementation (M6-V21)" (the 1,000-figure measurement and what merged surfaces are
+worth), "Implementation (M6-V20)" (the team shader, `teamShade`), "Implementation (M6-V23)" (the cast clip);
+docs/04 (the import pipeline, team colour); `studio/bugs/BUG-1530`; CLAUDE.md rule 7 (dumb views).
+
+Tests required: a scene for criteria 1 / 3 / 7, a scene row for criterion 6, the existing model scenes green, the
+bench output.
+
+Constraints: views hold no gameplay state; no player-facing text in C#; scenes and resources stay text formats;
+binaries only through Git LFS types already in `.gitattributes`; no new third-party asset (if one is added, the
+licensing log in the same commit); do not kill another track's Godot or `testhost`.
+
+QA focus (standard): compare before / after pictures yourself at the default zoom and zoomed in, in at least three
+player colours including a dark and a very light one, and under fog (remembered) and at mip distance (does atlas
+bleeding put team colour on a neighbouring texel, or a seam line on a figure when zoomed out?). Check the 1.5×
+Teblor and the Heavy Infantry's shield. Re-run the import on a fresh clone for byte identity. Cast gesture at game
+speeds 0.5× / 2×, paused, and at a replay's end; a cast interrupted by death or a Stop. The default loop, the
+scene loop, smoke; run the bench and the timing rows last and alone, and say what else was running. End with a
+`--no-incremental` build on the commit holding your own files.
+
+### Data track: STOP (cheap)
+
+No owner answer in the inbox; rule 41 (M6-S12 moves the AI under every opening measurement and re-prints cells on
+all three faction pages, which are handed to the sim developer this session). Counter stays 1 / 4. D33 next session.
+
 ## Where things stand
 
 - **`main` after this session = sim b385866 + view 41cd358** (plus this ACCEPT's studio and docs files). The
