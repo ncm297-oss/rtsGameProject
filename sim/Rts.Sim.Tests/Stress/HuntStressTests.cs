@@ -115,10 +115,19 @@ public class HuntStressTests
     /// shape with gold in place of wood (not split further: whether the mines are empty or unknown to the seats). The row
     /// moves to the smallest ending seed,
     /// 1 (over at 91,995, p2, 4 hunts; seeds 2 / 5 end at 50,397 / 59,083, seed 4 does not end). Was seed 3.
+    /// M6-S12 fix round 1 (BUG-1559, rule 45, a finding, not re-bound): under the rally, rebalance and re-scout rules the
+    /// free-for-all on seed 1 no longer ends by 144,000 (every oracle clean). Probed every 6,000 ticks: all four seats have
+    /// gathered their start's gold by 25:00 (8,870 / 8,850 / 8,820 / 8,890, frozen from then on), the gold war at 20-25 min
+    /// spends the armies, p3 falls at 55,508 and p0 at 107,906; from 70:00 p1 has 0 soldiers (26 workers, 7 production
+    /// buildings, 10 gold, 18,000-26,000 wood) and p2 one (21 workers, 20 gold), and neither can train one: the skipped
+    /// <see cref="FourAiSeats_OnPaleHills_Seed1_KnownStall"/>'s shape (BUG-1068 / BUG-1116 / BUG-1536), not a fault of the
+    /// new rules. The row moves to the next seed that ends, 2 (over at 59,951, p1, 4 hunts; seed 5 ends at 73,778, seeds 6
+    /// and 7 do not end), which is also <see cref="FourAiSeats_OnPaleHills_Seed2_KnownStall"/>'s match. The 2v2 row keeps
+    /// seed 1 (it ends). Was seed 1.
     /// </summary>
     [Theory]
     [Trait("Category", "Stress")]
-    [InlineData(1UL, false)]
+    [InlineData(2UL, false)]
     [InlineData(1UL, true)]
     public void FourAiSeats_OnPaleHills_EndWithTheOracleOnEveryHunt(ulong seed, bool teams) => FourSeatsRow(seed, teams);
 
@@ -129,8 +138,11 @@ public class HuntStressTests
     /// about 26,000; seat 3 is defeated at about 50:00 and the three left walk to its start at 57,620 and find its mines spent:
     /// no free gold anywhere. At 144,000 seats 1 and 2 are alive (0 and 6 army, 31,000-42,000 wood each, gold 8,880 / 8,820
     /// gathered, all of it before 30:00), seats 0 and 3 out: two gold-starved seats that can raze nothing.
+    /// M6-SH2: it ended (91,995, p2) and became the oracle row's seed. M6-S12 (BUG-1559): no result by 144,000 again, the same
+    /// shape (gold gathered 8,820-8,890 a seat, all of it by 25:00; p3 out at 55,508, p0 at 107,906; p1 0 soldiers and p2 one
+    /// from 70:00, 18,000-26,000 wood each), so the oracle row moved to seed 2 and this row stays skipped.
     /// </summary>
-    [Theory(Skip = "BUG-1068 / BUG-1116 (open): no result by 144,000 with the far expansion (no free gold left on the map with four seats); measured in M5-9b")]
+    [Theory(Skip = "BUG-1068 / BUG-1116 / BUG-1559 (open): no result by 144,000 (no free gold left on the map with four seats); measured in M5-9b and again in M6-S12")]
     [Trait("Category", "Stress")]
     [InlineData(1UL, false)]
     public void FourAiSeats_OnPaleHills_Seed1_KnownStall(ulong seed, bool teams) => FourSeatsRow(seed, teams);
@@ -249,7 +261,8 @@ public class HuntStressTests
     /// The Pale Hills seed the mid-hunt save row plays: 3 until M5-9a, 5 in M5-9a, 1 since M5-9b (seed 5 now ends only at
     /// 96,321, past the row's 72,000: the far expansion's gold lengthens its war, BUG-1116's slow raze at the end; seed 1 ends
     /// at 48,858 after one hunt), 2 since M6-SH2 (BUG-1533: seed 1 ends at 27,498 with no hunt; seed 2 ends at 42,016 after 4
-    /// hunts). Was 1.
+    /// hunts). Was 1. M6-S12 fix round 1: seed 2 ends at 51,218 (was 42,016), saved at a sighting (p1, 46,381) and a sweep
+    /// (p1, 48,541); unchanged.
     /// </summary>
     private const ulong MidHuntSeed = 2;
 

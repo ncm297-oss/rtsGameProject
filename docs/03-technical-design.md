@@ -9104,7 +9104,7 @@ six `rules.json` `ai` knobs in `Data/AiRulesDef.cs`; the hash in `GameData.Conte
 - **Economy additions.** **Rebalance** (needed once the scout finds a forest late, when every worker already gathers gold and
   the cap stops training, so none is ever idle): on a think with no idle worker, while the gatherers' split is off
   `round(goldShare x gatherers)` and a node of the short kind is known, one gatherer a think (of those `Gathering` the long kind, the
-  one carrying the least, slot order on ties: M5-H1, BUG-0594, since the other kind's Gather drops a load) is sent to the nearest node of the other kind. **BUG-0574**: a dropped Gather is not judged (and
+  one carrying the least, slot order on ties: M5-H1, BUG-0594, since the other kind's Gather drops a load) is sent to the node of the other kind nearest its nearest own finished drop-off (since M6-S12, BUG-1531; it was the node nearest the worker, which sent a woodcutter at a far forest to a mine farther out still; with no finished drop-off, still nearest the worker). **BUG-0574**: a dropped Gather is not judged (and
   marks nothing) while the player has no finished drop-off or the worker carries a full load of the kind it was sent to (such a
   Gather goes to a drop-off first and ends at once with none); and a mark on a node the player sees alive again (`Remaining`
   known) is cleared at the next think (the pass runs only while a mark is set). **Production** weighs
@@ -10548,7 +10548,7 @@ rules are unchanged.
 - **Spending per opening (D21, 2026-10-18, data track: three openings per faction)**
   (`Content/AiSpendingReportTests.GeneratedNormal_Spending_Report`, the menu's map against an idle seat, 20 minutes: one
   Normal run per opening on the smallest seed in 1-50 whose Normal pick it is, plus Easy on seed 1): the idle seat falls
-  at malazan standard Normal seed 1 465 s, malazan crossbow_push Normal seed 5 470 s, malazan cadre_rush Normal seed 7 644 s, malazan standard Easy seed 1 478 s, whirlwind standard Normal seed 1 501 s, whirlwind raider_rush Normal seed 2 416 s, whirlwind holy_war Normal seed 3 583 s and whirlwind standard Easy seed 1 525 s. Across both factions 2 of those 9 marks had wood under 100 with gold at 300 or more, so the report reads "wood binds at some marks only, not the limit
+  at malazan standard Normal seed 1 455 s, malazan crossbow_push Normal seed 5 457 s, malazan cadre_rush Normal seed 7 616 s, malazan standard Easy seed 1 491 s, whirlwind standard Normal seed 1 502 s, whirlwind raider_rush Normal seed 2 409 s, whirlwind holy_war Normal seed 3 567 s and whirlwind standard Easy seed 1 521 s (re-printed 2026-11-16 for the sim's M6-S12, "Implementation (M6-S12)"; they were 465 / 470 / 644 / 478 s and 501 / 416 / 583 / 525 s). Across both factions 2 of those 9 marks had wood under 100 with gold at 300 or more, so the report reads "wood binds at some marks only, not the limit
   overall". Re-printed 2026-10-26 (data track, D-R32) for M5-4g's reserve: Age II is now in at 509-616 s on every run
   (its step due at 5:00-8:00), Easy's too; before it, with no reserve and the production manager spending first, it came
   in at 509-1,098 s and the Whirlwind's Easy run never in 20 minutes (the idle seat fell at 498 / 474 / 619 / 497 s and
@@ -10895,7 +10895,13 @@ tests `Ai/CriterionMatch.cs` (the harness), `Ai/MatchCriterionTests`, `CommandRe
   | 2v2 | Vathar Crossing 1, 4 seats | 26,070 = 21:43 (72,000) | team 1 | 14 | 4 | Build Blocked 1, SealsGround 2, UnitInTheWay 1; Gather UnitGone 1; Move UnitGone 1 |
 
   Waves and hunts are the match's totals over its seats. The longest refusal run on any row is 1 think (no command refused twice on one target).
-  **Re-measured for M6-SH2** (a construction site is no drop-off; an AI with no worker retrains; "Implementation
+  **Re-measured for M6-S12** (the AI's rally point off one-cell passages, a rebalanced gatherer's node measured from its
+  drop-off, a blind seat's re-scout; "Implementation (M6-S12)"): Vathar Crossing seed 7 ends at 30,482, past 24,000, so the
+  literal row is **seed 1 again**, 23,244 (19:22, seat 1, 6 waves); the generated row seed 2 ends at 27,690, past 24,000, so
+  it moves to **seed 1**, 21,876 (18:13, seat 0, 6 waves); Raraku seed 3 27,394 (seat 1, 8 waves); Pale Hills seed 1 33,230
+  (seat 1, 12 waves, 2 hunts); the FFA 38,690 (seat 3, 17 waves, 4 hunts; one `Train:TrainRefused:NoBuilding`, now
+  documented: BUG-1551); the 2v2 61,686 (team 1, 32 waves, 13 hunts); every check clean, the bounds unchanged.
+  `HalfWay` 11,622. The Hard v Normal tally: **34 / 7 / 1** (Hard / Normal / none, 42 matches to 72,000; was 28 / 10 / 4): Raraku 13 / 1 / 0 (was 13 / 1 / 0), Vathar Crossing 12 / 2 / 0 (was 11 / 3 / 0), Pale Hills 9 / 4 / 1 (was 4 / 6 / 4). Hard leads on Pale Hills again (BUG-1522 reads the old tally; report only, nothing cured).  **Re-measured for M6-SH2** (a construction site is no drop-off; an AI with no worker retrains; "Implementation
   (M6-SH2)"): the literal row Vathar Crossing seed 7 ends at 19,912 (seat 0, 5 waves); the Raraku row moves to **seed 3**,
   25,083 (seat 1, 8 waves; seed 2 now ends at 56,940, past its bound: BUG-1521); Pale Hills seed 1 27,498 (seat 1, 8 waves);
   generated seed 2 22,280 (seat 0, 8 waves); the FFA 39,102 (seat 3, 18 waves, 8 hunts); the 2v2 44,858 (team 1, 22 waves,
@@ -10943,6 +10949,8 @@ tests `Ai/CriterionMatch.cs` (the harness), `Ai/MatchCriterionTests`, `CommandRe
   - `Gather:NoResourceNode`: a Gather to a node the seat remembers that is gone (BUG-0570's case: dropped at apply, the
     node marked once the worker stands idle).
   - `AttackMove:UnitGone`, `Gather:UnitGone`: an order to a unit that died in the tick it was sent.
+  - `Train:TrainRefused:NoBuilding` (since M6-S12, BUG-1551): a Train at a producer razed in the tick it was sent (the FFA
+    row, tick 17,381: a defending seat's Priest at its razed producer); the Train's form of `UnitGone`.
   - Also allowed, not seen: a Train over the queue or without the cost (`TrainRefused:QueueFull` / `CannotAfford`), the
     other unit orders' `UnitGone`, and `Attack:AttackTargetInvalid` (the target died that tick).
 - **What does not end, and why.** Pale Hills seed 2 Normal v Normal (BUG-1068: the gold runs out, the `expand` step looks
@@ -13100,7 +13108,7 @@ fix), one cost fix with no behaviour change (BUG-1538), the rest re-staged or li
   rebalance (no worker idle) moves wood gatherer Laborer 28, standing at the 117 m forest, to gold, and `NearestNode` takes
   the mine nearest **the worker** (61 m from it, 174 m from the hall) over the home mines (about 100 m from it, 17 m from the
   hall). At 6,361 that mine's gatherer is rebalanced back to wood and the wood nearest it lies 197 m from the hall, the
-  row's 201 m. This is the documented rule ("the known node of that kind nearest the worker") applied to a worker far from
+  row's 201 m. This is the documented rule of the time ("the known node of that kind nearest the worker"; M6-S12 measures a rebalance's pick from the worker's nearest finished drop-off) applied to a worker far from
   home, not a deviation from it; the control met no such rebalance. A cure (measure a rebalance's pick from the drop-off the
   worker delivers to, or by the haul to the nearest finished drop-off) changes a documented rule and every pin: the
   Producer's call. Red, named.
@@ -13153,6 +13161,250 @@ tools` is empty, so no pin moves).**
   due only on seed 3" → `holy_war` falls on none of the nine runs; seed 3 survives the 5:46 Malazan wave and sends one
   wave at 14:45 (numbers from the table only).
 - This section, BUG-1536's line: "mines empty or unknown" → "mines empty" (QA's probe: 0 live mines from tick 30,000).
+
+### Implementation (M6-S12)
+
+2026-11-16. The three AI rules the Producer decided at the 2026-11-15-2136 ACCEPT (docs/01, 2026-11-16 item 3), BUG-1463's five
+red Stress rows settled, and one re-measure of every AI match pin after the last behaviour change. No game data changed (data
+hash B74DC7AE61B4862D), no save or replay format changed (save 10, replay 9 / 6), the golden `cross_map_seed1.replay` did not
+move.
+
+**Item 1, BUG-1463: the five red `KeepCornerCureQaStressTests` rows, traced and re-stated as known-bug rows.** On the base
+(95186a7) the red rows at 0.5 are `HardShapes` cliff28_25 (1 of 8 shuffles), depot22_20 (8 of 8), edge1_15 (4 of 8),
+`TwoByTwoDepot_MineAtItsCorner` (22, 20) Gatherers and `KeepOnTheMapEdge` (1, 15). (`KeepAgainstACliff` (28, 25) at 0.5,
+which the brief also names, is green on the base; the cliff row that is red is `HardShapes` cliff28_25.) What holds the
+worker in each shape (the rows' own HELD lines, 6,000 ticks):
+
+| Shape | Who is held | What holds it | Give-up |
+| --- | --- | --- | --- |
+| depot22_20 (2 x 2 depot, a 2 x 2 mine flush on its east face, 12 Teblor Gatherers, r 0.75) | loaded Gatherers east of the mine (x 48-49.5) walking to the depot's stand points round the mine's corners, and Gatherers at the mine's corner stand points | the depot's only stand points on that side are round the mine's two corners, and the corner stand points (48.125, 41.875 / 44.125) are held by mates working the mine (Gathering does not yield); 0.75 m bodies fill the corner lane | walk to (43.875, 44.125) / (43.875, 39.875) gives up (goal cell -1), `Wait` re-walks into the same spot; 2-4 held workers a run, every shuffle |
+| edge1_15 / `KeepOnTheMapEdge` (1, 15) (Keep on the west edge, the mine below it against the edge, 16 mixed) | one loaded 0.75 m worker, frozen (0.00 m in 600 ticks) at (5.74, 29.3) | it stands in the one-cell (2 m) gap between the Keep's south face (y 28) and the mine's north face (y 30), closed by the map edge: its body (1.5 m) cannot come within reach of the Keep from inside the gap while a mate working the mine's north face presses it 6 cm past the line | Returning, goal (5.875, 28.125), stuck 2-19, never delivers in 300 s (shuffles 0, 2, 3, 7) |
+| cliff28_25 (Keep against a cliff, the mine at its corner on the cliff, 16 mixed) | a loaded Laborer (r 0.40), frozen at (57.2, 49.4) / (55.6, 49.3) | the same one-cell gap (the Keep's south face y 48, the mine's north face y 50), closed by the cliff to the east, with a mate working the mine's north face beside it | Returning, goal (57, 48.125), goal cell -1; 2 held in shuffle 3 |
+
+The three shapes are one family: a lane one cell wide (or a corner) shared by workers standing at their node and mates walking
+their load to the drop-off. None involves an army or an AI. The only generic cure in reach is a movement change (a worker at
+work yields, or is shoved, along the lane to a loaded mate), the family of M6-SH2's reverted shove change, and the brief rules
+that out ("do not repeat M6-SH2's reverted shove change"; "any movement rule that changes how armies separate" is out of
+scope). So no cure was built: each row is re-stated `Skip = "BUG-1463: <cause>"` with its body and bound unchanged, and the
+shape stays in BUG-1463 for a movement task. `Stress/WideCrowdStressTests` was not re-run (no movement change).
+
+**Item 2, BUG-1461: the AI's rally point keeps off one-cell passages (`MilitaryManager.RallyPoint` / `OffThePassage` /
+`NarrowWithin`, `PlayerView.IsKnownClosed`).** Traced first on Raraku seed 1 (the base): the passage is **not terrain**. It is
+a lane between seat 0's own buildings: a 3 x 3 building on cells x 25-27, rows 59-61, another on x 25-27, rows 63-65, so
+cells (25..27, 62) are open with both rows beside them closed. The nominal rally point (55.98, 127.25), cell (27, 63), stands
+inside the lower building's footprint at the lane's east mouth; at tick 20, before any building, the ground there is open
+(so a terrain-only rule would never have fired). The rule therefore reads the ground as the seat knows it.
+- **Closed, as the seat knows it** (`PlayerView.IsKnownClosed(x, y)`, new, read-only): off the map; terrain (cliff, border,
+  pocket, as `CanPlace` judges it); a building it knows (its own, one it sees, a ghost of the same building: `CanPlace`'s
+  rule); a live node on ground it has explored. A building it never saw reads open; a node felled out of its sight reads open
+  (the cell's truth, not its memory: the rally search reads only the ground round its own point, near its base).
+- **A one-cell passage cell** (`NarrowWithin`): an open cell closed on both sides along one axis and open on both sides
+  along the other (a lane one cell wide; a dead end, closed on three sides, is not one).
+- **The rule:** when a passage cell's centre lies within `ai.rallyReach` (6 m) of the nominal point (`ai.rallyDistance`,
+  12 m, from the hall toward the target, unchanged), the point is the nearest **acceptable** one (its cell open and no
+  passage cell within `ai.rallyReach`) on the same line, one map cell (2 m) at a time and at most `ai.rallyReach` from the
+  nominal point, **back toward the hall first** (10, 8, 6 m from the hall), then out past it (14, 16, 18 m); the nominal
+  point when none is. No new number: the step is the map's cell, the bound and the clearance are `ai.rallyReach` (the ring
+  an army already counts as "at the rally point").
+- **Why the step out (a deviation from the brief's "stepping back toward the hall"):** on Raraku seed 1 the line back from the
+  mouth to the hall's centre crosses the lower building (10 / 8 / 6 m: cells (27..25, 63), all closed), so nothing behind the
+  lane is open ground; stepping back only would keep the nominal point, and criterion 3 could not be met. The search is
+  still back first: on the staged map (`Ai/RallyPassageTests`) the point steps back to 8 m, on the hall side.
+- **Stable:** the answer is a function of the hall, the target and the seat's knowledge of the ground round the point, which
+  change between thinks only when a building or node does, or the target (as for the nominal point itself); `RallyVersion`
+  rises only when the point changes. Staged: one version in 200 thinks. Raraku seed 1: seat 0's point is (61.96, 126.88),
+  cell (30, 63), 18 m out, from tick 3,020 (the base: (55.98, 127.25), cell (27, 63), in the lane's mouth from 2,360); its later
+  changes (v4-v15 to 24,140) follow the target (enemy buildings seen and razed; every one 16-18 m out on its own line, none
+  back in a mouth).
+- **Cost:** `NarrowWithin` reads at most 9 x 9 cells and their four neighbours, once a think for the nominal point and once
+  per candidate (at most 6) when it fires; no allocation (`Ai/RallyPassageTests.TheRallySearch_AllocatesNothing`).
+- **Held workers, Raraku seed 1, the first 12,000 ticks** (the Producer's definition: on its loop, node alive, 1,200 ticks
+  without a delivery, within 2 m of where it stood 600 ticks earlier and never in reach of its node or a finished drop-off in
+  them; `Stress/M6S12RarakuProbeStressTests`): base **1,022 worker-ticks** (one stretch, seat 0's unit 1, 6,332..7,353, at
+  (57.2, 124.5), in the lane); this tree **261** (unit 1, 6,978..7,238, at (60.4, 123.7), 3.6 m from the new point, while the
+  army walks out to it). The rally rule alone: 362 (7,000..7,361). Seat 1: none on any tree.
+- `Movement/ParkedArmyGatherTests.Bug1461_*` stay report rows: the cure decided is an AI rule, so the movement shape (an army
+  parked by hand round a worker in a mouth) still holds the worker; no AI seat parks there now (the reason is in the rows'
+  comment). Tests: `Ai/RallyPassageTests` (the mouth: red on the base, (32, 64) kept; now (28, 64), twice alike, one version
+  in 200 thinks; open ground: (32, 64), green on both; the allocation row).
+
+**Item 3, BUG-1531: a rebalanced gatherer's node is measured from its drop-off (`EconomyManager.Rebalance`,
+`NearestDropOff`).** With no worker idle and the split off `ai.goldShare`, the gatherer moved to the other kind now goes to
+the known node of that kind nearest **its nearest own finished drop-off** (centre to centre, building order on ties; nearest
+the worker when the seat has no finished drop-off: no anchor), with the same filters as before (not marked gone, not by the
+defense point while defended, in the gather reach until it lifts). An idle worker's pick is unchanged (nearest the worker):
+the traced row's far targets were all rebalances (BUG-1531's QA probe: units 28, 34, 1, 0, 10 at work at the 115-117 m
+forest), and no idle pick showed the fault, so it was not changed (a question below). docs/02 and the M5-3 sentence here
+re-worded. `QA/ReachRuleQaTests` (2, 80) un-skipped, body and bound unchanged: farthest wood target **116.9 m** against the
+control's 116.6 m (bound + 30 m; was 201.1 m); its other rows green. Tests: `Ai/RebalanceFromDropOffTests` (a Laborer at
+work at a far tree with a mine 8 m from it: red on the base, sent to that mine 77.9 m from the Keep; now to the home mine
+14.1 m from it; the idle control is sent to the far mine on both).
+
+**Item 4, BUG-1460: a blind seat scouts again (`ScoutManager.Rescout`, `BlindRescoutDue`, `BlindTo`;
+`AiPlayer.PickShortOf`; `AiPlayer.PickBuilder(idleOnly)`).** Run once a think **after `EconomyManager`** (a new line in
+`AiPlayer.Think`). A seat whose sweep has ended (`ScoutPhase` 2) sends one worker on the scout's sweep again, past
+`ai.scoutReplacements`, when, on the first think of an `ai.scoutAfter` (15 s) window of the match clock, with a hall and the
+match not over, it is **blind** to gold or wood: short of it for its army (`PickShortOf`: the unit production waits for, or
+with no producer free some unit of its current mix, costs more of it than it holds), no own worker at it, and no live node
+of it known at any distance (one marked gone doesn't count; the view's memory only, so nothing is read through the fog).
+Gold is left to the far expansion while its leg's worker is out. The worker is **one the economy left idle this think**
+(nothing it could be sent to), the nearest the hall; phase 1 again (so at most one is out), laid as a scout sent again
+(`SentAgain`'s mark) with every waypoint on explored ground visited at once (head and mirror points too: explored ground
+holds no node it doesn't know), released as a scout sent again is. No new state: the window is the match clock, the "sent
+again" mark is the existing one.
+- **Why idle only (a narrowing of the brief's "sends one worker"; the handoff's own wording is "one idle worker"):** built
+  first with `PickBuilder`'s rule (an idle worker, else a gatherer), QA's default-loop guard
+  `ReachRuleQaTests.EveryScoutKilledAtOnce_*` seed 1 (every scout killed the tick it is sent) lost **16** scouts by tick 6,000
+  against its bound of 4 (the seat knows no tree and gathers gold: a gatherer was taken every window). Taking only a worker
+  with nothing to do costs no income, and the row is green (3 scouts).
+- **Raraku Normal v Normal seed 1** (criterion 6): the re-scout alone (on the base) ends it at **47,911, seat 1**: seat 1
+  (24 workers idle, no tree known) sends unit 32 at 39,600, finds wood and trains again. On this tree (all three rules) it
+  ends at **24,354, seat 0**, before any seat is blind (no re-scout fires); the rally rule alone ends it at 32,699 (seat 1),
+  the rebalance alone at 27,735 (seat 0).
+- Tests: `Ai/BlindRescoutTests` (the blind seat past the cap, idle workers, no tree known: red on the base, nobody sent; now
+  exactly one worker, the only unit sent a Move in 3,000 ticks, one scout; the control that knows a live tree sends none; the
+  check allocates nothing).
+
+**Item 5, the two other red Stress rows: both green after items 2-4, nothing built for them.**
+- `StartingResourcesAiStressTests` (1, 0) (`crossbow_push` seed 9, BUG-1462): green: high's mean bank 2:00-10:00 238
+  against 1.5 x standard's 165 (was 213 against 137; the bound unchanged).
+- `MapSlice2StressTests` Pale Hills 5 (BUG-1523): the match ends at **57,755, seat 0** (was no result by 72,000). Not cured by
+  cause (the hunt of a beaten seat's last unit, BUG-1116's family, was not touched): the match moved.
+
+**Item 6, the pins (re-measured once, after the last behaviour change; old values kept in "was" comments).** What each rule
+moves alone, measured on three scratch builds of the base 95186a7 plus one item's files (the criterion rows, every check on):
+
+| Row | Base (M6-SH2) | Rally alone | Rebalance alone | Re-scout alone | M6-S12 (all three) |
+| --- | --- | --- | --- | --- | --- |
+| Vathar Crossing 7 | 19,912 p0 | no end by 24,000 | no end by 24,000 | 19,912 p0 | 30,482 p0 (row moves to seed 1: 23,244 p1) |
+| Raraku 3 | 25,083 p1 | 26,429 p1 | 34,433 p1 | 25,083 p1 | 27,394 p1 |
+| Pale Hills 1 | 27,498 p1 | 24,066 p1 | 25,161 p1 | 27,498 p1 | 33,230 p1 |
+| generated 2 | 22,280 p0 | 19,893 p0 | no end by 24,000 | 22,280 p0 | 27,690 p0 (row moves to seed 1: 21,876 p0) |
+| FFA (Vathar 2, 4 seats) | 39,102 p3 | no end by 72,000 | 37,557 p3 | 39,102 p3 | 38,690 p3 |
+| 2v2 (Vathar 1) | 44,858 t1 | 43,427 t2 | 68,040 t2 | 44,858 t1 | 61,686 t1 |
+| Raraku 1 (BUG-1460) | no end | 32,699 p1 | 27,735 p0 | 47,911 p1 | 24,354 p0 |
+
+The re-scout alone moves no criterion row (no seat in them is ever blind with an idle worker); the rally rule and the
+rebalance each move every other row, and together they move them all.
+- **`MatchCriterionTests` (rule 45, no bound raised):** the literal row Vathar Crossing seed 7 ends at 30,482, past 24,000,
+  so it moves to the lowest of seeds 1-8 that ends inside: **seed 1 again, 23,244 (19:22), seat 1** (6 waves, nothing
+  refused); the generated row seed 2 ends at 27,690, past 24,000, so it moves to the lowest of 1-6 under 24,000: **seed 1,
+  21,876 (18:13), seat 0**. Generated seed 2 passes every sweep oracle (it ends, later), so it is not added to
+  `MatchCriterionSweepQaStressTests.Known`. Raraku seed 3 27,394 (seat 1, was 25,083), Pale Hills seed 1 33,230 (seat 1,
+  12 waves, 2 hunts; was 27,498), the FFA 38,690 (seat 3, 17 waves, 4 hunts; was 39,102), the 2v2 61,686 (team 1, 32 waves,
+  13 hunts; was 44,858). `HalfWay` 9,956 -> 11,622. `CliTests.Match_TheLiteralRow_*` follows the row (seat 1 the winner).
+- **A new refusal kind (BUG-1551):** the FFA row stopped at tick 17,381 on check (e): player 1, defending, sent a Train of a
+  Priest at its producer, which was razed before the command applied (no building stands there at the refusal). The
+  Train's form of "an order at a target that died the tick it was sent"; `CriterionMatch.Documented` gains
+  `Train:TrainRefused:NoBuilding` with that cause (the AI judged from its view a tick before; the row then ends at 38,690).
+- **Seeds 1-8, every check on, to 72,000** (`Stress/MatchRowsM6S10Report`; Pale Hills seeds 2-8 added to it), old -> new end
+  tick (winner):
+
+| Seed | Raraku | Pale Hills | Vathar Crossing |
+| --- | --- | --- | --- |
+| 1 | no end -> 24,354 (p0) | 27,498 -> 33,230 (p1) | 24,266 -> 23,244 (p1) |
+| 2 | 56,940 -> 39,262 (p1) | 42,016 -> 51,218 (p1) | 57,039 -> 30,540 (p0) |
+| 3 | 25,083 -> 27,394 (p1) | 43,751 -> 40,889 (p1) | 25,118 -> 24,088 (p1) |
+| 4 | 25,083 -> 27,394 (p1) | 43,751 -> 40,889 (p1) | 25,118 -> 24,088 (p1) |
+| 5 | 31,420 -> 27,212 (p1) | no end -> 57,755 (p0) | 55,495 -> 34,619 (p0) |
+| 6 | 25,083 -> 27,394 (p1) | 43,751 -> 40,889 (p1) | 25,118 -> 24,088 (p1) |
+| 7 | 28,633 -> 28,753 (p1) | 38,440 -> 27,017 (p0) | 19,912 -> 30,482 (p0) |
+| 8 | 28,633 -> 28,753 (p1) | 38,440 -> 27,017 (p0) | 19,912 -> 30,482 (p0) |
+
+  Every row ends, every check clean. `MatchCriterionSweepQaStressTests.Known` loses Raraku 1 (BUG-1460) and Raraku 2
+  (BUG-1521: its silence is gone, longest 1,379 ticks) and Vathar 2 (BUG-1537: it ends at 30,540 with every oracle
+  clean), each at the row's own "no longer fails: remove the entry"; neither bug is cured by cause, the matches moved. Generated seeds 1-6: 21,876 / 27,690 / 30,704 /
+  22,789 / 29,994 / 44,747.
+- **The Hard v Normal tally (BUG-1522, report only):** **34 / 7 / 1** (Hard / Normal / none, 42 matches to 72,000; was 28 / 10 / 4): Raraku 13 / 1 / 0 (was 13 / 1 / 0), Vathar Crossing 12 / 2 / 0 (was 11 / 3 / 0), Pale Hills 9 / 4 / 1 (was 4 / 6 / 4). Hard leads on Pale Hills again (BUG-1522 reads the old tally; report only, nothing cured).
+- **Hashes re-pinned with "was" comments:** `StandardPresetPinQaTests` (6 AI scenes), `OutcomePinM73bQaTests` (6 AI scenes),
+  `NonHardMatchPinQaTests` (8), `CounterCompositionTests.TheNonHardPins_*` (8), `ReserveTwinTests` (the two rich rows, moved
+  from the first hash), `SharedVisionFfaPinTests` (menu seeds 1 and 3, the 4-seat AI); `HardKnobsPinTests` and the non-AI
+  save scenes did not move. The pre-map AI replay `Replays/premap/replay_ai_ffa_standard.replay` and the `save_ai_seed2`
+  digest re-recorded with the writer's flag (the three non-AI replay fixtures and `save_menu_seed1` wrote the same bytes);
+  `seed21_playable.replay` and the golden `cross_map_seed1.replay` did not move.
+- **Re-staged / re-stated rows, each with its reason in its comment:** `ReservePairingsStressTests.KnownNoAgeTwo` (out:
+  (0, 1, 1, 0), now Age II at 13:07; in: (2, 0, 1, 1), the Whirlwind side of `cadre_rush` v `standard` seed 13, alive at
+  20:00 without Age II; totals 2 no-wave sides, 98 Malazan waves, defeats 4 / 1, no constant moved); `ScoutCapQaTests`'
+  "capped" read (BUG-1550: a released scout killed later as a gatherer read as "the sweep ended on the first death": the
+  `pre-losses` seed 3 row; now only a sweep that ends on a death counts) and its far-forest seeds 5 / 6 worker bound printed,
+  not asserted (`KnownWorkerLosses`, BUG-1462's family: the woodcutters at the 147-154 m forests die to the enemy there;
+  11-13 workers against 14; every scout count within the cap, still asserted).
+- **Fix round 1 (BUG-1559, QA's Stress run): three Stress rows the re-measure missed, each traced, none a determinism or
+  oracle failure, none a fault of the new rules; test-only, no product code and no bound changed.**
+  - **Rule-45 finding: `HuntStressTests.FourAiSeats_OnPaleHills_EndWithTheOracleOnEveryHunt` (seed 1, free-for-all) stopped
+    ending.** It is in the handoff's pin list and was not re-measured in round 0. Probed every 6,000 ticks: every seat has
+    gathered its start's gold by 25:00 (8,870 / 8,850 / 8,820 / 8,890, frozen from then on); the gold war at 20-25 min
+    spends the armies; p3 falls at 55,508 and p0 at 107,906; from 70:00 p1 has no soldier (26 workers, 7 production
+    buildings, 10 gold, 18,000-26,000 wood) and p2 one (21 workers, 20 gold), and neither can train another. That is the
+    skipped `FourAiSeats_OnPaleHills_Seed1_KnownStall`'s shape (BUG-1068 / BUG-1116, BUG-1536 for seed 3): the row moves to
+    the next seed that ends, **2 (over at 59,951, p1, 4 hunts)**; seed 5 ends at 73,778 (p2), seeds 6 and 7 do not end by
+    144,000. Seed 2 is also `FourAiSeats_OnPaleHills_Seed2_KnownStall`'s match (same body), so the two rows now run one
+    match twice (a question below). The skipped seed-1 row's reason gains BUG-1559 and this measurement. The 2v2 row keeps
+    seed 1 (it ends). `MatchCriterionSweepQaStressTests.Known` is keyed by two-seat matches (Pale Hills seed 1 two-seat ends
+    at 33,230 and passes every oracle), so the stall is recorded on the skipped row, not there.
+  - **`M6Sh2DeterminismStressTests` (the retrain twin) re-staged to Raraku seed 3.** On seed 1 the loser (seat 1) loses its
+    last worker at 21,920 with its hall standing but 3 gold, short of a worker, so it never retrains (the rule as built) and
+    the match ends at 24,354: the row's premise was the BUG-1460 stall. Of Raraku 1, 2, 3, 5, 7, Pale Hills 1, 2, 3, 5, 7
+    and Vathar Crossing 1, 2, 3, 5, 7 only Raraku 3 (seat 0, Train sent for 24,261 with 1,087 gold; over at 27,394), Raraku
+    5 (22,761) and Pale Hills 7 (26,481, over at 27,017, too close to the end for the 2,000-tick follow) retrain. Twins,
+    the save at the retrain and the replay unchanged; green (ran to 26,261).
+  - **`M6Sh2QaStressTests`' save sweep re-staged to Raraku seed 2.** Seed 1 now ends at 24,354, so 48 saves fit against
+    the row's 60. Raraku 2 (over at 39,262) gives 78 saves, every load byte-identical and every follow hash-equal; bound 60
+    unchanged. No seat retrains on seed 2; the retrain's save is the twin row's on seed 3.
+  - **The other pin classes, accounted for:** `AiDeterminismTests.PaleHills_ToTheEndWithAHunt_*` (`HuntSeed` 2) ends at
+    **51,218 with 2 hunts** (was 42,016, 4), green in two processes; `HuntStressTests.PaleHills_SavedMidHunt_*`
+    (`MidHuntSeed` 2) green; `StarvedSaveTwoProcessQaStressTests` (Raraku seed 1): seat 0 stamped starved at 18,720, its
+    first starved wave at 20,960, over at 24,354, the child equal; `ReservePairingsStressTests` green. The default-loop pin
+    classes (`MatchCriterionTests`, the hash pins, `CliTests`, the replays) were re-pinned in round 0 and are green in QA's
+    default loop.
+
+**Item 7, the pages' cells (rule 40, handed by name; rule 68's list missed two classes).** Re-printed from the runs, every old
+figure kept as history beside it: both Age II tables (malazan.md 26 cells, whirlwind.md 23; a "Re-printed 2026-11-16"
+paragraph under each with the counts), whirlwind.md "The holy war's first wave" (the table and its "What it says"
+paragraph, re-worded to the cells: seed 3 now sends no wave and stands), teblor.md's opponent sentence (320 / 425 s against
+both). Not in the brief's list but red by the same re-measure, so re-printed under rule 40 (pages only, their tests not
+edited): every opening's "Houses at the cap" note (`QA/Content/D20PinQaTests.HouseNote_*`; teblor.md's sentence about the
+11th and 12th Hut steps re-worded: now 11 Huts and only step 16 skipped) and "Spending on the menu's map" sentence
+(`Content/AiSpendingReportTests.GeneratedNormal_PagesAndDocs03_QuoteTheReport`, with this file's D21 spending bullet). Test
+rows: `TeblorOpeningQaTests` (6421 -> 6401 against both), `DR35ProsePinQaTests.AgeTwoProse_*` (seed 13's clause built from
+its cell, as BUG-1524 did for the Teblor sentence: it now stands), `AiOpeningPairsReportTests` (BUG-1553: (0, 2) seed 3's
+`holy_war` side stands at 20:00 without a wave, its army never at its 20 pop; named in `AliveWithoutAWave`, reported and not
+failed, failing if it waves or falls; a balance finding for D33, no conclusion drawn here), `HolyWarFirstWaveReportTests`
+(the table). `D21OpeningsQaTests` needed only the cells. `Bug0982_*` and malazan.md's threshold table untouched (D33).
+
+**Determinism.** `Stress/M6S12DeterminismStressTests`: for each rule, twins hash alike on every tick and a save taken on the
+tick it first acts loads byte-identical and follows the run hash for hash for 2,000 ticks: the rally shift (Raraku seed 1,
+tick 3,021), a rebalance (Raraku seed 1, tick 301), the re-scout (the blind scene, tick 1). The rules add no state (the
+re-scout's window is the match clock, its mark the existing `SentAgain` one), so the save format (10) and the replay formats
+(9 / 6) are unchanged; no `game/data` byte changed (data hash B74DC7AE61B4862D); the golden `cross_map_seed1.replay` did not
+move. Allocation: `Ai/RallyPassageTests.TheRallySearch_AllocatesNothing` (20 thinks with the search firing every think, and
+`NarrowWithin` alone), `Ai/BlindRescoutTests.TheBlindCheck_AllocatesNothing`; the existing allocation rows stay green.
+
+**Questions for the Producer (rule 67), each with the developer's recommendation.**
+1. **The rally search steps out past the nominal point** when nothing behind it is open ground (Raraku seed 1: the line back
+   crosses the barracks and the hall). The brief said "stepping back toward the hall". Recommendation: keep back-then-out
+   within `ai.rallyReach`; the alternative (back only) leaves Raraku's army in the lane.
+2. **"Acceptable" uses `ai.rallyReach` twice** (the clearance from a passage cell and the most the point may move). A
+   dedicated knob (`ai.rallyClearance`) would let the two differ. Recommendation: no new knob until a map shows the need.
+3. **The rally rule reads known buildings, not just terrain**, since Raraku's lane is between the seat's own buildings. Its
+   one fog edge: a node felled out of sight reads open (the cell's truth). Recommendation: accept (the search reads only the
+   ground round the seat's own point).
+4. **The re-scout takes only a worker the economy left idle** (it runs after the economy). A seat short of wood that knows a
+   gold mine puts every worker on gold and never re-scouts. Recommendation: keep it (QA's guard row lost 16 scouts when a
+   gatherer could be taken); if the Producer wants gatherers taken, a cap per window is a new number.
+5. **An idle worker's pick is unchanged** (nearest the worker): no traced row showed the fault there. Recommendation: leave it
+   until a trace does.
+6. **Raraku seed 1 ends again (24,354).** The Raraku criterion row stays seed 3 (it ends inside its bound). Recommendation:
+   move it back to seed 1 at the next pin move only if the Producer wants the original row.
+7. **Rule 68's handover missed two content classes** (`QA/Content/D20PinQaTests`, `Content/AiSpendingReportTests`); their
+   cells were re-printed under rule 40, no test edited. Recommendation: name both in the next sim brief that moves AI play.
+8. **BUG-1553 / BUG-1462 rows re-stated** (one opening pair's side alive without a wave; two far-forest seeds' worker bound
+   printed). Recommendation: D33 reads both as balance; the sim does not cure them.
+9. **(Fix round 1) The four-seat free-for-all oracle row now plays seed 2, the same match as
+   `FourAiSeats_OnPaleHills_Seed2_KnownStall`** (rule 45's "next seed that ends"; about 30-55 minutes of the Stress run
+   twice). Recommendation: keep the rule's seed now; at the next pin move either drop the seed-2 twin row or move the oracle
+   row to seed 5 (73,778). The bug id range for the sim was used up (1550-1559), so the stall is filed under BUG-1559
+   itself rather than a new id.
 
 ## Testing strategy
 

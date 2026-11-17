@@ -2,8 +2,8 @@
 
 | Field | Value |
 | --- | --- |
-| Severity | S3 (re-rated by the Producer at the ACCEPT: a slow end, not a stall; S2 only while its row was red outside the allowed set) |
-| Status | open (Pale Hills 2 fixed and verified; Vathar 2 ruled into `Known`, cure goes to the next AI task) |
+| Severity | S4 (re-rated at the 2026-11-16-2036 ACCEPT; was S3) |
+| Status | open, re-rated S4 at the 2026-11-16-2036 ACCEPT (Vathar 2 ends at 30,540 with every oracle clean after M6-S12, its `Known` entry removed; no pinned row shows the shape now; the design gap, what a seat buys while it banks for a hall, is not cured) |
 | Found | 2026-11-15-2136, task M6-SH2 (QA) |
 | System | AI (gather re-send, BUG-1151 shape; a silent seat, BUG-1152 family), moved by the drop-off rule (BUG-1520) |
 | Fixed by | |
@@ -50,3 +50,7 @@ Every sweep row's checks and oracles clean, or the row in `Known` with an id (cr
 40801..46500; p1 silent 38361..42260`, the same failure as re-check 1. Note: like the Raraku entries, `Known` exempts
 the row from any oracle failure, not only the silent-seat one, so a new failure on that seed would be hidden until the
 entry is removed (the class's existing form; it does assert the row still fails). Stays open for the cure.
+
+## M6-S12 (2026-11-16-2036)
+Vathar Crossing seed 2 ends at 30,540 (p0) with every sweep oracle clean; its `Known` entry removed at the row's own
+request. Not cured by cause (the hall-rebuild bank was not touched): the match moved.

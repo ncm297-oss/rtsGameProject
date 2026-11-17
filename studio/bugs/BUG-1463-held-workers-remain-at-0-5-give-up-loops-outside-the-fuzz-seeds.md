@@ -3,7 +3,7 @@
 | Field | Value |
 | --- | --- |
 | Severity | S3 |
-| Status | open (cause traced in M6-SH2; five `KeepCornerCureQaStressTests` rows still red by ruling, a third session) |
+| Status | open (S3, a movement task's: the five rows are skipped as known-bug rows since M6-S12, bodies and bounds unchanged, cause traced per shape; no row is red) |
 | Found | 2026-11-15-0506, task M6-S10 (QA full) |
 | System | sim: movement (footprint walk give-ups, `MovementSystem.QueuesBehind`), economy retry (`EconomySystem.Wait`) |
 | Fixed by | |
@@ -52,3 +52,18 @@ passage shapes and not Raraku's: reverted. Still red at 0.5: `HardShapes` cliff2
 `TwoByTwoDepot` (22, 20) Gatherers, `KeepOnTheMapEdge` (1, 15); `FuzzSeeds57To120` is green. **Producer decision
 (docs/01 2026-11-16): the AI's rally point keeps off one-cell passages (an AI rule); the five synthetic shapes get one
 more bounded trace in the next AI task and are then either cured or re-stated as known-bug rows: no fourth red session.**
+
+## M6-S12 (2026-11-16-2036, the developer's note, applied by the Producer)
+Traced on the base 95186a7 from the rows' own HELD lines. Red at 0.5 were `HardShapes` cliff28_25 (1 of 8 shuffles),
+depot22_20 (8 of 8), edge1_15 (4 of 8), `TwoByTwoDepot_MineAtItsCorner` (22, 20) Gatherers and `KeepOnTheMapEdge`
+(1, 15); `KeepAgainstACliff` (28, 25) at 0.5 was green on the base (the PLAN's list named it by mistake).
+- depot22_20 (Gatherers, r 0.75): the mine flush on the depot's east face leaves stand points only round the mine's two
+  corners; mates working the mine hold them (Gathering does not yield); loaded Gatherers give up (goal cell -1) and
+  `Wait` re-walks into the same spot.
+- edge1_15 / KeepOnTheMapEdge (1, 15): a loaded 0.75 m worker frozen in the one-cell gap between the Keep's south face
+  and the mine's north face, closed by the map edge, pressed by a mate working the mine; never delivers in 300 s.
+- cliff28_25: the same one-cell gap closed by the cliff, a Laborer frozen beside a mate working the mine.
+One family (a one-cell lane or corner shared by workers at their node and loaded mates); no army, no AI. The only
+generic cure is a movement yield / shove change (M6-SH2's reverted family), out of M6-S12's scope. The five rows are
+`Skip = "BUG-1463: <cause>"`, bodies and bounds unchanged; QA un-skipped them on a scratch clone and all five are
+still red with the traced shapes. docs/03 "Implementation (M6-S12)" item 1.

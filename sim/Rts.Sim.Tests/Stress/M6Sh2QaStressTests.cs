@@ -8,16 +8,21 @@ namespace Rts.Sim.Tests.Stress;
 /// Normal (the match the retrain was found on) to 40,000 ticks: a save on every 500th tick, each loaded, saved byte-identical
 /// and run 300 ticks against the uninterrupted run's per-tick hashes. (2) QA focus 0: the AI's economy on fresh matches,
 /// gathered gold and wood per seat at 2:00 / 4:00 / 6:00 / 10:00, printed (run on the base and this tree to compare).
+/// M6-S12 fix round 1 (BUG-1559, a re-stage, the bound and checks unchanged): (1) played seed 1 while it stalled (BUG-1460).
+/// Under M6-S12 seed 1 ends at 24,354, so only 48 saves fit before the end, under the row's 60. It plays
+/// <see cref="SweepSeed"/> 2 (over at 39,262, seat 1: 78 saves), the lowest Raraku seed long enough. No seat retrains there;
+/// the retrain's save is <see cref="M6Sh2DeterminismStressTests"/>' row (Raraku seed 3). Was seed 1.
 /// </summary>
 [Trait("Category", "Stress")]
 public class M6Sh2QaStressTests(ITestOutputHelper output)
 {
     private const int Limit = 40_000, Every = 500, Follow = 300;
+    private const ulong SweepSeed = 2;
 
     [Fact]
-    public void RarakuSeed1_ASaveEvery500Ticks_FollowsTheRun()
+    public void Raraku_ASaveEvery500Ticks_FollowsTheRun()
     {
-        Simulation reference = MapFileTests.MapMatch("raraku", 1, false, out _);
+        Simulation reference = MapFileTests.MapMatch("raraku", SweepSeed, false, out _);
         var hashes = new ulong[Limit + Follow + 1];
         while (reference.TickNumber < Limit + Follow && !reference.MatchOver)
         {
@@ -25,7 +30,7 @@ public class M6Sh2QaStressTests(ITestOutputHelper output)
             hashes[reference.TickNumber] = reference.StateHash();
         }
         int end = reference.TickNumber;
-        Simulation a = MapFileTests.MapMatch("raraku", 1, false, out _);
+        Simulation a = MapFileTests.MapMatch("raraku", SweepSeed, false, out _);
         int saves = 0;
         while (a.TickNumber < Limit && a.TickNumber < end)
         {
@@ -43,7 +48,7 @@ public class M6Sh2QaStressTests(ITestOutputHelper output)
             }
             saves++;
         }
-        output.WriteLine($"Raraku seed 1: {saves} saves, each followed {Follow} ticks, run to {end} (match over {reference.MatchOver})");
+        output.WriteLine($"Raraku seed {SweepSeed}: {saves} saves, each followed {Follow} ticks, run to {end} (match over {reference.MatchOver})");
         Assert.True(saves >= 60);
     }
 

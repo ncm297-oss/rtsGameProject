@@ -68,13 +68,13 @@ public class OutcomePinM73bQaTests
     // Measured on de591f0 with this file (QA 2026-11-10-2116). Rows as StandardPresetPinQaTests.AiRows.
     public static IEnumerable<object[]> AiRows() => new[]
     {
-        new object[] { 1, 2, 0, false, 0xEAE4A3B216EC213BUL }, // M6-SH2 (a site is no drop-off, an AI with no worker retrains: BUG-1520 / 1465): was 0x6068BB609154B21C; M6-S10: was 0x3546ABECA82EA2A3
-        new object[] { 2, 2, 1, false, 0x48167292A6EF24BDUL }, // M6-SH2 (a site is no drop-off, an AI with no worker retrains: BUG-1520 / 1465): was 0xFC175F677CC212DE; M6-S10: was 0x072B988DD9AF8223
-        new object[] { 3, 3, 2, false, 0x31263B5622F7DA0AUL }, // M6-SH2 (a site is no drop-off, an AI with no worker retrains: BUG-1520 / 1465): was 0xA08252EC916352CF; M6-S10: was 0x13A00F83DC05E77E
-        new object[] { 4, 4, 1, false, 0x214D18E621F16C80UL }, // M6-SH2 (a site is no drop-off, an AI with no worker retrains: BUG-1520 / 1465): was 0x28538ED7267EF3C1; M6-S10: was 0x99F91DE86CC05AAF
-        new object[] { 5, 2, 2, false, 0xA0486B492AF90209UL }, // M6-SH2 (a site is no drop-off, an AI with no worker retrains: BUG-1520 / 1465): was 0x4245344F2464DFBA; M6-S10: was 0xE8521B011327420A
+        new object[] { 1, 2, 0, false, 0xF903D6DE12B11509UL }, // M6-S12 (the AI rules of 2026-11-16): was 0xEAE4A3B216EC213B; M6-SH2 (a site is no drop-off, an AI with no worker retrains: BUG-1520 / 1465): was 0x6068BB609154B21C; M6-S10: was 0x3546ABECA82EA2A3
+        new object[] { 2, 2, 1, false, 0x67BBE6654365053CUL }, // M6-S12 (the AI rules of 2026-11-16): was 0x48167292A6EF24BD; M6-SH2 (a site is no drop-off, an AI with no worker retrains: BUG-1520 / 1465): was 0xFC175F677CC212DE; M6-S10: was 0x072B988DD9AF8223
+        new object[] { 3, 3, 2, false, 0xBB746BF885751C3BUL }, // M6-S12 (the AI rules of 2026-11-16): was 0x31263B5622F7DA0A; M6-SH2 (a site is no drop-off, an AI with no worker retrains: BUG-1520 / 1465): was 0xA08252EC916352CF; M6-S10: was 0x13A00F83DC05E77E
+        new object[] { 4, 4, 1, false, 0xAC87DE6CB1FD9E22UL }, // M6-S12 (the AI rules of 2026-11-16): was 0x214D18E621F16C80; M6-SH2 (a site is no drop-off, an AI with no worker retrains: BUG-1520 / 1465): was 0x28538ED7267EF3C1; M6-S10: was 0x99F91DE86CC05AAF
+        new object[] { 5, 2, 2, false, 0x20059A79D1DB74DAUL }, // M6-S12 (the AI rules of 2026-11-16): was 0xA0486B492AF90209; M6-SH2 (a site is no drop-off, an AI with no worker retrains: BUG-1520 / 1465): was 0x4245344F2464DFBA; M6-S10: was 0xE8521B011327420A
         new object[] { 3, 3, 0, true, 0x17290C9492D9B119UL }, // M6-SH2 (a site is no drop-off, an AI with no worker retrains: BUG-1520 / 1465): was 0x59957393434AC0A8; M6-S10: was 0xC9899EC24D14CC32
-        new object[] { 1, 4, -1, false, 0x6747216DFF880778UL }, // M6-SH2 (a site is no drop-off, an AI with no worker retrains: BUG-1520 / 1465): was 0x6E3F35D35905EDFD; M6-S10: was 0x8E6B162FAC2C8B07
+        new object[] { 1, 4, -1, false, 0x9C151226398F180FUL }, // M6-S12 (the AI rules of 2026-11-16): was 0x6747216DFF880778; M6-SH2 (a site is no drop-off, an AI with no worker retrains: BUG-1520 / 1465): was 0x6E3F35D35905EDFD; M6-S10: was 0x8E6B162FAC2C8B07
     };
 
     [Theory]

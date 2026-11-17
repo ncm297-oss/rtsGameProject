@@ -43,6 +43,10 @@ internal static class CriterionMatch
         "Build:BuildRefused:UnitInTheWay", "Build:BuildRefused:SealsGround", "Build:BuildRefused:Blocked",
         // A Train over the cap or without the cost (the brief's; no row shows one: the reserve and the queue check hold).
         "Train:TrainRefused:QueueFull", "Train:TrainRefused:CannotAfford",
+        // M6-S12 (BUG-1551): a Train at a producer razed the tick it was sent (the FFA row, Vathar Crossing seed 2, tick 17,381:
+        // player 1, defending, sent a Priest at its producer at (385, 371), razed before the command applied: no building stands
+        // there at the refusal), the Train's form of UnitGone.
+        "Train:TrainRefused:NoBuilding",
         // An order on a unit that died the tick it was sent, or at a target that did.
         "Move:UnitGone", "AttackMove:UnitGone", "Attack:UnitGone", "Gather:UnitGone", "Build:UnitGone", "Stop:UnitGone",
         "UseAbility:UnitGone", "Attack:AttackTargetInvalid",

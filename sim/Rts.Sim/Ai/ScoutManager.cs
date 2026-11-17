@@ -29,7 +29,9 @@ namespace Rts.Sim.Ai;
 /// so the blackboard keeps no count); past that the sweep ends and the reach lifts. M6-SH1 round 1: the first scout's death is
 /// always followed (BUG-1055: losses before it aren't the scout role's), unless the knob is 0; a scout sent again is marked in
 /// its saved waypoints (<see cref="SentAgain"/>) and released to gather once the reach has lifted and the player knows an
-/// enemy building and a node of every kind, its nearest forest clear of the enemy's buildings (BUG-1056).
+/// enemy building and a node of every kind, its nearest forest clear of the enemy's buildings (BUG-1056). M6-S12 (BUG-1460):
+/// once the sweep has ended, a seat blind to a resource its army needs sends a worker left idle on it again, past the cap
+/// (<see cref="Rescout"/>, run after the economy).
 /// <para>
 /// M6-S5 (BUG-1042), a player with an ally: a head waypoint within <c>ai.scoutRadius</c> of an ally's building is dropped
 /// (the base there is the ally's: with teams the hall's mirror may be the ally's start), and past the head the next grid
@@ -57,7 +59,7 @@ internal static class ScoutManager
     internal static void Run(AiPlayer ai)
     {
         Blackboard board = ai.Board;
-        if (board.ScoutPhase == 2) return;
+        if (board.ScoutPhase == 2) return; // M6-S12: a blind seat's re-scout is Rescout's, after the economy
         if (board.ScoutPhase == 0)
         {
             if (ai.Now < ai.Rules.ScoutAfterTicks || !ai.TryHallPoint(out Vector2 hall)) return;
@@ -75,6 +77,69 @@ internal static class ScoutManager
             board.ScoutPhase = 1;
         }
         Sweep(ai);
+    }
+
+    /// <summary>
+    /// M6-S12 (BUG-1460, docs/01 2026-11-16): a seat whose sweep has ended and that is blind to a resource its army needs
+    /// (<see cref="BlindRescoutDue"/>) sends one worker on the sweep again, past <c>ai.scoutReplacements</c>: a worker the
+    /// economy left idle this think (it runs after <see cref="EconomyManager"/>: a worker idle then has no node it could be sent
+    /// to, so the seat gives up no income), the nearest the hall. Phase 1 again, so at most one scout is out at a time, and it
+    /// sweeps and is released as a scout sent again does. Why idle only: taking a gatherer each window fed a seat's workers to
+    /// an enemy camped at its door (QA's <c>EveryScoutKilledAtOnce_*</c> seed 1: 16 scouts lost by tick 6,000 against its bound
+    /// of 4).
+    /// </summary>
+    internal static void Rescout(AiPlayer ai)
+    {
+        Blackboard board = ai.Board;
+        if (board.ScoutPhase != 2 || !BlindRescoutDue(ai, out Vector2 home)) return;
+        int scout = ai.PickBuilder(home, out int generation, idleOnly: true);
+        if (scout < 0) return;
+        Waypoints(ai, home, blind: true);
+        board.ScoutSlot = scout;
+        board.ScoutGeneration = generation;
+        board.ScoutTarget = -1;
+        board.ScoutPhase = 1;
+        Sweep(ai);
+    }
+
+    /// <summary>
+    /// M6-S12 (BUG-1460): whether a seat whose sweep has ended (phase 2) sends a worker on it again this think: on the first
+    /// think of each <c>ai.scoutAfter</c> window of the match clock (the scout's own timing knob, so a scout lost at once is
+    /// followed at most once a window, never every think), with a hall and the match not over, when it is blind to a resource
+    /// (<see cref="BlindTo"/>) of either kind. Whatever <c>ai.scoutReplacements</c> says: the cap keeps a seat from feeding
+    /// workers to a role it has filled, while a blind seat has no other way to find the resource. Cheap tests first; the
+    /// node walks stop at the first live node of the kind. Allocates nothing.
+    /// </summary>
+    internal static bool BlindRescoutDue(AiPlayer ai, out Vector2 hall)
+    {
+        hall = default;
+        int every = Math.Max(ai.Rules.ScoutAfterTicks, ai.ThinkTicks);
+        if (ai.Now % every >= ai.ThinkTicks || ai.View.MatchOver || !ai.TryHallPoint(out hall)) return false;
+        return BlindTo(ai, ResourceKind.Wood) || BlindTo(ai, ResourceKind.Gold);
+    }
+
+    /// <summary>
+    /// M6-S12 (BUG-1460): whether the seat is short of <paramref name="kind"/> for its army (<see cref="AiPlayer.PickShortOf"/>:
+    /// the unit production waits for, or with no producer free some unit of its current mix, costs more of it than it holds),
+    /// has no worker at it (<see cref="AiPlayer.Gathering"/>) and knows no live node of it at any distance (one the economy
+    /// marked gone doesn't count; only what its view remembers, so nothing is read through the fog). Gold is left to the far
+    /// expansion while its leg's worker is out (<c>FarScoutSlot</c>): one worker looking for gold at a time.
+    /// </summary>
+    internal static bool BlindTo(AiPlayer ai, ResourceKind kind)
+    {
+        if (KnowsLiveNode(ai, kind)) return false;
+        byte gathered = kind == ResourceKind.Gold ? EconomyManager.Gold : EconomyManager.Wood;
+        if (ai.Gathering(gathered) || kind == ResourceKind.Gold && ai.Board.FarScoutSlot >= 0) return false;
+        return ai.PickShortOf(kind);
+    }
+
+    /// <summary>M6-S12: whether the player knows a node of <paramref name="kind"/> it has not marked gone, at any distance.</summary>
+    private static bool KnowsLiveNode(AiPlayer ai, ResourceKind kind)
+    {
+        int s = -1;
+        while (ai.View.NextResource(ref s, out SeenResource node))
+            if (ai.Data.Resources[node.TypeId].Resource == kind && ai.Board.NodeDropped[s] != node.Handle.Generation) return true;
+        return false;
     }
 
     private static void Sweep(AiPlayer ai)
@@ -280,8 +345,13 @@ internal static class ScoutManager
         return false;
     }
 
-    /// <summary>The waypoint list (see the type's summary), computed once from the hall's centre and the map.</summary>
-    private static void Waypoints(AiPlayer ai, Vector2 hall)
+    /// <summary>
+    /// The waypoint list (see the type's summary), computed once from the hall's centre and the map. M6-S12 (BUG-1460): a
+    /// <paramref name="blind"/> re-scout is laid as a scout sent again (<see cref="SentAgain"/>'s mark) and every point whose
+    /// cell the player has explored is visited at once, the head's mirror point too: it looks for a node, and explored ground
+    /// holds none it doesn't know (no match spawns nodes later), so it never walks back to the enemy's door it has seen.
+    /// </summary>
+    private static void Waypoints(AiPlayer ai, Vector2 hall, bool blind = false)
     {
         Blackboard board = ai.Board;
         Vector2 size = ai.MapSize, centre = size * 0.5f, toCentre = centre - hall;
@@ -297,7 +367,7 @@ internal static class ScoutManager
         Vector2[] points = board.ScoutPoints;
         // M6-S7 (BUG-1048): a replacement (the points were laid before: a laid point is never (0, 0), it is clamped half a
         // cell inside the map) skips the ring points already seen; a first scout walks the whole ring, as before.
-        bool replacement = points[0] != Vector2.Zero;
+        bool replacement = blind || points[0] != Vector2.Zero;
         for (int k = 0; k < 8; k++)
             points[k] = ai.ClampToMap(hall + s_compass[(first + k) % 8] * ai.Rules.ScoutRadius);
         points[8] = ai.ClampToMap(size - hall);
@@ -305,7 +375,8 @@ internal static class ScoutManager
             points[k] = GridPoint(ai, k);
         Array.Clear(board.ScoutVisited);
         if (!replacement) return;
-        for (int k = 0; k < 8; k++)
+        int seen = blind ? points.Length : 8;
+        for (int k = 0; k < seen; k++)
             if (Explored(ai, points[k])) board.ScoutVisited[k] = true;
         // M6-SH1 round 1: the mark of a scout sent again (SentAgain), kept in the saved points so the blackboard gains no
         // byte. The grid point nearest the hall becomes the hall's centre, visited: nothing to see at home, so the walk is

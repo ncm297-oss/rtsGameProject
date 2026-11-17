@@ -3,7 +3,7 @@
 | Field | Value |
 | --- | --- |
 | Severity | S3 |
-| Status | open (its Stress row is red on `main` by ruling: rule 57) |
+| Status | closed by measurement (2026-11-16-2036: Pale Hills seed 5 ends at 57,755, `MapSlice2StressTests` Pale Hills 5 green; not cured by cause, the lone-last-unit hunt stays under BUG-1116) |
 | Found | 2026-11-16, task M6-SH2 (developer, the Stress re-run; confirmed by QA) |
 | System | sim: AI end game (the hunt of a beaten seat's last unit, BUG-1116's family) |
 | Fixed by | |
@@ -21,3 +21,6 @@ Hills seed 5 also ends in none. Not re-bound.
 ## Notes
 QA: caused by the drop-off rule (BUG-1520) through match divergence (base + the retrain alone ends at 40,805). Next AI
 task, with BUG-1116.
+
+## M6-S12 (2026-11-16-2036)
+Pale Hills seed 5 ends at 57,755 (seat 0); `MapSlice2StressTests` Pale Hills 5 green. Not cured by cause: the match moved.

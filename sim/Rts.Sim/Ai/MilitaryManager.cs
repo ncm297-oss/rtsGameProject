@@ -12,7 +12,9 @@ namespace Rts.Sim.Ai;
 /// <list type="bullet">
 /// <item><b>Rally.</b> The point <c>ai.rallyDistance</c> from the hall's centre toward the known enemy building nearest the
 /// hall (the map centre with none known). An idle army unit not in a wave, farther than <c>ai.rallyReach</c> from it, gets one
-/// Move there, never again to the same point (it got as close as it could), nor while a command to it is pending.</item>
+/// Move there, never again to the same point (it got as close as it could), nor while a command to it is pending. M6-S12
+/// (BUG-1461): a point in or at the mouth of a one-cell passage moves to the nearest acceptable point on the same line within
+/// <c>ai.rallyReach</c>, back toward the hall first (<see cref="OffThePassage"/>).</item>
 /// <item><b>Wave start.</b> No wave in progress, the cooldown over, and the army free to go (not casting, no command pending)
 /// at least <c>attack.minArmyPop</c> half-pop and <c>attack.minArmyCost</c> gold + wood, each times the difficulty's
 /// <c>waveSizeMultiplier</c>, with an enemy building known: every such unit becomes a member and is sent
@@ -110,9 +112,74 @@ internal static class MilitaryManager
         Vector2 d = toward - hall;
         float length = d.Length();
         Vector2 p = ai.ClampToMap(length > 0.001f ? hall + d * (ai.Rules.RallyDistance / length) : hall);
+        if (length > 0.001f && NarrowWithin(ai, p)) p = OffThePassage(ai, hall, d, length, p); // M6-S12 (BUG-1461)
         if (p == board.Rally && board.RallyVersion > 0) return;
         board.Rally = p;
         board.RallyVersion++; // units already rallied go again to the new point
+    }
+
+    /// <summary>
+    /// M6-S12 (BUG-1461, docs/01 2026-11-16): the rally point when the nominal one (<paramref name="nominal"/>, <c>ai.rallyDistance</c>
+    /// from the hall toward the target <paramref name="d"/>) stands in or at the mouth of a one-cell passage
+    /// (<see cref="NarrowWithin"/>): the nearest acceptable point (<see cref="Acceptable"/>) on the same line, one map cell at a
+    /// time and at most <c>ai.rallyReach</c> from the nominal point (the ring an army already counts as "at the rally point"),
+    /// stepping back toward the hall first, then out past the nominal point; the nominal point when none is. Why the step out:
+    /// on Raraku seed 1 the line back to the hall crosses the seat's own barracks, so no point behind the passage is open
+    /// ground. The answer reads only the seat's knowledge (<see cref="PlayerView.IsKnownClosed"/>), which changes between
+    /// thinks only when a building or node does (or the target, as the nominal point itself), so the point does not flap.
+    /// At most 2 x <c>rallyReach</c> / cell size points; allocates nothing.
+    /// </summary>
+    private static Vector2 OffThePassage(AiPlayer ai, Vector2 hall, Vector2 d, float length, Vector2 nominal)
+    {
+        float far = ai.Rules.RallyDistance;
+        int steps = (int)(ai.Rules.RallyReach / MapConstants.CellSize);
+        for (int k = 1; k <= steps; k++)
+        {
+            float back = far - k * MapConstants.CellSize;
+            if (back <= 0f) break;
+            Vector2 q = ai.ClampToMap(hall + d * (back / length));
+            if (Acceptable(ai, q)) return q;
+        }
+        for (int k = 1; k <= steps; k++)
+        {
+            Vector2 q = ai.ClampToMap(hall + d * ((far + k * MapConstants.CellSize) / length));
+            if (Acceptable(ai, q)) return q;
+        }
+        return nominal;
+    }
+
+    /// <summary>
+    /// M6-S12: whether <paramref name="q"/> may be the rally point once the nominal one was not: its cell open as far as the
+    /// seat knows (not in a building, a cliff or a node) and no one-cell passage cell within <c>ai.rallyReach</c> of it
+    /// (<see cref="NarrowWithin"/>).
+    /// </summary>
+    private static bool Acceptable(AiPlayer ai, Vector2 q) =>
+        !ai.View.IsKnownClosed((int)(q.X / MapConstants.CellSize), (int)(q.Y / MapConstants.CellSize)) && !NarrowWithin(ai, q);
+
+    /// <summary>
+    /// M6-S12 (BUG-1461): whether a one-cell passage cell has its centre within <c>ai.rallyReach</c> of <paramref name="p"/>:
+    /// a cell open as far as the seat knows (<see cref="PlayerView.IsKnownClosed"/>) that is closed on both sides along one axis
+    /// and open on both sides along the other (a lane one cell wide: a gap in a cliff, between two buildings, or between a
+    /// building and a tree line). A dead end (closed on three sides) is not a passage. An army parked there blocks the lane
+    /// for its own workers, and a shove cannot move a soldier along it (BUG-0033's rule): Raraku seed 1's worker held from
+    /// tick 5,131. At most (2 x reach / cell + 3)^2 cells, five reads each; allocates nothing.
+    /// </summary>
+    internal static bool NarrowWithin(AiPlayer ai, Vector2 p)
+    {
+        PlayerView v = ai.View;
+        float reach = ai.Rules.RallyReach, cell = MapConstants.CellSize;
+        int r = (int)MathF.Ceiling(reach / cell) + 1;
+        int cx = (int)(p.X / cell), cy = (int)(p.Y / cell);
+        for (int y = cy - r; y <= cy + r; y++)
+            for (int x = cx - r; x <= cx + r; x++)
+            {
+                Vector2 centre = new((x + 0.5f) * cell, (y + 0.5f) * cell);
+                if (Vector2.DistanceSquared(centre, p) > reach * reach || v.IsKnownClosed(x, y)) continue;
+                bool west = v.IsKnownClosed(x - 1, y), east = v.IsKnownClosed(x + 1, y);
+                bool north = v.IsKnownClosed(x, y - 1), south = v.IsKnownClosed(x, y + 1);
+                if (west && east && !north && !south || north && south && !west && !east) return true;
+            }
+        return false;
     }
 
     /// <summary>Starts a wave if it may (see the type's summary); true when it did.</summary>

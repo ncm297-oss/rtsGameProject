@@ -119,6 +119,9 @@ public class ParkedArmyGatherTests(ITestOutputHelper output)
     /// 1 delivery in 6,000 ticks, held from 2,148; 6 at (23, 10): none, held from 1,616; 8 at (22, 10): held from 2,157). The
     /// worker presses diagonally into the passage's mouth; the soldier in its way can yield only along the passage, but a shove
     /// moves a unit along the contact normal, into the wall (and a blob's point does not yield at all, BUG-0033's rule).
+    /// M6-S12: still a report, on purpose. The cure decided on 2026-11-16 is an AI rule (the rally point keeps off one-cell
+    /// passages, <c>Ai/RallyPassageTests</c> asserts it on a staged AI seat), not a movement rule, so this movement shape (an
+    /// army parked by hand round a worker in a mouth) still holds the worker; no AI seat parks there any more.
     /// </summary>
     [Theory]
     [Trait("Category", "Stress")]

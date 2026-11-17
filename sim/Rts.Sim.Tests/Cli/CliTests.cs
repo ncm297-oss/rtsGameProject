@@ -439,7 +439,7 @@ public sealed class CliTests : IDisposable
     /// <summary>
     /// M5-5: the literal row from a prompt: <c>match --map vathar_crossing --seed 7</c> prints a line every 6,000 ticks, ends
     /// with seat 0 the winner (exit 0) at the criterion test's end tick, end hash and fold. M6-S10: the literal row moved from
-    /// seed 1 (seat 1 the winner) to seed 7 (<c>MatchCriterionTests.VatharBound</c>'s comment).
+    /// seed 1 (seat 1 the winner) to seed 7 (<c>MatchCriterionTests.VatharBound</c>'s comment). M6-S12: back to seed 1, seat 1.
     /// </summary>
     [Fact]
     public void Match_TheLiteralRow_EndsWithAWinner_Exit0_WithTheTestsHashes()
@@ -450,10 +450,10 @@ public sealed class CliTests : IDisposable
         CriterionMatch.Result direct = CriterionMatch.Play(CriterionMatch.Build("vathar_crossing", row.Seed), 72_000, checks: false);
         string[] lines = Lines(r.Out);
         Assert.Equal(new[] { "tick 6000 (5:00)", "tick 12000 (10:00)", "tick 18000 (15:00)" }, lines.Where(l => l.StartsWith("tick ")).Select(l => l[..(l.IndexOf(')') + 1)]));
-        Assert.Contains($"result winner p0 at tick {direct.EndTick} ({CriterionMatch.Clock(direct.EndTick)})", lines); // M6-S10: p1 at seed 1 before
+        Assert.Contains($"result winner p1 at tick {direct.EndTick} ({CriterionMatch.Clock(direct.EndTick)})", lines); // M6-S12: seed 1 again, p1 (was p0 at seed 7, M6-S10 to M6-SH2)
         Assert.Contains($"end tick {direct.EndTick} hash {direct.EndHash:X16} fold {direct.Fold:X16}", lines);
         Assert.Contains($"waves {direct.Waves} hunts {direct.Hunts}", lines);
-        Assert.Equal("p0", direct.Winner);
+        Assert.Equal("p1", direct.Winner); // M6-S12 (was "p0", seed 7)
     }
 
     /// <summary>M5-5: no result by <c>--ticks</c> is its own exit code (3), the result line says so, and <c>--record</c> writes a replay that plays back to every checkpoint.</summary>

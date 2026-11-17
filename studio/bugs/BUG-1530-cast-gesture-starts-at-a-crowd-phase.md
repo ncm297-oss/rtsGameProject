@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S4 |
-| Status | open |
+| Status | fixed (M6-V24, 2026-11-16-2036, be6b218: the cast clip starts at 0 and follows the cast once; `CastClipTest` rows 1b / 1c, QA's `QaM6V24Test` at 0.5x / 1x / 2x, paused, Stop, recast, slot freed) |
 | Found | 2026-11-15-2136, task M6-V23 |
 | System | unit models / animation (view) |
-| Fixed by | |
+| Fixed by | M6-V24 (be6b218): `CastClipTest` rows 1b / 1c, QA's `QaM6V24Test` |
 
 ## Repro
 1. `& $env:GODOT --headless --path game res://tests/QaM6V23Test.tscn`. Row (C) prints
@@ -33,3 +33,8 @@ motion shows, but it starts at a phase that depends on the slot.
 A possible fix: start the Cast slot at 0 (no crowd phase; casts are rare and don't line up in a crowd), and play it at
 `length / castTime` speed, or don't loop it, so one thrust spans the cast. Leave this until a second model caster
 lands, then decide together with the Malazan / Whirlwind casters' clip maps (M6-V23 rule-67 question 3).
+
+## Fixed (M6-V24, 2026-11-16-2036)
+The cast clip starts at its first frame on the tick the unit is first seen casting and stands where the cast is
+(`UnitViews.CastProgress`), so it spans the cast once and never wraps; other clips keep the crowd phase. Producer:
+the gesture spans the cast as seen (one tick shorter than `castTime`) and the 0.15 s blend stays (Q2, Q4 accepted).

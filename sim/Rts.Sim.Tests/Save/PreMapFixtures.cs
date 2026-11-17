@@ -45,11 +45,16 @@ internal static class PreMapFixtures
     /// <c>("save_ai_seed2", 1230475, 0x260D2E7D579BB2FFUL)</c>. The four replay files were rewritten with <see cref="WriteFlag"/>
     /// in the same move: their headers are byte for byte the ab54ddb ones, only <c>k</c> lines (and the AI scene's commands,
     /// 81 to 83) moved.
+    /// M6-S12 (the AI's rally point off one-cell passages, a rebalance measured from the drop-off, a blind seat's re-scout):
+    /// the AI scene's play moved again; <c>save_ai_seed2</c> re-measured as <see cref="SaveFormatTests"/> normalizes it (its
+    /// length is back to 1,230,475) and <c>replay_ai_ffa_standard</c> rewritten with <see cref="WriteFlag"/> (its commands
+    /// 83 to 82); the three non-AI replay files and <c>save_menu_seed1</c> did not move. (The writer's printed save lines are not
+    /// normalized as the test is; the digest comes from the test's own normalization.)
     /// </remarks>
     internal static readonly (string Name, int Length, ulong Digest)[] SaveDigests =
     {
         ("save_menu_seed1", 2017388, 0x706E266D3C78B919UL),
-        ("save_ai_seed2", 1246880, 0x1B8D1E13E92D88EAUL),
+        ("save_ai_seed2", 1230475, 0x2866C3222D82808FUL), // M6-S12 (the AI rules of 2026-11-16; the format unchanged): was 1246880, 0x1B8D1E13E92D88EA
     };
 
     /// <summary>The replay fixture names (each <c>Replays/premap/&lt;name&gt;.replay</c>) and the format each must be.</summary>

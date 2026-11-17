@@ -515,6 +515,18 @@ own cues (select, order, refused, building placed or finished, unit or tech read
   has the population room and the gold for one, whatever its build order says and even while its base is under attack;
   with no gold for one it sends nothing (M6-SH2, BUG-1465: a beaten side used to sit on its gold with a finished Town Hall
   for good; [03 Implementation (M6-SH2)](03-technical-design.md#implementation-m6-sh2)).
+- The AI parks its army at a rally point `rules.json` `ai.rallyDistance` (12 m) from its Town Hall toward the nearest
+  enemy building it knows (toward the map's centre while it knows none). A point in or at the mouth of a one-cell passage
+  (a lane one cell wide between cliffs, buildings or trees, as far as the AI knows them) moves to the nearest point on the
+  same line within `ai.rallyReach` (6 m) that stands on open ground with no such lane that near, stepping back toward the
+  Town Hall first and then out past the first point; with none it stays where it was. So a parked army no longer stands in
+  the one lane its own workers walk through to their mine (built in M6-S12, BUG-1461, Producer decision 2026-11-16;
+  [03 Implementation (M6-S12)](03-technical-design.md#implementation-m6-s12)).
+- The AI keeps about `rules.json` `ai.goldShare` (0.6) of its gatherers on gold, leaning toward what its build order is
+  saving for. An idle worker goes to the known gold mine or forest nearest it. When no worker is idle and the split is off,
+  one gatherer a think moves to the other resource, and it goes to the known node of that resource nearest the drop-off it
+  delivers to (its nearest finished Town Hall, depot or camp), not the one nearest where it stands: a woodcutter at a far
+  forest is no longer sent to an even farther mine beside it (built in M6-S12, BUG-1531, Producer decision 2026-11-16).
 - The AI looks before it attacks uphill: a wave whose target stands on higher ground than the army goes first to the
   top of the ramp nearest the target, onto the target's own plateau, and on to the target once a member is there or the
   target is in its sight. On level ground, or against a target on the army's own level or below, nothing changes (built
@@ -545,7 +557,11 @@ own cues (select, order, refused, building placed or finished, unit or tech read
   at (M6-SH1, BUG-1052 / 1053). The first scout's loss is always followed by one more (earlier losses in a fight are not the
   scout role's, BUG-1055), and a scout sent again stops looking, and gathers, as soon as the AI knows an enemy building, a
   gold mine and a forest anywhere that is not at an enemy's door: it stands at the far forest it found, so the first wood
-  comes home a walk sooner (BUG-1056). A seat with no finished drop-off may take any node. Built in M6-S5 (BUG-1045), the head ring
+  comes home a walk sooner (BUG-1056). A side whose scouting is over, that is short of a resource the next unit of its
+  army mix needs, knows no gold mine or forest of it at all and has a worker with nothing to gather, sends that worker on
+  the scout's sweep again, past the `ai.scoutReplacements` cap: one at a time, at most one every `ai.scoutAfter` (15 s),
+  walking only to ground it has never seen (M6-S12, BUG-1460, Producer decision 2026-11-16; a worker at work is never taken
+  for it, so an enemy camped at the door does not drain the economy). A seat with no finished drop-off may take any node. Built in M6-S5 (BUG-1045), the head ring
   and the replacement in M6-S7 (BUG-1047, BUG-1048; [03 Implementation (M6-S7)](03-technical-design.md#implementation-m6-s7);
   the fallback for a kind with no node in reach was built, measured and dropped: Producer decision, [01 change log](01-vision.md) 2026-11-05).
 - Build orders, army compositions, and attack thresholds are per-faction data (`ai.json`), not code.

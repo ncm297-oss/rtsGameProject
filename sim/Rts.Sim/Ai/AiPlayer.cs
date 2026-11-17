@@ -516,6 +516,7 @@ internal sealed partial class AiPlayer
         FarExpansion.Run(this); // M5-9b: after the build order (its hall rebuild and reserve first), before the scout
         ScoutManager.Run(this);
         EconomyManager.Run(this);
+        ScoutManager.Rescout(this); // M6-S12 (BUG-1460): after the economy, so only a worker it left idle goes
         ProductionManager.Run(this);
         MilitaryManager.Run(this);
         AbilityManager.Run(this); // M5-4c: last (docs/03 "AI architecture")
@@ -698,6 +699,27 @@ internal sealed partial class AiPlayer
         for (int k = 0; k < mix.Units.Length; k++)
             if (CanPayNow(mix.Units[k])) return false;
         return true;
+    }
+
+    /// <summary>
+    /// M6-S12 (BUG-1460): whether the seat is short for production's pick (<see cref="ShortForPick"/>) and that unit (or, with
+    /// no producer free, some unit of its current composition) costs more of <paramref name="kind"/> than it holds: a resource
+    /// its army mix needs now. False with no composition.
+    /// </summary>
+    internal bool PickShortOf(ResourceKind kind)
+    {
+        if (!ShortForPick(out int pick)) return false;
+        if (pick >= 0) return ShortOf(pick, kind);
+        AiComposition mix = CurrentMix();
+        for (int k = 0; k < mix.Units.Length; k++)
+            if (ShortOf(mix.Units[k], kind)) return true;
+        return false;
+    }
+
+    private bool ShortOf(int type, ResourceKind kind)
+    {
+        UnitDef def = Data.Units[type];
+        return kind == ResourceKind.Gold ? Gold < def.CostGold : Wood < def.CostWood;
     }
 
     /// <summary>The current age's composition of the picked opening (it has at least one).</summary>
@@ -1240,8 +1262,12 @@ internal sealed partial class AiPlayer
         return ax < x0 + bw && x0 < ax + aw && ay < y0 + bh && y0 < ay + ah;
     }
 
-    /// <summary>The worker to send to build at <paramref name="at"/>: the nearest idle one, else the nearest gathering or returning one, never one with a command not yet applied, the scout nor one fleeing (M5-4b); -1 for none.</summary>
-    internal int PickBuilder(Vector2 at, out int generation)
+    /// <summary>
+    /// The worker to send to build at <paramref name="at"/>: the nearest idle one, else the nearest gathering or returning one,
+    /// never one with a command not yet applied, the scout nor one fleeing (M5-4b); -1 for none. M6-S12: with
+    /// <paramref name="idleOnly"/> an idle one only (the blind re-scout, <see cref="ScoutManager.Rescout"/>).
+    /// </summary>
+    internal int PickBuilder(Vector2 at, out int generation, bool idleOnly = false)
     {
         int best = -1, bestRank = int.MaxValue;
         float bestDistance = float.MaxValue;
@@ -1250,7 +1276,7 @@ internal sealed partial class AiPlayer
         {
             int slot = WorkerSlots[k];
             int rank = BuilderRank(slot, out SeenUnit u);
-            if (rank == 2) continue;
+            if (rank == 2 || idleOnly && rank != 0) continue;
             float d = Vector2.DistanceSquared(u.Position, at);
             if (rank > bestRank || rank == bestRank && d >= bestDistance) continue;
             best = slot;

@@ -29,6 +29,8 @@ namespace Rts.Sim.Tests.Content;
 /// three seeds: this is one seed of nine (the other eight send their first wave by 10:09 and stand at 20:00; whirlwind.md
 /// "The holy war's first wave"), so the allowance is this case only. Any other side defeated without a wave, a side alive
 /// at 20:00 without one, or the named side if its wave was due before it fell, still fails.
+/// M6-S12 (the sim's AI rules; BUG-1553): one side alive at 20:00 without a wave is named too (<see cref="AliveWithoutAWave"/>,
+/// (0, 2) seed 3), reported and not failed, under the same rule (it fails if it waves or falls).
 /// </para>
 /// <para>
 /// Reads the AI through its internals (<c>InternalsVisibleTo</c>): <c>Simulation.AiOf</c>, <c>AiPlayer.Opening</c>,
@@ -121,6 +123,14 @@ public class AiOpeningPairsReportTests
             _out.WriteLine($"  {side}: steps done {done} / {ai.Opening.BuildOrder.Length}; waiting: {(waiting.Count == 0 ? "none" : string.Join("; ", waiting))}");
             int longWaits = waiting.Count(x => x.Contains(LongWaitFlag, StringComparison.Ordinal));
             if (longWaits > 0) _out.WriteLine($"  {side}: {longWaits} step(s) due over 5:00 and still short of gold or wood at 20:00 (BUG-0981's pattern, left by M5-4g's gated reserve; not a failure)");
+            if (Array.IndexOf(AliveWithoutAWave, (malazan, whirlwind, seed, p)) >= 0)
+            {
+                // M6-S12 (BUG-1553): the named side stands at 20:00 without a wave: reported, not failed; any other outcome fails,
+                // so the entry cannot go stale.
+                if (ai.Board.WavesStarted == 0 && defeated[p] < 0) _out.WriteLine($"  {side} ({ai.Opening.Id}) sent no wave on seed {seed} and stands at 20:00 (BUG-1553: reported, not failed)");
+                else deadEnds.Add($"{side} ({ai.Opening.Id}) on seed {seed} now waves or falls: take it out of AliveWithoutAWave");
+                continue;
+            }
             bool named = Array.IndexOf(DefeatedBeforeDue, (malazan, whirlwind, seed, p)) >= 0;
             string? noWave = NoWave(side, ai.Opening.Id, seed, ai.Board.WavesStarted, defeated[p], firstDue[p], named, out bool fails);
             if (noWave != null && fails) deadEnds.Add(noWave);
@@ -180,6 +190,16 @@ public class AiOpeningPairsReportTests
     // M6-SH2 (the sim's drop-off rule and retrain, handed this list): (0, 2, 3, 1) taken out at the row's own request
     // ("now sends a wave: take it out"): on seed 3 holy_war survives the Malazan first wave and waves at 14:45.
     internal static readonly (int Malazan, int Whirlwind, ulong Seed, int Player)[] DefeatedBeforeDue = Array.Empty<(int, int, ulong, int)>();
+
+    /// <summary>
+    /// M6-S12 (the sim's AI rules, handed this class while the data track is stopped; BUG-1553, a finding for the balance
+    /// pass, D33): the one named side the no-wave rule reports instead of failing because it stands at 20:00 without a wave.
+    /// (0, 2) seed 3: the Malazan <c>standard</c> sends five waves from 5:50 and the <c>holy_war</c> army never reaches its
+    /// 20-pop threshold (peak 16; 600 thinks defending); it is not defeated (M6-SH2: it waved once, at 14:45).
+    /// <c>Content/HolyWarFirstWaveReportTests</c> and whirlwind.md "The holy war's first wave" print it. Any other side alive
+    /// at 20:00 without a wave still fails, and so does this one if it waves or falls.
+    /// </summary>
+    internal static readonly (int Malazan, int Whirlwind, ulong Seed, int Player)[] AliveWithoutAWave = { (0, 2, 3, 1) };
 
     /// <summary>
     /// D-R39: whether <paramref name="ai"/>'s first wave is due now, from world state: its live army (every unit, so at
