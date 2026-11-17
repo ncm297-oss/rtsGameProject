@@ -1,5 +1,16 @@
 # Handoff: brief for the next session
 
+**ACCEPT of 2026-11-15-2136, first call (2026-11-16, 16:05-18:20): view M6-V23 ACCEPT (Producer's scratch merge of
+sim 63a6a2a + view 41cd358: build 0 / 0, default loop 9,744 / 4 failed / 19 skipped, exactly the sim's four named
+rows, smoke PASS, scene loop 113 of 113); sim M6-SH2 gets fix round 2 of 2, rulings only, no production code.**
+Still to write at the second call: the full session log, STATE (the view's For your review entry, the sim's), the
+roadmap note, docs/01's change-log entry for the rulings, bug files BUG-1521 / 1522 / 1523 / 1524 and the
+developer's status notes (`m6sh2-bugs.patch.md` in the session scratchpad: BUG-1520 fixed, BUG-1465 (a) fixed,
+BUG-1460 / 1461 / 1463 appended, BUG-1440 fixed), the view's `m6v23-bugs.patch`. The rulings and the round's
+brief are under "Sim track → Fix round 2 (Producer rulings)" below. If this session dies here: BUG-1520's fix
+(`EconomySystem`, QA-verified correct) is on branch `studio/2026-11-15-2136-sim` at `63a6a2a`, not on `main`; resume
+by running that round, not by re-planning (rule 44).
+
 **Amended after the owner's 21:42 inbox note: the sim's M6-SH2 now starts with BUG-1520 (a construction site is
 not a drop-off); view and data unchanged.**
 **PLAN of session 2026-11-15-2136 (session 3 / 8, started 21:36): sim GO M6-SH2 (hardening, QA full) · view GO
@@ -420,6 +431,48 @@ shapes x 8 shuffles at 0, 0.5 and 0.75, Laborers and Gatherers, fuzz seeds 57-20
 (no gather loop) must separate exactly as before (twin a no-worker battle against the base). (6) Determinism: twins,
 save on every 500th tick of a Raraku match, replay. (7) Every pin edit against a fresh run; no assertion weakened in
 the handed-over content pins. Default loop with Stress, then Perf alone (rule 42). Rule 65.
+
+### Fix round 2 (Producer rulings, 2026-11-16; the last round: tests and docs only)
+
+**Why a round and not a verdict:** the branch's default loop has 4 red rows and `main` stays green. Every one needs
+only a ruling, so the round is small. **No file under `sim/Rts.Sim/**`, `game/**` or `tools/**` changes** (so no pin
+moves and no full Stress re-run: `git diff 63a6a2a -- sim/Rts.Sim game tools` must be empty).
+
+Rulings (Producer decisions, owner may revisit; recorded in docs/01 at the ACCEPT):
+1. **BUG-1534: the retrain wins.** A seat with no worker trains one even on a think where it is stamped starved.
+   `StarvedPickOracleQaStressTests`: the oracle exempts a worker-type Train sent while the seat has no live worker
+   (nothing else), the reason in the row; docs/02's starved paragraph gets the sentence.
+2. **BUG-1537, Vathar Crossing seed 2:** into `MatchCriterionSweepQaStressTests.Known` with its id and the
+   diagnosis as the comment (one Laborer hauling wood for the hall rebuild, silent 5,699 ticks, not stuck). No bound
+   raised. The cure (what a seat buys while it banks for a hall) goes to the next AI task.
+3. **BUG-1531, `ReachRuleQaTests` (2, 80 m):** the oracle is right and stays as written. The row leaves the
+   `InlineData` list and becomes a known-bug row skipped with `BUG-1531` in the repo's usual form (same body, same
+   bound). **The cure is decided: a rebalance's pick is measured from the worker's nearest finished drop-off, not
+   from the worker**; it is the first item of the next sim task that changes the AI (it moves every pin), which
+   un-skips the row.
+4. **The three content pins (new id BUG-1524, S3), handed to the sim developer by name:**
+   (a) `TeblorOpeningQaTests.TheOpponentSentence_*` and teblor.md's sentence: built per row for either outcome
+   (`Fell < 0`: "and still stands at 20:00"; else "and is defeated at N s"); the sentence says both matches stand
+   now, the old figures kept in the bracket as history, the "the Whirlwind match is the balance pass's" clause
+   corrected. (b) `DR35ProsePinQaTests.AgeTwoProse_*` and whirlwind.md: seed 13 read from its cell like its
+   neighbours (never reaches Age II, defeated at the cell's time); the sentence says so. (c)
+   `DR35ProsePinQaTests.Malazan_Bug0982Prose_*`: skipped with `BUG-1524` ("D33 re-measures the BUG-0982 threshold
+   table on the M6-SH2 sim and rewrites its prose"); malazan.md gets one line under the threshold table saying it
+   predates M6-SH2 and the Age II table above is newer. No assertion in it is edited. (d) whirlwind.md "What it
+   says" under the holy war's table: re-worded to what the re-printed table says (`holy_war` no longer falls on
+   seed 3), numbers from the table only.
+5. docs/03 "Fix round 1", BUG-1536's line: "mines empty" (QA's probe: 0 live mines from tick 30,000), not "empty
+   or unknown"; a "Fix round 2" paragraph listing these edits old → new.
+6. Criteria 2, 4, 5 are ruled at the ACCEPT, not in this round (2: the brief's error, the rebuild already worked;
+   4: not built with good reason, the re-scout is next; 5: stays open under BUG-1461 / 1463). Do not touch them.
+
+Done when: build `--no-incremental` 0 / 0; **the default loop 0 failed** (rule 62: the full loop after the last
+edit); `StarvedPickOracleQaStressTests` and `MatchCriterionSweepQaStressTests` run whole and green; the production
+diff empty as above. QA's re-check: the same loop on the commit with its own files (rule 47 / 65), the two Stress
+classes, the diff check, and that no assertion was removed or loosened beyond rulings 1-4. **No full Stress or Perf
+run** (no production byte moves). Expected Stress reds on `main` afterwards, by ruling: `Bug0982_*` x2 (D33),
+`KeepCornerCureQaStressTests` x5 (BUG-1461 / 1463), `StartingResourcesAiStressTests` (1, 0) (BUG-1462),
+`MapSlice2StressTests` Pale Hills 5 (BUG-1523).
 
 ### Where we are
 M6-S11 on `main`: the Hard-counter row honest, Request 57 built. Counter **4 / 4: the next session is the sim's
