@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S4 |
-| Status | open (item 2 fixed by M6-VH8, session 2026-11-15-1536, verified by QA: `OverlayLineTest`; item 3 waits for an art task with a re-import, item 4 for a task that may re-pin `QaM6VH7Test` row 1 or `QaM6V20Test` row 9; item 1 is the owner's taste) |
+| Status | open (item 2 fixed by M6-VH8, session 2026-11-15-1536, verified by QA: `OverlayLineTest`; item 4 fixed by M6-V23 (verified by QA: `CastClipTest`; BUG-1530 is its S4 follow-up); item 3 waits for an art task with a re-import; item 1 is the owner's taste) |
 | Found | 2026-11-14-2156, task M7-V5 (QA) |
 | System | view: unit models (Teblor figures), overlays |
-| Fixed by | M6-VH8 (item 2) |
+| Fixed by | M6-VH8 (item 2), M6-V23 (item 4) |
 
 ## Repro
 1. `& $env:GODOT --path game --resolution 1600x900 res://tests/QaM7V5Test.tscn -- --shots <dir>` (headless without
@@ -48,3 +48,10 @@ Nothing here breaks a criterion; each is a look item for the Producer / owner:
 - Item 4 not done: no re-import is needed, but a Casting clip needs a seventh `UnitModels.Clip` (breaks QA's
   `QaM6VH7Test` row 1) or a type-aware `ClipFor` (moves the contract `QaM6V20Test` row 9 / `TeblorModelTest` read).
 - Item 3 not done: a prop offset needs a Blender re-import (left for an art task). Item 1 is the owner's taste.
+
+## M6-V23
+- Item 4 fixed: `UnitModels.Clip.Cast`, a seventh slot named `attack_cast` (the library clip), and `ClipFor` maps
+  `Casting` to it; by the state-name rule every model type holds it with no re-import, so the casting Shaman plays
+  `attack_cast`; a library without it plays `idle` with no warning. New scene `CastClipTest`; picture
+  `shaman-casting-zoom20.png` (`CastClipTest` windowed `-- --shots`). `QaM6VH7Test` row 1, `QaM6V20Test` row 9 and
+  `TeblorModelTest` needed no edit (the slot's name is a library clip: 0.5 s, longer than the 0.3 s stagger bound).

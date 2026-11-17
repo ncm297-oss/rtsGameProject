@@ -2,7 +2,7 @@
 
 | Field | Value |
 | --- | --- |
-| Severity | S2 (the default loop is red outside the rows M6-SH2's criterion 11 allows: only the criterion-10 content rows may be red; the developer listed it "for ruling", untraced) |
+| Severity | S3 (re-rated by the Producer at the ACCEPT: an AI economy weakness on one staged seed, wood banked not lower; it was S2 only while its row was red on the default loop) |
 | Status | open (ruled: oracle stands; row (2, 80) skipped as a known bug; cure decided for the next sim task that changes the AI) |
 | Found | 2026-11-15-2136, task M6-SH2 (QA) |
 | System | AI economy (gather targeting under the lifted reach); exposed by the drop-off rule (BUG-1520) |

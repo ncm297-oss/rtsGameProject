@@ -29,6 +29,10 @@ Commit and push after editing, from either machine (or ask Claude to).
   with tests that fail first: a site is not a drop-off until it is finished; a worker heading for one goes to the
   nearest finished drop-off, or keeps its load until one is finished. It runs in the same task as the clean-up because
   it changes gathering, and the AI test matches are re-measured once for both.
+  → **Fixed and on `main` (2026-11-16, M6-SH2 accepted).** Every drop-off building of every faction; a loaded worker
+  with no finished drop-off waits beside the site and delivers when it is done. The golden replay did not change; every
+  AI match pin did (re-measured). Training, research and rally already required a finished building. Details: the
+  first For your review entry in `studio/STATE.md`.
 
 - 2026-11-14 · **Gatherers may overlap a bit while collecting (owner, relayed by the watcher session).** Owner thinks
   gatherers should be able to clip through each other somewhat while collecting resources (at a resource node and at the

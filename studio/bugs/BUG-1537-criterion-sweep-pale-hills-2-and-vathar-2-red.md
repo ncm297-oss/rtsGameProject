@@ -2,7 +2,7 @@
 
 | Field | Value |
 | --- | --- |
-| Severity | S2 (Stress red outside the rows M6-SH2's criterion 11 allows; criterion 3 lets only Raraku rows change in `Known`) |
+| Severity | S3 (re-rated by the Producer at the ACCEPT: a slow end, not a stall; S2 only while its row was red outside the allowed set) |
 | Status | open (Pale Hills 2 fixed and verified; Vathar 2 ruled into `Known`, cure goes to the next AI task) |
 | Found | 2026-11-15-2136, task M6-SH2 (QA) |
 | System | AI (gather re-send, BUG-1151 shape; a silent seat, BUG-1152 family), moved by the drop-off rule (BUG-1520) |

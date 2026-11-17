@@ -3,7 +3,7 @@
 | Field | Value |
 | --- | --- |
 | Severity | S4 |
-| Status | open (docs corrected by M6-VH8, session 2026-11-15-1536; the `smoke.ps1` check is Request 59 for the sim track) |
+| Status | fixed (M6-SH2, session 2026-11-15-2136: `tools/qa/smoke.ps1` stops before the import when a non-.wav file under `game/` is a Git LFS pointer, exit 3; QA saw it fire on a smudge-skipped clone: "72 file(s) ... run 'git lfs pull' first") |
 | Found | 2026-11-14-2156, at PLAN (Producer, scratch clone of `main` f07b849 made with `GIT_LFS_SKIP_SMUDGE=1`) |
 | System | view: asset import, `tools/qa/smoke.ps1`, docs (the handoff's and docs/03's "a pointer file gives the capsule and one warning, never an `ERROR`") |
 | Fixed by | M6-VH8 (docs) |

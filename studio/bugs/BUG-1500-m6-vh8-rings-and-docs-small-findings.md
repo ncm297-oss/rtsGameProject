@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S4 |
-| Status | open |
+| Status | fixed (M6-V23, session 2026-11-15-2136; verified by QA: `QaM6VH8Test` rows R / F, `QaM6V23Test` rows P / R) |
 | Found | 2026-11-15-1536, task M6-VH8 |
 | System | queued-orders drawing (`OrderPathView`), docs/03 |
-| Fixed by | |
+| Fixed by | M6-V23 |
 
 ## Repro
 1. `& $env:GODOT --headless --path game res://tests/QaM6VH8Test.tscn` (row R), or windowed with
@@ -41,3 +41,13 @@ Item 1: the level could be counted per point across units (a second pass, or the
 entries at a point) so different no-place kinds at one point nest too. Rare in play: it needs two units with different
 end orders at one shared point. Items 2-3 are doc wording only. The pictures show the overlays read well just above the
 heads, so item 3 is input for the Producer's Question 1, not a request to move the line.
+
+## M6-V23
+- Item 1 fixed: `OrderPathView` tells rings apart per point by (kind, how many of that kind the unit has there before
+  it) and gives each new ring at a point the next level out, counted across every selected unit. Row R now checks it:
+  `(R) a Stop (unit a) and a Hold (unit b) at one point: [Stop level 0 radius 1.20 m; HoldPosition level 1 radius 1.71 m]`
+  (was printed only, both level 0 / 1.20 m). One unit's nesting (Stop@0, Stop@1, Hold@2, Stop@2) and the three-ring cap
+  are unchanged. Picture: `rings-stop-and-hold-shared-point.png` (QaM6VH8Test windowed `-- --shots`): a white inner ring
+  and a cream outer ring round the shared Move disc.
+- Item 2 fixed: `MarkerFullZoom`'s summary reads "1 m in radius, 2 m wide" at 60 m.
+- Item 3 fixed: docs/03 "Implementation (M6-VH8)" reads about 0.21 m (a man) / 0.32 m (a giant).

@@ -773,7 +773,13 @@ open S1 / S2. Retro below; open S3 / S4 listed there.)_
       `MatchCriterionTests` method names still say "Seed1"); Raraku's row is seed 2 (27,936), Pale Hills seed 1 42,384;
       the Hard v Normal tally 36 / 3 / 3. **Open against criterion 5's other maps: Raraku seeds 1, 3, 4 and 6 no longer
       end inside 72,000 (BUG-1460 / BUG-1465, the sim's next hardening).** No criterion ticked or unticked; docs/03 "Implementation
-      (M6-S10)".)
+      (M6-S10)".
+      **M6-SH2 (2026-11-15-2136, the sim's hardening, accepted after two fix rounds; the owner's drop-off bug BUG-1520
+      fixed, a worker-less AI retrains, every match row re-measured once):** criterion 5's 20-minute row is Vathar
+      Crossing seed 7 at 19,912; Raraku's row is **seed 3** (25,083; seeds 3 / 4 / 6 end again, seed 1 still does not:
+      BUG-1460; seed 2 ends late at 56,940: BUG-1521); Pale Hills seed 1 27,498; the Hard v Normal tally 28 / 10 / 4,
+      **Hard behind on Pale Hills at 4 / 6 / 4 (BUG-1522, the balance pass)**; Pale Hills seed 5 no result by 72,000
+      (BUG-1523). No criterion ticked or unticked; docs/03 "Implementation (M6-SH2)".)
 
 ## M6 — Game shell & real art
 

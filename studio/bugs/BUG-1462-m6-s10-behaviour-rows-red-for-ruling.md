@@ -60,3 +60,9 @@ corrected in the session log. None of the five is a held worker, an unplaced bui
 
 ## 2026-11-15-1536 (ACCEPT)
 The five default-loop rows ruled red at 0506 are green: `CounterCompositionTests.AHardSeat_ShiftsItsLineShareFurther_ThanANormalSeat` (M6-S11, the two-producer-pair staging `RunWide`; Normal 11 / 6 seen v 10 / 8 unseen, Hard 12 / 5; strength-0 controls read 0), `AiOpeningPairsReportTests` (0, 2) and (2, 0) and `DR35ProsePinQaTests` x2 (D-R39). Still red by the ruling, exactly as listed above and re-confirmed by M6-S11's QA on a47318f (16 rows): the Stress rows. They are two sessions red after this one, so they are the sim's next task (the hardening), each green or re-stated with its id. Note for D33: `Bug0982_*` x2 stay red on their pick check (the rule picks 14, the file ships 18); the page's threshold table was re-printed by D-R39.
+
+## M6-SH2 (2026-11-16)
+Row by row: Raraku 3 / 4 / 6 green; `FarExpandProbe` Vathar 2 (4 seats) green; `StarvedSaveTwoProcess` re-staged on
+Raraku seed 1, green; `StartingResourcesAi` opening 2 green, **opening 1 against 0 still red** (`crossbow_push` seed 9);
+`ScoutCap` seed 5 green; `KeepCornerCure` **five rows still red** (BUG-1461 / 1463). Red on `main` by ruling after this
+session, Stress only: those six, `MapSlice2StressTests` Pale Hills 5 (BUG-1523) and `Bug0982_*` x2 (D33).

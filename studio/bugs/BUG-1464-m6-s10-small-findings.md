@@ -3,7 +3,7 @@
 | Field | Value |
 | --- | --- |
 | Severity | S4 |
-| Status | open |
+| Status | open (item 1 fixed by M6-SH2: `Movement/HeldWorkerProbe` checks every tick past the clock with the Producer's definition) |
 | Found | 2026-11-15-0506, task M6-S10 (QA full) |
 | System | tests (`Movement/HeldWorkerProbe`), docs (docs/03 "Implementation (M6-S10)", `docs/factions/teblor.md`) |
 | Fixed by | |

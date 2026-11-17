@@ -3,7 +3,7 @@
 | Field | Value |
 | --- | --- |
 | Severity | S3 |
-| Status | open |
+| Status | fixed ((a) the retrain, M6-SH2, session 2026-11-15-2136: `Ai/RetrainTests`, red on the base; (b) the hall rebuild was not a defect: it already worked, the seat was 18 wood short when the report stopped) |
 | Found | 2026-11-15-0506, task M6-S10 (QA full, probing BUG-1460) |
 | System | sim: AI (economy / production executor in the end game) |
 | Fixed by | |
@@ -30,3 +30,10 @@ finish. Not a held worker: neither seat has a worker on a loop.
 
 ## Note from D-R39 (2026-11-15-1536, BUG-1510 item 2)
 A second shape of the same pattern: `AiOpeningPairsReportTests` (malazan 2, whirlwind 0) seed 13: the Whirlwind seat's Town Hall is razed, it keeps 4 workers, 1,072 gold and 257 wood to 20:00 and never rebuilds a hall. The report now reads that seat as "beaten: hall lost" (by the brief), so the row no longer flags it: the hardening's fix should cover "workers and gold, no hall" as well as "a hall and gold, no worker", with this seed as a row.
+
+## M6-SH2
+(a) Cause: workers were trained only by the opening's `train` steps, so a seat whose workers all died after those
+steps never trained another. Fixed by `BuildOrderExecutor.Retrain`. QA: the retrained worker gathers; a camping enemy
+drains one worker every 67 s or so, bounded by gold (18 trained, 17 lost in 20 minutes). Ruling (BUG-1534): the retrain
+also runs on a starved think. (b) Not a defect; `RetrainTests.AWorker_NoHall_*` guards the rule. The brief's criterion 2
+asked for a failing-first scene of a rule that already worked: the brief's error (rule 66), corrected in the session log.

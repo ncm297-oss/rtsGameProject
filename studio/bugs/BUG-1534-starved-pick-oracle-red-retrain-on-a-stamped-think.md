@@ -2,7 +2,7 @@
 
 | Field | Value |
 | --- | --- |
-| Severity | S2 (Stress red outside the rows M6-SH2's criterion 11 allows; two documented AI rules now disagree and neither the docs nor the row says which wins) |
+| Severity | S3 (re-rated at the ACCEPT; closed by ruling) |
 | Status | closed (ruled: the retrain wins; oracle exemption verified narrow by QA re-check 2) |
 | Found | 2026-11-15-2136, task M6-SH2 (QA) |
 | System | AI: `BuildOrderExecutor.Retrain` (BUG-1465 (a)) against the M5-9a starved rule's oracle |
