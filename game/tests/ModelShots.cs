@@ -34,6 +34,10 @@ namespace Rts.Game.Tests;
 /// M6-V24: <c>--compare &lt;dir&gt;</c> saves, per model type, <c>cmp-&lt;id&gt;-front.png</c> / <c>-back.png</c> (a close camera)
 /// and <c>-20m</c> / <c>-40m</c> / <c>-60m.png</c> (the match camera): players 1 and 2's figures held at idle's first frame, so
 /// two builds' pictures can be diffed pixel by pixel (<c>--compare-only &lt;id&gt;</c> takes one type).
+/// M6-V25: <c>--figures &lt;dir&gt;</c> [<c>--figures-faction &lt;id&gt;</c>] [<c>--figures-types &lt;id,id&gt;</c>]: per faction (Malazan
+/// and Whirlwind by default) close-ups of the named types in their clips (the cast too for a type with an ability) and the
+/// row of every model type of the faction in two players' colours (<c>figures-&lt;faction&gt;-40m.png</c>, <c>-20m.png</c>,
+/// <c>-40m-gray.png</c>).
 /// </remarks>
 public partial class ModelShots : Node
 {
@@ -53,6 +57,7 @@ public partial class ModelShots : Node
         string? lines = Arg(args, "--lines");
         string? teblor = Arg(args, "--teblor");
         string? compare = Arg(args, "--compare");
+        string? figures = Arg(args, "--figures");
         try
         {
             DataLoadResult loaded = DataLoader.LoadAll(ProjectSettings.GlobalizePath("res://data"));
@@ -62,7 +67,7 @@ public partial class ModelShots : Node
             string vsync = Arg(args, "--vsync") ?? "on";
             // The pictures stand still (no combat); the cost run fights.
             var flags = new System.Collections.Generic.List<string> { "--seed", "1", "--units", "0", "--no-bases", "--no-fog", "--mute", "--no-hud", "--vsync", vsync };
-            if (look != null || typeShots != null || compare != null || (teblor != null && Array.IndexOf(args, "--teblor-fight") < 0)) flags.Add("--no-combat");
+            if (look != null || typeShots != null || compare != null || figures != null || (teblor != null && Array.IndexOf(args, "--teblor-fight") < 0)) flags.Add("--no-combat");
             // The real skirmish start: a Town Hall and the starting workers a side, the fog, an AI seat; Malazan for slot 1
             // unless --skirmish-faction names another (M7-V5: teblor).
             if (skirmish != null) flags = new System.Collections.Generic.List<string> { "--skirmish", "--seed", "1", "--faction", "1", Arg(args, "--skirmish-faction") ?? "malazan", "--mute" };
@@ -80,6 +85,7 @@ public partial class ModelShots : Node
             if (lines != null) await Lines(data, lines);
             if (teblor != null) await TeblorShots(data, teblor);
             if (compare != null) await CompareShots(data, compare);
+            if (figures != null) await FigureShots(data, figures);
         }
         catch (Exception ex)
         {
@@ -390,6 +396,15 @@ public partial class ModelShots : Node
             await TeblorFight(data, dir, types, c);
             return;
         }
+        await CloseUps(data, dir, types, c);
+        int heavy = data.FindUnit("malazan_heavy_infantry"), laborer = data.FindUnit("malazan_laborer");
+        await Row(data, dir, new System.Collections.Generic.List<int>(types) { heavy, laborer }, "row", c);
+    }
+
+    // M7-V5 (shared since M6-V25): per type, player 1 and player 2's figure facing a close camera, idle and held at 40 % of
+    // each of its own clips (a worker's three, a type with an ability its cast too): closeup-<id>-<clip>.png.
+    private async Task CloseUps(GameData data, string dir, System.Collections.Generic.List<int> types, NVector2 c)
+    {
         Camera3D? match = GetViewport().GetCamera3D();
         var close = new Camera3D { Fov = 40f };
         AddChild(close);
@@ -407,11 +422,12 @@ public partial class ModelShots : Node
             string id = data.Units[type].Key;
             await Frames(10);
             Save(dir, $"closeup-{id}-idle.png");
-            foreach (string clip in new[] { "walk", "attack", "gather_gold", "gather_wood", "build" })
+            foreach (string clip in new[] { "walk", "attack", "gather_gold", "gather_wood", "build", "attack_cast" })
             {
                 if (!_views.Models!.HasClip(type, (UnitModels.Clip)Array.IndexOf(UnitModels.ClipNames, (StringName)clip))) continue;
                 if (clip.StartsWith("gather", StringComparison.Ordinal) || clip == "build")
                     if (!data.Units[type].IsWorker) continue;
+                if (clip == "attack_cast" && data.Units[type].Abilities.Length == 0) continue;
                 foreach (int s in slots)
                 {
                     AnimationPlayer anim = _views.AnimatorOf(s)!;
@@ -427,22 +443,26 @@ public partial class ModelShots : Node
         }
         match?.MakeCurrent();
         close.QueueFree();
+    }
 
+    // M7-V5 (shared since M6-V25): the types in a row facing the match camera, player 1's in front and player 2's behind, at
+    // the default and the closest zoom (<stem>-40m.png / -20m.png) and a grey copy of the default (<stem>-40m-gray.png).
+    private async Task Row(GameData data, string dir, System.Collections.Generic.List<int> row, string stem, NVector2 c)
+    {
         ClearUnits();
-        int heavy = data.FindUnit("malazan_heavy_infantry"), laborer = data.FindUnit("malazan_laborer");
-        var row = new System.Collections.Generic.List<int>(types) { heavy, laborer };
         for (int p = 0; p < 2; p++)
             for (int k = 0; k < row.Count; k++)
                 Spawn(p, row[k], c + new NVector2((k - (row.Count - 1) / 2f) * 2.2f, -4f + p * 3.5f));
         await FaceCamera();
+        _camera.MakeCurrent();
         _camera.SetFocus(c.X, c.Y - 1f);
         foreach (float zoom in new[] { CameraLimits.DefaultZoom, CameraLimits.MinZoom })
         {
             _camera.SetZoom(zoom);
             await Frames(10);
             Image img = GetViewport().GetTexture().GetImage();
-            img.SavePng(System.IO.Path.Combine(dir, $"row-{zoom:0}m.png"));
-            GD.Print($"saved row-{zoom:0}m.png: {string.Join(' ', row.ConvertAll(t => data.Units[t].Key))}, player 1 front, player 2 behind");
+            img.SavePng(System.IO.Path.Combine(dir, $"{stem}-{zoom:0}m.png"));
+            GD.Print($"saved {stem}-{zoom:0}m.png: {string.Join(' ', row.ConvertAll(t => data.Units[t].Key))}, player 1 front, player 2 behind (camera {GetViewport().GetCamera3D()?.Name} at {GetViewport().GetCamera3D()?.GlobalPosition.Y:F1} m)");
             if (zoom != CameraLimits.DefaultZoom) continue;
             for (int y = 0; y < img.GetHeight(); y++)
                 for (int x = 0; x < img.GetWidth(); x++)
@@ -451,7 +471,28 @@ public partial class ModelShots : Node
                     float l = 0.2126f * px.R + 0.7152f * px.G + 0.0722f * px.B;
                     img.SetPixel(x, y, new Color(l, l, l));
                 }
-            img.SavePng(System.IO.Path.Combine(dir, "row-40m-gray.png"));
+            img.SavePng(System.IO.Path.Combine(dir, $"{stem}-40m-gray.png"));
+        }
+    }
+
+    // M6-V25: per faction (--figures-faction <id>, else Malazan and Whirlwind), the close-ups of the types --figures-types
+    // names (comma-separated ids; else every model type of the faction) and the row of every model type of the faction
+    // (figures-<faction>-40m.png / -20m.png / -40m-gray.png), in two players' colours.
+    private async Task FigureShots(GameData data, string dir)
+    {
+        System.IO.Directory.CreateDirectory(dir);
+        string[] args = OS.GetCmdlineUserArgs();
+        string[] factions = Arg(args, "--figures-faction") is string one ? new[] { one } : new[] { "malazan", "whirlwind" };
+        string[] picked = (Arg(args, "--figures-types") ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries);
+        NVector2 c = Centre();
+        foreach (string faction in factions)
+        {
+            var types = new System.Collections.Generic.List<int>();
+            foreach (int t in ModelFileTypes(data)) if (data.Factions[data.Units[t].Faction].Key == faction) types.Add(t);
+            GD.Print($"figure shots: {faction} model types {string.Join(' ', types.ConvertAll(t => data.Units[t].Key))}");
+            var close = types.FindAll(t => picked.Length == 0 || Array.IndexOf(picked, data.Units[t].Key) >= 0);
+            await CloseUps(data, dir, close, c);
+            await Row(data, dir, types, $"figures-{faction}", c);
         }
     }
 

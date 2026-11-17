@@ -4454,6 +4454,69 @@ view tests and docs; no sim, ViewApi, data or library change (`universal_humanoi
   4. The gesture spans the cast as the view sees it (castTicks - 1 ticks, the sim counting the starting tick), not
      `castTime`, so it ends on the tick the ability lands. Recommendation: accept.
 
+### Implementation (M6-V25)
+
+The art pass's fourth slice: the last four foot units, the Cadre Mage, the Sapper, the Priest of the Whirlwind and the
+Zealot, are figures (fifteen model types); the capsules left are the six types with no source on disk (the Wickan Lancer,
+the Horse Raider, the Destrier Rider, the War-dog, the Catapult and the Battering Ram). Four manifest entries, their
+generated files, view tests and docs; no sim, ViewApi, data, library or view-script change (`UnitModels` / `UnitViews` draw
+the new files as they draw the eleven).
+
+- **The entries** (docs/04 "Unit models, as built", fourth slice; the clips in "Animation setup"): the Ranger outfit for the
+  Mage, the Sapper and the Priest, the Peasant for the Zealot, recoloured to the faction palettes; props as boxes in sRGB
+  (`propColourSpace`): the casters' robes (a waist box and four panels on `pelvis`), the Mage's staff, the Priest's veil, the
+  Sapper's satchels and munition, the Zealot's two blades and head-wrap. 2,339-2,568 triangles, one surface, one `team`
+  material, one 1536 x 1024 atlas each. No new manifest hook, no builder or script change.
+- **Clips.** No new library clip. The Mage and the Priest attack and cast with `attack_cast`; the Sapper attacks with
+  `attack_throw` and its map names `attack_throw` for the cast slot too (the Cusser is a thrown munition); the Zealot attacks
+  with `attack_melee`. The cast gesture follows the cast for the three that cast (M6-V24's `CastClipTime`, read from
+  `AbilityDef.CastTicks`; nothing new in the view).
+- **Import:** two full runs of `tools/import-assets.ps1` give the same SHA-256 for all 31 binaries (fifteen `.glb`, fifteen
+  atlases, the library); the eleven earlier models' files and the library are byte-identical to the base. The art pass's
+  binaries: 38,442,384 bytes, was 28,828,257 (the four new models 9,614,127).
+- **Tests.** New `game/tests/FootModelTest` (headless, in the loop): per new type (found by id in the data and the manifest)
+  one mesh, one surface, the `team` material, an atlas with team and props tiles, triangles within the manifest's cap, 65
+  bones, the figure 1.8 m within 5 % without its props' faces, the players' materials sharing the atlas; from real sim states
+  idle, walk, attack (on a Heavy Infantry) and the cast (for a type with an ability), and every other state written into the
+  test's world, the playing clip is `ClipFor`'s and the library's very `Animation` the manifest maps it to; the cast gesture at
+  the shipped `castTime` (Telas Fire 0.8 s, Sandstorm 1.2 s, Cusser 1.0 s): from 0, never stepping back, ending within one frame
+  of the clip's end, then idle. Changed: `CastClipTest` rows (1) and (1b) run for the Shaman, the Cadre Mage and the Priest
+  (each ability edited by id in whichever faction file holds it); `ModelViewTest` checks the capsules are exactly the six
+  named types (it counts the models from the manifest as before: 15 models, 6 capsules); `AtlasModelTest` pins the new types'
+  triangles per tile (no base surfaces to compare with: the first build's counts). `ModelShots` gains `--figures <dir>`
+  (close-ups of chosen types in their clips, the cast too, and each faction's row of model types in two colours) and its
+  rows now make the match camera current first (without it, one faction's row picture after the close-ups came out at the
+  wrong zoom).
+- **Cost** (rules 42 / 61; 2026-11-17, 1600 x 900, `ModelShots --bench 30 --vsync off`, fifteen model types mixed,
+  `--per-side 200` / `500`, capsules with `--placeholder-art`, all four runs in one window, none of the developer's own test
+  processes running; two to three other tracks' `testhost`s ran throughout and could not be stopped, and the 400-capsule
+  figure, 2.66 ms against M6-V24's 0.87 alone, says the machine was about three times as busy as that window):
+
+  | Run | Average | While 90 %+ alive | Worst 1 % (90 %+ alive) | Draw calls |
+  | --- | --- | --- | --- | --- |
+  | 400 figures, fifteen types | 9.16 ms | **9.89 ms** (at most 16.7) | 18.10 ms | 963 |
+  | 400 capsules | 2.61 ms | 2.66 ms | 5.95 ms | 176 |
+  | 1,000 figures, fifteen types | 25.94 ms | 27.36 ms | 39.39 ms | 2,588 |
+  | 1,000 capsules | 3.87 ms | 4.03 ms | 9.78 ms | 243 |
+
+  The four new types add no draw call per figure (one surface each, as the eleven): 963 a frame for 400 figures against
+  M6-V24's 1,003. The 400 row is under the 16.7 ms gate in a loaded window; the 1,000 row is reported, not gated (M6-V24
+  measured 17.48 ms alone; this window's capsules ran three times as slow). A run alone would give the comparable figure:
+  a finding for the Producer's next quiet window.
+- **Questions for the Producer (rule 67), each with a recommendation:**
+  1. The robes are rigid boxes on the pelvis: in a stride, and in the idle stance, a leg shows through the front or side
+     panel (a split robe at 20-60 m). A robe that bends with the legs needs a skinned mesh (Blender work or a pack).
+     Recommendation: accept for now; revisit with the owner's packs.
+  2. The Sapper's Cusser plays the throw (`attack_throw`) rather than the casters' open-hand `attack_cast`, by naming it in
+     the Sapper's clip map. Recommendation: accept (a munition is thrown; the view rule is unchanged).
+  3. The Priest's veil is a flat crimson panel from the nose to the chin, which close up reads as a mask. Recommendation:
+     owner's taste; a narrower or lower panel is a manifest edit.
+  4. The Zealot's right blade lies across its chest at idle (the Raider's blade, placed by `Sword_Attack`'s first frame, does
+     the same). Recommendation: leave until a per-clip grip is looked at (BUG-1411's area).
+  5. M6-V24's question 2 (the 0.15 s blend into the cast) waited for the second model caster: the casts are now 0.5 s
+     (Frenzy), 0.8 s (Telas Fire), 1.0 s (Cusser) and 1.2 s (Sandstorm), so the blend is 30 %, 19 %, 15 % and 13 % of them.
+     Recommendation: keep 0.15 s; only the Frenzy is short enough for it to show.
+
 ## Vision, detection, fog
 
 Fog of war and the high-ground rule are in since M4-3a (`sim/Rts.Sim/Vision/`); the last-known building ghosts, buildings

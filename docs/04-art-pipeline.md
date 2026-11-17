@@ -55,6 +55,8 @@ M6-V21 (Producer default, owner may revisit): the Heavy Infantry's team parts ar
 Crossbowman's; the Camp Follower's tunic as the Laborer's.
 M7-V5 (developer's pick, owner may revisit): the Teblor Gatherer's and Shaman's tunic (the Peasant body), the Warrior's and
 Breaker's jerkin and pauldron, the Javelin Thrower's jerkin (the Ranger body; no pauldron, so it reads apart from the Warrior).
+M6-V25 (developer's pick, owner may revisit): the Cadre Mage's and the Priest's jerkin and hood (their robes are their own
+colour), the Sapper's jerkin, the Zealot's tunic (the Peasant body).
 **One material per model since M6-V24.** A unit model is one surface with one material, still named `team`, drawing one
 atlas: a 512² tile per role texture (the team part's brightness, outfit, skin, head, hair) and a tile of the props' flat
 colours; the atlas **alpha is the team mask** (0.5 on the team tile, 0.75 on the props' tile, 1 elsewhere). The same
@@ -375,6 +377,29 @@ tools/
     the library): **28,828,257 bytes (27.5 MB), was 24,767,612 (23.6 MB)**: the `.glb`s 15,864,564 (was 13,875,584), the
     extracted textures 12,963,693 (was 10,892,028); the atlas holds every texel the role textures did, plus an alpha channel
     and (nine models) one unused tile.
+- **Fourth slice (M6-V25): the last four foot units** (fifteen model types). The two outfits on disk recoloured to the
+  Malazan and Whirlwind palettes, built straight into the M6-V24 atlas (one surface, one `team` material, a 3 x 2 grid:
+  team, outfit, skin / head, props, one unused tile), props as boxes with `propColourSpace: "srgb"` (their hex is the
+  colour on screen). After it the capsules are the six types with no source on disk: the Wickan Lancer, the Horse Raider,
+  the Destrier Rider, the War-dog, the Catapult and the Battering Ram (the owner's packs).
+
+  | Type | Outfit parts (team parts in bold) | Outfit tint | Props (sRGB) | Triangles |
+  | --- | --- | --- | --- | --- |
+  | Malazan Cadre Mage | Ranger **body**, **hood**, arms, legs, boots | dull bronze `#7a6545` 0.6 | an oxblood robe `#4e2a26` (a waist box and four panels flared 8° outward, on `pelvis`), a 1.75 m staff `#4a3626` with a bronze head `#a07c3c` (`hand_r`, upright at `Idle_Loop`'s first frame) | 2,494 |
+  | Malazan Sapper | Ranger **body**, arms, bracers, legs, boots; bare head | leather `#6e5a3c` 0.6 | satchels `#4f3b26`: a 0.40 x 0.19 x 0.50 m pack on the back (`spine_03`, its top over the shoulders) with a strap across the chest, a bag on each hip (`pelvis`); a clay munition `#b0703a` in `hand_r` (`OverhandThrow` at 30 %) | 2,339 |
+  | Priest of the Whirlwind | Ranger **body**, **hood**, arms, legs, boots | bleached `#e2d9c2` 0.65, brightness 1.4 | a bleached white robe `#d9d0bc` (the Mage's robe shape), a crimson veil `#8e1f24` over the lower face (`Head`) | 2,470 |
+  | Whirlwind Zealot | Peasant **body**, arms, legs, feet; bare head | crimson `#8a2a26` 0.6 | two curved blades `#b4b6b8` (the Raider's blade in `hand_r` and `hand_l`, `Sword_Attack`'s first frame), a crimson head-wrap `#7e1d1d` with a tail (`Head`) | 2,568 |
+
+  **What tells them apart** (developer's read of the pictures, owner may revisit): the Mage is the only Malazan figure with
+  a long robe and a staff over its head; the Sapper the only one with a pack standing over its shoulders and bags on its
+  hips (the Laborer is bare, the Crossbowman hooded with a crossbow, the Heavy Infantry has the big team shield and helmet);
+  the Priest the only Whirlwind figure in a long white robe, its hood in the team colour and a red veil; the Zealot the
+  only one with a red head-wrap and a blade in each hand (the Raider is hooded with one blade, the Camp Follower bare).
+  **Stand-ins (developer's default):** no robe, veil, satchel or turban mesh is on disk, so each is boxes bound to one bone
+  (the robe to the pelvis: in a stride the legs show through its front and sides, which at 20-60 m reads as a split
+  robe). The models are 1.82-1.90 m tall (the hood, the head-wrap), feet at the origin, 65 bones. Sizes (Git LFS): the four
+  `.glb` 5,242,232 bytes and atlases 4,371,895 (9,614,127, 9.2 MB); all the art pass's generated binaries **38,442,384 bytes
+  (36.7 MB), was 28,828,257 (27.5 MB)**. A full run leaves the eleven earlier models and the library byte-identical.
 - The view: `UnitViews` draws a type whose file loads as its model, any other type as its capsule (docs/03 "Implementation
   (M6-V20)").
 
@@ -503,6 +528,17 @@ which also renames to snake_case. Findings:
   M6-V20 set (`UnitViews.ClipFor`); since M6-V23 it plays `attack_cast` (the seventh state slot is named after it, so every
   type holds it by the state-name rule; a library without it plays `idle`). The other rows' Casting column reads `idle`
   for types that never cast; a caster among them would play `attack_cast` too.
+- **The last foot units' clips (M6-V25).** No new library clip (nine, unchanged); every state each can be in maps to one:
+
+  | Type | idle | walk | attack | Casting | Returning, worker states |
+  | --- | --- | --- | --- | --- | --- |
+  | Cadre Mage, Priest | `idle` | `walk` | `attack_cast` (a magic bolt) | `attack_cast` (Telas Fire's 0.8 s, Sandstorm's 1.2 s) | Returning `idle`; gather / build the workers' clips by state name (never entered) |
+  | Sapper | `idle` | `walk` | `attack_throw` (its attack throws a munition) | `attack_throw` (the Cusser's 1.0 s throw: the map names it for the cast slot) | as above |
+  | Zealot | `idle` | `walk` | `attack_melee` | (no ability: `attack_cast` by state name, never entered) | as above |
+
+  The cast gesture follows the cast for all three (M6-V24's rule: from its first frame when the cast is seen, once, ending
+  as the ability lands). The Sapper's cast slot is mapped to the throw (the manifest's `"attack_cast": "attack_throw"`), so
+  its Cusser looks like its attack, not an open-hand spell.
 - **No finger tracks (M6-VH7, BUG-1321).** The library carries 25 of the rig's 65 bones: the import deletes the 40 finger
   bones (`thumb_`, `index_`, `middle_`, `ring_`, `pinky_`, 01-03 and the `_04_leaf` ends, both hands; the manifest's
   `library.dropBonePrefixes`, checked against `dropBoneCount` 40) and their curves before export, so each clip has 75 tracks
