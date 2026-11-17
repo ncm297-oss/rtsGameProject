@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S2 (Stress red outside the rows M6-SH2's criterion 11 allows; two documented AI rules now disagree and neither the docs nor the row says which wins) |
-| Status | open (for ruling; QA re-check 1 agrees it needs one) |
+| Status | closed (ruled: the retrain wins; oracle exemption verified narrow by QA re-check 2) |
 | Found | 2026-11-15-2136, task M6-SH2 (QA) |
 | System | AI: `BuildOrderExecutor.Retrain` (BUG-1465 (a)) against the M5-9a starved rule's oracle |
-| Fixed by | |
+| Fixed by | 039d6eb (M6-SH2 fix round 2: test + docs, per the Producer's ruling) |
 
 ## Repro
 1. `dotnet test sim/Rts.Sim.Tests --filter "FullyQualifiedName~StarvedPickOracleQaStressTests"`
@@ -42,3 +42,11 @@ Still red in QA's Stress run (`AStampedThink_SendsNoTrain (raraku, 5)`). Judgeme
 rules (docs/02: a seat with no worker "trains one first thing ... whatever its build order says"; the starved rule: "it
 waits for that one rather than buy a cheaper one"), so a ruling is needed, not a fix. QA leans to (a): the worker retrain is
 the newer and narrower rule, and a seat with no worker cannot otherwise recover; (a) is test and docs only.
+
+## QA re-check 2 (fix round 2, 039d6eb)
+- Ruling (a) applied: `StarvedPickOracleQaStressTests` exempts a worker-type Train sent while the seat has no live worker;
+  docs/02's starved paragraph has the sentence. The class whole: 6 / 6 green; across all six rows exactly one exempt Train
+  (Raraku 5 seat 0), every other count 0.
+- Narrowness proved with a throw-away probe driving the oracle's hooks on a stamped think (deleted after): a worker Train
+  while a worker lives fails; a non-worker Train with no worker fails; a worker plus a soldier Train on one think with no
+  worker fails; a lone worker Train with no worker is exempt. Closed.

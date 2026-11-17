@@ -3,7 +3,7 @@
 | Field | Value |
 | --- | --- |
 | Severity | S2 (the default loop is red outside the rows M6-SH2's criterion 11 allows: only the criterion-10 content rows may be red; the developer listed it "for ruling", untraced) |
-| Status | open (for ruling; trace confirmed by QA re-check 1) |
+| Status | open (ruled: oracle stands; row (2, 80) skipped as a known bug; cure decided for the next sim task that changes the AI) |
 | Found | 2026-11-15-2136, task M6-SH2 (QA) |
 | System | AI economy (gather targeting under the lifted reach); exposed by the drop-off rule (BUG-1520) |
 | Fixed by | |
@@ -57,3 +57,9 @@ gatherers). Later sends go to 174 m (three more Laborers) and 197 m. Wood banked
   worker"); QA's row assumes picks are about as near home as the 512-reach control's. Either the rule changes (measure from
   the worker's drop-off: an AI change that moves every pin) or the row is re-stated. Neither is the developer's call.
   It still leaves the default loop red outside criterion 10's rows, so criterion 11 stays unmet until the ruling.
+
+## QA re-check 2 (fix round 2, 039d6eb)
+Ruling applied as written: the row `(2UL, 80f)` keeps its body and bound and is skipped as
+`Skip = "BUG-1531 (open, S2): ..."`; the other five rows run and are green in the default loop. Stays open: the decided cure
+(a rebalance's pick measured from the worker's nearest finished drop-off) is the first item of the next sim task that
+changes the AI, and that task un-skips the row.

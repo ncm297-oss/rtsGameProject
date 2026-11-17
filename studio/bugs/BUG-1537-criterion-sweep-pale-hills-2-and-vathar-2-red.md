@@ -3,7 +3,7 @@
 | Field | Value |
 | --- | --- |
 | Severity | S2 (Stress red outside the rows M6-SH2's criterion 11 allows; criterion 3 lets only Raraku rows change in `Known`) |
-| Status | open (Pale Hills 2 fixed and verified; Vathar 2 for ruling) |
+| Status | open (Pale Hills 2 fixed and verified; Vathar 2 ruled into `Known`, cure goes to the next AI task) |
 | Found | 2026-11-15-2136, task M6-SH2 (QA) |
 | System | AI (gather re-send, BUG-1151 shape; a silent seat, BUG-1152 family), moved by the drop-off rule (BUG-1520) |
 | Fixed by | |
@@ -43,3 +43,10 @@ Every sweep row's checks and oracles clean, or the row in `Known` with an id (cr
   Laborer hauls the wood. QA did not re-trace it. Criterion 3 lets `Known` change only for Raraku, so extending it to Vathar
   is the Producer's call. A ruling is needed: the alternative is an AI change, such as spending the 10 soldiers while banking
   for the hall.
+
+## QA re-check 2 (fix round 2, 039d6eb)
+`Known` gains `("vathar_crossing", 2) = "BUG-1537"` with the diagnosis as its comment; no bound raised. The class whole:
+24 / 24 green; the Vathar 2 row prints `known (BUG-1537): a seat with a worker sent nothing for 5699 ticks: p0 silent
+40801..46500; p1 silent 38361..42260`, the same failure as re-check 1. Note: like the Raraku entries, `Known` exempts
+the row from any oracle failure, not only the silent-seat one, so a new failure on that seed would be hidden until the
+entry is removed (the class's existing form; it does assert the row still fails). Stays open for the cure.
