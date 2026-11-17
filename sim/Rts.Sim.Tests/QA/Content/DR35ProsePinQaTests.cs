@@ -137,6 +137,7 @@ public class DR35ProsePinQaTests
     /// The Age II tables' prose: seeds 32 and 45 (Malazan) and seeds 9, 13 and 19 (Whirlwind). D-R39 (2026-11-15, after the
     /// sim's M6-S10): seeds 32, 45 and 9 now reach Age II and stand at 20:00, so each is read as a cell with no defeat and
     /// its sentence says so. M6-SH2 fix round 2 (BUG-1524): seed 13 never reaches Age II and is defeated, read from its cell.
+    /// M6-S12: seed 13's outcome clause is built from its cell (it now stands at 20:00 without Age II).
     /// </summary>
     [Fact]
     public void AgeTwoProse_MatchesTheAgeTwoTables()
@@ -154,9 +155,13 @@ public class DR35ProsePinQaTests
         Assert.Contains($"seed 9's side reaches Age II at {w9}", w, StringComparison.Ordinal);
         // BUG-1524 (M6-SH2 fix round 2, ruled): seed 13 is read from its cell like its neighbours. Since M6-SH2 its side
         // never reaches Age II and is defeated (was: "| seed 13: never |" and "seed 13's still stands at 20:00 without Age II").
-        string w13 = Regex.Match(w, @"\| seed 13: never \(defeated (\d+:\d\d)\) \|").Groups[1].Value;
-        Assert.NotEqual("", w13);
-        Assert.Contains($"seed 13's side never reaches Age II and is defeated at {w13}", w, StringComparison.Ordinal);
+        // M6-S12 (the sim's AI rules; handed this class while the data track is stopped): the clause is built from the cell,
+        // as BUG-1524 built TeblorOpeningQaTests' outcome clauses: "never (defeated m:ss)" reads "and is defeated at m:ss",
+        // "never" reads "and still stands at 20:00" (M6-S12: the side stands; M6-SH2: defeated at 15:19).
+        Match c13 = Regex.Match(w, @"\| seed 13: never( \(defeated (\d+:\d\d)\))? \|");
+        Assert.True(c13.Success, "whirlwind.md has no '| seed 13: never ... |' cell");
+        string w13 = c13.Groups[2].Success ? $"and is defeated at {c13.Groups[2].Value}" : "and still stands at 20:00";
+        Assert.Contains($"seed 13's side never reaches Age II {w13}", w, StringComparison.Ordinal);
         string w19 = Regex.Match(w, @"\| `raider_rush` \| `crossbow_push` \|[^\n]*?seed 19: (\d+:\d\d) \|").Groups[1].Value;
         Assert.NotEqual("", w19);
         Assert.Contains($"seed 19 now reaches Age II at {w19} (was 10:34", w, StringComparison.Ordinal);

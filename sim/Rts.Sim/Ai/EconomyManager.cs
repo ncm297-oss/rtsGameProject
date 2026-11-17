@@ -1,4 +1,5 @@
 using System;
+using System.Numerics;
 using Rts.Sim.Commands;
 using Rts.Sim.Data;
 using Rts.Sim.Entities;
@@ -197,8 +198,9 @@ internal static class EconomyManager
     /// M5-3: with no idle worker, one gatherer a think moves to the other kind while the split is off
     /// <see cref="AiRulesDef.GoldShare"/> (more than <c>round(goldShare x gatherers)</c> on gold, or fewer) and a node of the
     /// other kind is known: of those at work on the kind with too many (Gathering, not carrying a load home), the one carrying
-    /// the least (M5-H1, BUG-0594: the other kind's Gather drops the load), slot order on ties.
-    /// Without it a base whose workers all went to gold before its scout found a forest never gathers wood (no worker is ever
+    /// the least (M5-H1, BUG-0594: the other kind's Gather drops the load), slot order on ties. M6-S12 (BUG-1531): it goes to
+    /// the known node of the other kind nearest its nearest own finished drop-off (<see cref="NearestDropOff"/>; nearest the
+    /// worker with none finished), the same filters as an idle worker's pick. Without it a base whose workers all went to gold before its scout found a forest never gathers wood (no worker is ever
     /// idle again once the cap stops training).
     /// </summary>
     private static void Rebalance(AiPlayer ai, int gold, int wood)
@@ -221,7 +223,9 @@ internal static class EconomyManager
             (pick, least, picked) = (slot, load, u);
         }
         if (pick < 0) return;
-        int node = NearestNode(ai, to, picked, out int nodeType, out EntityHandle nodeHandle);
+        // M6-S12 (BUG-1531, docs/01 2026-11-16): the node is measured from the drop-off the worker delivers to, not from where it
+        // stands: a wood gatherer at a forest 117 m out was sent to the mine 61 m from it and 174 m from the hall.
+        int node = NearestNode(ai, to, NearestDropOff(ai, picked.Position), out int nodeType, out EntityHandle nodeHandle);
         if (node < 0 || !ai.Send(Command.Gather(ai.Player, picked.Handle, ai.NodeCentre(nodeType, node)))) return;
         ai.MarkOrdered(pick, picked.Handle.Generation, to, nodeHandle);
     }
@@ -282,7 +286,32 @@ internal static class EconomyManager
     /// skipping nodes a Gather was dropped at and, until the reach lifts, nodes beyond <c>ai.gatherReach</c> of every own
     /// drop-off (M6-S5, BUG-1045; M6-S7 when it lifts: <see cref="AiPlayer.InGatherReach"/>); -1 for none.
     /// </summary>
-    private static int NearestNode(AiPlayer ai, byte kind, in SeenUnit u, out int nodeType, out EntityHandle handle)
+    private static int NearestNode(AiPlayer ai, byte kind, in SeenUnit u, out int nodeType, out EntityHandle handle) =>
+        NearestNode(ai, kind, u.Position, out nodeType, out handle);
+
+    /// <summary>
+    /// M6-S12 (BUG-1531): the centre of the own finished drop-off nearest <paramref name="at"/> (centre to centre, the first in
+    /// building order on ties), the one a worker standing there delivers to; <paramref name="at"/> itself with none finished.
+    /// One pass over the own buildings; allocates nothing.
+    /// </summary>
+    internal static Vector2 NearestDropOff(AiPlayer ai, Vector2 at)
+    {
+        Vector2 best = at;
+        float bestDistance = float.MaxValue;
+        for (int k = 0; k < ai.OwnBuildingCount; k++)
+        {
+            if (ai.OwnBuildingSites[k] || !ai.Data.Buildings[ai.OwnBuildingTypes[k]].DropOff) continue;
+            Vector2 centre = ai.BuildingCentre(ai.OwnBuildingTypes[k], ai.OwnBuildingCells[k]);
+            float d = Vector2.DistanceSquared(centre, at);
+            if (d >= bestDistance) continue;
+            bestDistance = d;
+            best = centre;
+        }
+        return best;
+    }
+
+    /// <summary>See <see cref="NearestNode(AiPlayer, byte, in SeenUnit, out int, out EntityHandle)"/>: measured from <paramref name="from"/>.</summary>
+    private static int NearestNode(AiPlayer ai, byte kind, Vector2 from, out int nodeType, out EntityHandle handle)
     {
         ResourceKind want = kind == Gold ? ResourceKind.Gold : ResourceKind.Wood;
         int best = -1, s = -1;
@@ -294,10 +323,10 @@ internal static class EconomyManager
         while (ai.View.NextResource(ref s, out SeenResource node))
         {
             if (ai.Data.Resources[node.TypeId].Resource != want || ai.Board.NodeDropped[s] == node.Handle.Generation) continue;
-            System.Numerics.Vector2 centre = ai.NodeCentre(node.TypeId, node.Cell);
-            if (System.Numerics.Vector2.DistanceSquared(centre, ai.Board.DefensePoint) <= flee) continue;
+            Vector2 centre = ai.NodeCentre(node.TypeId, node.Cell);
+            if (Vector2.DistanceSquared(centre, ai.Board.DefensePoint) <= flee) continue;
             if (!ai.InGatherReach(centre)) continue; // M6-S5 (BUG-1045): too far from home while the reach holds: unknown
-            float d = System.Numerics.Vector2.DistanceSquared(centre, u.Position);
+            float d = Vector2.DistanceSquared(centre, from);
             if (d >= bestDistance) continue;
             best = node.Cell;
             bestDistance = d;

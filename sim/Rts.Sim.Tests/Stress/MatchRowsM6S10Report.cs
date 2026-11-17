@@ -30,6 +30,13 @@ public class MatchRowsM6S10Report(ITestOutputHelper output)
     [InlineData("raraku", 7UL, 2)]
     [InlineData("raraku", 8UL, 2)]
     [InlineData("pale_hills", 1UL, 2)]
+    [InlineData("pale_hills", 2UL, 2)] // M6-S12: Pale Hills seeds 2-8 for the brief's seeds 1-8 table
+    [InlineData("pale_hills", 3UL, 2)]
+    [InlineData("pale_hills", 4UL, 2)]
+    [InlineData("pale_hills", 5UL, 2)]
+    [InlineData("pale_hills", 6UL, 2)]
+    [InlineData("pale_hills", 7UL, 2)]
+    [InlineData("pale_hills", 8UL, 2)]
     [InlineData("generated", 1UL, 2)]
     [InlineData("generated", 2UL, 2)]
     [InlineData("generated", 3UL, 2)]

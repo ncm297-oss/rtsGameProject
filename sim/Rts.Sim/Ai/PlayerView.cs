@@ -122,6 +122,26 @@ public sealed class PlayerView
     /// <summary>The terrain plateau of <paramref name="cell"/> (M3-H2: labelled at load, before any building or node), -1 for none.</summary>
     public int PlateauAt(int cell) => _world.Plateaus.At(cell);
 
+    /// <summary>
+    /// M6-S12 (BUG-1461): whether the player knows cell (<paramref name="x"/>, <paramref name="y"/>) is closed to ground units:
+    /// off the map; closed by the terrain (a cliff, the border, a pocket, as <see cref="CanPlace"/> judges them); covered by a
+    /// building it knows (its own, one it sees, a ghost of the same building: the rule <see cref="CanPlace"/> uses); or by a
+    /// live node on ground it has explored (it saw it: no match spawns nodes later). A building it never saw reads open, and so
+    /// does a node felled out of its sight (the cell's truth, not the player's memory; the AI's rally search alone reads this,
+    /// near its own base). Read-only and allocation-free.
+    /// </summary>
+    public bool IsKnownClosed(int x, int y)
+    {
+        NavGrid g = _world.NavGrid;
+        if (!g.InBounds(x, y)) return true;
+        NavFlags f = g.FlagsAt(x, y);
+        if ((f & NavFlags.Blocked) == 0) return false;
+        if ((f & NavFlags.Resource) != 0) return _fog.IsExplored(_player, y * g.Width + x);
+        if ((f & NavFlags.Building) == 0) return true; // terrain or a pocket
+        int k = _buildings.SlotAt(x, y);
+        return k >= 0 && KnowsBuilding(k);
+    }
+
     // ---------- the start list (M5-9b): map data every seat is given, so no fog ----------
 
     /// <summary>

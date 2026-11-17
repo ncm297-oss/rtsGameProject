@@ -235,13 +235,13 @@ its name and description.
 
 **Houses at the cap (D21, 2026-10-18, D15 C's parked finding measured; `QA/Content/AiHouseRuleReportTests.MenuMapNormal_HouseSources_Report` and `MenuMapNormal_TwelfthHouse_Report`).**
 Since M5-4f the executor skips a house step once the population cap is the hard cap (100): the step is done with no
-command sent and no Tent placed. On the menu's map (20 minutes, the other seat idle): Normal, seed 1: the cap reaches 100 at 872 s; the last Tent step (step 19) is done at a cap of 100; skipped at the hard cap: steps 18, 19; 10 Tents stand at 20:00, 0 past the cap. The 12th Tent can leave 6 of its 8 pop unused, so D21 measured taking it out: without the 12th Tent step (step 19) on the same seed, the cap reaches 100 at 872 s, and 10 Tents stand at 20:00, 0 past the cap.
+command sent and no Tent placed. On the menu's map (20 minutes, the other seat idle): Normal, seed 1: the cap reaches 100 at 892 s; the last Tent step (step 19) is done at a cap of 100; skipped at the hard cap: steps 18, 19; 10 Tents stand at 20:00, 0 past the cap. The 12th Tent can leave 6 of its 8 pop unused, so D21 measured taking it out: without the 12th Tent step (step 19) on the same seed, the cap reaches 100 at 892 s, and 10 Tents stand at 20:00, 0 past the cap (re-printed 2026-11-16 for the sim's M6-S12: 872 s with and without the step).
 Re-printed 2026-10-26 for M5-4g (the reserve): three Tents are still sites at 20:00, so the cap is 92 with the 12th Tent step and 84 without it, where
 the population sits from 17:00. Before M5-4g the cap reached 100 at 683 s with the step and 827 s without it (12 Tents
 both times, the house rule placing the 12th anyway). The step stays in every opening.
 
 **Spending on the menu's map (D21, 2026-10-18, gathering gold 0.85 / wood 0.75 a second; `Content/AiSpendingReportTests.GeneratedNormal_Spending_Report`).**
-Against an idle seat, 12 forests and 8 mines (the menu's), 20 minutes. Normal, seed 1 (the smallest seed in 1-50 whose Normal pick is this opening): the idle base falls at 501 s; in hand at 5 min 356 gold / 117 wood; the first wave at 380 s; Age II in at 563 s. Easy, seed 1 (Easy always plays the first opening): the idle base falls at 525 s; in hand at 5 min 508 gold / 39 wood; the first wave at 362 s; Age II in at 623 s. Re-printed 2026-10-26 for M5-4g (the reserve,
+Against an idle seat, 12 forests and 8 mines (the menu's), 20 minutes. Normal, seed 1 (the smallest seed in 1-50 whose Normal pick is this opening): the idle base falls at 502 s; in hand at 5 min 346 gold / 127 wood; the first wave at 380 s; Age II in at 568 s (re-printed 2026-11-16 for the sim's M6-S12; was: the idle base falls at 501 s; in hand at 5 min 356 gold / 117 wood; the first wave at 380 s; Age II in at 563 s). Easy, seed 1 (Easy always plays the first opening): the idle base falls at 521 s; in hand at 5 min 508 gold / 29 wood; the first wave at 372 s; Age II in at 635 s (re-printed 2026-11-16 for the sim's M6-S12; was: the idle base falls at 525 s; in hand at 5 min 508 gold / 39 wood; the first wave at 362 s; Age II in at 623 s). Re-printed 2026-10-26 for M5-4g (the reserve,
 above): before it Age II came in at 1098 s on Normal and never in 20 minutes on Easy, and the idle base fell at 495 s
 and 518 s; the 5-minute banks and the first waves did not move. D20's two-seed note (495 s / 518 s, seeds 1 and 7)
 measured both seeds; the runs are now one per opening.
@@ -298,12 +298,12 @@ Smithy waits for pop 24 and Age II for 8:00.
 | 25 | time 600 | research | `dryjhnas_prophecy` | 1 | The faction upgrade, at the Smithy |
 
 **Houses at the cap (D21, 2026-10-18; `QA/Content/AiHouseRuleReportTests.MenuMapNormal_HouseSources_Report`).** On the
-menu's map (20 minutes, the other seat idle): Normal, seed 2: the cap reaches 100 at 827 s; the last Tent step (step 19) is done at a cap of 100; skipped at the hard cap: steps 18, 19; 10 Tents stand at 20:00, 0 past the cap (the expansion's Holy
-Camp stands on this seed). Re-printed 2026-10-26 for M5-4g: before it the cap reached 100 at 928 s and step 19 was done
+menu's map (20 minutes, the other seat idle): Normal, seed 2: the cap reaches 100 at 723 s; the last Tent step (step 19) is done at a cap of 100; skipped at the hard cap: steps 18, 19; 10 Tents stand at 20:00, 0 past the cap (the expansion's Holy
+Camp stands on this seed). Re-printed 2026-11-16 for the sim's M6-S12: 827 s. Re-printed 2026-10-26 for M5-4g: before it the cap reached 100 at 928 s and step 19 was done
 at a cap of 90.
 
 **Spending on the menu's map (D21, 2026-10-18, gathering gold 0.85 / wood 0.75 a second; `Content/AiSpendingReportTests.GeneratedNormal_Spending_Report`).**
-Against an idle seat, the menu's map, 20 minutes. Normal, seed 2 (the smallest seed in 1-50 whose Normal pick is this opening): the idle base falls at 416 s; in hand at 5 min 162 gold / 99 wood; the first wave at 288 s; Age II in at 682 s.
+Against an idle seat, the menu's map, 20 minutes. Normal, seed 2 (the smallest seed in 1-50 whose Normal pick is this opening): the idle base falls at 409 s; in hand at 5 min 187 gold / 9 wood; the first wave at 288 s; Age II in at 674 s (re-printed 2026-11-16 for the sim's M6-S12; was: the idle base falls at 416 s; in hand at 5 min 162 gold / 99 wood; the first wave at 288 s; Age II in at 682 s).
 The quickest wave and the quickest win of the six openings. Re-printed 2026-10-26 for M5-4g: before it the idle base
 fell at 416 s, the 5-minute bank was 36 gold / 37 wood and Age II came in at 957 s.
 
@@ -358,13 +358,11 @@ wave waits for 20 army pop, the latest Whirlwind wave.
 | 25 | time 570 | build | `whirlwind_ram_yard` | 1 | Battering Rams |
 
 **Houses at the cap (D21, 2026-10-18; `QA/Content/AiHouseRuleReportTests.MenuMapNormal_HouseSources_Report`).** On the
-menu's map (20 minutes, the other seat idle): Normal, seed 3: the cap reaches 100 at 783 s; the last Tent step (step 18) is done at a cap of 100; skipped at the hard cap: step 18; 11 Tents stand at 20:00, 1 past the cap (re-printed 2026-11-15 for the sim's M6-SH2: 0 past the cap). Re-printed 2026-10-26
+menu's map (20 minutes, the other seat idle): Normal, seed 3: the cap reaches 100 at 767 s; the last Tent step (step 18) is done at a cap of 100; skipped at the hard cap: steps 17, 18; 10 Tents stand at 20:00, 0 past the cap (re-printed 2026-11-16 for the sim's M6-S12: 783 s, step 18 skipped, 11 Tents, 1 past the cap; re-printed 2026-11-15 for the sim's M6-SH2: 0 past the cap). Re-printed 2026-10-26
 for M5-4g: before it the cap reached 100 at 1184 s, step 18 was done at a cap of 90 and 1 Tent stood past the cap.
 
 **Spending on the menu's map (D21, 2026-10-18, gathering gold 0.85 / wood 0.75 a second; `Content/AiSpendingReportTests.GeneratedNormal_Spending_Report`).**
-Against an idle seat, the menu's map, 20 minutes. Normal, seed 3 (the smallest seed in 1-50 whose Normal pick is this
-opening): the idle base falls at 583 s; in hand at 5 min 428 gold / 91 wood; the first wave at 497 s; Age II in at 563
-s. Its Age II step is the earliest (6:30), but since M5-4g the standard opening's Age II comes in first (561 s; the
+Against an idle seat, the menu's map, 20 minutes. Normal, seed 3 (the smallest seed in 1-50 whose Normal pick is this opening): the idle base falls at 567 s; in hand at 5 min 428 gold / 101 wood; the first wave at 481 s; Age II in at 552 s (re-printed 2026-11-16 for the sim's M6-S12; was: the idle base falls at 583 s; in hand at 5 min 428 gold / 91 wood; the first wave at 497 s; Age II in at 563 s). Its Age II step is the earliest (6:30), but since M5-4g the standard opening's Age II comes in first (561 s; the
 raider rush 616 s). Re-printed 2026-10-26 for M5-4g: before it the idle base fell at 573 s and Age II came in at 791 s, the
 earliest Whirlwind Age II then (the others: 1098 s and 957 s).
 
@@ -476,26 +474,26 @@ every Whirlwind opening against every Malazan opening on the pairing's three sma
 and 3rd `QA/Content/D21OpeningsQaTests`'; each run pins its cell here and on malazan.md's twin table ("Age II against
 the Whirlwind"). Under M5-4g no Whirlwind side fell, and the two sides without Age II (`standard` against
 `crossbow_push` seed 9 and against `cadre_rush` seed 13) stood at 20:00 knowing no gold node, so their Age II can't be
-reserved (docs/03 "Implementation (M5-4g)"). Since the sim's M6-S10 (2026-11-15, the gather change) seed 9's side reaches Age II at 11:47 (from the sim's M5-9a until M6-S10 it was defeated at 19:36 without it); seed 13's side never reaches
-Age II and is defeated at 15:19 (since the sim's M6-SH2; under M6-S10 it still stood at 20:00 without Age II, beaten
-down: its Town Hall razed, 4 workers left). Under M6-S10 three Whirlwind sides fell: `holy_war`
+reserved (docs/03 "Implementation (M5-4g)"). Since the sim's M6-S10 (2026-11-15, the gather change) seed 9's side reaches Age II at 17:16 (since the sim's M6-S12; 11:47 under M6-S10 and M6-SH2; from the sim's M5-9a until M6-S10 it was defeated at 19:36 without it); seed 13's side never reaches
+Age II and still stands at 20:00 (since the sim's M6-S12; under M6-SH2 it was defeated at 15:19; under M6-S10 it still
+stood at 20:00 without Age II, beaten down: its Town Hall razed, 4 workers left). Under M6-S10 three Whirlwind sides fell: `holy_war`
 against `standard` seed 3 at 12:29 (before its first wave was due, see "The holy war's first wave" below), `raider_rush`
 against `crossbow_push` seed 11 at 18:34, without Age II, and `standard` against `cadre_rush` seed 17 at 16:27.
 
 | Whirlwind opening | Malazan opening | 1st seed | 2nd seed | 3rd seed |
 | --- | --- | --- | --- | --- |
-| `standard` | `standard` | seed 1: 9:22 | seed 22: 18:51 | seed 26: 10:53 |
-| `standard` | `crossbow_push` | seed 9: 11:47 | seed 32: 9:58 | seed 37: 9:34 |
-| `standard` | `cadre_rush` | seed 13: never (defeated 15:19) | seed 16: 11:31 (defeated 18:23) | seed 17: 9:22 |
-| `raider_rush` | `standard` | seed 2: 9:51 | seed 10: 9:27 | seed 21: 10:49 |
-| `raider_rush` | `crossbow_push` | seed 5: 10:31 | seed 11: never (defeated 18:04) | seed 19: 10:04 |
-| `raider_rush` | `cadre_rush` | seed 7: 10:04 | seed 8: 11:27 | seed 14: 9:51 (defeated 19:53) |
-| `holy_war` | `standard` | seed 3: 9:10 | seed 4: 9:59 | seed 6: 7:58 |
-| `holy_war` | `crossbow_push` | seed 12: 9:12 | seed 45: 8:46 | seed 71: 9:33 |
-| `holy_war` | `cadre_rush` | seed 20: 7:35 | seed 24: 9:10 | seed 27: 8:46 |
+| `standard` | `standard` | seed 1: 9:10 | seed 22: 11:06 | seed 26: 9:30 |
+| `standard` | `crossbow_push` | seed 9: 17:16 | seed 32: 9:58 | seed 37: 9:18 |
+| `standard` | `cadre_rush` | seed 13: never | seed 16: 10:10 | seed 17: 9:58 |
+| `raider_rush` | `standard` | seed 2: 9:57 | seed 10: 9:32 | seed 21: 16:14 |
+| `raider_rush` | `crossbow_push` | seed 5: 13:28 | seed 11: 13:09 | seed 19: 16:10 |
+| `raider_rush` | `cadre_rush` | seed 7: 10:04 (defeated 19:59) | seed 8: 10:02 | seed 14: 10:00 |
+| `holy_war` | `standard` | seed 3: 9:10 | seed 4: 10:07 | seed 6: 7:35 |
+| `holy_war` | `crossbow_push` | seed 12: 9:10 | seed 45: 9:10 | seed 71: 9:10 |
+| `holy_war` | `cadre_rush` | seed 20: 9:19 | seed 24: 9:10 | seed 27: 8:46 |
 
 Re-printed 2026-11-15 for the sim's M6-S10 (docs/03 "Implementation (M6-S10)"): `raider_rush` against `crossbow_push`
-seed 19 now reaches Age II at 10:04 (was 10:34 from the sim's M5-H6, and 10:21 before it).
+seed 19 now reaches Age II at 16:10 (was 10:34 from the sim's M5-H6, and 10:21 before it; 10:04 under M6-S10 and M6-SH2, 16:10 since the sim's M6-S12).
 
 Re-printed again 2026-11-15 for the sim's M6-SH2 (a construction site is no longer a drop-off; an AI with no worker trains
 one; docs/03 "Implementation (M6-SH2)"): 25 of the 27 Whirlwind sides reach Age II; the two that don't are both defeated
@@ -503,6 +501,12 @@ one; docs/03 "Implementation (M6-SH2)"): 25 of the 27 Whirlwind sides reach Age 
 fall: those two, `standard` against `cadre_rush` seed 16 at 18:23 (after its Age II) and `raider_rush` against
 `cadre_rush` seed 14 at 19:53. `holy_war` against `standard` seed 3 no longer falls (Age II at 9:10). The paragraph above
 the table describes the M6-S10 runs, except seed 13's sentence, which reads the M6-SH2 cell.
+
+Re-printed 2026-11-16 for the sim's M6-S12 (the AI's rally point off one-cell passages, a rebalanced gatherer's node
+measured from its drop-off, a blind seat's re-scout; docs/03 "Implementation (M6-S12)"): 26 of the 27 Whirlwind sides
+reach Age II; the one that doesn't is `standard` against `cadre_rush` seed 13, which now stands at 20:00 without it (it
+was defeated at 15:19 under M6-SH2). One side falls: `raider_rush` against `cadre_rush` seed 7 at 19:59, after its Age II
+(10:04). `raider_rush` against `crossbow_push` seed 11 reaches Age II at 13:09 and stands.
 
 ## The holy war's first wave (D-R39, 2026-11-15)
 
@@ -516,15 +520,22 @@ charge), its first wave and the waves sent, its defeat and its largest army (rea
 
 | Malazan opening | seed | Malazan first wave | `holy_war` wave due | `holy_war` first wave (waves) | `holy_war` defeated at | `holy_war` peak army pop |
 | --- | --- | --- | --- | --- | --- | --- |
-| `standard` | 3 | 5:46 | 12:57 | 14:45 (1) | never | 49 |
-| `standard` | 4 | 6:02 | 8:24 | 8:24 (4) | never | 27 |
-| `standard` | 6 | 5:57 | 7:58 | 7:58 (5) | never | 30 |
-| `crossbow_push` | 12 | 5:59 | 8:09 | 8:09 (4) | never | 32 |
-| `crossbow_push` | 45 | 5:44 | 7:23 | 7:43 (4) | never | 36 |
-| `crossbow_push` | 71 | 6:56 | 7:39 | 7:39 (2) | never | 74 |
-| `cadre_rush` | 20 | 8:12 | 7:28 | 7:28 (6) | never | 34 |
-| `cadre_rush` | 24 | never | 7:28 | 7:28 (2) | never | 67 |
-| `cadre_rush` | 27 | 11:17 | 6:59 | 6:59 (5) | never | 72 |
+| `standard` | 3 | 5:50 | never | never (0) | never | 16 |
+| `standard` | 4 | 6:02 | 8:24 | 8:24 (5) | never | 30 |
+| `standard` | 6 | 5:55 | 8:33 | 8:33 (5) | never | 31 |
+| `crossbow_push` | 12 | 5:45 | 8:16 | 8:16 (4) | never | 32 |
+| `crossbow_push` | 45 | 5:40 | 7:27 | 7:39 (5) | never | 47 |
+| `crossbow_push` | 71 | 7:03 | 7:23 | 7:23 (3) | never | 64 |
+| `cadre_rush` | 20 | 8:08 | 7:38 | 7:38 (5) | never | 25 |
+| `cadre_rush` | 24 | 10:07 | 7:51 | 7:51 (4) | never | 30 |
+| `cadre_rush` | 27 | 9:41 | 6:53 | 6:53 (5) | never | 67 |
+
+Re-printed 2026-11-16 for the sim's M6-S12 (the AI's rally point off one-cell passages, a rebalanced gatherer's node
+measured from its drop-off, a blind seat's re-scout; docs/03 "Implementation (M6-S12)"): `holy_war` is defeated on none of
+the nine runs and sends a wave on eight. On seed 3 it is never at its 20 pop (peak 16) and sends no wave in 20 minutes,
+while the Malazan `standard` sends five; it is not defeated. On the other eight its wave is due between 6:53 and 8:33. The
+M6-SH2 table read, for seed 3: Malazan first wave 5:46, wave due 12:57, one wave at 14:45, peak 49. The paragraph below
+reads this table.
 
 Re-printed 2026-11-15 for the sim's M6-SH2 (a construction site is no longer a drop-off; an AI with no worker trains
 one; docs/03 "Implementation (M6-SH2)"): `holy_war` is now defeated before its first wave is due in 0 of 9 runs. On
@@ -533,12 +544,13 @@ eight its wave is due between 6:59 and 8:24. `AiOpeningPairsReportTests.Defeated
 paragraph below reads this table (re-worded 2026-11-16, M6-SH2 fix round 2, BUG-1524; D-R39's reading of the M6-S10
 runs, where seed 3 fell at 12:29 with a 14-pop army before its wave was due, is history).
 
-**What it says (a finding for the balance pass, D33; no data changed).** `holy_war` no longer falls on any of the nine
-runs, seed 3 included: every side stands at 20:00 and every side sends a wave. On seed 3 the Malazan `standard` first wave
-(5:46) comes long before `holy_war`'s is due (12:57); the side survives it, peaks at 49 army pop and sends one wave, at
-14:45. On the other eight its wave is due between 6:59 and 8:24 and it sends 2 to 6 waves, the first between 6:59 and
-8:24. The Malazan `standard` and `crossbow_push` openings send their first wave at 5:44 to 6:56, before `holy_war`'s is
-due on every one of their six seeds; the `cadre_rush` ones send theirs after it (8:12 and 11:17) or never (seed 24). The
-latest Whirlwind wave (20 army pop) is the price of the opening's early Age II; on seed 3 it now comes late rather than
-not at all, and the measurement does not say the threshold is wrong. `Content/AiOpeningPairsReportTests` names no case
-(`DefeatedBeforeDue` is empty) and fails any side that sends no wave.
+**What it says (a finding for the balance pass, D33; no data changed).** `holy_war` falls on none of the nine runs. Since
+the sim's M6-S12 (2026-11-16) it sends no wave on seed 3: the Malazan `standard` first wave (5:50) and four more keep its
+army under its 20 pop (peak 16) for the whole 20 minutes, and it is not defeated (M6-SH2: it survived the 5:46 wave,
+peaked at 49 army pop and sent one wave, at 14:45). On the other eight its wave is due between 6:53 and 8:33 and it sends
+3 to 5 waves, the first between 6:53 and 8:33. The Malazan `standard` and `crossbow_push` openings send their first wave
+at 5:40 to 7:03, before `holy_war`'s is due on every one of their six seeds; the `cadre_rush` ones
+send theirs after it (8:08, 10:07, 9:41). The latest Whirlwind wave (20 army pop) is the price of the opening's early Age
+II; whether seed 3 says the threshold is wrong is the balance pass's question. `Content/AiOpeningPairsReportTests` names
+seed 3 in `AliveWithoutAWave` (BUG-1553: reported, not failed, while the side stands without a wave) and fails any other
+side that sends no wave.

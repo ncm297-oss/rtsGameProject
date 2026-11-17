@@ -31,6 +31,10 @@ public class MatchCriterionTests
     /// M6-SH2 (a construction site is no drop-off; an AI with no worker retrains): seed 7 ends at <b>19,912 (16:35), seat 0</b>,
     /// Build UnitInTheWay 1 refused, every check clean. Seeds 1-8: 24,266 / 57,039 / 25,118 / 25,118 / 55,495 / 25,118 /
     /// 19,912 / 19,912, so seed 7 is still the lowest under 24,000.
+    /// M6-S12 (the AI rules of 2026-11-16: the rally point off one-cell passages, a rebalance measured from the drop-off, the
+    /// blind seat's re-scout): seed 7 ends at 30,482 (seat 0), past the bound, so by the rule the row moves to the lowest of
+    /// seeds 1-8 that ends inside 24,000: <b>seed 1 again, 23,244 (19:22), seat 1</b>. Seeds 1-8: 23,244 / 30,540 / 24,088 /
+    /// 24,088 / 34,619 / 24,088 / 30,482 / 30,482 (<c>Stress/MatchRowsM6S10Report</c>). No bound moved.
     /// </summary>
     internal const int VatharBound = 24_000;
 
@@ -42,6 +46,8 @@ public class MatchCriterionTests
     /// so the bound is <b>72,000</b> (the four-seat rows' hour), BUG-1153, <b>Producer decision 2026-11-08-1556</b> (docs/03
     /// "Implementation (M5-5)" and STATE; the owner may revisit it). Used by <c>MapFileTests</c>' Pale Hills row too. M5-H6
     /// (the house rule, the hunt's free starts from its second hunt, the leg's fixes): 50,140 (41:47), seat 1, one hunt.
+    /// M6-SH2: 27,498 (seat 1). M6-S12 (the AI rules of 2026-11-16): 33,230 (27:41), seat 1, two hunts; seeds 1-8: 33,230 /
+    /// 51,218 / 40,889 / 40,889 / 57,755 / 40,889 / 27,017 / 27,017 (<c>Stress/MatchRowsM6S10Report</c>).
     /// </summary>
     internal const int PaleHillsBound = 72_000;
 
@@ -55,7 +61,10 @@ public class MatchCriterionTests
     /// M6-SH2 (a construction site is no drop-off; an AI with no worker retrains): <b>seed 2 now ends at 56,940 (47:27), seat 0,
     /// past the bound</b> (BUG-1521, a finding, not a new bound), so by the brief's rule the row moves to the lowest of seeds 1-8
     /// that ends inside it: <b>seed 3, 25,083 (20:54), seat 1</b>, every check clean. Seeds 1-8: none / 56,940 / 25,083 /
-    /// 25,083 / 31,420 / 25,083 / 28,633 / 28,633 (seed 1 still BUG-1460).</summary>
+    /// 25,083 / 31,420 / 25,083 / 28,633 / 28,633 (seed 1 still BUG-1460).
+    /// M6-S12 (the AI rules of 2026-11-16): seed 3 ends at <b>27,394 (22:49), seat 1</b>, inside the bound, so the row stays.
+    /// Seeds 1-8: 24,354 / 39,262 / 27,394 / 27,394 / 27,212 / 27,394 / 28,753 / 28,753 (seed 1 ends again: BUG-1460's re-scout
+    /// and the rally rule; whether the row goes back to seed 1 is the Producer's call).</summary>
     internal const int RarakuBound = 36_000;
 
     /// <summary>
@@ -63,22 +72,25 @@ public class MatchCriterionTests
     /// Normal's counter shift lengthened it to 26,853 (the bound went to 30,000 by Raraku's rule); round 2 (the starved wave)
     /// ends it at 25,968 (21:38), still over 24,000, so by the brief's rule the row moves to seed 2, the lowest of 1-6 under
     /// 24,000 (15,691 = 13:05, seat 1 the winner, unchanged by M5-9a), and keeps the original 24,000. M5-H6 (the house
-    /// rule): 17,053 (14:12), seat 1.
+    /// rule): 17,053 (14:12), seat 1. M6-S12 (the AI rules of 2026-11-16): seed 2 ends at 27,690, past the bound, so by the rule
+    /// the row moves to the lowest of seeds 1-6 under 24,000: <b>seed 1, 21,876 (18:13), seat 0</b>. Seeds 1-6: 21,876 / 27,690 /
+    /// 30,704 / 22,789 / 29,994 / 44,747. Seed 2 passes every sweep oracle (it ends, later), so it is not added to
+    /// <c>MatchCriterionSweepQaStressTests.Known</c>.
     /// </summary>
     internal const int GeneratedBound = 24_000;
 
     /// <summary>The four-seat rows' bound (60 minutes, QA's M5-H5 sweep): the FFA (Vathar seed 2) ends at 58,155 (48:27; was 52,305 before M5-9a), the 2v2 (Vathar seed 1) at 35,648 (29:42; was 34,510). M5-H6: the FFA 56,896 (47:24, seat 3), the 2v2 26,070 (21:43, team 1).</summary>
     internal const int FourSeatBound = 72_000;
 
-    /// <summary>The tick the literal row is saved at: half its end (M6-SH2: seed 7's 19,912 / 2; was 11,706 (M6-S10: 23,412 / 2), and 11,397, half of seed 1's 22,794 before M5-9a; any mid-match tick serves).</summary>
-    internal const int HalfWay = 9_956;
+    /// <summary>The tick the literal row is saved at: half its end (M6-S12: seed 1's 23,244 / 2; M6-SH2: seed 7's 19,912 / 2; was 11,706 (M6-S10: 23,412 / 2), and 11,397, half of seed 1's 22,794 before M5-9a; any mid-match tick serves).</summary>
+    internal const int HalfWay = 11_622; // M6-S12: half of seed 1's 23,244 (was 9,956)
 
     internal static readonly Row[] Rows =
     {
-        new("vathar_crossing", "vathar_crossing", 7, 2, null, VatharBound), // M6-S10: seed 7 (seed 1 ends at 24,497)
+        new("vathar_crossing", "vathar_crossing", 1, 2, null, VatharBound), // M6-S12: seed 1 again (23,244; seed 7 ends at 30,482); M6-S10: seed 7 (seed 1 ended at 24,497)
         new("raraku", "raraku", 3, 2, null, RarakuBound), // M6-SH2: seed 3 (seed 2 ends at 56,940: BUG-1521); M6-S10: seed 2 (seed 1 no longer ends inside 72,000: BUG-1460)
         new("pale_hills", "pale_hills", 1, 2, null, PaleHillsBound),
-        new("generated", "generated", 2, 2, null, GeneratedBound), // M5-9a round 2: seed 2 (seed 1 ends at 25,968)
+        new("generated", "generated", 1, 2, null, GeneratedBound), // M6-S12: seed 1 again (21,876; seed 2 ends at 27,690); M5-9a round 2: seed 2 (seed 1 ended at 25,968)
         new("ffa", "vathar_crossing", 2, 4, null, FourSeatBound),
         new("2v2", "vathar_crossing", 1, 4, new[] { 1, 2, 1, 2 }, FourSeatBound),
     };
@@ -109,7 +121,7 @@ public class MatchCriterionTests
     }
 
     /// <summary>
-    /// The criterion's literal row (default loop): Vathar Crossing seed 7 (seed 1 before M6-S10), Normal v Normal, ends with one side defeated within
+    /// The criterion's literal row (default loop): Vathar Crossing seed 1 (seed 7 from M6-S10 to M6-SH2), Normal v Normal, ends with one side defeated within
     /// 24,000 ticks, checks (a)-(e) clean on every tick and think.
     /// </summary>
     [Fact]

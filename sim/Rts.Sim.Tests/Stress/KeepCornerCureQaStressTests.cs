@@ -23,6 +23,9 @@ namespace Rts.Sim.Tests.Stress;
 /// Gatherers and a mixed crowd, 40 workers on one mine, a drop-off destroyed while workers return, a mine that runs out
 /// mid-queue, spawn-order shuffles, the knob switched on one tick late, builders at a Keep's corner, and the fuzz on seeds
 /// 57-120 at 0 and 0.5.
+/// M6-S12 (the Producer's 2026-11-16 decision, no fourth red session): the five rows still red at 0.5 (<c>HardShapes</c>
+/// cliff28_25 / depot22_20 / edge1_15, <c>TwoByTwoDepot</c> (22, 20) Gatherers, <c>KeepOnTheMapEdge</c> (1, 15)) are skipped as
+/// known-bug rows (BUG-1463), bodies and bounds unchanged; the per-shape trace is in docs/03 "Implementation (M6-S12)".
 /// </summary>
 [Trait("Category", "Stress")]
 public class KeepCornerCureQaStressTests(ITestOutputHelper output)
@@ -234,7 +237,7 @@ public class KeepCornerCureQaStressTests(ITestOutputHelper output)
     [InlineData(0.0, 22, 22, GatherOverlapScenes.Workers.Mixed, 16)]
     [InlineData(0.5, 22, 22, GatherOverlapScenes.Workers.Mixed, 16)]
     [InlineData(0.0, 22, 20, GatherOverlapScenes.Workers.Gatherer, 12)]
-    [InlineData(0.5, 22, 20, GatherOverlapScenes.Workers.Gatherer, 12)]
+    [InlineData(0.5, 22, 20, GatherOverlapScenes.Workers.Gatherer, 12, Skip = "BUG-1463: loaded 0.75 m Gatherers east of a mine flush on the depot must pass the mine's corners, whose stand points mates hold while gathering (give-up loop; M6-S12 trace in docs/03)")]
     public void TwoByTwoDepot_MineAtItsCorner_NoWorkerHeld(double overlap, int mx, int my, GatherOverlapScenes.Workers kind, int count)
     {
         Simulation sim = GatherOverlapScenes.NewSim(Data(overlap), 48, width: 56, height: 44);
@@ -248,7 +251,7 @@ public class KeepCornerCureQaStressTests(ITestOutputHelper output)
     /// <summary>A Keep on the map's west edge (anchor x = 1, the border ring blocked), the mine below it against the edge.</summary>
     [Theory]
     [InlineData(0.0, 1, 15)]
-    [InlineData(0.5, 1, 15)]
+    [InlineData(0.5, 1, 15, Skip = "BUG-1463: a returning worker wedged in the one-cell gap between the Keep's face and the mine's face against the map edge, beside a mate working at the mine (frozen, give-up loop; M6-S12 trace in docs/03)")]
     [InlineData(0.0, 1, 14)]
     [InlineData(0.5, 1, 14)]
     [InlineData(0.0, 5, 14)]
@@ -571,15 +574,15 @@ public class KeepCornerCureQaStressTests(ITestOutputHelper output)
     /// </summary>
     [Theory]
     [InlineData("depot22_20", 0.0)]
-    [InlineData("depot22_20", 0.5)]
+    [InlineData("depot22_20", 0.5, Skip = "BUG-1463: loaded 0.75 m Gatherers east of a mine flush on the depot must pass the mine's corners, whose stand points mates hold while gathering (give-up loop; M6-S12 trace in docs/03)")]
     [InlineData("depot22_20_laborers", 0.0)]
     [InlineData("depot22_20_laborers", 0.5)]
     [InlineData("lodge_trees", 0.0)]
     [InlineData("lodge_trees", 0.5)]
     [InlineData("edge1_15", 0.0)]
-    [InlineData("edge1_15", 0.5)]
+    [InlineData("edge1_15", 0.5, Skip = "BUG-1463: a returning worker wedged in the one-cell gap between the Keep's face and the mine's face against the map edge, beside a mate working at the mine (frozen, give-up loop; M6-S12 trace in docs/03)")]
     [InlineData("cliff28_25", 0.0)]
-    [InlineData("cliff28_25", 0.5)]
+    [InlineData("cliff28_25", 0.5, Skip = "BUG-1463: a returning Laborer wedged in the one-cell gap between the Keep's face and the mine's face closed by the cliff, under a mate working at the mine (frozen, give-up loop; M6-S12 trace in docs/03)")]
     public void HardShapes_EightShuffles_HeldRuns(string shape, double overlap)
     {
         int bad = 0;

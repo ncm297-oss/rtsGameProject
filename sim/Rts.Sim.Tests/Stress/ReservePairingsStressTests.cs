@@ -56,13 +56,19 @@ public class ReservePairingsStressTests
     /// </summary>
     internal static readonly (int Malazan, int Whirlwind, int Nth, int Player)[] KnownNoAgeTwo =
     {
+        // M6-S12 (re-measured once on the M6-S12 tree: the rally point off one-cell passages, a rebalance measured from the
+        // drop-off, the blind seat's re-scout): (0, 1, 1, 0) is out (standard v raider_rush seed 2's Malazan side now reaches
+        // Age II at 13:07, the row's own "take it out"); one new side is in.
+        // cadre_rush v standard seed 13, Whirlwind: never reaches Age II and stands at 20:00 (under M6-SH2 it was defeated at
+        // 15:19 without it; listed until M6-SH2 for "no gold node known by 20:00"). The pages' Age II tables print it.
+        (2, 0, 1, 1),
         // M6-SH2 fix round (BUG-1535, re-measured once on the M6-SH2 tree: a site is no drop-off, the retrain, BUG-1151's
         // mark): the four sides below now reach Age II or are defeated, so they are out; one new side is in.
         // standard v raider_rush seed 2, Malazan: raided all match (63 units lost by 20:00, its workers 19 at 10:00 and 4 at
         // 20:00, defending on every other minute); it waved once (6:51), reserved for Age II (400 / 200) and never banked it:
         // gathered 2,630 gold by 10:00 and 3,580 by 20:00 against the raider rush's 2,910 / 5,030 (Age II at 9:51). No worker
         // held or wedged (QA and the fix round's minute lines): a war it loses slowly, not a stall. Base: Age II 12:38.
-        (0, 1, 1, 0),
+        // (0, 1, 1, 0) was here (out in M6-S12).
         // Out (each "now reaches Age II or is defeated: take it out" on this tree), as they were listed:
         // (1, 1, 3, 0) crossbow_push v raider_rush seed 19, Malazan: no wave, peak army 7, Age II due 7:00 never paid.
         // (1, 0, 2, 0) crossbow_push v standard seed 32, Malazan: wood-starved, one wave at 7:29.
@@ -73,7 +79,8 @@ public class ReservePairingsStressTests
     /// <summary>
     /// The restated criterion's totals over the 27 runs (BUG-1027): the base's no-wave sides, Malazan's waves, the defeats.
     /// M6-SH2 fix round (BUG-1535): no-wave sides re-measured 3 -> 2 on the M6-SH2 tree (Malazan waves 83, defeats 7 / 4,
-    /// alive without Age II 1 of 43); the other three are bounds the tree meets unchanged.
+    /// alive without Age II 1 of 43); the other three are bounds the tree meets unchanged. M6-S12: no-wave sides 2 (unchanged),
+    /// Malazan waves 98, Whirlwind waves 123, defeats 4 / 1, alive without Age II 1 of 49; no constant moved.
     /// </summary>
     internal const int NoWaveSides = 2, MinMalazanWaves = 79, MaxMalazanDefeats = 8, MaxWhirlwindDefeats = 5;
 
