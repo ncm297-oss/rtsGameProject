@@ -13207,6 +13207,34 @@ rebalance each move every other row, and together they move them all.
   `pre-losses` seed 3 row; now only a sweep that ends on a death counts) and its far-forest seeds 5 / 6 worker bound printed,
   not asserted (`KnownWorkerLosses`, BUG-1462's family: the woodcutters at the 147-154 m forests die to the enemy there;
   11-13 workers against 14; every scout count within the cap, still asserted).
+- **Fix round 1 (BUG-1559, QA's Stress run): three Stress rows the re-measure missed, each traced, none a determinism or
+  oracle failure, none a fault of the new rules; test-only, no product code and no bound changed.**
+  - **Rule-45 finding: `HuntStressTests.FourAiSeats_OnPaleHills_EndWithTheOracleOnEveryHunt` (seed 1, free-for-all) stopped
+    ending.** It is in the handoff's pin list and was not re-measured in round 0. Probed every 6,000 ticks: every seat has
+    gathered its start's gold by 25:00 (8,870 / 8,850 / 8,820 / 8,890, frozen from then on); the gold war at 20-25 min
+    spends the armies; p3 falls at 55,508 and p0 at 107,906; from 70:00 p1 has no soldier (26 workers, 7 production
+    buildings, 10 gold, 18,000-26,000 wood) and p2 one (21 workers, 20 gold), and neither can train another. That is the
+    skipped `FourAiSeats_OnPaleHills_Seed1_KnownStall`'s shape (BUG-1068 / BUG-1116, BUG-1536 for seed 3): the row moves to
+    the next seed that ends, **2 (over at 59,951, p1, 4 hunts)**; seed 5 ends at 73,778 (p2), seeds 6 and 7 do not end by
+    144,000. Seed 2 is also `FourAiSeats_OnPaleHills_Seed2_KnownStall`'s match (same body), so the two rows now run one
+    match twice (a question below). The skipped seed-1 row's reason gains BUG-1559 and this measurement. The 2v2 row keeps
+    seed 1 (it ends). `MatchCriterionSweepQaStressTests.Known` is keyed by two-seat matches (Pale Hills seed 1 two-seat ends
+    at 33,230 and passes every oracle), so the stall is recorded on the skipped row, not there.
+  - **`M6Sh2DeterminismStressTests` (the retrain twin) re-staged to Raraku seed 3.** On seed 1 the loser (seat 1) loses its
+    last worker at 21,920 with its hall standing but 3 gold, short of a worker, so it never retrains (the rule as built) and
+    the match ends at 24,354: the row's premise was the BUG-1460 stall. Of Raraku 1, 2, 3, 5, 7, Pale Hills 1, 2, 3, 5, 7
+    and Vathar Crossing 1, 2, 3, 5, 7 only Raraku 3 (seat 0, Train sent for 24,261 with 1,087 gold; over at 27,394), Raraku
+    5 (22,761) and Pale Hills 7 (26,481, over at 27,017, too close to the end for the 2,000-tick follow) retrain. Twins,
+    the save at the retrain and the replay unchanged; green (ran to 26,261).
+  - **`M6Sh2QaStressTests`' save sweep re-staged to Raraku seed 2.** Seed 1 now ends at 24,354, so 48 saves fit against
+    the row's 60. Raraku 2 (over at 39,262) gives 78 saves, every load byte-identical and every follow hash-equal; bound 60
+    unchanged. No seat retrains on seed 2; the retrain's save is the twin row's on seed 3.
+  - **The other pin classes, accounted for:** `AiDeterminismTests.PaleHills_ToTheEndWithAHunt_*` (`HuntSeed` 2) ends at
+    **51,218 with 2 hunts** (was 42,016, 4), green in two processes; `HuntStressTests.PaleHills_SavedMidHunt_*`
+    (`MidHuntSeed` 2) green; `StarvedSaveTwoProcessQaStressTests` (Raraku seed 1): seat 0 stamped starved at 18,720, its
+    first starved wave at 20,960, over at 24,354, the child equal; `ReservePairingsStressTests` green. The default-loop pin
+    classes (`MatchCriterionTests`, the hash pins, `CliTests`, the replays) were re-pinned in round 0 and are green in QA's
+    default loop.
 
 **Item 7, the pages' cells (rule 40, handed by name; rule 68's list missed two classes).** Re-printed from the runs, every old
 figure kept as history beside it: both Age II tables (malazan.md 26 cells, whirlwind.md 23; a "Re-printed 2026-11-16"
@@ -13250,6 +13278,11 @@ move. Allocation: `Ai/RallyPassageTests.TheRallySearch_AllocatesNothing` (20 thi
    cells were re-printed under rule 40, no test edited. Recommendation: name both in the next sim brief that moves AI play.
 8. **BUG-1553 / BUG-1462 rows re-stated** (one opening pair's side alive without a wave; two far-forest seeds' worker bound
    printed). Recommendation: D33 reads both as balance; the sim does not cure them.
+9. **(Fix round 1) The four-seat free-for-all oracle row now plays seed 2, the same match as
+   `FourAiSeats_OnPaleHills_Seed2_KnownStall`** (rule 45's "next seed that ends"; about 30-55 minutes of the Stress run
+   twice). Recommendation: keep the rule's seed now; at the next pin move either drop the seed-2 twin row or move the oracle
+   row to seed 5 (73,778). The bug id range for the sim was used up (1550-1559), so the stall is filed under BUG-1559
+   itself rather than a new id.
 
 ## Testing strategy
 
