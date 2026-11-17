@@ -7,9 +7,11 @@ namespace Rts.Sim.Tests.QA.Content;
 /// backed by the shipped opening's data, so the words and the steps can't drift apart silently: the two buildings named
 /// "first" are built before Age II is researched, "four Warriors raid at 8 army pop" is the wave threshold over a
 /// Warrior-only Age I mix, each unit kind named as joining is in the Age II mix and has a building step for its trainer,
-/// Shamans also have their own train step, and "a second Longhouse" has an <c>expand</c> step. The kinds the shipped text
-/// leaves out (the Breakers, Destrier Riders and War-dogs, fielded in no match by 15:00 on D32's row) stay out of it.
-/// Measured play (how often each claim holds) is <see cref="D32OpeningQaStressTests"/>.
+/// Shamans also have their own train step, and "a second Longhouse" has an <c>expand</c> step. D32's text left out the
+/// Breakers, Destrier Riders and War-dogs (fielded in no match by 15:00 on D32's row). D33 (2026-11-17, BUG-1420) names them
+/// again: each now has its own train step, and on the 64-match Normal row they are fielded in 12, 22 and 39 matches
+/// (<c>Content/D33BalanceReportTests</c>), so the checks that kept them out became checks that each named kind has a
+/// trainer step and a train step. Measured play (how often each claim holds) is <see cref="D32OpeningQaStressTests"/>.
 /// </summary>
 public class D32DescriptionQaTests
 {
@@ -32,9 +34,10 @@ public class D32DescriptionQaTests
     private static string Desc => Standard().Description;
 
     [Fact]
-    public void TheDescription_IsD32sSentence()
+    public void TheDescription_IsD33sSentence()
     {
-        Assert.Equal("War Lodge and Javelin Ground first, then Age II; four Warriors raid at 8 army pop, then Javelin Throwers and Shamans join them and a second Longhouse goes up.", Desc);
+        // D33 (2026-11-17): was "... then Javelin Throwers and Shamans join them and a second Longhouse goes up." (D32's, BUG-1390).
+        Assert.Equal("War Lodge and Javelin Ground first, then Age II; four Warriors raid at 8 army pop, then Javelin Throwers, Shamans, Breakers, Destrier Riders and War-dogs join them and a second Longhouse goes up.", Desc);
     }
 
     [Fact]
@@ -72,6 +75,9 @@ public class D32DescriptionQaTests
     [Theory]
     [InlineData("Javelin Throwers", "teblor_javelin_thrower", "teblor_javelin_ground")]
     [InlineData("Shamans", "teblor_shaman", "teblor_shamans_circle")]
+    [InlineData("Breakers", "teblor_breaker", "teblor_breakers_hall")]
+    [InlineData("Destrier Riders", "teblor_destrier_rider", "teblor_stables")]
+    [InlineData("War-dogs", "teblor_war_dog", "teblor_stables")]
     public void EachKindNamedAsJoining_IsInTheAgeIIMix_AndItsTrainerIsBuilt(string words, string unit, string trainer)
     {
         AiOpening o = Standard();
@@ -104,9 +110,21 @@ public class D32DescriptionQaTests
         Assert.True(expand > StepIndex(o, AiStepAction.Research, "age_ii"));
     }
 
+    /// <summary>
+    /// D33: the three kinds D32's text left out are named again, and each has its own train step (as the Shamans do), due no
+    /// sooner than its hall's step. Was <c>TheKindsNotFieldedBy15_AreNotPromised</c> (D32: none of them in the text).
+    /// </summary>
     [Theory]
-    [InlineData("Breaker")]
-    [InlineData("Destrier")]
-    [InlineData("War-dog")]
-    public void TheKindsNotFieldedBy15_AreNotPromised(string word) => Assert.DoesNotContain(word, Desc);
+    [InlineData("Breakers", "teblor_breaker", "teblor_breakers_hall")]
+    [InlineData("Destrier Riders", "teblor_destrier_rider", "teblor_stables")]
+    [InlineData("War-dogs", "teblor_war_dog", "teblor_stables")]
+    public void TheKindsD33Names_HaveTheirOwnTrainStep(string words, string unit, string hall)
+    {
+        AiOpening o = Standard();
+        Assert.Contains(words, Desc);
+        int train = StepIndex(o, AiStepAction.Train, unit), build = StepIndex(o, AiStepAction.Build, hall);
+        Assert.True(train >= 0 && build >= 0, $"{unit}: train step {train + 1}, {hall} step {build + 1}");
+        Assert.True(o.BuildOrder[train].Count >= 1);
+        Assert.True(o.BuildOrder[train].At >= o.BuildOrder[build].At, $"the {unit} step is due before its {hall}");
+    }
 }

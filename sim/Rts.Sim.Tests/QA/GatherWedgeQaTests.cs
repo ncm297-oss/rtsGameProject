@@ -77,6 +77,13 @@ public class GatherWedgeQaTests
     // overlap shipped: common/rules.json gains "gatherOverlap": 0.5 (hashed when non-zero, RulesDef.GatherOverlap). The
     // golden's army never gathers and the M6-S10 cure (EconomyConstants.QueueArrival) reads only footprint walkers, so its
     // k lines are byte for byte as before (header data-hash and checksum only).
+    // D33 (data track, rule 51, BUG-0750's rule): regenerated once more, B74DC7AE61B4862D -> 318E8C4256456C05, because three AI
+    // openings changed in one move (all in GameData.ContentHash): the Malazan cadre_rush waves at 16 army pop / 1,184 (was
+    // 18 / 1,332) and the Whirlwind holy_war at 14 / 918 (was 20 / 1,312), each with its description, and the Teblor standard
+    // opening gains a train step each for a Breaker, a Destrier Rider and a War-dog pack, with the Breakers Hall at 9:00
+    // ahead of the expansion and the Stables first of the 10:00 steps, and a new description (BUG-0982, BUG-1553, BUG-1420).
+    // The golden's one seat is a Malazan human seat, so its k lines are byte for byte as before (header data-hash and
+    // checksum only).
 
     /// <summary>
     /// Ticks the replay must still match its recorded checkpoints: all of them (M4-H1, BUG-0211; before the re-recording

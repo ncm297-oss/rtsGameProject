@@ -123,7 +123,7 @@ pins every side's Age II to "Age II against the Malazans" at the end of this pag
 | --- | --- | --- | --- |
 | 1 | `standard` | Swarm | Raider, Archer and Horse camps first and a raid at 14 army pop; Zealots, Priests and Battering Rams join in Age II. |
 | 2 | `raider_rush` | Raider rush | Two Raider Camps and Horse Lines, no archers: Raiders and Horse Raiders strike at 10 army pop and keep coming. |
-| 3 | `holy_war` | Holy war | An early Age II, the Shrine at once and Dryjhna's Prophecy for Zealots and Priests. No Horse Lines; the first wave waits for 20 army pop. |
+| 3 | `holy_war` | Holy war | An early Age II, the Shrine at once and Dryjhna's Prophecy for Zealots and Priests. No Horse Lines; the first wave goes at 14 army pop. |
 
 Not in the file, because the schema has no field for it (requests to the sim track): the sketch's first raid at ~4:30
 (6 Raiders + 2 Horse Raiders against the workers; the standard opening's first wave goes at 14 army pop, below) and the
@@ -327,7 +327,8 @@ to 70.
 
 The faith first: Raider and Archer Camps only (no Horse Lines), the Smithy at pop 18, Age II at 6:30, the Shrine as
 soon as it can stand and Dryjhna's Prophecy (Zealots +20 HP) at 8:00, then a second Raider Camp for Zealots. The first
-wave waits for 20 army pop, the latest Whirlwind wave.
+wave goes at 14 army pop, as the standard opening's (20 until D33, 2026-11-17: at 20 the army never got there on one
+measured seed, BUG-1553; "The holy war's first wave" at the end of this page).
 
 | # | At | Do | Id | Count | Why |
 | --- | --- | --- | --- | --- | --- |
@@ -358,12 +359,12 @@ wave waits for 20 army pop, the latest Whirlwind wave.
 | 25 | time 570 | build | `whirlwind_ram_yard` | 1 | Battering Rams |
 
 **Houses at the cap (D21, 2026-10-18; `QA/Content/AiHouseRuleReportTests.MenuMapNormal_HouseSources_Report`).** On the
-menu's map (20 minutes, the other seat idle): Normal, seed 3: the cap reaches 100 at 767 s; the last Tent step (step 18) is done at a cap of 100; skipped at the hard cap: steps 17, 18; 10 Tents stand at 20:00, 0 past the cap (re-printed 2026-11-16 for the sim's M6-S12: 783 s, step 18 skipped, 11 Tents, 1 past the cap; re-printed 2026-11-15 for the sim's M6-SH2: 0 past the cap). Re-printed 2026-10-26
+menu's map (20 minutes, the other seat idle): Normal, seed 3: the cap reaches 100 at 750 s; the last Tent step (step 18) is done at a cap of 100; skipped at the hard cap: steps 17, 18; 10 Tents stand at 20:00, 0 past the cap (re-printed 2026-11-17 for D33's 14-pop wave: 767 s; re-printed 2026-11-16 for the sim's M6-S12: 783 s, step 18 skipped, 11 Tents, 1 past the cap; re-printed 2026-11-15 for the sim's M6-SH2: 0 past the cap). Re-printed 2026-10-26
 for M5-4g: before it the cap reached 100 at 1184 s, step 18 was done at a cap of 90 and 1 Tent stood past the cap.
 
 **Spending on the menu's map (D21, 2026-10-18, gathering gold 0.85 / wood 0.75 a second; `Content/AiSpendingReportTests.GeneratedNormal_Spending_Report`).**
-Against an idle seat, the menu's map, 20 minutes. Normal, seed 3 (the smallest seed in 1-50 whose Normal pick is this opening): the idle base falls at 567 s; in hand at 5 min 428 gold / 101 wood; the first wave at 481 s; Age II in at 552 s (re-printed 2026-11-16 for the sim's M6-S12; was: the idle base falls at 583 s; in hand at 5 min 428 gold / 91 wood; the first wave at 497 s; Age II in at 563 s). Its Age II step is the earliest (6:30), but since M5-4g the standard opening's Age II comes in first (561 s; the
-raider rush 616 s). Re-printed 2026-10-26 for M5-4g: before it the idle base fell at 573 s and Age II came in at 791 s, the
+Against an idle seat, the menu's map, 20 minutes. Normal, seed 3 (the smallest seed in 1-50 whose Normal pick is this opening): the idle base falls at 512 s; in hand at 5 min 428 gold / 101 wood; the first wave at 419 s; Age II in at 550 s (re-printed 2026-11-17 for D33's 14-pop wave; was: the idle base falls at 567 s; the first wave at 481 s; Age II in at 552 s; and before the sim's M6-S12: 583 s, 428 / 91, 497 s, 563 s). Its Age II step is the earliest (6:30), and its Age II comes in first again (the standard opening's at 568 s, the
+raider rush's at 674 s; from M5-4g until D33 the standard opening's came first). Re-printed 2026-10-26 for M5-4g: before it the idle base fell at 573 s and Age II came in at 791 s, the
 earliest Whirlwind Age II then (the others: 1098 s and 957 s).
 
 **Army composition (`compositions`), weights by pop.** Age I is the two units the Age I steps train (no Horse Lines), so
@@ -379,8 +380,8 @@ its weights sum to 50.
 
 - **Composition target (by pop):** 30% Raider, 20% Desert Archer, 30% Zealot, 15% Priest of the Whirlwind,
   5% Battering Ram.
-- **Attack waves:** first at 20 army pop and 1,312 gold + wood (`attack`; the cost of 20 pop of the Age I mix, rounded
-  down).
+- **Attack waves:** first at 14 army pop and 918 gold + wood (`attack`; the cost of 14 pop of the Age I mix, rounded
+  down; 20 and 1,312 until D33, 2026-11-17).
 
 ## Difficulty
 
@@ -484,13 +485,13 @@ against `crossbow_push` seed 11 at 18:34, without Age II, and `standard` against
 | --- | --- | --- | --- | --- |
 | `standard` | `standard` | seed 1: 9:10 | seed 22: 11:06 | seed 26: 9:30 |
 | `standard` | `crossbow_push` | seed 9: 17:16 | seed 32: 9:58 | seed 37: 9:18 |
-| `standard` | `cadre_rush` | seed 13: never | seed 16: 10:10 | seed 17: 9:58 |
+| `standard` | `cadre_rush` | seed 13: never | seed 16: 10:10 (defeated 18:47) | seed 17: 9:58 |
 | `raider_rush` | `standard` | seed 2: 9:57 | seed 10: 9:32 | seed 21: 16:14 |
 | `raider_rush` | `crossbow_push` | seed 5: 13:28 | seed 11: 13:09 | seed 19: 16:10 |
-| `raider_rush` | `cadre_rush` | seed 7: 10:04 (defeated 19:59) | seed 8: 10:02 | seed 14: 10:00 |
-| `holy_war` | `standard` | seed 3: 9:10 | seed 4: 10:07 | seed 6: 7:35 |
-| `holy_war` | `crossbow_push` | seed 12: 9:10 | seed 45: 9:10 | seed 71: 9:10 |
-| `holy_war` | `cadre_rush` | seed 20: 9:19 | seed 24: 9:10 | seed 27: 8:46 |
+| `raider_rush` | `cadre_rush` | seed 7: 9:52 (defeated 19:54) | seed 8: 12:03 | seed 14: 10:00 |
+| `holy_war` | `standard` | seed 3: 9:10 | seed 4: 10:03 | seed 6: 7:35 |
+| `holy_war` | `crossbow_push` | seed 12: 8:58 | seed 45: 7:35 | seed 71: 8:58 |
+| `holy_war` | `cadre_rush` | seed 20: 8:34 | seed 24: 9:10 | seed 27: 7:53 |
 
 Re-printed 2026-11-15 for the sim's M6-S10 (docs/03 "Implementation (M6-S10)"): `raider_rush` against `crossbow_push`
 seed 19 now reaches Age II at 16:10 (was 10:34 from the sim's M5-H6, and 10:21 before it; 10:04 under M6-S10 and M6-SH2, 16:10 since the sim's M6-S12).
@@ -508,49 +509,61 @@ reach Age II; the one that doesn't is `standard` against `cadre_rush` seed 13, w
 was defeated at 15:19 under M6-SH2). One side falls: `raider_rush` against `cadre_rush` seed 7 at 19:59, after its Age II
 (10:04). `raider_rush` against `crossbow_push` seed 11 reaches Age II at 13:09 and stands.
 
+Re-printed 2026-11-17 for D33 (the data track's balance pass: `holy_war`'s wave at 14 army pop, was 20; the Malazan
+`cadre_rush`'s at 16, was 18): 26 of the 27 Whirlwind sides reach Age II; the one that doesn't is still `standard` against
+`cadre_rush` seed 13, which stands at 20:00. Two sides fall, both after their Age II: `raider_rush` against `cadre_rush`
+seed 7 at 19:54 (was 19:59) and `standard` against `cadre_rush` seed 16 at 18:47 (it stood under M6-S12). `holy_war`
+reaches Age II sooner against `crossbow_push` (8:58, 7:35 and 8:58, was 9:10 on all three seeds) and against `cadre_rush`
+seeds 20 and 27 (8:34 and 7:53, was 9:19 and 8:46); `raider_rush` against `cadre_rush` seed 8 later (12:03, was 10:02).
+
 ## The holy war's first wave (D-R39, 2026-11-15)
 
-Measured by `Content/HolyWarFirstWaveReportTests`, which pins this table to its output cell for cell, after the sim's
-M6-S10 gather change. On the first seed of `holy_war` against the Malazan `standard` (seed 3, `Content/AiOpeningPairsReportTests`'
-run) the Malazan first wave wipes the `holy_war` army and the side is defeated at 12:29 without sending a wave. To see
-whether that is the opening or the seed: `holy_war` against each Malazan opening, two Normal AI seats on the menu's map
-(12 forests, 8 mines), 20 minutes, on each pairing's three smallest seeds in 1-500 (the Age II table's seeds). The
-`holy_war` columns: when its first wave was due (its army at the opening's 20 army pop and their cost, or the starved
-charge), its first wave and the waves sent, its defeat and its largest army (read once a second).
+Measured by `Content/AiOpeningPairsReportTests`' companion `Content/HolyWarFirstWaveReportTests`, which pins this table to
+its output cell for cell. `holy_war` against each Malazan opening, two Normal AI seats on the menu's map (12 forests, 8
+mines), 20 minutes, on each pairing's three smallest seeds in 1-500 (the Age II table's seeds). The `holy_war` columns:
+when its first wave was due (its army at the opening's 14 army pop and their cost, or the starved charge), its first
+wave and the waves sent, its defeat and its largest army (read once a second).
 
 | Malazan opening | seed | Malazan first wave | `holy_war` wave due | `holy_war` first wave (waves) | `holy_war` defeated at | `holy_war` peak army pop |
 | --- | --- | --- | --- | --- | --- | --- |
-| `standard` | 3 | 5:50 | never | never (0) | never | 16 |
-| `standard` | 4 | 6:02 | 8:24 | 8:24 (5) | never | 30 |
-| `standard` | 6 | 5:55 | 8:33 | 8:33 (5) | never | 31 |
-| `crossbow_push` | 12 | 5:45 | 8:16 | 8:16 (4) | never | 32 |
-| `crossbow_push` | 45 | 5:40 | 7:27 | 7:39 (5) | never | 47 |
-| `crossbow_push` | 71 | 7:03 | 7:23 | 7:23 (3) | never | 64 |
-| `cadre_rush` | 20 | 8:08 | 7:38 | 7:38 (5) | never | 25 |
-| `cadre_rush` | 24 | 10:07 | 7:51 | 7:51 (4) | never | 30 |
-| `cadre_rush` | 27 | 9:41 | 6:53 | 6:53 (5) | never | 67 |
+| `standard` | 3 | 5:50 | 6:21 | 6:21 (5) | never | 25 |
+| `standard` | 4 | 6:02 | 6:34 | 6:34 (4) | never | 17 |
+| `standard` | 6 | 5:55 | 6:17 | 6:17 (6) | never | 19 |
+| `crossbow_push` | 12 | 5:45 | 5:58 | 5:58 (4) | never | 20 |
+| `crossbow_push` | 45 | 5:40 | 6:10 | 6:10 (4) | never | 66 |
+| `crossbow_push` | 71 | 7:03 | 6:26 | 6:26 (4) | never | 40 |
+| `cadre_rush` | 20 | 8:54 | 6:38 | 6:38 (5) | never | 20 |
+| `cadre_rush` | 24 | 9:02 | 6:49 | 6:49 (5) | never | 22 |
+| `cadre_rush` | 27 | 10:17 | 5:56 | 5:56 (5) | never | 22 |
 
-Re-printed 2026-11-16 for the sim's M6-S12 (the AI's rally point off one-cell passages, a rebalanced gatherer's node
-measured from its drop-off, a blind seat's re-scout; docs/03 "Implementation (M6-S12)"): `holy_war` is defeated on none of
-the nine runs and sends a wave on eight. On seed 3 it is never at its 20 pop (peak 16) and sends no wave in 20 minutes,
-while the Malazan `standard` sends five; it is not defeated. On the other eight its wave is due between 6:53 and 8:33. The
-M6-SH2 table read, for seed 3: Malazan first wave 5:46, wave due 12:57, one wave at 14:45, peak 49. The paragraph below
-reads this table.
+Re-printed 2026-11-17 for D33 (the data track's balance pass, BUG-1553): `holy_war`'s wave is 14 army pop and 918 gold +
+wood (was 20 and 1,312), and `cadre_rush`'s 16 (was 18; malazan.md "Fast Age II against the raider rush"). `holy_war` now
+sends 4 to 6 waves on every one of the nine runs, the first between 5:56 and 6:49, and falls on none. On seed 3, where
+at 20 pop its army never got there (peak 16) and it sent no wave in 20 minutes against the Malazan's five, it waves at
+6:21. The `cadre_rush` rows' Malazan first waves are earlier (8:54, 9:02, 10:17; were 8:08, 10:07, 9:41 at 18 pop).
 
-Re-printed 2026-11-15 for the sim's M6-SH2 (a construction site is no longer a drop-off; an AI with no worker trains
-one; docs/03 "Implementation (M6-SH2)"): `holy_war` is now defeated before its first wave is due in 0 of 9 runs. On
-seed 3 it survives the Malazan first wave (5:46), reaches its 20 pop at 12:57 and sends one wave at 14:45; on the other
-eight its wave is due between 6:59 and 8:24. `AiOpeningPairsReportTests.DefeatedBeforeDue` no longer names seed 3. The
-paragraph below reads this table (re-worded 2026-11-16, M6-SH2 fix round 2, BUG-1524; D-R39's reading of the M6-S10
-runs, where seed 3 fell at 12:29 with a 14-pop army before its wave was due, is history).
+How D33 chose 14 (`Content/D33BalanceReportTests.HolyWar_WaveThreshold_NineRuns_Report`, the same nine runs with
+`cadre_rush` still at 18, the wave cost the floor of the Age I mix at that pop as D21's rule has it): at 20, 18, 16 and
+15 army pop seed 3's army peaks at 16 and it sends no wave; at 14 it waves on all nine. 14 is the standard opening's wave
+too (the raider rush's is 10), so the holy war's first wave no longer waits longer than the other openings'; its early
+Age II is still its own.
 
-**What it says (a finding for the balance pass, D33; no data changed).** `holy_war` falls on none of the nine runs. Since
-the sim's M6-S12 (2026-11-16) it sends no wave on seed 3: the Malazan `standard` first wave (5:50) and four more keep its
-army under its 20 pop (peak 16) for the whole 20 minutes, and it is not defeated (M6-SH2: it survived the 5:46 wave,
-peaked at 49 army pop and sent one wave, at 14:45). On the other eight its wave is due between 6:53 and 8:33 and it sends
-3 to 5 waves, the first between 6:53 and 8:33. The Malazan `standard` and `crossbow_push` openings send their first wave
-at 5:40 to 7:03, before `holy_war`'s is due on every one of their six seeds; the `cadre_rush` ones
-send theirs after it (8:08, 10:07, 9:41). The latest Whirlwind wave (20 army pop) is the price of the opening's early Age
-II; whether seed 3 says the threshold is wrong is the balance pass's question. `Content/AiOpeningPairsReportTests` names
-seed 3 in `AliveWithoutAWave` (BUG-1553: reported, not failed, while the side stands without a wave) and fails any other
-side that sends no wave.
+The M6-S12 table (2026-11-16) read: seed 3 no wave (peak 16, not defeated); the other eight waved first between 6:53 and
+8:33 (3 to 5 waves); `holy_war` fell on none. The M6-SH2 table read, for seed 3: Malazan first wave 5:46, wave due 12:57,
+one wave at 14:45, peak 49. D-R39's reading of the M6-S10 runs, where seed 3 fell at 12:29 with a 14-pop army before its
+wave was due, is history.
+
+**What it says (D33).** `holy_war` sends its first wave before the Malazan's on four of the nine runs (the three
+`cadre_rush` runs and `crossbow_push` seed 71) and 13 to 32 s after it on the other five. It falls on none. `Content/AiOpeningPairsReportTests` names no side in `AliveWithoutAWave` since D33
+(BUG-1553: (0, 2) seed 3 was named there from M6-S12) and fails any side that sends no wave.
+
+## Questions for the Producer (D33, 2026-11-17)
+
+Raised by D33 (BUG-1553), with the developer's recommendation.
+
+1. **`holy_war` waves at 14 army pop.** Of 20, 18, 16, 15 and 14 (each with D21's cost rule), only 14 makes seed 3's side
+   wave; at 15 and above its army peaks at 16 pop and waits. 14 is the standard opening's number, so the opening's
+   "waits for 20" identity is gone (its description now reads "the first wave goes at 14 army pop"). Recommendation:
+   accept; a lower `minArmyCost` at 16 pop, or a sim rule ("wave with what you have when attacked every two minutes",
+   BUG-1010's family) would keep a later wave, and both are for the owner to choose.
+

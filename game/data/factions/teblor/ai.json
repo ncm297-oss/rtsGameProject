@@ -38,7 +38,7 @@
     {
       "id": "standard",
       "displayName": "War band",
-      "description": "War Lodge and Javelin Ground first, then Age II; four Warriors raid at 8 army pop, then Javelin Throwers and Shamans join them and a second Longhouse goes up.",
+      "description": "War Lodge and Javelin Ground first, then Age II; four Warriors raid at 8 army pop, then Javelin Throwers, Shamans, Breakers, Destrier Riders and War-dogs join them and a second Longhouse goes up.",
       "buildOrder": [
         { "at": { "time": 0 }, "do": "train", "id": "teblor_gatherer", "count": 9 },
         { "at": { "pop": 6 }, "do": "build", "id": "teblor_hut" },
@@ -57,15 +57,18 @@
         { "at": { "pop": 64 }, "do": "build", "id": "teblor_hut" },
         { "at": { "pop": 70 }, "do": "build", "id": "teblor_hut" },
         { "at": { "time": 360 }, "do": "research", "id": "age_ii" },
+        { "at": { "time": 600 }, "do": "train", "id": "teblor_breaker", "count": 1 },
+        { "at": { "time": 600 }, "do": "train", "id": "teblor_destrier_rider", "count": 1 },
+        { "at": { "time": 600 }, "do": "train", "id": "teblor_war_dog", "count": 1 },
+        { "at": { "time": 540 }, "do": "build", "id": "teblor_breakers_hall" },
         { "at": { "time": 480 }, "do": "expand" },
+        { "at": { "time": 600 }, "do": "build", "id": "teblor_stables" },
         { "at": { "time": 600 }, "do": "build", "id": "teblor_bloodwood_carver" },
         { "at": { "time": 540 }, "do": "build", "id": "teblor_shamans_circle" },
         { "at": { "time": 540 }, "do": "train", "id": "teblor_shaman", "count": 2 },
-        { "at": { "time": 600 }, "do": "build", "id": "teblor_breakers_hall" },
         { "at": { "time": 690 }, "do": "research", "id": "teblor_blood_oil_anointing" },
         { "at": { "time": 720 }, "do": "research", "id": "armor_1" },
-        { "at": { "time": 600 }, "do": "train", "id": "teblor_gatherer", "count": 8 },
-        { "at": { "time": 600 }, "do": "build", "id": "teblor_stables" }
+        { "at": { "time": 600 }, "do": "train", "id": "teblor_gatherer", "count": 8 }
       ],
       "compositions": [
         { "age": 1, "units": { "teblor_warrior": 45 } },

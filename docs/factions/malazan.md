@@ -126,7 +126,7 @@ the openings table), printed but not failed.
 | --- | --- | --- | --- |
 | 1 | `standard` | Combined arms | Barracks, Crossbow Range and Armory first; waves of shields and crossbows from 16 army pop, then mages, siege and Wickan cavalry in Age II. |
 | 2 | `crossbow_push` | Crossbow push | A Crossbow Range before the Barracks, then a second: an early wave of crossbows behind a thin shield line at 14 army pop. |
-| 3 | `cadre_rush` | Fast Age II | Only a Barracks and an Armory before racing to Age II, then two Cadre Towers: few soldiers early, many mages later. The first wave waits for 18 army pop. |
+| 3 | `cadre_rush` | Fast Age II | Only a Barracks and an Armory before racing to Age II, then two Cadre Towers: few soldiers early, many mages later. The first wave waits for 16 army pop. |
 
 Not in the file, because the schema has no field for it (requests to the sim track): the sketch's expansion condition
 (army ≥ 12 pop and no enemy army near the base for 60 s; the step fires at its time), the Barracks rally to the base
@@ -370,13 +370,13 @@ Range waits for Age II, so Age I trains Heavy Infantry only.
 | 25 | time 570 | research | `moranth_supply` | 1 | The faction upgrade, at the Armory |
 
 **Houses at the cap (D21, 2026-10-18; `QA/Content/AiHouseRuleReportTests.MenuMapNormal_HouseSources_Report`).** On the
-menu's map (20 minutes, the other seat idle): Normal, seed 7: the cap reaches 100 at 779 s; the last Billet step (step 16) is done at a cap of 100; skipped at the hard cap: steps 15, 16; 10 Billets stand at 20:00, 0 past the cap. Re-printed 2026-11-16 for the sim's M6-S12: 777 s. Re-printed 2026-11-15 for the sim's M6-SH2: the cap reached 100 at 811 s and step 16 was never done.
+menu's map (20 minutes, the other seat idle): Normal, seed 7: the cap reaches 100 at 807 s; the last Billet step (step 16) is done at a cap of 100; skipped at the hard cap: step 16; 11 Billets stand at 20:00, 0 past the cap. Re-printed 2026-11-17 for D33's 16-pop wave: the cap reached 100 at 779 s, steps 15 and 16 were skipped and 10 Billets stood. Re-printed 2026-11-16 for the sim's M6-S12: 777 s. Re-printed 2026-11-15 for the sim's M6-SH2: the cap reached 100 at 811 s and step 16 was never done.
 Re-printed 2026-10-26 for M5-4g: before it the cap reached 100 at 835 s, step 16 was done at a cap of 98, no step was
 skipped and 12 Billets stood.
 
 **Spending on the menu's map (D21, 2026-10-18, gathering gold 0.85 / wood 0.75 a second; `Content/AiSpendingReportTests.GeneratedNormal_Spending_Report`).**
-Against an idle seat, the menu's map, 20 minutes. Normal, seed 7 (the smallest seed in 1-50 whose Normal pick is this opening): the idle base falls at 616 s; in hand at 5 min 228 gold / 575 wood, at 10 min 232 / 125; the first wave at 488 s; Age II in at 503 s (re-printed 2026-11-16 for the sim's M6-S12; was: the idle base falls at 644 s; in hand at 5 min 218 gold / 575 wood, at 10 min 261 / 350; the first wave at 511 s; Age II in at 493 s). Still the fastest Malazan Age II (the others: 523 s and 568 s), though not the step's 6:00: the
-one Barracks still spends gold before 400 piles up, and the reserve waits for an 18-pop army (the first wave, at 487
+Against an idle seat, the menu's map, 20 minutes. Normal, seed 7 (the smallest seed in 1-50 whose Normal pick is this opening): the idle base falls at 569 s; in hand at 5 min 228 gold / 575 wood; the first wave at 437 s; Age II in at 501 s (re-printed 2026-11-17 for D33's 16-pop wave; was: the idle base falls at 616 s; in hand at 5 min 228 gold / 575 wood, at 10 min 232 / 125; the first wave at 488 s; Age II in at 503 s; and before the sim's M6-S12: 644 s, 218 / 575 and 261 / 350, 511 s, 493 s). Still the fastest Malazan Age II (the others: 538 s and 556 s), though not the step's 6:00: the
+one Barracks still spends gold before 400 piles up, and the reserve waits for a 16-pop army (the first wave, at 437
 s). Re-printed 2026-10-26 for M5-4g: Age II did not move; the idle base fell at 619 s and the 10-minute bank read 99 /
 490 before it.
 
@@ -394,23 +394,19 @@ train), so its weights sum to 30.
 
 - **Composition target (by pop):** 30% Heavy Infantry, 20% Crossbowman, 30% Cadre Mage,
   10% Wickan Lancer, 5% Sapper, 5% Catapult.
-- **Attack waves:** first at 18 army pop and 1,332 gold + wood (`attack`; the cost of 18 pop of the Age I mix, Heavy
-  Infantry at 74 a pop). Mages cast Telas Fire on the largest enemy clump.
+- **Attack waves:** first at 16 army pop and 1,184 gold + wood (`attack`; the cost of 16 pop of the Age I mix, Heavy
+  Infantry at 74 a pop; 18 and 1,332 until D33, 2026-11-17, BUG-0982's rule below). Mages cast Telas Fire on the
+  largest enemy clump.
 
-**This opening can fall to a rush without ever attacking (BUG-0982, D-H6, 2026-10-18).** It is the greedy opening: one
-Barracks in Age I and the gold saved for Age II. Against the Whirlwind's raider rush, the Malazan army stays small while
-the base is defended. On the pairing's five smallest seeds (7, 8, 14, 18, 23) it sends no wave on three, and all three
-are destroyed (seed 14 at 11:34, 18 at 13:39, 23 at 15:43); seeds 7 and 8 wave and stand at 20:00, seed 8 first at 9:01
-(re-measured 2026-11-15 after the sim's M6-S10 gather change, seeds 18 and 23 by `QA/Content/DH6ThresholdQaTests`; on
-the sim's M5-H6, 2026-11-09, seed 8 sent no wave and was destroyed at 13:47, seed 14 at 14:16 and seed 18 at 10:50, and
-seed 23 sent three waves, the first at 12:29, and fell at 18:49; measured 2026-11-07 after the sim's M5-4d slice 2, seed
-18 was destroyed at 10:44 and seed 23 sent one wave at 13:53 and was destroyed at 18:27; before slice 2 seed 23 sent
-none, peaked at 10 pop and fell at 15:36, and seed 18 stood at 20:00, BUG-1010). A lower wave threshold doesn't help
-those three: at 16 or 14 army pop they still send no wave, because the army never grows past 13 pop (seed 14), 7 (seed
-18) or 9 (seed 23). It does change the pick: seed 8 now waves at every threshold, so BUG-0982's rule (below) picks 14,
-not the 18 the file ships. The file still ships 18 (the Producer's default, measured; the owner may revisit): the number
-is the balance pass's (D33), and at 14 seed 8 is destroyed at 19:28 where at 18 it stands. The measurement is under
-"Fast Age II against the raider rush" at the end of this page.
+**This opening can fall to a rush without ever attacking (BUG-0982, D-H6, 2026-10-18; re-measured by D33, 2026-11-17).**
+It is the greedy opening: one Barracks in Age I and the gold saved for Age II. Against the Whirlwind's raider rush, the
+Malazan army stays small while the base is defended. On the pairing's five smallest seeds (7, 8, 14, 18, 23) it sends
+no wave on three, and all three are destroyed (seed 14 at 11:21, 18 at 12:42, 23 at 13:44); seeds 7 and 8 wave and
+stand at 20:00, seed 8 first at 7:48. A lower wave threshold doesn't help those three: at 16 or 14 army pop they still
+send no wave, because the army never grows past 9 pop (seed 14), 7 (seed 18) or 10 (seed 23). It does help the two that
+wave: D33 lowered the wave from 18 to 16 army pop by BUG-0982's rule, re-stated (below), so seed 8's first wave comes
+at 7:48 (9:59 at 18) and seed 7's at 7:50 (8:20 at 18), and both still stand; at 14 seed 8 is destroyed at 13:09 where
+at 16 and 18 it stands. The measurement is under "Fast Age II against the raider rush" at the end of this page.
 
 ## Difficulty
 
@@ -540,63 +536,46 @@ the Sapper stays "Fragile; wants an escort".
 Measured by `Content/AiOpeningPairsReportTests.Bug0982_CadreRushVersusRaiderRush_WaveThresholdTable`, which pins this
 table to its output cell for cell. Malazan `cadre_rush` (Fast Age II) against Whirlwind `raider_rush`, two Normal AI
 seats on the menu's map (12 forests, 8 mines), 20 minutes, on the three smallest seeds in 1-500 that make the pair (7,
-8, 14). `attack.minArmyPop` is set to 18 (shipped), 16 and 14, and `minArmyCost` is the cost of that pop of the Age I
-mix, rounded down (Heavy Infantry at 74 a pop). The columns are the Malazan side's: the first wave (and the number of
-waves), Age II, the defeat, and the largest army it had (read once a second).
+8, 14). `attack.minArmyPop` is set to 18, 16 (shipped since D33) and 14, and `minArmyCost` is the cost of that pop of
+the Age I mix, rounded down (Heavy Infantry at 74 a pop). The columns are the Malazan side's: the first wave (and the
+number of waves), Age II, the defeat, and the largest army it had (read once a second).
 
 | minArmyPop / minArmyCost | seed | waved at (waves) | Age II at | defeated at | peak army pop |
 | --- | --- | --- | --- | --- | --- |
-| 18 / 1,332 | 7 | 10:44 (4) | 8:24 | never | 36 |
-| 18 / 1,332 | 8 | 9:01 (4) | 8:22 | never | 30 |
-| 18 / 1,332 | 14 | never (0) | 8:19 | 11:34 | 13 |
-| 16 / 1,184 | 7 | 10:29 (3) | 8:24 | never | 33 |
-| 16 / 1,184 | 8 | 8:51 (3) | 8:22 | never | 23 |
-| 16 / 1,184 | 14 | never (0) | 8:19 | 11:34 | 13 |
-| 14 / 1,036 | 7 | 10:05 (2) | 8:24 | never | 17 |
-| 14 / 1,036 | 8 | 8:51 (2) | 8:22 | 19:28 | 21 |
-| 14 / 1,036 | 14 | never (0) | 8:19 | 11:34 | 13 |
+| 18 / 1,332 | 7 | 8:20 (4) | 8:13 | never | 55 |
+| 18 / 1,332 | 8 | 9:59 (3) | 8:41 | never | 21 |
+| 18 / 1,332 | 14 | never (0) | 8:52 | 11:21 | 9 |
+| 16 / 1,184 | 7 | 7:50 (4) | 8:13 | never | 52 |
+| 16 / 1,184 | 8 | 7:48 (4) | 8:41 | never | 26 |
+| 16 / 1,184 | 14 | never (0) | 8:52 | 11:21 | 9 |
+| 14 / 1,036 | 7 | 6:47 (5) | 8:13 | never | 60 |
+| 14 / 1,036 | 8 | 7:18 (1) | 8:33 | 13:09 | 16 |
+| 14 / 1,036 | 14 | never (0) | 8:52 | 11:21 | 9 |
 
-This table and the prose under it predate the sim's M6-SH2; the Age II table under "Age II against the Whirlwind" (re-printed for M6-SH2) is newer, and D33 re-measures this one (BUG-1524).
+Re-measured 2026-11-17 by D33 on the sim of M6-S12 (docs/03 "Implementation (M6-S12)"), before any D33 data change
+(the table sets `cadre_rush`'s wave itself, so the shipped number does not move it). Seeds 7 and 8 wave at every
+threshold and stand at 20:00 at 18 and 16 pop; at 14 pop seed 8 sends one wave (7:18) and is destroyed at 13:09. At
+every threshold seed 14 is destroyed at 11:21 without a wave, after its Age II (8:52), with a peak of 9 pop. Age II
+comes at the same time at 18 and 16 pop on every seed. The M6-S10 table (D-R39, 2026-11-15) read, at 18 pop: seed 7
+first wave 10:44 (4), Age II 8:24, peak 36; seed 8 9:01 (4), Age II 8:22, peak 30; seed 14 no wave, Age II 8:19,
+destroyed at 11:34, peak 13; at 14 pop seed 8 was destroyed at 19:28.
 
-Re-printed 2026-11-15 for the sim's M6-S10 (the gather change; docs/03 "Implementation (M6-S10)"): seed 8 now waves at
-every threshold (at 18 pop first at 9:01, 4 waves, peak 30; was no wave, peak 11) and stands at 20:00 at 18 and 16 pop
-(was destroyed at 13:47), but at 14 pop it is destroyed at 19:28; at every threshold seed 14 now falls at 11:34 (was
-14:16), still without a wave, now with Age II at 8:19 and a peak of 13 (was no Age II, peak 7); seed 7's first wave at
-18 pop is 10:44 (was 10:16), peak 36 (was 42). The M5-H6 rows the older notes below speak of: 18 pop seed 7 10:16 (3),
-Age II 8:26, peak 42; seed 8 no wave, Age II 8:41, destroyed at 13:47, peak 11; seed 14 no wave, no Age II, destroyed
-at 14:16, peak 7.
+**The rule (the Producer's default for D-H6, re-stated by D33 under BUG-1524; the owner may revisit):** take the lowest
+threshold of 16 or less at which seed 8 waves, no seed that stands at 20:00 at 18 is destroyed, and Age II comes on
+every measured seed no more than 60 s later than at 18; else keep 18. D-H6's rule had only the first and the last
+test; since the sim's M6-S10 seed 8 waves at every threshold, so it picked 14, where seed 8 is destroyed. The
+re-stated rule picks 16: seeds 7 and 8 wave sooner (7:50 and 7:48, against 8:20 and 9:59 at 18) and both still
+stand, and Age II does not move. `cadre_rush` ships 16 army pop and 1,184 since D33 (2026-11-17), and its description
+says so. On seed 14 the army never reaches 14 pop, so no threshold in this range would send a wave. A fix there would
+have to be something other than this number, for example the sim-side "send what you have when the base is being
+lost" that BUG-0982's notes name (BUG-1010). That is a new mechanic, so it is not data.
 
-Re-printed 2026-10-26 for the sim's M5-4g (the reserve). Before it the 18-pop rows read seed 7: waved at 8:42 (3), Age
-II at 8:24, peak 25; seed 8: Age II at 8:44, defeated at 13:14; seed 14: defeated at 11:19, peak 8. Seed 7 now waves
-later at 18 pop (10:16) with a larger army. Re-printed again 2026-11-07 for the sim's M5-4d slice 2 (the AI rebuilds
-what it loses; docs/03 "Implementation (M5-4d slice 2)"): at every threshold seed 8 fell at 13:50 (was 13:25) and seed
-14 at 15:03 (was 12:33), both still without a wave and with the same peaks; seed 7's peak at 16 and 14 pop was 47 and 41
-(was 46 and 40). Re-printed 2026-11-08 for the sim's M5-9a (the counter shift; docs/03 "Implementation (M5-9a)"): seed
-7's peak at 18, 16 and 14 pop is 42, 52 and 44 (was 40, 47 and 41). Re-printed 2026-11-09 for the sim's M5-H6 (docs/03
-"Implementation (M5-H6)"): at every threshold seed 8 now falls at 13:47 (was 13:50) and seed 14 at 14:16 (was 15:03),
-both still without a wave and with the same peaks.
-
-**The rule (the Producer's default for D-H6, the owner may revisit):** take the lowest threshold of 16 or less at which
-seed 8 waves and Age II comes on every measured seed no more than 60 s later than at 18; else keep 18. **Re-read
-2026-11-15 on the M6-S10 table: the rule now picks 14** (seed 8 waves at 14, and Age II comes at the same time at every
-threshold on every seed), while `cadre_rush` ships 18. D-R39 changed no data; the pick is a finding for the balance pass
-(D33), and `Content/AiOpeningPairsReportTests.Bug0982_*` and `QA/Content/DH6ThresholdQaTests.Bug0982_*` (Stress) stay
-red until it decides. What 14 would do on these seeds: seed 7's first wave earlier (10:44 to 10:05, with a peak of 17
-against 36), seed 8's earlier (9:01 to 8:51) but seed 8 destroyed at 19:28, and seed 14 unchanged. Until M6-S10 seed 8
-sent no wave at 16 or at 14 and the wave stayed at 18 (2026-10-26 and 2026-11-09: the same pick, no data change). On
-seed 14 the army never reaches 14 pop, so no threshold in this range would send a wave. A fix there would have to be
-something other than this number, for example the sim-side "send what you have when the base is being lost" that
-BUG-0982's notes name. That is a new mechanic, so it is not data. QA's `QA/Content/DH6ThresholdQaTests` runs the same
-thresholds on the pairing's 4th and 5th seeds too (18 and 23). Re-measured 2026-11-15 on the sim's M6-S10 (its
-printout; not pinned): at every threshold seed 18 sends no wave, never reaches Age II and is destroyed at 13:39 (peak 7
-pop), and seed 23 sends no wave, reaches Age II at 8:18 and is destroyed at 15:43 (peak 9). Measured 2026-11-09 on the
-sim's M5-H6: seed 18 sends no wave at any of the three thresholds and is
-destroyed at 10:50 at 18 pop; seed 23 sends 3 / 2 / 2 waves at 18 / 16 / 14 pop, the first at 12:29 / 12:28 / 12:10,
-peaks at 21 / 21 / 17 pop and reaches Age II at 8:11, and is destroyed at 18:49 at 18 pop but stands at 20:00 at 16 and
-at 14. Measured 2026-11-07 after M5-4d slice 2: seed 18 destroyed at 10:44 with a 6-pop peak; seed 23 one wave at each
-(13:53, 13:34, 13:31), peaks of 20 to 21 pop, destroyed at 18:27 at 18 pop and 18:39 at 14, standing at 16. Before
-slice 2 neither sent a wave, seed 23 was destroyed at 15:36 and seed 18 stood at 20:00. The rule over all five seeds
-now picks 14 (QA's printout: "rule over 5 seeds picks 14; shipped 18"); it picked 18 until M6-S10.
+QA's `QA/Content/DH6ThresholdQaTests` runs the same thresholds on the pairing's 4th and 5th seeds too (18 and 23), and
+the same rule over all five seeds (its printout, not pinned): at every threshold seed 18 sends no wave, never reaches
+Age II and is destroyed at 12:42 (peak 7 pop), and seed 23 sends no wave, reaches Age II at 8:11 and is destroyed at
+13:44 (peak 10). The rule over all five seeds picks 16. Re-measured 2026-11-15 on the sim's M6-S10: seed 18 was
+destroyed at 13:39 (peak 7) and seed 23 at 15:43 (Age II 8:18, peak 9), neither waving; on the sim's M5-H6
+(2026-11-09) seed 23 sent three waves at 18 pop and was destroyed at 18:49.
 
 The same thing happens to `crossbow_push` (BUG-1010; D-H6's third seed per pairing, `QA/Content/D21OpeningsQaTests`, and
 QA's 4th and 5th, `QA/Content/DH6ThresholdQaTests`). Against `raider_rush` it sends no wave on 2 of the pairing's 5
@@ -622,7 +601,8 @@ put seed 19's back the same day.
 
 Over the two openings, `raider_rush` beats the Malazans without a fight on 5 of 10 seeds (`cadre_rush` 3 of 5,
 `crossbow_push` 2 of 5; re-counted 2026-11-15 on the sim's M6-S10: the same 5 of 10, but `cadre_rush`'s three are now
-seeds 14, 18 and 23, with seed 8 waving; 6 of 10 before slice 2, when seed 23 sent no wave either). `standard` sent a wave on each of its 9
+seeds 14, 18 and 23, with seed 8 waving; 6 of 10 before slice 2, when seed 23 sent no wave either; `cadre_rush`'s three
+re-measured by D33, 2026-11-17: still seeds 14, 18 and 23, at 16 pop as at 18). `standard` sent a wave on each of its 9
 measured pairing seeds (3 Whirlwind openings x 3 seeds).
 
 ## Age II against the Whirlwind (M5-4g, 2026-10-26)
@@ -644,17 +624,17 @@ and seed 19 with it; from M5-4d slice 2 (the AI rebuilds what it loses) until M6
 | --- | --- | --- | --- | --- |
 | `standard` | `standard` | seed 1: 10:19 | seed 22: 15:25 | seed 26: 11:16 |
 | `standard` | `raider_rush` | seed 2: 13:07 | seed 10: never (defeated 12:38) | seed 21: 8:14 |
-| `standard` | `holy_war` | seed 3: 9:34 | seed 4: 12:15 | seed 6: 10:30 |
+| `standard` | `holy_war` | seed 3: 9:34 | seed 4: 11:24 | seed 6: 11:01 |
 | `crossbow_push` | `standard` | seed 9: 11:23 | seed 32: 15:01 | seed 37: 9:52 |
 | `crossbow_push` | `raider_rush` | seed 5: 9:50 | seed 11: 9:28 | seed 19: 11:31 |
-| `crossbow_push` | `holy_war` | seed 12: 17:04 | seed 45: 8:38 | seed 71: 9:28 (defeated 16:14) |
-| `cadre_rush` | `standard` | seed 13: 6:05 | seed 16: 8:15 | seed 17: 8:08 |
+| `crossbow_push` | `holy_war` | seed 12: 11:20 | seed 45: 8:40 | seed 71: never (defeated 17:49) |
+| `cadre_rush` | `standard` | seed 13: 6:05 | seed 16: 8:11 | seed 17: 8:08 |
 | `cadre_rush` | `raider_rush` | seed 7: 8:13 | seed 8: 8:41 | seed 14: 8:52 (defeated 11:21) |
-| `cadre_rush` | `holy_war` | seed 20: 8:16 | seed 24: 8:28 | seed 27: 8:23 (defeated 19:41) |
+| `cadre_rush` | `holy_war` | seed 20: 8:16 | seed 24: 8:26 | seed 27: 8:42 |
 
-Re-printed 2026-11-15 for the sim's M6-S10 (docs/03 "Implementation (M6-S10)"): `crossbow_push` against `holy_war` seed 45 reaches Age II at 8:38 (was 9:28) and stands at 20:00 again (was defeated at 19:02 from the sim's M5-H6; Age II at 8:42 under M6-S10 and M6-SH2, 8:38 since M6-S12); `cadre_rush`
+Re-printed 2026-11-15 for the sim's M6-S10 (docs/03 "Implementation (M6-S10)"): `crossbow_push` against `holy_war` seed 45 reaches Age II at 8:40 (was 9:28) and stands at 20:00 again (was defeated at 19:02 from the sim's M5-H6; Age II at 8:42 under M6-S10 and M6-SH2, 8:38 under M6-S12, 8:40 since D33); `cadre_rush`
 against `raider_rush` seed 8 reaches Age II at 8:22 (was 8:41) and stands at 20:00 (was destroyed at 13:47), and seed 14
-reaches Age II at 8:19 (was never) and falls at 11:34 (was 14:16), as in the BUG-0982 table above.
+reaches Age II at 8:19 (was never) and falls at 11:34 (was 14:16), as the BUG-0982 table above read then (D-R39).
 
 Re-printed again 2026-11-15 for the sim's M6-SH2 (a construction site is no longer a drop-off; an AI with no worker
 trains one; docs/03 "Implementation (M6-SH2)"): 24 of the 27 Malazan sides reach Age II; the three that don't are
@@ -672,6 +652,14 @@ Age II; the one that doesn't is `standard` against `raider_rush` seed 10 (defeat
 now reaches Age II (13:07) and `crossbow_push` against `raider_rush` seed 19 stands at 20:00 with Age II at 11:31. The two
 paragraphs above describe the M6-S10 and M6-SH2 runs.
 
+Re-printed 2026-11-17 for D33 (the data track's balance pass: `cadre_rush`'s wave at 16 army pop, was 18; the Whirlwind
+`holy_war`'s at 14, was 20): 25 of the 27 Malazan sides reach Age II; the two that don't are both defeated, `standard`
+against `raider_rush` seed 10 (12:38) and `crossbow_push` against `holy_war` seed 71 (17:49; under M6-S12 it reached Age II
+at 9:28 and fell at 16:14). Three sides fall: those two and `cadre_rush` against `raider_rush` seed 14 (11:21, after its
+Age II at 8:52). `cadre_rush` against `holy_war` seed 27 now stands at 20:00 (Age II at 8:42; it fell at 19:41), and
+`crossbow_push` against `holy_war` seed 12 reaches Age II at 11:20 (was 17:04). The three paragraphs above describe the
+M6-S10, M6-SH2 and M6-S12 runs.
+
 ## Questions for the Producer (D-R39, 2026-11-15)
 
 Raised by D-R39 (the page made true again after the sim's M6-S10 gather change; no data changed), each with the
@@ -681,11 +669,27 @@ developer's recommendation.
    the rule's first test passes at 14 (table under "Fast Age II against the raider rush"). At 14 seed 8 is destroyed at
    19:28 where at 18 it stands, and seeds 14, 18 and 23 fall without a wave at every threshold. Recommendation: leave 18
    to the balance pass (D33), which may also want to re-read the rule now that it no longer answers BUG-0982's question
-   (seed 14 never reaches 14 pop).
+   (seed 14 never reaches 14 pop). **Answered by D33 (2026-11-17, BUG-1524):** the rule is re-stated (a lower
+   threshold may not lose a seed that stands at 18) and picks 16 on the re-measured table; `cadre_rush` ships 16.
 2. **The BUG-0982 table was re-printed in D-R39, not in M6-S10.** The sentences pinned by
    `QA/Content/DR35ProsePinQaTests.Malazan_Bug0982Prose_*` read that table, so it was re-printed from a fresh run of
    `Content/AiOpeningPairsReportTests.Bug0982_*` (which stays red on its pick assertion, before it compares the table).
-   Recommendation: accept; the row compares the table again once D33 settles the pick.
+   Recommendation: accept; the row compares the table again once D33 settles the pick. **Done by D33:** the table is
+   D33's run, and both `Bug0982_*` rows compare it again.
 3. **`QA/Content/D21OpeningsQaTests.KnownBeatenAlive` still names `crossbow_push` against `raider_rush` seed 19.** Since
    M6-S10 that side is defeated at 16:10 and the row prints "now passes the rule: take it out of KnownBeatenAlive".
    Recommendation: take the entry out (and its `DR33QaTests` pin) in the next data task; the row passes either way.
+
+## Questions for the Producer (D33, 2026-11-17)
+
+Raised by D33 (the start of the balance pass), each with the developer's recommendation.
+
+1. **BUG-0982's rule is re-stated.** D-H6's rule (the lowest threshold of 16 or less at which seed 8 waves and Age II is
+   no more than 60 s later) picked 14 on today's table, where seed 8 is destroyed at 13:09 although it stands at 16 and
+   18. D33 added "no seed that stands at 20:00 at 18 is destroyed", which picks 16, and `cadre_rush` ships 16 / 1,184 (its
+   description says 16). Recommendation: accept the re-stated rule; the alternative is to ship 14 by the old rule and
+   lose seed 8, or keep 18 and drop the rule.
+2. **`crossbow_push` against `holy_war` seed 71 now falls without Age II** (17:49; under M6-S12 it reached Age II at 9:28
+   and fell at 16:14): the holy war's earlier wave (14 pop) is felt by the Malazan side on that seed. Recommendation: a
+   finding for the next balance step, not this one (it waves and is not a dead end; the Age II table prints it).
+

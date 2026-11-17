@@ -114,7 +114,7 @@
     {
       "id": "cadre_rush",
       "displayName": "Fast Age II",
-      "description": "Only a Barracks and an Armory before racing to Age II, then two Cadre Towers: few soldiers early, many mages later. The first wave waits for 18 army pop.",
+      "description": "Only a Barracks and an Armory before racing to Age II, then two Cadre Towers: few soldiers early, many mages later. The first wave waits for 16 army pop.",
       "buildOrder": [
         { "at": { "time": 0 }, "do": "train", "id": "malazan_laborer", "count": 15 },
         { "at": { "pop": 6 }, "do": "build", "id": "malazan_billet" },
@@ -146,7 +146,7 @@
         { "age": 1, "units": { "malazan_heavy_infantry": 30 } },
         { "age": 2, "units": { "malazan_heavy_infantry": 30, "malazan_crossbowman": 20, "malazan_cadre_mage": 30, "malazan_wickan_lancer": 10, "malazan_sapper": 5, "malazan_catapult": 5 } }
       ],
-      "attack": { "minArmyPop": 18, "minArmyCost": 1332 }
+      "attack": { "minArmyPop": 16, "minArmyCost": 1184 }
     }
   ],
   "retreat": { "hpFraction": 0.3, "lossFraction": 0.5 }

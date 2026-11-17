@@ -157,7 +157,7 @@ table, composition table and wave line, and the retreat line below to the file, 
 
 | # | Id | Name (shown to the player) | Description (shown to the player) |
 | --- | --- | --- | --- |
-| 1 | `standard` | War band | War Lodge and Javelin Ground first, then Age II; four Warriors raid at 8 army pop, then Javelin Throwers and Shamans join them and a second Longhouse goes up. |
+| 1 | `standard` | War band | War Lodge and Javelin Ground first, then Age II; four Warriors raid at 8 army pop, then Javelin Throwers, Shamans, Breakers, Destrier Riders and War-dogs join them and a second Longhouse goes up. |
 
 Not in the file, because the schema has no field for it (requests to the sim track): the sketch's later waves "whenever
 army pop ≥ 24" (an opening has one wave threshold, used for every wave), its expansion condition "when army ≥ 16 pop"
@@ -228,14 +228,16 @@ proposal for a Teblor-only answer (War-dogs against Ranged) is under "Owner revi
 
 ### Opening 1: `standard` (War band)
 
-D32's measured variant X7 (on D29's V24, which D31 landed for BUG-1241): a War Lodge and the Javelin Ground first, the two
-building kinds Age II needs, and Age II at 6:00; from 8:00 a second Longhouse, from 9:00 the Shamans' Circle and two
-Shamans, and from 10:00 the Bloodwood Carver, the Breakers Hall, eight more Gatherers and the Stables, then the faction
-upgrade (11:30) and Armor (12:00). The sketch's Carver and Armor in Age I moved after Age II so the AI saves for the age
-first; the 11 Gatherers at the start became 9. D32 put the expansion first among the Age II steps and moved the Carver,
-the Breakers Hall and the two researches after it, since nothing else may be due beside it if the bank is ever to hold a
-Longhouse's cost (below), and added the Shaman step, since the mix's Shaman weight alone fielded a Shaman in 4 of 64
-matches.
+D33's measured variant F3 (BUG-1420), on D32's X7: a War Lodge and the Javelin Ground first, the two building kinds Age
+II needs, and Age II at 6:00; from 8:00 a second Longhouse, from 9:00 the Breakers Hall, the Shamans' Circle and two
+Shamans, from 10:00 the Stables, the Bloodwood Carver and eight more Gatherers, then the faction upgrade (11:30) and Armor
+(12:00); and one Breaker, one Destrier Rider and one War-dog pack, each as soon as its hall stands. The sketch's Carver
+and Armor in Age I moved after Age II so the AI saves for the age first; the 11 Gatherers at the start became 9. D32 put
+the expansion first among the Age II steps, since nothing else may be due beside it if the bank is ever to hold a
+Longhouse's cost, and added the Shaman step, since the mix's Shaman weight alone fielded a Shaman in 4 of 64 matches. D33
+put the three train steps and the Breakers Hall ahead of the expansion in the file: while the expansion waits for its
+275 gold and 275 wood (in about half the matches it never goes up) its reserve held back every unit step after it, so the
+halls stood and nothing trained in them ("The Age II army (BUG-1420, D33)" at the end of this page).
 
 | # | At | Do | Id | Count | Why |
 | --- | --- | --- | --- | --- | --- |
@@ -256,15 +258,18 @@ matches.
 | 15 | pop 64 | build | `teblor_hut` | 1 | |
 | 16 | pop 70 | build | `teblor_hut` | 1 | The 12th Hut: Longhouse 10 + 12 × 8 = 106, past the 100 cap |
 | 17 | time 360 | research | `age_ii` | 1 | Age II at 6:00 (needs two kinds: the War Lodge and the Javelin Ground) |
-| 18 | time 480 | expand | — | 1 | 2nd Longhouse near the nearest free gold mine, at Normal's `expandAfter` (480 s); the first Age II step, so it holds the reserve |
-| 19 | time 600 | build | `teblor_bloodwood_carver` | 1 | The Forge, at 10:00, after the expansion |
-| 20 | time 540 | build | `teblor_shamans_circle` | 1 | Shamans, at 9:00 |
-| 21 | time 540 | train | `teblor_shaman` | 2 | Two Shamans once the Circle stands (the mix's weight alone fielded almost none) |
-| 22 | time 600 | build | `teblor_breakers_hall` | 1 | Breakers, at 10:00 |
-| 23 | time 690 | research | `teblor_blood_oil_anointing` | 1 | The faction upgrade, at the Bloodwood Carver |
-| 24 | time 720 | research | `armor_1` | 1 | The Carver's first upgrade, Armor |
-| 25 | time 600 | train | `teblor_gatherer` | 8 | Workers to 22 in Age II, at 10:00 |
-| 26 | time 600 | build | `teblor_stables` | 1 | Destrier Riders and War-dogs (needs the War Lodge) |
+| 18 | time 600 | train | `teblor_breaker` | 1 | One Breaker once the Breakers Hall stands (D33): ahead of the expansion in the file, so its reserve does not hold it back |
+| 19 | time 600 | train | `teblor_destrier_rider` | 1 | One Destrier Rider once the Stables stand (D33) |
+| 20 | time 600 | train | `teblor_war_dog` | 1 | One War-dog pack (3 dogs) once the Stables stand (D33) |
+| 21 | time 540 | build | `teblor_breakers_hall` | 1 | Breakers, at 9:00, ahead of the expansion in the file (D33) |
+| 22 | time 480 | expand | — | 1 | 2nd Longhouse near the nearest free gold mine, at Normal's `expandAfter` (480 s); the first Age II building step after the Breakers Hall |
+| 23 | time 600 | build | `teblor_stables` | 1 | Destrier Riders and War-dogs (needs the War Lodge), at 10:00, first of the 10:00 buildings (D33) |
+| 24 | time 600 | build | `teblor_bloodwood_carver` | 1 | The Forge, at 10:00 |
+| 25 | time 540 | build | `teblor_shamans_circle` | 1 | Shamans, at 9:00 |
+| 26 | time 540 | train | `teblor_shaman` | 2 | Two Shamans once the Circle stands (the mix's weight alone fielded almost none) |
+| 27 | time 690 | research | `teblor_blood_oil_anointing` | 1 | The faction upgrade, at the Bloodwood Carver |
+| 28 | time 720 | research | `armor_1` | 1 | The Carver's first upgrade, Armor |
+| 29 | time 600 | train | `teblor_gatherer` | 8 | Workers to 22 in Age II, at 10:00 |
 
 **Army composition (`compositions`), weights by pop.** Age I lists only the Warrior (the one unit the Age I steps can
 train), so its weights sum to 45. The War-dog's weight is by pop like the rest (1 a dog); how the AI counts a pack item
@@ -287,6 +292,12 @@ against its share is the sim's (docs/03 "Implementation (M7-2)", BUG-1168).
   a due step once its army is a quarter of the wave, not the whole of it (`rules.json` `ai.reserveArmyShare` 1, which
   every other opening plays). D31 measured it on the files that ship (below).
 
+**The Age II army (D33, 2026-11-17, BUG-1420).** On the 64-match rows (the Teblor against the Malazan and the Whirlwind,
+four maps, seeds 1-8, to 15:00) the Normal AI fields Breakers in 12 matches, Destrier Riders in 22 and War-dogs in 39
+(were 0, 4 and 0), a Shaman in 25 (was 30) and a second Longhouse by 15:00 in 23 (was 28), and is defeated in 10 (was
+5). The measurement, the 31 variants and the Easy and Hard rows are under "The Age II army (BUG-1420, D33)" at the end
+of this page.
+
 **The reserve share, measured (D31, 2026-11-14, on the files that ship; `Content/TeblorLandedShareReportTests`).**
 Normal against Normal to 15:00, the Teblor on seat 0 against a Malazan and on seat 1 against a Whirlwind, on the
 generated map, Raraku, Pale Hills and Vathar Crossing, seeds 1-8: 64 matches a row. The target (BUG-1241) is Age II and
@@ -305,8 +316,8 @@ reports to bring them up to date. The same 64 matches (Normal against Normal to 
 seeds 1-8). The target (Age II and a wave by 10:00 in 6 of a seed's 8) on 8 of 8 seeds; of the 64, Age II by 10:00 in 55,
 a wave by 10:00 in 62, a second Longhouse finished by 15:00 in 18, every building kind of the opening in 18, the
 Anointing in 20, defeated by 15:00 in 10; a Shaman fielded in 27, with 22 Blood-oil Frenzy casts landed in 18 of them;
-Javelin Throwers fielded in 51 and no Breaker, Destrier Rider or War-dog in any by 15:00 (the description names only the
-Javelin Throwers and Shamans for that reason); an army of 106 pop at 15:00 summed over the 64 matches (1.7 a match). D31's
+Javelin Throwers fielded in 51 and no Breaker, Destrier Rider or War-dog in any by 15:00 (the description named only the
+Javelin Throwers and Shamans for that reason until D33, BUG-1420); an army of 106 pop at 15:00 summed over the 64 matches (1.7 a match). D31's
 opening on the same row: 8 of 8 seeds; 55, 62, no second Longhouse, 18, 35, 14 defeated; a Shaman in 4 (4 casts). The
 brief's rule: at least 6 of 8 seeds, at most 14 defeats, more than 4 matches with a Shaman and more than 0 with a second
 Longhouse; of the 19 variants measured beside D31's, six meet all four (E2, C3, X2, X7, X8, X9), and this one (X7) also
@@ -327,12 +338,9 @@ Where the step was sent before D32, on Raraku against the Whirlwind at 8:35, the
 **Houses at the cap (D32, 2026-11-14, measured on the shipped files;
 `QA/Content/AiHouseRuleReportTests.MenuMapNormal_HouseSources_Report` and `MenuMapNormal_TwelfthHouse_Report`).**
 Since M5-4f the executor skips a house step once the population cap is the hard cap (100): the step is done with no
-command sent and no Hut placed. On the menu's map (20 minutes, the other seat idle): Normal, seed 1: the cap reaches 100
-at 1059 s; the last Hut step (step 16) is done at a cap of 100; skipped at the hard cap: step 16; 11 Huts stand at
-20:00, 1 past the cap. As on the other pages, the 12th Hut step measured taken out: without the 12th Hut step (step 16)
-on the same seed, the cap reaches 100 at 1059 s, and 11 Huts stand at 20:00, 1 past the cap. The step stays: on this seed the
-second Longhouse (+10 pop, D32's expansion) and 11 Huts bring the cap to 100, so the 12th Hut step (step 16) is skipped at
-the hard cap (re-measured 2026-11-16 after the sim's M6-S12 AI rules; 2026-11-15, after the sim's M6-S10 gather change: the
+command sent and no Hut placed. On the menu's map (20 minutes, the other seat idle): Normal, seed 1: the cap reaches 100 at 1043 s; the last Hut step (step 16) is done at a cap of 100; skipped at the hard cap: steps 15, 16; 10 Huts stand at 20:00, 0 past the cap. As on the other pages, the 12th Hut step measured taken out: without the 12th Hut step (step 16) on the same seed, the cap reaches 100 at 1043 s, and 10 Huts stand at 20:00, 0 past the cap. The step stays: on this seed the
+second Longhouse (+10 pop, D32's expansion) and 10 Huts bring the cap to 100, so the 11th and 12th Hut steps (15 and 16) are skipped at
+the hard cap (re-measured 2026-11-17 for D33's opening: the cap was at 100 at 1059 s with 11 Huts, 1 past the cap, and only step 16 skipped; re-measured 2026-11-16 after the sim's M6-S12 AI rules; 2026-11-15, after the sim's M6-S10 gather change: the
 cap at 100 at 1000 s with 10 Huts, both the 11th and the 12th Hut steps (15 and 16) skipped; before it step 15 was skipped
 and step 16 never reached); a seat that loses or never builds the second Longhouse needs both,
 and they cost nothing until they are reached.
@@ -390,7 +398,7 @@ stated numbers to the file (K).
 The words the Teblor files carry, for the owner to read (codenames, as the other factions' files; the release names
 are the table above). D28 copied them as written, since no answer on the names had come; `Content/TeblorRosterPinTests`
 pins every row to the files character for character, both ways. Each description is one or two short sentences of at
-most 160 characters, names only Teblor things, and says "needs X" exactly for a building's requirements (the content
+most 160 characters (an AI opening's at most 200, D21's rule for every faction's openings), names only Teblor things, and says "needs X" exactly for a building's requirements (the content
 pins' rules for every faction).
 
 | File | Id | Name (`displayName`) | Description (`description`) |
@@ -417,7 +425,7 @@ pins' rules for every faction).
 | `techs.json` | `teblor_blood_oil_anointing` | Blood-oil Anointing | Blood-oil rubbed into the skin before battle: Warriors and Destrier Riders gain +2 armor, and Blood-oil Frenzy lasts 4 s longer. Needs Age II. |
 | `abilities.json` | `blood_oil_frenzy` | Blood-oil Frenzy | Drives nearby warriors into a frenzy: own units within 8 m attack 40% faster and deal 20% more damage for 10 seconds, then are Slowed 20% for 4 seconds. |
 | `statuses.json` | `teblor_frenzied` | Blood-oil Frenzy | Attacks faster and deals 20% more damage. When it ends, the unit is Slowed 20% for 4 seconds. |
-| `ai.json` opening | `standard` | War band | War Lodge and Javelin Ground first, then Age II; four Warriors raid at 8 army pop, then Javelin Throwers and Shamans join them and a second Longhouse goes up. |
+| `ai.json` opening | `standard` | War band | War Lodge and Javelin Ground first, then Age II; four Warriors raid at 8 army pop, then Javelin Throwers, Shamans, Breakers, Destrier Riders and War-dogs join them and a second Longhouse goes up. |
 
 **Counter answers (the data track's proposal, the owner's call).** `rules.json` `ai.counters` is one rule by slot for
 every faction, so the Teblor answers in "How the AI adapts" are that rule in Teblor units. The proposal differs in one
@@ -433,3 +441,80 @@ track; it would move the other factions' answers too).
 | Caster | Destrier Rider, Javelin Thrower | Destrier Rider, Javelin Thrower |
 | Siege | Warrior, Destrier Rider | Warrior, Destrier Rider |
 | Unique | none | none |
+
+## The Age II army (BUG-1420, D33, 2026-11-17)
+
+Measured by `Content/D33BalanceReportTests.TeblorVariants_64SeatRow_Report` (2026-11-17; the shape of
+`QA/Content/D32OpeningQaStressTests`, which re-runs the shipped opening's rows). The Teblor against the Malazan on seat 0 and against the Whirlwind on
+seat 1, the same difficulty on both seats, the generated map, Raraku, Pale Hills and Vathar Crossing, seeds 1-8, to
+15:00: 64 matches a row, and the columns count the matches in which at least one unit of the kind was alive at some
+second before 15:00. On the files before D33 (with the Malazan and Whirlwind waves D33 ships) the Normal AI fielded no
+Breaker or War-dog and a Destrier Rider in 4 of 64, though the Stables stood in 36 matches and the Breakers Hall in 17
+(at a median 12:12 and 12:34). The cause is the reserve, not the halls: the Age II mix waits for its most under-weighted
+unit, and every unit step after the expand step in the file spends only above the expansion's 275 gold and 275 wood
+while the expansion waits, which on Normal is most of the match in about half of them. A Breaker (180 gold, 120 wood) is
+the costliest unit, so it is the last to be paid for. The brief's target: on Normal and on Hard each of the three kinds
+in at least 8 of 64, and on Normal a Shaman in 14 or more, a second Longhouse by 15:00 in 9 or more and at most 15
+defeats. S0 and 31 variants on Normal, S0 and 14 of them on Hard too (`-`: not run):
+
+| variant | change | Normal: defeated / 2nd Longhouse / Shamans | Normal: Breakers / Destrier Riders / War-dogs | Hard: defeated / 2nd Longhouse / Shamans | Hard: Breakers / Destrier Riders / War-dogs |
+| --- | --- | --- | --- | --- | --- |
+| S0 | the opening D32 shipped (X7) | 5 / 28 / 30 | 0 / 4 / 0 | 9 / 28 / 36 | 11 / 18 / 8 |
+| B1 | S0 with the Breakers Hall and the Stables first of the 10:00 steps (before the Carver) | 11 / 28 / 31 | 4 / 0 / 0 | 11 / 26 / 36 | 17 / 16 / 4 |
+| B2 | B1 with the Carver at 11:00 | 8 / 28 / 19 | 0 / 0 / 0 | 11 / 33 / 41 | 20 / 14 / 5 |
+| B3 | S0 with the Stables and the Breakers Hall at 9:00, after the Shaman step | 12 / 28 / 30 | 0 / 5 / 1 | 5 / 30 / 36 | 24 / 15 / 7 |
+| B4 | S0 with the Stables at 7:00 before the expansion and the Breakers Hall first of the 10:00 steps | 13 / 21 / 23 | 3 / 29 / 6 | 8 / 32 / 40 | 30 / 60 / 51 |
+| B5 | B1 with the eight Gatherers last in the file | 11 / 28 / 31 | 4 / 0 / 0 | 11 / 26 / 36 | 17 / 16 / 4 |
+| B6 | B3 with the Carver at 11:00 | 9 / 28 / 34 | 0 / 5 / 1 | 5 / 30 / 42 | 32 / 25 / 7 |
+| C1 | B4 plus train steps: 1 Breaker after the Breakers Hall, 1 Destrier Rider and 1 War-dog pack after the Stables | 11 / 0 / 17 | 10 / 57 / 53 | - | - |
+| C2 | B3 plus C1's train steps | 7 / 28 / 29 | 0 / 21 / 38 | - | - |
+| C3 | S0 plus C1's train steps | 5 / 28 / 30 | 0 / 4 / 15 | - | - |
+| C4 | B1 plus C1's train steps | 11 / 28 / 18 | 6 / 11 / 29 | - | - |
+| C5 | S0 with the Stables at 8:00 just after the expansion, the Breakers Hall first of the 10:00 steps, and C1's train steps | 10 / 17 / 16 | 5 / 34 / 43 | - | - |
+| C6 | B6 plus C1's train steps | 5 / 28 / 29 | 0 / 26 / 33 | - | - |
+| D1 | C4 with the Carver at 11:00 | 8 / 28 / 18 | 4 / 3 / 25 | - | - |
+| D2 | S0 with the Breakers Hall at 9:00 before the Circle, the Stables first of the 10:00 steps, and C1's train steps | 11 / 33 / 12 | 1 / 28 / 31 | - | - |
+| D3 | S0 with the Breakers Hall at 9:00 after the Shaman step, the Stables first of the 10:00 steps, and C1's train steps | 10 / 33 / 28 | 0 / 19 / 35 | - | - |
+| D4 | D3 with the Carver at 11:00 | 8 / 28 / 31 | 0 / 18 / 38 | - | - |
+| D5 | C4 with 2 Breakers in the train step | 11 / 28 / 18 | 6 / 11 / 29 | - | - |
+| D6 | C4 with the Breaker listed before the Destrier Rider and the Shaman in the Age II mix (the tie order) | 11 / 28 / 18 | 6 / 11 / 29 | - | - |
+| D7 | D3 with the Stables at 11:00 | 9 / 33 / 32 | 0 / 16 / 31 | - | - |
+| E1 | C4 with its three train steps moved before the expand step | 11 / 28 / 17 | 7 / 23 / 38 | 11 / 26 / 22 | 22 / 44 / 50 |
+| E2 | C4 with the Breaker train step moved before the expand step | 11 / 28 / 18 | 7 / 16 / 24 | 11 / 26 / 29 | 29 / 30 / 41 |
+| E3 | C3 (S0 plus the train steps) with the three train steps before the expand step | 5 / 28 / 30 | 5 / 24 / 31 | 9 / 26 / 29 | 22 / 42 / 45 |
+| E4 | D2 with the three train steps before the expand step | 11 / 28 / 17 | 7 / 29 / 40 | 11 / 23 / 23 | 35 / 42 / 48 |
+| E5 | E1 with the Shaman step before the expand step too | 11 / 28 / 36 | 2 / 26 / 36 | 11 / 21 / 40 | 17 / 44 / 50 |
+| E6 | E3 with the Shaman step before the expand step too | 5 / 28 / 38 | 5 / 24 / 31 | 9 / 21 / 41 | 22 / 41 / 45 |
+| F1 | E1 with the Breakers Hall step moved before the expand step (still due at 10:00) | 11 / 28 / 21 | 7 / 19 / 38 | - | - |
+| F2 | E1 with the Breakers Hall due at 9:00 | 10 / 28 / 21 | 7 / 31 / 44 | - | - |
+| F3 | F1 with the Breakers Hall due at 9:00 | 10 / 23 / 25 | 12 / 22 / 39 | 11 / 23 / 25 | 35 / 43 / 48 |
+| F4 | E1 with the Anointing at 13:00 and Armor at 13:30 | 11 / 28 / 25 | 8 / 23 / 37 | 11 / 31 / 41 | 24 / 41 / 50 |
+| F5 | E1 with the Carver at 11:00, the Anointing at 12:30 and Armor at 13:00 | 8 / 28 / 27 | 5 / 30 / 41 | - | - |
+| F6 | E4 with the Anointing at 13:00 and Armor at 13:30 | 11 / 28 / 32 | 6 / 26 / 40 | - | - |
+
+F3 ships: the only variant that meets every figure on Normal with a margin on the Breakers (12; F4 meets them with 8).
+On Normal it fields Breakers in 12 of 64, Destrier Riders in 22 and War-dogs in 39, a Shaman in 25 (was 30), a second
+Longhouse by 15:00 in 23 (was 28), and 10 defeats (was 5); Age II by 10:00 in 58 and a wave by 10:00 in 63, as before.
+On Hard: Breakers in 35 (was 11), Destrier Riders in 43 (was 18), War-dogs in 48 (was 8), a Shaman in 25 (was 36), a
+second Longhouse in 23 (was 28), 11 defeats (was 9), the Anointing in 18 (was 32). On Easy (both seats Easy; Easy plays
+this opening too): Breakers 27, Destrier Riders 36, War-dogs 51 (all were 0), a Shaman in 34 (was 51), the Anointing in
+1 (was 35), 1 defeat (as before), no second Longhouse (Easy's `expandAfter` is 900 s, as before). What the Easy and Hard
+AIs lose is the Anointing and some Shamans: the gold that bought them now buys the three kinds. The description names the
+three kinds again (D32 had narrowed it to the kinds fielded then); each has its own train step, so a match whose halls
+stand fields one of each.
+
+## Questions for the Producer (D33, 2026-11-17)
+
+Raised by D33 (BUG-1420), each with the developer's recommendation.
+
+1. **Easy loses the Anointing.** With F3 the Easy AI researches Blood-oil Anointing in 1 of 64 matches (was 35) and
+   fields a Shaman in 34 (was 51), while it now fields Breakers, Destrier Riders and War-dogs (27 / 36 / 51, all were 0).
+   The brief's criteria are Normal and Hard; Easy plays the same opening. Recommendation: accept for now (an Easy AI with
+   the whole roster and no upgrade is still an Easy AI); a per-difficulty opening is a schema question for the sim track.
+2. **The opening's description is 195 characters.** The Owner review rows keep to 160; an opening may have 200 (D21's
+   rule), and naming the five Age II kinds does not fit in 160. Recommendation: accept, or shorten to "... then Javelin
+   Throwers, Shamans, Breakers, riders and dogs join; a second Longhouse goes up." (168) if the owner prefers.
+3. **The reserve holds back every unit step after a waiting expansion.** D33 cures it in data by order (the three train
+   steps and the Breakers Hall ahead of the expand step). Recommendation: a sim Request for the balance pass, so the
+   order of the file need not carry it: an expansion that has waited `N` seconds for its cost stops holding the reserve
+   (or a train step may name itself exempt).

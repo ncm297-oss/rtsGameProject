@@ -132,6 +132,9 @@ public class D32PreFixtureTests(ITestOutputHelper output)
         {
             dir.EditJson("factions/teblor/ai.json", root => root["openings"]![0] = D32TeblorOpeningReportTests.D31());
             dir.EditJson("common/rules.json", r => r.Remove("gatherOverlap"));
+            // D33 (the data track's balance pass): its two wave changes put back too (cadre_rush 16 -> 18, holy_war 14 -> 20,
+            // with the words that quote them); the Teblor opening above already replaces D33's.
+            D33BalanceReportTests.PutBackTheWaves(dir);
         });
         Assert.Equal(PreHash, before.ContentHash());
         byte[] bytes = Convert.FromBase64String(File.ReadAllText(Fixture("save_teblor_frenzy.b64")));

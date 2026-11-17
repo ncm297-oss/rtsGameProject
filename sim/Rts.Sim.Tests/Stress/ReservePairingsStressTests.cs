@@ -81,8 +81,12 @@ public class ReservePairingsStressTests
     /// M6-SH2 fix round (BUG-1535): no-wave sides re-measured 3 -> 2 on the M6-SH2 tree (Malazan waves 83, defeats 7 / 4,
     /// alive without Age II 1 of 43); the other three are bounds the tree meets unchanged. M6-S12: no-wave sides 2 (unchanged),
     /// Malazan waves 98, Whirlwind waves 123, defeats 4 / 1, alive without Age II 1 of 49; no constant moved.
+    /// D33 (the data track's balance pass, handed this class by name: <c>cadre_rush</c> waves at 16 army pop, <c>holy_war</c> at
+    /// 14): no-wave sides 2 -> 1 (the <c>holy_war</c> side of <c>standard</c> v <c>holy_war</c> seed 3 now waves: BUG-1553's
+    /// cure; the one left is <c>cadre_rush</c> v <c>raider_rush</c> seed 14's Malazan side, BUG-0982), Malazan waves 96, Whirlwind
+    /// waves 128, defeats 3 / 2, alive without Age II 1 of 49; the three bounds unchanged.
     /// </summary>
-    internal const int NoWaveSides = 2, MinMalazanWaves = 79, MaxMalazanDefeats = 8, MaxWhirlwindDefeats = 5;
+    internal const int NoWaveSides = 1, MinMalazanWaves = 79, MaxMalazanDefeats = 8, MaxWhirlwindDefeats = 5; // D33: NoWaveSides was 2
 
     /// <summary>The 27 rows' results, by (Malazan, Whirlwind, nth); the row that completes the set asserts the totals (the rows of one class run one at a time).</summary>
     private static readonly SortedDictionary<int, Result> s_pairings = new();

@@ -32,8 +32,11 @@ public class DH6ThresholdQaTests
 
     /// <summary>
     /// The developer's three seeds plus the 4th and 5th: per threshold and seed, the Malazan first wave, Age II and defeat.
-    /// Asserts the rule (lowest of 16 / 14 at which seed 8 waves and Age II on every seed is at most 60 s later than at 18,
-    /// else 18) still picks the shipped number, and prints whether the new seeds alone would argue otherwise.
+    /// Asserts the rule (lowest of 16 / 14 at which seed 8 waves, no seed standing at 20:00 at 18 is defeated, and Age II on
+    /// every seed is at most 60 s later than at 18, else 18) still picks the shipped number, and prints whether the new seeds
+    /// alone would argue otherwise. D33 (2026-11-17, BUG-1524): the "no seed lost" test is D33's re-statement of the rule
+    /// (D-H6's rule picked 14 since the sim's M6-S10, where seed 8 falls), and the shipped number is 16 since D33; the row
+    /// keeps its name ("KeepEighteen" was D-H6's decision) so its history stays findable.
     /// </summary>
     [Fact]
     [Trait("Category", "Stress")]
@@ -48,8 +51,9 @@ public class DH6ThresholdQaTests
         Assert.Equal("cadre_rush", shipped.Id);
         // The description's number is the shipped wave pop (the brief's "description == attack.minArmyPop").
         Assert.Contains($"The first wave waits for {shipped.AttackMinHalfPop / 2} army pop.", shipped.Description);
-        Assert.Equal(36, shipped.AttackMinHalfPop);
-        Assert.Equal(1332, shipped.AttackMinCost);
+        // D33 (2026-11-17): 16 pop / 1,184 (was 18 / 1,332, D21's number kept by D-H6).
+        Assert.Equal(32, shipped.AttackMinHalfPop);
+        Assert.Equal(1184, shipped.AttackMinCost);
         double perPop = 0, weight = 0;
         AiComposition one = shipped.Compositions[0];
         for (int k = 0; k < one.Units.Length; k++)
@@ -60,6 +64,7 @@ public class DH6ThresholdQaTests
         }
         perPop /= weight;
         Assert.Equal(1332, (int)Math.Floor(perPop * 18));
+        Assert.Equal(shipped.AttackMinCost, (int)Math.Floor(perPop * shipped.AttackMinHalfPop / 2));
         var waved = new int[pops.Length, seeds.Length];
         var ageTwo = new int[pops.Length, seeds.Length];
         var fell = new int[pops.Length, seeds.Length];
@@ -89,11 +94,14 @@ public class DH6ThresholdQaTests
         for (int i = pops.Length - 1; i >= 1; i--)
         {
             bool seedEight = waved[i, 1] >= 0;
-            bool inTime = true;
+            bool inTime = true, noneLost = true;
             for (int j = 0; j < seeds.Length; j++)
+            {
                 if (ageTwo[0, j] >= 0 && (ageTwo[i, j] < 0 || ageTwo[i, j] > ageTwo[0, j] + 60 * Tps)) inTime = false;
-            _out.WriteLine($"  {pops[i]} pop over 5 seeds: seed 8 waves {seedEight}; Age II within 60 s on every seed {inTime}");
-            if (seedEight && inTime) { pick = pops[i]; break; }
+                if (fell[0, j] < 0 && fell[i, j] >= 0) noneLost = false;
+            }
+            _out.WriteLine($"  {pops[i]} pop over 5 seeds: seed 8 waves {seedEight}; no seed standing at 18 defeated {noneLost}; Age II within 60 s on every seed {inTime}");
+            if (seedEight && noneLost && inTime) { pick = pops[i]; break; }
         }
         // Would the new seeds alone change anything? (a lower threshold makes a seed wave that never waved at 18)
         for (int i = 1; i < pops.Length; i++)

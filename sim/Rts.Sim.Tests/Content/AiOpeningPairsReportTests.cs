@@ -22,15 +22,13 @@ namespace Rts.Sim.Tests.Content;
 /// <c>QA/Content/D21OpeningsQaTests</c>' runs).
 /// <para>
 /// D-R39 (2026-11-15, after the sim's M6-S10 gather change) re-states "both sides started a wave" for one named case
-/// (<see cref="DefeatedBeforeDue"/>): that side, defeated before its first wave was ever due (<see cref="NoWave"/>), is
-/// reported, not failed. On (0, 2) seed 3 the Malazan standard opening's first wave (5:47) wipes the <c>holy_war</c> army
-/// (14 pop at its peak, its wave waits for 20) and the Whirlwind fall at 12:29 with their wave never due.
-/// <c>Content/HolyWarFirstWaveReportTests</c> measured <c>holy_war</c> against all three Malazan openings on each pairing's
-/// three seeds: this is one seed of nine (the other eight send their first wave by 10:09 and stand at 20:00; whirlwind.md
-/// "The holy war's first wave"), so the allowance is this case only. Any other side defeated without a wave, a side alive
-/// at 20:00 without one, or the named side if its wave was due before it fell, still fails.
-/// M6-S12 (the sim's AI rules; BUG-1553): one side alive at 20:00 without a wave is named too (<see cref="AliveWithoutAWave"/>,
-/// (0, 2) seed 3), reported and not failed, under the same rule (it fails if it waves or falls).
+/// (<see cref="DefeatedBeforeDue"/>): a side defeated before its first wave was ever due (<see cref="NoWave"/>) is
+/// reported, not failed, when it is named there. The list is empty: its one entry, (0, 2) seed 3's <c>holy_war</c> side
+/// (defeated at 12:29 under the sim's M6-S10), was taken out by M6-SH2, when that side survived and waved. M6-S12 named
+/// the same side again in <see cref="AliveWithoutAWave"/> (alive at 20:00 with no wave, its army never at its 20-pop
+/// threshold; BUG-1553), and D33 (2026-11-17) took it out: <c>holy_war</c> waves at 14 army pop since then and the side
+/// waves on seed 3 (<c>Content/HolyWarFirstWaveReportTests</c>, whirlwind.md "The holy war's first wave"). Any side
+/// defeated without a wave, a side alive at 20:00 without one, or a named side if its wave was due before it fell, fails.
 /// </para>
 /// <para>
 /// Reads the AI through its internals (<c>InternalsVisibleTo</c>): <c>Simulation.AiOf</c>, <c>AiPlayer.Opening</c>,
@@ -199,7 +197,9 @@ public class AiOpeningPairsReportTests
     /// <c>Content/HolyWarFirstWaveReportTests</c> and whirlwind.md "The holy war's first wave" print it. Any other side alive
     /// at 20:00 without a wave still fails, and so does this one if it waves or falls.
     /// </summary>
-    internal static readonly (int Malazan, int Whirlwind, ulong Seed, int Player)[] AliveWithoutAWave = { (0, 2, 3, 1) };
+    // D33 (2026-11-17, BUG-1553): (0, 2, 3, 1) taken out; holy_war's wave is 14 army pop (was 20) and the side waves on
+    // seed 3 (Content/D33BalanceReportTests' 14-pop row: first wave 6:21).
+    internal static readonly (int Malazan, int Whirlwind, ulong Seed, int Player)[] AliveWithoutAWave = Array.Empty<(int, int, ulong, int)>();
 
     /// <summary>
     /// D-R39: whether <paramref name="ai"/>'s first wave is due now, from world state: its live army (every unit, so at
@@ -300,10 +300,12 @@ public class AiOpeningPairsReportTests
     /// BUG-0982, decided by measurement (D-H6): Malazan <c>cadre_rush</c> v Whirlwind <c>raider_rush</c>, Normal v Normal on
     /// the menu's map, 20 minutes, on the pairing's three smallest seeds, with <c>cadre_rush</c>'s <c>attack.minArmyPop</c>
     /// at 18 (D21's number), 16 and 14 and <c>minArmyCost</c> the floor of the Age I mix at that pop (D21's rule). The rule
-    /// (the Producer's): take the lowest threshold of at most 16 at which seed 8 (the BUG's seed) waves and Age II comes on
-    /// every measured seed no more than 60 s later than at 18; else keep 18. Prints the table the malazan page quotes and
-    /// the rule's pick; asserts the shipped number is the pick (a sim change that moves the outcome fails here, and the page
-    /// and this rule are re-read then). Every run asserts its own pick of openings.
+    /// (the Producer's, re-stated by D33 under BUG-1524): take the lowest threshold of at most 16 at which seed 8 (the BUG's
+    /// seed) waves, no seed that stands at 20:00 at 18 is defeated, and Age II comes on every measured seed no more than 60 s
+    /// later than at 18; else keep 18 (D-H6's rule had no "no seed lost" test, and since the sim's M6-S10 it picked 14, where
+    /// seed 8 falls). Prints the table the malazan page quotes and the rule's pick; asserts the shipped number is the pick (a
+    /// sim change that moves the outcome fails here, and the page and this rule are re-read then). Every run asserts its own
+    /// pick of openings.
     /// </summary>
     [Fact]
     [Trait("Category", "Stress")]
@@ -358,11 +360,14 @@ public class AiOpeningPairsReportTests
         for (int i = pops.Length - 1; i >= 1; i--)
         {
             bool seedEightWaves = waved[i, 1] >= 0;
-            bool ageTwoInTime = true;
+            bool ageTwoInTime = true, noneLost = true;
             for (int j = 0; j < seeds.Length; j++)
+            {
                 if (ageTwo[0, j] >= 0 && (ageTwo[i, j] < 0 || ageTwo[i, j] > ageTwo[0, j] + 60 * Tps)) ageTwoInTime = false;
-            _out.WriteLine($"  {pops[i]} pop: seed 8 waves {(seedEightWaves ? "yes" : "no")}; Age II no more than 60 s later than at 18 on every seed {(ageTwoInTime ? "yes" : "no")}");
-            if (seedEightWaves && ageTwoInTime) { pick = pops[i]; break; }
+                if (fell[0, j] < 0 && fell[i, j] >= 0) noneLost = false;
+            }
+            _out.WriteLine($"  {pops[i]} pop: seed 8 waves {(seedEightWaves ? "yes" : "no")}; no seed standing at 18 defeated {(noneLost ? "yes" : "no")}; Age II no more than 60 s later than at 18 on every seed {(ageTwoInTime ? "yes" : "no")}");
+            if (seedEightWaves && noneLost && ageTwoInTime) { pick = pops[i]; break; }
         }
         _out.WriteLine($"  the rule picks {pick} pop; cadre_rush ships {shipped.AttackMinHalfPop / 2.0} pop / {shipped.AttackMinCost}");
         Assert.True(pick * 2 == shipped.AttackMinHalfPop,

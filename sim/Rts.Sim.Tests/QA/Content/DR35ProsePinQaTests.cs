@@ -100,37 +100,51 @@ public class DR35ProsePinQaTests
     /// sim's M6-S10): seed 8 no longer falls at every threshold (it waves at all three and stands at 18 and 16 pop), so the
     /// check that its defeat is one value at every threshold now checks that it waves at every threshold, stands at 18 and
     /// 16 and falls at 14, each cell read from the table; seed 14's defeat is still one value at every threshold; and the
-    /// Age II table's twin cells (the same shipped runs) are read against the threshold table's 18-pop row.
+    /// Age II table's twin cells (the same shipped runs) are read against the threshold table's row. D33 (2026-11-17,
+    /// BUG-1524 item 3; un-skipped): the table re-measured on the sim of M6-S12 and the prose rewritten; <c>cadre_rush</c>
+    /// ships 16 pop, so the shipped row is read from the file (<c>attack.minArmyPop</c>), the twin cells are read against
+    /// it (was the 18-pop row), and the sentences quote both the shipped row's and the 18-pop row's first waves.
     /// </summary>
-    [Fact(Skip = "BUG-1524: D33 re-measures the BUG-0982 threshold table on the M6-SH2 sim and rewrites its prose")]
+    [Fact]
     public void Malazan_Bug0982Prose_MatchesTheThresholdTable()
     {
         string page = Joined("malazan");
         Match Row(string pop, int seed) =>
             Regex.Match(page, @"\| " + Regex.Escape(pop) + @" \| " + seed + @" \| ([^|]+?) \| ([^|]+?) \| ([^|]+?) \| ([^|]+?) \|");
         string Defeat(string pop, int seed) => Row(pop, seed).Groups[3].Value;
+        string Wave(string pop, int seed) => Regex.Match(Row(pop, seed).Groups[1].Value, @"^(\d+:\d\d) \(\d+\)$").Groups[1].Value;
+        AiOpening cadre = TestSim.Data.Ai[TestSim.Data.FindFaction("malazan")].Openings.Single(o => o.Id == "cadre_rush");
+        string shipped = $"{cadre.AttackMinHalfPop / 2} / {cadre.AttackMinCost:#,0}";
+        Assert.Equal("16 / 1,184", shipped);
+        string[] all = { "18 / 1,332", "16 / 1,184", "14 / 1,036" };
         string d14 = Defeat("18 / 1,332", 14);
         Assert.Matches(@"^\d+:\d\d$", d14);
-        foreach (string pop in new[] { "16 / 1,184", "14 / 1,036" })
+        foreach (string pop in all)
+        {
             Assert.Equal(d14, Defeat(pop, 14));
-        string w8 = Regex.Match(Row("18 / 1,332", 8).Groups[1].Value, @"^(\d+:\d\d) \(\d+\)$").Groups[1].Value;
-        Assert.NotEqual("", w8);
-        foreach (string pop in new[] { "16 / 1,184", "14 / 1,036" })
-            Assert.Matches(@"^\d+:\d\d \(\d+\)$", Row(pop, 8).Groups[1].Value);
+            Assert.Equal("never (0)", Row(pop, 14).Groups[1].Value);
+            Assert.NotEqual("", Wave(pop, 7));
+            Assert.NotEqual("", Wave(pop, 8));
+            Assert.Equal("never", Defeat(pop, 7));
+        }
         Assert.Equal("never", Defeat("18 / 1,332", 8));
         Assert.Equal("never", Defeat("16 / 1,184", 8));
         string d8At14 = Defeat("14 / 1,036", 8);
         Assert.Matches(@"^\d+:\d\d$", d8At14);
+        string w8 = Wave(shipped, 8), w7 = Wave(shipped, 7), w8At18 = Wave("18 / 1,332", 8), w7At18 = Wave("18 / 1,332", 7);
         Assert.Contains($"are destroyed (seed 14 at {d14}, 18 at", page, StringComparison.Ordinal);
-        Assert.Contains($"seeds 7 and 8 wave and stand at 20:00, seed 8 first at {w8}", page, StringComparison.Ordinal);
-        Assert.Contains($"at 14 seed 8 is destroyed at {d8At14} where at 18 it stands", page, StringComparison.Ordinal);
-        Assert.Contains($"at every threshold seed 14 now falls at {d14} (was", page, StringComparison.Ordinal);
-        Assert.Contains($"(at 18 pop first at {w8},", page, StringComparison.Ordinal);
-        string a8 = Row("18 / 1,332", 8).Groups[2].Value, a14 = Row("18 / 1,332", 14).Groups[2].Value;
-        Assert.Matches(@"^\d+:\d\d$", a8);
-        Assert.Matches(@"^\d+:\d\d$", a14);
-        Assert.Contains($"`raider_rush` seed 8 reaches Age II at {a8} (was 8:41) and stands at 20:00 (was destroyed at 13:47), and seed 14 reaches Age II at {a14} (was never) and falls at {d14} (was 14:16)", page, StringComparison.Ordinal);
-        Assert.Contains($"seed 8: {a8} | seed 14: {a14} (defeated {d14}) |", page, StringComparison.Ordinal);
+        Assert.Contains($"seeds 7 and 8 wave and stand at 20:00, seed 8 first at {w8}.", page, StringComparison.Ordinal);
+        Assert.Contains($"so seed 8's first wave comes at {w8} ({w8At18} at 18) and seed 7's at {w7} ({w7At18} at 18), and both still stand", page, StringComparison.Ordinal);
+        Assert.Contains($"at 14 seed 8 is destroyed at {d8At14} where at 16 and 18 it stands", page, StringComparison.Ordinal);
+        Assert.Contains($"At every threshold seed 14 is destroyed at {d14} without a wave, after its Age II ({Row("18 / 1,332", 14).Groups[2].Value})", page, StringComparison.Ordinal);
+        Assert.Contains($"at 14 pop seed 8 sends one wave ({Wave("14 / 1,036", 8)}) and is destroyed at {d8At14}", page, StringComparison.Ordinal);
+        Assert.Contains($"seeds 7 and 8 wave sooner ({w7} and {w8}, against {w7At18} and {w8At18} at 18)", page, StringComparison.Ordinal);
+        Assert.Contains($"The re-stated rule picks {cadre.AttackMinHalfPop / 2}:", page, StringComparison.Ordinal);
+        Assert.Contains($"`cadre_rush` ships {cadre.AttackMinHalfPop / 2} army pop and {cadre.AttackMinCost:#,0} since D33", page, StringComparison.Ordinal);
+        // The Age II table's twin cells are the shipped runs: the threshold table's shipped row.
+        string a7 = Row(shipped, 7).Groups[2].Value, a8 = Row(shipped, 8).Groups[2].Value, a14 = Row(shipped, 14).Groups[2].Value;
+        foreach (string a in new[] { a7, a8, a14 }) Assert.Matches(@"^\d+:\d\d$", a);
+        Assert.Contains($"| `cadre_rush` | `raider_rush` | seed 7: {a7} | seed 8: {a8} | seed 14: {a14} (defeated {d14}) |", page, StringComparison.Ordinal);
     }
 
     /// <summary>

@@ -64,7 +64,9 @@ public class MatchCriterionTests
     /// 25,083 / 31,420 / 25,083 / 28,633 / 28,633 (seed 1 still BUG-1460).
     /// M6-S12 (the AI rules of 2026-11-16): seed 3 ends at <b>27,394 (22:49), seat 1</b>, inside the bound, so the row stays.
     /// Seeds 1-8: 24,354 / 39,262 / 27,394 / 27,394 / 27,212 / 27,394 / 28,753 / 28,753 (seed 1 ends again: BUG-1460's re-scout
-    /// and the rally rule; whether the row goes back to seed 1 is the Producer's call).</summary>
+    /// and the rally rule; whether the row goes back to seed 1 is the Producer's call).
+    /// D33 (the data track's waves: <c>cadre_rush</c> 16 army pop, <c>holy_war</c> 14): seed 3 ends at <b>28,915 (24:05), seat 1</b>
+    /// (was 27,394), inside the bound, so the row stays.</summary>
     internal const int RarakuBound = 36_000;
 
     /// <summary>
@@ -79,7 +81,13 @@ public class MatchCriterionTests
     /// </summary>
     internal const int GeneratedBound = 24_000;
 
-    /// <summary>The four-seat rows' bound (60 minutes, QA's M5-H5 sweep): the FFA (Vathar seed 2) ends at 58,155 (48:27; was 52,305 before M5-9a), the 2v2 (Vathar seed 1) at 35,648 (29:42; was 34,510). M5-H6: the FFA 56,896 (47:24, seat 3), the 2v2 26,070 (21:43, team 1).</summary>
+    /// <summary>The four-seat rows' bound (60 minutes, QA's M5-H5 sweep): the FFA (Vathar seed 2) ends at 58,155 (48:27; was 52,305 before M5-9a), the 2v2 (Vathar seed 1) at 35,648 (29:42; was 34,510). M5-H6: the FFA 56,896 (47:24, seat 3), the 2v2 26,070 (21:43, team 1).
+    /// D33 (the data track's balance pass: the Malazan <c>cadre_rush</c> waves at 16 army pop, the Whirlwind <c>holy_war</c> at 14):
+    /// the FFA on seed 2 no longer ends inside 72,000 (at 72,000 seats 0 and 1 defeated at 33,951 / 24,932, seats 2 and 3 left;
+    /// a finding, not a new bound), so by rule 45 the row moves to the nearest seed that ends: <b>seed 1, 31,991 (26:39), seat 2</b>,
+    /// every check clean (seeds 1 and 3 are as near; the lower is taken; the 2v2 row also plays Vathar seed 1, with teams).
+    /// Seeds 1 / 3 / 4 / 5 / 6: 31,991 / 41,051 / 66,919 / 62,482 / 59,255 (<c>Content/D33BalanceReportTests.CriterionRows_Report</c>).
+    /// The bound did not move.</summary>
     internal const int FourSeatBound = 72_000;
 
     /// <summary>The tick the literal row is saved at: half its end (M6-S12: seed 1's 23,244 / 2; M6-SH2: seed 7's 19,912 / 2; was 11,706 (M6-S10: 23,412 / 2), and 11,397, half of seed 1's 22,794 before M5-9a; any mid-match tick serves).</summary>
@@ -91,7 +99,7 @@ public class MatchCriterionTests
         new("raraku", "raraku", 3, 2, null, RarakuBound), // M6-SH2: seed 3 (seed 2 ends at 56,940: BUG-1521); M6-S10: seed 2 (seed 1 no longer ends inside 72,000: BUG-1460)
         new("pale_hills", "pale_hills", 1, 2, null, PaleHillsBound),
         new("generated", "generated", 1, 2, null, GeneratedBound), // M6-S12: seed 1 again (21,876; seed 2 ends at 27,690); M5-9a round 2: seed 2 (seed 1 ended at 25,968)
-        new("ffa", "vathar_crossing", 2, 4, null, FourSeatBound),
+        new("ffa", "vathar_crossing", 1, 4, null, FourSeatBound), // D33 (rule 45): seed 1 (seed 2 no longer ends inside 72,000; seeds 1 and 3 are as near, the lower taken)
         new("2v2", "vathar_crossing", 1, 4, new[] { 1, 2, 1, 2 }, FourSeatBound),
     };
 

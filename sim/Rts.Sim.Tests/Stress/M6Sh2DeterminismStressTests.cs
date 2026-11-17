@@ -16,12 +16,17 @@ namespace Rts.Sim.Tests.Stress;
 /// 21,920 with its hall standing but 3 gold, short of a worker, so it never retrains (the retrain rule as built) and the row
 /// proved nothing. It plays <see cref="Seed"/> 3, the lowest Raraku seed whose loser retrains (seat 0 has no worker at 24,260
 /// with 1,087 gold and sends a worker Train for 24,261; over at 27,394). Was seed 1.
+/// D33 (the data track's balance pass, handed this class by name: the Malazan <c>cadre_rush</c> waves at 16 army pop, the
+/// Whirlwind <c>holy_war</c> at 14; a re-stage, the checks unchanged): seed 3 now ends at 28,915 with no seat retraining, so
+/// the row proved nothing ("no seat retrained a worker"). It plays seed 5, the lowest Raraku seed whose loser retrains
+/// (seat 0 sends a worker Train for 22,761; over at 27,212; seeds 1, 2, 4, 6, 7 and 8 retrain nowhere:
+/// <c>Content/D33BalanceReportTests.RarakuRetrainSeeds_Report</c>). Was seed 3.
 /// </summary>
 [Trait("Category", "Stress")]
 public class M6Sh2DeterminismStressTests(ITestOutputHelper output)
 {
     private const int After = 2000, Limit = 45_000;
-    private const ulong Seed = 3;
+    private const ulong Seed = 5; // D33: was 3 (no retrain there since D33's waves)
 
     [Fact]
     public void Raraku_TheRetrain_TwinsSaveAndReplay()

@@ -205,7 +205,7 @@ public class TeblorRosterPinTests
     /// <summary>Criterion 2, the AI section (openings, steps, composition, wave): a page cell changed fails naming the row.</summary>
     [Theory]
     [InlineData("| 3 | pop 7 | build | `teblor_war_lodge` | 1 |", "| 3 | pop 8 | build | `teblor_war_lodge` | 1 |", "teblor standard step 3")]
-    [InlineData("| 23 | time 690 | research |", "| 23 | time 720 | research |", "teblor standard step 23")] // D32: X7's step 23 (21 in D31, 25 before)
+    [InlineData("| 27 | time 690 | research |", "| 27 | time 720 | research |", "teblor standard step 27")] // D33: step 27 (was 23: four steps went in ahead of it); D32: X7's step 23 (21 in D31, 25 before)
     [InlineData("own reserve share 0.25", "own reserve share 0.5", "teblor standard reserve share: page '0.5' vs data '0.25'")]
     [InlineData("| `teblor_breaker` | — | 10 |", "| `teblor_breaker` | — | 15 |", "teblor standard")]
     [InlineData("first at 8 army pop and 600 gold + wood", "first at 8 army pop and 640 gold + wood", "teblor standard attack")]

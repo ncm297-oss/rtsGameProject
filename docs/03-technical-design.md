@@ -10548,7 +10548,7 @@ rules are unchanged.
 - **Spending per opening (D21, 2026-10-18, data track: three openings per faction)**
   (`Content/AiSpendingReportTests.GeneratedNormal_Spending_Report`, the menu's map against an idle seat, 20 minutes: one
   Normal run per opening on the smallest seed in 1-50 whose Normal pick it is, plus Easy on seed 1): the idle seat falls
-  at malazan standard Normal seed 1 455 s, malazan crossbow_push Normal seed 5 457 s, malazan cadre_rush Normal seed 7 616 s, malazan standard Easy seed 1 491 s, whirlwind standard Normal seed 1 502 s, whirlwind raider_rush Normal seed 2 409 s, whirlwind holy_war Normal seed 3 567 s and whirlwind standard Easy seed 1 521 s (re-printed 2026-11-16 for the sim's M6-S12, "Implementation (M6-S12)"; they were 465 / 470 / 644 / 478 s and 501 / 416 / 583 / 525 s). Across both factions 2 of those 9 marks had wood under 100 with gold at 300 or more, so the report reads "wood binds at some marks only, not the limit
+  at malazan standard Normal seed 1 455 s, malazan crossbow_push Normal seed 5 457 s, malazan cadre_rush Normal seed 7 569 s, malazan standard Easy seed 1 491 s, whirlwind standard Normal seed 1 502 s, whirlwind raider_rush Normal seed 2 409 s, whirlwind holy_war Normal seed 3 512 s and whirlwind standard Easy seed 1 521 s (re-printed 2026-11-17 by the data track's D33, which lowered `cadre_rush`'s wave to 16 army pop and `holy_war`'s to 14: `cadre_rush` was 616 s and `holy_war` 567 s; re-printed 2026-11-16 for the sim's M6-S12, "Implementation (M6-S12)"; before it they were 465 / 470 / 644 / 478 s and 501 / 416 / 583 / 525 s). Across both factions 2 of those 8 marks had wood under 100 with gold at 300 or more, so the report reads "wood binds at some marks only, not the limit
   overall". Re-printed 2026-10-26 (data track, D-R32) for M5-4g's reserve: Age II is now in at 509-616 s on every run
   (its step due at 5:00-8:00), Easy's too; before it, with no reserve and the production manager spending first, it came
   in at 509-1,098 s and the Whirlwind's Easy run never in 20 minutes (the idle seat fell at 498 / 474 / 619 / 497 s and
@@ -10895,6 +10895,28 @@ tests `Ai/CriterionMatch.cs` (the harness), `Ai/MatchCriterionTests`, `CommandRe
   | 2v2 | Vathar Crossing 1, 4 seats | 26,070 = 21:43 (72,000) | team 1 | 14 | 4 | Build Blocked 1, SealsGround 2, UnitInTheWay 1; Gather UnitGone 1; Move UnitGone 1 |
 
   Waves and hunts are the match's totals over its seats. The longest refusal run on any row is 1 think (no command refused twice on one target).
+  **Re-measured for D33** (the data track's balance pass, 2026-11-17: the Malazan `cadre_rush` waves at 16 army pop / 1,184,
+  was 18 / 1,332; the Whirlwind `holy_war` at 14 / 918, was 20 / 1,312; the Teblor `standard` opening's order, which no row
+  plays; data hash B74DC7AE61B4862D -> 318E8C4256456C05): the literal row Vathar Crossing seed 1 23,244 (seat 1, 6 waves),
+  Pale Hills seed 1 33,230, the generated row seed 1 21,876 and the 2v2 61,686 did not move; Raraku seed 3 ends at **28,915**
+  (24:05, seat 1, 10 waves, 1 hunt; was 27,394). The FFA on Vathar Crossing seed 2 **no longer ends inside 72,000** (at
+  72,000 seats 0 and 1 are defeated, at 33,951 and 24,932, and seats 2 and 3 stand; a finding, not a new bound), so by rule
+  45 the row moves to the nearest seed that ends: **seed 1, 31,991 (26:39), seat 2** (10 waves, 3 hunts; Build SealsGround
+  2), every check clean; seeds 1 and 3 are as near and the lower is taken, and the 2v2 row plays Vathar seed 1 too, with
+  teams. Seeds 1 / 3 / 4 / 5 / 6 with four seats: 31,991 p2 / 41,051 p0 / 66,919 p3 / 62,482 p3 / 59,255 p2
+  (`Content/D33BalanceReportTests.CriterionRows_Report`). `HalfWay` 11,622 unchanged; no bound moved. The Hard v Normal
+  tally (`Stress/HardVersusNormalTallyQaStressTests`, report only): **34 / 5 / 3** (Hard / Normal / none, 42 matches to
+  72,000; was 34 / 7 / 1): Raraku 13 / 1 / 0 (was 13 / 1 / 0), Vathar Crossing 14 / 0 / 0 (was 12 / 2 / 0), Pale Hills
+  7 / 4 / 3 (was 9 / 4 / 1); Hard still leads on every map. Seeds 1-8 (`Stress/MatchRowsM6S10Report`, every check on):
+  Raraku 24,354 / 39,262 / 28,915 / 28,915 / 27,212 / 28,915 / 23,435 / 23,435; Pale Hills 33,230 / 51,218 / 44,946 /
+  44,946 / 57,755 / 44,946 / 43,385 / 43,385; Vathar Crossing 23,244 / 30,540 / 22,082 / 22,082 / 34,619 / 22,082 / 26,493 /
+  26,493; generated 1-6 21,876 / 27,690 / 34,618 / 19,170 / 29,994 / 30,192; every row ends but the old FFA.
+  `Stress/M6Sh2DeterminismStressTests` re-staged to Raraku seed 5 (seed 3 no longer retrains: no seat loses every worker);
+  `Stress/ReservePairingsStressTests.NoWaveSides` 2 -> 1 (the `holy_war` side of seed 3 waves; Malazan waves 96, defeats
+  3 / 2, the three bounds unchanged). The pins re-measured once, old values in "was" comments: `StandardPresetPinQaTests` and
+  `OutcomePinM73bQaTests` (the 3-seat Hard and 4-seat Normal AI scenes), `NonHardMatchPinQaTests` and
+  `CounterCompositionTests.TheNonHardPins_*` (Pale Hills seed 3, both first seats); the golden `cross_map_seed1.replay`
+  header and checksum only (its k lines did not move).
   **Re-measured for M6-S12** (the AI's rally point off one-cell passages, a rebalanced gatherer's node measured from its
   drop-off, a blind seat's re-scout; "Implementation (M6-S12)"): Vathar Crossing seed 7 ends at 30,482, past 24,000, so the
   literal row is **seed 1 again**, 23,244 (19:22, seat 1, 6 waves); the generated row seed 2 ends at 27,690, past 24,000, so
