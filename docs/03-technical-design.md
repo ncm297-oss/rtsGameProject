@@ -12888,7 +12888,7 @@ fix), one cost fix with no behaviour change (BUG-1538), the rest re-staged or li
   tick 30,000 no seat gathers gold again (gathered gold frozen at 8,880 / 8,850 / 8,890, banks 2-16 gold) and every seat
   banks only wood (12,000-30,000 by 144,000), so none trains a soldier; p0 (5 soldiers, starved from 52,420) waves and
   hunts but cannot finish p1 (13 units) and p3 (22), which have no army and so are never starved (`ai.starvedMinArmy`).
-  BUG-1460's shape with gold in place of wood (not split further: mines empty or unknown). `HuntStressTests.FourAiSeats_*`'
+  BUG-1460's shape with gold in place of wood (mines empty: QA's probe counts 0 live mines from tick 30,000). `HuntStressTests.FourAiSeats_*`'
   free-for-all row moves to the smallest ending seed, 1 (91,995, p2, 4 hunts; seeds 2 / 5 end at 50,397 / 59,083, 4 does
   not end); no bound raised.
 - **BUG-1537 Vathar Crossing seed 2: for ruling.** p0 lost its Keep at about 34,000 and is left with one Laborer, 276 gold,
@@ -12927,6 +12927,32 @@ fix), one cost fix with no behaviour change (BUG-1538), the rest re-staged or li
   `StarvedPickOracleQaStressTests` (raraku, 5) (BUG-1534, for ruling), `MatchCriterionSweepQaStressTests` Vathar 2
   (BUG-1537, for ruling). `DropOffSiteScanQaStressTests` reads +0.33 ms in a category run beside the default loop (every
   tick 3 ms, the machine shared) and +0.027 ms alone (rule 42).
+
+**Fix round 2 (the Producer's rulings; tests and docs only, no production byte: `git diff 63a6a2a -- sim/Rts.Sim game
+tools` is empty, so no pin moves).**
+- **BUG-1534, the retrain wins.** `StarvedPickOracleQaStressTests`: the oracle failed on any Train sent on a stamped think
+  → it exempts a worker-type Train sent while the seat has no live worker (counted and printed as "worker retrain on a
+  stamped think"), and nothing else. docs/02's starved paragraph: no word on the retrain → one sentence (waiting for that
+  unit never stops the worker retrain).
+- **BUG-1537, Vathar Crossing seed 2.** `MatchCriterionSweepQaStressTests.Known`: Raraku 1 / 2 only → plus
+  `("vathar_crossing", 2) = "BUG-1537"`, the diagnosis as its comment (one Laborer hauling wood for the hall rebuild,
+  silent 5,699 ticks, not stuck). No bound raised.
+- **BUG-1531, `ReachRuleQaTests` (2, 80 m).** `[InlineData(2UL, 80f)]` → the same row with `Skip = "BUG-1531 ..."` (same
+  body, same bound). The cure is decided (a rebalance's pick measured from the worker's nearest finished drop-off) and is
+  the first item of the next sim task that changes the AI, which un-skips the row.
+- **BUG-1524 (S3), the content pins.** (a) `TeblorOpeningQaTests.TheOpponentSentence_*`: asserted the Malazan row stands
+  and the Whirlwind row defeats → each row's clause built from the row (`Fell < 0`: "and still stands at 20:00", else
+  "and is defeated at N s"); teblor.md's sentence: Malazan 323 / 448 s stands, Whirlwind 316 / 429 s defeated at 1,022 s,
+  "the Whirlwind match is the balance pass's" → 321 / 425 s and stands against both, the M6-S10 and D31 figures kept in
+  the bracket, the clause now "the Whirlwind match is no longer a defeat". (b) `DR35ProsePinQaTests.AgeTwoProse_*`: seed 13
+  pinned as "never" and "still stands at 20:00 without Age II" → read from its cell (`never (defeated 15:19)`), the
+  sentence "seed 13's side never reaches Age II and is defeated at 15:19" on whirlwind.md. (c)
+  `DR35ProsePinQaTests.Malazan_Bug0982Prose_*`: `[Fact]` → `[Fact(Skip = "BUG-1524: D33 re-measures ...")]`, no assertion
+  edited; malazan.md gets one line under the threshold table (it predates M6-SH2; the Age II table under "Age II against
+  the Whirlwind" is newer). (d) whirlwind.md "What it says" under the holy war's table: "falls before its first wave is
+  due only on seed 3" → `holy_war` falls on none of the nine runs; seed 3 survives the 5:46 Malazan wave and sends one
+  wave at 14:45 (numbers from the table only).
+- This section, BUG-1536's line: "mines empty or unknown" → "mines empty" (QA's probe: 0 live mines from tick 30,000).
 
 ## Testing strategy
 

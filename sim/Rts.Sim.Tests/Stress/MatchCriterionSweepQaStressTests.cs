@@ -61,6 +61,13 @@ public class MatchCriterionSweepQaStressTests
         // (p0 40,161..48,960): BUG-1521.
         [("raraku", 1)] = "BUG-1460",
         [("raraku", 2)] = "BUG-1521",
+        // M6-SH2 fix round 2 (the Producer's ruling; no bound raised): Vathar Crossing seed 2 (green on the base fdc8710: ends
+        // 30,569, p0) now ends at 57,039 (p0) and fails the silent-seat oracle: p0 sent nothing for 5,699 ticks (40,801..46,500).
+        // Diagnosis: p0 lost its Keep (about 34,000) and is left with one Laborer, 276 gold, 20-70 wood and 10 soldiers (under
+        // its opening's 16-pop wave size); the hall rebuild holds its gold for the Keep (275 / 275) while the one Laborer hauls
+        // wood 10 at a time for it. Not stuck and not a wedge. The cure (what a seat buys while it banks for a hall) goes to the
+        // next AI task.
+        [("vathar_crossing", 2)] = "BUG-1537",
         // BUG-1152 (a losing seat whose last worker gathers only gold, wood under the cost of anything, sends nothing for 4+
         // minutes): M5-9a took Raraku seed 2 out (it ended at 29,190, every oracle clean). M5-H6 (the house rule, the hunt's
         // free starts from its second hunt) takes seeds 1 and 5 out too, though BUG-1152 is not fixed: seed 1 ends at 28,231

@@ -476,8 +476,9 @@ every Whirlwind opening against every Malazan opening on the pairing's three sma
 and 3rd `QA/Content/D21OpeningsQaTests`'; each run pins its cell here and on malazan.md's twin table ("Age II against
 the Whirlwind"). Under M5-4g no Whirlwind side fell, and the two sides without Age II (`standard` against
 `crossbow_push` seed 9 and against `cadre_rush` seed 13) stood at 20:00 knowing no gold node, so their Age II can't be
-reserved (docs/03 "Implementation (M5-4g)"). Since the sim's M6-S10 (2026-11-15, the gather change) seed 9's side reaches Age II at 11:47 (from the sim's M5-9a until M6-S10 it was defeated at 19:36 without it); seed 13's still stands at
-20:00 without Age II, beaten down: its Town Hall razed, 4 workers left. Three Whirlwind sides now fall: `holy_war`
+reserved (docs/03 "Implementation (M5-4g)"). Since the sim's M6-S10 (2026-11-15, the gather change) seed 9's side reaches Age II at 11:47 (from the sim's M5-9a until M6-S10 it was defeated at 19:36 without it); seed 13's side never reaches
+Age II and is defeated at 15:19 (since the sim's M6-SH2; under M6-S10 it still stood at 20:00 without Age II, beaten
+down: its Town Hall razed, 4 workers left). Under M6-S10 three Whirlwind sides fell: `holy_war`
 against `standard` seed 3 at 12:29 (before its first wave was due, see "The holy war's first wave" below), `raider_rush`
 against `crossbow_push` seed 11 at 18:34, without Age II, and `standard` against `cadre_rush` seed 17 at 16:27.
 
@@ -501,7 +502,7 @@ one; docs/03 "Implementation (M6-SH2)"): 25 of the 27 Whirlwind sides reach Age 
 (`standard` against `cadre_rush` seed 13 at 15:19, `raider_rush` against `crossbow_push` seed 11 at 18:04). Four sides
 fall: those two, `standard` against `cadre_rush` seed 16 at 18:23 (after its Age II) and `raider_rush` against
 `cadre_rush` seed 14 at 19:53. `holy_war` against `standard` seed 3 no longer falls (Age II at 9:10). The paragraph above
-the table describes the M6-S10 runs.
+the table describes the M6-S10 runs, except seed 13's sentence, which reads the M6-SH2 cell.
 
 ## The holy war's first wave (D-R39, 2026-11-15)
 
@@ -528,14 +529,16 @@ charge), its first wave and the waves sent, its defeat and its largest army (rea
 Re-printed 2026-11-15 for the sim's M6-SH2 (a construction site is no longer a drop-off; an AI with no worker trains
 one; docs/03 "Implementation (M6-SH2)"): `holy_war` is now defeated before its first wave is due in 0 of 9 runs. On
 seed 3 it survives the Malazan first wave (5:46), reaches its 20 pop at 12:57 and sends one wave at 14:45; on the other
-eight its wave is due between 6:59 and 8:24. The paragraph below is D-R39's reading of the M6-S10 runs (seed 3 fell at
-12:29 with a 14-pop army); whether it still stands is the data track's to re-word (listed for the Producer's ruling), and
-`AiOpeningPairsReportTests.DefeatedBeforeDue` no longer names seed 3.
+eight its wave is due between 6:59 and 8:24. `AiOpeningPairsReportTests.DefeatedBeforeDue` no longer names seed 3. The
+paragraph below reads this table (re-worded 2026-11-16, M6-SH2 fix round 2, BUG-1524; D-R39's reading of the M6-S10
+runs, where seed 3 fell at 12:29 with a 14-pop army before its wave was due, is history).
 
-**What it says (a finding for the balance pass, D33; no data changed).** One seed of nine: `holy_war` falls before its
-first wave is due only on seed 3. On the other eight it reaches its 20 pop between 7:01 and 8:55, sends 3 to 6 waves and
-stands at 20:00. The Malazan `standard` and `crossbow_push` openings send their first wave at 5:42 to 6:08, before
-`holy_war`'s is due on every one of their six seeds; on seed 3 that wave met a 14-pop army that never grew back. The
-latest Whirlwind wave (20 army pop) is the price of the opening's early Age II, and seed 3 shows the risk; the measurement
-does not say the threshold is wrong. So `Content/AiOpeningPairsReportTests` names this one case
-(`DefeatedBeforeDue`: reported, not failed) and fails any other side that sends no wave.
+**What it says (a finding for the balance pass, D33; no data changed).** `holy_war` no longer falls on any of the nine
+runs, seed 3 included: every side stands at 20:00 and every side sends a wave. On seed 3 the Malazan `standard` first wave
+(5:46) comes long before `holy_war`'s is due (12:57); the side survives it, peaks at 49 army pop and sends one wave, at
+14:45. On the other eight its wave is due between 6:59 and 8:24 and it sends 2 to 6 waves, the first between 6:59 and
+8:24. The Malazan `standard` and `crossbow_push` openings send their first wave at 5:44 to 6:56, before `holy_war`'s is
+due on every one of their six seeds; the `cadre_rush` ones send theirs after it (8:12 and 11:17) or never (seed 24). The
+latest Whirlwind wave (20 army pop) is the price of the opening's early Age II; on seed 3 it now comes late rather than
+not at all, and the measurement does not say the threshold is wrong. `Content/AiOpeningPairsReportTests` names no case
+(`DefeatedBeforeDue` is empty) and fails any side that sends no wave.

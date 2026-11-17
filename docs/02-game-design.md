@@ -488,7 +488,9 @@ own cues (select, order, refused, building placed or finished, unit or tech read
   `rules.json` `ai.starvedMinArmy` (1) combat units free, then after `ai.starvedWaveAfter` (60 s) in that state it sends
   every free combat unit in a wave whatever the wave threshold (or hunts, if it knows no enemy building), again after each
   wave's cooldown, at every difficulty; a raid on its base resets the clock, and 0 turns the rule off (built in M5-9a
-  round 2, BUG-1153; [03 Implementation (M5-9a)](03-technical-design.md#implementation-m5-9a)).
+  round 2, BUG-1153; [03 Implementation (M5-9a)](03-technical-design.md#implementation-m5-9a)). Waiting for that unit
+  never stops the worker retrain below: a starved side with no worker left still trains one, since a worker is its only
+  way back to the resource it lacks (M6-SH2, BUG-1534, the Producer's ruling).
 - When its own gold is spent the AI expands to the far mines with a depot: short of gold for the unit it would train next,
   with no worker on gold and no gold mine it knows, it sends a worker to look at the start locations no player took, and
   once it has seen a free mine within `rules.json` `ai.farExpandReach` (384 m) of its Town Hall with no enemy drop-off by

@@ -556,6 +556,8 @@ waves), Age II, the defeat, and the largest army it had (read once a second).
 | 14 / 1,036 | 8 | 8:51 (2) | 8:22 | 19:28 | 21 |
 | 14 / 1,036 | 14 | never (0) | 8:19 | 11:34 | 13 |
 
+This table and the prose under it predate the sim's M6-SH2; the Age II table under "Age II against the Whirlwind" (re-printed for M6-SH2) is newer, and D33 re-measures this one (BUG-1524).
+
 Re-printed 2026-11-15 for the sim's M6-S10 (the gather change; docs/03 "Implementation (M6-S10)"): seed 8 now waves at
 every threshold (at 18 pop first at 9:01, 4 waves, peak 30; was no wave, peak 11) and stands at 20:00 at 18 and 16 pop
 (was destroyed at 13:47), but at 14 pop it is destroyed at 19:28; at every threshold seed 14 now falls at 11:34 (was

@@ -68,8 +68,9 @@ public class TeblorOpeningQaTests
     // page's sentence is pinned to the same numbers (TheOpponentSentence_QuotesTheReportRows).
     // M6-SH2 (sim track, a site is no drop-off and a beaten AI retrains; handed): v Whirlwind (6321, 8581, 20444) ->
     // (6421, 8501, -1): the Teblor no longer beaten; v Malazan (6461, 8961, -1) -> (6421, 8501, -1). The page's sentence
-    // (TheOpponentSentence_QuotesTheReportRows) says the Whirlwind defeats the Teblor: its meaning changed, so it is listed
-    // for the Producer's ruling, not re-worded here.
+    // (TheOpponentSentence_QuotesTheReportRows) said the Whirlwind defeats the Teblor: its meaning changed, so it was listed
+    // for the Producer's ruling. Fix round 2 (BUG-1524, ruled): the sentence builds each row's outcome clause and says both
+    // matches stand; the old figures stay in its bracket as history.
     internal static readonly (string Opponent, int FirstWave, int AgeTwo, int Fell)[] OpponentRows =
     {
         ("whirlwind", 6421, 8501, -1), // M6-SH2: wave 321 s, Age II 425 s, stands at 20:00 (M6-S10: 316 / 429 s, beaten 1022 s)
@@ -104,18 +105,19 @@ public class TeblorOpeningQaTests
     /// <summary>
     /// D-R39 (BUG-1421 item 3, BUG-1464 item 3): teblor.md's "Spending on the menu's map" sentence about the active
     /// opponents quotes <see cref="OpponentRows"/> in whole seconds (a tick / 20, rounded down), so a re-measure that moves a
-    /// row fails here until the sentence moves with it.
+    /// row fails here until the sentence moves with it. Each row's outcome clause is built from the row (BUG-1524, the
+    /// Producer's ruling in M6-SH2 fix round 2): <c>Fell &lt; 0</c> reads "and still stands at 20:00", otherwise "and is
+    /// defeated at N s", so a re-measure that flips an outcome fails here as a wording change, not as a stale assert.
     /// </summary>
     [Fact]
     public void TheOpponentSentence_QuotesTheReportRows()
     {
         string page = System.Text.RegularExpressions.Regex.Replace(string.Join(" ", PageTables.FactionLines("teblor").Select(l => l.Trim())), @"\s+", " ");
         static string S(int tick) => (tick / Tps).ToString("#,0", System.Globalization.CultureInfo.InvariantCulture) + " s";
+        static string Outcome(int fell) => fell < 0 ? "and still stands at 20:00" : $"and is defeated at {S(fell)}";
         var m = OpponentRows.Single(r => r.Opponent == "malazan");
         var w = OpponentRows.Single(r => r.Opponent == "whirlwind");
-        Assert.Equal(-1, m.Fell);
-        Assert.True(w.Fell >= 0, "the Whirlwind row no longer defeats the Teblor: re-word the sentence");
-        Assert.Contains($"a Normal Teblor seat sends its first wave at {S(m.FirstWave)}, is in Age II at {S(m.AgeTwo)} and still stands at 20:00 against a Normal Malazan; "
-            + $"against a Normal Whirlwind it sends its first wave at {S(w.FirstWave)}, is in Age II at {S(w.AgeTwo)} and is defeated at {S(w.Fell)} (", page, StringComparison.Ordinal);
+        Assert.Contains($"a Normal Teblor seat sends its first wave at {S(m.FirstWave)}, is in Age II at {S(m.AgeTwo)} {Outcome(m.Fell)} against a Normal Malazan; "
+            + $"against a Normal Whirlwind it sends its first wave at {S(w.FirstWave)}, is in Age II at {S(w.AgeTwo)} {Outcome(w.Fell)} (", page, StringComparison.Ordinal);
     }
 }
