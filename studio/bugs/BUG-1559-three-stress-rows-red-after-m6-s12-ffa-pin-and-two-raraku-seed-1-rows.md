@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S2 |
-| Status | open |
+| Status | fixed (verified by QA re-check round 1, 2026-11-16-2036) |
 | Found | 2026-11-16-2036, task M6-12 (M6-S12), QA full (the Stress category, once, after the last behaviour change) |
 | System | AI match pins (rule 45) and test staging on matches the M6-S12 AI rules moved |
-| Fixed by | |
+| Fixed by | 4a4f8be (M6-12 fix round 1: tests and docs only; a rule-45 move and two re-stages) |
 
 ## Repro
 The Stress category on a fresh clone of efa7b31 (`dotnet test sim/Rts.Sim.Tests --filter Category=Stress`, 4 h 17 m):
@@ -46,3 +46,21 @@ The Stress category on a fresh clone of efa7b31 (`dotnet test sim/Rts.Sim.Tests 
 - (1) is back in the shape of its own skipped twin `FourAiSeats_OnPaleHills_Seed1_KnownStall` (BUG-1068 / BUG-1116: four
   seats spend the map's gold, the two left cannot finish each other) and of BUG-1536 (the owner's open question on a map
   mined out); the cure is the rule-45 move, not a gameplay change.
+
+## Fix verification (QA re-check round 1, on 4a4f8be)
+- Fix: tests and docs only (`git diff --stat efa7b31 4a4f8be -- sim/Rts.Sim game tools` is empty). `HuntStressTests`'
+  free-for-all oracle row moved from seed 1 to seed 2 (rule 45); `M6Sh2DeterminismStressTests` re-staged on Raraku seed 3
+  and `M6Sh2QaStressTests`' save sweep on Raraku seed 2. Each row's body, oracle and bound is byte-for-byte unchanged
+  (only the seed constant and the method name moved); the skipped seed-1 row's reason names this bug.
+- QA's own probe (temporary, deleted) confirmed every trace the developer gave:
+  - FFA seed 1: gathered gold frozen at 8,870 / 8,850 / 8,820 / 8,890 from tick 30,000; p3 out at 55,508, p0 at 107,906;
+    p1 0 soldiers from 84,000, p2 1; no result by 144,000.
+  - FFA seed 2 over at 59,951 (p1, 4 hunts); seed 5 over at 73,778.
+  - Raraku seed 1: p1 has no worker at 21,920 with 3 gold, no retrain, over at 24,354. Seed 2: nobody loses every worker,
+    over at 39,262. Seed 3: p0 has no worker at 24,260 with 1,087 gold, Train sent for 24,261.
+- Rows run on 4a4f8be: `HuntStressTests`, `M6Sh2DeterminismStressTests`, `M6Sh2QaStressTests`,
+  `StarvedSaveTwoProcessQaStressTests`, `ReservePairingsStressTests`, `AiDeterminismTests.PaleHills_ToTheEndWithAHunt_*`:
+  75 passed / 0 failed / 1 skipped (the seed-1 known stall) of 76 in 12.5 min. FFA seed 2: 560 hunting thinks
+  oracle-checked, leaks 0. Retrain twin: Train at 24,261, save at that tick, ran to 26,261. Save sweep: 78 saves.
+- Deviation accepted: the stall is not added to `MatchCriterionSweepQaStressTests.Known`. That dictionary is keyed by
+  two-seat matches, and two-seat Pale Hills seed 1 passes, so an entry there would turn the row red ("no longer fails").
