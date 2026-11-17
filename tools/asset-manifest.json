@@ -1,5 +1,5 @@
 {
-  "about": "Art import manifest (docs/04 'Import process'). tools/import-assets.ps1 rebuilds every model and the animation library from these entries with Blender (tools/art/build_unit.py). Paths: 'source' relative to sourceRoot, 'destination' relative to the repo root. A model's 'clips' maps docs/04's state names to library clip names; 'library.clips' maps each library name to its source clip.",
+  "about": "Art import manifest (docs/04 'Import process'). tools/import-assets.ps1 rebuilds every model and the animation library from these entries with Blender (tools/art/build_unit.py). Paths: 'source' relative to sourceRoot, 'destination' relative to the repo root. A model's 'clips' maps docs/04's state names to library clip names; 'library.clips' maps each library name to its source clip. Since M6-V24 a model is one surface drawing one atlas: 'textureSize' is the size of each role's tile in it (docs/04 'Unit models, as built').",
   "sourceRoot": "asset-sources",
   "licences": [
     "Universal Base Characters[Standard]/Universal Base Characters[Standard]/License_Standard.txt",

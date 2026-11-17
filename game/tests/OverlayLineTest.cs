@@ -175,10 +175,16 @@ public partial class OverlayLineTest : Node
         Mesh m = mesh.Mesh;
         Transform3D x = mesh.GlobalTransform;
         float top = float.MinValue;
+        UnitModels.Atlas? atlas = views.Models!.AtlasOf(type);
         for (int s = 0; s < m.GetSurfaceCount(); s++)
         {
             if (m.SurfaceGetMaterial(s) is BaseMaterial3D mat && _propMaterials.Contains(mat.ResourceName)) continue;
-            foreach (Vector3 v in m.SurfaceGetArrays(s)[(int)Mesh.ArrayType.Vertex].AsVector3Array()) top = Math.Max(top, (x * v).Y);
+            // M6-V24: on the one surface of an atlas model the props' own faces read the props' tile.
+            Godot.Collections.Array arrays = m.SurfaceGetArrays(s);
+            Vector3[] vertices = arrays[(int)Mesh.ArrayType.Vertex].AsVector3Array();
+            Vector2[] uvs = arrays[(int)Mesh.ArrayType.TexUV].AsVector2Array();
+            for (int k = 0; k < vertices.Length; k++)
+                if (atlas == null || k >= uvs.Length || !atlas.IsProp(uvs[k])) top = Math.Max(top, (x * vertices[k]).Y);
         }
         holder.Free();
         return top;

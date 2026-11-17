@@ -8,9 +8,10 @@
 #   Sources: -SourceRoot, else <repo>/asset-sources, else (in a git worktree) the main checkout's asset-sources.
 #   Godot import: $env:GODOT (process, then user); without it the Blender outputs are written and the import is left to you.
 # Godot import settings written here (each .import keeps its uid, so a re-run gives the same files):
-#   a model .glb: no animations, no tangents (no normal maps), textures extracted beside it; its clip map rides in it as
-#   glTF extras on the armature node, which Godot imports as metadata (M6-V21);
-#   an extracted texture: VRAM compressed with mipmaps (docs/04 "Look test (M6-V10)");
+#   a model .glb: no animations, no tangents (no normal maps), its texture extracted beside it; its clip map and (M6-V24)
+#   atlas layout ride in it as glTF extras on the armature node, which Godot imports as metadata (M6-V21);
+#   an extracted texture: VRAM compressed with mipmaps (docs/04 "Look test (M6-V10)"), alpha border fix off (M6-V24: the
+#   atlas alpha is the team mask); a texture of an earlier build that the model no longer holds is deleted;
 #   the library .glb: imported as an AnimationLibrary, every clip looping (root motion is off: in-place sources).
 # Exit 0 on success; 1 when a build or import fails; 2 when Blender, the manifest or the sources are missing.
 param(
@@ -108,6 +109,17 @@ foreach ($model in $m.models) {
     $results += $r
     Set-Import (Join-Path $root $model.destination) 'scene' 'PackedScene' @(
         'animation/import=false', 'meshes/ensure_tangents=false', 'gltf/embedded_image_handling=1')
+    # M6-V24: a texture Godot extracted from an earlier build that the model no longer holds (the role textures the atlas
+    # replaced) goes, with its .import and imported copy, so nothing stale stays beside the model.
+    $dir = Split-Path (Join-Path $root $model.destination) -Parent
+    $keep = @($r.textures.PSObject.Properties | ForEach-Object { "$($model.id)_$($_.Name).png" })
+    foreach ($old in @(Get-ChildItem -LiteralPath $dir -Filter "$($model.id)_*.png" -File)) {
+        if ($keep -contains $old.Name) { continue }
+        Write-Host "    removing $($old.Name) (no longer in the model)"
+        Remove-Item -LiteralPath $old.FullName, "$($old.FullName).import" -Force -ErrorAction SilentlyContinue
+        $imported = Join-Path $root 'game\.godot\imported'
+        if (Test-Path -LiteralPath $imported) { Get-ChildItem -LiteralPath $imported -Filter "$($old.Name)-*" | Remove-Item -Force }
+    }
 }
 $library = $null
 if (-not $Only -or $Only -eq 'library') {
@@ -145,11 +157,13 @@ if ($NoGodot -or -not $godot -or -not (Test-Path -LiteralPath $godot)) {
         }
     }
     Invoke-GodotImport
-    # The textures Godot extracted from each model: VRAM compressed with mipmaps, then imported again.
+    # The textures Godot extracted from each model: VRAM compressed with mipmaps, then imported again. M6-V24: the atlas
+    # alpha is the team mask, so the importer must leave the colours under it alone (fix_alpha_border off; no texel is
+    # transparent anyway).
     foreach ($r in $results) {
         $dir = Split-Path (Join-Path $root $r.destination) -Parent
         foreach ($png in Get-ChildItem -LiteralPath $dir -Filter '*.png') {
-            Set-Import $png.FullName 'texture' 'CompressedTexture2D' @('compress/mode=2', 'mipmaps/generate=true', 'detect_3d/compress_to=0')
+            Set-Import $png.FullName 'texture' 'CompressedTexture2D' @('compress/mode=2', 'mipmaps/generate=true', 'detect_3d/compress_to=0', 'process/fix_alpha_border=false')
         }
     }
     Invoke-GodotImport
@@ -160,12 +174,16 @@ $total = 0
 foreach ($r in $results) {
     Write-Host ("{0}: {1} triangles, {2:0.00} m tall, feet at {3} m, materials [{4}]" -f $r.id, $r.triangles, $r.height, $r.feet, ($r.materials -join ' '))
     foreach ($t in $r.textures.PSObject.Properties) { Write-Host ("    texture {0} {1} x {2}" -f $t.Name, $t.Value[0], $t.Value[1]) }
+    # M6-V24: the atlas's tiles (column, row from the top-left).
+    if ($r.atlas) { Write-Host ("    atlas {0} x {1} tiles of {2}: {3}" -f $r.atlas.grid[0], $r.atlas.grid[1], $r.atlas.tile, (($r.atlas.tiles.PSObject.Properties | ForEach-Object { "$($_.Name) ($($_.Value -join ', '))" }) -join ' ')) }
     # M6-V21: the clip map written into the model (state name -> library clip).
     if ($r.clips) { Write-Host ("    clips " + (($r.clips.PSObject.Properties | ForEach-Object { "$($_.Name)=$($_.Value)" }) -join ' ')) }
     $dir = Split-Path (Join-Path $root $r.destination) -Parent
     foreach ($f in Get-ChildItem -LiteralPath $dir -File | Sort-Object Name) {
         if ($f.Extension -ne '.import') { $total += $f.Length }
-        Write-Host ("    {0,10:N0}  {1}" -f $f.Length, $f.FullName.Substring($root.Length + 1).Replace('\', '/'))
+        # M6-V24: each binary's SHA-256 (the first 16 hex digits), so two runs can be compared byte for byte.
+        $hash = if ($f.Extension -ne '.import') { '  ' + (Get-FileHash -LiteralPath $f.FullName -Algorithm SHA256).Hash.Substring(0, 16) } else { '' }
+        Write-Host ("    {0,10:N0}  {1}{2}" -f $f.Length, $f.FullName.Substring($root.Length + 1).Replace('\', '/'), $hash)
     }
 }
 if ($library) {
@@ -173,7 +191,7 @@ if ($library) {
     foreach ($c in $library.clips.PSObject.Properties) { Write-Host ("    {0,-12} <- {1} ({2} s)" -f $c.Name, $c.Value, $library.seconds.($c.Name)) }
     $lib = Get-Item (Join-Path $root $library.destination)
     $total += $lib.Length
-    Write-Host ("    {0,10:N0}  {1}" -f $lib.Length, $library.destination)
+    Write-Host ("    {0,10:N0}  {1}  {2}" -f $lib.Length, $library.destination, (Get-FileHash -LiteralPath $lib.FullName -Algorithm SHA256).Hash.Substring(0, 16))
 }
 Write-Host ("binaries written: {0:N0} bytes ({1:0.00} MB)" -f $total, ($total / 1MB))
 Remove-Item -Recurse -Force $work -ErrorAction SilentlyContinue

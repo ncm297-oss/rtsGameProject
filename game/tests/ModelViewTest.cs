@@ -127,22 +127,32 @@ public partial class ModelViewTest : Node
         AddChild(holder);
         Node3D model = views.Models!.Instantiate(type, out MeshInstance3D mesh, out AnimationPlayer _);
         holder.AddChild(model);
-        int tris = 0, team = 0;
+        int tris = 0, team = 0, surfaces = 0, meshes = 0;
         var mats = new List<string>();
+        UnitModels.Atlas? atlas = views.Models.AtlasOf(type);
+        Check(atlas != null, $"{id}: the file carries no atlas layout (M6-V24)");
         foreach (Node n in model.FindChildren("*", "MeshInstance3D", true, false))
         {
             Mesh? mm = ((MeshInstance3D)n).Mesh;
+            meshes++;
             for (int s = 0; mm != null && s < mm.GetSurfaceCount(); s++)
             {
+                surfaces++;
                 int indices = mm.SurfaceGetArrays(s)[(int)Mesh.ArrayType.Index].AsInt32Array().Length;
                 tris += indices / 3;
                 var mat = mm.SurfaceGetMaterial(s) as BaseMaterial3D;
                 mats.Add(mat?.ResourceName ?? "?");
                 if (mat?.ResourceName == UnitModels.TeamMaterialName) team++;
+                // M6-V24: one atlas of whole tiles, each at most the manifest's texture size (each role texture's size before).
                 Vector2I size = mat?.AlbedoTexture?.GetSize() is Vector2 v ? new Vector2I((int)v.X, (int)v.Y) : Vector2I.Zero;
-                Check(size.X <= maxTex && size.Y <= maxTex, $"{id}: texture of {mat?.ResourceName} is {size}, over {maxTex}");
+                Vector2I grid = atlas?.Grid ?? Vector2I.One;
+                Check(size.X % grid.X == 0 && size.Y % grid.Y == 0 && size.X / grid.X == size.Y / grid.Y && size.X / grid.X <= maxTex,
+                    $"{id}: texture of {mat?.ResourceName} is {size} for a {grid} grid, want square tiles of at most {maxTex}");
             }
         }
+        // M6-V24 (criterion 1): one mesh, one surface, one material (the team shader draws the whole figure).
+        Check(meshes == 1 && surfaces == 1 && mats.Count == 1, $"{id}: {meshes} meshes, {surfaces} surfaces, materials [{string.Join(' ', mats)}], want one surface with one material");
+        Check(views.Models.TeamSurface(type) == 0, $"{id}: team surface {views.Models.TeamSurface(type)}, want 0");
         Aabb box = mesh.GlobalTransform * mesh.GetAabb();
         var skeleton = model.FindChildren("*", "Skeleton3D", true, false)[0] as Skeleton3D;
         int foot = skeleton?.FindBone("foot_l") ?? -1, ball = skeleton?.FindBone("ball_l") ?? -1;
@@ -157,9 +167,12 @@ public partial class ModelViewTest : Node
         var props = new HashSet<string>();
         foreach (JsonNode? p in m["props"]?.AsArray() ?? new JsonArray())
             if ((string)p!["material"]! != UnitModels.TeamMaterialName) props.Add((string)p["material"]!);
-        float figure = FigureHeight(mesh, props);
+        float figure = FigureHeight(mesh, props, atlas, out int propVertices);
         const float want = 1.8f;
-        GD.Print($"{id}: figure {figure:F3} m tall without the prop surfaces [{string.Join(' ', props)}], data scale {data.Units[type].Scale} (drawn {figure * data.Units[type].Scale:F2} m)");
+        // M6-V24: the props' faces are found by their atlas tile now (one surface); a model whose manifest names a prop of its
+        // own colour has some, one without has none.
+        Check((props.Count > 0) == (propVertices > 0), $"{id}: {propVertices} prop vertices in the atlas's props tile, the manifest names [{string.Join(' ', props)}]");
+        GD.Print($"{id}: figure {figure:F3} m tall without the prop faces [{string.Join(' ', props)}] ({propVertices} vertices), data scale {data.Units[type].Scale} (drawn {figure * data.Units[type].Scale:F2} m)");
         Check(Mathf.Abs(figure - want) <= 0.05f * want, $"{id}: the figure is {figure:F3} m tall, want {want:F2} m within 5 % (the data scale is applied by the view)");
         // M6-V21: the clip map the file carries (glTF extras) is the manifest's.
         var map = new List<string>();
@@ -178,17 +191,24 @@ public partial class ModelViewTest : Node
         holder.Free();
     }
 
-    // M7-V5: a figure's rest-pose height over every surface but the props' own materials.
-    private static float FigureHeight(MeshInstance3D mi, HashSet<string> props)
+    // M7-V5: a figure's rest-pose height over every surface but the props' own materials. M6-V24: and, on the one surface of
+    // an atlas model, every vertex but those reading the props' tile (a prop's own colour; a team prop is on the team tile
+    // and counts, as it did on the team surface).
+    private static float FigureHeight(MeshInstance3D mi, HashSet<string> props, UnitModels.Atlas? atlas, out int propVertices)
     {
         float lo = float.MaxValue, hi = float.MinValue;
+        propVertices = 0;
         Transform3D x = mi.GlobalTransform;
         for (int s = 0; s < mi.Mesh.GetSurfaceCount(); s++)
         {
             if (mi.Mesh.SurfaceGetMaterial(s) is BaseMaterial3D mat && props.Contains(mat.ResourceName)) continue;
-            foreach (Vector3 v in mi.Mesh.SurfaceGetArrays(s)[(int)Mesh.ArrayType.Vertex].AsVector3Array())
+            Godot.Collections.Array arrays = mi.Mesh.SurfaceGetArrays(s);
+            Vector3[] vertices = arrays[(int)Mesh.ArrayType.Vertex].AsVector3Array();
+            Vector2[] uvs = arrays[(int)Mesh.ArrayType.TexUV].AsVector2Array();
+            for (int k = 0; k < vertices.Length; k++)
             {
-                float y = (x * v).Y;
+                if (atlas != null && k < uvs.Length && atlas.IsProp(uvs[k])) { propVertices++; continue; }
+                float y = (x * vertices[k]).Y;
                 lo = Math.Min(lo, y);
                 hi = Math.Max(hi, y);
             }

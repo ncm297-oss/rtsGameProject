@@ -3817,6 +3817,8 @@ docs/04 "Import process" ("Unit models, as built").
   wood), `--bench <s> [--vsync off] [--no-anim] [--no-model-shadows]` (the cost run above).
 - Changed by M6-VH7 (below): the worker tint no longer goes on a model, the players are advanced by `CrowdAnimator`, and the
   library has no finger tracks.
+- Changed by M6-V24: a model is one surface (one atlas, the team material draws the whole figure: the team surface is
+  surface 0, the only one), and the cast clip has no crowd phase.
 
 ### Implementation (M6-VH7)
 
@@ -4297,6 +4299,7 @@ no sim rule, state, hash, data or asset changed.
   `QaM6VH7Test` row 1 (every slot against the shared library by name: 0.5 s, 3.3 far samples a loop), `QaM6V20Test` row
   9 and `TeblorModelTest` (the playing clip is `ClipFor`'s, the library's by identity) green unedited. The overlay line
   did not move (the highest bone is still `gather_wood`'s raised hand). Capsule types are unchanged (no player).
+  Changed by M6-V24 (BUG-1530): the cast clip starts at its first frame and follows the cast's progress, once.
 - **Tests.** `ViewApi/OrderPathTests.QueuesBehind_ReplacesIdle_QueuesBehindAGatherLoopOrAnOrderThatEnds` (was
   `QueuesBehind_ReplacesAGatherLoopOrIdle_QueuesBehindAnOrderThatEnds`; its "gather loop" and "gather loop with a queue"
   rows False -> True) and QA's `OrderPathQaTests.AWorkerCarryingCargoHome_IsStillOnItsLoop_QueuesNotReplaces` (was
@@ -4331,6 +4334,125 @@ no sim rule, state, hash, data or asset changed.
      (one tick; refusing is the safe side).
   3. Every model type now plays `attack_cast` while casting, a Malazan caster too once it has a model. Recommendation:
      keep; a type that wants another gesture names it under `attack_cast` in its clip map at its next import.
+
+### Implementation (M6-V24)
+
+Merged surfaces (rule 61's step after the Teblor humanoids): every unit model draws as one surface with one material and one
+texture instead of four to six, with nothing about how a figure looks changed; and the cast gesture starts with the cast
+and plays once (BUG-1530). The import tooling, the eleven re-imported models, the team shader, `UnitModels` / `UnitViews`,
+view tests and docs; no sim, ViewApi, data or library change (`universal_humanoid.glb` is byte-identical).
+
+- **The atlas** (`tools/art/build_unit.py` `build_atlas`, docs/04 "Unit models, as built" M6-V24). After the join, each role
+  texture (the team part's brightness, outfit, skin, head, hair) becomes a 512² tile of one texture and the props' flat
+  colours a tile of colour blocks (one colour: the whole tile); every face's UVs move into its role's tile, half a texel
+  inside it. Tiles go row by row from the top-left in the order team, outfit, skin, head, hair, props on the fewest columns
+  that make a near-square grid:
+
+  | Models | Tiles | Grid | Texture |
+  | --- | --- | --- | --- |
+  | Laborer, Camp Follower | team, outfit, skin, head | 2 x 2 | 1024 x 1024 |
+  | Crossbowman, Heavy Infantry, Raider, Desert Archer | team, outfit, skin / head, props, (unused) | 3 x 2 | 1536 x 1024 |
+  | the five Teblor | team, outfit, skin / head, hair, props | 3 x 2 | 1536 x 1024 |
+
+  The mesh has one material, still named `team` (so `UnitModels.FindTeam`'s rule, a model without a `team` material is a
+  capsule, and every test that looks for the team surface keep working), and the layout rides in the file's extras beside
+  the clip map (`{"atlas": {"grid", "tile", "tiles"}}`, `UnitModels.AtlasOf`).
+- **The mask: the atlas alpha.** 0.5 on the team tile, 0.75 on the props' tile, 1 on every other (no texel transparent, so no
+  importer's alpha handling touches the colours; the script also turns Godot's `fix_alpha_border` off). Chosen over a second
+  small texture because it is one fetch and one file, it travels inside the `.glb` with the colours it marks, and the
+  per-tile constant compresses exactly (DXT5's alpha block: `AtlasModelTest` reads 128 / 191 / 255 on every texel of the
+  imported texture). The props' value also gives them their old roughness (0.8; everything else 0.9).
+- **The shader** (`team_colour.gdshader`, one `ShaderMaterial` per model type and player as before, `use_atlas` and
+  `atlas_grid` set from the layout): a team texel is `player colour x shade x 1.25` exactly as before, any other texel its own
+  colour. Each sample is clamped inside its tile by half a texel of the mip level read (from the UV derivatives), so bilinear
+  and mip filtering never mix a team texel into skin or a prop and no seam shows at 60 m. Three findings from the pixel
+  diffs, each fixed so the figure matches the base:
+  1. The imported materials were double-sided and the team surface (the shader) culled its back faces: every face is now
+     double-sided except a team texel's, discarded on its back face. In the **shadow pass** Godot draws a culled material
+     from the faces turned *away* from the light, so there a team texel's *front* face is discarded (with the main pass's
+     rule the Heavy Infantry's shield stopped shading its legs; with neither, a Laborer's shadow lost its gaps).
+  2. Godot 4.7's default diffuse for a shader of its own is Lambert; the imported materials used Burley. The shader now
+     names `diffuse_burley, specular_schlick_ggx` (the props were 6 % too dark without it). The team texels were Lambert
+     before (the old team shader had the default), so they are now 1-3 levels brighter on lit faces and up to about 9 on a
+     grazing face (the shield's edge): question 1.
+  3. Faces on a tile's edge: the decimation leaves 4 hair triangles a Teblor model 0.15 texel under 0; clamped to 0 they
+     sat on the edge, where `floor(UV x grid)` picks the next tile. UVs are now kept half a texel inside (`AtlasModelTest`
+     found it: "4 triangles straddle two tiles").
+- **Looks the same** (`ModelShots --compare <dir>`: per type, players 1 and 2 held at idle's first frame, a close camera
+  in front and behind and the match camera at 20 / 40 / 60 m; base 95186a7 against this branch, the same window):
+  per 1600 x 900 picture, the pixels more than 24 levels apart number 1-58 (the base against itself: 0-19), more than 8
+  levels apart 17-1,129 (the base against itself: 0-120; the rest is DXT re-encoding, a prop's colour 565-quantized, and
+  the Burley change on team texels), the mean difference at most 0.11 of a level. The developer looked at every pair (front,
+  back, 40 m): the same figure. Pictures for the owner: `m6v24-before-after-<id>.png` (eleven, before | after).
+  `AtlasModelTest -- --render <dir>` draws each type from one held pose in each player colour and counts the pixels that
+  change between the colours (the team's): base and branch give the same counts within 1 pixel (Laborer 7,658 / 7,658,
+  Heavy Infantry 18,979 / 18,979 with its shield, Teblor Warrior 6,145 / 6,145, ...), every changed pixel in its player's
+  hue, the skin, hair, outfit and props the same in both colours. (One type in a run sometimes reads about 1,000 pixels
+  more from a frame of other movement; a second run is clean.)
+- **BUG-1530, the cast gesture.** `UnitViews.PlayClip` starts the `Cast` clip at its first frame (no crowd phase; casts are
+  rare and don't line up in a crowd), and while a slot casts, `Sync` records where the clip should stand and
+  `AdvanceAnimations` puts it there after the crowd schedule has advanced it: `CastClipTime = CastProgress x length`
+  (just short of the end, so the looping clip never shows its first frame again), `CastProgress = (seen - ticksLeft +
+  alpha) / seen` with `seen = castTicks - 1` (the sim counts the starting tick, so a cast of 10 ticks is seen for 9: the
+  clip runs from 0 on the frame the cast is first seen to its end on the frame the ability lands, at `length / (seen x
+  50 ms)`, 1.11x for the 0.5 s Frenzy). It follows the sim, so it holds while paused and at a replay's end, runs at any
+  game speed, and a cast first seen half-way (out of the fog) shows the gesture half-way. The cast's length is read from
+  the data the view already reads (`UnitStore.CastAbility` / `CastTicks`, `AbilityDef.CastTicks`), so **no ViewApi
+  accessor was added**. Other clips keep the crowd phase (`UnitViews.CrowdPhase`, 0.37 s a slot). The 0.15 s blend into
+  the clip is unchanged (question 2). View bookkeeping only: three arrays sized at `Bind`, no allocation per frame.
+- **Tests.** New `game/tests/AtlasModelTest` (headless, in the loop; criteria 1 / 3 / 7): per manifest entry (the count
+  read from the file) one mesh, one surface, one `team` material, the layout, whole 512² tiles; the mask on every texel;
+  every triangle in one tile and each tile's triangle count equal to the base's surface of that role (pinned per type,
+  measured on 95186a7: no face gained or lost the team colour; the Heavy Infantry's 12 shield triangles at one team texel);
+  the players' materials share the atlas and differ in the colour only; LFS pointers for every model and atlas give
+  capsules; models off. Windowed `-- --render <dir>` (above). `CastClipTest` gains (1b) on copies whose Frenzy takes 0.5 /
+  0.8 / 1.2 s (the Shaman in slot 1, BUG-1530's case): at 60 FPS and 20 ticks a second the clip starts at 0.000 s, never
+  steps back, ends at 0.481 / 0.489 / 0.493 s of 0.50 (within a frame), then idle (on the base: starts at 0.387 s, loops
+  1 / 2 / 3 times, ends at 0.320 / 0.120 / 0.020 s); and (1c) eight walking Warriors start their walk at eight different
+  places. **Rows re-stated for one surface (none weaker):** `ModelViewTest` (the texture row checks whole square tiles of at
+  most `textureSize` where it checked each role texture's size; new: one mesh, one surface, one material, team surface 0;
+  the figure's height skips the vertices on the props' tile where it skipped the props' surfaces, and checks a type has
+  prop vertices exactly when its manifest names a prop), `TeblorModelTest`, `QaM7V5Test` and `OverlayLineTest` (the same
+  height rule: vertices on the props' tile, with the old surface rule kept for a pre-atlas file). No scene pinned a team
+  surface index other than through `TeamSurface(type)` (now 0); `QaM6V20Test`, `QaM6V21Test`, `TeblorViewTest`,
+  `ModelViewTest`'s colour rows read it and are unedited. `ModelShots` gains `--compare` / `--compare-only`.
+- **Import:** two runs of `tools/import-assets.ps1` give the same SHA-256 for all 23 binaries (eleven `.glb`, eleven atlases,
+  the library). The art pass's binaries: 28,828,257 bytes, was 24,767,612 (docs/04).
+- **Cost** (rules 42 / 61; 2026-11-16, last and alone of the developer's own processes, 1600 x 900, `ModelShots --bench 30
+  --vsync off`, eleven model types mixed, `--per-side 200` / `500`, capsules with `--placeholder-art`; base = a copy of
+  95186a7's `game/` and `sim/Rts.Sim` built with the same `ModelShots.cs`, run alternately with this branch in one window;
+  the sim track's two `testhost`s ran throughout and could not be stopped, and other tracks' Godot runs started during
+  the 1,000-figure rows: 2-3 other test / Godot processes for the 400 rows, 4-6 for the 1,000 rows):
+
+  | Run | Average | While 90 %+ alive | Worst 1 % (90 %+ alive) | Draw calls |
+  | --- | --- | --- | --- | --- |
+  | 400 figures, base | 9.90 ms | 11.08 ms | 15.04 ms | 5,201 |
+  | 400 figures, M6-V24 | **5.72 ms** | **6.19 ms** | 10.18 ms | **1,003** (19 % of the base) |
+  | 400 capsules, base / M6-V24 | 0.81 / 0.85 ms | 0.79 / 0.87 ms | 2.67 / 3.26 ms | 143 / 143 |
+  | 1,000 figures, base | 30.35 ms | 31.16 ms | 38.98 ms | 13,964 |
+  | 1,000 figures, M6-V24 | **16.97 ms** | **17.48 ms** | 23.44 ms | **2,659** |
+  | 1,000 capsules, base / M6-V24 | 1.43 / 1.44 ms | 1.48 / 1.48 ms | 6.33 / 6.33 ms | 186 / 186 |
+
+  One surface a figure instead of four to six: 400 figures 4.9 ms faster while 90 %+ alive, 1,000 figures 13.7 ms (the
+  base's 1,000 row had two more other processes running than the branch's; the capsule rows, equal for both, say the
+  window was the same). That is far more than M6-V21's estimate of 4-5 ms at 1,000, which counted only the draw calls
+  (about 0.5 µs each); the likely reason is that Godot also skins and shadow-draws a skinned mesh surface by surface, so
+  fewer surfaces cut that work too (not measured apart: a finding for whoever does the next cost split). 1,000 figures are now about 17.5 ms while 90 %+ alive, just over
+  16.7 ms; rule 61's other step (a shared skeleton or baked animation, M6-V21: up to about 8 ms) is what would bring them
+  under it.
+- **Questions for the Producer (rule 67), each with a recommendation:**
+  1. Team texels now take Burley diffuse like the rest of the figure (1-3 levels brighter on lit faces, about 9 on a
+     grazing face; the old team surface alone had Lambert, Godot's default for a shader of its own). Lambert for team texels
+     only would need a hand-written `light()` copying Godot's lighting. Recommendation: accept (one lighting model for the
+     whole figure; the base-against-branch team pixel counts are equal).
+  2. The 0.15 s blend into the cast clip still uses 30 % of a 0.5 s Frenzy (BUG-1530's third point); the clip's own
+     position now starts at 0. Recommendation: keep until the second model caster lands, then decide its blend with the
+     Malazan / Whirlwind casters' clip maps.
+  3. Video memory for the eleven models' textures is 21.7 MB, was 8.6 MB (DXT5 for the mask, where the role textures were
+     DXT1; nine models carry one unused tile). Recommendation: accept; if memory matters later, a 5-tile model can drop to
+     a 2 x 3 grid with the props in a quarter tile, or the mask can move to a 3 x 2 texel texture with a DXT1 atlas.
+  4. The gesture spans the cast as the view sees it (castTicks - 1 ticks, the sim counting the starting tick), not
+     `castTime`, so it ends on the tick the ability lands. Recommendation: accept.
 
 ## Vision, detection, fog
 

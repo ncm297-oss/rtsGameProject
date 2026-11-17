@@ -55,6 +55,13 @@ M6-V21 (Producer default, owner may revisit): the Heavy Infantry's team parts ar
 Crossbowman's; the Camp Follower's tunic as the Laborer's.
 M7-V5 (developer's pick, owner may revisit): the Teblor Gatherer's and Shaman's tunic (the Peasant body), the Warrior's and
 Breaker's jerkin and pauldron, the Javelin Thrower's jerkin (the Ranger body; no pauldron, so it reads apart from the Warrior).
+**One material per model since M6-V24.** A unit model is one surface with one material, still named `team`, drawing one
+atlas: a 512² tile per role texture (the team part's brightness, outfit, skin, head, hair) and a tile of the props' flat
+colours; the atlas **alpha is the team mask** (0.5 on the team tile, 0.75 on the props' tile, 1 elsewhere). The same
+`team_colour.gdshader` draws the whole figure: a team texel as before (`player colour x shade x 1.25`), any other texel as
+its own colour, so which parts take the player colour is unchanged (the same triangles, `AtlasModelTest`). Still one
+`ShaderMaterial` per model type and player. Layout and the reasons in "Unit models, as built" (M6-V24) below and docs/03
+"Implementation (M6-V24)".
 
 ### Faction palettes and silhouettes
 
@@ -273,10 +280,13 @@ tools/
   armature with a one-triangle skin (so the tracks import as `Skeleton3D` bone tracks), one NLA track per clip, without
   the bones the manifest's `library.dropBonePrefixes` names (the 40 finger bones, M6-VH7; "Animation setup" below).
 - **Godot import settings** (written by the script; each `.import` keeps its uid, so a re-run gives the same files): a model
-  `.glb` imports with no animations and no tangents, its textures extracted beside it (`<id>_<role>.png`), each set to VRAM
-  compressed with mipmaps; the library `.glb` imports as an `AnimationLibrary` (`importer="animation_library"`).
-- **The run prints** each model's triangles, height, feet, materials and texture sizes, every generated file with its size,
-  the library's clip map, and `IMPORT ASSETS PASS`. Two runs give byte-identical files (M6-V20's check).
+  `.glb` imports with no animations and no tangents, its textures extracted beside it (`<id>_<role>.png`; since M6-V24 one,
+  `<id>_atlas.png`, and a texture of an earlier build the model no longer holds is deleted with its `.import`), each set to
+  VRAM compressed with mipmaps (M6-V24: alpha border fix off); the library `.glb` imports as an `AnimationLibrary`
+  (`importer="animation_library"`).
+- **The run prints** each model's triangles, height, feet, materials and texture sizes (M6-V24: its atlas layout), every
+  generated file with its size (M6-V24: and the first 16 hex digits of its SHA-256), the library's clip map, and `IMPORT
+  ASSETS PASS`. Two runs give byte-identical files (M6-V20's check; M6-V24: the 23 binaries' hashes equal over two runs).
 - **Budget as built:** Laborer 2,597 triangles, Crossbowman 2,727 (the crossbow 48), four 512² textures each, library 6 clips;
   all generated binaries about 4.5 MB (about 4.2 MB since M6-VH7 dropped the finger tracks from the library).
 - **Second slice (M6-V21): six model types.** The Producer's default (the owner may revisit): the two outfits on disk
@@ -336,6 +346,35 @@ tools/
   reached the game (no texture had changed since M6-V20, so nothing showed it). The script now gives each rebuilt model's
   texture imports a placeholder md5 before the Godot import: every texture is extracted again (the same bytes when nothing
   changed: the six earlier models' files are byte-identical after a run) and keeps its uid.
+- **One surface, one material, one atlas (M6-V24).** After the join, `build_unit.py` (`build_atlas`) bakes the model's role
+  textures and its props' flat colours into one texture and gives the mesh one material, `team`; the M6-V20 to M7-V5
+  surfaces above (four to six a model, each a draw call and a shadow-pass draw call) are now one. Nothing in the manifest
+  changed: `textureSize` is the tile size.
+  - **Layout:** tiles of `textureSize` (512) in the order team, outfit, skin, head, hair, then the props' colours, row by row
+    from the top-left, on the fewest columns that make a near-square grid: 2 x 2 (1024 x 1024) for the Laborer and the Camp
+    Follower (four roles, no prop), 3 x 2 (1536 x 1024) for the other nine (five or six tiles; an unused sixth tile is black,
+    alpha 1). The layout rides in the file as glTF extras beside the clip map (`{"atlas": {"grid": [c, r], "tile": 512,
+    "tiles": {"team": [0, 0], ...}}}`); `UnitModels.AtlasOf(type)` reads it.
+  - **UVs:** each face's UVs move into its role's tile (`(column + u) / columns`), kept half a texel inside it (the
+    decimation leaves 4 hair triangles a Teblor model 0.15 texel under 0, which would sit on a tile's edge); a prop face of
+    its own colour samples the centre of its colour's block in the props' tile (one colour: the whole tile, so it is the same
+    colour at every mip level); a team prop (the shield) samples the team tile as before. The builder fails on a UV more
+    than half a texel outside its texture (it would read the next tile).
+  - **The mask** is the atlas alpha: 0.5 marks a team texel, 0.75 a prop texel (drawn at roughness 0.8 as the props' own
+    materials were), 1 any other (roughness 0.9). No texel is transparent, so an importer's alpha handling never touches the
+    colours; the script also turns Godot's `process/fix_alpha_border` off for the extracted texture. Why the alpha and not a
+    second texture: one texture fetch, one file, and the mask travels inside the `.glb` with the colours it marks.
+  - **The shader** keeps each sample inside its tile (half a texel of the mip level read), so filtering never carries a team
+    texel onto a skin or prop texel and no seam shows at the far zooms. Culling and lighting are the old materials': every
+    face double-sided except a team texel's (culled as the team surface was), Burley diffuse (docs/03 "Implementation
+    (M6-V24)").
+  - **Sizes:** the imported texture is VRAM-compressed with alpha (DXT5, 1 byte a texel, where the role textures were DXT1):
+    about 2.1 MB of video memory a 3 x 2 model and 1.4 MB a 2 x 2 one with mipmaps, 21.7 MB for the eleven (8.6 MB before:
+    49 DXT1 512² textures). The prop colours are 565-quantized by the compression (the Teblor bloodwood `#5e3324` reads `#5a3121`), within
+    the role textures' own compression error. The art pass's generated binaries (the eleven models with their textures and
+    the library): **28,828,257 bytes (27.5 MB), was 24,767,612 (23.6 MB)**: the `.glb`s 15,864,564 (was 13,875,584), the
+    extracted textures 12,963,693 (was 10,892,028); the atlas holds every texel the role textures did, plus an alpha channel
+    and (nine models) one unused tile.
 - The view: `UnitViews` draws a type whose file loads as its model, any other type as its capsule (docs/03 "Implementation
   (M6-V20)").
 

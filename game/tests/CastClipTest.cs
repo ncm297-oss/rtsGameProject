@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Reflection;
+using System.Text.Json.Nodes;
 using System.Threading.Tasks;
 using Godot;
 using Rts.Sim;
@@ -19,6 +20,9 @@ namespace Rts.Game.Tests;
 /// to <c>idle</c> when the cast ends; (2) with a library that lacks <c>attack_cast</c> (the shared library swapped for a
 /// copy without it, restored after) the casting Shaman plays <c>idle</c>, with no warning or error from the view;
 /// (3) with models off (capsules) the casting Shaman is its capsule with no animation player, as before.
+/// M6-V24 (BUG-1530): (1b) on copies whose Frenzy takes 0.5, 0.8 and 1.2 s, the cast clip starts at its first frame when the
+/// cast is first seen and plays once across it, frame by frame (never stepping back, ending within one frame of its end);
+/// (1c) eight walking Warriors still start their walk at eight different places (the crowd phase).
 /// </summary>
 /// <remarks>
 /// Headless, in the scene loop: <c>&amp; $env:GODOT --headless --path game res://tests/CastClipTest.tscn</c>; prints
@@ -55,6 +59,8 @@ public partial class CastClipTest : Node
             Check(CastClip == "attack_cast", $"the cast slot is named {CastClip}, want attack_cast");
             UnitViews.UseModels = true;
             await ShamanRow();
+            foreach (float seconds in new[] { 0.5f, 0.8f, 1.2f }) await CastOnceRow(seconds);
+            await CrowdPhaseRow();
             await NoClipRow();
             await CapsuleRow();
         }
@@ -103,6 +109,120 @@ public partial class CastClipTest : Node
         {
             await EndMatch(match);
         }
+    }
+
+    // (1b) M6-V24, BUG-1530: on a data copy whose Frenzy takes `seconds` (found by id and edited, rule 58), the cast clip
+    // starts at its first frame on the frame the Shaman is first seen casting and spans the cast once: frame by frame at
+    // 60 FPS and 20 ticks a second (the view's alpha a third of a tick further each frame) its position only grows, never
+    // wraps, ends within one frame of the clip's end on the last frame of the cast, and the figure plays idle after it.
+    private async Task CastOnceRow(float seconds)
+    {
+        string dataDir = ProjectSettings.GlobalizePath("res://data");
+        string copy = Path.Combine(Path.GetTempPath(), $"rts-cast-clip-{OS.GetProcessId()}", "data");
+        foreach (string dir in Directory.GetDirectories(dataDir, "*", SearchOption.AllDirectories))
+            Directory.CreateDirectory(Path.Combine(copy, Path.GetRelativePath(dataDir, dir)));
+        foreach (string file in Directory.GetFiles(dataDir, "*", SearchOption.AllDirectories))
+            File.Copy(file, Path.Combine(copy, Path.GetRelativePath(dataDir, file)), true);
+        string path = Path.Combine(copy, "factions", "teblor", "abilities.json");
+        JsonNode abilities = JsonNode.Parse(File.ReadAllText(path))!;
+        int edited = 0;
+        foreach (JsonNode? a in abilities["abilities"]!.AsArray())
+            if ((string?)a!["id"] == "blood_oil_frenzy") { a["castTime"] = seconds; edited++; }
+        File.WriteAllText(path, abilities.ToJsonString());
+        DataLoadResult loaded = DataLoader.LoadAll(copy);
+        try { Directory.Delete(Path.GetDirectoryName(copy)!, true); } catch (IOException) { } catch (UnauthorizedAccessException) { }
+        if (!Check(edited == 1 && loaded.Ok, $"(1b) {seconds} s: {edited} Frenzy rows edited, the copy loads {loaded.Ok}")) return;
+        GameData data = loaded.Data!;
+        int shaman = data.FindUnit("teblor_shaman"), frenzy = data.FindAbility("blood_oil_frenzy");
+        int castTicks = data.Abilities[frenzy].CastTicks;
+
+        var views = new UnitViews();
+        AddChild(views);
+        views.Bind(data, 8, new uint[] { 0xC03030, 0x3060D0 });
+        var sim = new Simulation(new SimConfig(3, 2, 8, 4096) { Data = data, Combat = false });
+        UnitStore u = sim.World.Units;
+        NVector2[] west = StartLayout.Block(sim.World.NavGrid, 2, true, 1f);
+        // A Warrior first, so the Shaman is in slot 1 (BUG-1530's case: the old rule started its clip at 0.37 s).
+        sim.Enqueue(Command.SpawnUnit(0, data.FindUnit("teblor_warrior"), west[1]));
+        sim.Enqueue(Command.SpawnUnit(0, shaman, west[0]));
+        sim.Tick();
+        sim.Tick();
+        int slot = -1;
+        for (int i = 0; i < u.Capacity && slot < 0; i++) if (u.Alive[i] && u.TypeId[i] == shaman) slot = i;
+        Check(slot == 1, $"(1b) {seconds} s: the Shaman is in slot {slot}, want 1");
+        views.Sync(sim.World, 1f);
+        AnimationPlayer? anim = slot >= 0 ? views.AnimatorOf(slot) : null;
+        if (!Check(anim != null, $"(1b) {seconds} s: no Shaman model")) { views.QueueFree(); return; }
+        // Idle a while, so the clip that was playing stands somewhere in its loop (the old rule's start phase came from it).
+        for (int f = 0; f < 20; f++) { views.Sync(sim.World, 1f, 1f / 60f); views.AdvanceAnimations(1.0 / 60.0, null); }
+        sim.Enqueue(Command.UseAbility(0, new EntityHandle(slot, u.Generation[slot]), data.Units[shaman].Abilities.IndexOf(frenzy), u.Position[slot]));
+        for (int k = 0; k < 6 && u.State[slot] != UnitState.Casting; k++) sim.Tick();
+        if (!Check(u.State[slot] == UnitState.Casting, $"(1b) {seconds} s: the Shaman is not casting ({u.State[slot]})")) { views.QueueFree(); return; }
+
+        float length = views.Models!.ClipLength(shaman, UnitModels.Clip.Cast);
+        const int perTick = 3; // 60 FPS at 20 ticks a second
+        float frameClip = length / ((castTicks - 1) * perTick); // one frame of clip time at the cast's pace
+        var positions = new List<float>();
+        int frames = 0;
+        string start = "";
+        while (u.State[slot] == UnitState.Casting && frames < 400)
+        {
+            for (int f = 0; f < perTick && u.State[slot] == UnitState.Casting; f++, frames++)
+            {
+                views.Sync(sim.World, (float)f / perTick, 1f / 60f);
+                views.AdvanceAnimations(1.0 / 60.0, null);
+                if (frames == 0) start = anim!.CurrentAnimation;
+                positions.Add((float)anim!.CurrentAnimationPosition);
+            }
+            sim.Tick();
+        }
+        views.Sync(sim.World, 0f, 1f / 60f);
+        views.AdvanceAnimations(1.0 / 60.0, null);
+        string after = anim!.CurrentAnimation;
+        int wraps = 0;
+        for (int k = 1; k < positions.Count; k++) if (positions[k] < positions[k - 1]) wraps++;
+        float first = positions.Count > 0 ? positions[0] : -1f, last = positions.Count > 0 ? positions[^1] : -1f;
+        GD.Print($"(1b) cast {seconds} s ({castTicks} ticks, seen {castTicks - 1}): clip '{start}' {length:F2} s over {positions.Count} frames, first {first:F3} s, last {last:F3} s, {wraps} steps back; then '{after}'");
+        Check(start == "attack_cast", $"(1b) {seconds} s: plays '{start}' on the cast's first frame, want attack_cast");
+        Check(first >= 0f && first <= frameClip + 1e-4f, $"(1b) {seconds} s: the clip starts at {first:F3} s, want 0 within one frame ({frameClip:F3} s)");
+        Check(wraps == 0, $"(1b) {seconds} s: the clip stepped back {wraps} times (looped)");
+        Check(last >= length - frameClip - 2e-3f && last < length, $"(1b) {seconds} s: the clip ends the cast at {last:F3} s of {length:F3} s, want its end within one frame");
+        Check(positions.Count == (castTicks - 1) * perTick, $"(1b) {seconds} s: {positions.Count} frames of cast, want {(castTicks - 1) * perTick}");
+        Check(after == "idle", $"(1b) {seconds} s: after the cast plays '{after}', want idle");
+        views.QueueFree();
+        await Frame();
+    }
+
+    // (1c) The other clips keep the crowd phase (M6-V20): eight walking Warriors start their walk at different places.
+    private async Task CrowdPhaseRow()
+    {
+        int warrior = _data.FindUnit("teblor_warrior");
+        var views = new UnitViews();
+        AddChild(views);
+        views.Bind(_data, 16, new uint[] { 0xC03030, 0x3060D0 });
+        var sim = new Simulation(new SimConfig(3, 2, 16, 4096) { Data = _data, Combat = false });
+        UnitStore u = sim.World.Units;
+        NVector2[] west = StartLayout.Block(sim.World.NavGrid, 8, true, 1f);
+        for (int k = 0; k < 8; k++) sim.Enqueue(Command.SpawnUnit(0, warrior, west[k]));
+        sim.Tick();
+        sim.Tick();
+        views.Sync(sim.World, 1f);
+        for (int i = 0; i < u.Capacity; i++)
+            if (u.Alive[i]) sim.Enqueue(Command.Move(0, new EntityHandle(i, u.Generation[i]), u.Position[i] + new NVector2(20f, 0f)));
+        for (int k = 0; k < 4; k++) sim.Tick();
+        views.Sync(sim.World, 1f);
+        var phases = new SortedSet<int>();
+        int walking = 0;
+        for (int i = 0; i < u.Capacity; i++)
+        {
+            if (!u.Alive[i] || u.State[i] != UnitState.Moving || views.AnimatorOf(i)?.CurrentAnimation != "walk") continue;
+            walking++;
+            phases.Add((int)Math.Round(views.AnimatorOf(i)!.CurrentAnimationPosition * 1000));
+        }
+        GD.Print($"(1c) {walking} walking Warriors start their walk at {phases.Count} different places (ms: {string.Join(' ', phases)})");
+        Check(walking == 8 && phases.Count == walking, $"(1c) {walking} walking, {phases.Count} different start phases, want 8 and 8");
+        views.QueueFree();
+        await Frame();
     }
 
     // (2) A library without attack_cast: the casting Shaman plays idle (no warning, no error: the loop reads the log).

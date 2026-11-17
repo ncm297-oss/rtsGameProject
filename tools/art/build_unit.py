@@ -5,10 +5,11 @@
 #       --source-root <asset-sources dir> --repo <repo root> --work <temp dir> (--model <id> | --library) [--preview <png>]
 #
 # A model: the outfit parts and the base character's head on one 65-bone armature, each part decimated to its triangle
-# share, joined into one mesh with one material per role (the team part's material is named "team"), base colour
-# textures only, cut to the manifest's size and tinted toward the faction palette, the manifest's props built from boxes
-# and bound to their bone (a "team" prop on the team surface), the yaw fix on the armature node (glTF faces +Z, docs/04
-# wants -Z), the model's clip map as glTF extras on the armature node (M6-V21), exported as one .glb with no animations.
+# share, base colour textures only, cut to the manifest's size and tinted toward the faction palette, the manifest's props
+# built from boxes and bound to their bone, joined into one mesh; M6-V24: every role texture (the team part's as its
+# brightness) and the props' flat colours baked into one atlas, so the mesh has one surface and one material, "team",
+# whose atlas alpha marks the team texels (build_atlas); the yaw fix on the armature node (glTF faces +Z, docs/04 wants
+# -Z), the model's clip map and the atlas layout as glTF extras on the armature node, exported as one .glb with no animations.
 # The library: the manifest's library.clips, renamed to their library names, on one armature with a
 # one-triangle skin (so Godot imports the tracks as Skeleton3D bone tracks), the bones the manifest's "dropBonePrefixes"
 # name (the 40 finger bones, BUG-1321) deleted with their curves so no clip carries their tracks, exported as one .glb.
@@ -231,6 +232,129 @@ def box(bm, centre, size, deform, group, rotation=None):
         v[deform][group] = 1.0
 
 
+# M6-V24: the atlas's tiles, in this order (row by row from the top-left), then any other role, then the props' palette.
+TILE_ORDER = ["team", "outfit", "skin", "head", "hair"]
+PROPS_TILE = "props"
+# The atlas alpha is the team mask (and the props' roughness flag); no texel is transparent, so an importer's alpha
+# handling (Godot's fix_alpha_border, a premultiply) never touches the colours. team_colour.gdshader reads it back.
+ALPHA_PLAIN, ALPHA_PROP, ALPHA_TEAM = 1.0, 0.75, 0.5
+
+
+def linear_to_srgb(rgb):
+    """The sRGB value of linear channels (the IEC 61966-2-1 curve), what an 8-bit sRGB texel holds."""
+    return [c * 12.92 if c <= 0.0031308 else 1.055 * c ** (1.0 / 2.4) - 0.055 for c in rgb]
+
+
+def atlas_layout(roles, has_props):
+    """M6-V24: the atlas grid (columns, rows) and each tile's (column, row) from the top-left, one tile per role plus one
+    for the props' palette: the fewest columns that make a near-square grid (4 tiles: 2 x 2, 5 or 6: 3 x 2)."""
+    names = [r for r in TILE_ORDER if r in roles] + sorted(r for r in roles if r not in TILE_ORDER)
+    if has_props:
+        names.append(PROPS_TILE)
+    cols = math.ceil(math.sqrt(len(names)))
+    rows = math.ceil(len(names) / cols)
+    return cols, rows, {name: (i % cols, i // cols) for i, name in enumerate(names)}
+
+
+def palette_blocks(count):
+    """The side of the square grid of colour blocks in the props' tile: a power of two, so each block's edges fall on the
+    tile's mip boundaries (one colour: the whole tile, the same colour at every mip level)."""
+    side = 1
+    while side * side < count:
+        side *= 2
+    return side
+
+
+def build_atlas(model, body, images, materials, prop_colours, size, work):
+    """M6-V24: bakes the model's role textures and its props' flat colours into one atlas (one tile each, `size` square),
+    moves every face's UVs into its tile, and gives the mesh one material, `team`, drawing the atlas. The atlas alpha marks
+    each texel's kind (team / prop / plain, see ALPHA_*); team_colour.gdshader tints the team texels with the player colour
+    and keeps each sample inside its tile. Returns the layout written into the file's extras."""
+    role_of = {mat.name: role for role, mat in materials.items() if role in images}
+    prop_of = {mat.name: name for name, mat in materials.items() if name in prop_colours}
+    cols, rows, tiles = atlas_layout(sorted(images), bool(prop_colours))
+    width, height = cols * size, rows * size
+    px = np.zeros((height, width, 4), dtype=np.float32)  # Blender's rows run from the bottom
+    px[:, :, 3] = ALPHA_PLAIN  # an unused tile too: no texel is transparent
+
+    def tile_origin(name):
+        c, r = tiles[name]
+        return c * size, (rows - 1 - r) * size
+
+    for role, img in images.items():
+        src = np.empty(size * size * 4, dtype=np.float32)
+        img.pixels.foreach_get(src)
+        x0, y0 = tile_origin(role)
+        px[y0:y0 + size, x0:x0 + size, :3] = src.reshape(size, size, 4)[:, :, :3]
+        px[y0:y0 + size, x0:x0 + size, 3] = ALPHA_TEAM if role == "team" else ALPHA_PLAIN
+    names = list(prop_colours)  # manifest order
+    side = palette_blocks(len(names))
+    block = size // side
+    prop_uv = {}
+    if names:
+        x0, y0 = tile_origin(PROPS_TILE)
+        px[y0:y0 + size, x0:x0 + size, 3] = ALPHA_PROP
+        for j, name in enumerate(names):
+            bc, br = j % side, j // side  # from the tile's top-left
+            bx, by = x0 + bc * block, y0 + size - (br + 1) * block
+            px[by:by + block, bx:bx + block, :3] = linear_to_srgb(prop_rgb(model, prop_colours[name]))
+            prop_uv[name] = ((bc + 0.5) / side, 1.0 - (br + 0.5) / side)  # the block's centre, tile UV (v up)
+
+    me = body.data
+    n_loops, n_polys = len(me.loops), len(me.polygons)
+    uv = np.empty(n_loops * 2, dtype=np.float32)
+    me.uv_layers[0].data.foreach_get("uv", uv)
+    uv = uv.reshape(-1, 2)
+    starts = np.empty(n_polys, dtype=np.int32)
+    totals = np.empty(n_polys, dtype=np.int32)
+    mat_index = np.empty(n_polys, dtype=np.int32)
+    me.polygons.foreach_get("loop_start", starts)
+    me.polygons.foreach_get("loop_total", totals)
+    me.polygons.foreach_get("material_index", mat_index)
+    loop_poly = np.repeat(np.arange(n_polys), totals)
+    loop_mat = mat_index[loop_poly]
+    for k, mat in enumerate(me.materials):
+        sel = loop_mat == k
+        if not sel.any():
+            continue
+        if mat.name in prop_of:
+            tile, local = PROPS_TILE, np.tile(np.array(prop_uv[prop_of[mat.name]], dtype=np.float32), (int(sel.sum()), 1))
+        elif mat.name in role_of:
+            tile, local = role_of[mat.name], uv[sel]
+            lo, hi = local.min(axis=0), local.max(axis=0)
+            # A UV outside its texture would wrap there; in the atlas it would read the next tile. Half a texel over (the
+            # decimation's UV interpolation leaves the hair 0.15 texel under 0) is clamped to the edge texel's centre, so
+            # no vertex sits on a tile's edge (where the shader's floor() would pick the neighbouring tile); the shader
+            # keeps its samples that far inside the tile anyway.
+            slack = 0.5 / size
+            if lo.min() < -slack or hi.max() > 1.0 + slack:
+                fail(f"{model['id']}: {tile} UVs span {lo.round(4).tolist()}-{hi.round(4).tolist()}, outside [0, 1]")
+            local = np.clip(local, slack, 1.0 - slack)
+        else:
+            fail(f"{model['id']}: material {mat.name} is neither a role nor a prop")
+        c, r = tiles[tile]
+        uv[sel, 0] = (c + local[:, 0]) / cols
+        uv[sel, 1] = (rows - 1 - r + local[:, 1]) / rows
+    me.uv_layers[0].data.foreach_set("uv", uv.ravel())
+
+    old = list(me.materials)
+    me.materials.clear()
+    for mat in old:
+        bpy.data.materials.remove(mat)
+    for img in list(images.values()):
+        bpy.data.images.remove(img)
+    atlas = bpy.data.images.new("atlas", width, height, alpha=True)
+    atlas.pixels.foreach_set(px.ravel())
+    os.makedirs(work, exist_ok=True)
+    atlas.filepath_raw = os.path.join(work, "atlas.png")
+    atlas.file_format = 'PNG'
+    atlas.save()
+    me.materials.append(flat_material("team", image=atlas))
+    me.polygons.foreach_set("material_index", np.zeros(n_polys, dtype=np.int32))
+    layout = {"grid": [cols, rows], "tile": size, "tiles": {name: list(tiles[name]) for name in sorted(tiles)}}
+    return atlas, layout
+
+
 def team_uv(image, shade, block=32):
     """M6-V21: the UV of the centre of the `block` x `block` texel square of the team texture that is the most even and
     nearest the mean brightness `shade`. A prop drawn in team colour (a shield) puts all its UVs there, so it joins the team
@@ -398,9 +522,11 @@ def build_model(manifest, model, src_root, repo, work):
     body = meshes[0]
     body.name = model["id"]
     body.data.name = model["id"]
+    # M6-V24: one surface, one material, one texture: the roles and the props' colours baked into an atlas.
+    atlas, layout = build_atlas(model, body, images, materials, prop_colours, size, os.path.join(work, model["id"]))
     # Unused images from the sources must not reach the file.
     for img in list(bpy.data.images):
-        if img not in images.values():
+        if img is not atlas:
             bpy.data.images.remove(img)
 
     # glTF faces +Z; docs/04 wants -Z: the yaw lives on the armature node, so bone tracks stay untouched.
@@ -411,14 +537,16 @@ def build_model(manifest, model, src_root, repo, work):
     # for another). Nothing else may carry extras.
     clear_custom_properties()
     arm["clips"] = {k: model["clips"][k] for k in sorted(model["clips"])}
+    # M6-V24: the atlas layout beside it (the team shader keeps each sample inside its tile; tests find the props' faces).
+    arm["atlas"] = layout
 
     tris = triangles(body)
     zs = [v.co.z for v in body.data.vertices]
     height = max(zs) - min(zs)
     if tris > int(model["maxTriangles"]):
         fail(f"{model['id']}: {tris} triangles, over the {model['maxTriangles']} cap")
-    if "team" not in [m.name for m in body.data.materials]:
-        fail(f"{model['id']}: no team material")
+    if [m.name for m in body.data.materials] != ["team"]:
+        fail(f"{model['id']}: materials {[m.name for m in body.data.materials]}, want the one team material")
     dest = os.path.join(repo, model["destination"])
     os.makedirs(os.path.dirname(dest), exist_ok=True)
     bpy.ops.export_scene.gltf(filepath=dest, export_format='GLB', export_animations=False, export_skins=True,
@@ -427,7 +555,7 @@ def build_model(manifest, model, src_root, repo, work):
     return {"id": model["id"], "destination": model["destination"], "triangles": tris,
             "height": round(height, 3), "feet": round(min(zs), 3), "clips": arm["clips"].to_dict(),
             "materials": sorted(m.name for m in body.data.materials),
-            "textures": {img.name: list(img.size) for img in images.values()}}
+            "textures": {atlas.name: list(atlas.size)}, "atlas": layout}
 
 
 def library_clips(manifest):

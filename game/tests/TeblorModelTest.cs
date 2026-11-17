@@ -118,7 +118,7 @@ public partial class TeblorModelTest : Node
                 {
                     int slot = Slot(u, owner, type);
                     if (!Check(slot >= 0 && views.ModelMeshOf(slot) != null, $"{def.Key} (player {owner + 1}): not drawn as a model")) continue;
-                    Aabb drawn = FigureBox(views.ModelMeshOf(slot)!);
+                    Aabb drawn = FigureBox(views.ModelMeshOf(slot)!, views.Models!.AtlasOf(type));
                     float ground = UnitViews.GroundPoint(w, slot, 1f).Y;
                     Vector3 s = views.ModelOf(slot)!.Scale;
                     GD.Print($"{def.Key} (player {owner + 1}): drawn {drawn.Size.Y:F3} m tall, base figure {baseHeight:F3} m x data scale {def.Scale} = {baseHeight * def.Scale:F3} m; feet at {drawn.Position.Y - ground:F3} m over the ground; model scale {s}");
@@ -212,7 +212,7 @@ public partial class TeblorModelTest : Node
         if (Check(slot >= 0 && views.ModelMeshOf(slot) != null, "the forged warrior is not drawn as a model"))
         {
             float baseHeight = BaseHeight(views, warrior);
-            Aabb drawn = FigureBox(views.ModelMeshOf(slot)!);
+            Aabb drawn = FigureBox(views.ModelMeshOf(slot)!, views.Models!.AtlasOf(warrior));
             float ground = UnitViews.GroundPoint(sim.World, slot, 1f).Y;
             GD.Print($"forged scale {forgedScale}: warrior drawn {drawn.Size.Y:F3} m, base {baseHeight:F3} m ({drawn.Size.Y / baseHeight:F3}x), feet {drawn.Position.Y - ground:F3} m, drawn radius {UnitViews.DrawnRadius(sim.World, slot)}");
             Check(Mathf.Abs(drawn.Size.Y - baseHeight * forgedScale) <= 0.02f * baseHeight * forgedScale,
@@ -330,13 +330,15 @@ public partial class TeblorModelTest : Node
         AddChild(holder);
         Node3D model = views.Models!.Instantiate(type, out MeshInstance3D mesh, out AnimationPlayer _);
         holder.AddChild(model);
-        float h = FigureBox(mesh).Size.Y;
+        float h = FigureBox(mesh, views.Models!.AtlasOf(type)).Size.Y;
         holder.Free();
         return h;
     }
 
-    // The rest-pose box of a figure's body in world space: every surface but the props' own materials.
-    private Aabb FigureBox(MeshInstance3D mi)
+    // The rest-pose box of a figure's body in world space: every surface but the props' own materials. M6-V24: on the one
+    // surface of an atlas model the props' own faces are the vertices reading the props' tile (a team prop reads the team
+    // tile and counts, as it did on the team surface); the surface check stays for a pre-atlas file.
+    private Aabb FigureBox(MeshInstance3D mi, UnitModels.Atlas? atlas)
     {
         Mesh mesh = mi.Mesh;
         Transform3D x = mi.GlobalTransform;
@@ -345,9 +347,13 @@ public partial class TeblorModelTest : Node
         for (int s = 0; s < mesh.GetSurfaceCount(); s++)
         {
             if (mesh.SurfaceGetMaterial(s) is BaseMaterial3D mat && _propMaterials.Contains(mat.ResourceName)) continue;
-            foreach (Vector3 v in mesh.SurfaceGetArrays(s)[(int)Mesh.ArrayType.Vertex].AsVector3Array())
+            Godot.Collections.Array arrays = mesh.SurfaceGetArrays(s);
+            Vector3[] vertices = arrays[(int)Mesh.ArrayType.Vertex].AsVector3Array();
+            Vector2[] uvs = arrays[(int)Mesh.ArrayType.TexUV].AsVector2Array();
+            for (int k = 0; k < vertices.Length; k++)
             {
-                Vector3 p = x * v;
+                if (atlas != null && k < uvs.Length && atlas.IsProp(uvs[k])) continue;
+                Vector3 p = x * vertices[k];
                 box = any ? box.Expand(p) : new Aabb(p, Vector3.Zero);
                 any = true;
             }

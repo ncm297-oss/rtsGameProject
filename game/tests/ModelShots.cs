@@ -31,6 +31,9 @@ namespace Rts.Game.Tests;
 /// Infantry and a Laborer in two colours), <c>--teblor &lt;dir&gt; --teblor-fight</c> (Teblor against Malazan), and
 /// <c>--skirmish-faction &lt;id&gt;</c> for <c>--skirmish</c> (a Teblor base gathering); <c>--bench-without &lt;faction id&gt;</c>
 /// leaves that faction's model types out of the bench.
+/// M6-V24: <c>--compare &lt;dir&gt;</c> saves, per model type, <c>cmp-&lt;id&gt;-front.png</c> / <c>-back.png</c> (a close camera)
+/// and <c>-20m</c> / <c>-40m</c> / <c>-60m.png</c> (the match camera): players 1 and 2's figures held at idle's first frame, so
+/// two builds' pictures can be diffed pixel by pixel (<c>--compare-only &lt;id&gt;</c> takes one type).
 /// </remarks>
 public partial class ModelShots : Node
 {
@@ -49,6 +52,7 @@ public partial class ModelShots : Node
         string? typeShots = Arg(args, "--types");
         string? lines = Arg(args, "--lines");
         string? teblor = Arg(args, "--teblor");
+        string? compare = Arg(args, "--compare");
         try
         {
             DataLoadResult loaded = DataLoader.LoadAll(ProjectSettings.GlobalizePath("res://data"));
@@ -58,7 +62,7 @@ public partial class ModelShots : Node
             string vsync = Arg(args, "--vsync") ?? "on";
             // The pictures stand still (no combat); the cost run fights.
             var flags = new System.Collections.Generic.List<string> { "--seed", "1", "--units", "0", "--no-bases", "--no-fog", "--mute", "--no-hud", "--vsync", vsync };
-            if (look != null || typeShots != null || (teblor != null && Array.IndexOf(args, "--teblor-fight") < 0)) flags.Add("--no-combat");
+            if (look != null || typeShots != null || compare != null || (teblor != null && Array.IndexOf(args, "--teblor-fight") < 0)) flags.Add("--no-combat");
             // The real skirmish start: a Town Hall and the starting workers a side, the fog, an AI seat; Malazan for slot 1
             // unless --skirmish-faction names another (M7-V5: teblor).
             if (skirmish != null) flags = new System.Collections.Generic.List<string> { "--skirmish", "--seed", "1", "--faction", "1", Arg(args, "--skirmish-faction") ?? "malazan", "--mute" };
@@ -75,6 +79,7 @@ public partial class ModelShots : Node
             if (typeShots != null) await TypeShots(data, typeShots);
             if (lines != null) await Lines(data, lines);
             if (teblor != null) await TeblorShots(data, teblor);
+            if (compare != null) await CompareShots(data, compare);
         }
         catch (Exception ex)
         {
@@ -498,6 +503,60 @@ public partial class ModelShots : Node
             close.MakeCurrent();
             await Frames(6);
             Save(dir, "fight-close.png");
+        }
+        match?.MakeCurrent();
+        close.QueueFree();
+    }
+
+    // M6-V24: before / after pictures of every model type for the merged-surface import, taken the same way on the base and
+    // on the branch so they can be laid side by side or diffed: per type, player 1's and player 2's figure facing the
+    // camera, both held at idle's first frame (no clip time in the picture), from a close camera in front and behind
+    // (cmp-<id>-front.png / -back.png) and from the match camera at the nearest, default and farthest zoom (-20m / -40m /
+    // -60m.png: the far ones read the textures' small mip levels).
+    private async Task CompareShots(GameData data, string dir)
+    {
+        System.IO.Directory.CreateDirectory(dir);
+        Camera3D? match = GetViewport().GetCamera3D();
+        var close = new Camera3D { Fov = 40f };
+        AddChild(close);
+        NVector2 c = Centre();
+        string? only = Arg(OS.GetCmdlineUserArgs(), "--compare-only"); // one type id, for a quick look
+        foreach (int type in ModelFileTypes(data))
+        {
+            if (only != null && data.Units[type].Key != only) continue;
+            ClearUnits();
+            Spawn(0, type, c + new NVector2(-1.3f, -3f));
+            Spawn(1, type, c + new NVector2(1.3f, -3f));
+            await FaceCamera();
+            int[] slots = { SlotOf(0, type), SlotOf(1, type) };
+            if (slots[0] < 0 || slots[1] < 0 || _views.AnimatorOf(slots[0]) == null) continue;
+            foreach (int s in slots)
+            {
+                AnimationPlayer anim = _views.AnimatorOf(s)!;
+                anim.Active = true;
+                anim.Play("idle", 0);
+                anim.Seek(0.0, true);
+                anim.Active = false; // held: the crowd schedule advances nothing that is inactive
+            }
+            string id = data.Units[type].Key;
+            float k = Math.Max(1f, data.Units[type].Scale);
+            Vector3 mid = (_views.ViewOf(slots[0])!.GlobalPosition + _views.ViewOf(slots[1])!.GlobalPosition) / 2f;
+            Vector3 ground = new(mid.X, UnitViews.GroundPoint(_sim.World, slots[0], 1f).Y, mid.Z);
+            foreach ((string side, float z) in new[] { ("front", 1f), ("back", -1f) })
+            {
+                close.LookAtFromPosition(ground + new Vector3(0f, 2.2f * k, 6.5f * k * z), ground + new Vector3(0f, 1.0f * k, 0f), Vector3.Up);
+                close.MakeCurrent();
+                await Frames(6);
+                Save(dir, $"cmp-{id}-{side}.png");
+            }
+            match?.MakeCurrent();
+            _camera.SetFocus(mid.X, mid.Z);
+            foreach (float zoom in new[] { CameraLimits.MinZoom, CameraLimits.DefaultZoom, CameraLimits.MaxZoom })
+            {
+                _camera.SetZoom(zoom);
+                await Frames(6);
+                Save(dir, $"cmp-{id}-{zoom:0}m.png");
+            }
         }
         match?.MakeCurrent();
         close.QueueFree();

@@ -184,7 +184,7 @@ public partial class QaM7V5Test : Node
                 if (!Check(slot >= 0 && views.ModelMeshOf(slot) != null, $"(B) forged {scale}: {id} not a model")) continue;
                 sel.Add(new EntityHandle(slot, sim.World.Units.Generation[slot]));
                 float baseH = BaseHeight(views, type);
-                Aabb box = FigureBox(views.ModelMeshOf(slot)!);
+                Aabb box = FigureBox(views.ModelMeshOf(slot)!, views.Models!.AtlasOf(type));
                 float ground = UnitViews.GroundPoint(sim.World, slot, 1f).Y;
                 Vector3 s = views.ModelOf(slot)!.Scale;
                 float line = UnitViews.DrawnHeight(def);
@@ -585,12 +585,14 @@ public partial class QaM7V5Test : Node
         AddChild(holder);
         Node3D model = views.Models!.Instantiate(type, out MeshInstance3D mesh, out AnimationPlayer _);
         holder.AddChild(model);
-        float h = FigureBox(mesh).Size.Y;
+        float h = FigureBox(mesh, views.Models!.AtlasOf(type)).Size.Y;
         holder.Free();
         return h;
     }
 
-    private Aabb FigureBox(MeshInstance3D mi)
+    // M6-V24: on the one surface of an atlas model the props' own faces are the vertices reading the props' tile (a team
+    // prop reads the team tile and counts, as it did on the team surface); the surface check stays for a pre-atlas file.
+    private Aabb FigureBox(MeshInstance3D mi, UnitModels.Atlas? atlas)
     {
         Mesh mesh = mi.Mesh;
         Transform3D x = mi.GlobalTransform;
@@ -599,9 +601,13 @@ public partial class QaM7V5Test : Node
         for (int s = 0; s < mesh.GetSurfaceCount(); s++)
         {
             if (mesh.SurfaceGetMaterial(s) is BaseMaterial3D mat && _propMaterials.Contains(mat.ResourceName)) continue;
-            foreach (Vector3 v in mesh.SurfaceGetArrays(s)[(int)Mesh.ArrayType.Vertex].AsVector3Array())
+            Godot.Collections.Array arrays = mesh.SurfaceGetArrays(s);
+            Vector3[] vertices = arrays[(int)Mesh.ArrayType.Vertex].AsVector3Array();
+            Vector2[] uvs = arrays[(int)Mesh.ArrayType.TexUV].AsVector2Array();
+            for (int k = 0; k < vertices.Length; k++)
             {
-                Vector3 p = x * v;
+                if (atlas != null && k < uvs.Length && atlas.IsProp(uvs[k])) continue;
+                Vector3 p = x * vertices[k];
                 box = any ? box.Expand(p) : new Aabb(p, Vector3.Zero);
                 any = true;
             }

@@ -16,7 +16,9 @@ namespace Rts.Game;
 /// overlay (not the worker tint, M6-VH7), and an <see cref="AnimationPlayer"/> on the shared library playing
 /// <see cref="ClipFor"/> the unit's sim state each frame (only a change of clip touches it), advanced by the
 /// <see cref="CrowdAnimator"/> schedule (M6-VH7). A slot reused by a type of another model or by a capsule type
-/// frees its model; a hidden slot's player stops. Every other type is the capsule below.
+/// frees its model; a hidden slot's player stops. Every other type is the capsule below. M6-V24: a model is one surface (one
+/// atlas, one team material for the whole figure); the cast clip starts at its first frame and follows the cast's progress
+/// (<see cref="CastProgress"/>, BUG-1530) instead of the crowd phase and the clock.
 /// A slot's node is created the first time the slot holds a live unit and hidden while it is dead,
 /// so a unit respawned into the slot reuses it. Meshes (one per unit type, radius from data, M7-V1: height times the
 /// type's data <c>scale</c>, M7-V3c: width the collision radius alone, <see cref="DrawnRadius(UnitDef)"/> / <see cref="DrawnHeight"/>) and
@@ -124,6 +126,12 @@ public partial class UnitViews : Node3D
     private AnimationPlayer?[] _anim = Array.Empty<AnimationPlayer?>();
     private int[] _shownClip = Array.Empty<int>();
     private CrowdAnimator _crowd = new(0);
+    // M6-V24 (BUG-1530): per slot the length of the cast clip it plays (0: none, or the idle fallback) and where that clip
+    // stands this frame; the slots casting this frame, made by Sync and read by AdvanceAnimations.
+    private float[] _castLength = Array.Empty<float>();
+    private float[] _castAt = Array.Empty<float>();
+    private int[] _castSlots = Array.Empty<int>();
+    private int _castCount;
 
     /// <summary>The models of the last <see cref="Bind"/>, or null when <see cref="UseModels"/> was off.</summary>
     public UnitModels? Models => _models;
@@ -257,6 +265,10 @@ public partial class UnitViews : Node3D
         _anim = new AnimationPlayer?[unitCapacity];
         _shownClip = new int[unitCapacity];
         Array.Fill(_shownClip, -1);
+        _castLength = new float[unitCapacity];
+        _castAt = new float[unitCapacity];
+        _castSlots = new int[unitCapacity];
+        _castCount = 0;
         _crowd = new CrowdAnimator(unitCapacity);
         _overlayLine = new float[data.Units.Length];
         for (int t = 0; t < _overlayLine.Length; t++)
@@ -311,7 +323,47 @@ public partial class UnitViews : Node3D
         // Paused: no figure moves, and the schedule doesn't run (its stagger phase and the figures' waits hold still).
         if (rate <= 0.0) return;
         _crowd.Advance(_anim, _shown, _views, eye, delta * rate);
+        // M6-V24 (BUG-1530): a casting figure's clip stands where the cast is (set by the last Sync), whatever the schedule
+        // advanced it by, so the gesture starts with the cast, spans it once and never wraps.
+        for (int k = 0; k < _castCount; k++)
+        {
+            int slot = _castSlots[k];
+            if (_anim[slot] is AnimationPlayer anim && anim.Active) anim.Seek(_castAt[slot], true);
+        }
     }
+
+    /// <summary>
+    /// How far through a cast the view shows it (M6-V24, BUG-1530), from 0 on the first tick the unit is seen casting to 1 on
+    /// the tick the ability lands: the sim counts the starting tick (<c>AbilitySystem</c>), so a cast of
+    /// <paramref name="castTicks"/> ticks is seen for <c>castTicks - 1</c> of them; <paramref name="ticksLeft"/> is
+    /// <c>UnitStore.CastTicks</c> and <paramref name="alpha"/> the frame's place between ticks. 1 for a cast never seen (one tick).
+    /// </summary>
+    public static float CastProgress(int ticksLeft, int castTicks, float alpha)
+    {
+        int shown = castTicks - 1;
+        if (shown <= 0) return 1f;
+        float a = Math.Clamp(float.IsNaN(alpha) ? 1f : alpha, 0f, 1f);
+        return Math.Clamp((shown - ticksLeft + a) / shown, 0f, 1f);
+    }
+
+    /// <summary>
+    /// The cast clip's time for slot <paramref name="slot"/> (M6-V24, BUG-1530): <see cref="CastProgress"/> of its cast times the
+    /// clip's <paramref name="length"/>, just short of the end (a looping clip at its very end would show its first frame);
+    /// 0 when the slot has no cast in hand. Reads the unit store and the data only.
+    /// </summary>
+    public static float CastClipTime(World world, int slot, float alpha, float length)
+    {
+        UnitStore u = world.Units;
+        int index = u.CastAbility[slot];
+        if (index < 0 || length <= 0f) return 0f;
+        UnitDef def = world.Data.Units[u.TypeId[slot]];
+        if ((uint)index >= (uint)def.Abilities.Length) return 0f;
+        int castTicks = Math.Max(1, world.Data.Abilities[def.Abilities[index]].CastTicks);
+        return Math.Min(CastProgress(u.CastTicks[slot], castTicks, alpha) * length, length - CastEndMargin);
+    }
+
+    /// <summary>How far short of its end the cast clip stops (seconds), so a looping clip never wraps to its first frame.</summary>
+    public const float CastEndMargin = 1e-3f;
 
     /// <summary>
     /// How fast the figures' clips run against view time (M6-V21, docs/01 2026-11-14 (d) (f)): the runner's
@@ -338,6 +390,7 @@ public partial class UnitViews : Node3D
         Flash.UpdateWithSlotMax(u.Alive, u.Generation, u.Hp, MaxHp.Refreshed(world), delta);
         FogView? fog = Fog?.Refreshed(world);
         int n = Math.Min(u.Capacity, _views.Length);
+        _castCount = 0;
         for (int i = 0; i < n; i++)
         {
             MeshInstance3D? view = _views[i];
@@ -401,6 +454,12 @@ public partial class UnitViews : Node3D
             {
                 int clip = (int)ClipFor(world, i);
                 if (clip != _shownClip[i]) PlayClip(i, anim, clip);
+                // M6-V24 (BUG-1530): the cast clip follows the cast, not the clock (AdvanceAnimations puts it there).
+                if (_castLength[i] > 0f)
+                {
+                    _castAt[i] = CastClipTime(world, i, alpha, _castLength[i]);
+                    _castSlots[_castCount++] = i;
+                }
             }
             sbyte cargo = u.Cargo[i] > 0 ? (sbyte)u.CargoKind[i] : (sbyte)-1;
             if (cargo != _shownCargo[i]) ShowCargo(i, view, type, cargo);
@@ -536,6 +595,7 @@ public partial class UnitViews : Node3D
         _viewOwner[slot] = -1;
         _shownTint[slot] = (UnitState)byte.MaxValue;
         _shownClip[slot] = -1;
+        _castLength[slot] = 0f;
         bool model = _models?.Has(type) == true;
         bool sameScene = model && old >= 0 && _model[slot] != null && _modelPath[old] == _modelPath[type];
         if (_model[slot] != null && !sameScene)
@@ -592,10 +652,12 @@ public partial class UnitViews : Node3D
     }
 
     // Plays the clip (idle when the type's library lacks it), started at a phase from the slot so a crowd doesn't move in
-    // step. M6-V21: the type's own library (its file's clip map) decides which motion a state name is.
+    // step. M6-V21: the type's own library (its file's clip map) decides which motion a state name is. M6-V24 (BUG-1530):
+    // the cast clip starts at its first frame instead and from then on stands where the cast is (Sync, AdvanceAnimations).
     private void PlayClip(int slot, AnimationPlayer anim, int clip)
     {
         _shownClip[slot] = clip;
+        _castLength[slot] = 0f;
         int type = _viewType[slot];
         if (!_models!.HasClip(type, (UnitModels.Clip)clip)) clip = (int)UnitModels.Clip.Idle;
         if (!_models.HasClip(type, (UnitModels.Clip)clip))
@@ -605,8 +667,16 @@ public partial class UnitViews : Node3D
         }
         anim.Play(UnitModels.ClipNames[clip]);
         float length = _models.ClipLength(type, (UnitModels.Clip)clip);
-        if (length > 0f) anim.Seek(slot * 0.37f % length, true);
+        if (clip == (int)UnitModels.Clip.Cast)
+        {
+            _castLength[slot] = length;
+            anim.Seek(0.0, true);
+        }
+        else if (length > 0f) anim.Seek(slot * CrowdPhase % length, true);
     }
+
+    /// <summary>Seconds of clip between neighbouring slots' start phases (M6-V20), so a crowd doesn't move in step; the cast clip has none (BUG-1530).</summary>
+    public const float CrowdPhase = 0.37f;
 
     /// <summary>Model instances created so far (M6-V20; one per slot and model scene it held).</summary>
     public int ModelNodeCount { get; private set; }

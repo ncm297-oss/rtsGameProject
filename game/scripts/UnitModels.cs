@@ -14,6 +14,10 @@ namespace Rts.Game;
 /// once per file per run. The shared animation library (<see cref="LibraryPath"/>, imported as an <c>AnimationLibrary</c>)
 /// is loaded once per run; its clips loop. The team surface of each model is drawn by <c>team_colour.gdshader</c>: one
 /// material per type and player (the outfit's shading times the player colour), made here, never per frame.
+/// M6-V24: a model file is one surface (its material named <c>team</c>) drawing one atlas whose alpha marks the team texels;
+/// the file's extras carry the atlas layout (<see cref="AtlasOf"/>), which the material's <c>atlas_grid</c> takes, so the one
+/// team material draws the whole figure. A file without the layout (built before M6-V24) is drawn as before: its team
+/// surface in the player colour, its other surfaces with their own materials.
 /// Clip maps (M6-V21): a model file carries its clip map (docs/04 state name -> library clip, the asset manifest's
 /// <c>clips</c>) as glTF extras on its armature node, which Godot imports as the node's <c>extras</c> metadata. Each model
 /// type gets its own small <see cref="AnimationLibrary"/> holding the shared library's <see cref="Animation"/>s under the
@@ -60,6 +64,7 @@ public sealed class UnitModels
     private readonly string[]?[] _clipMap;
     private readonly AnimationLibrary?[] _libs;
     private readonly float[]?[] _lengths;
+    private readonly Atlas?[] _atlas;
 
     /// <summary>Types with a model.</summary>
     public int ModelTypes { get; }
@@ -78,6 +83,7 @@ public sealed class UnitModels
         _clipMap = new string[n][];
         _libs = new AnimationLibrary?[n];
         _lengths = new float[n][];
+        _atlas = new Atlas?[n];
         Shader shader = _teamShader ??= GD.Load<Shader>(TeamShaderPath);
         var missing = new List<string>();
         for (int t = 0; t < n; t++)
@@ -85,17 +91,21 @@ public sealed class UnitModels
             _team[t] = Array.Empty<ShaderMaterial?>();
             string path = PathFor(data.Units[t].Model);
             PackedScene? scene = Load(path, missing);
-            if (scene == null || !FindTeam(scene, path, out NodePath meshPath, out int surface, out Texture2D? texture, out string[] clipMap)) continue;
+            if (scene == null || !FindTeam(scene, path, out NodePath meshPath, out int surface, out Texture2D? texture, out string[] clipMap, out Atlas? atlas)) continue;
             _scenes[t] = scene;
             _clipMap[t] = clipMap;
             _meshPath[t] = meshPath;
             _teamSurface[t] = surface;
+            _atlas[t] = atlas;
             _team[t] = new ShaderMaterial?[colours.Length];
             for (int c = 0; c < colours.Length; c++)
             {
                 var mat = new ShaderMaterial { Shader = shader };
                 mat.SetShaderParameter("albedo_texture", texture!);
                 mat.SetShaderParameter("team_colour", UnitViews.ColorFromRgb(colours[c]));
+                // M6-V24: the one surface draws the atlas; its alpha says which texels take the player colour.
+                mat.SetShaderParameter("use_atlas", atlas != null);
+                if (atlas != null) mat.SetShaderParameter("atlas_grid", new Vector2(atlas.Grid.X, atlas.Grid.Y));
                 _team[t][c] = mat;
                 TeamMaterialCount++;
             }
@@ -317,8 +327,11 @@ public sealed class UnitModels
     public ShaderMaterial? TeamMaterial(int type, int colour) =>
         Has(type) && (uint)colour < (uint)_team[type].Length ? _team[type][colour] : null;
 
-    /// <summary>The surface index of type <paramref name="type"/>'s team material on its mesh.</summary>
+    /// <summary>The surface index of type <paramref name="type"/>'s team material on its mesh (M6-V24: 0, the mesh's one surface).</summary>
     public int TeamSurface(int type) => _teamSurface[type];
+
+    /// <summary>Type <paramref name="type"/>'s atlas layout (M6-V24, read from its file's extras), or null for a capsule type or a file from before M6-V24.</summary>
+    public Atlas? AtlasOf(int type) => Has(type) ? _atlas[type] : null;
 
     /// <summary>A new instance of type <paramref name="type"/>'s model with an <see cref="AnimationPlayer"/> on the shared library.</summary>
     public Node3D Instantiate(int type, out MeshInstance3D mesh, out AnimationPlayer player)
@@ -371,13 +384,15 @@ public sealed class UnitModels
 
     // The model's first mesh with a "team" surface: its path from the root, the surface, and the texture the team shader
     // shades; and its clip map (M6-V21): per Clip, the library clip its extras name, else the state's own name.
-    private static bool FindTeam(PackedScene scene, string path, out NodePath meshPath, out int surface, out Texture2D? texture, out string[] clipMap)
+    private static bool FindTeam(PackedScene scene, string path, out NodePath meshPath, out int surface, out Texture2D? texture, out string[] clipMap, out Atlas? atlas)
     {
         meshPath = new NodePath();
         surface = -1;
         texture = null;
         Node probe = scene.Instantiate();
-        clipMap = ReadClipMap(probe);
+        Godot.Collections.Dictionary? extras = ReadExtras(probe);
+        clipMap = ReadClipMap(extras);
+        atlas = ReadAtlas(extras);
         foreach (Node n in probe.FindChildren("*", "MeshInstance3D", true, false))
         {
             Mesh? mesh = ((MeshInstance3D)n).Mesh;
@@ -406,21 +421,69 @@ public sealed class UnitModels
     /// <summary>The name of the glTF extras key that holds a model's clip map (M6-V21, tools/art/build_unit.py).</summary>
     public const string ClipMapKey = "clips";
 
-    // The clip map in the first node with imported glTF extras (the armature's: the builder writes no other extras); a file
-    // without one, or an entry that is not a string, keeps the state's own name.
-    private static string[] ReadClipMap(Node root)
+    // The imported glTF extras of the first node that has them (the armature's: the builder writes no other extras), or null.
+    private static Godot.Collections.Dictionary? ReadExtras(Node root)
     {
-        var map = new string[ClipNames.Length];
-        for (int c = 0; c < map.Length; c++) map[c] = ClipNames[c];
         Node? holder = root.HasMeta("extras") ? root : null;
         if (holder == null)
             foreach (Node n in root.FindChildren("*", "", true, false))
                 if (n.HasMeta("extras")) { holder = n; break; }
-        if (holder == null || holder.GetMeta("extras").Obj is not Godot.Collections.Dictionary extras) return map;
-        if (!extras.TryGetValue(ClipMapKey, out Variant clipsVar) || clipsVar.Obj is not Godot.Collections.Dictionary clips) return map;
+        return holder?.GetMeta("extras").Obj as Godot.Collections.Dictionary;
+    }
+
+    // The clip map in the extras; a file without one, or an entry that is not a string, keeps the state's own name.
+    private static string[] ReadClipMap(Godot.Collections.Dictionary? extras)
+    {
+        var map = new string[ClipNames.Length];
+        for (int c = 0; c < map.Length; c++) map[c] = ClipNames[c];
+        if (extras == null || !extras.TryGetValue(ClipMapKey, out Variant clipsVar) || clipsVar.Obj is not Godot.Collections.Dictionary clips) return map;
         for (int c = 0; c < map.Length; c++)
             if (clips.TryGetValue(ClipNames[c].ToString(), out Variant v) && v.VariantType == Variant.Type.String) map[c] = v.AsString();
         return map;
+    }
+
+    /// <summary>The name of the glTF extras key that holds a model's atlas layout (M6-V24, tools/art/build_unit.py).</summary>
+    public const string AtlasKey = "atlas";
+
+    /// <summary>The name of the atlas tile that holds the props' flat colours (M6-V24).</summary>
+    public const string PropsTile = "props";
+
+    /// <summary>A model's atlas layout (M6-V24): its grid of tiles and which tile holds what (a role texture or the props' colours).</summary>
+    public sealed class Atlas
+    {
+        /// <summary>Columns and rows of equal tiles.</summary>
+        public Vector2I Grid { get; init; }
+
+        /// <summary>Tile name (<c>team</c>, <c>outfit</c>, <c>skin</c>, <c>head</c>, <c>hair</c>, <see cref="PropsTile"/>) to its column and row from the top-left.</summary>
+        public Dictionary<string, Vector2I> Tiles { get; init; } = new();
+
+        /// <summary>Tile <paramref name="name"/>'s rectangle in UV space (u right, v down, as imported), or an empty one when the atlas has no such tile.</summary>
+        public Rect2 TileRect(string name) =>
+            Tiles.TryGetValue(name, out Vector2I t) ? new Rect2((float)t.X / Grid.X, (float)t.Y / Grid.Y, 1f / Grid.X, 1f / Grid.Y) : new Rect2();
+
+        /// <summary>The name of the tile UV <paramref name="uv"/> lies in, or "" when no named tile holds it (tests and tools: a face's role).</summary>
+        public string TileAt(Vector2 uv)
+        {
+            var cell = new Vector2I((int)Math.Floor(uv.X * Grid.X), (int)Math.Floor(uv.Y * Grid.Y));
+            foreach (KeyValuePair<string, Vector2I> tile in Tiles)
+                if (tile.Value == cell) return tile.Key;
+            return "";
+        }
+
+        /// <summary>Whether UV <paramref name="uv"/> reads a prop's own colour (the <see cref="PropsTile"/>): a figure measured without its props skips those vertices.</summary>
+        public bool IsProp(Vector2 uv) => TileAt(uv) == PropsTile;
+    }
+
+    // The atlas layout in the extras ({grid: [c, r], tiles: {name: [c, r]}}), or null for a file from before M6-V24.
+    private static Atlas? ReadAtlas(Godot.Collections.Dictionary? extras)
+    {
+        if (extras == null || !extras.TryGetValue(AtlasKey, out Variant atlasVar) || atlasVar.Obj is not Godot.Collections.Dictionary atlas) return null;
+        if (!atlas.TryGetValue("grid", out Variant gridVar) || gridVar.Obj is not Godot.Collections.Array grid || grid.Count != 2) return null;
+        var result = new Atlas { Grid = new Vector2I(Math.Max(1, grid[0].AsInt32()), Math.Max(1, grid[1].AsInt32())) };
+        if (atlas.TryGetValue("tiles", out Variant tilesVar) && tilesVar.Obj is Godot.Collections.Dictionary tiles)
+            foreach (var (key, value) in tiles)
+                if (value.Obj is Godot.Collections.Array cr && cr.Count == 2) result.Tiles[key.AsString()] = new Vector2I(cr[0].AsInt32(), cr[1].AsInt32());
+        return result;
     }
 
     /// <summary>"No team material" warnings printed since the program started (a test counter: one per file per run, BUG-1322).</summary>
