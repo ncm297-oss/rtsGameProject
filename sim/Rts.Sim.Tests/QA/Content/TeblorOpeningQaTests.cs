@@ -20,8 +20,8 @@ public class TeblorOpeningQaTests
     // Measured 2026-11-11 (D28) on the shipped data: the Teblor's first wave against the idle seat (416 s, as the page's
     // "Spending on the menu's map" says). D31 (2026-11-14): re-measured on the landed opening (V24, its own reserve share
     // 0.25, the Gatherer's carry 15): 8321 -> 6841 (342 s). M6-S10 (sim track, the Keep-corner cure and gatherOverlap 0.5:
-    // handed this row for the session): 6841 -> 6321 (316 s).
-    private const int FirstWaveTick = 6321;
+    // handed this row for the session): 6841 -> 6321 (316 s). M6-SH2 (sim track, a site is no drop-off; handed): 6321 -> 6401 (320 s).
+    private const int FirstWaveTick = 6401;
 
     private readonly ITestOutputHelper _out;
 
@@ -66,10 +66,15 @@ public class TeblorOpeningQaTests
     // the Teblor still beaten but 111 s later, 4 waves sent, the Whirlwind 3; v Malazan (6801, 9321, -1) -> (6461, 8961, -1),
     // the Teblor stand, 2 waves sent, the Malazan 3. D-R39: the rows moved from InlineData to this list, unchanged, so the
     // page's sentence is pinned to the same numbers (TheOpponentSentence_QuotesTheReportRows).
+    // M6-SH2 (sim track, a site is no drop-off and a beaten AI retrains; handed): v Whirlwind (6321, 8581, 20444) ->
+    // (6421, 8501, -1): the Teblor no longer beaten; v Malazan (6461, 8961, -1) -> (6421, 8501, -1). The page's sentence
+    // (TheOpponentSentence_QuotesTheReportRows) said the Whirlwind defeats the Teblor: its meaning changed, so it was listed
+    // for the Producer's ruling. Fix round 2 (BUG-1524, ruled): the sentence builds each row's outcome clause and says both
+    // matches stand; the old figures stay in its bracket as history.
     internal static readonly (string Opponent, int FirstWave, int AgeTwo, int Fell)[] OpponentRows =
     {
-        ("whirlwind", 6321, 8581, 20444), // M6-S10: wave 316 s, Age II 429 s, beaten 1022 s (D31: 362 / 464 / 910 s; the Whirlwind sent 1 wave)
-        ("malazan", 6461, 8961, -1),      // M6-S10: wave 323 s, Age II 448 s, stands at 20:00 (D31: 340 / 466 s; the Malazan sent 1 wave)
+        ("whirlwind", 6421, 8501, -1), // M6-SH2: wave 321 s, Age II 425 s, stands at 20:00 (M6-S10: 316 / 429 s, beaten 1022 s)
+        ("malazan", 6421, 8501, -1),   // M6-SH2: wave 321 s, Age II 425 s, stands at 20:00 (M6-S10: 323 / 448 s)
     };
 
     public static TheoryData<string, int, int, int> Opponents()
@@ -100,18 +105,19 @@ public class TeblorOpeningQaTests
     /// <summary>
     /// D-R39 (BUG-1421 item 3, BUG-1464 item 3): teblor.md's "Spending on the menu's map" sentence about the active
     /// opponents quotes <see cref="OpponentRows"/> in whole seconds (a tick / 20, rounded down), so a re-measure that moves a
-    /// row fails here until the sentence moves with it.
+    /// row fails here until the sentence moves with it. Each row's outcome clause is built from the row (BUG-1524, the
+    /// Producer's ruling in M6-SH2 fix round 2): <c>Fell &lt; 0</c> reads "and still stands at 20:00", otherwise "and is
+    /// defeated at N s", so a re-measure that flips an outcome fails here as a wording change, not as a stale assert.
     /// </summary>
     [Fact]
     public void TheOpponentSentence_QuotesTheReportRows()
     {
         string page = System.Text.RegularExpressions.Regex.Replace(string.Join(" ", PageTables.FactionLines("teblor").Select(l => l.Trim())), @"\s+", " ");
         static string S(int tick) => (tick / Tps).ToString("#,0", System.Globalization.CultureInfo.InvariantCulture) + " s";
+        static string Outcome(int fell) => fell < 0 ? "and still stands at 20:00" : $"and is defeated at {S(fell)}";
         var m = OpponentRows.Single(r => r.Opponent == "malazan");
         var w = OpponentRows.Single(r => r.Opponent == "whirlwind");
-        Assert.Equal(-1, m.Fell);
-        Assert.True(w.Fell >= 0, "the Whirlwind row no longer defeats the Teblor: re-word the sentence");
-        Assert.Contains($"a Normal Teblor seat sends its first wave at {S(m.FirstWave)}, is in Age II at {S(m.AgeTwo)} and still stands at 20:00 against a Normal Malazan; "
-            + $"against a Normal Whirlwind it sends its first wave at {S(w.FirstWave)}, is in Age II at {S(w.AgeTwo)} and is defeated at {S(w.Fell)} (", page, StringComparison.Ordinal);
+        Assert.Contains($"a Normal Teblor seat sends its first wave at {S(m.FirstWave)}, is in Age II at {S(m.AgeTwo)} {Outcome(m.Fell)} against a Normal Malazan; "
+            + $"against a Normal Whirlwind it sends its first wave at {S(w.FirstWave)}, is in Age II at {S(w.AgeTwo)} {Outcome(w.Fell)} (", page, StringComparison.Ordinal);
     }
 }

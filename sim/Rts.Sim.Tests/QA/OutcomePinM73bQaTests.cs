@@ -68,13 +68,13 @@ public class OutcomePinM73bQaTests
     // Measured on de591f0 with this file (QA 2026-11-10-2116). Rows as StandardPresetPinQaTests.AiRows.
     public static IEnumerable<object[]> AiRows() => new[]
     {
-        new object[] { 1, 2, 0, false, 0x6068BB609154B21CUL }, // M6-S10: was 0x3546ABECA82EA2A3
-        new object[] { 2, 2, 1, false, 0xFC175F677CC212DEUL }, // M6-S10: was 0x072B988DD9AF8223
-        new object[] { 3, 3, 2, false, 0xA08252EC916352CFUL }, // M6-S10: was 0x13A00F83DC05E77E
-        new object[] { 4, 4, 1, false, 0x28538ED7267EF3C1UL }, // M6-S10: was 0x99F91DE86CC05AAF
-        new object[] { 5, 2, 2, false, 0x4245344F2464DFBAUL }, // M6-S10: was 0xE8521B011327420A
-        new object[] { 3, 3, 0, true, 0x59957393434AC0A8UL }, // M6-S10: was 0xC9899EC24D14CC32
-        new object[] { 1, 4, -1, false, 0x6E3F35D35905EDFDUL }, // M6-S10: was 0x8E6B162FAC2C8B07
+        new object[] { 1, 2, 0, false, 0xEAE4A3B216EC213BUL }, // M6-SH2 (a site is no drop-off, an AI with no worker retrains: BUG-1520 / 1465): was 0x6068BB609154B21C; M6-S10: was 0x3546ABECA82EA2A3
+        new object[] { 2, 2, 1, false, 0x48167292A6EF24BDUL }, // M6-SH2 (a site is no drop-off, an AI with no worker retrains: BUG-1520 / 1465): was 0xFC175F677CC212DE; M6-S10: was 0x072B988DD9AF8223
+        new object[] { 3, 3, 2, false, 0x31263B5622F7DA0AUL }, // M6-SH2 (a site is no drop-off, an AI with no worker retrains: BUG-1520 / 1465): was 0xA08252EC916352CF; M6-S10: was 0x13A00F83DC05E77E
+        new object[] { 4, 4, 1, false, 0x214D18E621F16C80UL }, // M6-SH2 (a site is no drop-off, an AI with no worker retrains: BUG-1520 / 1465): was 0x28538ED7267EF3C1; M6-S10: was 0x99F91DE86CC05AAF
+        new object[] { 5, 2, 2, false, 0xA0486B492AF90209UL }, // M6-SH2 (a site is no drop-off, an AI with no worker retrains: BUG-1520 / 1465): was 0x4245344F2464DFBA; M6-S10: was 0xE8521B011327420A
+        new object[] { 3, 3, 0, true, 0x17290C9492D9B119UL }, // M6-SH2 (a site is no drop-off, an AI with no worker retrains: BUG-1520 / 1465): was 0x59957393434AC0A8; M6-S10: was 0xC9899EC24D14CC32
+        new object[] { 1, 4, -1, false, 0x6747216DFF880778UL }, // M6-SH2 (a site is no drop-off, an AI with no worker retrains: BUG-1520 / 1465): was 0x6E3F35D35905EDFD; M6-S10: was 0x8E6B162FAC2C8B07
     };
 
     [Theory]

@@ -177,7 +177,9 @@ public class AiOpeningPairsReportTests
     /// player): measured one seed of nine for <c>holy_war</c> (<c>Content/HolyWarFirstWaveReportTests</c>), a balance
     /// finding for D33, not a pattern.
     /// </summary>
-    internal static readonly (int Malazan, int Whirlwind, ulong Seed, int Player)[] DefeatedBeforeDue = { (0, 2, 3, 1) };
+    // M6-SH2 (the sim's drop-off rule and retrain, handed this list): (0, 2, 3, 1) taken out at the row's own request
+    // ("now sends a wave: take it out"): on seed 3 holy_war survives the Malazan first wave and waves at 14:45.
+    internal static readonly (int Malazan, int Whirlwind, ulong Seed, int Player)[] DefeatedBeforeDue = Array.Empty<(int, int, ulong, int)>();
 
     /// <summary>
     /// D-R39: whether <paramref name="ai"/>'s first wave is due now, from world state: its live army (every unit, so at

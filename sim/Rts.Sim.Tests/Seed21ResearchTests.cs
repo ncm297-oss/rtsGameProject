@@ -28,7 +28,9 @@ public class Seed21ResearchTests(ITestOutputHelper output)
         var research = new List<Command>();
         foreach (Command c in replay!.Commands)
             if (c.Kind == CommandKind.Research) research.Add(c);
-        Assert.Equal(new[] { (4267, data.FindTech("age_ii")), (5475, data.FindTech("melee_weapons_1")) }, research.Select(c => (c.Tick, c.TypeId)));
+        // M6-SH2 re-recording (a site is no drop-off, BUG-1520): the two clicks moved from ticks 4,267 / 5,475 to 4,363 / 5,571,
+        // and the run below from 5,480 to 5,576 (the same 1,213 ticks after the Age II click).
+        Assert.Equal(new[] { (4363, data.FindTech("age_ii")), (5571, data.FindTech("melee_weapons_1")) }, research.Select(c => (c.Tick, c.TypeId)));
         var sim = new Simulation(new SimConfig(replay.Seed, replay.PlayerCount, replay.UnitCapacity, replay.CommandCapacity)
         {
             Data = data,
@@ -39,7 +41,7 @@ public class Seed21ResearchTests(ITestOutputHelper output)
         var refused = new List<(int Tick, CommandKind Kind, int Type, CommandRefusal Why, int Detail)>();
         sim.RefusedForTests = (c, why, detail) => refused.Add((c.Tick, c.Kind, c.TypeId, why, detail));
         int next = 0;
-        while (sim.TickNumber < 5480)
+        while (sim.TickNumber < 5576)
         {
             while (next < replay.Commands.Length && replay.Commands[next].Tick == sim.TickNumber + 1) sim.Enqueue(replay.Commands[next++]);
             sim.Tick();

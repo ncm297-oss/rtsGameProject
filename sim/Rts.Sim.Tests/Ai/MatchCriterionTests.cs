@@ -28,6 +28,9 @@ public class MatchCriterionTests
     /// every check clean: <b>seed 7, 23,412 (19:30), seat 0 (Malazan)</b>, Build UnitInTheWay 2 refused. Seeds 1-8: 24,497 /
     /// 30,569 / 27,240 / 27,240 / 27,361 / 27,240 / 23,412 / 23,412 (<c>Stress/MatchRowsM6S10Report</c>). The methods keep
     /// their "Seed1" names (docs/05 cites them); the row is seed 7.
+    /// M6-SH2 (a construction site is no drop-off; an AI with no worker retrains): seed 7 ends at <b>19,912 (16:35), seat 0</b>,
+    /// Build UnitInTheWay 1 refused, every check clean. Seeds 1-8: 24,266 / 57,039 / 25,118 / 25,118 / 55,495 / 25,118 /
+    /// 19,912 / 19,912, so seed 7 is still the lowest under 24,000.
     /// </summary>
     internal const int VatharBound = 24_000;
 
@@ -48,7 +51,11 @@ public class MatchCriterionTests
     /// soldiers, and razes slowly; no held worker or unhunted lone unit causes it), so by the brief's rule the row moves to the
     /// lowest of seeds 1-8 on Raraku that ends: <b>seed 2, 27,936 (23:16), seat 1</b>; Raraku's rule gives the same bound
     /// (27,936 x 1.1 = 30,730, the next 6,000 above it 36,000). Seeds 1-8: none / 27,936 / none / none / 29,569 / none / 28,547
-    /// / 28,547 (<c>Stress/MatchRowsM6S10Report</c>).</summary>
+    /// / 28,547 (<c>Stress/MatchRowsM6S10Report</c>).
+    /// M6-SH2 (a construction site is no drop-off; an AI with no worker retrains): <b>seed 2 now ends at 56,940 (47:27), seat 0,
+    /// past the bound</b> (BUG-1521, a finding, not a new bound), so by the brief's rule the row moves to the lowest of seeds 1-8
+    /// that ends inside it: <b>seed 3, 25,083 (20:54), seat 1</b>, every check clean. Seeds 1-8: none / 56,940 / 25,083 /
+    /// 25,083 / 31,420 / 25,083 / 28,633 / 28,633 (seed 1 still BUG-1460).</summary>
     internal const int RarakuBound = 36_000;
 
     /// <summary>
@@ -63,13 +70,13 @@ public class MatchCriterionTests
     /// <summary>The four-seat rows' bound (60 minutes, QA's M5-H5 sweep): the FFA (Vathar seed 2) ends at 58,155 (48:27; was 52,305 before M5-9a), the 2v2 (Vathar seed 1) at 35,648 (29:42; was 34,510). M5-H6: the FFA 56,896 (47:24, seat 3), the 2v2 26,070 (21:43, team 1).</summary>
     internal const int FourSeatBound = 72_000;
 
-    /// <summary>The tick the literal row is saved at: half its end (M6-S10: seed 7's 23,412 / 2; was 11,397, half of seed 1's 22,794 before M5-9a; any mid-match tick serves).</summary>
-    internal const int HalfWay = 11_706;
+    /// <summary>The tick the literal row is saved at: half its end (M6-SH2: seed 7's 19,912 / 2; was 11,706 (M6-S10: 23,412 / 2), and 11,397, half of seed 1's 22,794 before M5-9a; any mid-match tick serves).</summary>
+    internal const int HalfWay = 9_956;
 
     internal static readonly Row[] Rows =
     {
         new("vathar_crossing", "vathar_crossing", 7, 2, null, VatharBound), // M6-S10: seed 7 (seed 1 ends at 24,497)
-        new("raraku", "raraku", 2, 2, null, RarakuBound), // M6-S10: seed 2 (seed 1 no longer ends inside 72,000: BUG-1460)
+        new("raraku", "raraku", 3, 2, null, RarakuBound), // M6-SH2: seed 3 (seed 2 ends at 56,940: BUG-1521); M6-S10: seed 2 (seed 1 no longer ends inside 72,000: BUG-1460)
         new("pale_hills", "pale_hills", 1, 2, null, PaleHillsBound),
         new("generated", "generated", 2, 2, null, GeneratedBound), // M5-9a round 2: seed 2 (seed 1 ends at 25,968)
         new("ffa", "vathar_crossing", 2, 4, null, FourSeatBound),

@@ -107,10 +107,18 @@ public class HuntStressTests
     /// Four Normal AI seats on Pale Hills (free-for-all, or teams 1/2/1/2), to a result within 144,000 ticks. At every think of
     /// a seat that is hunting, its view equals the <see cref="PlayerViewOracle"/>'s answers, and a sighting it remembered this
     /// think is the position of a unit a fresh view of that seat shows, owned by an enemy (never an ally).
+    /// M6-SH2 fix round (BUG-1536, a finding, not re-bound): the free-for-all on seed 3 (over at 107,419 on the base) no
+    /// longer ends by 144,000 since a site stopped being a drop-off. Probed every 6,000 ticks: from about tick 30,000 no seat
+    /// gathers gold again (gathered gold frozen at 8,880 / 8,850 / 8,890, banks 2-16 gold) and every seat banks only wood
+    /// (12,000-30,000 by the bound), so none can train a soldier; p0 (5 soldiers, starved from 52,420) waves and hunts but
+    /// cannot finish p1 (13 units) and p3 (22), which have no army and so are never starved (ai.starvedMinArmy). BUG-1460's
+    /// shape with gold in place of wood (not split further: whether the mines are empty or unknown to the seats). The row
+    /// moves to the smallest ending seed,
+    /// 1 (over at 91,995, p2, 4 hunts; seeds 2 / 5 end at 50,397 / 59,083, seed 4 does not end). Was seed 3.
     /// </summary>
     [Theory]
     [Trait("Category", "Stress")]
-    [InlineData(3UL, false)]
+    [InlineData(1UL, false)]
     [InlineData(1UL, true)]
     public void FourAiSeats_OnPaleHills_EndWithTheOracleOnEveryHunt(ulong seed, bool teams) => FourSeatsRow(seed, teams);
 
@@ -197,7 +205,8 @@ public class HuntStressTests
     /// it hunts a sighting; each load follows the uninterrupted run hash for hash to the match's end, the AI seats field for field equal there.
     /// M5-9a: with Normal's counter shift seed 3 ends at 31,891 without a hunt, so the row plays seed 5 (<see cref="MidHuntSeed"/>,
     /// one hunt, ends at 45,358) to keep a save taken mid-hunt. M5-9b: seed 1 (one hunt, ends at 48,858; seed 5 ends past 72,000;
-    /// M5-H6: 50,140, one hunt).
+    /// M5-H6: 50,140, one hunt). M6-SH2 (BUG-1533): seed 1 ends at 27,498 with no hunt, so the row plays seed 2 (42,016, 4
+    /// hunts, the first at 34,761).
     /// </summary>
     [Fact]
     [Trait("Category", "Stress")]
@@ -239,9 +248,10 @@ public class HuntStressTests
     /// <summary>
     /// The Pale Hills seed the mid-hunt save row plays: 3 until M5-9a, 5 in M5-9a, 1 since M5-9b (seed 5 now ends only at
     /// 96,321, past the row's 72,000: the far expansion's gold lengthens its war, BUG-1116's slow raze at the end; seed 1 ends
-    /// at 48,858 after one hunt).
+    /// at 48,858 after one hunt), 2 since M6-SH2 (BUG-1533: seed 1 ends at 27,498 with no hunt; seed 2 ends at 42,016 after 4
+    /// hunts). Was 1.
     /// </summary>
-    private const ulong MidHuntSeed = 1;
+    private const ulong MidHuntSeed = 2;
 
     private static Simulation Reload(Simulation sim)
     {

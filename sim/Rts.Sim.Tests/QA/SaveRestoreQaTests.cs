@@ -464,6 +464,9 @@ public class SaveRestoreQaTests
         "sim.World.PlannedFlank", "sim.World.ChainMembers", "sim.World.Neighbors", "sim.World.PlannedStep",
         "sim.World.PlannedAction", "sim.World.PlannedRemaining", "sim.World.MoveOrder", "sim.World.FieldMisses",
         "sim.World.FieldRefreshes", "sim.World.Seal.",
+        // M6-SH2 fix round (BUG-1538): the economy's list of the tick's drop-off sites, rebuilt at the start of every
+        // EconomySystem.Run before it is read.
+        "sim.World.DropOffSites", "sim.World.DropOffSiteCount",
         // The fog's per-level stamp boxes (read only under _levelUsed, which every update clears) and the spatial hash's
         // query buffer (filled before it is read by each query).
         "sim.World.Fog._box", "sim.World.Spatial._scratch",

@@ -450,6 +450,9 @@ public class HuntTests
         CombatScenes.Place(sim, 1, TestSim.Data.FindUnit("whirlwind_camp_follower"), sim.World.NavGrid.CellCenter(44, 32)); // keeps player 1 in: out of sight of the edges and far from player 0's hall (no defense)
         for (int i = 0; i < sim.World.Units.Capacity; i++) // player 0's workers: no scout to spot it and pull the army off the ring
             if (sim.World.Units.Alive[i] && sim.World.Units.Owner[i] == 0) sim.World.Units.Free(new EntityHandle(i, sim.World.Units.Generation[i]));
+        // M6-SH2 re-staging: a seat with no worker now trains one (BUG-1465); its new Laborer spotted player 1's unit and the
+        // sighting pulled the army off the ring after 10 targets. No gold, no worker: the scene keeps player 0 worker-less.
+        BuildMaps.SetTotals(sim, 0, 0, sim.World.Wood[0]);
         AiPlayer ai = sim.AiOf(0)!;
         List<EntityHandle> army = Army(sim, 4, 1, 30); // by the west edge: a ring point is the nearest sweep point
         ai.Board.WavesStarted = 1;

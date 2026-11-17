@@ -82,9 +82,11 @@ public class GatherWedgeQaTests
     /// Ticks the replay must still match its recorded checkpoints: all of them (M4-H1, BUG-0211; before the re-recording
     /// only the first 19, the setup before the M4-2a fix changed the match, and from M4-3a none; M4-V5's re-recording,
     /// BUG-0273, held 12,131; M5-4f's, 7,682; M6-S10's, 7,653: the Keep-corner cure and gatherOverlap 0.5 moved the game from
-    /// checkpoint 63 on, so it was re-recorded from M3PlayableTest -- --seed 21 --break 19 on the M6-S10 tree).
+    /// checkpoint 63 on, so it was re-recorded from M3PlayableTest -- --seed 21 --break 19 on the M6-S10 tree; M6-SH2's, 7,754:
+    /// a construction site stopped taking loads (BUG-1520) and the recorded game diverged from it, so it was re-recorded the same
+    /// way on the M6-SH2 tree, headless; its Research commands moved to ticks 4,363 and 5,571, Seed21ResearchTests).
     /// </summary>
-    private const int CheckpointPrefixTicks = 7653;
+    private const int CheckpointPrefixTicks = 7754;
 
     // M4-V5 (BUG-0273): re-recorded from M3PlayableTest -- --seed 21 --break 19 on the M4-3b tree, whose scene builds on
     // explored ground (the old recording built a House on unexplored ground at tick 616, which placement refuses since M4-3b).

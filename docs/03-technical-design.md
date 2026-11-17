@@ -1878,7 +1878,9 @@ equal to the base, alternating (`ConstructionPerfTests`, `RequirementPerfTests`,
   stands and walks again every `EconomyConstants.RetryTicks`, choosing the nearest free side; see
   "Implementation (M3-2)".
 - Workers run a small state machine: walk to node → gather (timer) → walk to nearest drop-off →
-  deposit → repeat. Drop-off choice uses straight-line distance, re-evaluated per trip.
+  deposit → repeat. Drop-off choice uses straight-line distance, re-evaluated per trip. Only a finished drop-off counts
+  (M6-SH2, BUG-1520: `EconomySystem.InReachOfDropOff` / `NearestDropOff` skip `UnderConstruction`); see
+  "Implementation (M6-SH2)".
 - Production queues: 5 slots per building, resources deducted at queue time and refunded on
   cancel. Population is reserved when training *starts*; a full cap pauses the queue.
 - Construction sites are buildings in `UnderConstruction` state with progress; HP grows with
@@ -10424,10 +10426,7 @@ rules are unchanged.
 - **Spending per opening (D21, 2026-10-18, data track: three openings per faction)**
   (`Content/AiSpendingReportTests.GeneratedNormal_Spending_Report`, the menu's map against an idle seat, 20 minutes: one
   Normal run per opening on the smallest seed in 1-50 whose Normal pick it is, plus Easy on seed 1): the idle seat falls
-  at malazan standard Normal seed 1 469 s, malazan crossbow_push Normal seed 5 463 s, malazan cadre_rush Normal seed 7
-  599 s, malazan standard Easy seed 1 479 s, whirlwind standard Normal seed 1 497 s, whirlwind raider_rush Normal seed 2
-  415 s, whirlwind holy_war Normal seed 3 583 s and whirlwind standard Easy seed 1 537 s. Across both factions 3 of those
-  8 marks had wood under 100 with gold at 300 or more, so the report reads "wood binds at some marks only, not the limit
+  at malazan standard Normal seed 1 465 s, malazan crossbow_push Normal seed 5 470 s, malazan cadre_rush Normal seed 7 644 s, malazan standard Easy seed 1 478 s, whirlwind standard Normal seed 1 501 s, whirlwind raider_rush Normal seed 2 416 s, whirlwind holy_war Normal seed 3 583 s and whirlwind standard Easy seed 1 525 s. Across both factions 2 of those 9 marks had wood under 100 with gold at 300 or more, so the report reads "wood binds at some marks only, not the limit
   overall". Re-printed 2026-10-26 (data track, D-R32) for M5-4g's reserve: Age II is now in at 509-616 s on every run
   (its step due at 5:00-8:00), Easy's too; before it, with no reserve and the production manager spending first, it came
   in at 509-1,098 s and the Whirlwind's Easy run never in 20 minutes (the idle seat fell at 498 / 474 / 619 / 497 s and
@@ -10774,6 +10773,13 @@ tests `Ai/CriterionMatch.cs` (the harness), `Ai/MatchCriterionTests`, `CommandRe
   | 2v2 | Vathar Crossing 1, 4 seats | 26,070 = 21:43 (72,000) | team 1 | 14 | 4 | Build Blocked 1, SealsGround 2, UnitInTheWay 1; Gather UnitGone 1; Move UnitGone 1 |
 
   Waves and hunts are the match's totals over its seats. The longest refusal run on any row is 1 think (no command refused twice on one target).
+  **Re-measured for M6-SH2** (a construction site is no drop-off; an AI with no worker retrains; "Implementation
+  (M6-SH2)"): the literal row Vathar Crossing seed 7 ends at 19,912 (seat 0, 5 waves); the Raraku row moves to **seed 3**,
+  25,083 (seat 1, 8 waves; seed 2 now ends at 56,940, past its bound: BUG-1521); Pale Hills seed 1 27,498 (seat 1, 8 waves);
+  generated seed 2 22,280 (seat 0, 8 waves); the FFA 39,102 (seat 3, 18 waves, 8 hunts); the 2v2 44,858 (team 1, 22 waves,
+  7 hunts); every check clean, every row equal in two processes, the bounds unchanged. QA's 42-match Hard v Normal tally
+  reads **28 / 10 / 4** (was 36 / 3 / 3): Raraku 13 / 1 / 0, Vathar 11 / 3 / 0, Pale Hills 4 / 6 / 4 (BUG-1522: Hard no
+  longer leads there).
   **Re-measured for M6-S10** (the Keep-corner cure and `gatherOverlap` 0.5; the table re-printed in "Implementation
   (M6-S10)"): the literal row is now **Vathar Crossing seed 7** (23,412, seat 0; seed 1 ends at 24,497, past 24,000), the
   Raraku row **seed 2** (27,936, seat 1; seed 1 no longer ends inside 72,000: BUG-1460), Pale Hills seed 1 42,384, generated
@@ -12783,6 +12789,248 @@ loop runs differently (the check is behind `QueueCount > 0`), so no AI match mov
   part 1 here; `AiOpeningPairsReportTests` (0, 2) / (2, 0) and the two `DR35ProsePinQaTests` rows by the data track's
   D-R39 (the same session). (4) Requests the view's M6-VH8 raised for the sim (STATE Requests 58 / 59): a per-tick list of
   queued orders dropped at their turn behind a read-only ViewApi accessor, and an LFS-pointer check in `tools/qa/smoke.ps1`.
+
+### Implementation (M6-SH2)
+
+2026-11-15. The sim's hardening: the owner's playtest bug first (BUG-1520), then the causes behind the Stress rows red by
+ruling (BUG-1462), then one re-measure of the match pins.
+
+**Item 0, BUG-1520: a construction site is not a drop-off.** `EconomySystem.InReachOfDropOff` and `NearestDropOff` tested
+`Alive`, `Owner` and `def.DropOff`, never `UnderConstruction`, so a worker delivered at a Camp, hut or hall the moment it
+was placed. Both now skip sites. The return leg (`StartReturn`): a finished drop-off in reach, deposit; else walk to the
+nearest finished one; none finished but an own drop-off site stands (`OwnsDropOffSite`), stand Returning with the cargo
+and look again every `EconomyConstants.RetryTicks` (the existing `Wait` retry), so the load is delivered once a drop-off
+is finished, the site included; no drop-off at all, the loop ends as before (Idle, cargo kept). A worker already walking
+its load to a site (a save from before the rule) re-picks on its next tick: `Step` asks `WalksToSite` (its walk's goal is in
+reach of an own site and of no finished drop-off) for a loaded walker, only on ticks where some drop-off site stands
+(one scan a tick in `Run`; since the fix round, BUG-1538, that scan lists the tick's drop-off sites in `World.DropOffSites`,
+scratch, not saved, and a walker tests only those: with every slot scanned per walker, 400 loaded walkers cost 1.0 ms a
+tick more while any player had a site standing; now +0.02 ms, `Stress/DropOffSiteScanQaStressTests`). `EndsForQueue` reads the finished rule: an order queued behind the loop with
+only a site standing starts at once, cargo kept. A damaged or repairing drop-off is finished and still counts.
+- **Readers checked:** `Deposit` runs only after `InReachOfDropOff`; the AI already read "finished" everywhere it asks
+  for a drop-off (`AiPlayer.HasDropOff`, `InGatherReach`, `DefenseManager.NearestDropOff`), and `FarExpansion.OwnDropOffNear`
+  counts sites on purpose (a site by a mine means the mine needs no new drop-off); ViewApi has no drop-off reader (read,
+  not edited); training, research and rally points already require a finished building (`ProductionSystem.ApplyTrain`,
+  `ApplyResearch`, `OwnFinishedAt`).
+- **No new state, no format change, no number** (the retry is the loop's own `RetryTicks`).
+- **Tests:** `Economy/DropOffSiteTests` (20 of its 22 rows red on the base: in reach of a site, nothing banked and the
+  cargo kept, then a delivery within 200 ticks of the site finishing; a finished hall 20 m off walked to and delivered at;
+  a walk to a site from a save re-picks the next tick; a queued order with only a site starts at once; gold and wood, a
+  hall and a Camp-type building, the Laborer and the Teblor Gatherer; the damaged-drop-off and no-drop-off controls green
+  on both), its twin and save rows and its allocation row (0 bytes).
+
+**Item A, BUG-1465.** (a) Traced on Raraku seed 1, seat 0 from 30,000: workers were trained only by the opening's `train`
+steps, and production's composition holds no worker, so once those steps were done a seat that lost every worker never
+trained another (4,058 gold and a finished Keep for 42,000 ticks, defending every think against two razing soldiers; the
+defense blocks nothing). `BuildOrderExecutor.Retrain`, first thing in the executor's think: a seat with no live worker and
+none in a queue sends a Train of a worker type at a finished own building that may train it now (`AiPlayer.TryTrain`:
+the view's `CanTrain`, its cost, outside the reserve), whatever its steps and whether it defends; the command rides
+`Blackboard.ProductionPending`, which nothing judges (no new saved state). With no gold for one nothing is sent.
+(b) Traced on `AiOpeningPairsReportTests` (2, 0) seed 13 at the base: the hall-first rule (M5-4d slice 2) was working:
+the Whirlwind seat reserved the hall's wood (0 / 275) and its four workers gathered it; it was 18 wood short when the
+20:00 report stopped. No code change; `Ai/RetrainTests.AWorker_NoHall_*` guards the rule (green on the base too). On this
+tree item 0 changes that match (the seat is defeated at about 19,000).
+- **Tests:** `Ai/RetrainTests` (criterion 1's scene red on the base: a Laborer queued within 200 ticks while three raiders
+  raze the Keep and the seat defends, one Train only; no gold, nothing; the allocation row), `Stress/M6Sh2DeterminismStressTests`
+  (Raraku seed 1: twins to the first retrain + 2,000 ticks, a save the tick the retrain is sent followed hash for hash, the
+  replay played back).
+
+**Item B, BUG-1460: no wood rule built (the trace showed the brief's rule could not end the stall).** Raraku Normal v
+Normal, seeds 1-8, every check on, 72,000 ticks (`Stress/MatchRowsM6S10Report`), M6-S10 → M6-SH2 (end tick, winner):
+
+| Seed | M6-S10 | M6-SH2 |
+| --- | --- | --- |
+| 1 | no end | no end (BUG-1460) |
+| 2 | 27,936, seat 1 | 56,940, seat 0 (BUG-1521) |
+| 3 | no end | 25,083, seat 1 |
+| 4 | no end | 25,083, seat 1 |
+| 5 | 29,569 | 31,420, seat 1 |
+| 6 | no end | 25,083, seat 1 |
+| 7 | 28,547 | 28,633, seat 0 |
+| 8 | 28,547 | 28,633, seat 0 |
+
+Seeds 3, 4 and 6 (one match) end (`MapSlice2StressTests` Raraku 3 / 4 / 6 green; out of
+`MatchCriterionSweepQaStressTests.Known`). Seed 1 traced (seat lines every 3,000 ticks): with the retrain, seat 0 spends
+its 4,058 gold (workers and soldiers that die to seat 1's raiders) and is left at 2 gold, 0 units and 11 buildings with a
+watchtower; seat 1 (24 workers, 5,638 gold, wood 2) was already **starved** by the M5-9a rule from 22,480 (wood its army
+mix needs, no wood node known) and sent its starved waves; they died to seat 0's towers and from 48,000 seat 1 has no
+army, so the starved rule (which needs `ai.starvedMinArmy` 1 free soldier) has nothing to send. The brief's rule (1) is
+that same rule, already firing; rule (2) needs a known node of the missing resource, and seat 1 **knows no tree at all**:
+the nearest live tree, 41.8 m from its drop-offs, was never explored, and its scout role is spent (`ai.scoutReplacements`).
+Neither part of the rule could end this match, so neither was built (no scene, no knob). Seed 1 stays in `Known`
+(BUG-1460) with `RarakuStallProbeQaStressTests` printing it. Seed 2 now ends at 56,940 and its winner, with workers,
+sends nothing for 8,799 ticks (p0 40,161..48,960): BUG-1521, `Known` with its id; it was `MatchCriterionTests`' Raraku row,
+which moves to seed 3 (25,083, seat 1), the bound unchanged.
+
+**Item C, BUG-1461 / 1463: traced, cause found, no movement change kept.** Raraku seed 1 (this tree) holds seat 0's worker
+1 from 5,131 (30 give-ups): it stands at (55.25, 124.0) in the east mouth of a one-cell passage (cells 25-27 blocked on
+every row but 62), and the AI's rally point (goal cell 7,963 = (27, 62)) is in that mouth: eight soldiers park round the
+worker. Every walk east presses diagonally into the passage's mouth; the soldier in its way could only yield along the
+passage, but a shove moves a unit along the contact normal, into the wall, and a blob's point yields to a push only when
+the pushed line holds the whole blob (BUG-0033's rule, `ShoveDirection` / `ChainHoldsItsGroups`). Reproduced in
+`Movement/ParkedArmyGatherTests` (the `Bug1461_*` report rows: held from 1,616-2,157, 0-1 deliveries in 6,000 ticks), not
+in the open or with the army parked in the passage before the worker came (asserted rows). A generic change was tried (a
+blocked gatherer shoves own parked non-gatherers, the line ahead whole): it freed 1 of the 3 passage shapes and not
+Raraku's, so it was reverted (it would have moved every pin for a partial cure). Candidates for the Producer: the AI's
+rally point kept off one-cell passages (an AI rule, docs/02's rally), or a shove along the walker's free direction.
+`Movement/HeldWorkerProbe` now checks every tick past the clock with the Producer's definition (BUG-1464 item 1: never in
+reach of its node or a finished drop-off in the 600 ticks).
+
+**Item D, the other rows.**
+- `FarExpandProbeQaStressTests` (vathar_crossing, 2, 4 seats): green as is.
+- `StarvedSaveTwoProcessQaStressTests.PaleHillsSeed1_*`: re-staged, Pale Hills seed 1 → Raraku seed 1 (renamed
+  `RarakuSeed1_*`): Pale Hills seed 1 ends at 27,498 with no seat ever stamped, Raraku seed 1's winner is stamped from
+  22,480; green.
+- `StartingResourcesAiStressTests.EachOpening_AtHigh_*`: opening 2 green as is (all three rows); opening 1 green against
+  openings 1 and 2, red against 0 (`crossbow_push` seed 9: high's mean bank 2:00-10:00 213 against 1.5 x standard's 137):
+  for ruling (high's opening-1 Malazan seat banks its start while its standard twin never reaches Age II on this seed).
+- `QA/ScoutCapQaTests.OneScoutKilled_*(seed: 5)`: green as is (all ten seeds). `EconomyFuzzStressTests` (conservation):
+  green. New in the same run: `FarExpandProbeQaStressTests.PaleHillsSeeds2And5_To144000_Measured(2)` and
+  `PaleHills_LegLosses_Measured(2, Normal)` red on BUG-1151's shape (player 1's Gather to a gone node refused 9 thinks in
+  a row at 26,461: the rebalance re-send), the open bug, now met on Pale Hills seed 2.
+- `KeepCornerCureQaStressTests` (C): red as before, five rows at 0.5 (`HardShapes` cliff28_25, depot22_20, edge1_15;
+  `TwoByTwoDepot` (22, 20) Gatherers; `KeepOnTheMapEdge` (1, 15)); `FuzzSeeds57To120_NoHeldWorker` at 0.5 is green (seed
+  72 no longer held). For ruling with C. `Stress/WideCrowdStressTests`: both columns unchanged (no movement change; seeds
+  1-40: 0.4 m arrived 250-303 of 500, 0.75 m 126-189; seeds 41-80: 108-119 / 43-75 of 128).
+- New, found by the re-run: `MapSlice2StressTests.NormalVersusNormal_PaleHillsSeed5_SlowRaze_EndsWithin72000` red (BUG-1523:
+  no result by 72,000; seat 0 down to 1 unit and no hall, seat 1 with 81 units and 2 hunts: the lone-unit shape, BUG-1116's
+  family; the tally's Pale Hills seed 5 also ends in none). Listed, not re-bound.
+
+**Item E, the pins (re-measured once, after the last behaviour change; old values in the code comments).**
+- `MatchCriterionTests`: Vathar seed 7 19,912 (was 23,412), seat 0; Raraku row seed 2 → **seed 3**, 25,083 (BUG-1521);
+  Pale Hills seed 1 27,498 (was 42,384), seat 1; generated seed 2 22,280 (was 21,822), seat 0; FFA 39,102 (was 52,098),
+  seat 3; 2v2 44,858 (was 57,154), team 1. `HalfWay` 11,706 → 9,956. Every check clean; the bounds unchanged.
+- `HardVersusNormalTallyQaStressTests` (42 matches to 72,000): **28 / 10 / 4** (Hard / Normal / none; was 36 / 3 / 3):
+  Raraku 13 / 1 / 0, Vathar Crossing 11 / 3 / 0, Pale Hills 4 / 6 / 4. **Hard no longer leads on Pale Hills** (BUG-1522, a
+  finding for the balance pass).
+- Hashes re-pinned with "was" comments: `StandardPresetPinQaTests` (7 AI scenes), `OutcomePinM73bQaTests` (7 AI scenes),
+  `NonHardMatchPinQaTests` (8), `CounterCompositionTests.TheNonHardPins_*` (8), `ReserveTwinTests` (2 rich rows, from the
+  third hash), `SharedVisionFfaPinTests` (menu seed 3, the 4-seat AI), `HardKnobsPinTests.NormalGathering`; the save
+  scenes (no AI, no site) did not move. `OutcomePinM73bQaTests`' save scenes and `StandardPresetPinQaTests`' did not move.
+- Replays: the pre-map AI fixture `Replays/premap/replay_ai_ffa_standard.replay` re-recorded with the writer's flag (the
+  three non-AI fixtures wrote the same bytes); `seed21_playable.replay` re-recorded from `M3PlayableTest -- --seed 21
+  --break 19` headless (7,754 ticks, was 7,653; `GatherWedgeQaTests.CheckpointPrefixTicks`, `Seed21ResearchTests`' clicks
+  at 4,363 / 5,571). The golden `cross_map_seed1.replay` did **not** move. `CliTests.Match_TheLiteralRow_*` green.
+- Re-staged rows (a premise the new rules broke, the reason in each comment): `AiPlayerTests.TenStepBuildOrder_*` (a Build
+  step's first send is checked against the first think with a builder free: the Easy laborers walked their loads past the
+  depot site), `AiDeterminismTests` waves seed 1 → 2 (the Easy seat's first wave at 7,281 on seed 1), `HuntTests.TheRingLeg_*`
+  and QA's `HuntSweepRound2LegQaTests.ARingLeg_*` (player 0 kept worker-less with no gold: its retrained worker's sight
+  pulled the army off the ring).
+
+**Determinism.** Twins, a save mid-wait and a replay for the drop-off rule (`DropOffSiteTests`, the M6-S11 queue rows,
+every AI match in the pins) and for the retrain (`Stress/M6Sh2DeterminismStressTests`: Raraku seed 1, the first retrain at
+26,481, a save that tick followed for 2,000 ticks, the replay played back). The data hash (B74DC7AE61B4862D), the save
+format (10) and the replay formats (9 / 6) are unchanged; no `game/data` byte changed.
+
+**Questions for the Producer (rule 67), each with the developer's recommendation.**
+1. BUG-1460 seed 1: a winner with no army, no wood known and its scouts spent cannot finish. Recommendation: let a seat that
+   is short of a resource its army mix needs and knows no node of it send one idle worker on the scout's sweep again,
+   past `ai.scoutReplacements` (an existing role; whether the cap should bind here is the Producer's call).
+2. BUG-1461: the AI's rally point inside a one-cell passage. Recommendation: keep the rally point off a passage cell (the
+   rally rule, an AI change) rather than loosen the push rule, which held its armies' blobs since BUG-0033.
+3. The rows whose meaning changed (listed, not re-worded; the default loop's only red rows): `TeblorOpeningQaTests.TheOpponentSentence_*`
+   (the Whirlwind no longer defeats the Teblor on seed 1), `DR35ProsePinQaTests.AgeTwoProse_*` (whirlwind seed 13 is now
+   defeated at 15:19; the row pins "never" and "still stands"), `DR35ProsePinQaTests.Malazan_Bug0982Prose_*` (it reads the
+   re-printed Age II cells against the BUG-0982 threshold table, which is D33's and not re-printed), `ReachRuleQaTests`
+   (2, 80 m) (the farthest wood target 201.1 m against the control's 116.6 m; traced in fix round 1, below), and whirlwind.md's "What it
+   says" under the holy war's table (holy_war no longer falls on seed 3). Recommendation: the data track re-words the
+   sentences; the Producer rules on the reach row.
+
+**Fix round 1 (QA: FAIL, eight Stress rows red and not named; BUG-1531 to 1538).** One behaviour change (BUG-1151's
+fix), one cost fix with no behaviour change (BUG-1538), the rest re-staged or listed for ruling.
+- **BUG-1151 (met again as BUG-1537's Pale Hills seed 2 row): fixed.** Traced: player 1, no worker idle, sends one
+  rebalance Gather a think from 26,261 to a remembered gold mine at (110, 124) that is gone; each is dropped at apply
+  (`NoResourceNode`), the worker goes on gathering wood, so it never goes Idle and BUG-0570's mark (judged on idle workers
+  only) never comes. `EconomyManager.NoteDroppedRebalance`: a worker at work whose last AI Gather has applied but which still
+  carries the other kind had it dropped (a Gather that applies sets the cargo's kind at once, `EconomySystem.StartGather`),
+  so the node is marked as an idle worker's would be (out of sight, the handle sent) and the worker counts as what it still
+  gathers. Reads only the seat's own cargo (`PlayerView.TryGetCargo`); no new state, no number. Test:
+  `Ai/RebalanceDroppedGatherTests` (red without the fix: one gone mine tried 5 times in 40 thinks; with it, each once).
+  The sweep's Pale Hills 2 row and `FarExpandProbe`'s Pale Hills 2 rows (red last round on the same shape) are green.
+- **BUG-1538: fixed (no behaviour change).** `World.DropOffSites` (scratch, not saved): `EconomySystem.Run`'s one scan a
+  tick lists the drop-off sites, and `WalksToSite` tests only those (the finished-drop-off scan runs only for a walker whose
+  goal is beside an own site). QA's `Stress/DropOffSiteScanQaStressTests` un-skipped: +0.021 ms a tick with a site standing
+  (was +0.99 ms). Every hash pin that does not involve BUG-1151 is unchanged.
+- **BUG-1533: re-staged.** `AiDeterminismTests.PaleHills_ToTheEndWithAHunt_*` (`HuntSeed`) and
+  `HuntStressTests.PaleHills_SavedMidHunt_*` (`MidHuntSeed`) play Pale Hills seed 2 (was 1): seed 1 ends at 27,498 with no
+  hunt; seed 2 ends at 42,016 after 4 hunts (the first at 34,761), the smallest seed that hunts. Pale Hills Normal v
+  Normal seeds 1-10 on this tree (end, winner, hunts): 1 27,498 p1 0; 2 / 10 42,016 p1 4; 3 / 4 / 6 43,751 p1 6; 5 no end
+  (BUG-1523), 2 hunts; 7 / 8 38,440 p0 3; 9 44,052 p1 1.
+- **BUG-1535: diagnosed (a match outcome, not a wedge), re-measured.** Minute lines of the Malazan seat (standard v
+  raider_rush, seed 2): raided all match, 63 units lost by 20:00, its workers 19 at 10:00 and 4 at 20:00, defending every
+  other minute; one wave (6:51); it reserves for Age II (400 / 200) and never banks it (gathered gold 2,630 by 10:00, 3,580
+  by 20:00, against the raider rush's 2,910 / 5,030 and Age II at 9:51). `ReservePairingsStressTests.KnownNoAgeTwo` re-measured:
+  the four old sides out (each now reaches Age II or is defeated), (0, 1, 1, 0) in; `NoWaveSides` 3 → 2 (Malazan waves 83,
+  defeats 7 / 4, alive without Age II 1 of 43).
+- **BUG-1536: a finding, the row re-staged.** The Pale Hills free-for-all on seed 3, probed every 6,000 ticks: from about
+  tick 30,000 no seat gathers gold again (gathered gold frozen at 8,880 / 8,850 / 8,890, banks 2-16 gold) and every seat
+  banks only wood (12,000-30,000 by 144,000), so none trains a soldier; p0 (5 soldiers, starved from 52,420) waves and
+  hunts but cannot finish p1 (13 units) and p3 (22), which have no army and so are never starved (`ai.starvedMinArmy`).
+  BUG-1460's shape with gold in place of wood (mines empty: QA's probe counts 0 live mines from tick 30,000). `HuntStressTests.FourAiSeats_*`'
+  free-for-all row moves to the smallest ending seed, 1 (91,995, p2, 4 hunts; seeds 2 / 5 end at 50,397 / 59,083, 4 does
+  not end); no bound raised.
+- **BUG-1537 Vathar Crossing seed 2: for ruling.** p0 lost its Keep at about 34,000 and is left with one Laborer, 276 gold,
+  20-70 wood and 10 soldiers (under the standard opening's wave size, 16 pop); the hall rebuild (BUG-1465 (b)) holds its
+  gold for the Keep (275 / 275) while the one Laborer hauls wood 10 at a time, so nothing else is bought or sent for 5,699
+  ticks (40,801..46,500); the match ends at 57,039. Not a wedge (the Laborer delivers); a slow end the silent-seat oracle
+  catches. The row stays red, named; `Known` is the Producer's to extend (criterion 3 lets it change only for Raraku).
+- **BUG-1531 `ReachRuleQaTests` (2, 80 m): traced, for ruling.** The 174 m target at 4,781 is a **gold mine**: the
+  rebalance (no worker idle) moves wood gatherer Laborer 28, standing at the 117 m forest, to gold, and `NearestNode` takes
+  the mine nearest **the worker** (61 m from it, 174 m from the hall) over the home mines (about 100 m from it, 17 m from the
+  hall). At 6,361 that mine's gatherer is rebalanced back to wood and the wood nearest it lies 197 m from the hall, the
+  row's 201 m. This is the documented rule ("the known node of that kind nearest the worker") applied to a worker far from
+  home, not a deviation from it; the control met no such rebalance. A cure (measure a rebalance's pick from the drop-off the
+  worker delivers to, or by the haul to the nearest finished drop-off) changes a documented rule and every pin: the
+  Producer's call. Red, named.
+- **BUG-1534 `StarvedPickOracleQaStressTests` (raraku, 5): for ruling, left red.** What each choice changes: (a) the retrain
+  wins (QA's reading of docs/02): the row's oracle exempts a worker Train sent while the seat has no worker, docs/02's
+  starved paragraph says so; test and docs only, no pin moves. (b) the starved stamp wins: `BuildOrderExecutor.Retrain`
+  sends nothing while `StarvedSince >= 0`; a behaviour change: Raraku seed 5 diverges from 27,960 (it ends at 31,420 now;
+  with no retrain at all it ended at 31,089), any match whose worker-less seat is stamped re-rolls, and every pin is
+  re-measured again; a stamped seat with gold and no worker then never retrains (BUG-1465 (a) undone for that case).
+- **BUG-1532: done.** `DR39ReStatementQaTests` asserts the side is **not** in `DefeatedBeforeDue` (the cross-check kept, the
+  other way round); `AiPlayerTests.TenStep*` asserts at most one checked step waited for a builder (Easy: the crossbow
+  range, 720 → 760; Hard: none); `smoke.ps1`'s space; the stray BOM.
+- **Pins, re-measured after BUG-1151's fix (the round's only behaviour change):** one moved,
+  `CounterCompositionTests.TheNonHardPins_*` (pale_hills, 3, Easy) `1EAF7C1D0E471B75 36000 2639` → `5470B5C79FC5E953 36000
+  3153` (re-pinned, the old value in its comment). Unchanged: `MatchCriterionTests` (six rows and `HalfWay`),
+  `StandardPresetPinQaTests`, `NonHardMatchPinQaTests`, `OutcomePinM73bQaTests`, the other seven `TheNonHardPins_*`,
+  `ReserveTwinTests`, `SharedVisionFfaPinTests`, `HardKnobsPinTests`, the premap AI replay, `seed21_playable.replay`
+  (`Seed21ResearchTests`, `GatherWedgeQaTests`), `CliTests.Match_TheLiteralRow_*`, the golden; the Hard v Normal tally
+  28 / 10 / 4 as before (Raraku 13 / 1 / 0, Vathar 11 / 3 / 0, Pale Hills 4 / 6 / 4: BUG-1522 stands).
+- **Red at the end of the round, each named:** default loop: `DR35ProsePinQaTests` x2 and
+  `TeblorOpeningQaTests.TheOpponentSentence_*` (criterion 10, for ruling, unchanged), `ReachRuleQaTests` (2, 80 m)
+  (BUG-1531, for ruling). Stress: `Bug0982_*` x2 (D33's), `KeepCornerCureQaStressTests` x5 (criterion 5, BUG-1461 / 1463),
+  `StartingResourcesAiStressTests` (1, 0) (for ruling, as before), `MapSlice2StressTests` Pale Hills 5 (BUG-1523),
+  `StarvedPickOracleQaStressTests` (raraku, 5) (BUG-1534, for ruling), `MatchCriterionSweepQaStressTests` Vathar 2
+  (BUG-1537, for ruling). `DropOffSiteScanQaStressTests` reads +0.33 ms in a category run beside the default loop (every
+  tick 3 ms, the machine shared) and +0.027 ms alone (rule 42).
+
+**Fix round 2 (the Producer's rulings; tests and docs only, no production byte: `git diff 63a6a2a -- sim/Rts.Sim game
+tools` is empty, so no pin moves).**
+- **BUG-1534, the retrain wins.** `StarvedPickOracleQaStressTests`: the oracle failed on any Train sent on a stamped think
+  → it exempts a worker-type Train sent while the seat has no live worker (counted and printed as "worker retrain on a
+  stamped think"), and nothing else. docs/02's starved paragraph: no word on the retrain → one sentence (waiting for that
+  unit never stops the worker retrain).
+- **BUG-1537, Vathar Crossing seed 2.** `MatchCriterionSweepQaStressTests.Known`: Raraku 1 / 2 only → plus
+  `("vathar_crossing", 2) = "BUG-1537"`, the diagnosis as its comment (one Laborer hauling wood for the hall rebuild,
+  silent 5,699 ticks, not stuck). No bound raised.
+- **BUG-1531, `ReachRuleQaTests` (2, 80 m).** `[InlineData(2UL, 80f)]` → the same row with `Skip = "BUG-1531 ..."` (same
+  body, same bound). The cure is decided (a rebalance's pick measured from the worker's nearest finished drop-off) and is
+  the first item of the next sim task that changes the AI, which un-skips the row.
+- **BUG-1524 (S3), the content pins.** (a) `TeblorOpeningQaTests.TheOpponentSentence_*`: asserted the Malazan row stands
+  and the Whirlwind row defeats → each row's clause built from the row (`Fell < 0`: "and still stands at 20:00", else
+  "and is defeated at N s"); teblor.md's sentence: Malazan 323 / 448 s stands, Whirlwind 316 / 429 s defeated at 1,022 s,
+  "the Whirlwind match is the balance pass's" → 321 / 425 s and stands against both, the M6-S10 and D31 figures kept in
+  the bracket, the clause now "the Whirlwind match is no longer a defeat". (b) `DR35ProsePinQaTests.AgeTwoProse_*`: seed 13
+  pinned as "never" and "still stands at 20:00 without Age II" → read from its cell (`never (defeated 15:19)`), the
+  sentence "seed 13's side never reaches Age II and is defeated at 15:19" on whirlwind.md. (c)
+  `DR35ProsePinQaTests.Malazan_Bug0982Prose_*`: `[Fact]` → `[Fact(Skip = "BUG-1524: D33 re-measures ...")]`, no assertion
+  edited; malazan.md gets one line under the threshold table (it predates M6-SH2; the Age II table under "Age II against
+  the Whirlwind" is newer). (d) whirlwind.md "What it says" under the holy war's table: "falls before its first wave is
+  due only on seed 3" → `holy_war` falls on none of the nine runs; seed 3 survives the 5:46 Malazan wave and sends one
+  wave at 14:45 (numbers from the table only).
+- This section, BUG-1536's line: "mines empty or unknown" → "mines empty" (QA's probe: 0 live mines from tick 30,000).
 
 ## Testing strategy
 

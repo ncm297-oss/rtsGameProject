@@ -3,7 +3,7 @@
 | Field | Value |
 | --- | --- |
 | Severity | S3 |
-| Status | open |
+| Status | open (Raraku seed 1 only since M6-SH2; seeds 3 / 4 / 6 end at 25,083) |
 | Found | 2026-11-15-0506, task M6-S10 (developer, criterion 11) |
 | System | sim: AI end game (a winner that cannot finish), economy (wood on Raraku) |
 | Fixed by | |
@@ -23,3 +23,11 @@ No held worker causes it (a seat-0 worker is held 5,000-7,300 and 8,600-10,000 b
 BUG-1461) and no lone unit goes unhunted (BUG-1116 is a different shape). `MatchCriterionTests`' Raraku row moved to seed 2 by
 the brief's rule; `MatchCriterionSweepQaStressTests.Known` holds seeds 1, 3, 4 and 6 (silent seats; the shared list makes `FarExpandProbeQaStressTests` (raraku, 1) print its oracles, so that row is green); the two-process end-game row
 follows the criterion row.
+
+## M6-SH2
+Seeds 1-8 now: none / 56,940 / 25,083 / 25,083 / 31,420 / 25,083 / 28,633 / 28,633 (were none / 27,936 / none / none /
+29,569 / none / 28,547 / 28,547). QA: the drop-off rule alone (BUG-1520) ends seeds 3 / 4 / 6; the retrain alone ends
+none. Seed 1: the winner (24 workers, 5,638 gold) knows no tree at all (the nearest stands 41.8 m from its drop-offs,
+never explored), its scouts are spent and its starved waves died to towers, so the brief's wood rule had nothing to act
+on and was not built. **Producer decision (docs/01 2026-11-16): a seat short of a resource its army needs that knows no
+node of it sends a worker on the scout's sweep again, past `ai.scoutReplacements`; the next AI task.**

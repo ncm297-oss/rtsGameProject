@@ -144,7 +144,8 @@ internal static class EconomyManager
                 continue;
             }
             if (board.UnitGeneration[slot] != u.Handle.Generation) continue;
-            board.GatherNode[slot] = default; // at work after its last order applied: that Gather wasn't dropped
+            NoteDroppedRebalance(ai, slot);
+            board.GatherNode[slot] = default; // at work after its last order applied: judged once
             if (u.State is UnitState.Building) continue;
             if (board.GatherKind[slot] == Gold) gold++;
             else if (board.GatherKind[slot] == Wood) wood++;
@@ -246,6 +247,27 @@ internal static class EconomyManager
         if (board.NodeDropped[node.Index] == 0) board.NodeMarks++;
         board.NodeDropped[node.Index] = node.Generation;
         board.GatherKind[slot] |= Dropped;
+    }
+
+    /// <summary>
+    /// BUG-1151: a worker at work (not Idle) whose last AI Gather has applied. A Gather that applies sets the worker's cargo kind
+    /// to its node's at once (<see cref="EconomySystem.StartGather"/>), so one still carrying the other kind had it dropped: the
+    /// rebalance's Gather to a remembered node that is gone, which leaves the worker on its old node, so it never goes Idle for
+    /// <see cref="NoteDroppedGather"/> to judge. The node is marked as that rule marks one (out of sight, the handle sent), and
+    /// the worker counts as what it still gathers. Without it the rebalance sent a gatherer to the same gone mine every think
+    /// (Pale Hills seed 2, player 1, from tick 26,261).
+    /// </summary>
+    private static void NoteDroppedRebalance(AiPlayer ai, int slot)
+    {
+        Blackboard board = ai.Board;
+        EntityHandle node = board.GatherNode[slot];
+        byte sent = (byte)(board.GatherKind[slot] & (Gold | Wood));
+        if (node.Generation == 0 || sent == 0 || !ai.View.TryGetCargo(slot, out _, out ResourceKind carried)) return;
+        if (carried == (sent == Gold ? ResourceKind.Gold : ResourceKind.Wood)) return; // it applied
+        board.GatherKind[slot] = carried == ResourceKind.Gold ? Gold : Wood;
+        if (!ai.View.TryGetResource(node.Index, out SeenResource seen) || seen.Handle != node || seen.Remaining >= 0) return;
+        if (board.NodeDropped[node.Index] == 0) board.NodeMarks++;
+        board.NodeDropped[node.Index] = node.Generation;
     }
 
     /// <summary>Whether own worker <paramref name="slot"/> carries a full load of <paramref name="kind"/> (1 gold, 2 wood).</summary>

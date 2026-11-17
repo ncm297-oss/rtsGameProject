@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S3 |
-| Status | open |
+| Status | fixed (M6-SH2 fix round 1, verified by QA re-check 1) |
 | Found | 2026-11-08-0726, task M5-5 (game-dev, the criterion rows' refusal-run check) |
 | System | AI economy (`EconomyManager.Rebalance`, BUG-0570's dropped-Gather mark) |
-| Fixed by | |
+| Fixed by | M6-SH2 fix round 1 (`EconomyManager.NoteDroppedRebalance`, test `Ai/RebalanceDroppedGatherTests`) |
 
 ## Repro
 1. Generated map, seed 4, Normal v Normal (`CriterionMatch.Build("generated", 4)`), played with the checks on
@@ -38,3 +38,18 @@ gatherer again and sends it to the same nearest remembered mine: one wasted comm
   trips the refusal-streak check at tick 35,301: player 1's Gather (unit 45) to a gone node at (176, 100) refused 9 thinks
   in a row. The row is skipped under this id with the measurement (the far fog oracle clean to there). Not fixed here
   (the brief's (d)). `MatchCriterionSweepQaStressTests.Known` generated 4 still fails as recorded.
+
+## M6-SH2 fix round 1 (the developer): fixed
+- Met again on Pale Hills seed 2 (BUG-1537's sweep row and `FarExpandProbe`'s Pale Hills 2 rows): player 1, no worker
+  idle, sent one rebalance Gather a think from 26,261 to a gone mine at (110, 124), each dropped at apply.
+- Fix: a worker at work whose last AI Gather has applied but which still carries the other kind had that Gather dropped
+  (a Gather that applies sets the cargo kind at once), so the node is marked as BUG-0570 marks one, and the worker counts
+  as what it still gathers. `Ai/RebalanceDroppedGatherTests` is red without it (one gone mine tried 5 times in 40 thinks).
+
+## QA re-check 1 (2026-11-15-2136, M6-SH2 fix round 1)
+- Verified. With `NoteDroppedRebalance` taken out (scratch tree), `Ai/RebalanceDroppedGatherTests` is red (one mine,
+  (28, 50), tried 5 times) and the sweep's Pale Hills 2 row fails at 26,461 ("player 1 Gather ... refused 9 thinks in a
+  row"); with it both are green, and the whole Stress category has no Pale Hills 2 red.
+- QA's `QA/RebalanceDroppedGatherQaTests`: the wood mirror (every tree gone; 12 gone trees tried once each, red without the
+  fix: one tree tried 4 times), a save / load every 3 thinks while marks are made (12 loads follow hash for hash, marks equal;
+  red without the fix only for want of a mark), and a no-false-marks control (live mines: 8 Gathers, 0 refused, 0 marks).

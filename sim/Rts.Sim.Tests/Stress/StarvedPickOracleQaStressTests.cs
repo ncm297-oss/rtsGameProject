@@ -13,6 +13,8 @@ namespace Rts.Sim.Tests.Stress;
 /// waits for and can never get what it lacks. A Train sent on a stamped think means the check and production disagree on the
 /// pick or on what is payable. Also measured (reported, not asserted): thinks where a stamped seat's bank of a kind it
 /// lacked for the pick rose since its last think (income of a kind the rule called unobtainable).
+/// M6-SH2 fix round 2 (BUG-1534, the Producer's ruling: the retrain wins): a worker-type Train sent while the seat has no
+/// live worker is exempt (the docs/02 retrain; Raraku seed 5's seat 0 at tick 27,960 is the case), and nothing else is.
 /// </summary>
 [Trait("Category", "Stress")]
 public class StarvedPickOracleQaStressTests
@@ -24,6 +26,7 @@ public class StarvedPickOracleQaStressTests
     private sealed class Seat
     {
         public int Thinks, StampedThinks, TrainsThisThink, TrainsOnStamped, FirstStamp = -1, Rose, PrevGold = -1, PrevWood = -1;
+        public int RetrainsThisThink, RetrainsOnStamped;
         public bool PrevStamped, PrevShortGold, PrevShortWood;
         public string? Error;
     }
@@ -42,7 +45,18 @@ public class StarvedPickOracleQaStressTests
     private static void Watch(Simulation sim, int p, Seat s)
     {
         AiPlayer ai = sim.AiOf(p)!;
-        ai.SentForTests = c => { if (c.Kind == CommandKind.Train) s.TrainsThisThink++; };
+        // BUG-1534 (Producer's ruling, M6-SH2 fix round 2: the retrain wins): a Train of a worker type sent while the seat has
+        // no live worker is the docs/02 retrain ("trains one first thing ... whatever its build order says"), which runs on a
+        // starved think too, since a worker is the only way a seat with none gets back the kind it lacks. That Train, and
+        // nothing else, is exempt from the oracle; it is counted and printed.
+        ai.SentForTests = c =>
+        {
+            if (c.Kind != CommandKind.Train) return;
+            World w = sim.World;
+            if (c.TypeId >= 0 && c.TypeId < w.Data.Units.Length && w.Data.Units[c.TypeId].Slot == UnitSlot.Worker && LiveWorkers(w, p) == 0)
+                s.RetrainsThisThink++;
+            else s.TrainsThisThink++;
+        };
         ai.ThoughtForTests = a =>
         {
             s.Thinks++;
@@ -51,6 +65,7 @@ public class StarvedPickOracleQaStressTests
             {
                 s.StampedThinks++;
                 if (s.FirstStamp < 0) s.FirstStamp = a.Now;
+                s.RetrainsOnStamped += s.RetrainsThisThink;
                 if (s.TrainsThisThink > 0)
                 {
                     s.TrainsOnStamped++;
@@ -70,7 +85,16 @@ public class StarvedPickOracleQaStressTests
             s.PrevGold = a.Gold;
             s.PrevWood = a.Wood;
             s.TrainsThisThink = 0;
+            s.RetrainsThisThink = 0;
         };
+    }
+
+    private static int LiveWorkers(World w, int player)
+    {
+        int n = 0;
+        for (int i = 0; i < w.Units.Capacity; i++)
+            if (w.Units.Alive[i] && w.Units.Owner[i] == player && w.Data.Units[w.Units.TypeId[i]].Slot == UnitSlot.Worker) n++;
+        return n;
     }
 
     /// <summary>
@@ -95,7 +119,7 @@ public class StarvedPickOracleQaStressTests
         {
             Seat s = seats[p];
             _out.WriteLine($"  seat {p}: {s.Thinks} thinks, {s.StampedThinks} stamped (first {s.FirstStamp}), Train on a stamped think {s.TrainsOnStamped}, "
-                + $"lacked kind rose while stamped {s.Rose}; {(s.Error ?? "clean")}");
+                + $"worker retrain on a stamped think {s.RetrainsOnStamped} (exempt, BUG-1534), lacked kind rose while stamped {s.Rose}; {(s.Error ?? "clean")}");
         }
         foreach (Seat s in seats) Assert.True(s.Error == null, s.Error);
     }

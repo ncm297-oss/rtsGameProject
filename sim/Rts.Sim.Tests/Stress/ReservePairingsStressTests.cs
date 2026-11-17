@@ -56,22 +56,26 @@ public class ReservePairingsStressTests
     /// </summary>
     internal static readonly (int Malazan, int Whirlwind, int Nth, int Player)[] KnownNoAgeTwo =
     {
-        // crossbow_push v raider_rush seed 19, Malazan: no wave (its army stays under the wave's size, so the reserve never
-        // engages: base behaviour); peak army 7, 910 gold / 15 wood at 20:00, Age II due 7:00 (400 / 200) never paid.
-        (1, 1, 3, 0),
-        // crossbow_push v standard seed 32, Malazan: wood-starved, one wave at 7:29, 794 gold / 5 wood at 20:00; the Crossbow
-        // Range (0 / 150) due since 2:43 and Age II (400 / 200) since 7:00 (round 1 had it defeated at 12:35).
-        (1, 0, 2, 0),
-        // cadre_rush v standard seed 13, Whirlwind: no gold node known by 20:00 (11 gold / 277 wood; the expand's
-        // freeMine=False ungatedGold=False), so Age II (400 / 200, due 7:30) is not Fillable; 3 waves from 6:51.
-        (2, 0, 1, 1),
-        // crossbow_push v standard seed 9, Whirlwind: the same, no gold node known (9 gold / 235 wood), Age II due 7:30;
-        // 5 waves from 6:20.
-        (1, 0, 1, 1),
+        // M6-SH2 fix round (BUG-1535, re-measured once on the M6-SH2 tree: a site is no drop-off, the retrain, BUG-1151's
+        // mark): the four sides below now reach Age II or are defeated, so they are out; one new side is in.
+        // standard v raider_rush seed 2, Malazan: raided all match (63 units lost by 20:00, its workers 19 at 10:00 and 4 at
+        // 20:00, defending on every other minute); it waved once (6:51), reserved for Age II (400 / 200) and never banked it:
+        // gathered 2,630 gold by 10:00 and 3,580 by 20:00 against the raider rush's 2,910 / 5,030 (Age II at 9:51). No worker
+        // held or wedged (QA and the fix round's minute lines): a war it loses slowly, not a stall. Base: Age II 12:38.
+        (0, 1, 1, 0),
+        // Out (each "now reaches Age II or is defeated: take it out" on this tree), as they were listed:
+        // (1, 1, 3, 0) crossbow_push v raider_rush seed 19, Malazan: no wave, peak army 7, Age II due 7:00 never paid.
+        // (1, 0, 2, 0) crossbow_push v standard seed 32, Malazan: wood-starved, one wave at 7:29.
+        // (2, 0, 1, 1) cadre_rush v standard seed 13, Whirlwind: no gold node known by 20:00.
+        // (1, 0, 1, 1) crossbow_push v standard seed 9, Whirlwind: the same, no gold node known.
     };
 
-    /// <summary>The restated criterion's totals over the 27 runs (BUG-1027): the base's no-wave sides, Malazan's waves, the defeats.</summary>
-    internal const int NoWaveSides = 3, MinMalazanWaves = 79, MaxMalazanDefeats = 8, MaxWhirlwindDefeats = 5;
+    /// <summary>
+    /// The restated criterion's totals over the 27 runs (BUG-1027): the base's no-wave sides, Malazan's waves, the defeats.
+    /// M6-SH2 fix round (BUG-1535): no-wave sides re-measured 3 -> 2 on the M6-SH2 tree (Malazan waves 83, defeats 7 / 4,
+    /// alive without Age II 1 of 43); the other three are bounds the tree meets unchanged.
+    /// </summary>
+    internal const int NoWaveSides = 2, MinMalazanWaves = 79, MaxMalazanDefeats = 8, MaxWhirlwindDefeats = 5;
 
     /// <summary>The 27 rows' results, by (Malazan, Whirlwind, nth); the row that completes the set asserts the totals (the rows of one class run one at a time).</summary>
     private static readonly SortedDictionary<int, Result> s_pairings = new();
@@ -172,7 +176,7 @@ public class ReservePairingsStressTests
         Assert.Contains("side 1 alive at 20:00 without Age II", fails);
         Assert.DoesNotContain("side 0", fails);
         Assert.Contains(printed, l => l.Contains("KNOWN"));
-        Assert.Equal(4, KnownNoAgeTwo.Length);
+        Assert.Single(KnownNoAgeTwo); // M6-SH2 fix round (BUG-1535): 4 -> 1, re-measured
     }
 
     /// <summary>BUG-1010's six seeds: <c>cadre_rush</c> v <c>raider_rush</c> 8, 14, 18, 23; <c>crossbow_push</c> v <c>raider_rush</c> 19, 25 (printed).</summary>

@@ -328,25 +328,23 @@ Where the step was sent before D32, on Raraku against the Whirlwind at 8:35, the
 `QA/Content/AiHouseRuleReportTests.MenuMapNormal_HouseSources_Report` and `MenuMapNormal_TwelfthHouse_Report`).**
 Since M5-4f the executor skips a house step once the population cap is the hard cap (100): the step is done with no
 command sent and no Hut placed. On the menu's map (20 minutes, the other seat idle): Normal, seed 1: the cap reaches 100
-at 1044 s; the last Hut step (step 16) is done at a cap of 100; skipped at the hard cap: steps 15, 16; 10 Huts stand at
+at 1000 s; the last Hut step (step 16) is done at a cap of 100; skipped at the hard cap: steps 15, 16; 10 Huts stand at
 20:00, 0 past the cap. As on the other pages, the 12th Hut step measured taken out: without the 12th Hut step (step 16)
-on the same seed, the cap reaches 100 at 1044 s, and 10 Huts stand at 20:00, 0 past the cap. The step stays: the second
+on the same seed, the cap reaches 100 at 1000 s, and 10 Huts stand at 20:00, 0 past the cap. The step stays: the second
 Longhouse (+10 pop, D32's expansion) brings the cap to 100 with 10 Huts, so both the 11th and the 12th Hut steps (steps
 15 and 16) are skipped at the hard cap on this seed (re-measured 2026-11-15 after the sim's M6-S10 gather change; before
 it step 15 was skipped and step 16 never reached); a seat that loses or never builds the second Longhouse needs both,
 and they cost nothing until they are reached.
 
 **Spending on the menu's map (D32, 2026-11-14, gathering gold 0.85 / wood 0.75 a second; `Content/AiSpendingReportTests.GeneratedNormal_Spending_Report`).**
-Against an idle seat, 12 forests and 8 mines (the menu's), 20 minutes. Normal, seed 1 (the smallest seed in 1-50 whose
-Normal pick is this opening): the idle base falls at 466 s; in hand at 5 min 230 gold / 150 wood; the first wave at 316
-s; Age II in at 436 s. Easy, seed 1 (Easy always plays the first opening): the idle base falls at 494 s; in hand at 5
-min 290 gold / 105 wood; the first wave at 318 s; Age II in at 450 s. Against an active opponent on the same map and seed
-(`QA/Content/TeblorOpeningQaTests`, re-measured 2026-11-15 after the sim's M6-S10 gather change; its rows pin the ticks
-and `TheOpponentSentence_QuotesTheReportRows` this sentence): a Normal Teblor seat sends its first wave at 323 s, is in
-Age II at 448 s and still stands at 20:00 against a Normal Malazan; against a Normal Whirlwind it sends its first wave at
-316 s, is in Age II at 429 s and is defeated at 1,022 s (D31's runs, 2026-11-14: 340 s and 466 s against the Malazan;
-362 s, 464 s and beaten at 910 s against the Whirlwind). BUG-1240's "beaten before Age II" is gone on this seed; the
-Whirlwind match is the balance pass's.
+Against an idle seat, 12 forests and 8 mines (the menu's), 20 minutes. Normal, seed 1 (the smallest seed in 1-50 whose Normal pick is this opening): the idle base falls at 470 s; in hand at 5 min 245 gold / 135 wood; the first wave at 320 s; Age II in at 425 s. Easy, seed 1 (Easy always plays the first opening): the idle base falls at 502 s; in hand at 5 min 245 gold / 60 wood; the first wave at 326 s; Age II in at 450 s. Against an active opponent on the same map and seed
+(`QA/Content/TeblorOpeningQaTests`, re-measured in session 2026-11-15-2136 after the sim's M6-SH2 drop-off and retrain change; its rows
+pin the ticks and `TheOpponentSentence_QuotesTheReportRows` this sentence): a Normal Teblor seat sends its first wave at
+321 s, is in Age II at 425 s and still stands at 20:00 against a Normal Malazan; against a Normal Whirlwind it sends its
+first wave at 321 s, is in Age II at 425 s and still stands at 20:00 (M6-S10's runs, 2026-11-15: 323 s and 448 s against
+the Malazan; 316 s, 429 s and beaten at 1,022 s against the Whirlwind; D31's runs, 2026-11-14: 340 s and 466 s against
+the Malazan; 362 s, 464 s and beaten at 910 s against the Whirlwind). BUG-1240's "beaten before Age II" is gone on this
+seed, and since M6-SH2 the Teblor seat stands at 20:00 in both matches: the Whirlwind match is no longer a defeat.
 
 ## Difficulty
 
