@@ -38,7 +38,9 @@ public partial class AtlasModelTest : Node
     private const string Tag = "ATLAS MODEL TEST";
 
     // Triangles per role surface in the base's files (95186a7, measured with a probe over the imported meshes; the props'
-    // own colours summed under "props"). The shield's 12 triangles are in the Heavy Infantry's team count.
+    // own colours summed under "props"). The shield's 12 triangles are in the Heavy Infantry's team count. M6-V25: the four
+    // types built as atlases from the start have no base surfaces; their rows pin the first build's tiles (the manifest's
+    // part shares after decimation, and 12 triangles a prop box), so a later import that moves a face between roles fails.
     private static readonly Dictionary<string, Dictionary<string, int>> BaseTriangles = new()
     {
         ["malazan_laborer"] = new() { ["team"] = 799, ["outfit"] = 873, ["skin"] = 426, ["head"] = 499 },
@@ -52,6 +54,12 @@ public partial class AtlasModelTest : Node
         ["teblor_javelin_thrower"] = new() { ["team"] = 600, ["outfit"] = 967, ["skin"] = 132, ["head"] = 400, ["hair"] = 450, ["props"] = 60 },
         ["teblor_shaman"] = new() { ["team"] = 700, ["outfit"] = 742, ["skin"] = 358, ["head"] = 450, ["hair"] = 450, ["props"] = 36 },
         ["teblor_breaker"] = new() { ["team"] = 780, ["outfit"] = 1093, ["skin"] = 106, ["head"] = 400, ["hair"] = 399, ["props"] = 24 },
+        // M6-V25 (first build): robe 5 boxes + staff 1 + staff head 2; satchels 3 + strap 1 + munition 1; robe 5 + veil 1;
+        // two blades of 4 + head-wrap 2.
+        ["malazan_cadre_mage"] = new() { ["team"] = 950, ["outfit"] = 959, ["skin"] = 140, ["head"] = 349, ["props"] = 96 },
+        ["malazan_sapper"] = new() { ["team"] = 600, ["outfit"] = 1147, ["skin"] = 132, ["head"] = 400, ["props"] = 60 },
+        ["whirlwind_priest"] = new() { ["team"] = 950, ["outfit"] = 959, ["skin"] = 140, ["head"] = 349, ["props"] = 72 },
+        ["whirlwind_zealot"] = new() { ["team"] = 749, ["outfit"] = 857, ["skin"] = 392, ["head"] = 450, ["props"] = 120 },
     };
 
     // The base's team triangles drawn at one texel (a team prop): the Heavy Infantry's shield box.

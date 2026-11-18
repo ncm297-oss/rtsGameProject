@@ -38,6 +38,9 @@ namespace Rts.Game.Tests;
 /// M7-V5: eleven model types (five Teblor), one per manifest entry, every other type (the Teblor Destrier Rider and War-dog
 /// among them) a capsule; each file's figure (without its props' own surfaces) is 1.8 m within 5 %: the file holds the base
 /// figure and the view applies the data scale (TeblorModelTest checks the drawn size).
+/// M6-V25: fifteen model types (the Cadre Mage, Sapper, Priest and Zealot join), still one per manifest entry; the capsules
+/// are exactly the six types without a source on disk (the Wickan Lancer, Horse Raider, Destrier Rider, War-dog, Catapult
+/// and Battering Ram); FootModelTest checks the four new figures' clips and cast gesture.
 /// </remarks>
 public partial class ModelViewTest : Node
 {
@@ -111,10 +114,19 @@ public partial class ModelViewTest : Node
         // M7-V5: one model type per manifest entry (11: the six of M6-V21 and five Teblor); every other type, the Teblor
         // Destrier Rider and War-dog among them, a capsule (checked per type above).
         Check(models == expected.Count, $"{models} types draw a model, the manifest has {expected.Count} entries");
-        var capsules = new List<string>();
-        for (int t = 0; t < data.Units.Length; t++) if (!views.DrawsModel(t) && data.Units[t].Key.StartsWith("teblor_", StringComparison.Ordinal)) capsules.Add(data.Units[t].Key);
-        GD.Print($"teblor capsules: [{string.Join(' ', capsules)}]");
+        // M6-V25: every foot unit is a figure; the capsules left are exactly the horses, the dog and the machines (no source
+        // on disk: the owner's packs).
+        var capsules = new SortedSet<string>(StringComparer.Ordinal);
+        for (int t = 0; t < data.Units.Length; t++) if (!views.DrawsModel(t)) capsules.Add(data.Units[t].Key);
+        GD.Print($"capsules: [{string.Join(' ', capsules)}]");
+        Check(capsules.SetEquals(CapsuleTypes), $"capsules [{string.Join(' ', capsules)}], want exactly [{string.Join(' ', CapsuleTypes)}]");
     }
+
+    // M6-V25: the unit types still drawn as capsules: the two cavalry, the Destrier Rider, the War-dog, the catapult and the ram.
+    private static readonly string[] CapsuleTypes =
+    {
+        "malazan_catapult", "malazan_wickan_lancer", "teblor_destrier_rider", "teblor_war_dog", "whirlwind_battering_ram", "whirlwind_horse_raider",
+    };
 
     // Criterion 3 (b): triangles, textures, height, feet, facing, rig and the team material, read from the imported model.
     private void ModelRows(GameData data, UnitViews views, JsonNode m)

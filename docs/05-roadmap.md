@@ -876,6 +876,9 @@ open S1 / S2. Retro below; open S3 / S4 listed there.)_
       pack has no characters) and today's capsule under the real camera; screenshots `docs/images/look-test-2026-10-17[-far].png`;
       docs/04 "Look test (M6-V10)" and the first three licensing rows (Quaternius, CC0). Left: the owner's art call, then the real
       models and animations through the manifest / import script. **2026-11-13:** the owner's art call is made ("look: go": the Quaternius stack with outfits and team colour); the art pass starts with M6-V20 (the import tooling and two Malazan units). **M6-V20, 2026-11-13-1118: the first slice is in**: `tools/import-assets.ps1` + `tools/asset-manifest.json` + `tools/art/build_unit.py` (raw packs → Blender → `.glb`, byte-reproducible), `malazan_laborer` and `malazan_crossbowman` as animated models with a `team` material and six shared clips, three licensing rows. Not ticked: about thirty unit types and every building are still placeholders, and BUG-1321 (400 animated figures 14.5-21 ms a frame) is fixed before more are built. **M6-V24, 2026-11-16-2036: every unit model is one surface, one material and one texture sheet** (eleven types; draw calls for 400 figures 5,191 → 1,003; 400 figures 11.6 → 6.6 ms a frame, 1,000 figures 29.2 → 16.5 ms, QA's bench; looks unchanged on 110 before / after pictures a side). Not ticked: the unit types and buildings still placeholders, and the Rider and the War-dog wait on a horse / dog pack (the owner's download).)
+      **M6-V25, 2026-11-17-0816:** the Cadre Mage, the Sapper, the Priest and the Zealot are figures: 15 unit types are
+      models, 6 are capsules (two cavalry, the Destrier Rider, the War-dog, the Catapult, the Ram: horses, dogs and machines
+      wait on the owner's packs). 400 mixed figures 6.9 ms a frame. **Not ticked:** those six and every building.
 - [ ] Real SFX and placeholder music; alerts with sound. (M6-V12, 2026-10-17-2344: **real SFX and the alerts are in**: 16 clips cut from
       the owner's Sonniss GDC 2026 bundle (`tools/audio/trim-wav.ps1` + `sfx-manifest.json`, LFS, docs/04 licensing rows) for 12 events
       (`SfxEvent`); world sounds only for what the local player sees on screen, at most 4 per 100 ms; attack alerts (`ViewApi/AttackAlerts`
@@ -986,6 +989,10 @@ open S1 / S2. Retro below; open S3 / S4 listed there.)_
       1.5, about 2.76 m; a throw and a cast clip added to the library). **Not ticked; left:** the Destrier Rider and the
       War-dog (no horse or dog pack on disk: the owner's download), Teblor buildings, and the balance pass (D33, after the
       gather-overlap value ships).
+      **D33, 2026-11-17-0816: the balance pass's first step.** The Teblor AI fields Breakers, Destrier Riders and
+      War-dogs (Normal 12 / 22 / 39 of 64 matches, Hard 35 / 43 / 48; BUG-1420 fixed); `cadre_rush` waves at 16 army pop,
+      `holy_war` at 14 (BUG-1553 fixed); data hash 318E8C4256456C05. **Not ticked:** Easy lost the Anointing (BUG-1612,
+      D34), unit stats are untouched, the Destrier Rider and the War-dog are still capsules (the owner's packs).
 
 ## M8 — Shadow
 
@@ -997,6 +1004,10 @@ open S1 / S2. Retro below; open S3 / S4 listed there.)_
       track's), the Shadow Archer's stand-still stealth is M8-2, the view's stealth visuals for a forest-hidden unit are
       checked once a roster ships.) **D-R38, 2026-11-14-2156: `docs/factions/shadow.md` is pin-ready** (0 readiness
       problems; its "Schema gaps (D-R38)" G1-G14 list what the sim still owes before a roster can ship: STATE Request 56).
+      **M8-2, 2026-11-17-0816: the Shadow Archer's stand-still stealth is built as a generic unit field, on test data
+      only**: `units.json` `stillStealth { status, delay }`, `StillStealthSystem` in phase 5 after the forest's pass, the
+      save part `STIL` written only when the data has the field (format 10 unchanged); docs/03 "Implementation (M8-2)".
+      **Still not ticked:** no shipped unit or faction carries either rule; the view's check waits on the roster.
 - [ ] Hounds (pack bonus, 7-alive limit), Aptorian Stalker, Shadow-step, Summon Wraiths.
 - [ ] Shadow AI with ambush behavior; models; balance pass (watch early-game stealth, see faction page).
 

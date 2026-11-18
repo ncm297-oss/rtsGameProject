@@ -23,6 +23,8 @@ namespace Rts.Game.Tests;
 /// M6-V24 (BUG-1530): (1b) on copies whose Frenzy takes 0.5, 0.8 and 1.2 s, the cast clip starts at its first frame when the
 /// cast is first seen and plays once across it, frame by frame (never stepping back, ending within one frame of its end);
 /// (1c) eight walking Warriors still start their walk at eight different places (the crowd phase).
+/// M6-V25: rows (1) and (1b) run for every caster drawn as a model: the Shaman (Blood-oil Frenzy), the Cadre Mage (Telas
+/// Fire) and the Priest of the Whirlwind (Sandstorm); each casts with the library's <c>attack_cast</c>, as its clip map names.
 /// </summary>
 /// <remarks>
 /// Headless, in the scene loop: <c>&amp; $env:GODOT --headless --path game res://tests/CastClipTest.tscn</c>; prints
@@ -38,6 +40,12 @@ public partial class CastClipTest : Node
     private readonly List<string> _failures = new();
     private GameData _data = null!;
     private int _shaman, _frenzy;
+
+    // M6-V25: the casters whose cast gesture rows (1) and (1b) check: (unit id, the ability it casts).
+    private static readonly (string Unit, string Ability)[] Casters =
+    {
+        ("teblor_shaman", "blood_oil_frenzy"), ("malazan_cadre_mage", "telas_fire"), ("whirlwind_priest", "sandstorm"),
+    };
     private string? _shots;
     private AnimationLibrary? _realLibrary;
     private float[]? _realLengths;
@@ -58,8 +66,11 @@ public partial class CastClipTest : Node
             _frenzy = _data.FindAbility("blood_oil_frenzy");
             Check(CastClip == "attack_cast", $"the cast slot is named {CastClip}, want attack_cast");
             UnitViews.UseModels = true;
-            await ShamanRow();
-            foreach (float seconds in new[] { 0.5f, 0.8f, 1.2f }) await CastOnceRow(seconds);
+            foreach ((string unit, string ability) in Casters)
+            {
+                await CasterRow(unit, ability);
+                foreach (float seconds in new[] { 0.5f, 0.8f, 1.2f }) await CastOnceRow(unit, ability, seconds);
+            }
             await CrowdPhaseRow();
             await NoClipRow();
             await CapsuleRow();
@@ -75,10 +86,11 @@ public partial class CastClipTest : Node
         SceneExit.Quit(this, _failures.Count == 0 ? 0 : 1);
     }
 
-    // (1) The shipped library: the casting Shaman plays attack_cast, then idle once the cast is done.
-    private async Task ShamanRow()
+    // (1) The shipped library: the casting caster plays attack_cast, then idle once the cast is done.
+    private async Task CasterRow(string unitId, string abilityId)
     {
-        (Match match, Simulation sim, UnitViews views, int slot) = await CastingShaman();
+        int unit = _data.FindUnit(unitId), ability = _data.FindAbility(abilityId);
+        (Match match, Simulation sim, UnitViews views, int slot) = await Casting(unit, ability);
         try
         {
             if (slot < 0) return;
@@ -86,10 +98,10 @@ public partial class CastClipTest : Node
             Animation? library = UnitModels.Library?.HasAnimation(CastClip) == true ? UnitModels.Library.GetAnimation(CastClip) : null;
             string playing = anim?.CurrentAnimation ?? "(no player)";
             Animation? actual = anim != null && anim.HasAnimation(playing) ? anim.GetAnimation(playing) : null;
-            GD.Print($"(1) the Shaman casting (state {sim.World.Units.State[slot]}): plays '{playing}' ({actual?.Length:F2} s), shown clip {views.ShownClip(slot)}");
-            Check(views.DrawsModel(_shaman) && anim != null, "(1) the Shaman is not drawn as a model");
+            GD.Print($"(1) {unitId} casting {abilityId} (state {sim.World.Units.State[slot]}): plays '{playing}' ({actual?.Length:F2} s), shown clip {views.ShownClip(slot)}");
+            Check(views.DrawsModel(unit) && anim != null, $"(1) {unitId} is not drawn as a model");
             Check(playing == "attack_cast" && library != null && actual == library && anim!.IsPlaying() && views.ShownClip(slot) == (int)UnitModels.Clip.Cast,
-                $"(1) the casting Shaman plays '{playing}' (the library's attack_cast: {actual == library && library != null}), want attack_cast");
+                $"(1) the casting {unitId} plays '{playing}' (the library's attack_cast: {actual == library && library != null}), want attack_cast");
             if (_shots != null && DisplayServer.GetName() != "headless")
             {
                 var camera = match.GetNode<RtsCamera>("RtsCamera");
@@ -97,13 +109,13 @@ public partial class CastClipTest : Node
                 camera.SetZoom(CameraLimits.MinZoom);
                 camera.SetFocus(p.X, p.Y + 2f);
                 for (int k = 0; k < 12; k++) await Frame(); // into the thrust (0.5 s clip)
-                await Shot("shaman-casting-zoom20");
+                await Shot($"{unitId}-casting-zoom20");
             }
             for (int k = 0; k < 40 && sim.World.Units.State[slot] == UnitState.Casting; k++) sim.Tick();
             views.Sync(sim.World, 1f);
             string after = anim?.CurrentAnimation ?? "";
-            GD.Print($"(1) the cast done (state {sim.World.Units.State[slot]}): plays '{after}'");
-            Check(sim.World.Units.State[slot] != UnitState.Casting && after == "idle", $"(1) after the cast: state {sim.World.Units.State[slot]}, plays '{after}', want idle");
+            GD.Print($"(1) {unitId}: the cast done (state {sim.World.Units.State[slot]}): plays '{after}'");
+            Check(sim.World.Units.State[slot] != UnitState.Casting && after == "idle", $"(1) {unitId} after the cast: state {sim.World.Units.State[slot]}, plays '{after}', want idle");
         }
         finally
         {
@@ -111,11 +123,12 @@ public partial class CastClipTest : Node
         }
     }
 
-    // (1b) M6-V24, BUG-1530: on a data copy whose Frenzy takes `seconds` (found by id and edited, rule 58), the cast clip
-    // starts at its first frame on the frame the Shaman is first seen casting and spans the cast once: frame by frame at
+    // (1b) M6-V24, BUG-1530: on a data copy whose ability takes `seconds` (found by id and edited, rule 58), the cast clip
+    // starts at its first frame on the frame the caster is first seen casting and spans the cast once: frame by frame at
     // 60 FPS and 20 ticks a second (the view's alpha a third of a tick further each frame) its position only grows, never
     // wraps, ends within one frame of the clip's end on the last frame of the cast, and the figure plays idle after it.
-    private async Task CastOnceRow(float seconds)
+    // M6-V25: for each caster (the ability is edited in whichever faction file holds its id).
+    private async Task CastOnceRow(string unitId, string abilityId, float seconds)
     {
         string dataDir = ProjectSettings.GlobalizePath("res://data");
         string copy = Path.Combine(Path.GetTempPath(), $"rts-cast-clip-{OS.GetProcessId()}", "data");
@@ -123,17 +136,21 @@ public partial class CastClipTest : Node
             Directory.CreateDirectory(Path.Combine(copy, Path.GetRelativePath(dataDir, dir)));
         foreach (string file in Directory.GetFiles(dataDir, "*", SearchOption.AllDirectories))
             File.Copy(file, Path.Combine(copy, Path.GetRelativePath(dataDir, file)), true);
-        string path = Path.Combine(copy, "factions", "teblor", "abilities.json");
-        JsonNode abilities = JsonNode.Parse(File.ReadAllText(path))!;
         int edited = 0;
-        foreach (JsonNode? a in abilities["abilities"]!.AsArray())
-            if ((string?)a!["id"] == "blood_oil_frenzy") { a["castTime"] = seconds; edited++; }
-        File.WriteAllText(path, abilities.ToJsonString());
+        foreach (string path in Directory.GetFiles(Path.Combine(copy, "factions"), "abilities.json", SearchOption.AllDirectories))
+        {
+            JsonNode abilities = JsonNode.Parse(File.ReadAllText(path))!;
+            int here = 0;
+            foreach (JsonNode? a in abilities["abilities"]!.AsArray())
+                if ((string?)a!["id"] == abilityId) { a["castTime"] = seconds; here++; }
+            if (here > 0) File.WriteAllText(path, abilities.ToJsonString());
+            edited += here;
+        }
         DataLoadResult loaded = DataLoader.LoadAll(copy);
         try { Directory.Delete(Path.GetDirectoryName(copy)!, true); } catch (IOException) { } catch (UnauthorizedAccessException) { }
-        if (!Check(edited == 1 && loaded.Ok, $"(1b) {seconds} s: {edited} Frenzy rows edited, the copy loads {loaded.Ok}")) return;
+        if (!Check(edited == 1 && loaded.Ok, $"(1b) {unitId} {seconds} s: {edited} {abilityId} rows edited, the copy loads {loaded.Ok}")) return;
         GameData data = loaded.Data!;
-        int shaman = data.FindUnit("teblor_shaman"), frenzy = data.FindAbility("blood_oil_frenzy");
+        int shaman = data.FindUnit(unitId), frenzy = data.FindAbility(abilityId);
         int castTicks = data.Abilities[frenzy].CastTicks;
 
         var views = new UnitViews();
@@ -142,22 +159,22 @@ public partial class CastClipTest : Node
         var sim = new Simulation(new SimConfig(3, 2, 8, 4096) { Data = data, Combat = false });
         UnitStore u = sim.World.Units;
         NVector2[] west = StartLayout.Block(sim.World.NavGrid, 2, true, 1f);
-        // A Warrior first, so the Shaman is in slot 1 (BUG-1530's case: the old rule started its clip at 0.37 s).
+        // A Warrior first, so the caster is in slot 1 (BUG-1530's case: the old rule started its clip at 0.37 s).
         sim.Enqueue(Command.SpawnUnit(0, data.FindUnit("teblor_warrior"), west[1]));
         sim.Enqueue(Command.SpawnUnit(0, shaman, west[0]));
         sim.Tick();
         sim.Tick();
         int slot = -1;
         for (int i = 0; i < u.Capacity && slot < 0; i++) if (u.Alive[i] && u.TypeId[i] == shaman) slot = i;
-        Check(slot == 1, $"(1b) {seconds} s: the Shaman is in slot {slot}, want 1");
+        Check(slot == 1, $"(1b) {unitId} {seconds} s: the caster is in slot {slot}, want 1");
         views.Sync(sim.World, 1f);
         AnimationPlayer? anim = slot >= 0 ? views.AnimatorOf(slot) : null;
-        if (!Check(anim != null, $"(1b) {seconds} s: no Shaman model")) { views.QueueFree(); return; }
+        if (!Check(anim != null, $"(1b) {unitId} {seconds} s: no caster model")) { views.QueueFree(); return; }
         // Idle a while, so the clip that was playing stands somewhere in its loop (the old rule's start phase came from it).
         for (int f = 0; f < 20; f++) { views.Sync(sim.World, 1f, 1f / 60f); views.AdvanceAnimations(1.0 / 60.0, null); }
         sim.Enqueue(Command.UseAbility(0, new EntityHandle(slot, u.Generation[slot]), data.Units[shaman].Abilities.IndexOf(frenzy), u.Position[slot]));
         for (int k = 0; k < 6 && u.State[slot] != UnitState.Casting; k++) sim.Tick();
-        if (!Check(u.State[slot] == UnitState.Casting, $"(1b) {seconds} s: the Shaman is not casting ({u.State[slot]})")) { views.QueueFree(); return; }
+        if (!Check(u.State[slot] == UnitState.Casting, $"(1b) {unitId} {seconds} s: the caster is not casting ({u.State[slot]})")) { views.QueueFree(); return; }
 
         float length = views.Models!.ClipLength(shaman, UnitModels.Clip.Cast);
         const int perTick = 3; // 60 FPS at 20 ticks a second
@@ -182,13 +199,13 @@ public partial class CastClipTest : Node
         int wraps = 0;
         for (int k = 1; k < positions.Count; k++) if (positions[k] < positions[k - 1]) wraps++;
         float first = positions.Count > 0 ? positions[0] : -1f, last = positions.Count > 0 ? positions[^1] : -1f;
-        GD.Print($"(1b) cast {seconds} s ({castTicks} ticks, seen {castTicks - 1}): clip '{start}' {length:F2} s over {positions.Count} frames, first {first:F3} s, last {last:F3} s, {wraps} steps back; then '{after}'");
-        Check(start == "attack_cast", $"(1b) {seconds} s: plays '{start}' on the cast's first frame, want attack_cast");
-        Check(first >= 0f && first <= frameClip + 1e-4f, $"(1b) {seconds} s: the clip starts at {first:F3} s, want 0 within one frame ({frameClip:F3} s)");
-        Check(wraps == 0, $"(1b) {seconds} s: the clip stepped back {wraps} times (looped)");
-        Check(last >= length - frameClip - 2e-3f && last < length, $"(1b) {seconds} s: the clip ends the cast at {last:F3} s of {length:F3} s, want its end within one frame");
-        Check(positions.Count == (castTicks - 1) * perTick, $"(1b) {seconds} s: {positions.Count} frames of cast, want {(castTicks - 1) * perTick}");
-        Check(after == "idle", $"(1b) {seconds} s: after the cast plays '{after}', want idle");
+        GD.Print($"(1b) {unitId} cast {seconds} s ({castTicks} ticks, seen {castTicks - 1}): clip '{start}' {length:F2} s over {positions.Count} frames, first {first:F3} s, last {last:F3} s, {wraps} steps back; then '{after}'");
+        Check(start == "attack_cast", $"(1b) {unitId} {seconds} s: plays '{start}' on the cast's first frame, want attack_cast");
+        Check(first >= 0f && first <= frameClip + 1e-4f, $"(1b) {unitId} {seconds} s: the clip starts at {first:F3} s, want 0 within one frame ({frameClip:F3} s)");
+        Check(wraps == 0, $"(1b) {unitId} {seconds} s: the clip stepped back {wraps} times (looped)");
+        Check(last >= length - frameClip - 2e-3f && last < length, $"(1b) {unitId} {seconds} s: the clip ends the cast at {last:F3} s of {length:F3} s, want its end within one frame");
+        Check(positions.Count == (castTicks - 1) * perTick, $"(1b) {unitId} {seconds} s: {positions.Count} frames of cast, want {(castTicks - 1) * perTick}");
+        Check(after == "idle", $"(1b) {unitId} {seconds} s: after the cast plays '{after}', want idle");
         views.QueueFree();
         await Frame();
     }
@@ -243,7 +260,7 @@ public partial class CastClipTest : Node
         var lengths = (float[])_realLengths.Clone();
         lengths[(int)UnitModels.Clip.Cast] = 0f;
         LengthField.SetValue(null, lengths);
-        (Match match, Simulation sim, UnitViews views, int slot) = await CastingShaman();
+        (Match match, Simulation sim, UnitViews views, int slot) = await Casting(_shaman, _frenzy);
         try
         {
             if (slot < 0) return;
@@ -264,7 +281,7 @@ public partial class CastClipTest : Node
     private async Task CapsuleRow()
     {
         UnitViews.UseModels = false;
-        (Match match, Simulation sim, UnitViews views, int slot) = await CastingShaman();
+        (Match match, Simulation sim, UnitViews views, int slot) = await Casting(_shaman, _frenzy);
         try
         {
             if (slot < 0) return;
@@ -280,9 +297,10 @@ public partial class CastClipTest : Node
         }
     }
 
-    // A match with no bases, combat or fog; a Shaman of player 0 at the map's middle, given the Frenzy and ticked into its
-    // cast; the views synced. Slot -1 (a failure noted) when it never casts.
-    private async Task<(Match, Simulation, UnitViews, int)> CastingShaman()
+    // A match with no bases, combat or fog; a caster of player 0 at the map's middle, given its ability (aimed at its own
+    // feet: in range for a ground-targeted one) and ticked into its cast; the views synced. Slot -1 (a failure noted) when
+    // it never casts. M6-V25: any caster (was the Shaman and the Frenzy).
+    private async Task<(Match, Simulation, UnitViews, int)> Casting(int caster, int ability)
     {
         var match = GD.Load<PackedScene>("res://scenes/Match.tscn").Instantiate<Match>();
         AddChild(match);
@@ -297,17 +315,17 @@ public partial class CastClipTest : Node
         sim.Tick();
         sim.Tick();
         NVector2 mid = w.NavGrid.CellCenter(w.NavGrid.Width / 2, w.NavGrid.Height / 2);
-        sim.Enqueue(Command.SpawnUnit(0, _shaman, mid));
+        sim.Enqueue(Command.SpawnUnit(0, caster, mid));
         sim.Tick();
         sim.Tick();
         int slot = -1;
-        for (int i = 0; i < u.Capacity && slot < 0; i++) if (u.Alive[i] && u.Owner[i] == 0 && u.TypeId[i] == _shaman) slot = i;
-        if (!Check(slot >= 0, "no Shaman spawned")) return (match, sim, views, -1);
-        int index = _data.Units[_shaman].Abilities.IndexOf(_frenzy);
-        if (!Check(index >= 0, "the Shaman has no Blood-oil Frenzy")) return (match, sim, views, -1);
+        for (int i = 0; i < u.Capacity && slot < 0; i++) if (u.Alive[i] && u.Owner[i] == 0 && u.TypeId[i] == caster) slot = i;
+        if (!Check(slot >= 0, $"no {_data.Units[caster].Key} spawned")) return (match, sim, views, -1);
+        int index = _data.Units[caster].Abilities.IndexOf(ability);
+        if (!Check(index >= 0, $"{_data.Units[caster].Key} has no {_data.Abilities[ability].Key}")) return (match, sim, views, -1);
         sim.Enqueue(Command.UseAbility(0, new EntityHandle(slot, u.Generation[slot]), index, u.Position[slot]));
         for (int k = 0; k < 6 && u.State[slot] != UnitState.Casting; k++) sim.Tick();
-        if (!Check(u.State[slot] == UnitState.Casting, $"the Shaman is not casting ({u.State[slot]})")) return (match, sim, views, -1);
+        if (!Check(u.State[slot] == UnitState.Casting, $"{_data.Units[caster].Key} is not casting ({u.State[slot]})")) return (match, sim, views, -1);
         views.Sync(w, 1f);
         await Frame();
         views.Sync(w, 1f);

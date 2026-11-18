@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S3 (balance, the data track's D33) |
-| Status | open (the row reaches `main` as a named known case, `AliveWithoutAWave`, by the Producer's ruling 2026-11-16-2036) |
+| Status | fixed |
 | Found | 2026-11-16-2036, task M6-S12 (the developer) |
 | System | AI openings (content) |
-| Fixed by | |
+| Fixed by | D33 (2026-11-17-0816, 3f35d60): `holy_war` waves at 14 army pop / 918. Pair (0, 2) seed 3 waves at 6:21; `AliveWithoutAWave` is empty; QA ran 19 / 17 / 15 too (none cures it). |
 
 ## Repro
 1. `Content/AiOpeningPairsReportTests` pair (0, 2), seed 3, on M6-S12's tree.

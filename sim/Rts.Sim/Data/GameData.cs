@@ -219,6 +219,14 @@ public sealed class GameData
                 h.Add(1);
                 h.Add(u.Carry);
             }
+            // M8-2: the stand-still stealth only when the file carries it (a marker of its own, then both fields), so data
+            // without it hashes as before; either field away from its default counts, so each moves the hash on its own.
+            if (u.StillStealthStatus >= 0 || u.StillStealthDelayTicks != 0)
+            {
+                h.Add(2);
+                h.Add(u.StillStealthStatus);
+                h.Add(u.StillStealthDelayTicks);
+            }
         }
 
         h.Add(Resources.Length);
@@ -563,6 +571,17 @@ public sealed class GameData
     {
         foreach (FactionDef f in Factions)
             if (f.HasForestStealth) return true;
+        return false;
+    }
+
+    /// <summary>
+    /// M8-2: whether any unit type carries the stand-still stealth (<see cref="UnitDef.HasStillStealth"/>). With one, every
+    /// world on this data keeps, hashes and saves its per-unit state; without, none exists (docs/03 "Implementation (M8-2)").
+    /// </summary>
+    public bool AnyStillStealth()
+    {
+        foreach (UnitDef u in Units)
+            if (u.HasStillStealth) return true;
         return false;
     }
 

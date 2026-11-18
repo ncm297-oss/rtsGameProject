@@ -20,7 +20,9 @@ namespace Rts.Sim.Abilities;
 /// <c>TicksRemaining</c> is one more than the timed applications left it (1 = none), counts down as ever but never below 1,
 /// and a timed application onto it adds one (<see cref="StatusSystem.Hold"/>). Letting go takes the one back: the entry ends
 /// at once when nothing timed is left, else runs out exactly when the timed application would have. So the forest never
-/// shortens or lengthens a timed Stealthed, and a held entry always shows at least one tick left.
+/// shortens or lengthens a timed Stealthed, and a held entry always shows at least one tick left. M8-2: the stand-still
+/// stealth (<see cref="StillStealthSystem"/>) may hold the same entry too and adds a tick of its own; the count of holders is
+/// <see cref="StatusSystem.Holders"/>.
 /// </para>
 /// <para>
 /// <b>When.</b> Phase 5, after the countdown, regeneration and zones, before <see cref="StealthSystem.Run"/>: a unit that

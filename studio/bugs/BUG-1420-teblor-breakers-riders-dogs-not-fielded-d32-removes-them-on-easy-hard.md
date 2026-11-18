@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S3 (AI plays a thinner army than its own mix asks for; outside D32's criteria, which are Normal-only; no crash) |
-| Status | open |
+| Status | fixed |
 | Found | 2026-11-14-1246, task D32 (proposed by the developer for Normal; QA added the Easy / Hard regression) |
 | System | data: `game/data/factions/teblor/ai.json` `standard` (build order timing and file order vs the Age II `compositions`) |
-| Fixed by | |
+| Fixed by | D33 (2026-11-17-0816, 3f35d60): `teblor/ai.json` `standard` trains a Breaker, a Destrier Rider and a War-dog pack ahead of the expand step. 64 seats: Normal 12 / 22 / 39, Hard 35 / 43 / 48, Easy 27 / 36 / 51 (`D33BalanceReportTests`, QA's `D33TeblorRowQaStressTests`). What it cost Easy and Hard is BUG-1612. |
 
 ## Repro
 1. `dotnet test sim/Rts.Sim.Tests --filter "FullyQualifiedName~D32OpeningQaStressTests.Opening_Row_Report" --logger "console;verbosity=detailed"`

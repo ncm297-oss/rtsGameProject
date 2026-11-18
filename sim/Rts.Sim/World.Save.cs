@@ -176,6 +176,7 @@ public sealed partial class World
         for (int i = 0; i < Units.Capacity && !r.Failed; i++)
             if (Units.Alive[i] && !r.Check(Units.GoalCell[i] >= (Units.State[i] == UnitState.Moving ? 0 : -1) && Units.GoalCell[i] < cells)) return;
         if (!CheckForestState(r)) return;
+        if (!CheckStillState(r)) return; // M8-2: World.StillStealth.cs
         _ledger.ReadFrom(r);
         Techs.ReadFrom(r);
         Projectiles.ReadFrom(r, Data.Projectiles.Length, Data.Units.Length, Data.Buildings.Length);

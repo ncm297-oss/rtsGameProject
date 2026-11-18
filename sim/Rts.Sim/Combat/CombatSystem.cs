@@ -1233,6 +1233,8 @@ public static class CombatSystem
         if (u.Statuses.StealthedUnits != 0 && !hit.AttackerIsBuilding && u.IsAlive(hit.Attacker)) StealthSystem.OnAttackOrCast(world, hit.Attacker.Index);
         // M8-1: and the forest stealth's wait starts again for the attacker (the same moment).
         if (world.AnyForestStealth && !hit.AttackerIsBuilding && u.IsAlive(hit.Attacker)) ForestStealthSystem.OnAttackOrCast(world, hit.Attacker.Index);
+        // M8-2: and the stand-still stealth's.
+        if (world.StillStealthInData && !hit.AttackerIsBuilding && u.IsAlive(hit.Attacker)) StillStealthSystem.OnAttackOrCast(world, hit.Attacker.Index);
         // M4-3a: a hit from a higher level reveals the attacker to the victim's owner (before the retaliation below asks);
         // a tower too since BUG-0270.
         if (hit.AttackerLevel > 0) VisionSystem.OnHit(world, hit.Attacker, hit.AttackerIsBuilding, hit.AttackerLevel, u.Owner[v], world.Fog.LevelAt(u.Position[v]));
@@ -1244,6 +1246,8 @@ public static class CombatSystem
         bool forest = world.AnyForestStealth && hit.Damage > 0 && (uint)victimOwner < (uint)world.ForestStatusOf.Length && world.ForestStatusOf[victimOwner] >= 0;
         if (forest || ((uint)victimOwner < (uint)world.RegenPerTickOf.Length && world.RegenPerTickOf[victimOwner] > 0)) u.LastDamagedTick[v] = world.TickNumber;
         if (forest) ForestStealthSystem.OnHpLost(world, v);
+        // M8-2: a loss of hit points restarts the stand-still stealth's wait and ends its hold at once (a hit taking none does neither).
+        if (world.StillStealthInData && hit.Damage > 0) StillStealthSystem.OnHpLost(world, v);
         if (u.Hp[v] <= 0)
         {
             u.Hp[v] = 0;
@@ -1295,6 +1299,7 @@ public static class CombatSystem
         UnitStore u = world.Units;
         if (u.Statuses.StealthedUnits != 0 && !hit.AttackerIsBuilding && u.IsAlive(hit.Attacker)) StealthSystem.OnAttackOrCast(world, hit.Attacker.Index); // M4-5
         if (world.AnyForestStealth && !hit.AttackerIsBuilding && u.IsAlive(hit.Attacker)) ForestStealthSystem.OnAttackOrCast(world, hit.Attacker.Index); // M8-1
+        if (world.StillStealthInData && !hit.AttackerIsBuilding && u.IsAlive(hit.Attacker)) StillStealthSystem.OnAttackOrCast(world, hit.Attacker.Index); // M8-2
         if (hit.AttackerLevel > 0) VisionSystem.OnHit(world, hit.Attacker, hit.AttackerIsBuilding, hit.AttackerLevel, b.Owner[j], world.Fog.BuildingLevel(j)); // M4-3a, BUG-0270
         if (hit.Damage >= b.Hp[j])
         {

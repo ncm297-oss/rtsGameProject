@@ -76,6 +76,7 @@ public static class SaveFormat
     internal const uint TagUnits = 0x54494E55;     // "UNIT"
     internal const uint TagRegen = 0x4E474552;     // "REGN" (M7-1, format 10: the unit store's last part)
     internal const uint TagForest = 0x54535246;    // "FRST" (M8-1, format 10: after REGN, exactly when the data has a faction with forestStealth)
+    internal const uint TagStill = 0x4C495453;     // "STIL" (M8-2, format 10: after REGN / FRST, exactly when the data has a unit with stillStealth)
     internal const uint TagLedger = 0x5244454C;    // "LEDR"
     internal const uint TagStats = 0x54415453;     // "STAT"
     internal const uint TagTechs = 0x48434554;     // "TECH"

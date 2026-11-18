@@ -340,6 +340,8 @@ public sealed partial class Simulation : ICommandSink
         // M8-1: a faction's forest stealth holds or lets go of each of its units' Stealthed entry, before the detection pass
         // reads them. Nothing to do in a match whose seats have none.
         ForestStealthSystem.Run(World);
+        // M8-2: then a unit type's stand-still stealth holds or lets go of its units' entry. Nothing to do on data without one.
+        StillStealthSystem.Run(World);
         // M4-5: then which players detect each stealthed unit, from this tick's statuses and positions and the last fog
         // update, so phases 6-12 (casts, scans, towers, swings) read one answer. Nothing to do while no unit carries stealth.
         StealthSystem.Run(World);
@@ -412,6 +414,7 @@ public sealed partial class Simulation : ICommandSink
 
         UnitStore u = World.Units;
         ForestStealthStore? forestState = u.Forest; // M8-1
+        StillStealthStore? stillState = u.Still; // M8-2
         h.Add(u.Capacity);
         for (int i = 0; i < u.Capacity; i++)
         {
@@ -440,7 +443,10 @@ public sealed partial class Simulation : ICommandSink
             // M8-1: bit 22 a unit with forest-stealth state (its last landed attack, or the forest holding its stealth); the
             // arrays exist only when the data has a faction with the bonus, so other data hashes as before.
             bool forest = forestState != null && forestState.HasState(i);
-            h.Add((ulong)(byte)u.State[i] | ((ulong)(OrderBits(u, i) | (combat ? 1u << 17 : 0u) | (ability ? 1u << 18 : 0u) | (summoned ? 1u << 19 : 0u) | (flank ? 1u << 20 : 0u) | (regen ? 1u << 21 : 0u) | (forest ? 1u << 22 : 0u)) << 32));
+            // M8-2: bit 23 a unit with stand-still state (where and when it last moved, its last attack and hp loss, the hold);
+            // the arrays exist only when the data has a unit type with the field, so other data hashes as before.
+            bool still = stillState != null && stillState.HasState(i);
+            h.Add((ulong)(byte)u.State[i] | ((ulong)(OrderBits(u, i) | (combat ? 1u << 17 : 0u) | (ability ? 1u << 18 : 0u) | (summoned ? 1u << 19 : 0u) | (flank ? 1u << 20 : 0u) | (regen ? 1u << 21 : 0u) | (forest ? 1u << 22 : 0u) | (still ? 1u << 23 : 0u)) << 32));
             h.Add(u.Goal[i]);
             h.Add(u.GoalCell[i]);
             h.Add(u.OrderTick[i]);
@@ -472,6 +478,14 @@ public sealed partial class Simulation : ICommandSink
             {
                 h.Add(forestState!.LastAttackTick[i]);
                 h.Add((int)forestState.Held[i]);
+            }
+            if (still)
+            {
+                h.Add(stillState!.MovedTick[i]);
+                h.Add(stillState.StillAt[i]);
+                h.Add(stillState.LastAttackTick[i]);
+                h.Add(stillState.LastHurtTick[i]);
+                h.Add((int)stillState.Held[i]);
             }
         }
         h.Add(u.FreeCount);

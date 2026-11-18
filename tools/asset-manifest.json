@@ -431,6 +431,218 @@
         "walk": "walk",
         "attack": "attack_melee"
       }
+    },
+    {
+      "id": "malazan_cadre_mage",
+      "destination": "game/assets/models/malazan/malazan_cadre_mage/malazan_cadre_mage.glb",
+      "maxTriangles": 3000,
+      "textureSize": 512,
+      "yawDegrees": 180,
+      "materials": { "MI_Ranger": "outfit", "MI_Regular_Male": "skin", "MI_Superhero_Male": "head" },
+      "teamRole": "outfit",
+      "propColourSpace": "srgb",
+      "tints": { "outfit": { "colour": "#7a6545", "amount": 0.6 } },
+      "parts": [
+        { "source": "Modular Character Outfits - Fantasy[Standard]/Modular Character Outfits - Fantasy[Standard]/Exports/glTF (Godot-Unreal)/Outfits/Male_Ranger.gltf", "mesh": "Male_Ranger_Body", "triangles": 600, "team": true },
+        { "source": "Modular Character Outfits - Fantasy[Standard]/Modular Character Outfits - Fantasy[Standard]/Exports/glTF (Godot-Unreal)/Outfits/Male_Ranger.gltf", "mesh": "Male_Ranger_Head_Hood", "triangles": 350, "team": true },
+        { "source": "Modular Character Outfits - Fantasy[Standard]/Modular Character Outfits - Fantasy[Standard]/Exports/glTF (Godot-Unreal)/Outfits/Male_Ranger.gltf", "mesh": "Male_Ranger_Arms", "triangles": 550 },
+        { "source": "Modular Character Outfits - Fantasy[Standard]/Modular Character Outfits - Fantasy[Standard]/Exports/glTF (Godot-Unreal)/Outfits/Male_Ranger.gltf", "mesh": "Male_Ranger_Legs", "triangles": 250 },
+        { "source": "Modular Character Outfits - Fantasy[Standard]/Modular Character Outfits - Fantasy[Standard]/Exports/glTF (Godot-Unreal)/Outfits/Male_Ranger.gltf", "mesh": "Male_Ranger_Feet_Boots", "triangles": 300 },
+        { "source": "Universal Base Characters[Standard]/Universal Base Characters[Standard]/Base Characters/Godot - UE/Superhero_Male_FullBody.gltf", "mesh": "SuperHero_Male", "triangles": 350, "keepBones": ["Head", "neck_01"], "keepThreshold": 0.5 }
+      ],
+      "props": [
+        {
+          "name": "robe", "bone": "pelvis", "material": "robe", "colour": "#4e2a26",
+          "pose": { "source": "UAL1", "clip": "Idle_Loop", "at": 0.0 },
+          "offset": [0.0, 0.0, 0.0],
+          "boxes": [
+            { "at": [0.0, -0.02, -0.03], "size": [0.48, 0.34, 0.16] },
+            { "at": [0.0, -0.20, -0.40], "size": [0.70, 0.03, 0.78], "rotation": [-8, 0, 0] },
+            { "at": [0.0, 0.16, -0.40], "size": [0.70, 0.03, 0.78], "rotation": [8, 0, 0] },
+            { "at": [0.30, -0.02, -0.40], "size": [0.03, 0.48, 0.78], "rotation": [0, -8, 0] },
+            { "at": [-0.30, -0.02, -0.40], "size": [0.03, 0.48, 0.78], "rotation": [0, 8, 0] }
+          ]
+        },
+        {
+          "name": "staff", "bone": "hand_r", "material": "wood", "colour": "#4a3626",
+          "pose": { "source": "UAL1", "clip": "Idle_Loop", "at": 0.0 },
+          "offset": [0.0, 0.0, 0.0],
+          "boxes": [
+            { "at": [0.0, 0.0, 0.14], "size": [0.045, 0.045, 1.75] }
+          ]
+        },
+        {
+          "name": "staff_head", "bone": "hand_r", "material": "bronze", "colour": "#a07c3c",
+          "pose": { "source": "UAL1", "clip": "Idle_Loop", "at": 0.0 },
+          "offset": [0.0, 0.0, 0.0],
+          "boxes": [
+            { "at": [0.0, 0.0, 1.06], "size": [0.13, 0.13, 0.13] },
+            { "at": [0.0, 0.0, 1.17], "size": [0.06, 0.06, 0.12] }
+          ]
+        }
+      ],
+      "clips": {
+        "idle": "idle",
+        "walk": "walk",
+        "attack": "attack_cast",
+        "attack_cast": "attack_cast"
+      }
+    },
+    {
+      "id": "malazan_sapper",
+      "destination": "game/assets/models/malazan/malazan_sapper/malazan_sapper.glb",
+      "maxTriangles": 3000,
+      "textureSize": 512,
+      "yawDegrees": 180,
+      "materials": { "MI_Ranger": "outfit", "MI_Regular_Male": "skin", "MI_Superhero_Male": "head" },
+      "teamRole": "outfit",
+      "propColourSpace": "srgb",
+      "tints": { "outfit": { "colour": "#6e5a3c", "amount": 0.6 } },
+      "parts": [
+        { "source": "Modular Character Outfits - Fantasy[Standard]/Modular Character Outfits - Fantasy[Standard]/Exports/glTF (Godot-Unreal)/Outfits/Male_Ranger.gltf", "mesh": "Male_Ranger_Body", "triangles": 600, "team": true },
+        { "source": "Modular Character Outfits - Fantasy[Standard]/Modular Character Outfits - Fantasy[Standard]/Exports/glTF (Godot-Unreal)/Outfits/Male_Ranger.gltf", "mesh": "Male_Ranger_Arms", "triangles": 500 },
+        { "source": "Modular Character Outfits - Fantasy[Standard]/Modular Character Outfits - Fantasy[Standard]/Exports/glTF (Godot-Unreal)/Outfits/Male_Ranger.gltf", "mesh": "Male_Ranger_Arms_Bracer", "triangles": 150 },
+        { "source": "Modular Character Outfits - Fantasy[Standard]/Modular Character Outfits - Fantasy[Standard]/Exports/glTF (Godot-Unreal)/Outfits/Male_Ranger.gltf", "mesh": "Male_Ranger_Legs", "triangles": 300 },
+        { "source": "Modular Character Outfits - Fantasy[Standard]/Modular Character Outfits - Fantasy[Standard]/Exports/glTF (Godot-Unreal)/Outfits/Male_Ranger.gltf", "mesh": "Male_Ranger_Feet_Boots", "triangles": 330 },
+        { "source": "Universal Base Characters[Standard]/Universal Base Characters[Standard]/Base Characters/Godot - UE/Superhero_Male_FullBody.gltf", "mesh": "SuperHero_Male", "triangles": 400, "keepBones": ["Head", "neck_01"], "keepThreshold": 0.5 }
+      ],
+      "props": [
+        {
+          "name": "back_satchel", "bone": "spine_03", "material": "leather", "colour": "#4f3b26",
+          "pose": { "source": "UAL1", "clip": "Idle_Loop", "at": 0.0 },
+          "offset": [0.0, 0.0, 0.0],
+          "boxes": [
+            { "at": [0.0, 0.22, 0.04], "size": [0.40, 0.19, 0.50] },
+            { "at": [0.0, -0.15, -0.02], "size": [0.05, 0.02, 0.56], "rotation": [0, 38, 0] }
+          ]
+        },
+        {
+          "name": "hip_satchels", "bone": "pelvis", "material": "leather", "colour": "#4f3b26",
+          "pose": { "source": "UAL1", "clip": "Idle_Loop", "at": 0.0 },
+          "offset": [0.0, 0.0, 0.0],
+          "boxes": [
+            { "at": [0.23, -0.02, -0.10], "size": [0.12, 0.24, 0.24] },
+            { "at": [-0.23, -0.02, -0.10], "size": [0.12, 0.24, 0.24] }
+          ]
+        },
+        {
+          "name": "munition", "bone": "hand_r", "material": "clay", "colour": "#b0703a",
+          "pose": { "source": "UAL2", "clip": "OverhandThrow", "at": 0.3 },
+          "offset": [0.0, 0.0, 0.0],
+          "boxes": [
+            { "at": [0.0, -0.08, 0.0], "size": [0.11, 0.11, 0.11] }
+          ]
+        }
+      ],
+      "clips": {
+        "idle": "idle",
+        "walk": "walk",
+        "attack": "attack_throw",
+        "attack_cast": "attack_throw"
+      }
+    },
+    {
+      "id": "whirlwind_priest",
+      "destination": "game/assets/models/whirlwind/whirlwind_priest/whirlwind_priest.glb",
+      "maxTriangles": 3000,
+      "textureSize": 512,
+      "yawDegrees": 180,
+      "materials": { "MI_Ranger": "outfit", "MI_Regular_Male": "skin", "MI_Superhero_Male": "head" },
+      "teamRole": "outfit",
+      "propColourSpace": "srgb",
+      "tints": { "outfit": { "colour": "#e2d9c2", "amount": 0.65, "brightness": 1.4 } },
+      "parts": [
+        { "source": "Modular Character Outfits - Fantasy[Standard]/Modular Character Outfits - Fantasy[Standard]/Exports/glTF (Godot-Unreal)/Outfits/Male_Ranger.gltf", "mesh": "Male_Ranger_Body", "triangles": 600, "team": true },
+        { "source": "Modular Character Outfits - Fantasy[Standard]/Modular Character Outfits - Fantasy[Standard]/Exports/glTF (Godot-Unreal)/Outfits/Male_Ranger.gltf", "mesh": "Male_Ranger_Head_Hood", "triangles": 350, "team": true },
+        { "source": "Modular Character Outfits - Fantasy[Standard]/Modular Character Outfits - Fantasy[Standard]/Exports/glTF (Godot-Unreal)/Outfits/Male_Ranger.gltf", "mesh": "Male_Ranger_Arms", "triangles": 550 },
+        { "source": "Modular Character Outfits - Fantasy[Standard]/Modular Character Outfits - Fantasy[Standard]/Exports/glTF (Godot-Unreal)/Outfits/Male_Ranger.gltf", "mesh": "Male_Ranger_Legs", "triangles": 250 },
+        { "source": "Modular Character Outfits - Fantasy[Standard]/Modular Character Outfits - Fantasy[Standard]/Exports/glTF (Godot-Unreal)/Outfits/Male_Ranger.gltf", "mesh": "Male_Ranger_Feet_Boots", "triangles": 300 },
+        { "source": "Universal Base Characters[Standard]/Universal Base Characters[Standard]/Base Characters/Godot - UE/Superhero_Male_FullBody.gltf", "mesh": "SuperHero_Male", "triangles": 350, "keepBones": ["Head", "neck_01"], "keepThreshold": 0.5 }
+      ],
+      "props": [
+        {
+          "name": "robe", "bone": "pelvis", "material": "robe", "colour": "#d9d0bc",
+          "pose": { "source": "UAL1", "clip": "Idle_Loop", "at": 0.0 },
+          "offset": [0.0, 0.0, 0.0],
+          "boxes": [
+            { "at": [0.0, -0.02, -0.03], "size": [0.48, 0.34, 0.16] },
+            { "at": [0.0, -0.20, -0.40], "size": [0.70, 0.03, 0.78], "rotation": [-8, 0, 0] },
+            { "at": [0.0, 0.16, -0.40], "size": [0.70, 0.03, 0.78], "rotation": [8, 0, 0] },
+            { "at": [0.30, -0.02, -0.40], "size": [0.03, 0.48, 0.78], "rotation": [0, -8, 0] },
+            { "at": [-0.30, -0.02, -0.40], "size": [0.03, 0.48, 0.78], "rotation": [0, 8, 0] }
+          ]
+        },
+        {
+          "name": "veil", "bone": "Head", "material": "veil", "colour": "#8e1f24",
+          "pose": { "source": "UAL1", "clip": "Idle_Loop", "at": 0.0 },
+          "offset": [0.0, 0.0, 0.0],
+          "boxes": [
+            { "at": [0.0, -0.13, -0.02], "size": [0.17, 0.03, 0.22], "rotation": [-8, 0, 0] }
+          ]
+        }
+      ],
+      "clips": {
+        "idle": "idle",
+        "walk": "walk",
+        "attack": "attack_cast",
+        "attack_cast": "attack_cast"
+      }
+    },
+    {
+      "id": "whirlwind_zealot",
+      "destination": "game/assets/models/whirlwind/whirlwind_zealot/whirlwind_zealot.glb",
+      "maxTriangles": 3000,
+      "textureSize": 512,
+      "yawDegrees": 180,
+      "materials": { "MI_Peasant": "outfit", "MI_Regular_Male": "skin", "MI_Superhero_Male": "head" },
+      "teamRole": "outfit",
+      "propColourSpace": "srgb",
+      "tints": { "outfit": { "colour": "#8a2a26", "amount": 0.6 } },
+      "parts": [
+        { "source": "Modular Character Outfits - Fantasy[Standard]/Modular Character Outfits - Fantasy[Standard]/Exports/glTF (Godot-Unreal)/Outfits/Male_Peasant.gltf", "mesh": "Male_Peasant_Body", "triangles": 750, "team": true },
+        { "source": "Modular Character Outfits - Fantasy[Standard]/Modular Character Outfits - Fantasy[Standard]/Exports/glTF (Godot-Unreal)/Outfits/Male_Peasant.gltf", "mesh": "Male_Peasant_Arms", "triangles": 600 },
+        { "source": "Modular Character Outfits - Fantasy[Standard]/Modular Character Outfits - Fantasy[Standard]/Exports/glTF (Godot-Unreal)/Outfits/Male_Peasant.gltf", "mesh": "Male_Peasant_Legs", "triangles": 350 },
+        { "source": "Modular Character Outfits - Fantasy[Standard]/Modular Character Outfits - Fantasy[Standard]/Exports/glTF (Godot-Unreal)/Outfits/Male_Peasant.gltf", "mesh": "Male_Peasant_Feet", "triangles": 300 },
+        { "source": "Universal Base Characters[Standard]/Universal Base Characters[Standard]/Base Characters/Godot - UE/Superhero_Male_FullBody.gltf", "mesh": "SuperHero_Male", "triangles": 450, "keepBones": ["Head", "neck_01"], "keepThreshold": 0.5 }
+      ],
+      "props": [
+        {
+          "name": "blade_r", "bone": "hand_r", "material": "steel", "colour": "#b4b6b8",
+          "pose": { "source": "UAL1", "clip": "Sword_Attack", "at": 0.0 },
+          "offset": [0.0, 0.0, 0.0],
+          "boxes": [
+            { "at": [0.0, -0.05, 0.0], "size": [0.04, 0.04, 0.16] },
+            { "at": [0.0, -0.22, 0.0], "size": [0.02, 0.28, 0.06] },
+            { "at": [0.0, -0.45, 0.04], "size": [0.02, 0.22, 0.065], "rotation": [-18, 0, 0] },
+            { "at": [0.0, -0.62, 0.12], "size": [0.02, 0.16, 0.05], "rotation": [-40, 0, 0] }
+          ]
+        },
+        {
+          "name": "blade_l", "bone": "hand_l", "material": "steel", "colour": "#b4b6b8",
+          "pose": { "source": "UAL1", "clip": "Sword_Attack", "at": 0.0 },
+          "offset": [0.0, 0.0, 0.0],
+          "boxes": [
+            { "at": [0.0, -0.05, 0.0], "size": [0.04, 0.04, 0.16] },
+            { "at": [0.0, -0.22, 0.0], "size": [0.02, 0.28, 0.06] },
+            { "at": [0.0, -0.45, 0.04], "size": [0.02, 0.22, 0.065], "rotation": [-18, 0, 0] },
+            { "at": [0.0, -0.62, 0.12], "size": [0.02, 0.16, 0.05], "rotation": [-40, 0, 0] }
+          ]
+        },
+        {
+          "name": "head_wrap", "bone": "Head", "material": "wrap", "colour": "#7e1d1d",
+          "pose": { "source": "UAL1", "clip": "Idle_Loop", "at": 0.0 },
+          "offset": [0.0, 0.0, 0.0],
+          "boxes": [
+            { "at": [0.0, 0.02, 0.14], "size": [0.205, 0.235, 0.12] },
+            { "at": [0.0, 0.15, 0.0], "size": [0.08, 0.03, 0.24] }
+          ]
+        }
+      ],
+      "clips": {
+        "idle": "idle",
+        "walk": "walk",
+        "attack": "attack_melee"
+      }
     }
   ]
 }

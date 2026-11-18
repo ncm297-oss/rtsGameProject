@@ -106,6 +106,15 @@ public sealed class UnitDef
     /// <c>workerCarry</c> applies (<see cref="GameData.CarryOf"/>). In <see cref="GameData.ContentHash"/> only when set.
     /// </summary>
     public int Carry { get; init; }
+    /// <summary>
+    /// M8-2: the status id (index into <see cref="GameData.Statuses"/>, a status of kind <c>stealthed</c>) the unit's
+    /// stand-still stealth holds (<c>stillStealth.status</c>); -1 without the field. In <see cref="GameData.ContentHash"/> only when set.
+    /// </summary>
+    public int StillStealthStatus { get; init; } = -1;
+    /// <summary>M8-2: ticks the unit must go without moving, without its attack landing (or cast resolving) and without losing hit points before it is hidden (<c>stillStealth.delay</c>); 0 without the field.</summary>
+    public int StillStealthDelayTicks { get; init; }
+    /// <summary>M8-2: whether the type carries <c>stillStealth</c> (<see cref="Abilities.StillStealthSystem"/>).</summary>
+    public bool HasStillStealth => StillStealthStatus >= 0;
     /// <summary>The half-pop one queue item of this type reserves when it starts: <see cref="HalfPop"/> x <see cref="SpawnCount"/> (M7-2).</summary>
     public int ItemHalfPop => HalfPop * SpawnCount;
     /// <summary>
