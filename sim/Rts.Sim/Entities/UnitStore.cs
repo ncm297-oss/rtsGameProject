@@ -204,6 +204,12 @@ public sealed partial class UnitStore
     /// unless the data has a faction with the bonus (<see cref="EnableForestStealth"/>). Cleared with the slot like the statuses.
     /// </summary>
     public Abilities.ForestStealthStore? Forest { get; private set; }
+    /// <summary>
+    /// M8-2: the stand-still stealth's per-unit state (where and when the unit last moved, its last landed attack and hp loss,
+    /// whether the rule holds its stealth); null unless the data has a unit type with the field (<see cref="EnableStillStealth"/>).
+    /// Cleared with the slot like the statuses.
+    /// </summary>
+    public Abilities.StillStealthStore? Still { get; private set; }
     /// <summary>Whether the slot holds a live unit.</summary>
     public readonly bool[] Alive;
 
@@ -339,6 +345,12 @@ public sealed partial class UnitStore
     /// </summary>
     internal void EnableForestStealth() => Forest ??= new Abilities.ForestStealthStore(Capacity);
 
+    /// <summary>
+    /// M8-2: creates <see cref="Still"/>. The world calls it at construction when its data has a unit type with the
+    /// stand-still stealth, so a match on data without one carries none of its state.
+    /// </summary>
+    internal void EnableStillStealth() => Still ??= new Abilities.StillStealthStore(Capacity);
+
     /// <summary>Total number of slots.</summary>
     public int Capacity => Alive.Length;
 
@@ -386,6 +398,7 @@ public sealed partial class UnitStore
         LastDamagedTick[index] = -1;
         RegenAccum[index] = 0;
         Forest?.Clear(index); // M8-1
+        Still?.Clear(index); // M8-2
         ExpiresAtTick[index] = 0;
         _countedHalfPop[index] = 0;
         Alive[index] = true;
@@ -504,6 +517,7 @@ public sealed partial class UnitStore
         LastDamagedTick[handle.Index] = -1; // M7-1
         RegenAccum[handle.Index] = 0;
         Forest?.Clear(handle.Index); // M8-1: the held entry went with the statuses
+        Still?.Clear(handle.Index); // M8-2: likewise
         // A freed slot stands still: since units die (M4-1), a scan over slots must not count a dead walker as Moving.
         State[handle.Index] = UnitState.Idle;
         Velocity[handle.Index] = default;

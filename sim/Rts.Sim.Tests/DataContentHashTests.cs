@@ -559,6 +559,9 @@ public class DataContentHashTests
         // M8-1: the forest stealth (-1 / 0 / 0 when absent; any field set must differ).
         foreach (string f in new[] { "ForestStealthStatus", "ForestStealthDelayTicks", "ForestStealthExceptSlots" })
             Assert.Contains($"FactionDef.{f}", checkedFields);
+        // M8-2: the stand-still stealth (-1 / 0 when absent; either field set must differ).
+        foreach (string f in new[] { "StillStealthStatus", "StillStealthDelayTicks" })
+            Assert.Contains($"UnitDef.{f}", checkedFields);
         Assert.Contains("StatusDef.StateHashId", checkedFields);
         foreach (string f in new[] { "DamageBonus", "OnEndStatus", "OnEndMagnitude", "OnEndTicks" }) // M7-4
             Assert.Contains($"StatusDef.{f}", checkedFields);
