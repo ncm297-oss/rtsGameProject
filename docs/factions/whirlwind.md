@@ -411,6 +411,13 @@ both ways (J), and docs/02's stated numbers to the file (K).
 - **Likely sources:** KayKit Adventurers (Barbarian and Rogue bases recolored), Quaternius horse,
   Kenney Castle Kit / Quaternius Ultimate Fantasy RTS for buildings (tent and mudbrick variants
   may need AI generation or Blender kit-bashing). Details in [04-art-pipeline.md](../04-art-pipeline.md).
+- **As built (M6-V25, stand-ins; BUG-1602):** the Priest and the Zealot on `main` differ from the silhouettes above.
+  The Priest wears a team-coloured hood, a long bleached-white robe and a crimson veil over the lower face, with no
+  headdress and no staff. The Zealot is clothed, not bare-chested: a team-coloured tunic, crimson trousers and a crimson
+  head-wrap with a tail, and it carries two curved blades (the Raider's 0.7 m blade, one in each hand), not knives. Each
+  still reads apart from the Raider (hooded, one blade). Both are the outfits on disk recoloured, with box props
+  (docs/04 "Fourth slice (M6-V25)", the team parts and props "developer's pick, owner may revisit"); the Priest's veil
+  and the Zealot's idle blade are with the owner. The notes above stay the target for a later art pass.
 
 ## Codename → release name
 
@@ -475,11 +482,13 @@ every Whirlwind opening against every Malazan opening on the pairing's three sma
 and 3rd `QA/Content/D21OpeningsQaTests`'; each run pins its cell here and on malazan.md's twin table ("Age II against
 the Whirlwind"). Under M5-4g no Whirlwind side fell, and the two sides without Age II (`standard` against
 `crossbow_push` seed 9 and against `cadre_rush` seed 13) stood at 20:00 knowing no gold node, so their Age II can't be
-reserved (docs/03 "Implementation (M5-4g)"). Since the sim's M6-S10 (2026-11-15, the gather change) seed 9's side reaches Age II at 17:16 (since the sim's M6-S12; 11:47 under M6-S10 and M6-SH2; from the sim's M5-9a until M6-S10 it was defeated at 19:36 without it); seed 13's side never reaches
-Age II and still stands at 20:00 (since the sim's M6-S12; under M6-SH2 it was defeated at 15:19; under M6-S10 it still
-stood at 20:00 without Age II, beaten down: its Town Hall razed, 4 workers left). Under M6-S10 three Whirlwind sides fell: `holy_war`
-against `standard` seed 3 at 12:29 (before its first wave was due, see "The holy war's first wave" below), `raider_rush`
-against `crossbow_push` seed 11 at 18:34, without Age II, and `standard` against `cadre_rush` seed 17 at 16:27.
+reserved (docs/03 "Implementation (M5-4g)"). Since the sim's M6-S10 (2026-11-15, the gather change) seed 9's side
+reaches Age II at 17:16 (since the sim's M6-S12; 11:47 under M6-S10 and M6-SH2; from the sim's M5-9a until M6-S10 it
+was defeated at 19:36 without it); seed 13's side never reaches Age II and still stands at 20:00 (since the sim's
+M6-S12; under M6-SH2 it was defeated at 15:19; under M6-S10 it still stood at 20:00 without Age II, beaten down: its
+Town Hall razed, 4 workers left). Under M6-S10 three Whirlwind sides fell: `holy_war` against `standard` seed 3 at
+12:29 (before its first wave was due, see "The holy war's first wave" below), `raider_rush` against `crossbow_push`
+seed 11 at 18:34, without Age II, and `standard` against `cadre_rush` seed 17 at 16:27.
 
 | Whirlwind opening | Malazan opening | 1st seed | 2nd seed | 3rd seed |
 | --- | --- | --- | --- | --- |
@@ -494,7 +503,8 @@ against `crossbow_push` seed 11 at 18:34, without Age II, and `standard` against
 | `holy_war` | `cadre_rush` | seed 20: 8:34 | seed 24: 9:10 | seed 27: 7:53 |
 
 Re-printed 2026-11-15 for the sim's M6-S10 (docs/03 "Implementation (M6-S10)"): `raider_rush` against `crossbow_push`
-seed 19 now reaches Age II at 16:10 (was 10:34 from the sim's M5-H6, and 10:21 before it; 10:04 under M6-S10 and M6-SH2, 16:10 since the sim's M6-S12).
+seed 19 now reaches Age II at 16:10 (was 10:34 from the sim's M5-H6, and 10:21 before it; 10:04 under M6-S10 and
+M6-SH2, 16:10 since the sim's M6-S12).
 
 Re-printed again 2026-11-15 for the sim's M6-SH2 (a construction site is no longer a drop-off; an AI with no worker trains
 one; docs/03 "Implementation (M6-SH2)"): 25 of the 27 Whirlwind sides reach Age II; the two that don't are both defeated

@@ -437,6 +437,12 @@ both ways (J), and docs/02's stated numbers to the file (K).
   for Cadre Mage, Rogue_Hooded for Sapper, plus weapon accessories), a Quaternius horse for the
   Lancer's mount, Kenney Castle Kit siege weapons for the Catapult, Quaternius Ultimate Fantasy
   RTS for buildings. Details in [04-art-pipeline.md](../04-art-pipeline.md).
+- **As built (M6-V25, stand-ins; BUG-1602):** the figures on `main` follow these notes except the Sapper. The Cadre Mage
+  matches: a team-coloured hood, an oxblood robe and a staff, no armor. The Sapper has its munition satchels (a pack on
+  the back with a strap across the chest, a bag on each hip, a clay munition in hand) but no leather apron, and it
+  stands upright at idle like the other figures; it bends low only in its throw. It is the outfit on disk recoloured,
+  with box props (docs/04 "Fourth slice (M6-V25)", the team parts and props "developer's pick, owner may revisit"). The
+  note above stays the target for a later art pass.
 
 ## Codename → release name
 
@@ -581,15 +587,17 @@ The same thing happens to `crossbow_push` (BUG-1010; D-H6's third seed per pairi
 QA's 4th and 5th, `QA/Content/DH6ThresholdQaTests`). Against `raider_rush` it sends no wave on 2 of the pairing's 5
 smallest seeds (5, 11, 19, 25, 38). Re-measured 2026-11-15 on the sim's M6-S10: seed 19's side is defeated at 16:10
 (tick 19,416) and seed 25's at 11:32 (tick 13,857); neither ever attacks, so "falls to the rush without a wave" holds on
-both. On the sim's M5-H6 (2026-11-09) seed 19's side was beaten down but still standing at 20:00 and seed 25's was
-defeated at 12:22 (tick 14,843; 12:33, tick 15,068, measured 2026-11-07). From the sim's M5-4d slice 2 (the AI rebuilds
-what it loses, 2026-11-07) until M6-S10, seed 19's hall was razed but its last worker kept rebuilding, and at 20:00 the
-side had 1 pop, no building and 502 gold (522 measured 2026-11-07; BUG-1116 / BUG-1119; docs/03 "Implementation (M5-4d
-slice 2)"). So seed 19 is a named allowance (`QA/Content/D21OpeningsQaTests.KnownBeatenAlive`, pinned by
-`QA/Content/DR33QaTests`): its row passes while the side stands without a wave. Since M6-S10 the side no longer stands,
-and the row prints "the known case seed 19 player 0 now passes the rule: take it out of KnownBeatenAlive" (see
-"Questions for the Producer" below). Seed 25 is not on either list, so its row fails if the side is ever left standing
-at 20:00 without a wave.
+both (D34, 2026-11-18: seed 19's side now waves, below; seed 25 was not re-measured). On the sim's M5-H6
+(2026-11-09) seed 19's side was beaten down but still standing at 20:00 and seed 25's was defeated at 12:22
+(tick 14,843; 12:33, tick 15,068, measured 2026-11-07). From the sim's M5-4d slice 2 (the AI rebuilds what it loses,
+2026-11-07) until M6-S10, seed 19's hall was razed but its last worker kept rebuilding, and at 20:00 the side had 1
+pop, no building and 502 gold (522 measured 2026-11-07; BUG-1116 / BUG-1119; docs/03 "Implementation (M5-4d slice
+2)"). So seed 19 was a named allowance (`QA/Content/D21OpeningsQaTests.KnownBeatenAlive`, pinned by
+`QA/Content/DR33QaTests`): its row passed while the side stood without a wave. Since M6-S10 the side no longer stands
+without one, and the row printed "the known case seed 19 player 0 now passes the rule: take it out of KnownBeatenAlive".
+Re-measured by D34 (2026-11-18): seed 19's side sends its first wave at 6:46 (6 waves by 20:00), reaches Age II at 11:31
+and stands at 20:00, so D34 took the entry out and `DR33QaTests` pins both lists empty. Neither seed is on a list now, so
+either row fails if its side is ever left standing at 20:00 without a wave.
 
 How the two seeds got here: before M5-4g seed 19 read a peak of 8 pop and 6 pop / cap 16 with 670 gold and 60 wood at
 20:00, and seed 25 was destroyed at 11:26. From M5-4g both stood at 20:00: on seed 19 the army peaked at 7 pop, under
@@ -597,7 +605,7 @@ its 14-pop wave, while it held the base, and at 20:00 it had 15 pop with a cap o
 II; on seed 25 it peaked at 12 pop and was down to 1 pop at 20:00 (re-measured unchanged on 2026-11-06 by D-H7). M5-4d
 (the AI hunts the last units once it knows no enemy building) finished both off, seed 19 at 10:24 and seed 25 at 12:34
 (tick 15,084; 12:33 since slice 2), and D-R33 (2026-11-07) took both `KnownBeatenAlive` entries out (BUG-1110); slice 2
-put seed 19's back the same day.
+put seed 19's back the same day, and D34 (2026-11-18) took it out again.
 
 Over the two openings, `raider_rush` beats the Malazans without a fight on 5 of 10 seeds (`cadre_rush` 3 of 5,
 `crossbow_push` 2 of 5; re-counted 2026-11-15 on the sim's M6-S10: the same 5 of 10, but `cadre_rush`'s three are now
@@ -679,6 +687,7 @@ developer's recommendation.
 3. **`QA/Content/D21OpeningsQaTests.KnownBeatenAlive` still names `crossbow_push` against `raider_rush` seed 19.** Since
    M6-S10 that side is defeated at 16:10 and the row prints "now passes the rule: take it out of KnownBeatenAlive".
    Recommendation: take the entry out (and its `DR33QaTests` pin) in the next data task; the row passes either way.
+   **Done by D34 (2026-11-18):** the entry is out and the pin reads an empty list; the side now waves from 6:46.
 
 ## Questions for the Producer (D33, 2026-11-17)
 

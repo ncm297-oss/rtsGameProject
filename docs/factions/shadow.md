@@ -66,7 +66,8 @@ the Shadow are drawn at the template's size). The Hound of Shadow needs Age II (
 
 - **Edur Warrior:** ×1.5 vs Mounted (docs/02's Line rule). Slightly lighter and faster than template line infantry.
 - **Shadow Archer:** Passive **Shadowed**: becomes Stealthed after 3 s without moving or attacking, anywhere (not just
-  forests). The first shot from stealth deals +50% damage. Neither is in the data yet (Schema gaps G1, G2).
+  forests). The first shot from stealth deals +50% damage. The stand-still stealth has its field since M8-2
+  (`units.json` `stillStealth`, Schema gaps G1); neither is in the data yet (the Archer's row lands with the roster; G2).
 - **Aptorian Stalker:** ×1.5 vs Light. A demon scout with long sight (20 m). Raids and spots.
 - **K'risnan Sorcerer:** splash 1.5 m, detector 10 m. Signature ability **Shadow-step**; gains **Summon Wraiths** with
   Wraith-binding (below).
@@ -339,8 +340,9 @@ bonus** is extra gather rate (docs/02: Hard's 40%); **expands after** is the ear
 
 ## Schema gaps (D-R38)
 
-What each mechanic on this page needs from the loader on `main` (2026-11-14). Every mechanic of the faction bonus, the unit
-notes, the summoned unit, the abilities, the techs and the AI sketch is listed once: either the field that holds it today,
+What each mechanic on this page needs from the loader on `main` (2026-11-14; G1 re-read 2026-11-18 by D34: built by
+M8-2). Every mechanic of the faction bonus, the unit notes, the summoned unit, the abilities, the techs and the AI
+sketch is listed once: either the field that holds it today,
 or a gap row below with the field the data track would want (a proposal; the sim track names the real one).
 
 | Mechanic | Where on the page | Today |
@@ -352,7 +354,7 @@ or a gap row below with the field the data track would want (a proposal; the sim
 | Splash 1.5 m, detector 10 m (K'risnan Sorcerer) | Unit notes | `attack.splash`, `detector` |
 | Attacks buildings only (Edur Ram) | Unit notes | `attack.targets` `buildings` (M4-2a) |
 | Hound needs Age II, trained at the Shadow Kennels | Units | `requires` `["age_ii"]`, `trainedAt` `shadow_kennels` |
-| Stand-still stealth anywhere (Shadow Archer) | Unit notes | gap G1 |
+| Stand-still stealth anywhere (Shadow Archer) | Unit notes | `units.json` `stillStealth` `{ status, delay }` (M8-2; gap G1, built) |
 | First shot from stealth +50% (Shadow Archer) | Unit notes | gap G2 |
 | Pack Hunter: +10% per other Hound within 8 m, max +30% | Unit notes | gap G3 |
 | At most 7 Hounds alive | Unit notes | gap G4 |
@@ -369,7 +371,7 @@ or a gap row below with the field the data track would want (a proposal; the sim
 
 | Gap | Mechanic | Why no field holds it | Field wanted (proposal) |
 | --- | --- | --- | --- |
-| G1 | Shadow Archer: Stealthed after 3 s without moving or attacking, anywhere | `forestStealth` is faction-wide and needs a tree; no unit field gives a stealth (docs/01 2026-11-14 (d) (e): the next slice, M8-2) | `units.json` `stillStealth { "status": "stealthed", "delay": 3 }`: held while the unit has not moved, attacked or lost hp for `delay` (the forest rule's timers, plus a last-moved tick) |
+| G1 | Shadow Archer: Stealthed after 3 s without moving or attacking, anywhere | **Built (M8-2, 2026-11-17):** the field is on `main` (docs/03 "Implementation (M8-2)"), on test data only; no shipped unit carries it. Before M8-2, `forestStealth` was faction-wide and needed a tree, and no unit field gave a stealth | `units.json` `stillStealth { "status": "stealthed", "delay": 3 }` (docs/03 "For the data track (M8-2)"): held while the unit has not moved, attacked or cast, or lost hp for `delay`; the Archer's row carries it when the roster lands |
 | G2 | Shadow Archer: the first shot from stealth deals +50% | No attack field reads the attacker's stealth; `damageBonus` is a status's (frenzied kind) | `units.json` `attack.fromStealthBonus` 0.5: a hit whose attack was started while the attacker was Stealthed deals ×1.5 |
 | G3 | Pack Hunter: +10% damage per other Hound within 8 m, max +30% | Passive triggers are `whenBelowHp`, `onDeath`, `onHit`; nothing counts nearby friends | a passive `{ "trigger": "nearbyAllies", "units": ["shadow_hound"], "radius": 8, "damageBonus": 0.1, "maxStacks": 3 }`, the count taken when the attack lands |
 | G4 | At most 7 Hounds alive at once | No per-type cap; only the population cap limits training | `units.json` `maxAlive` 7: live units plus queue items count, a train command at the cap is refused (and the AI skips the unit while at it) |

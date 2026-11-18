@@ -294,9 +294,11 @@ against its share is the sim's (docs/03 "Implementation (M7-2)", BUG-1168).
 
 **The Age II army (D33, 2026-11-17, BUG-1420).** On the 64-match rows (the Teblor against the Malazan and the Whirlwind,
 four maps, seeds 1-8, to 15:00) the Normal AI fields Breakers in 12 matches, Destrier Riders in 22 and War-dogs in 39
-(were 0, 4 and 0), a Shaman in 25 (was 30) and a second Longhouse by 15:00 in 23 (was 28), and is defeated in 10 (was
-5). The measurement, the 31 variants and the Easy and Hard rows are under "The Age II army (BUG-1420, D33)" at the end
-of this page.
+(were 0, 4 and 0 before D33), a Shaman in 25 (was 26) and a second Longhouse by 15:00 in 23 (was 25), and is defeated in
+10 (was 12). The "was" figures are the data before D33 (QA's row `main`, BUG-1613; until D34 this paragraph printed a
+baseline that never shipped, D32's opening on D33's waves). The measurement, the 31 variants and the Easy and Hard rows
+are under "The Age II army (BUG-1420, D33)" at the end of this page; D34's attempt to win back Easy's Anointing by order
+alone (none shipped, BUG-1612) is under "Easy's Anointing (BUG-1612, D34)".
 
 **The reserve share, measured (D31, 2026-11-14, on the files that ship; `Content/TeblorLandedShareReportTests`).**
 Normal against Normal to 15:00, the Teblor on seat 0 against a Malazan and on seat 1 against a Whirlwind, on the
@@ -455,11 +457,15 @@ unit, and every unit step after the expand step in the file spends only above th
 while the expansion waits, which on Normal is most of the match in about half of them. A Breaker (180 gold, 120 wood) is
 the costliest unit, so it is the last to be paid for. The brief's target: on Normal and on Hard each of the three kinds
 in at least 8 of 64, and on Normal a Shaman in 14 or more, a second Longhouse by 15:00 in 9 or more and at most 15
-defeats. S0 and 31 variants on Normal, S0 and 14 of them on Hard too (`-`: not run):
+defeats. S0 and 31 variants on Normal, S0 and 14 of them on Hard too (`-`: not run). S0 and every variant play D33's
+Malazan and Whirlwind waves, so S0 is not the data that shipped before D33: that is the row `main` (D32's opening on
+D32's waves, data hash B74DC7AE61B4862D, QA's `QA/Content/D33TeblorRowQaStressTests` row `main`; BUG-1613), and the
+"was" figures below are `main`'s:
 
 | variant | change | Normal: defeated / 2nd Longhouse / Shamans | Normal: Breakers / Destrier Riders / War-dogs | Hard: defeated / 2nd Longhouse / Shamans | Hard: Breakers / Destrier Riders / War-dogs |
 | --- | --- | --- | --- | --- | --- |
-| S0 | the opening D32 shipped (X7) | 5 / 28 / 30 | 0 / 4 / 0 | 9 / 28 / 36 | 11 / 18 / 8 |
+| `main` | before D33: the opening D32 shipped (X7) on D32's Malazan and Whirlwind waves (QA's row) | 12 / 25 / 26 | 0 / 4 / 0 | 11 / 28 / 35 | 6 / 12 / 5 |
+| S0 | the opening D32 shipped (X7), on D33's waves | 5 / 28 / 30 | 0 / 4 / 0 | 9 / 28 / 36 | 11 / 18 / 8 |
 | B1 | S0 with the Breakers Hall and the Stables first of the 10:00 steps (before the Carver) | 11 / 28 / 31 | 4 / 0 / 0 | 11 / 26 / 36 | 17 / 16 / 4 |
 | B2 | B1 with the Carver at 11:00 | 8 / 28 / 19 | 0 / 0 / 0 | 11 / 33 / 41 | 20 / 14 / 5 |
 | B3 | S0 with the Stables and the Breakers Hall at 9:00, after the Shaman step | 12 / 28 / 30 | 0 / 5 / 1 | 5 / 30 / 36 | 24 / 15 / 7 |
@@ -493,15 +499,78 @@ defeats. S0 and 31 variants on Normal, S0 and 14 of them on Hard too (`-`: not r
 | F6 | E4 with the Anointing at 13:00 and Armor at 13:30 | 11 / 28 / 32 | 6 / 26 / 40 | - | - |
 
 F3 ships: the only variant that meets every figure on Normal with a margin on the Breakers (12; F4 meets them with 8).
-On Normal it fields Breakers in 12 of 64, Destrier Riders in 22 and War-dogs in 39, a Shaman in 25 (was 30), a second
-Longhouse by 15:00 in 23 (was 28), and 10 defeats (was 5); Age II by 10:00 in 58 and a wave by 10:00 in 63, as before.
-On Hard: Breakers in 35 (was 11), Destrier Riders in 43 (was 18), War-dogs in 48 (was 8), a Shaman in 25 (was 36), a
-second Longhouse in 23 (was 28), 11 defeats (was 9), the Anointing in 18 (was 32). On Easy (both seats Easy; Easy plays
-this opening too): Breakers 27, Destrier Riders 36, War-dogs 51 (all were 0), a Shaman in 34 (was 51), the Anointing in
-1 (was 35), 1 defeat (as before), no second Longhouse (Easy's `expandAfter` is 900 s, as before). What the Easy and Hard
-AIs lose is the Anointing and some Shamans: the gold that bought them now buys the three kinds. The description names the
-three kinds again (D32 had narrowed it to the kinds fielded then); each has its own train step, so a match whose halls
-stand fields one of each.
+Against `main` (QA's rows, BUG-1613; until D34 this paragraph printed S0's figures as "was"): on Normal it fields
+Breakers in 12 of 64, Destrier Riders in 22 and War-dogs in 39 (were 0, 4 and 0), a Shaman in 25 (was 26), a second
+Longhouse by 15:00 in 23 (was 25), the Anointing in 11 (was 8), and 10 defeats (was 12); Age II by 10:00 in 58 and a
+wave by 10:00 in 63. On Hard: Breakers in 35 (was 6), Destrier Riders in 43 (was 12), War-dogs in 48 (was 5), a Shaman
+in 25 (was 35), a second Longhouse in 23 (was 28), 11 defeats (as before), the Anointing in 18 (was 27). On Easy (both
+seats Easy; Easy plays this opening too): Breakers 27, Destrier Riders 36, War-dogs 51 (all were 0), a Shaman in 34
+(was 51), the Anointing in 1 (was 35), 1 defeat (as before), no second Longhouse (Easy's `expandAfter` is 900 s, as
+before). What the Easy and Hard AIs lose is the Anointing and some Shamans: the gold that bought them now buys the
+three kinds (BUG-1612; D34's attempt to win it back by order is the next section). The description names the three
+kinds again (D32 had narrowed it to the kinds fielded then); each has its own train step, so a match whose halls stand
+fields one of each.
+
+## Easy's Anointing (BUG-1612, D34, 2026-11-18)
+
+Measured by `Content/D34TeblorStepOrderReportTests.Variants_Row_Report` (2026-11-18, on `main`'s AI; the shape of
+`QA/Content/D33TeblorRowQaStressTests`: the Teblor against the Malazan on seat 0 and against the Whirlwind on seat 1, the
+same difficulty on both seats, four maps, to 15:00; the columns count the matches in which the kind was alive at some
+second before 15:00). M is the shipped opening (D33's F3); each variant changes only the order and the `at.time` of its
+steps. The brief's bar for shipping one, on the full 64: Easy's Anointing in 20 or more, while on Normal and on Hard
+each of Breakers, Destrier Riders and War-dogs stays at 8 or more, and on Normal a Shaman in 14 or more, a second
+Longhouse in 9 or more and at most 15 defeats.
+
+The reduced screen (seeds 1-4: 32 matches a row; Easy and Normal first, Hard run afterwards for the table):
+
+| variant | change | Easy: defeated / 2nd Longhouse / Shaman / Breaker / Rider / War-dog / Anointing | Normal: defeated / 2nd Longhouse / Shaman / Breaker / Rider / War-dog / Anointing | Hard: defeated / 2nd Longhouse / Shaman / Breaker / Rider / War-dog / Anointing |
+| --- | --- | --- | --- | --- |
+| M | the shipped opening (D33's F3) | 0 / 0 / 17 / 14 / 17 / 25 / 0 | 5 / 10 / 13 / 9 / 10 / 18 / 5 | 6 / 12 / 9 / 16 / 20 / 22 / 10 |
+| G1 | M with the Shaman's Circle, the Shaman step and the Anointing moved ahead of the three train steps (times kept) | 0 / 0 / 27 / 0 / 12 / 16 / 18 | 5 / 10 / 19 / 0 / 5 / 15 / 10 | 6 / 8 / 21 / 9 / 15 / 21 / 12 |
+| G2 | G1 with the Anointing due at 10:00 (was 11:30) | 0 / 0 / 26 / 0 / 8 / 15 / 18 | 5 / 10 / 19 / 0 / 6 / 15 / 10 | 6 / 8 / 21 / 9 / 14 / 21 / 12 |
+| G3 | M with the Circle, the Shaman step, the Bloodwood Carver and the Anointing (at 10:00) ahead of the three train steps | 0 / 0 / 26 / 0 / 4 / 9 / 19 | 5 / 10 / 18 / 0 / 8 / 13 / 8 | 6 / 8 / 19 / 12 / 14 / 21 / 12 |
+| G4 | G3 with the Carver at 9:00 and the Anointing at 9:30 | 0 / 0 / 26 / 0 / 5 / 23 / 24 | 6 / 8 / 11 / 0 / 12 / 12 / 15 | 5 / 8 / 17 / 12 / 13 / 14 / 14 |
+| G5 | M with only the Carver and the Anointing (at 10:00) ahead of the three train steps | 0 / 0 / 13 / 1 / 0 / 22 / 17 | 5 / 10 / 9 / 4 / 9 / 21 / 8 | 6 / 12 / 7 / 15 / 20 / 22 / 12 |
+
+The full row (seeds 1-8: 64 matches) for the one candidate, G5 (the only variant whose Normal Breakers stayed above 0),
+beside M on the same row (M's rows are QA's D33 rows to the match):
+
+| variant | difficulty | defeated | 2nd Longhouse | Shaman | Breaker | Rider | War-dog | Anointing |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| M | Easy | 1 | 0 | 34 | 27 | 36 | 51 | 1 |
+| G5 | Easy | 1 | 0 | 25 | 2 | 2 | 44 | 32 |
+| M | Normal | 10 | 23 | 25 | 12 | 22 | 39 | 11 |
+| G5 | Normal | 9 | 23 | 15 | 7 | 20 | 40 | 19 |
+| M | Hard | 11 | 23 | 25 | 35 | 43 | 48 | 18 |
+| G5 | Hard | 11 | 23 | 21 | 27 | 38 | 46 | 30 |
+
+**None ships.** G5 wins Easy's Anointing back (1 -> 32 of 64) and meets every other figure but one: Normal's Breakers
+fall to 7 (the bar is 8). The file stays D33's, and the data hash does not move. BUG-1612 waits for Request 55 (the
+sim's answer to the reserve), with G5 the best order found.
+
+**Why order alone can't do both** (the measured rows, read against the executor's rule in docs/02 "AI opponent"; not
+traced think by think). On Easy the Bloodwood Carver stands in 55 of 64 matches with M, yet the Anointing is researched
+in 1. Due at 11:30 (12:00 with Easy's 30 s slack) and last but two in the file, it is paid only from what the steps
+ahead of it (the three train steps, the Breakers Hall, the Stables, the Carver, the Circle) and the army mix leave, and
+the reserve, which the mix and every later train step spend above, goes to the first due step in file order that only
+its cost holds back, so rarely to it. Move the Anointing ahead of the train steps (G1-G5) and, once the Carver stands,
+it is that step: the train steps behind it then spend only above its 200 gold and 150 wood, and the Breaker (180 / 120,
+the costliest unit) is the one that goes. In every variant, as the Anointing comes back, the Breakers go: G5's full row
+27 -> 2 of 64 on Easy and 12 -> 7 on Normal; G1-G4 on the screen 14 -> 0 of 32 on Easy and 9 -> 0 on Normal. The
+trade is the reserve's (one step's cost held back for every train step after it), which is what Request 55 asks the
+sim to change.
+
+**Not tried (the screen's limit was five variants):** the Carver and the Anointing just after the three train steps
+(ahead of the Breakers Hall and the expansion, not ahead of the trains). The trains would spend before any reserve is
+set and the Anointing would take the reserve from the Breakers Hall and the expansion. A next attempt, if Request 55 is
+not built, should screen it first.
+
+**The step order is not in time order (BUG-1421 item 5, wontfix).** The Carver (10:00) sits before the Circle (9:00),
+and the three 10:00 train steps before the 9:00 Breakers Hall and the 8:00 expansion. That is on purpose: file order is
+priority (steps run side by side, earlier steps spend first and the first one held back by its cost takes the reserve),
+and D33 and D34 measured that this order is what fields the Age II army. BUG-1050's pull-forward (the first time step not
+yet due, in file order) acts only while the AI spends down at High starting resources; it then follows the same
+priority, which is the intent. Sorting the file by time would change what the AI buys first.
 
 ## Questions for the Producer (D33, 2026-11-17)
 
@@ -518,3 +587,26 @@ Raised by D33 (BUG-1420), each with the developer's recommendation.
    steps and the Breakers Hall ahead of the expand step). Recommendation: a sim Request for the balance pass, so the
    order of the file need not carry it: an expansion that has waited `N` seconds for its cost stops holding the reserve
    (or a train step may name itself exempt).
+
+## Questions for the Producer (D34, 2026-11-18)
+
+Raised by D34 (BUG-1612, BUG-1613, BUG-1421), each with the developer's recommendation. No data changed in D34.
+
+1. **The tooltip promises more than most Normal matches show (BUG-1613 item 2, BUG-1421 item 2).** The `standard`
+   description says "then Javelin Throwers, Shamans, Breakers, Destrier Riders and War-dogs join them and a second
+   Longhouse goes up". On the shipped file's Normal row (64 matches, alive at some second before 15:00) Javelin Throwers
+   are fielded in 55 and War-dogs in 39, but a Shaman in 25, Breakers in 12, Destrier Riders in 22 and a second Longhouse
+   finished in 23. The text is data, and its hash is the content hash, so softening it moves the data hash; the brief
+   allowed that only with a shipped variant, and none shipped. Recommendation: soften it at the next Teblor hash move to
+   "War Lodge and Javelin Ground first, then Age II; four Warriors raid at 8 army pop, then Javelin Throwers and War-dogs
+   join them; Shamans, Breakers, Destrier Riders and a second Longhouse may follow." (198 characters, D21's limit 200),
+   which names as joining only the kinds most Normal matches field; or accept the plan-like wording as BUG-1421 noted.
+2. **BUG-1612 waits for Request 55.** G5 (the Carver and the Anointing at 10:00 ahead of the three train steps) brings
+   Easy's Anointing back to 32 of 64 and meets every figure but Normal's Breakers (7, the bar 8). Recommendation: keep
+   D33's order until Request 55 is built, then re-measure M and G5; if Request 55 is not built, screen the untried order
+   (the Carver and the Anointing just after the three train steps) first. Accepting G5 as it is would trade Breakers
+   (Normal 12 -> 7 of 64, Easy 27 -> 2, Hard 35 -> 27) and Shamans (Easy 34 -> 25, Normal 25 -> 15, Hard 25 -> 21) for
+   the Anointing (Easy 1 -> 32, Normal 11 -> 19, Hard 18 -> 30), a taste call the brief's bar does not allow.
+3. **The expansion's reserve and the Shamans (BUG-1421 item 1) also wait for Request 55.** The variants that move the
+   Shaman step ahead of the train steps (G1-G3) raise Normal's Shamans (13 -> 18-19 of 32 on the screen) but take the
+   Breakers to 0, the same trade as item 2.

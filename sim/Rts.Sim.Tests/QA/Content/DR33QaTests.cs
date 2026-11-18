@@ -41,9 +41,11 @@ public class DR33QaTests
     /// <summary>
     /// The two lists hold exactly the named cases and nothing else (re-aimed at the 2026-11-07-0236 merge: the sim's M5-4d slice 2
     /// put seed 19 back, see <c>D21OpeningsQaTests.KnownBeatenAlive</c>; a further entry needs a bug id and this pin moved).
+    /// D34 (2026-11-18): seed 19 passes the rule again (it waves from 6:46 and stands at 20:00), so both lists are empty
+    /// (was "(1, 1, 19, 0)" for <c>D21OpeningsQaTests</c>).
     /// </summary>
     [Theory]
-    [InlineData(typeof(D21OpeningsQaTests), "(1, 1, 19, 0)")]
+    [InlineData(typeof(D21OpeningsQaTests), "")]
     [InlineData(typeof(DH6ThresholdQaTests), "")]
     public void KnownBeatenAlive_HoldsOnlyTheNamedCases(Type owner, string expected)
     {

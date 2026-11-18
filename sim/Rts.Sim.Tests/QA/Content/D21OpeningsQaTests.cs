@@ -229,7 +229,7 @@ public class D21OpeningsQaTests
 
     /// <summary>
     /// D-H6: the same on a third seed per pairing (the third-smallest in 1-500), with the same allowance as the second (see
-    /// there), plus any case named in <see cref="KnownBeatenAlive"/> (none since D-R33).
+    /// there), plus any case named in <see cref="KnownBeatenAlive"/> (none since D34).
     /// </summary>
     [Theory]
     [Trait("Category", "Stress")]
@@ -309,8 +309,12 @@ public class D21OpeningsQaTests
     /// 522 gold, 210 wood, no wave, 340 thinks defending; the Whirlwind 1 wave, Age II 10:21; today, since the sim's M5-H6, 502 gold,
     /// 270 wood and the Whirlwind's Age II 10:34, as the Whirlwind table's re-printed cell). BUG-1010's pattern with BUG-1116 /
     /// BUG-1119 underneath; <c>DR33QaTests.KnownBeatenAlive_HoldsOnlyTheNamedCases</c> pins this one entry. Seed 25 stays out.
+    /// **Taken out again by D34 (2026-11-18, BUG-1010 / malazan.md Question 3 of D-R39):** re-measured on <c>0317e7e</c>,
+    /// the row printed "the known case seed 19 player 0 now passes the rule: take it out of KnownBeatenAlive"; the side sends
+    /// its first wave at 6:46 (6 waves), reaches Age II at 11:31 and stands at 20:00 (pop 19 / cap 66). The list is empty, and
+    /// <c>DR33QaTests</c> pins it so; a side left standing without a wave fails its row again.
     /// </summary>
-    private static readonly (int Malazan, int Whirlwind, ulong Seed, int Player)[] KnownBeatenAlive = { (1, 1, 19, 0) };
+    private static readonly (int Malazan, int Whirlwind, ulong Seed, int Player)[] KnownBeatenAlive = { };
 
     /// <summary>Determinism per pairing with the shipped openings: two Normal v Normal runs on the pair's smallest seed, equal state hashes every 50 ticks for 6,000 ticks, and the same commands sent.</summary>
     [Theory]
