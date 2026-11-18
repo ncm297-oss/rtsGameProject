@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S2 |
-| Status | open |
+| Status | fixed |
 | Found | 2026-11-17-0816, task M8-2 |
 | System | tests (cross-track merge hazard): `Data/StillStealthLoaderTests`, `Vision/StillStealthSaveBytesTests` |
-| Fixed by | |
+| Fixed by | 5b504f3 (tests only). The hash row now reads the golden header `cross_map_seed1.replay`. The save rows compare a save on data with the field on an unfielded type, with its `STIL` part cut, against the field-less save. |
 
 ## Repro
 1. Fresh clone of `studio/2026-11-17-0816-sim` (b3a18bf) into a scratch folder.
@@ -48,3 +48,19 @@ a second golden that no brief names.
   developer re-pins them in the same commit.
 - Severity S2 because the session plan makes the red certain, not hypothetical (compare BUG-0124). The Producer may
   re-triage to S3 if the conductor re-pins them at the merge.
+
+## Verification (QA re-check, fix round 1)
+- I merged D33 itself in a scratch clone: `studio/2026-11-17-0816-sim` (5b504f3) + `studio/2026-11-17-0816-data` (95fd578).
+  Only `studio/qa/coverage.md` conflicted. D33 moves the shipped hash to 318E8C4256456C05 and re-pins the golden header.
+  - Results: `StillStealthLoaderTests` (4 rows), both `StillStealthSaveBytesTests` rows,
+    `FactionOrderTests.TheShippedContentHash_IsTheGoldenHeaders` and `PackQaTests.TheShippedDataHash_IsTheGoldenHeaders`
+    were all green, 8 / 8.
+  - The wider merged set (StillStealth / ForestStealth / FactionOrder / Replay / Golden, 603 rows) had 601 green. The
+    2 red were wall-clock Perf rows run under contention.
+- The old base-pinned digest rows (from b3a18bf) still pass against the HEAD production code. So the field-less save is
+  still byte for byte what base 10acb53 writes; the fix changed no production file.
+- Mutants on the save rows:
+  - The pass records state on non-field units: caught by the `HasState` check.
+  - A hook takes 1 hp from non-field units when the field is in the data: caught by the byte comparison.
+  - A hook zeroes non-field units' velocity: survived. In this brawl the velocity at that moment is already zero or is
+    rewritten before the save.
