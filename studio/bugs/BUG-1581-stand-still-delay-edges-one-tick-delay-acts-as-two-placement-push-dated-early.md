@@ -3,7 +3,7 @@
 | Field | Value |
 | --- | --- |
 | Severity | S4 |
-| Status | open (both items are docs/03 "Implementation (M8-2)" Known limits (1) and Questions 1-2; filed so they are tracked if the answer is "leave it") |
+| Status | wontfix (Producer ruling at the 2026-11-17-0816 ACCEPT, docs/01 2026-11-18: both edges stay as documented limits; no designed delay is under 1 s and the placement push is one tick. If a data row ever asks for a delay under 0.1 s, raise the loader's minimum then.) |
 | Found | 2026-11-17-0816, task M8-2 |
 | System | `Abilities/StillStealthSystem` |
 | Fixed by | |

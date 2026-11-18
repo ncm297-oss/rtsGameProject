@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S3 |
-| Status | open (two fixed in M6-SH2 fix round 2 by the Producer's ruling; one skipped for D33; one S4 comment left) |
+| Status | fixed |
 | Found | 2026-11-15-2136, task M6-SH2 (developer listed them for ruling; id given by the Producer at the ACCEPT) |
 | System | docs/factions pages and their content pins (`QA/Content/**`) |
-| Fixed by | |
+| Fixed by | Items 1-2: M6-SH2 fix round 2. Items 3-4: D33 (2026-11-17-0816, 3f35d60): malazan.md's BUG-0982 table re-measured, `DR35ProsePinQaTests.Malazan_Bug0982Prose_*` un-skipped and green, the stale `<summary>` fixed. |
 
 ## Items
 1. **Fixed (round 2):** `TeblorOpeningQaTests.TheOpponentSentence_*` and teblor.md's sentence: each row's outcome
