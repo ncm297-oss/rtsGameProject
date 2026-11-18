@@ -38,6 +38,11 @@ namespace Rts.Game.Tests;
 /// and Whirlwind by default) close-ups of the named types in their clips (the cast too for a type with an ability) and the
 /// row of every model type of the faction in two players' colours (<c>figures-&lt;faction&gt;-40m.png</c>, <c>-20m.png</c>,
 /// <c>-40m-gray.png</c>).
+/// M6-V26: <c>--bench-buildings N</c> adds N finished buildings to the bench before the fight, the building types that have a
+/// model file taken in turn (the count of types read from the files, as the figures'), packed in rows north and south of
+/// the two crowds and owned by the two sides in turn; <c>--building-boxes</c> draws them as today's boxes (the same window's
+/// comparison; the figures stay models); <c>--bench-zoom Z</c> sets the camera distance (default 40 m). The run prints how
+/// many of the buildings are on screen (at the start and the end); <c>--bench-shot &lt;png&gt;</c> saves the first measured frame.
 /// </remarks>
 public partial class ModelShots : Node
 {
@@ -64,6 +69,8 @@ public partial class ModelShots : Node
             GameData data = loaded.Data!;
             _match = GD.Load<PackedScene>("res://scenes/Match.tscn").Instantiate<Match>();
             AddChild(_match);
+            // M6-V26: the bench's buildings as boxes (the figures stay what --placeholder-art says).
+            if (Array.IndexOf(args, "--building-boxes") >= 0) BuildingViews.UseModels = false;
             string vsync = Arg(args, "--vsync") ?? "on";
             // The pictures stand still (no combat); the cost run fights.
             var flags = new System.Collections.Generic.List<string> { "--seed", "1", "--units", "0", "--no-bases", "--no-fog", "--mute", "--no-hud", "--vsync", vsync };
@@ -155,6 +162,16 @@ public partial class ModelShots : Node
                 float side = p == 0 ? -1f : 1f;
                 Spawn(p, types[(k + p * (types.Length / 2)) % types.Length], c + new NVector2(side * (14f + (k / columns) * 1.3f), (k % columns - columns / 2) * 1.3f));
             }
+        // M6-V26: the bench's buildings round the crowds, on the ground the bench camera shows.
+        int buildings = int.Parse(Arg(OS.GetCmdlineUserArgs(), "--bench-buildings") ?? "0", CultureInfo.InvariantCulture);
+        float benchZoom = float.Parse(Arg(OS.GetCmdlineUserArgs(), "--bench-zoom") ?? CameraLimits.DefaultZoom.ToString(CultureInfo.InvariantCulture), CultureInfo.InvariantCulture);
+        if (buildings > 0)
+        {
+            _camera.SetZoom(benchZoom);
+            _camera.SetFocus(c.X, c.Y);
+            await Frames(2);
+            PlaceBenchBuildings(data, c, buildings, perSide);
+        }
         long at = _sim.TickNumber;
         while (_sim.TickNumber < at + 4) await Frames(1);
         UnitStore u = _sim.World.Units;
@@ -165,9 +182,12 @@ public partial class ModelShots : Node
             alive++;
             _sim.Enqueue(Command.AttackMove(u.Owner[i], new EntityHandle(i, u.Generation[i]), c + new NVector2(u.Owner[i] == 0 ? 30f : -30f, 0f)));
         }
-        _camera.SetZoom(CameraLimits.DefaultZoom);
+        _camera.SetZoom(benchZoom);
         _camera.SetFocus(c.X, c.Y);
         await Frames(30);
+        if (buildings > 0) PrintBenchBuildings(data);
+        // M6-V26: --bench-shot <png> saves the first measured frame (what the bench draws).
+        if (Arg(OS.GetCmdlineUserArgs(), "--bench-shot") is string benchShot) GetViewport().GetTexture().GetImage().SavePng(benchShot);
         // Cost split (measure only): --no-anim stops every model's AnimationPlayer (skinning of a still pose stays), and
         // --no-model-shadows takes the models out of the shadow pass.
         string[] args = OS.GetCmdlineUserArgs();
@@ -220,6 +240,7 @@ public partial class ModelShots : Node
         if (capsule >= 0) GD.Print($"bench: a capsule unit has {Nodes(_views.ViewOf(capsule)!)} nodes, 1 surface");
         GD.Print($"bench: crowd animation (M6-VH7) last frame: {_views.Crowd.AdvancedLastFrame} of {_views.Crowd.EligibleLastFrame} shown players advanced ({CrowdAnimator.FullRateCount} nearest every frame, the rest 1 frame in {CrowdAnimator.StaggerFrames})");
         GD.Print($"bench: unit views {_views.NodeCount} slot nodes, {_views.ModelNodeCount} model instances, team materials {_views.Models?.TeamMaterialCount ?? 0}");
+        if (buildings > 0) PrintBenchBuildings(data); // at the end: the buildings the fight razed are gone
     }
 
     // The local player's starting workers sent to work as a player would: the first half to the nearest gold mine, the
@@ -646,6 +667,102 @@ public partial class ModelShots : Node
             img.SavePng(System.IO.Path.Combine(dir, name));
             GD.Print($"saved {name}; crowd animation: {_views.Crowd.AdvancedLastFrame} of {_views.Crowd.EligibleLastFrame} shown players advanced in the last frame");
         }
+    }
+
+    // M6-V26: `count` finished buildings of the types that have a model file, in turn, owned by players 0 and 1 in turn, packed
+    // edge to edge (60 with a free cell round each don't fit on screen beside 400 figures), one at a time (a spawn that would
+    // seal ground off is refused: the next anchor is tried), on the open anchors nearest `c` (nearest first, ties by cell index) whose footprint's
+    // four corners the bench camera shows, then (if those run out) the nearest others; the crowds' two blocks (and 2 m round
+    // them) kept free.
+    private void PlaceBenchBuildings(GameData data, NVector2 c, int count, int perSide)
+    {
+        World w = _sim.World;
+        var types = new System.Collections.Generic.List<int>();
+        for (int t = 0; t < data.Buildings.Length; t++) if (ResourceLoader.Exists(BuildingModels.PathFor(data, data.Buildings[t]))) types.Add(t);
+        if (types.Count == 0) { GD.Print("bench: no building type has a model file"); return; }
+        const float cs = Rts.Sim.Map.MapConstants.CellSize;
+        int gw = w.NavGrid.Width, gh = w.NavGrid.Height;
+        var taken = new bool[gw * gh];
+        // The crowds' blocks (Bench's layout: 14 m to 14 + columns x 1.3 m either side of c, 20 rows of 1.3 m).
+        float reach = 14f + (perSide / 20 + 1) * 1.3f + 2f;
+        for (int y = 0; y < gh; y++)
+            for (int x = 0; x < gw; x++)
+            {
+                float dx = Math.Abs((x + 0.5f) * cs - c.X), dz = Math.Abs((y + 0.5f) * cs - c.Y);
+                if (dx >= 12f && dx <= reach && dz <= 16f) taken[y * gw + x] = true;
+            }
+        var anchors = new System.Collections.Generic.List<int>();
+        for (int y = 1; y < gh - 1; y++)
+            for (int x = 1; x < gw - 1; x++)
+                if (Math.Abs((x + 0.5f) * cs - c.X) < 70f && Math.Abs((y + 0.5f) * cs - c.Y) < 50f) anchors.Add(y * gw + x);
+        anchors.Sort((a, b) =>
+        {
+            float da = NVector2.DistanceSquared(new NVector2((a % gw + 2f) * cs, (a / gw + 2f) * cs), c);
+            float db = NVector2.DistanceSquared(new NVector2((b % gw + 2f) * cs, (b / gw + 2f) * cs), c);
+            return da != db ? da.CompareTo(db) : a.CompareTo(b);
+        });
+        int placed = 0;
+        Rect2 screen = GetViewport().GetVisibleRect().Grow(-8f);
+        for (int pass = 0; pass < 2; pass++)
+            foreach (int anchor in anchors)
+            {
+                if (placed >= count) break;
+                int type = types[placed % types.Count];
+                BuildingDef def = data.Buildings[type];
+                int cx = anchor % gw, cy = anchor / gw;
+                if (!FreeFootprint(w, taken, def, cx, cy) || !w.Buildings.Fits(type, anchor)) continue;
+                if (pass == 0)
+                {
+                    bool seen = true;
+                    for (int k = 0; k < 4 && seen; k++)
+                    {
+                        float x = (cx + (k % 2) * def.FootprintWidth) * cs, z = (cy + (k / 2) * def.FootprintHeight) * cs;
+                        var at = new Vector3(x, TerrainHeight.At(w.Heightmap, x, z), z);
+                        seen = !_camera.IsPositionBehind(at) && screen.HasPoint(_camera.UnprojectPosition(at));
+                    }
+                    if (!seen) continue;
+                }
+                _sim.Enqueue(Command.SpawnBuilding(placed % 2, type, Rts.Sim.ViewApi.PlacementGhost.AnchorPoint(w.NavGrid, anchor)));
+                _sim.Tick();
+                _sim.Tick(); // a command applies at the start of the tick after the one it was queued for
+                int slot = w.Buildings.SlotAt(cx, cy);
+                if (slot < 0 || w.Buildings.Cell[slot] != anchor) continue;
+                for (int yy = cy; yy < cy + def.FootprintHeight; yy++)
+                    for (int xx = cx; xx < cx + def.FootprintWidth; xx++)
+                        taken[yy * gw + xx] = true;
+                placed++;
+            }
+        GD.Print($"bench: {placed} buildings placed ({string.Join(' ', types.ConvertAll(t => data.Buildings[t].Key))} in turn), drawn as {(BuildingViews.UseModels ? "models" : "boxes (--building-boxes)")}");
+    }
+
+    private static bool FreeFootprint(World w, bool[] taken, BuildingDef def, int cx, int cy)
+    {
+        for (int y = cy; y < cy + def.FootprintHeight; y++)
+            for (int x = cx; x < cx + def.FootprintWidth; x++)
+            {
+                if (x < 0 || y < 0 || x >= w.NavGrid.Width || y >= w.NavGrid.Height) return false;
+                if (taken[y * w.NavGrid.Width + x] || !w.NavGrid.IsPassable(x, y)) return false;
+            }
+        return true;
+    }
+
+    // How many live buildings, and how many of them have their footprint's centre on screen, and how many are drawn as models.
+    private void PrintBenchBuildings(GameData data)
+    {
+        World w = _sim.World;
+        var views = _match.GetNode<BuildingViews>("World3D/BuildingViews");
+        Rect2 screen = GetViewport().GetVisibleRect();
+        int live = 0, onScreen = 0, models = 0;
+        for (int i = 0; i < w.Buildings.Capacity; i++)
+        {
+            if (!w.Buildings.Alive[i]) continue;
+            live++;
+            if (views.ShownAsModel(i)) models++;
+            NVector2 p = StartBase.FootprintCenter(w.NavGrid, data.Buildings[w.Buildings.TypeId[i]], w.Buildings.Cell[i]);
+            var at = new Vector3(p.X, TerrainHeight.At(w.Heightmap, p.X, p.Y), p.Y);
+            if (!_camera.IsPositionBehind(at) && screen.HasPoint(_camera.UnprojectPosition(at))) onScreen++;
+        }
+        GD.Print($"bench: {live} buildings, {onScreen} with their centre on screen, {models} drawn as models");
     }
 
     private static int Nodes(Node n)

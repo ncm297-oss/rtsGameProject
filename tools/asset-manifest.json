@@ -1,11 +1,12 @@
 {
-  "about": "Art import manifest (docs/04 'Import process'). tools/import-assets.ps1 rebuilds every model and the animation library from these entries with Blender (tools/art/build_unit.py). Paths: 'source' relative to sourceRoot, 'destination' relative to the repo root. A model's 'clips' maps docs/04's state names to library clip names; 'library.clips' maps each library name to its source clip. Since M6-V24 a model is one surface drawing one atlas: 'textureSize' is the size of each role's tile in it (docs/04 'Unit models, as built').",
+  "about": "Art import manifest (docs/04 'Import process'). tools/import-assets.ps1 rebuilds every model and the animation library from these entries with Blender (tools/art/build_unit.py). Paths: 'source' relative to sourceRoot, 'destination' relative to the repo root. A model's 'clips' maps docs/04's state names to library clip names; 'library.clips' maps each library name to its source clip. Since M6-V24 a model is one surface drawing one atlas: 'textureSize' is the size of each role's tile in it (docs/04 'Unit models, as built'). Since M6-V26 'buildings' lists the static building models (tools/art/build_building.py): one source glTF each, its faces no camera above the ground sees dropped, the 'decimate' materials cut to their triangle counts, every source material one flat 'colours' tile (sRGB as on screen) or, for the 'team' materials, the team grey; one surface, one 'team' material, one atlas whose alpha is the team mask, as the units' (docs/04 'Building models, as built').",
   "sourceRoot": "asset-sources",
   "licences": [
     "Universal Base Characters[Standard]/Universal Base Characters[Standard]/License_Standard.txt",
     "Modular Character Outfits - Fantasy[Standard]/Modular Character Outfits - Fantasy[Standard]/License_Standard.txt",
     "Universal Animation Library[Standard]/Universal Animation Library[Standard]/License.txt",
-    "Universal Animation Library 2[Standard]/Universal Animation Library 2[Standard]/License.txt"
+    "Universal Animation Library 2[Standard]/Universal Animation Library 2[Standard]/License.txt",
+    "quaternius-ultimate-fantasy-rts-2022-08/Ultimate Fantasy RTS - Aug 2022/License.txt"
   ],
   "animationSources": {
     "UAL1": "Universal Animation Library[Standard]/Universal Animation Library[Standard]/Unreal-Godot/UAL1_Standard.glb",
@@ -642,6 +643,51 @@
         "idle": "idle",
         "walk": "walk",
         "attack": "attack_melee"
+      }
+    }
+  ],
+  "buildings": [
+    {
+      "id": "malazan_garrison_keep",
+      "destination": "game/assets/models/malazan/malazan_garrison_keep/malazan_garrison_keep.glb",
+      "source": "quaternius-ultimate-fantasy-rts-2022-08/Ultimate Fantasy RTS - Aug 2022/glTF/Barracks_SecondAge_Level3.gltf",
+      "maxTriangles": 5000,
+      "tileSize": 32,
+      "yawDegrees": 0,
+      "viewElevationDegrees": 15,
+      "decimate": { "Main": 420 },
+      "team": ["Main"],
+      "teamShade": 0.8,
+      "colours": {
+        "Stone": "#6e7176",
+        "Stone_Light": "#8f9195",
+        "Walls": "#7e8084",
+        "Wood": "#4d3a30",
+        "Wood_Light": "#5c4334",
+        "Gold": "#7a6440",
+        "Metal_Light": "#4a4d52",
+        "White": "#9a9da1"
+      }
+    },
+    {
+      "id": "malazan_barracks",
+      "destination": "game/assets/models/malazan/malazan_barracks/malazan_barracks.glb",
+      "source": "quaternius-ultimate-fantasy-rts-2022-08/Ultimate Fantasy RTS - Aug 2022/glTF/Barracks_SecondAge_Level1.gltf",
+      "maxTriangles": 5000,
+      "tileSize": 32,
+      "yawDegrees": 0,
+      "viewElevationDegrees": 15,
+      "team": ["Main"],
+      "teamShade": 0.8,
+      "colours": {
+        "Stone": "#6e7176",
+        "Stone_Light": "#8f9195",
+        "Walls": "#7e8084",
+        "Wood": "#4d3a30",
+        "Wood_Light": "#5c4334",
+        "Gold": "#7a6440",
+        "Metal_Light": "#4a4d52",
+        "White": "#9a9da1"
       }
     }
   ]

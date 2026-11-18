@@ -60,6 +60,7 @@ public partial class BuildingScaleViewTest : Node
     {
         string root = Path.GetFullPath(ProjectSettings.GlobalizePath($"user://building-scale-view-{OS.GetProcessId()}"));
         UnitViews.UseModels = false; // no unit is read here; capsules keep the scene light
+        BuildingViews.UseModels = false; // M6-V26: the rows pin each type's box and its scale (models: BuildingModelTest)
         try
         {
             GetTree().Root.Size = new Vector2I(1152, 648);

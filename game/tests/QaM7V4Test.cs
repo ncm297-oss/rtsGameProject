@@ -65,6 +65,7 @@ public partial class QaM7V4Test : Node
     {
         string root = Path.GetFullPath(ProjectSettings.GlobalizePath($"user://qa-m7v4-{OS.GetProcessId()}"));
         UnitViews.UseModels = false;
+        BuildingViews.UseModels = false; // M6-V26: the rows pin the scaled boxes and their bars (models: BuildingModelTest)
         try
         {
             GetTree().Root.Size = new Vector2I(1152, 648);

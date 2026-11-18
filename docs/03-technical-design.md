@@ -4517,6 +4517,113 @@ the new files as they draw the eleven).
      (Frenzy), 0.8 s (Telas Fire), 1.0 s (Cusser) and 1.2 s (Sandstorm), so the blend is 30 %, 19 %, 15 % and 13 % of them.
      Recommendation: keep 0.15 s; only the Frenzy is short enough for it to show.
 
+### Implementation (M6-V26)
+
+The first building models: the Malazan Garrison Keep and Barracks are drawn as models from the Ultimate Fantasy RTS pack
+when finished, with team colour; every other building type is still its box. Tooling, view code, view tests and docs; no
+sim, ViewApi or data file changed (docs/01 2026-11-18 (b) (e), (f)).
+
+- **The files** (docs/04 "Building models, as built"): `tools/art/build_building.py` builds each `buildings` entry of the
+  asset manifest into `game/assets/models/<faction id>/<building id>/<building id>.glb`: one surface, one material named
+  `team`, one atlas of flat-colour tiles whose alpha marks the team tile, the layout in the file's extras, the same shape as
+  a unit model since M6-V24. Keep 4,940 triangles, Barracks 2,158, a 128 x 128 atlas each.
+- **Found by id** (`BuildingModels.PathFor`): `{ModelRoot}{faction id}/{building id}/{building id}.glb` from the data's
+  faction and building ids; no building is named in code and `buildings.json` has no `model` field. `BuildingModels` (one
+  per `BuildingViews.Bind`, as `UnitModels` per `UnitViews.Bind`) loads each type's file once per run through `UnitModels`'
+  checks (now `internal`: `Problem`, `ReadExtras`, `ReadAtlas`): a missing file is the normal case (one line a run counts
+  them, no warning); a Git LFS pointer, a file that isn't glTF, one without a `team` material or without its atlas layout
+  prints one warning (never an `ERROR` line) and the type keeps its box. It takes the mesh resource out of the scene and draws
+  it on a plain `MeshInstance3D` (no instanced scene), so a building view is still one root with a box, a model node and
+  the bar.
+- **The fit:** one uniform scale per type, the largest that keeps the model's ground plan `FitMargin` (0.25 m) inside every
+  edge of the footprint (cells x 2 m), the plan's centre on the footprint's centre, its lowest point on the ground there (as
+  the box's base). The Keep 7.5 x 7.2 x 8.1 m on 8 x 8 m, the Barracks 3.9 x 5.5 x 3.5 m on 6 x 6 m. Computed once per
+  type at `Bind` from the mesh's bounds; a building places its model node with that transform once.
+- **Materials:** per type and player one team material (`team_colour.gdshader` on the atlas, the player colour on the team
+  tile) and one remembered material, the same with the shader's new `brightness` uniform at the ghost box's darkening
+  (`FogView.ExploredBrightness` 0.4 in sRGB = 0.133 linear, the shader multiplying linear albedo). `brightness` defaults to
+  1, so every unit model draws exactly as before.
+- **`BuildingViews`** (`UseModels`, on unless `--placeholder-art`, as `UnitViews.UseModels`): a finished building of a type
+  with a model shows its model node in its owner's team material and hides its box; a site keeps the rising box (the model
+  node hidden) and is switched on the first `Sync` that reads it finished (`SetLook`, which also places the bar: over the
+  box for a site, `BarHeight - BoxHeight` = 0.6 m over the model's highest point when finished, 8.69 m on the Keep and
+  4.09 m on the Barracks); a remembered building (not a site) of such a type draws its model on a per-slot ghost model node
+  in the remembered material, its ghost box hidden; a remembered site stays the darkened foundation box. Nodes are made the
+  first time a slot needs them; a steady frame writes nothing and allocates nothing (0 bytes over 20 syncs with models and
+  remembered models drawn). New accessors: `Models`, `ModelOf`, `ShownAsModel`, `GhostModelOf`, `GhostShownAsModel`,
+  `BarY`; every old one keeps its meaning (`BoxOf` is still the box, hidden under a model).
+- **Not changed:** the hit test keeps the 3 m box (a click on the footprint selects the building; a click on a Keep tower
+  above 3 m selects what is behind, as for any building taller than 3 m since M7-V4), the placement ghost (the box), the
+  outline and rings (the footprint), the minimap, every other type and the data `scale` (no model is drawn by it yet; see the
+  questions).
+- **Existing scenes:** the scenes that pin a finished Keep's or Barracks' box (its `BoxMesh`, its material, its visibility
+  or its ghost box) set `BuildingViews.UseModels = false` before the match, as the unit scenes switch unit models off:
+  `BuildingScaleViewTest` and `QaM7V4Test` (both pin M7-V4's scaled boxes and the bar 0.6 m over the box). Every other
+  scene passes with the models on: the ones that read a building's box material or colour (`EconomyViewTest`, `QaV1Test`,
+  `AiSeatTest`, `ShellTest`, `QaM6V2Test`, `QaM6V3Test`, `TeblorViewTest`) find it unchanged on the hidden box, and the
+  fog scenes (`FogViewTest`, `QaGhostViewTest`) check the ghosts of the enemy seat's buildings, Whirlwind by default, still boxes;
+  `BuildingModelTest` checks the Malazan models' ghosts.
+- **Tests.** New `game/tests/BuildingModelTest` (headless, in the loop; every row per entry of the manifest's `buildings`,
+  the count read from the file): the files (found by id at the manifest's destination, one surface, the `team` material, the
+  atlas at most 1024², at most the manifest's and docs/04's triangles, the mask on every texel of the imported texture, every
+  face on one texel, the triangles per tile pinned to the first build); team colour in all eight colours of the setup's table
+  (Crimson and Bone included): a team texel draws exactly the player colour at the team shade, every other tile the same in
+  every colour, the remembered material at the ghost's brightness; in a real three-player Malazan match with fog: each
+  finished model inside its footprint (0.25 m from the nearest edge), its base on the ground, its plan centred, its box
+  hidden, its bar over its top, a click on its footprint selecting it; a type with no file a box; a site of each type built
+  by Laborers is the box with its bar over the box on every tick and the model on the frame after the tick it finishes; a
+  cancelled site and a finished building razed by Heavy Infantry leave nothing drawn, the hit-point bar over the model's top
+  while hurt; an enemy Keep and Barracks scouted and left are drawn as their darkened models (ghost box hidden), one razed by
+  a third player out of sight stays remembered until a scout sees the spot, then goes, and the other seen again is the live
+  model alone; 0 bytes over 20 syncs; Git LFS pointers (one warning a file), missing files and models off give boxes.
+  Windowed with `-- --shots <dir>` it saves the pictures (`buildings-40m`, `-40m-gray`, `-60m`, `close-<n>-20m`,
+  `sites-40m`, `four-colours-40m`, `remembered-under-fog-40m`). `ModelShots` gains `--bench-buildings N`, `--building-boxes`,
+  `--bench-zoom Z` and `--bench-shot <png>` (below).
+- **Cost** (rules 42 / 61; 2026-11-18 about 14:45, 1600 x 900, `ModelShots --bench 30 --vsync off`, the fifteen figure
+  types mixed, all six runs back to back in one window after 30 s idle, none of the developer's own processes running;
+  three of the other tracks' `testhost`s were running, and the 400-capsule figure, 0.83 ms against M6-V24's 0.87 alone,
+  says the window was about as quiet as that one). The building rows: 400 figures with 60 finished buildings (30 Keeps,
+  30 Barracks, `--bench-buildings 60`) packed edge to edge round the two crowds; 60 with their footprints on screen needs
+  the farthest zoom (`--bench-zoom 60`: at 40 m only about 35 fit beside 400 figures); the fight razes 9 of them by the end
+  in both runs. The figure rows as M6-V25's (40 m, no buildings).
+
+  | Run | Average | While 90 %+ alive | Worst 1 % (90 %+ alive) | Draw calls |
+  | --- | --- | --- | --- | --- |
+  | 400 figures + 60 building models (60 m) | 6.78 ms | **7.00 ms** (at most 16.7) | 10.56 ms | 801 |
+  | 400 figures + 60 building boxes (`--building-boxes`, 60 m) | 6.78 ms | 6.97 ms | 10.45 ms | 800 |
+  | 400 figures, fifteen types (40 m) | 6.22 ms | 7.02 ms | 11.70 ms | 959 |
+  | 400 capsules | 0.83 ms | 0.86 ms | 3.06 ms | 171 |
+  | 1,000 figures, fifteen types | 17.00 ms | 17.57 ms | 24.96 ms | 2,602 |
+  | 1,000 capsules | 1.44 ms | 1.51 ms | 6.30 ms | 243 |
+
+  A building model costs what its box did: one surface, so one draw call and one shadow-pass draw call each, as the box
+  (801 against 800 a frame; the frame times agree within 0.03 ms). The 1,000-figure row is reported, not gated (M6-V24:
+  17.48 ms alone; M6-V25's loaded window 27.36 ms).
+- **Questions for the Producer (rule 67), each with a recommendation:**
+  1. **The source pick.** The pack's TownCenter models are a fountain and a statue plaza, so the Keep is the Barracks line's
+     Second Age Level 3 (a hall with three towers) and the Barracks its Level 1 (the same hall without towers). They read as
+     one family, the Keep plainly the fortress. Recommendation: accept; the owner judges the pictures.
+  2. **The team part is the whole roof.** It is the largest surface the camera sees on both, so two players' buildings read
+     apart at 40 and 60 m; but the first colour of the setup's table is a slate grey, and a slate roof on grey stone is the
+     weakest pair (`four-colours-40m.png`). Recommendation: accept; if the owner finds slate too quiet, a lighter stone or a
+     second team part (the tower tops) is a manifest edit.
+  3. **The Keep is 8.1 m tall** (towers included) on its 8 m footprint; a Heavy Infantry beside it is 1.8 m. Figures behind
+     it from the camera are hidden, as behind any tall building. Recommendation: accept; a lower fit (a height cap) is one
+     constant if play shows figures lost behind keeps.
+  4. **The hit test keeps the 3 m box**, so a click on a Keep tower above 3 m does not select the Keep (M7-V4's rule).
+     Recommendation: a later task gives `BuildingPicker.PickRay` each type's drawn height (a `ViewApi` change, out of this
+     task's scope), once more buildings are models.
+  5. **The data `scale` on a model** (the Teblor buildings' 1.25): not applied yet (no Teblor building has a model).
+     Recommendation: apply it as the boxes do since M7-V4, to the height only (the fit's scale times `scale` on the vertical
+     axis), so a Teblor model stays inside its footprint and stands 25 % taller; the alternative (uniform, then refit to the
+     footprint) would undo the scale. The bar follows the drawn top as now.
+  6. **Entrance facing.** The pack's buildings face +Z (their door toward the match camera), and the files keep it (yaw 0),
+     not docs/04's -Z for units: a building never turns, and its door faces the player. Recommendation: accept, and say in
+     docs/04 that a building's front faces the camera (+Z).
+  7. **A site is today's mauve box**, rising, until the frame it finishes, then the model appears whole. The pack has no
+     construction stage that fits (its Levels are upgrades). Recommendation: accept for this slice (docs/01 2026-11-18 (b)
+     (f)); a scaffold or a model rising through the ground is a later look task.
+
 ## Vision, detection, fog
 
 Fog of war and the high-ground rule are in since M4-3a (`sim/Rts.Sim/Vision/`); the last-known building ghosts, buildings
