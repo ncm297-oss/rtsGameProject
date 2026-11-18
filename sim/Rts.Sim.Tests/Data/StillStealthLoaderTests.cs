@@ -54,7 +54,11 @@ public class StillStealthLoaderTests
     public void TheHash_IsUnchangedWithoutTheField_MovesWithIt_AndWithEachField()
     {
         ulong shipped = TestSim.Data.ContentHash();
-        Assert.Equal(0xB74DC7AE61B4862DUL, shipped); // criterion 2: the shipped data hash
+        // Criterion 2: the shipped data hashes as the golden's header says. Not a literal of its own (BUG-1580): the header is
+        // the one pin of the shipped hash, which a data task moving the hash re-pins (with FactionOrderTests'
+        // TheShippedContentHash_IsTheGoldenHeaders); M8-2 left it as it was, so the field's absence did not move the hash.
+        string golden = File.ReadAllText(Path.Combine(TestDataDir.RepoRoot(), "sim", "Rts.Sim.Tests", "Replays", "cross_map_seed1.replay"));
+        Assert.Contains("data-hash " + shipped.ToString("X16"), golden);
         Assert.Equal(shipped, AiScenes.DataWith(_ => { }).ContentHash());
         ulong block = With(StillScenes.Block(3)).ContentHash();
         Assert.NotEqual(shipped, block);

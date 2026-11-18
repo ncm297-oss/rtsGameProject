@@ -25,9 +25,13 @@ internal static class ForestScenes
     /// <summary>The block as a JSON object.</summary>
     internal static JsonObject Block(double delay) => new() { ["status"] = "stealthed", ["delay"] = delay, ["exceptSlots"] = new JsonArray("siege") };
 
-    /// <summary>The test copy with the Malazan block at <paramref name="delay"/> seconds (see the type's summary).</summary>
-    internal static GameData DataWith(double delay) => AiScenes.DataWith(dir =>
+    /// <summary>
+    /// The test copy with the Malazan block at <paramref name="delay"/> seconds (see the type's summary), then
+    /// <paramref name="also"/>'s edits (M8-2: the save-bytes tests add a field to it).
+    /// </summary>
+    internal static GameData DataWith(double delay, Action<TestDataDir>? also = null) => AiScenes.DataWith(dir =>
     {
+        also?.Invoke(dir);
         dir.EditJson("factions/malazan/faction.json", r => r["forestStealth"] = Block(delay));
         StealthTests.AddTo(dir);
         dir.EditJson("factions/whirlwind/abilities.json", root => root["abilities"]!.AsArray().Add(new JsonObject
