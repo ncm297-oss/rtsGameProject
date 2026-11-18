@@ -28,6 +28,295 @@ is re-checked without Stress (rule 72); QA full on the sim runs Stress once; the
 and its Stress rows alone; tell every developer again that nothing is written outside its worktree and its own
 scratch folder (rule 63: a stray `fix1.patch` this session).
 
+## Current session plan
+
+**Session 2026-11-18-0926 (1 / 8 of 2026-11-18), planned 09:30. All three tracks GO, all feature.** Base 0317e7e.
+Bug ids: sim 1620-1629, view 1630-1639, data 1640-1659. Producer decisions for M8-3 and M6-V26: docs/01
+"2026-11-18 (b)". Everyone: record the PID of every `dotnet test` / Godot you start and end only those (rules 52 /
+69); scratch folders are new and named `<task>-...`, and nothing is written outside your worktree and your own
+scratch folder (rule 63); "build 0 / 0" means `--no-incremental` after the last edit (rule 64); run the full default
+loop after the last edit or say in the first lines that you did not (rule 62); open questions go in the docs section
+the task owns (rule 67). Developers cannot write `studio/**`. Smoke may fail once on stale `uid://` import state:
+re-run it once before calling it a finding.
+
+### Sim: M8-3, the first shot from stealth and the pack bonus, on test data only (feature, QA full)
+
+Goal: build the two damage rules the Shadow roster still lacks (shadow.md gaps G2 and G3; M8 criteria 1 and 2): the
+Shadow Archer's first shot from stealth deals +50 %, and a Hound of Shadow deals +10 % for each other Hound within
+8 m, up to +30 %. Both are generic data hooks with their schema checks. No shipped unit carries them, so nothing in
+a match changes.
+
+Scope:
+- Schema A: `units.json` `attack.fromStealthBonus` (a number above 0, at most a bound you name in `DataLimits`;
+  absent or JSON `null` = none). A building's attack may not carry it (one error).
+- Schema B: a fourth passive trigger `nearbyOwn` with `units` (the `onDeath` passive's rule: at least one, own
+  faction, no repeats), `radius` (above 0, at most `DataLimits.MaxPassiveRadius`), `damageBonus` (above 0, bounded)
+  and `maxStacks` (a whole number from 1 to a bound you name). The fields it does not use (`status`, `magnitude`,
+  `duration`, `hpFraction`) are errors on it; `damageBonus` and `maxStacks` are errors on the other three triggers;
+  one per trigger as today (`MaxUnitPassives` becomes 4; the trigger id is appended, existing ids keep their values).
+- Rule A (docs/01 2026-11-18 (b) (a), (b)): a hit by a unit whose attack carries the field is multiplied by
+  `1 + fromStealthBonus` when `World.IsStealthed(attacker)` is true (Stealthed and not Revealed) at the moment the
+  hit's damage is worked out: a melee blow at the strike (`CombatSystem.QueueHit`), a shot at its landing
+  (`ProjectileSystem.Strike`), exactly where `StatusSystem.DamageFactor` is read today. From any stealth source.
+  The landing reveals the attacker as today, so the next hit has no bonus. A dead shooter's shot has none.
+- Rule B (docs/01 2026-11-18 (b) (c)): a hit by a unit whose type has the passive is multiplied by
+  `1 + min(n, maxStacks) x damageBonus`, n = the attacker's owner's other live units of the listed types whose
+  centre is within `radius` of the attacker's centre (the boundary counts), counted through the spatial grid at the
+  same moments as rule A. An ally's units, enemies, other types and the attacker itself do not count. A dead
+  shooter's shot has none.
+- The factors multiply (status bonus x first shot x pack) in one fixed order, through one helper that every place
+  reading the status factor today calls (unit hits, building hits, splash), so no path forgets one (BUG-1281's
+  lesson). Data without either field pays one flag test.
+- **No stored state:** no new store field, save part or hash bit; save format stays 10, replay 9 / 6.
+- Test data only (rule 58: a helper that forges a row tolerates shipped data already carrying it; put the copies
+  beside `Vision/StillScenes`).
+- Docs: docs/02 "Stealth and detection" (the first-shot rule) and the passives text (the pack rule); docs/03
+  "Implementation (M8-3)" with "For the data track (M8-3)" (the two rows the Archer and the Hound will carry) and a
+  "Questions for the Producer" list; and write the Producer's answers to M8-2's Questions 1-3 into docs/03's M8-2
+  section (docs/01 2026-11-18: all three "leave it").
+- OUT of scope: any byte under `game/data/**`; the AI (no rule, no think change, no estimate); the view and
+  `ViewApi`; the 7-alive cap (G4), teleport, the Wraith row, ability `requires` (G5-G8); remembering "fired from
+  hiding" on a projectile; `docs/factions/**`; any existing pin class, fixture, the golden, or any literal of the
+  shipped data hash or of a save's bytes on shipped data (rule 73: the data track may move the hash this session).
+  If you find a shipped rule or a pin must move, stop and say so.
+
+Acceptance criteria:
+1. Both schemas load; each bad row is refused with exactly one error naming the unit and the field (bonus zero /
+   negative / over the bound; the field on a building's attack; `nearbyOwn` with a missing or bad `units`, `radius`,
+   `damageBonus`, `maxStacks`; an unused field on it; `damageBonus` or `maxStacks` on another trigger; a second
+   `nearbyOwn`). `null` reads as absent. New loader tests + `DataValidationTests` rows.
+2. `git diff 0317e7e -- game/data` is empty; no existing pin class, fixture or golden file is in the diff; every
+   existing test is green unedited (a test that pinned "three triggers" or `MaxUnitPassives` 3 may change that
+   number only, named in the report).
+3. Ranged: a Stealthed unit with `fromStealthBonus` 0.5 whose shot lands on a unit deals exactly the damage of
+   factor 1.5 (the pinned number beside the same shot from a unit that is not Stealthed), is revealed by that
+   landing, and its next shot deals the plain damage. Shown for forest stealth, stand-still stealth and a timed
+   Stealthed status.
+4. Melee: the same for a melee unit with the field: the first blow carries the bonus, the second does not.
+5. The boundary: a shot whose shooter is no longer Stealthed at the landing tick (it lost hit points, its
+   stand-still hold was let go after a move, it was Revealed by another hit of its own, or it died) deals the plain
+   damage; one still Stealthed at the landing deals the bonus even when an enemy detects it. Each case one test,
+   with the tick on both sides of the boundary pinned where there is one.
+6. The bonus reaches a hit on a building and every victim of that shot's splash; a Stealthed unit without the
+   field gets nothing.
+7. Pack: with `damageBonus` 0.1 and `maxStacks` 3 the factor is 1.0 / 1.1 / 1.2 / 1.3 / 1.3 / 1.3 for 0-5 other
+   listed units in reach (a table-driven test with pinned damage); a unit whose centre is exactly at `radius`
+   counts, one just beyond does not; the attacker itself, another type, an enemy's, an ally's and a dead unit do not
+   count.
+8. All three factors multiply: one pinned row with a status damage bonus, the first shot and a pack of two.
+9. Generic: each rule works on a unit of every shipped faction's test copy; on data with neither field the helper
+   returns the status factor alone.
+10. Determinism: twin runs agree on every tick's state hash over 4 seeds x 2,000 ticks, 3 players, random move /
+    attack / stop / hold orders, with units carrying each field on every side; a save at every 50th tick, loaded
+    and continued, equals the uninterrupted run. The diff adds no store field, save part or hash bit (save 10,
+    replay 9 / 6).
+11. No allocation per tick in a 200 v 200 fight of pack units (`[Collection(SerialCollection.Name)]`).
+12. Measure and report (not pass / fail): the tick cost of that 200 v 200 fight with and without the passive
+    (radius 8), alone under rule 42. No Perf threshold loosened.
+13. `dotnet build RtsGame.sln --no-incremental` 0 / 0; default loop 0 failed, 19 skipped (the same 19); smoke
+    PASS.
+14. docs/02 and docs/03 say what the code does; M8-2's three answers are written in.
+
+Design references: `docs/factions/shadow.md` "Unit notes", "Schema gaps (D-R38)" G2 and G3, Decisions; docs/02
+"Stealth and detection" and the passives rules; docs/01 2026-11-18 (b); docs/03 "Implementation (M7-4)" (the
+Frenzy's damage factor: where it is read is the model), "(M7-2)" (`onHit`: the passive loader's shape), "(M8-2)".
+
+Tests required: loader + validation; scene tests for criteria 3-9 with pinned damage and ticks; an invariant fuzz
+(every hit's damage equals the base damage times the product of the factors that hold at its moment; no hit by a
+unit without a field differs from the base's); determinism and save / load twins; allocation; the report.
+
+Constraints: no Godot in `Rts.Sim`; no stat in C# (0.5, 0.1, 3 and 8 are data); no allocation per tick; the count
+goes through the spatial grid, in a fixed order; float factors multiplied in one fixed order; one public type per
+file; test data only.
+
+QA focus (full): the landing-tick boundary (reveal ordering in `HitUnit` / `HitBuilding`: the damage must be worked
+out before the reveal on every path, and a second shot in flight when the first lands must not carry the bonus); a
+lob and a splash shot; a shot whose shooter's slot was freed and reused by another unit (the bonus must not come
+from the new occupant); the pack count at the exact radius, across spatial-grid cell borders and for the 0.75 m
+radius class; units of the pack dying in the same phase 11 as the hit; team games (an ally's Hounds); rounding of
+stacked factors against the damage formula (no off-by-one against a hand calculation); every path that reads the
+status factor today also reads the new ones (melee, shot on unit, shot on building, splash, friendly fire); the AI's
+`PlayerView` and shipped-data matches unchanged (a shipped-data twin against the base's state hashes over a full AI
+match). Scale: 2,000 units with both fields, 4 seeds x 2,000 ticks. Stress once, then Perf alone (rule 42); after a
+tests-only fix round no Stress re-run (rule 72).
+
+### View: M6-V26, the first building models (feature, QA standard; a first slice of about 800 lines)
+
+Goal: put the first real buildings on screen. Build the import path for a static building model from the
+Ultimate Fantasy RTS pack already on disk and use it for two Malazan buildings, the Garrison Keep
+(`malazan_garrison_keep`, 4 x 4 cells) and the Barracks (`malazan_barracks`, 3 x 3), with team colour, so the owner
+can judge buildings beside the figures before the rest follow.
+
+Scope:
+- Tooling: a `buildings` list in `tools/asset-manifest.json` and a build step in `tools/art/` run by
+  `tools/import-assets.ps1` (Blender 5.2; `asset-sources/quaternius-ultimate-fantasy-rts-2022-08/` of the main
+  checkout, read only). Output per building: one `.glb` (one surface, one material named `team`, one atlas whose
+  alpha is the team mask, as the units' since M6-V24) at
+  `game/assets/models/malazan/<building id>/<building id>.glb`. Which source model (TownCenter / Barracks, First or
+  Second Age, which level) and which parts take the player colour are your pick from the pictures; tint toward the
+  Malazan palette (steel grey, oxblood, dull bronze), muted, grounded.
+- View: a building type whose model file exists draws it when finished (found by id: docs/01 2026-11-18 (b) (e));
+  scaled uniformly to fit its footprint from the data with a small margin, origin at the ground centre. A site
+  keeps today's rising box; a remembered building under the fog draws the same model darkened as today's ghost box
+  is. The hit-point / progress bar sits above the model's top; selection, picking, the build ghost and the outline
+  work as today. Every other building type stays a box. Pointer files (no `git lfs pull`) and `--placeholder-art`
+  give today's boxes with 0 `ERROR` lines.
+- Scenes: one new scene for the two buildings (model shown when finished, box while a site, ghost, bar height,
+  two player colours, the fallback); existing scenes that pin a building's box mesh or material either read the new
+  accessor or switch models off, as the unit scenes did.
+- Docs: docs/04 (a "Building models, as built" part: the manifest entry, the fit rule, the team parts, the
+  licensing log row of the pack listing the source files used), docs/03 "Implementation (M6-V26)" with a
+  "Questions for the Producer" list.
+- OUT of scope: any file under `sim/` or `game/data/` (no `model` field for buildings; if you find you need one,
+  say so in Questions); the other eight Malazan buildings, Whirlwind and Teblor buildings, construction-stage
+  models, resource nodes, trees, props; the Teblor buildings' `scale` on a model (say in docs/03 how it will apply);
+  a new third-party pack; a new binary type (`.glb` and `.png` only); BUG-1600 / 1601 / 1602 (the next task);
+  changing unit figures.
+
+Acceptance criteria:
+1. Two manifest entries; a second run of the import leaves every model file (the units' too) sha256-identical.
+2. Each building file: one surface, the `team` material, one atlas, at most 5,000 triangles (docs/04), texture at
+   most 1024 x 1024.
+3. In a match, a finished Garrison Keep and Barracks draw their models inside their footprints (no part beyond the
+   footprint's edge by more than 0.25 m), standing on the ground; the scene checks the fitted bounds against the
+   data's footprint.
+4. A site of either type draws today's box and switches to the model the tick it is finished; a remembered one
+   under the fog draws the model with the ghost's darkening; destroying it removes it. Scene rows for each.
+5. The bar is above the model's highest point for both types; a click on the model's footprint selects it as
+   today.
+6. Team colour: the same building in two player colours reads apart at the default zoom; the scene checks that
+   team texels take the player colour and the others do not, in four colours.
+7. Pictures, looked at by you: both buildings at the default zoom and close up, in two player colours, with a
+   Laborer and a Heavy Infantry figure beside each for scale; a site, and a remembered one under the fog. The
+   report says what you picked and why. The sheets go in a scratch folder named in the report (the Producer copies
+   them to `studio/review/2026-11-18-0926/`).
+8. The bench alone (rule 42): 400 mixed figures with 60 buildings (30 of each) on screen, beside the same window's
+   boxes; and rule 61's 400- and 1,000-figure rows with the capsule figure. Over 16.7 ms a frame for 400 figures
+   with 60 building models fails.
+9. Pointer files and `--placeholder-art`: boxes, 0 `ERROR` lines.
+10. Only `.glb` and `.png` binaries added; the art pass's binaries' total size reported; the pack's licensing-log
+    row names the source files used, in the same commit.
+11. Nothing under `sim/` or `game/data/` in the diff.
+12. Build `--no-incremental` 0 / 0; default loop 0 failed; smoke PASS; scene loop all green (117 + the new one).
+13. docs/04 and docs/03 "Implementation (M6-V26)" updated.
+
+Design references: docs/04 (style guide: grounded, muted world and saturated teams; "Scale and dimensions":
+buildings fit their footprint with a small margin; "Team color"; "Buildings, nature, props"; "Directory layout and
+naming"; "Import process"; "Unit models, as built" for the atlas and mask); docs/03 "Implementation (M6-V24)" and
+"(M7-V4)" (the buildings' drawn `scale`); `game/data/factions/malazan/buildings.json` (ids, footprints);
+`game/scripts/BuildingViews.cs`, `UnitModels.cs` (the model of the loader and the fallback).
+
+Constraints: views hold no gameplay state; no player-facing text in C#; the model is found from the data's ids,
+never a list of building names in C#; counts of model types come from the manifest, never a literal;
+`tools/asset-manifest.json`, `tools/import-assets.ps1` and `tools/art/**` are the view's; nothing is downloaded.
+
+QA focus (standard): a fresh-clone import is byte-identical; the fit on both footprints and on a map's terraces
+(a model sunk into or floating over the ground); the site-to-finished switch, a building destroyed while a site and
+a finished one remembered under the fog then razed out of sight; team colour leaking onto walls or missing in four
+colours, Bone and Crimson included; the bar and the selection outline against the model's size at the closest and
+farthest zoom; units walking beside the model (figures hidden behind it or clipping through an overhang); the
+pointer-file fallback; a scene that pins a count as a literal. The bench last and alone; the rows that flake under
+load re-run alone.
+
+### Data: D34, Easy's lost upgrade and the pages after D33 (feature, QA standard; at most one data-hash move)
+
+Goal: D33 brought the Teblor AI's whole army out but cost the Easy AI its one upgrade (the Anointing 35 -> 1 of 64
+matches) and Shamans on Easy and Hard (BUG-1612). Try to win it back by the order and times of the steps alone, and
+make the pages say what `main` does (BUG-1613 and the small items).
+
+Scope (in this order; cut from the end if the budget is short and say so):
+- A. BUG-1612: `game/data/factions/teblor/ai.json` `standard`, order and step times only (the Shaman's Circle and
+  the Anointing ahead of the three new train steps; the Anointing's time earlier). Screen at least three and at
+  most five variants on a reduced row first (Easy and Normal), then run the full 64-seat row of
+  `D33TeblorRowQaStressTests`' shape for Easy / Normal / Hard on the one candidate.
+- B. BUG-1613: teblor.md's "was" column printed against `main`'s row (QA's numbers are in the bug file) or the
+  column relabelled, the AI section's short paragraph too; the `standard` tooltip softened so it promises only what
+  most Normal matches show (or the figure it rests on measured and printed). If A ships a variant, the page and the
+  tooltip follow that variant's row.
+- C. Small items: `KnownBeatenAlive` seed 19 with its `DR33QaTests` pin; BUG-1510 item 1 (two long lines); BUG-1421
+  items 1, 2, 5 (close each as fixed, as "waits for Request 55", or as wontfix with the reason on the page).
+- D. Docs only: `docs/factions/shadow.md` says gap G1 is built (M8-2: the field and its row from docs/03 "For the
+  data track (M8-2)"), keeping `Content/PagePinReadinessTests` green; the art notes on malazan.md and whirlwind.md
+  say what the figures on `main` show (BUG-1602's data half; the figures are in `studio/review/2026-11-17-0816/`
+  and docs/04 "Fourth slice (M6-V25)").
+- Print the Hard v Normal tally if a variant ships; tune nothing for it.
+- Files: `game/data/factions/teblor/ai.json` (the only data file that may change); `docs/factions/teblor.md`,
+  `malazan.md`, `whirlwind.md`, `shadow.md`; `Content/**`, `QA/Content/**`. **Only if a variant ships (the hash
+  moves),** handed over by name, values and "was" comments only (rules 51 / 71): the golden
+  `cross_map_seed1.replay` header and checksum (the reason in the `GatherWedgeQaTests` comment);
+  `Data/FactionOrderTests.TheShippedContentHash_IsTheGoldenHeaders`;
+  `QA/PackQaTests.TheShippedDataHash_IsTheGoldenHeaders`; and each of these, one line each in the report with
+  "re-measured: yes / moved to ... / unchanged":
+  - `MatchCriterionTests` (+ `CriterionMatch`, `HalfWay`)
+  - `StandardPresetPinQaTests`
+  - `NonHardMatchPinQaTests`
+  - `CounterCompositionTests.TheNonHardPins_*`
+  - `ReserveTwinTests`
+  - `SharedVisionFfaPinTests`
+  - `OutcomePinM73bQaTests`
+  - `HardKnobsPinTests`
+  - `CliTests.Match_TheLiteralRow_*`
+  - the premap AI replay, `save_ai_seed2`, `seed21_playable.replay`
+  - the Hard v Normal tally, docs/03's M5-5 table and bound comments
+  - Stress: `AiDeterminismTests`
+  - Stress: `HuntStressTests`
+  - Stress: `M6Sh2DeterminismStressTests`
+  - Stress: `M6Sh2QaStressTests`
+  - Stress: `M6S12DeterminismStressTests`
+  - Stress: `StarvedSaveTwoProcessQaStressTests`
+  - Stress: `ReservePairingsStressTests`
+  - Stress: `MatchRowsM6S10Report`
+  - Stress: `MatchCriterionSweepQaStressTests`
+  A view scene red only because its save / replay fixture carries the old data hash: regenerate that fixture file
+  and name it in the report; nothing else under `game/`.
+- OUT of scope: `game/data/common/**`, the other factions' `ai.json`, units' stats and costs, any other C# (a
+  missing rule goes in the report as evidence for Request 55); the Shadow roster's files; shadow.md's G2 / G3 rows
+  (the sim builds them this session; next task); tuning for the Hard v Normal tally; the waves D33 set (they wait
+  for the owner's answer).
+
+Acceptance criteria:
+1. The report prints, for every variant tried, Easy / Normal / Hard rows (defeated / 2nd Longhouse / Shaman /
+   Breaker / Rider / War-dog / Anointing) beside `main`'s, and says which rows are the reduced screen and which the
+   full 64.
+2. A variant ships only if, on the full rows, Easy's Anointing is back to at least 20 of 64 while on Normal and on
+   Hard each of Breakers, Riders and War-dogs stays at 8 or more, Normal's Shamans at 14 or more, its second
+   Longhouse at 9 or more and its "beaten" count at 15 or less. If none reaches that, nothing under `game/data/`
+   changes, the criterion is met by the table and the cause, BUG-1612 is marked "waits for Request 55" with the
+   best variant named, and the hash does not move.
+3. BUG-1613: every "was" figure on teblor.md is `main`'s (or the column says what it is), in the table and in the
+   AI section's paragraph; the tooltip's claims hold in most Normal matches by a printed figure, or the text is
+   softened; the page quotes the tooltip as the file has it.
+4. The small items of C are each closed or stated with a reason; pinned figures stay pinned
+   (`DR33QaTests`).
+5. shadow.md lists G1 as built with its field; `PagePinReadinessTests` green; the two art-note sections match the
+   figures.
+6. If the hash moved: the new hash stated; the golden header and the two hash pins regenerated; every class in the
+   list re-measured once (Stress classes run alone, PIDs recorded), old values kept in "was" comments; a pinned
+   criterion row that stops ending moves to the nearest seed that ends (rule 45) and the report says so; no bound
+   raised; the report says saves and recordings from before stop loading. If it did not move: `git diff 0317e7e --
+   game/data` is empty and the report says so.
+7. The pages' cells, prose and the opening's `description` match the shipped file and the measured tables; every
+   `Content/**` and `QA/Content/**` class green.
+8. The report carries the owner's review table (opening / field, old -> new, one-line why) and quotes any changed
+   player-facing text old -> new.
+9. Build `--no-incremental` 0 / 0; default loop 0 failed, 19 skipped; smoke PASS; scene loop green if anything
+   under `game/` changed.
+
+Design references: docs/02 "AI opponent" (openings, the reserve, the army mix); `docs/factions/teblor.md` (AI build
+order, "The Age II army (BUG-1420, D33)", the opening's tooltip), `malazan.md` and `whirlwind.md` (art notes, the
+lines of BUG-1510), `shadow.md` "Schema gaps (D-R38)"; docs/03 "For the data track (M8-2)"; BUG-1612, BUG-1613,
+BUG-1510, BUG-1421, BUG-1602; Request 55 in `studio/STATE.md`.
+
+Constraints: no C# outside the two content test folders except the pin values named above; player-facing text only
+in data; at most one hash move; `teblor/ai.json` is this track's alone this session; the sim's M8-3 does not
+change the AI, so openings are measured on `main`'s AI.
+
+QA focus (standard): scenario rows first, Stress rows alone. Re-run the full Easy / Normal / Hard rows of the
+shipped state independently and compare with the report; check the fallback was not taken where an order would have
+done (try one order of your own); Normal and Hard must not lose what Easy regains; every "was" figure against
+`main`; the tooltip against what the AI does in a match; pages against files both ways; if the hash moved, every
+listed pin class really run (rule 71) and a save from `main` refused cleanly.
+
 ## Where things stand
 
 - **`main` after this session = sim b70604a + view bcb48e2 + data 95fd578** (plus this ACCEPT's studio and docs
