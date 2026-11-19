@@ -34,10 +34,12 @@ public class D32DescriptionQaTests
     private static string Desc => Standard().Description;
 
     [Fact]
-    public void TheDescription_IsD33sSentence()
+    public void TheDescription_IsD34sSentence()
     {
+        // D34 fix round 1 (2026-11-18, BUG-1641 / BUG-1613): was "... then Javelin Throwers, Shamans, Breakers, Destrier Riders and
+        // War-dogs join them and a second Longhouse goes up." (D33's; the test was TheDescription_IsD33sSentence).
         // D33 (2026-11-17): was "... then Javelin Throwers and Shamans join them and a second Longhouse goes up." (D32's, BUG-1390).
-        Assert.Equal("War Lodge and Javelin Ground first, then Age II; four Warriors raid at 8 army pop, then Javelin Throwers, Shamans, Breakers, Destrier Riders and War-dogs join them and a second Longhouse goes up.", Desc);
+        Assert.Equal("War Lodge and Javelin Ground first, then Age II; four Warriors raid at 8 army pop, then Javelin Throwers and War-dogs join them; Shamans, Breakers, Destrier Riders and a second Longhouse may follow.", Desc);
     }
 
     [Fact]
@@ -104,7 +106,7 @@ public class D32DescriptionQaTests
     public void ASecondLonghouseGoesUp_IsAnExpandStep_AfterAgeII()
     {
         AiOpening o = Standard();
-        Assert.Contains("a second Longhouse goes up", Desc);
+        Assert.Contains("a second Longhouse may follow", Desc); // D34 fix round 1: was "a second Longhouse goes up" (D33's text)
         int expand = -1;
         for (int i = 0; i < o.BuildOrder.Length; i++) if (o.BuildOrder[i].Action == AiStepAction.Expand) expand = i;
         Assert.True(expand > StepIndex(o, AiStepAction.Research, "age_ii"));

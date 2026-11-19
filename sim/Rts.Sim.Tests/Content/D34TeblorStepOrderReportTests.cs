@@ -15,7 +15,8 @@ namespace Rts.Sim.Tests.Content;
 /// <c>D34_VARIANTS</c> (comma-separated names), <c>D34_DIFFS</c> (default Easy, Normal), <c>D34_SEEDS</c> (default 1-4, the
 /// reduced screen; 1-8 is the full 64) and <c>D34_THREADS</c> narrow a run. Outcome (2026-11-18, teblor.md "Easy's
 /// Anointing (BUG-1612, D34)"): G5 on the full rows brings Easy's Anointing to 32 of 64 but Normal's Breakers to 7 (the
-/// bar 8), so none ships; M's full rows equal QA's D33 rows to the match.
+/// bar 8); M's full rows equal QA's D33 rows to the match. Fix round 1 (BUG-1641): QA's order Q2 meets the bar on the full
+/// rows in this loop too, and ships (<see cref="ShippedVariant"/>, <c>Fixtures/teblor_standard_d34.json</c>).
 /// </summary>
 [Trait("Category", "Stress")]
 public class D34TeblorStepOrderReportTests(ITestOutputHelper output)
@@ -58,8 +59,18 @@ public class D34TeblorStepOrderReportTests(ITestOutputHelper output)
     private static readonly (string, string?) Carver = ("build", "teblor_bloodwood_carver");
     private static readonly (string, string?) Anointing = ("research", "teblor_blood_oil_anointing");
 
-    /// <summary>The variant D34 ships, if any (<c>null</c>: none reached the brief's criterion 2, the shipped file is D33's).</summary>
-    internal const string? ShippedVariant = null;
+    /// <summary>
+    /// The variant D34 ships: QA's Q2 (BUG-1641), the only order measured that meets the brief's criterion 2 on the full rows
+    /// (was <c>null</c> before the fix round: none of G1-G5 reached it).
+    /// </summary>
+    internal const string? ShippedVariant = "Q2";
+
+    /// <summary>
+    /// The description D34 ships with <see cref="ShippedVariant"/> (BUG-1613): it names as joining only the kinds most Normal
+    /// matches field on Q2's row (Javelin Throwers and War-dogs), and the rest as "may follow". Was D33's
+    /// <see cref="D33BalanceReportTests.Description"/>.
+    /// </summary>
+    internal const string Description = "War Lodge and Javelin Ground first, then Age II; four Warriors raid at 8 army pop, then Javelin Throwers and War-dogs join them; Shamans, Breakers, Destrier Riders and a second Longhouse may follow.";
 
     /// <summary>
     /// Every variant D34 measured, each named by its edit to D33's opening ("M", the fixture). Only the order and the
@@ -92,6 +103,12 @@ public class D34TeblorStepOrderReportTests(ITestOutputHelper output)
         MoveBefore(g5, "train", "teblor_breaker", Carver, Anointing);
         At(g5, "research", "teblor_blood_oil_anointing", 600);
         list.Add(("G5", "M with only the Carver and the Anointing (at 10:00) ahead of the three train steps; the Circle and the Shamans where D33 has them", g5));
+
+        // QA's Q2 (BUG-1641): G5 with the Breaker's train step kept ahead of the Carver and the Anointing.
+        JsonObject q2 = Copy(m);
+        MoveBefore(q2, "train", "teblor_destrier_rider", Carver, Anointing);
+        At(q2, "research", "teblor_blood_oil_anointing", 600);
+        list.Add(("Q2", "M with the Carver and the Anointing (at 10:00) after the Breaker's train step, ahead of the Rider and War-dog train steps (QA's order, BUG-1641)", q2));
 
         return list.ToArray();
     }

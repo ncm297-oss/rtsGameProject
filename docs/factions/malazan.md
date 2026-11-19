@@ -584,10 +584,12 @@ destroyed at 13:39 (peak 7) and seed 23 at 15:43 (Age II 8:18, peak 9), neither 
 (2026-11-09) seed 23 sent three waves at 18 pop and was destroyed at 18:49.
 
 The same thing happens to `crossbow_push` (BUG-1010; D-H6's third seed per pairing, `QA/Content/D21OpeningsQaTests`, and
-QA's 4th and 5th, `QA/Content/DH6ThresholdQaTests`). Against `raider_rush` it sends no wave on 2 of the pairing's 5
-smallest seeds (5, 11, 19, 25, 38). Re-measured 2026-11-15 on the sim's M6-S10: seed 19's side is defeated at 16:10
-(tick 19,416) and seed 25's at 11:32 (tick 13,857); neither ever attacks, so "falls to the rush without a wave" holds on
-both (D34, 2026-11-18: seed 19's side now waves, below; seed 25 was not re-measured). On the sim's M5-H6
+QA's 4th and 5th, `QA/Content/DH6ThresholdQaTests`). Against `raider_rush` it sent no wave on 2 of the pairing's 5
+smallest seeds (5, 11, 19, 25, 38), seeds 19 and 25, at the 2026-11-15 re-count; today (2026-11-18, D34 and its QA, BUG-1640)
+both wave and seed 38 does not: seed 19's side sends its first wave at 6:46 (below), seed 25's at 6:50 (one wave;
+defeated at 18:15, tick 21,906), and seed 38's sends none (defeated at 13:10, tick 15,812, peak 9 pop). Seeds 5 and 11
+were not re-run, so the count is at least 1 of 5. Re-measured 2026-11-15 on the sim's M6-S10: seed 19's side was
+defeated at 16:10 (tick 19,416) and seed 25's at 11:32 (tick 13,857), neither ever attacking. On the sim's M5-H6
 (2026-11-09) seed 19's side was beaten down but still standing at 20:00 and seed 25's was defeated at 12:22
 (tick 14,843; 12:33, tick 15,068, measured 2026-11-07). From the sim's M5-4d slice 2 (the AI rebuilds what it loses,
 2026-11-07) until M6-S10, seed 19's hall was razed but its last worker kept rebuilding, and at 20:00 the side had 1
@@ -607,10 +609,11 @@ II; on seed 25 it peaked at 12 pop and was down to 1 pop at 20:00 (re-measured u
 (tick 15,084; 12:33 since slice 2), and D-R33 (2026-11-07) took both `KnownBeatenAlive` entries out (BUG-1110); slice 2
 put seed 19's back the same day, and D34 (2026-11-18) took it out again.
 
-Over the two openings, `raider_rush` beats the Malazans without a fight on 5 of 10 seeds (`cadre_rush` 3 of 5,
-`crossbow_push` 2 of 5; re-counted 2026-11-15 on the sim's M6-S10: the same 5 of 10, but `cadre_rush`'s three are now
-seeds 14, 18 and 23, with seed 8 waving; 6 of 10 before slice 2, when seed 23 sent no wave either; `cadre_rush`'s three
-re-measured by D33, 2026-11-17: still seeds 14, 18 and 23, at 16 pop as at 18). `standard` sent a wave on each of its 9
+Over the two openings, `raider_rush` beats the Malazans without a fight on at least 4 of 10 seeds (`cadre_rush` 3 of 5,
+seeds 14, 18 and 23, re-measured by D33, 2026-11-17, at 16 pop as at 18; `crossbow_push` seed 38, with seeds 5 and 11 not
+re-run: 2026-11-18, BUG-1640). It was 5 of 10 when re-counted 2026-11-15 on the sim's M6-S10 (`crossbow_push` 2 of 5,
+seeds 19 and 25; `cadre_rush`'s three seeds 14, 18 and 23, with seed 8 waving), and 6 of 10 before slice 2, when seed 23
+sent no wave either. `standard` sent a wave on each of its 9
 measured pairing seeds (3 Whirlwind openings x 3 seeds).
 
 ## Age II against the Whirlwind (M5-4g, 2026-10-26)

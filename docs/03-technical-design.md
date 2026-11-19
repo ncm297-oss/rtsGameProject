@@ -11077,6 +11077,18 @@ tests `Ai/CriterionMatch.cs` (the harness), `Ai/MatchCriterionTests`, `CommandRe
   `OutcomePinM73bQaTests` (the 3-seat Hard and 4-seat Normal AI scenes), `NonHardMatchPinQaTests` and
   `CounterCompositionTests.TheNonHardPins_*` (Pale Hills seed 3, both first seats); the golden `cross_map_seed1.replay`
   header and checksum only (its k lines did not move).
+  **Re-measured for D34** (the data track, fix round 1, BUG-1641, 2026-11-18: the Teblor `standard` opening's Bloodwood
+  Carver and Blood-oil Anointing moved to just after the Breaker's train step, the Anointing due at 10:00, was 11:30, and
+  its description softened; no row seats a Teblor; data hash 318E8C4256456C05 -> A732F387C2BB7E4D): every row as at D33,
+  each class run once on its own: the literal row Vathar Crossing seed 1 23,244 (seat 1, 6 waves), Raraku seed 3 28,915
+  (seat 1, 10 waves, 1 hunt), Pale Hills seed 1 33,230, the generated row seed 1 21,876, the FFA seed 1 31,991 (seat 2)
+  and the 2v2 61,686 (team 1), each equal in two processes; `HalfWay` 11,622; no bound moved, no row moved seed. The Hard
+  v Normal tally (report only): **34 / 5 / 3**, unchanged (Raraku 13 / 1 / 0, Vathar Crossing 14 / 0 / 0, Pale Hills
+  7 / 4 / 3). Seeds 1-8 (`Stress/MatchRowsM6S10Report`) as at D33; `ReservePairingsStressTests` no-wave sides 1, Malazan
+  waves 96, defeats 3 / 2, as at D33. No pin value moved: `StandardPresetPinQaTests`, `NonHardMatchPinQaTests`,
+  `CounterCompositionTests`, `OutcomePinM73bQaTests`, `ReserveTwinTests`, `SharedVisionFfaPinTests`, `HardKnobsPinTests`,
+  `CliTests.Match_TheLiteralRow_*`, the premap replays, `save_ai_seed2` and `seed21_playable.replay` all green unchanged.
+  The golden `cross_map_seed1.replay`: header and checksum only (its k lines did not move).
   **Re-measured for M6-S12** (the AI's rally point off one-cell passages, a rebalanced gatherer's node measured from its
   drop-off, a blind seat's re-scout; "Implementation (M6-S12)"): Vathar Crossing seed 7 ends at 30,482, past 24,000, so the
   literal row is **seed 1 again**, 23,244 (19:22, seat 1, 6 waves); the generated row seed 2 ends at 27,690, past 24,000, so

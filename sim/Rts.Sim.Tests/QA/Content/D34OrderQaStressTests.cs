@@ -25,6 +25,8 @@ namespace Rts.Sim.Tests.QA.Content;
 /// Outcome (2026-11-18, 768 matches, 1 h 23 m shared): M equals the developer's and QA D33's rows to the match; Q2 meets
 /// the brief's criterion 2 bar (Easy Anointing 28; Normal 9 / 23 / 15 / 14 / 22 / 37; Hard Breaker / Rider / War-dog
 /// 39 / 33 / 46), Q1 and Q3 miss on Easy's Anointing (18, 17). BUG-1641.
+/// D34 fix round 1: Q2 ships (<c>Content/Fixtures/teblor_standard_d34.json</c>), so M is no longer the shipped file; it is
+/// played as D33's opening on a shipped copy and still hashes to <see cref="D33QaTests.D33Hash"/>.
 /// </summary>
 [Trait("Category", "Stress")]
 public class D34OrderQaStressTests(ITestOutputHelper output)
@@ -151,7 +153,8 @@ public class D34OrderQaStressTests(ITestOutputHelper output)
         var jobs = new List<(string V, GameData D, string M, string O, ulong S, AiDifficulty X)>();
         foreach (var (name, o) in variants)
         {
-            GameData d = name == "M" ? TestSim.Data : TeblorOpeningVariantsReportTests.DataWith(o);
+            // D34 fix round 1 (BUG-1641): M is D33's opening on a shipped copy (was TestSim.Data, which is D34's Q2 now).
+            GameData d = TeblorOpeningVariantsReportTests.DataWith(o);
             if (name == "M") Assert.Equal(D33QaTests.D33Hash, d.ContentHash());
             foreach (AiDifficulty x in diffs)
                 foreach (ulong s in seeds)

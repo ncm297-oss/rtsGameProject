@@ -70,25 +70,45 @@ public class TeblorOpeningFixtureTests
     }
 
     /// <summary>
-    /// D33: the shipped <c>standard</c> opening is <c>Fixtures/teblor_standard_d33.json</c> field for field (its description
-    /// included), so a one-sided edit of either fails by name: a description, a step moved, a share or a wave. D32's pin (the
-    /// shipped opening was <c>Fixtures/teblor_standard_d32.json</c>) is now <see cref="TheD32Fixture_IsTheMeasuredVariant_WithBug1390sDescription"/>
-    /// on the record of what D32 shipped, the base of D33's variants.
+    /// D34 (BUG-1641): the shipped <c>standard</c> opening is <c>Fixtures/teblor_standard_d34.json</c> field for field (its
+    /// description included), so a one-sided edit of either fails by name: a description, a step moved, a share or a wave.
+    /// Was <c>TheShippedOpening_IsTheD33Fixture</c> (D33: the shipped opening was <c>Fixtures/teblor_standard_d33.json</c>),
+    /// now <see cref="TheD33Fixture_IsTheMeasuredVariant_WithD33sDescription"/> on the record of what D33 shipped, D34's M.
     /// </summary>
     [Fact]
-    public void TheShippedOpening_IsTheD33Fixture()
+    public void TheShippedOpening_IsTheD34Fixture()
     {
-        Assert.Empty(ShippedVersusD33(TeblorOpeningVariantsReportTests.Shipped()));
+        Assert.Empty(ShippedVersus(TeblorOpeningVariantsReportTests.Shipped(), D34Fixture(), "D34"));
         JsonObject words = TeblorOpeningVariantsReportTests.Shipped();
         words["description"] = (string)words["description"]! + " ";
-        Assert.Contains("description differs from the D33 fixture", ShippedVersusD33(words));
+        Assert.Contains("description differs from the D34 fixture", ShippedVersus(words, D34Fixture(), "D34"));
         JsonObject moved = TeblorOpeningVariantsReportTests.Shipped();
         moved["buildOrder"]![16]!["at"] = new JsonObject { ["time"] = 420 };
-        Assert.Contains("buildOrder differs from the D33 fixture", ShippedVersusD33(moved));
+        Assert.Contains("buildOrder differs from the D34 fixture", ShippedVersus(moved, D34Fixture(), "D34"));
         JsonObject share = TeblorOpeningVariantsReportTests.Shipped();
         share["attack"]!["reserveArmyShare"] = 0.5;
-        Assert.Contains("attack differs from the D33 fixture", ShippedVersusD33(share));
+        Assert.Contains("attack differs from the D34 fixture", ShippedVersus(share, D34Fixture(), "D34"));
+        Assert.NotEmpty(ShippedVersus(TeblorOpeningVariantsReportTests.Shipped(), D33Fixture(), "D33"));
     }
+
+    /// <summary>
+    /// The D34 fixture is the variant <see cref="D34TeblorStepOrderReportTests.ShippedVariant"/> measured (build order,
+    /// compositions, wave and share), with D34's description (the D33 text softened to what most Normal matches field).
+    /// </summary>
+    [Fact]
+    public void TheD34Fixture_IsTheMeasuredVariant_WithD34sDescription()
+    {
+        JsonObject fixture = D34Fixture();
+        Assert.Equal("Q2", D34TeblorStepOrderReportTests.ShippedVariant);
+        JsonObject measured = D34TeblorStepOrderReportTests.AllVariants().Single(v => v.Name == D34TeblorStepOrderReportTests.ShippedVariant).Opening;
+        foreach (string field in new[] { "id", "displayName", "buildOrder", "compositions", "attack" })
+            Assert.True(JsonNode.DeepEquals(measured[field], fixture[field]), $"{field} differs from {D34TeblorStepOrderReportTests.ShippedVariant}");
+        Assert.Equal(D34TeblorStepOrderReportTests.Description, (string)fixture["description"]!);
+    }
+
+    /// <summary>The opening D34 ships, read from <c>Fixtures/teblor_standard_d34.json</c>.</summary>
+    internal static JsonObject D34Fixture() =>
+        JsonNode.Parse(File.ReadAllText(Path.Combine(TestDataDir.RepoRoot(), "sim", "Rts.Sim.Tests", "Content", "Fixtures", "teblor_standard_d34.json")))!.AsObject();
 
     /// <summary>The D33 fixture is the variant <see cref="D33BalanceReportTests.ShippedVariant"/> measured (build order, compositions, wave and share), with D33's description.</summary>
     [Fact]
@@ -129,13 +149,12 @@ public class TeblorOpeningFixtureTests
         Assert.True(JsonNode.DeepEquals(attack, handOver["attack"]));
     }
 
-    private static List<string> ShippedVersusD33(JsonObject shipped)
+    private static List<string> ShippedVersus(JsonObject shipped, JsonObject fixture, string name)
     {
         var problems = new List<string>();
-        JsonObject d33 = D33Fixture();
         foreach (string field in new[] { "id", "displayName", "description", "buildOrder", "compositions", "attack" })
-            if (!JsonNode.DeepEquals(shipped[field], d33[field])) problems.Add($"{field} differs from the D33 fixture");
-        if (shipped.Count != d33.Count) problems.Add($"the shipped opening has {shipped.Count} fields, the D33 fixture {d33.Count}");
+            if (!JsonNode.DeepEquals(shipped[field], fixture[field])) problems.Add($"{field} differs from the {name} fixture");
+        if (shipped.Count != fixture.Count) problems.Add($"the shipped opening has {shipped.Count} fields, the {name} fixture {fixture.Count}");
         return problems;
     }
 

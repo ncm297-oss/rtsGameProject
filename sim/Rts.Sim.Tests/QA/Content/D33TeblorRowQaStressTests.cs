@@ -87,7 +87,9 @@ public class D33TeblorRowQaStressTests(ITestOutputHelper output)
     [InlineData("shipped", "Easy")]
     public void TeblorRow_Report(string which, string difficulty)
     {
-        GameData data = which == "main" ? D33QaTests.Main : TestSim.Data;
+        // D34 fix round 1 (BUG-1641): "shipped" is D33's shipped data, its opening from the D33 fixture on a shipped copy (was
+        // TestSim.Data, which is D34's since the Teblor opening moved), so this row stays D33's record.
+        GameData data = which == "main" ? D33QaTests.Main : Rts.Sim.Tests.Content.TeblorOpeningVariantsReportTests.DataWith(Rts.Sim.Tests.Content.TeblorOpeningFixtureTests.D33Fixture());
         Assert.Equal(which == "main" ? D33QaTests.MainHash : D33QaTests.D33Hash, data.ContentHash());
         AiDifficulty diff = Enum.Parse<AiDifficulty>(difficulty);
         var jobs = new List<(ulong S, string M, string O)>();

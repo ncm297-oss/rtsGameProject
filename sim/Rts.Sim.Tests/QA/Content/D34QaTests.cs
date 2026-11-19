@@ -5,28 +5,44 @@ using Rts.Sim.Tests.Content;
 namespace Rts.Sim.Tests.QA.Content;
 
 /// <summary>
-/// QA D34 (session 2026-11-18-0926). D34 shipped no data: the shipped hash is still D33's, the Teblor opening is still the
-/// D33 fixture, and the developer's reason for not softening the tooltip (the description is part of the content hash, so a
-/// text-only change moves it) holds. The proposed later text fits D21's 200.
+/// QA D34 (session 2026-11-18-0926). As inspected, D34 shipped no data: the shipped hash was still D33's and the Teblor
+/// opening the D33 fixture, and the description is part of the content hash, so a text-only change moves it. The proposed
+/// later text fits D21's 200. D34 fix round 1 (BUG-1641): QA's order Q2 ships with that proposed text, so the first row now
+/// pins the shipped state to D34's hash and fixture (it was <c>TheShippedData_IsStillD33s</c>), and the second reads D33's
+/// opening from its fixture instead of the shipped file.
 /// </summary>
 public class D34QaTests
 {
-    /// <summary>The text teblor.md's D34 Question 1 proposes for the next Teblor hash move.</summary>
+    /// <summary>The hash D34 states (fix round 1, BUG-1641): Q2's order and the softened description on D33's data.</summary>
+    internal const ulong D34Hash = 0xA732F387C2BB7E4DUL;
+
+    /// <summary>The text teblor.md's D34 Question 1 proposed for the next Teblor hash move; D34's fix round ships it.</summary>
     internal const string ProposedDescription =
         "War Lodge and Javelin Ground first, then Age II; four Warriors raid at 8 army pop, then Javelin Throwers and War-dogs join them; Shamans, Breakers, Destrier Riders and a second Longhouse may follow.";
 
+    /// <summary>
+    /// D34 fix round 1: was <c>TheShippedData_IsStillD33s</c> (the shipped hash D33's 318E8C4256456C05 and the opening the
+    /// D33 fixture). The shipped data now hashes to <see cref="D34Hash"/>, its Teblor opening is the D34 fixture (QA's Q2 with
+    /// the proposed description), and D33's opening on a shipped copy still hashes to D33's.
+    /// </summary>
     [Fact]
-    public void TheShippedData_IsStillD33s()
+    public void TheShippedData_IsD34s_QasQ2WithTheProposedText()
     {
-        Assert.Equal(D33QaTests.D33Hash, TestSim.Data.ContentHash());
-        JsonObject shipped = TeblorOpeningVariantsReportTests.Shipped(), d33 = TeblorOpeningFixtureTests.D33Fixture();
-        Assert.True(JsonNode.DeepEquals(shipped, d33), "the shipped Teblor opening is not the D33 fixture");
+        Assert.Equal(D34Hash, TestSim.Data.ContentHash());
+        JsonObject shipped = TeblorOpeningVariantsReportTests.Shipped(), d34 = TeblorOpeningFixtureTests.D34Fixture();
+        Assert.True(JsonNode.DeepEquals(shipped, d34), "the shipped Teblor opening is not the D34 fixture");
+        Assert.Equal(ProposedDescription, (string)shipped["description"]!);
+        JsonObject q2 = D34OrderQaStressTests.AllVariants().Single(v => v.Name == "Q2").Opening;
+        foreach (string field in new[] { "id", "displayName", "buildOrder", "compositions", "attack" })
+            Assert.True(JsonNode.DeepEquals(q2[field], shipped[field]), $"{field}: the shipped opening is not QA's Q2");
+        Assert.Equal(D33QaTests.D33Hash, TeblorOpeningVariantsReportTests.DataWith(TeblorOpeningFixtureTests.D33Fixture()).ContentHash());
     }
 
     [Fact]
     public void ADescriptionOnlyEdit_MovesTheContentHash()
     {
-        JsonObject o = TeblorOpeningVariantsReportTests.Shipped();
+        // D34 fix round 1: reads D33's opening from its fixture (was the shipped file, which is D34's now).
+        JsonObject o = TeblorOpeningFixtureTests.D33Fixture();
         Assert.Equal(D33QaTests.D33Hash, TeblorOpeningVariantsReportTests.DataWith(o).ContentHash());
         o["description"] = ProposedDescription;
         Assert.NotEqual(D33QaTests.D33Hash, TeblorOpeningVariantsReportTests.DataWith(o).ContentHash());

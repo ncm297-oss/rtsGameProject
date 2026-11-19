@@ -84,6 +84,11 @@ public class GatherWedgeQaTests
     // ahead of the expansion and the Stables first of the 10:00 steps, and a new description (BUG-0982, BUG-1553, BUG-1420).
     // The golden's one seat is a Malazan human seat, so its k lines are byte for byte as before (header data-hash and
     // checksum only).
+    // D34 (data track, fix round 1, BUG-1641; rule 51, BUG-0750's rule): regenerated once more, 318E8C4256456C05 ->
+    // A732F387C2BB7E4D, because the Teblor standard opening changed in one move (in GameData.ContentHash): the Bloodwood
+    // Carver and the Blood-oil Anointing (due 10:00, was 11:30) moved to just after the Breaker's train step, and a softened
+    // description (BUG-1612, BUG-1613). The golden's one seat is a Malazan human seat, so its k lines are byte for byte as
+    // before (header data-hash and checksum only; checksum 807C173DF2B5F439 -> E7359ADD20818C67).
 
     /// <summary>
     /// Ticks the replay must still match its recorded checkpoints: all of them (M4-H1, BUG-0211; before the re-recording
