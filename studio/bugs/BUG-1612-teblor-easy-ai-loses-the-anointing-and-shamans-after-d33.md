@@ -24,3 +24,12 @@ The new train steps should not cost Easy and Hard the faction's one upgrade.
   (Request 55). The three new train steps and two buildings now come before the Shaman's Circle and the Anointing.
 - D34 first tries order only (the Shaman's Circle and the Anointing ahead of the three train steps, or the Anointing's
   time earlier) and prints all three difficulties. If no order keeps both, it waits for Request 55 in the sim.
+
+## QA re-check (2026-11-18-0926, D34 fix round 1; status left to the Producer)
+- D34 shipped QA's order Q2. On the shipped data (QA's loop, `TestSim.Data`, 64 matches a row), main(D33) -> D34:
+  Easy 1/0/34/27/36/51/1 -> 1/0/16/30/4/27/28; Normal 10/23/25/12/22/39/11 -> 9/23/15/14/22/37/17;
+  Hard 11/23/25/35/43/48/18 -> 11/23/22/39/33/46/23.
+- **The Anointing half is fixed** to the brief's bar (Easy 1 -> 28 of 64, pre-D33 35; Normal 11 -> 17; Hard 18 -> 23).
+- **The Shaman half is worse, not better**: Easy 34 -> 16 (pre-D33 51), Hard 25 -> 22, Normal 25 -> 15 (bar 14). The
+  brief's bar does not cover Easy's or Hard's Shamans, and the trade is printed in teblor.md's D34 questions. Suggest the
+  Producer either closes the Anointing half and moves the Shaman loss under Request 55, or keeps this bug open for it.

@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S4 |
-| Status | open |
+| Status | fixed (QA re-check 2026-11-18-0926, fix round 1) |
 | Found | 2026-11-18-0926, task D34 (QA) |
 | System | data docs: `docs/factions/malazan.md` "Fast Age II against the raider rush (BUG-0982, D-H6, 2026-10-18)" (the BUG-1010 paragraphs) |
-| Fixed by | |
+| Fixed by | D34 fix round 1 (6eae0da), docs only: `docs/factions/malazan.md` BUG-1010 paragraphs re-worded from QA's measurements |
 
 ## Repro
 1. `dotnet test sim/Rts.Sim.Tests --filter "FullyQualifiedName~D21OpeningsQaTests.EveryPairing_ThirdSeed_BothSidesWaveIn20Minutes" --logger "console;verbosity=detailed"`
@@ -35,3 +35,10 @@ dated.
   1 wave, defeated 18:15, tick 21,906), and **seed 38 sends no wave** (defeated 13:10, tick 15,812, peak 9). So of the
   five named seeds the no-wave cases are now seed 38 (plus whatever seeds 5 and 11 do; not re-run here), not "19 and 25".
   The fix is a re-count and a re-word, docs only.
+
+## Re-check (2026-11-18-0926, fix round 1)
+- Both sentences now say seeds 19 and 25 wave and seed 38 does not, with seeds 5 and 11 marked not re-run ("at least 1 of
+  5", "at least 4 of 10"); the 2026-11-15 counts kept as dated history. Matches QA's runs above.
+- Not part of this bug: the "Age II against the Whirlwind" lead paragraph still reads "26 of the 27 sides ... seed 19,
+  now defeated at 16:10", but it is labelled as the M6-S10 run ("The paragraph above the table describes the M6-S10
+  runs") and dated re-prints follow it; left as a note in the QA report.

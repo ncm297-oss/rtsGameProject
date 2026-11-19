@@ -147,15 +147,19 @@ public class D34OrderQaStressTests(ITestOutputHelper output)
     public void QaOrders_Row_Report()
     {
         string? only = Env("D34QA_VARIANTS");
-        var variants = AllVariants().Where(v => only == null || only.Split(',').Contains(v.Name)).ToArray();
+        // QA re-check of D34 fix round 1: "S" is the shipped data exactly as loaded (TestSim.Data, not a rebuilt copy), so the
+        // shipped state's rows are measured on the files themselves; asked for by name only.
+        var variants = AllVariants().Append(("S", TeblorOpeningVariantsReportTests.Shipped()))
+            .Where(v => only == null ? v.Item1 != "S" : only.Split(',').Contains(v.Item1)).ToArray();
         AiDifficulty[] diffs = (Env("D34QA_DIFFS") ?? "Easy,Normal,Hard").Split(',').Select(Enum.Parse<AiDifficulty>).ToArray();
         ulong[] seeds = (Env("D34QA_SEEDS") ?? "1,2,3,4,5,6,7,8").Split(',').Select(ulong.Parse).ToArray();
         var jobs = new List<(string V, GameData D, string M, string O, ulong S, AiDifficulty X)>();
         foreach (var (name, o) in variants)
         {
             // D34 fix round 1 (BUG-1641): M is D33's opening on a shipped copy (was TestSim.Data, which is D34's Q2 now).
-            GameData d = TeblorOpeningVariantsReportTests.DataWith(o);
+            GameData d = name == "S" ? TestSim.Data : TeblorOpeningVariantsReportTests.DataWith(o);
             if (name == "M") Assert.Equal(D33QaTests.D33Hash, d.ContentHash());
+            if (name == "S") Assert.Equal(D34QaTests.D34Hash, d.ContentHash());
             foreach (AiDifficulty x in diffs)
                 foreach (ulong s in seeds)
                     foreach (string m in Maps)

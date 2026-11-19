@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S2 (the brief's goal, BUG-1612, is reachable inside D34's scope; the QA focus asks exactly this: "check the fallback was not taken where an order would have done") |
-| Status | open |
+| Status | fixed (QA re-check 2026-11-18-0926, fix round 1) |
 | Found | 2026-11-18-0926, task D34 (QA) |
 | System | data: `game/data/factions/teblor/ai.json` `standard` `buildOrder` (order and `at.time` only) |
-| Fixed by | |
+| Fixed by | D34 fix round 1 (6eae0da): Q2 shipped in `teblor/ai.json`; `QA/Content/D34QaTests.TheShippedData_IsD34s_QasQ2WithTheProposedText`, `Content/TeblorOpeningFixtureTests.TheShippedOpening_IsTheD34Fixture` |
 
 ## Repro
 1. `$env:D34QA_VARIANTS='M,Q2'` (or leave it unset for M, Q1, Q2, Q3), then
@@ -55,3 +55,11 @@ Q1 (the order the page names as "not tried") misses on Easy's Anointing (18), as
   whole pin list of the brief applies, plus the tooltip / page following Q2's row.
 - QA ran Q2 only through QA's loop, not the developer's `D34TeblorStepOrderReportTests` harness; both loops print
   identical M rows, so the counting agrees.
+
+## Re-check (2026-11-18-0926, fix round 1)
+- The shipped `standard` build order equals QA's Q2 field for field (`D34QaTests`, green). Data hash 318E8C4256456C05 ->
+  A732F387C2BB7E4D.
+- QA's loop on the shipped data itself (`D34OrderQaStressTests.QaOrders_Row_Report` with `D34QA_VARIANTS=S`, i.e.
+  `TestSim.Data`, 192 matches in 956 s): Easy 1/0/16/30/4/27/28, Normal 9/23/15/14/22/37/17, Hard 11/23/22/39/33/46/23
+  (defeated / 2nd Longhouse / Shaman / Breaker / Rider / War-dog / Anointing); Javelin Throwers 64 / 55 / 64. Equal to
+  QA's first Q2 run and to the developer's harness to the match. Every figure of criterion 2's bar is met.

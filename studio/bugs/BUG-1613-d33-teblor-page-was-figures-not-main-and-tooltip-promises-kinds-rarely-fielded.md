@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S4 (docs accuracy for the owner's review, and tooltip wording; no crash, criteria met) |
-| Status | open |
+| Status | fixed (QA re-check 2026-11-18-0926, D34 fix round 1) |
 | Found | 2026-11-17-0816, task D33 (QA) |
 | System | data docs: `docs/factions/teblor.md` "The Age II army (BUG-1420, D33)" and the AI section's D33 paragraph; `game/data/factions/teblor/ai.json` `standard` `description` |
-| Fixed by | |
+| Fixed by | D34 (c71d1b8: teblor.md "was" figures are `main`'s) and D34 fix round 1 (6eae0da: the softened `standard` description); `QA/Content/D32DescriptionQaTests.TheDescription_IsD34sSentence`, `QA/Content/D34QaTests.TheProposedDescription_Is198Characters_AndThePageQuotesIt` |
 
 ## Repro
 1. `dotnet test sim/Rts.Sim.Tests --filter "FullyQualifiedName~D33TeblorRowQaStressTests" --logger "console;verbosity=detailed"`
@@ -48,3 +48,11 @@ when they were fielded in 0 of 64).
   "D32's opening on D33's waves".
 - Related: BUG-1420 (cured on Normal and Hard by these numbers), the developer's provisional BUG-1612 (Easy loses the
   Anointing 35 -> 1 and Shamans 51 -> 34, confirmed above; Hard also loses Anointing 27 -> 18 and Shamans 35 -> 25 against `main`).
+
+## Re-check (2026-11-18-0926, D34 fix round 1)
+- Item 1: every "was" figure on teblor.md is D33's `main` (verified in the first D34 inspection) or labelled as pre-D33.
+- Item 2: the shipped text is "...then Javelin Throwers and War-dogs join them; Shamans, Breakers, Destrier Riders and a
+  second Longhouse may follow." (198 characters). On the shipped data's Normal row (QA's loop, `TestSim.Data`, 64
+  matches) Javelin Throwers are fielded in 55 and War-dogs in 37, so the two kinds it says join do so in most Normal
+  matches; the rest are "may follow" (Shaman 15, Breaker 14, Rider 22, 2nd Longhouse 23). teblor.md quotes the text
+  as the file has it in both places.
