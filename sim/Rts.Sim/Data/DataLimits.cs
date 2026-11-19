@@ -159,11 +159,31 @@ public static class DataLimits
     /// <summary>JSON spelling of each <see cref="AbilityAffects"/>, indexed by the enum value (M4-4a).</summary>
     public static readonly ImmutableArray<string> AbilityAffectsIds = ImmutableArray.Create("enemy_units", "own_units", "all_units");
 
-    /// <summary>Most passives one unit type may list (M4-4b-3a): one per trigger of <see cref="PassiveTriggerIds"/> (3 since M7-2's <c>onHit</c>).</summary>
-    public const int MaxUnitPassives = 3;
+    /// <summary>Most passives one unit type may list (M4-4b-3a): one per trigger of <see cref="PassiveTriggerIds"/> (4 since M8-3's <c>nearbyOwn</c>).</summary>
+    public const int MaxUnitPassives = 4;
 
-    /// <summary>JSON spelling of each <see cref="PassiveTrigger"/>, indexed by the enum value (a unit's <c>passives[].trigger</c>, M4-4b-3a; <c>onHit</c> M7-2).</summary>
-    public static readonly ImmutableArray<string> PassiveTriggerIds = ImmutableArray.Create("whenBelowHp", "onDeath", "onHit");
+    /// <summary>JSON spelling of each <see cref="PassiveTrigger"/>, indexed by the enum value (a unit's <c>passives[].trigger</c>, M4-4b-3a; <c>onHit</c> M7-2; <c>nearbyOwn</c> M8-3).</summary>
+    public static readonly ImmutableArray<string> PassiveTriggerIds = ImmutableArray.Create("whenBelowHp", "onDeath", "onHit", "nearbyOwn");
+
+    /// <summary>
+    /// M8-3: the largest <c>units.json</c> <c>attack.fromStealthBonus</c> (4 = +400 %), the bound of a status's
+    /// <c>damageBonus</c> (<see cref="MaxStatusDamageBonus"/>). A rule of the format: far above any designed bonus
+    /// (docs/factions/shadow.md: +50 %).
+    /// </summary>
+    public const double MaxFromStealthBonus = 4;
+
+    /// <summary>
+    /// M8-3: the largest <c>nearbyOwn</c> passive <c>damageBonus</c>, per counted unit (1 = +100 % each). A rule of the format:
+    /// far above any designed step (docs/factions/shadow.md: +10 %); with <see cref="MaxPassiveStacks"/> it bounds the pack's
+    /// factor at 9.
+    /// </summary>
+    public const double MaxPassiveDamageBonus = 1;
+
+    /// <summary>
+    /// M8-3: the largest <c>nearbyOwn</c> passive <c>maxStacks</c> (a whole number from 1). A rule of the format: far above any
+    /// designed cap (docs/factions/shadow.md: 3); the count stops there, so it also bounds the per-hit scan's useful work.
+    /// </summary>
+    public const int MaxPassiveStacks = 8;
 
     /// <summary>
     /// Largest <c>onDeath</c> passive <c>radius</c> in meters (M4-4b-3a): a death queries the spatial hash over the circle, so a

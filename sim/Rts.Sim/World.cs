@@ -123,6 +123,7 @@ public sealed partial class World
         }
         MaxUnitRadius = maxRadius;
         MaxUnitSpeed = maxSpeed;
+        HitBonusInData = config.Data.AnyHitBonus(); // M8-3
         Hits = new PendingHit[config.UnitCapacity]; // one swing lands per unit per tick at most
         // Every unit and every building dies at most once a tick, and units and buildings share the list (BUG-0330).
         _deaths = new DeathEvent[config.UnitCapacity + config.BuildingCapacity];
@@ -458,6 +459,12 @@ public sealed partial class World
 
     /// <summary>Largest unit speed (m/tick) in <see cref="Data"/>: no unit moves further than this in one tick.</summary>
     internal float MaxUnitSpeed { get; }
+
+    /// <summary>
+    /// M8-3: whether the data has a unit type whose hits carry a factor of their own (<see cref="GameData.AnyHitBonus"/>):
+    /// the one flag <see cref="Combat.HitFactor"/> tests before reading either. Derived from the data; never saved or hashed.
+    /// </summary>
+    internal bool HitBonusInData { get; }
 
     /// <summary>Scratch for <see cref="Movement.MovementSystem"/>: the shove each standing Idle unit gets from friendly walkers this tick, summed in walk order; zero again once applied; derived, not hashed.</summary>
     internal Vector2[] ShoveStep { get; }

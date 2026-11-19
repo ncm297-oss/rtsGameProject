@@ -83,6 +83,11 @@ public sealed class UnitDef
     /// <summary>The index in <see cref="Passives"/> of its <see cref="PassiveTrigger.OnHit"/> passive, or -1 (the per-type flag a landed hit reads, M7-2).</summary>
     public int HitPassive { get; internal set; } = -1;
     /// <summary>
+    /// M8-3: the index in <see cref="Passives"/> of its <see cref="PassiveTrigger.NearbyOwn"/> passive, or -1 (the per-type flag
+    /// a hit's damage factor reads, <c>Combat.HitFactor</c>). In <see cref="GameData.ContentHash"/> only when set.
+    /// </summary>
+    public int NearbyPassive { get; internal set; } = -1;
+    /// <summary>
     /// Detection radius in meters (M4-5: <c>detector</c>, optional, docs/02 "Stealth and detection": casters 10 m); above 0
     /// and at most <see cref="DataLimits.MaxSight"/>; 0 for none.
     /// </summary>

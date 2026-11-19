@@ -31,6 +31,12 @@ public sealed class AttackDef
     public int ProjectileTypeId { get; init; } = -1;
     /// <summary>What the attack may target (<c>attack.targets</c>, M4-2a): units, buildings or both (the default).</summary>
     public AttackTargets Targets { get; init; }
+    /// <summary>
+    /// M8-3: a unit's hit deals <c>x (1 + this)</c> when its attacker is Stealthed (and not Revealed) at the moment the hit's
+    /// damage is worked out (<c>attack.fromStealthBonus</c>, optional; above 0, at most <see cref="DataLimits.MaxFromStealthBonus"/>;
+    /// the Shadow Archer: 0.5). 0 for none, and always 0 on a building's attack. In <see cref="GameData.ContentHash"/> only when set.
+    /// </summary>
+    public float FromStealthBonus { get; init; }
     /// <summary>Damage multiplier per armor class id (1 where the data gives none).</summary>
     public required ImmutableArray<float> BonusVs { get; init; }
 }
