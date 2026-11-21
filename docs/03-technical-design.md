@@ -4517,6 +4517,113 @@ the new files as they draw the eleven).
      (Frenzy), 0.8 s (Telas Fire), 1.0 s (Cusser) and 1.2 s (Sandstorm), so the blend is 30 %, 19 %, 15 % and 13 % of them.
      Recommendation: keep 0.15 s; only the Frenzy is short enough for it to show.
 
+### Implementation (M6-V26)
+
+The first building models: the Malazan Garrison Keep and Barracks are drawn as models from the Ultimate Fantasy RTS pack
+when finished, with team colour; every other building type is still its box. Tooling, view code, view tests and docs; no
+sim, ViewApi or data file changed (docs/01 2026-11-18 (b) (e), (f)).
+
+- **The files** (docs/04 "Building models, as built"): `tools/art/build_building.py` builds each `buildings` entry of the
+  asset manifest into `game/assets/models/<faction id>/<building id>/<building id>.glb`: one surface, one material named
+  `team`, one atlas of flat-colour tiles whose alpha marks the team tile, the layout in the file's extras, the same shape as
+  a unit model since M6-V24. Keep 4,940 triangles, Barracks 2,158, a 128 x 128 atlas each.
+- **Found by id** (`BuildingModels.PathFor`): `{ModelRoot}{faction id}/{building id}/{building id}.glb` from the data's
+  faction and building ids; no building is named in code and `buildings.json` has no `model` field. `BuildingModels` (one
+  per `BuildingViews.Bind`, as `UnitModels` per `UnitViews.Bind`) loads each type's file once per run through `UnitModels`'
+  checks (now `internal`: `Problem`, `ReadExtras`, `ReadAtlas`): a missing file is the normal case (one line a run counts
+  them, no warning); a Git LFS pointer, a file that isn't glTF, one without a `team` material or without its atlas layout
+  prints one warning (never an `ERROR` line) and the type keeps its box. It takes the mesh resource out of the scene and draws
+  it on a plain `MeshInstance3D` (no instanced scene), so a building view is still one root with a box, a model node and
+  the bar.
+- **The fit:** one uniform scale per type, the largest that keeps the model's ground plan `FitMargin` (0.25 m) inside every
+  edge of the footprint (cells x 2 m), the plan's centre on the footprint's centre, its lowest point on the ground there (as
+  the box's base). The Keep 7.5 x 7.2 x 8.1 m on 8 x 8 m, the Barracks 3.9 x 5.5 x 3.5 m on 6 x 6 m. Computed once per
+  type at `Bind` from the mesh's bounds; a building places its model node with that transform once.
+- **Materials:** per type and player one team material (`team_colour.gdshader` on the atlas, the player colour on the team
+  tile) and one remembered material, the same with the shader's new `brightness` uniform at the ghost box's darkening
+  (`FogView.ExploredBrightness` 0.4 in sRGB = 0.133 linear, the shader multiplying linear albedo). `brightness` defaults to
+  1, so every unit model draws exactly as before.
+- **`BuildingViews`** (`UseModels`, on unless `--placeholder-art`, as `UnitViews.UseModels`): a finished building of a type
+  with a model shows its model node in its owner's team material and hides its box; a site keeps the rising box (the model
+  node hidden) and is switched on the first `Sync` that reads it finished (`SetLook`, which also places the bar: over the
+  box for a site, `BarHeight - BoxHeight` = 0.6 m over the model's highest point when finished, 8.69 m on the Keep and
+  4.09 m on the Barracks); a remembered building (not a site) of such a type draws its model on a per-slot ghost model node
+  in the remembered material, its ghost box hidden; a remembered site stays the darkened foundation box. Nodes are made the
+  first time a slot needs them; a steady frame writes nothing and allocates nothing (0 bytes over 20 syncs with models and
+  remembered models drawn). New accessors: `Models`, `ModelOf`, `ShownAsModel`, `GhostModelOf`, `GhostShownAsModel`,
+  `BarY`; every old one keeps its meaning (`BoxOf` is still the box, hidden under a model).
+- **Not changed:** the hit test keeps the 3 m box (a click on the footprint selects the building; a click on a Keep tower
+  above 3 m selects what is behind, as for any building taller than 3 m since M7-V4), the placement ghost (the box), the
+  outline and rings (the footprint), the minimap, every other type and the data `scale` (no model is drawn by it yet; see the
+  questions).
+- **Existing scenes:** the scenes that pin a finished Keep's or Barracks' box (its `BoxMesh`, its material, its visibility
+  or its ghost box) set `BuildingViews.UseModels = false` before the match, as the unit scenes switch unit models off:
+  `BuildingScaleViewTest` and `QaM7V4Test` (both pin M7-V4's scaled boxes and the bar 0.6 m over the box). Every other
+  scene passes with the models on: the ones that read a building's box material or colour (`EconomyViewTest`, `QaV1Test`,
+  `AiSeatTest`, `ShellTest`, `QaM6V2Test`, `QaM6V3Test`, `TeblorViewTest`) find it unchanged on the hidden box, and the
+  fog scenes (`FogViewTest`, `QaGhostViewTest`) check the ghosts of the enemy seat's buildings, Whirlwind by default, still boxes;
+  `BuildingModelTest` checks the Malazan models' ghosts.
+- **Tests.** New `game/tests/BuildingModelTest` (headless, in the loop; every row per entry of the manifest's `buildings`,
+  the count read from the file): the files (found by id at the manifest's destination, one surface, the `team` material, the
+  atlas at most 1024², at most the manifest's and docs/04's triangles, the mask on every texel of the imported texture, every
+  face on one texel, the triangles per tile pinned to the first build); team colour in all eight colours of the setup's table
+  (Crimson and Bone included): a team texel draws exactly the player colour at the team shade, every other tile the same in
+  every colour, the remembered material at the ghost's brightness; in a real three-player Malazan match with fog: each
+  finished model inside its footprint (0.25 m from the nearest edge), its base on the ground, its plan centred, its box
+  hidden, its bar over its top, a click on its footprint selecting it; a type with no file a box; a site of each type built
+  by Laborers is the box with its bar over the box on every tick and the model on the frame after the tick it finishes; a
+  cancelled site and a finished building razed by Heavy Infantry leave nothing drawn, the hit-point bar over the model's top
+  while hurt; an enemy Keep and Barracks scouted and left are drawn as their darkened models (ghost box hidden), one razed by
+  a third player out of sight stays remembered until a scout sees the spot, then goes, and the other seen again is the live
+  model alone; 0 bytes over 20 syncs; Git LFS pointers (one warning a file), missing files and models off give boxes.
+  Windowed with `-- --shots <dir>` it saves the pictures (`buildings-40m`, `-40m-gray`, `-60m`, `close-<n>-20m`,
+  `sites-40m`, `four-colours-40m`, `remembered-under-fog-40m`). `ModelShots` gains `--bench-buildings N`, `--building-boxes`,
+  `--bench-zoom Z` and `--bench-shot <png>` (below).
+- **Cost** (rules 42 / 61; 2026-11-18 about 14:45, 1600 x 900, `ModelShots --bench 30 --vsync off`, the fifteen figure
+  types mixed, all six runs back to back in one window after 30 s idle, none of the developer's own processes running;
+  three of the other tracks' `testhost`s were running, and the 400-capsule figure, 0.83 ms against M6-V24's 0.87 alone,
+  says the window was about as quiet as that one). The building rows: 400 figures with 60 finished buildings (30 Keeps,
+  30 Barracks, `--bench-buildings 60`) packed edge to edge round the two crowds; 60 with their footprints on screen needs
+  the farthest zoom (`--bench-zoom 60`: at 40 m only about 35 fit beside 400 figures); the fight razes 9 of them by the end
+  in both runs. The figure rows as M6-V25's (40 m, no buildings).
+
+  | Run | Average | While 90 %+ alive | Worst 1 % (90 %+ alive) | Draw calls |
+  | --- | --- | --- | --- | --- |
+  | 400 figures + 60 building models (60 m) | 6.78 ms | **7.00 ms** (at most 16.7) | 10.56 ms | 801 |
+  | 400 figures + 60 building boxes (`--building-boxes`, 60 m) | 6.78 ms | 6.97 ms | 10.45 ms | 800 |
+  | 400 figures, fifteen types (40 m) | 6.22 ms | 7.02 ms | 11.70 ms | 959 |
+  | 400 capsules | 0.83 ms | 0.86 ms | 3.06 ms | 171 |
+  | 1,000 figures, fifteen types | 17.00 ms | 17.57 ms | 24.96 ms | 2,602 |
+  | 1,000 capsules | 1.44 ms | 1.51 ms | 6.30 ms | 243 |
+
+  A building model costs what its box did: one surface, so one draw call and one shadow-pass draw call each, as the box
+  (801 against 800 a frame; the frame times agree within 0.03 ms). The 1,000-figure row is reported, not gated (M6-V24:
+  17.48 ms alone; M6-V25's loaded window 27.36 ms).
+- **Questions for the Producer (rule 67), each with a recommendation:**
+  1. **The source pick.** The pack's TownCenter models are a fountain and a statue plaza, so the Keep is the Barracks line's
+     Second Age Level 3 (a hall with three towers) and the Barracks its Level 1 (the same hall without towers). They read as
+     one family, the Keep plainly the fortress. Recommendation: accept; the owner judges the pictures.
+  2. **The team part is the whole roof.** It is the largest surface the camera sees on both, so two players' buildings read
+     apart at 40 and 60 m; but the first colour of the setup's table is a slate grey, and a slate roof on grey stone is the
+     weakest pair (`four-colours-40m.png`). Recommendation: accept; if the owner finds slate too quiet, a lighter stone or a
+     second team part (the tower tops) is a manifest edit.
+  3. **The Keep is 8.1 m tall** (towers included) on its 8 m footprint; a Heavy Infantry beside it is 1.8 m. Figures behind
+     it from the camera are hidden, as behind any tall building. Recommendation: accept; a lower fit (a height cap) is one
+     constant if play shows figures lost behind keeps.
+  4. **The hit test keeps the 3 m box**, so a click on a Keep tower above 3 m does not select the Keep (M7-V4's rule).
+     Recommendation: a later task gives `BuildingPicker.PickRay` each type's drawn height (a `ViewApi` change, out of this
+     task's scope), once more buildings are models.
+  5. **The data `scale` on a model** (the Teblor buildings' 1.25): not applied yet (no Teblor building has a model).
+     Recommendation: apply it as the boxes do since M7-V4, to the height only (the fit's scale times `scale` on the vertical
+     axis), so a Teblor model stays inside its footprint and stands 25 % taller; the alternative (uniform, then refit to the
+     footprint) would undo the scale. The bar follows the drawn top as now.
+  6. **Entrance facing.** The pack's buildings face +Z (their door toward the match camera), and the files keep it (yaw 0),
+     not docs/04's -Z for units: a building never turns, and its door faces the player. Recommendation: accept, and say in
+     docs/04 that a building's front faces the camera (+Z).
+  7. **A site is today's mauve box**, rising, until the frame it finishes, then the model appears whole. The pack has no
+     construction stage that fits (its Levels are upgrades). Recommendation: accept for this slice (docs/01 2026-11-18 (b)
+     (f)); a scaffold or a model rising through the ground is a later look task.
+
 ## Vision, detection, fog
 
 Fog of war and the high-ground rule are in since M4-3a (`sim/Rts.Sim/Vision/`); the last-known building ghosts, buildings
@@ -4911,7 +5018,8 @@ the golden and every save are unchanged). Readings: docs/01 "2026-11-17 (b)" and
   (`Report_TwelveFieldUnitsSentToOnePoint_TicksFromArrivalUntilHidden`).
 - **Known limits.** (1) The placement push (a building placed on units, phases 1-4) moves a unit before the pass of the
   same tick; that change is dated a tick early (T - 1), so such a unit hides one tick sooner than "60 after". (2) As M8-1:
-  a held entry shows one tick more per holder than the timed applications left it. (3) The first-shot bonus (G2) is M8-3.
+  a held entry shows one tick more per holder than the timed applications left it. (3) The first-shot bonus (G2) is M8-3
+  ("Implementation (M8-3)").
 - **Tests.** `Data/StillStealthLoaderTests`, `DataValidationTests.BrokenUnitStillStealth_YieldsExactlyOneError`,
   `DataContentHashTests` (both fields in the reflection row), `Vision/StillStealthTests` (criteria 3-9: the pinned tick,
   hidden and untargetable, a move, a shove, facing alone, an attack, a cast, hp loss, a 0-damage hit, proximity, a unit
@@ -4938,6 +5046,120 @@ The field moves the data hash once; land it with the Shadow roster. Summoned uni
    Raise the minimum `delay` instead? Default: leave it (no designed delay is near it).
 3. A worker type with the field would be hidden only while it does not move; gathering walks, so in practice never while
    it gathers. Is that the wanted reading should a worker ever carry the field? Default: yes (the field is for the Archer).
+
+**The Producer's answers (docs/01 "2026-11-18" (1), all three "leave it").** (1) The placement push dating a move a tick
+early stays a documented limit (Known limits (1)). (2) The shortest `delay` the loader allows (0.05 s) behaving as 0.1 s
+stays; no designed delay is under 1 s (BUG-1581 closed by this ruling). (3) Yes: a worker type given the field is hidden
+only while it stands still, so never while it gathers. No code changed for any of them.
+
+### Implementation (M8-3)
+
+M8's third sim slice: the Shadow Archer's first shot from stealth and the Hound of Shadow's Pack Hunter
+(docs/factions/shadow.md "Unit notes", gaps G2 and G3; M8 criteria 1 and 2) as two generic data hooks, in the schema and
+tested on forged data only (no shipped file carries either, so the data hash, the golden and every save are unchanged).
+Readings: docs/01 "2026-11-18 (b)" (a)-(d), docs/02 "Stealth and detection" and "Unit passives". Code: `Combat/HitFactor.cs`
+(the one helper), its callers `CombatSystem.QueueHit` / `AttackerFactor` / `Resolve` and `ProjectileSystem.Strike`;
+`World.HitBonusInData`, `GameData.AnyHitBonus`; data in `DataLoader.BuildAttack` / `BuildBuildingAttack` and
+`DataLoader.Passives.cs`.
+
+- **Schema A.** `units.json` `attack.fromStealthBonus` (optional; JSON `null` = absent): above 0, at most 4
+  (`DataLimits.MaxFromStealthBonus`, the bound of a status's `damageBonus`), to `AttackDef.FromStealthBonus` (0 = none).
+  Zero, a negative, or above 4 is one error at `units[i].attack.fromStealthBonus`, naming the unit. A building's attack
+  with the field (any value but `null`) is one error at `buildings[i].attack.fromStealthBonus`: a building is never
+  stealthed, so the bonus could never apply.
+- **Schema B.** A fourth passive trigger, `nearbyOwn` (`PassiveTrigger.NearbyOwn` = 3, appended; `MaxUnitPassives` 3 → 4,
+  still one per trigger): `{trigger: nearbyOwn, units, radius, damageBonus, maxStacks}`. `units` is the `onDeath` rule (at
+  least one, own faction, no repeats); `radius` above 0, at most 64 (`DataLimits.MaxPassiveRadius`); `damageBonus` above 0,
+  at most 1 (`DataLimits.MaxPassiveDamageBonus`, +100 % a unit); `maxStacks` a whole number 1-8
+  (`DataLimits.MaxPassiveStacks`). `status`, `magnitude`, `duration` and `hpFraction` on it are "no such field" errors;
+  `damageBonus` and `maxStacks` on the other three triggers likewise; a second `nearbyOwn` is the one-per-trigger error.
+  One error per bad field, at `units[i].passives[j].<field>`; the loader's own messages name the unit (since M8-3 the
+  `onDeath` radius and units messages do too; their wording is otherwise the same). `UnitPassive.DamageBonus` /
+  `MaxStacks` (0 on the other triggers; `Status` -1 on `nearbyOwn`), `UnitDef.NearbyPassive` (its index or -1).
+- **The one helper** (`HitFactor.Of(world, slot)`): `status x stealth x pack`, multiplied in that order, where `status` is
+  M7-4's `1 + the largest damageBonus` (1 for a unit with no statuses, the count tested first), `stealth` is
+  `1 + fromStealthBonus` when the attack has one and `World.IsStealthed(slot)` (a Stealthed entry and no Revealed one, not
+  summoned: any stealth source), and `pack` is `1 + min(n, maxStacks) x damageBonus` (exactly 1 when n is 0). Every place
+  that read the status factor now calls it: the melee blow (`QueueHit`, phase 10, unit or building target), a landing shot
+  and its splash (`ProjectileSystem.Strike` through `AttackerFactor`, phase 11), and a melee splash (`Resolve`, phase 11).
+  `AttackerFactor` is 1 for a dead attacker (its statuses went with the slot; a dead shooter is neither hidden nor in a
+  pack). On data with neither field (`World.HitBonusInData` false, from `GameData.AnyHitBonus` at construction) the helper
+  is the status factor after one flag test, so every hit is bit-identical to before. A tower's shot reads none (factor 1).
+- **Rule A, when.** The factor is read exactly where M7-4's was: a blow at the strike, a shot at its landing, before the
+  hit is applied. So the shot and every victim of its splash carry one factor, worked out before the landing reveals the
+  shooter (`StealthSystem.OnAttackOrCast` in `HitUnit` / `HitBuilding`), and the shooter's next hit, Revealed, has none.
+  A shot in flight follows the shooter at its landing tick: hurt (a stand-still or forest hold is let go at once, M8-1 /
+  M8-2), moved (the stand-still hold is let go by the next phase 5: a move in tick L - 1's phase 9 is seen by tick L's
+  phase 5, before the landing in tick L's phase 11), revealed by another hit of its own, or dead: plain. Detection does not
+  matter. **Changed for M8-3:** a melee splash (none ships) now reads its factor before its direct hit lands rather than
+  after, so a blow struck from stealth splashes with the bonus it struck with; for every shipped unit the order of reads
+  changes nothing (no status read by the factor is changed by a hit).
+- **Rule B, the count** (`HitFactor.PackCount`): the attacker's owner's other live units of the listed types whose centre is
+  within `radius` of the attacker's centre, the edge counting (`DistanceSquared <= radius x radius` on today's positions),
+  stopping at `maxStacks`. Through the spatial grid (`QueryRadius` over `radius + MaxUnitSpeed + 1 m`, since the grid holds
+  phase 1's positions, the splash query's slack) into movement's second scratch (`World.ShoveNeighbors`, free outside
+  phases 8-9; every caller reads the factor before applying a hit, so no death passive is iterating it). The grid lists
+  ascending slots and only a count leaves the loop, so no order can leak. Not counted: the attacker, an ally's units, an
+  enemy's, other types, a freed slot (a unit killed earlier in the same phase 11 no longer counts for a later landing).
+- **No stored state.** Nothing is written: no store field, no save part, no state-hash bit; the save format stays 10, the
+  replay format 9. Each factor is derived at each hit from hashed state (statuses, positions, owners, types) and the data.
+  `GameData.ContentHash` adds `FromStealthBonus` (a marker 4, then the value) only when it is set, a passive's
+  `DamageBonus` / `MaxStacks` (a marker 3, then both) only when either is set, and `NearbyPassive` (a marker 3, then the
+  index) only when it is 0 or more: the shipped data's hash did not move.
+- **Cost.** Data without either field: one bool test per hit, on top of M7-4's status-count test. With them: per hit by a
+  field type, one `IsStealthed` (a status scan) and, for a pack type, one grid query of the radius. Nothing allocates
+  (`PackPerfTests.PackBrawl200v200_Ticks_AllocateNothing`: 0 bytes over 100 ticks of a 200 v 200 brawl, every blow
+  counting a full pack). Measured (Debug, 2026-11-18, `PackPerfTests.Report_*` alone from this track but beside other
+  tracks' test runs; three alternating runs, ticks 5-405 of the 200 v 200 brawl): with the passive (radius 8) 1.805 /
+  1.700 / 1.721 ms a tick, without 1.814 / 1.774 / 1.767 ms (means 1.742 / 1.785 ms). The two fights differ (317 units
+  left with the passive, 343 without: the packs kill faster, so fewer units tick), so the difference is the machine's
+  noise and the outcome, not the query; the helper alone for a unit in a full pack is 2.2 us a call. No Perf threshold moved.
+- **Known limits.** (1) A unit trained in phase 3 is in the grid only from the next tick's phase 1, so it does not count
+  in its first tick's hits (one tick). (2) The count's slack is the splash query's: a unit carried further than a step and
+  1 m since phase 1 would be missed (none has been seen; the fuzz's oracle walks every slot and agrees every tick).
+  (3) The factors are float products (`0.1` is not exact in binary), so a raw damage that falls exactly on a half can
+  round either way by the float's last bit; it is the same every run, and the test numbers do not land on one (10 / 11 /
+  12 / 13 on the Heavy Infantry's 10).
+- **Tests.** `Data/HitBonusLoaderTests` (both fields load, `null` absent, the four triggers on one unit, the bounds, the
+  hash rows), `DataValidationTests` (`BrokenFromStealthBonus_*`, `FromStealthBonus_OnABuildingsAttack_*`,
+  `BrokenNearbyOwnPassive_*`, `PackFields_OnAnotherTrigger_*`, `ASecondNearbyOwnPassive_*`: one error each),
+  `Combat/FirstShotTests` (criterion 3 for a timed status, the stand-still and the forest stealth; criterion 4 melee;
+  criterion 6 a building, a splash, a unit without the field), `Combat/FirstShotBoundaryTests` (criterion 5, each case
+  on both sides of its tick), `Combat/PackBonusTests` (criteria 7-9), `Combat/HitBonusMatchTests` (criterion 10: 4 seeds x
+  2,000 ticks of twins with the invariant fuzz after every tick, the save chain, no stored state),
+  `Combat/PackPerfTests` (criteria 11-12); the pack's own-player compare is listed in M6-S4's owner-compare table and
+  `TeamArchitectureTests`' allow-list. The test copy is `Vision/HitBonusScenes` (the first-shot field on five types
+  of the three factions, the stand-still field on two, the pack on a melee type of each faction, the Malazan forest
+  block, the M4-5 test stealth cast and the Blood-oil Frenzy row; no shipped file changes).
+
+**For the data track (M8-3).** The two rows the Shadow roster carries, beside its other fields (docs/factions/shadow.md's
+numbers):
+
+```json
+"attack": { "...": "...", "fromStealthBonus": 0.5 }
+```
+
+on `shadow_archer` (with M8-2's `stillStealth`), and on `shadow_hound`:
+
+```json
+"passives": [
+  { "trigger": "nearbyOwn", "units": ["shadow_hound"], "radius": 8, "damageBonus": 0.1, "maxStacks": 3 }
+]
+```
+
+Each moves the data hash once; land them with the Shadow roster. The Archer's bonus applies from either stealth (forest or
+stand-still), so the faction's `forestStealth` block (M8-1) needs nothing more. Before writing "+50%" or "+10%" into a
+`description`, check the content tests' description-number reading (D-H2): it knows neither field yet.
+
+**Questions for the Producer (M8-3).**
+
+1. A melee splash now reads its factor before its direct hit lands (so a blow from stealth splashes with the bonus). No
+   shipped unit has a melee splash; the alternative (keep M7-4's read after the hit, so the splash of a blow from hiding
+   is plain) is a one-line change. Default: keep the new order.
+2. The pack counts units by type only, so a summoned unit of a listed type would count (none is summoned today; the
+   Wraith is not a Hound). Should a summoned unit be left out, as stealth leaves it out? Default: count it (no designed
+   case either way).
+3. A unit trained in phase 3 joins the count from the next tick (Known limits (1)). Leave it? Default: leave it.
 
 ## Data format
 
@@ -5025,7 +5247,7 @@ consumes it.
 | `buildings.json` | `{ "buildings": [ ... ] }`, each `{id, displayName, description, slot, footprint {width, height}, hp, armor, cost {gold, wood}, buildTime, popProvided, dropOff}`: `slot` is one of the ten template slots (`DataLimits.BuildingSlotIds`), footprint sides 1-4 cells, `buildTime` in seconds (to ticks), `popProvided` a multiple of 0.5 (to half-pop), `dropOff` a required bool, `requires` an optional list of tech / building ids (M3-5; resolved and gating placement since M3-6), `sight` optional meters (M4-3a: above 0 and at most 64, default `rules.json` `buildingSight`; shipped 24 on both watch towers, docs/02), `attack` optional (M4-3b: the unit `attack` object; value at least 1, range above 0, an aimed `projectile` required, `targets` not `buildings`; shipped on both watch towers), `detector` optional meters (M4-3b: above 0 and at most 64; shipped 16 on both watch towers; unused until M4-5), `scale` optional (M7-4: the view's model size, 0.5-3.0, default 1; the sim never reads it; since M7-V4 the placeholder box's height, `3 m x scale`, on the footprint's width and depth: "Implementation (M7-V4)"). Ids unique across factions (M3-2, see "Economy implementation"); exactly one building per slot per faction (M3-6, BUG-0010) |
 | `techs.json` | `{ "techs": [ ... ] }` in `common/` (shared by every faction) and in each faction folder (its own), each `{id, displayName, description, researchedAt, cost {gold, wood}, researchTime, requires?, requiresAnyOf?, effects: [{stat, amount, appliesTo {attackType?, tags?, units?, siege?}}]}`: `researchedAt` is a building slot id (a common tech resolves to each faction's building of it; a faction without one is an error), `researchTime` in seconds (to ticks), `requires` tech / building ids (resolved and gating research since M3-6), `requiresAnyOf` `{count, of: [slot ids, or in a faction file its own building ids]}`: met when `count` of the distinct listed slots hold an own finished building (M3-6; shipped on `age_ii` only), `effects` may be empty. `stat` is one of `attack`, `armor`, `range`, `hp`, `abilityCooldown`, `statusDuration` (M7-4) (`DataLimits.TechStatIds`); `amount` is non-zero, whole for attack / armor / hp, meters for range, seconds for ability cooldown and status duration (to ticks, negative shortens it). A `statusDuration` effect takes `statuses` (statuses.json ids, at least one) and no `appliesTo`; no other stat takes `statuses` (see "Implementation (M7-4)"). `appliesTo` is required (`{}` = every unit) except on `statusDuration`; each filter it sets must match: `attackType` a damage type, `tags` any one of the unit's tags (each must be a tag some unit has), `units` unit ids (a faction tech's must be its own), `siege` true / false for the `siege` slot; a `tags` or `units` list set to `[]` is an error (M3-6, BUG-0098). Tech ids are unique across all techs files and may not equal a building id (M3-6); they number the common file's techs first, then each faction's in `common/factions.json` order, ordinal within each file (M7-3b), so a new faction's techs move no shipped id; `DataLimits.AgeTechIds` (`age_ii`) must be a common tech (M3-5, see "Implementation (M3-5)") |
 | `projectiles.json` | `{ "projectiles": [ ... ] }`, each `{id, kind, speed, hitTolerance?, leadSpeed?}`: `kind` `aimed` or `lob`, `speed` m/s (at least 1), `hitTolerance` m (aimed only, 0-2, default 0.3; an error on a lob), `leadSpeed` m/s (aimed only, not negative, default 0 = never leads; an error on a lob). Ids unique; every unit's `attack.projectile` must name one (M4-2b, see "Implementation (M4-2b)") |
-| `units.json` | `{ "units": [ ... ] }`, entries as in the example. `attack` also takes optional `minRange`, `splash` (m), and `friendlyFire` (docs/02 "Combat / Stats"); they default to 0 / false. Melee range is written as `0.5` (edge to edge). `abilities` (M4-4a, optional): ability ids of the unit's own faction, at most 4 (`DataLimits.MaxUnitAbilities`), no repeats; resolved to `UnitDef.Abilities`; shipped on the Cadre Mage (`telas_fire`), the Sapper (`cusser`) and the Priest of the Whirlwind (`sandstorm`). `passives` (M4-4b-3a, optional): at most 2 (`DataLimits.MaxUnitPassives`), one per `trigger` (`DataLimits.PassiveTriggerIds`): `{trigger: whenBelowHp, hpFraction, status, magnitude}` or `{trigger: onDeath, status, magnitude, duration, radius, units}` (see "Implementation (M4-4b-3a)"); resolved to `UnitDef.Passives`; shipped on the Zealot only. `detector` (M4-5, optional): meters, above 0, at most 64 (`UnitDef.Detector`; see "Implementation (M4-5)"). `scale` (M7-1, optional, default 1): the view's model size, 0.5-3.0 (`DataLimits.MinUnitScale` / `MaxUnitScale`), to `UnitDef.Scale`; presentation only, collision stays `radius` (docs/02 "Combat / Stats"); shipped on six Teblor units (1.5). `spawnCount` (M7-2, optional, default 1): units one queue item spawns, a whole number 1-8 (`DataLimits.MaxSpawnCount`), to `UnitDef.SpawnCount`; `cost` and `trainTime` are the item's, `pop` each unit's (see "Implementation (M7-2)"); shipped on the War-dogs (3). `passives` also takes (M7-2) `{trigger: onHit, status, magnitude, duration}`, so at most 3, still one per trigger. `carry` (M7-7, Request 48, optional, a worker only): resources the worker carries a trip, a whole number 1 to 1,000,000, to `UnitDef.Carry`; absent = `rules.json` `workerCarry` (`GameData.CarryOf`; see "Implementation (M7-7)"); shipped on the Teblor Gatherer (15, D31). `stillStealth` (M8-2, optional; JSON `null` = absent) `{status, delay}`, both required when the object is there: `status` a status of kind `stealthed`, to `UnitDef.StillStealthStatus` (-1 absent); `delay` seconds, at least one tick once converted, at most 60 (the forest's bound, `DataLimits.MaxForestStealthDelay`), to `UnitDef.StillStealthDelayTicks` (3 → 60); one error per bad field at `units[i].stillStealth.<field>`, naming the unit; an unknown key is an error. No shipped unit has it yet (the Shadow Archer: the data track). See "Implementation (M8-2)" |
+| `units.json` | `{ "units": [ ... ] }`, entries as in the example. `attack` also takes optional `minRange`, `splash` (m), and `friendlyFire` (docs/02 "Combat / Stats"); they default to 0 / false. Melee range is written as `0.5` (edge to edge). `abilities` (M4-4a, optional): ability ids of the unit's own faction, at most 4 (`DataLimits.MaxUnitAbilities`), no repeats; resolved to `UnitDef.Abilities`; shipped on the Cadre Mage (`telas_fire`), the Sapper (`cusser`) and the Priest of the Whirlwind (`sandstorm`). `passives` (M4-4b-3a, optional): at most 2 (`DataLimits.MaxUnitPassives`), one per `trigger` (`DataLimits.PassiveTriggerIds`): `{trigger: whenBelowHp, hpFraction, status, magnitude}` or `{trigger: onDeath, status, magnitude, duration, radius, units}` (see "Implementation (M4-4b-3a)"); resolved to `UnitDef.Passives`; shipped on the Zealot only. `detector` (M4-5, optional): meters, above 0, at most 64 (`UnitDef.Detector`; see "Implementation (M4-5)"). `scale` (M7-1, optional, default 1): the view's model size, 0.5-3.0 (`DataLimits.MinUnitScale` / `MaxUnitScale`), to `UnitDef.Scale`; presentation only, collision stays `radius` (docs/02 "Combat / Stats"); shipped on six Teblor units (1.5). `spawnCount` (M7-2, optional, default 1): units one queue item spawns, a whole number 1-8 (`DataLimits.MaxSpawnCount`), to `UnitDef.SpawnCount`; `cost` and `trainTime` are the item's, `pop` each unit's (see "Implementation (M7-2)"); shipped on the War-dogs (3). `passives` also takes (M7-2) `{trigger: onHit, status, magnitude, duration}`, so at most 3, still one per trigger. `carry` (M7-7, Request 48, optional, a worker only): resources the worker carries a trip, a whole number 1 to 1,000,000, to `UnitDef.Carry`; absent = `rules.json` `workerCarry` (`GameData.CarryOf`; see "Implementation (M7-7)"); shipped on the Teblor Gatherer (15, D31). `stillStealth` (M8-2, optional; JSON `null` = absent) `{status, delay}`, both required when the object is there: `status` a status of kind `stealthed`, to `UnitDef.StillStealthStatus` (-1 absent); `delay` seconds, at least one tick once converted, at most 60 (the forest's bound, `DataLimits.MaxForestStealthDelay`), to `UnitDef.StillStealthDelayTicks` (3 → 60); one error per bad field at `units[i].stillStealth.<field>`, naming the unit; an unknown key is an error. No shipped unit has it yet (the Shadow Archer: the data track). See "Implementation (M8-2)". `attack.fromStealthBonus` (M8-3, optional; JSON `null` = absent): above 0, at most 4 (`DataLimits.MaxFromStealthBonus`), to `AttackDef.FromStealthBonus` (0 absent); one error at `units[i].attack.fromStealthBonus`, naming the unit; on a building's attack any value is one error at `buildings[i].attack.fromStealthBonus`. `passives` also takes (M8-3) `{trigger: nearbyOwn, units, radius, damageBonus, maxStacks}` (`units` and `radius` as `onDeath`'s; `damageBonus` above 0, at most 1, `DataLimits.MaxPassiveDamageBonus`; `maxStacks` a whole number 1-8, `DataLimits.MaxPassiveStacks`; `status`, `magnitude`, `duration` and `hpFraction` are errors on it, `damageBonus` and `maxStacks` errors on the other three triggers), so at most 4, still one per trigger; to `UnitDef.NearbyPassive`. Neither ships yet (the Shadow Archer and the Hound: the data track). See "Implementation (M8-3)" |
 | `statuses.json` | `{ "statuses": [ ... ] }` (M4-4a), each `{id, displayName, description, kind, damageType?, sight?, reach?, damageBonus?, onEnd?}`: `kind` `damageOverTime`, `slow`, (M4-4b-2) `blind`, (M4-4b-3a) `frenzied`, (M4-5) `stealthed` / `revealed` (at most one `revealed`), or (M7-1) `regenerating` (`DataLimits.StatusKindIds`; its magnitude is HP per second, above 0, at most 100 and at least 0.05); `damageType` (a damage table type) required on `damageOverTime`, an error on any other kind; `sight` and `reach` (m, above 0, at most 64) required on `blind`, errors on any other kind; (M7-4) `damageBonus` (above 0, at most 4) on `frenzied` only, and `onEnd {status, magnitude, duration}` on any row (see "Implementation (M7-4)"). The magnitude and duration come from the effect applying it (a blind, stealthed or revealed status takes no magnitude). Ids unique; shipped `burning` (magic damage over time), `slowed`, `blinded` (2 / 3, M4-4b-2) and `frenzied` (M4-4b-3a; its magnitude, the attack-speed increase, any fraction above 0, is the applying effect's or passive's), `stealthed` and `revealed` (M4-5, "Implementation (M4-5)"), `regenerating` (M7-1: nothing applies it in shipped data yet; the hook M9's Darkness zone and later abilities use) |
 | `abilities.json` | `{ "abilities": [ ... ] }` (M4-4a, per faction, optional), each `{id, displayName, description, kind, range, radius, castTime, cooldown, duration?, affects, autocast?, effects}`: `kind` `targetGround` or (M4-4b-3a) `selfAura` (`targetUnit`, `summon`: "not supported yet"); `range` m above 0 and at most `DataLimits.MaxSight` (64), required on `targetGround` and an error on `selfAura` (0 included); `radius` m above 0 and at most `DataLimits.MaxAbilityRadius` (16); `castTime` s, 0 or more, to ticks; `cooldown` s above 0, to ticks (at least 1); `duration` s, optional (0), to ticks (required with a `createZone` effect, M4-4b-2); `affects` `enemy_units`, `own_units` or `all_units`; `autocast` only `false` ("not supported yet"); `effects` at least one, each `{kind: damage, type, amount, buildings?, friendlyFire?}` (a whole amount, at least 1; M4-4b-1: `buildings` true also hits other players' buildings as structure, not with `own_units`; `friendlyFire` 0-1, the fraction own units take, above 0 only with `enemy_units`) or `{kind: applyStatus, status, magnitude, duration}` (a `statuses.json` id; magnitude whole and at least 1 for damage over time, above 0 and below 1 for a slow; duration s, at least a tick, and for damage over time a whole number of seconds, at least 1, M4-4b-1); M4-4b-2: `{kind: createZone, blocksVision?, statuses: [{status, magnitude, duration}]}` (at least one status, each by the `applyStatus` rules, a blind status without a magnitude; the ability's `duration`, at least a tick, is then required: the zone's lifetime; at most one per ability); `teleport`, `spawn`: "not supported yet"; a field the effect kind doesn't use is an error. Ids unique across factions, numbered faction by faction in `common/factions.json` order, ordinal within a faction (M7-3b), so a new faction's abilities move no shipped id. Shipped: Malazan `telas_fire`, `cusser` (M4-4b-1); Whirlwind `sandstorm` (M4-4b-2) |
 | `maps/<file>.json` | (M6-S7, optional folder, one file a hand-made map, loaded in the files' names' ordinal order into `GameData.Maps`) `{id, displayName, description, players, size, terrain, ramps?, starts, mines, forests}`: see "Implementation (M6-S7)" for every field and check |
@@ -11988,6 +12210,7 @@ site means the very same player: ownership, queues, groupmates).
 | `Combat/CombatSystem.cs` | `QueuedBehindOwnLine` | own planted line (flank rule) | untouched |
 | `Combat/SurroundRule.cs` | `HoldsSpot`, `Occupied` | own spot holders / own blockers | untouched |
 | `Combat/TowerSystem.cs` | `OthersThan`, `Pick` (via `QueryEnemies`) | tower targets | allied-as-own |
+| `Combat/HitFactor.cs` | `PackCount` (M8-3: `u.Owner[j] != owner`) | the attacker's own pack | untouched (same player: docs/01 "2026-11-18 (b)" (c), an ally's units do not count) |
 | `Combat/ProjectileSystem.cs` | `Splash` units / buildings | friendly fire | allied-as-own: an ally's unit takes the 50 % share, an ally's building nothing |
 | `Abilities/AbilitySystem.cs` | `Resolve` units (`affects`, friendly fire) and buildings | ability targets | allied-as-own |
 | `Abilities/ZoneSystem.cs` | `Apply` | zone statuses (`affects`) | allied-as-own |

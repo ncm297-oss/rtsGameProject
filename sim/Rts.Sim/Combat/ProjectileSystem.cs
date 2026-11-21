@@ -142,6 +142,8 @@ public static class ProjectileSystem
         int attackBonus = CombatSystem.AttackBonus(world, owner, attackerType, fromBuilding);
         // M7-4: the shooter's status damage bonus, read at the landing as the tech bonus is: a shot in flight when the
         // shooter's Frenzy ends lands without it, and one whose shooter died lands without it. A tower has no statuses.
+        // M8-3: the whole factor (HitFactor: status x first shot x pack), read before the hit below reveals the shooter, so
+        // the shot and every victim of its splash carry the same one.
         float factor = fromBuilding ? 1f : CombatSystem.AttackerFactor(world, p.Attacker[k]);
         Vector2 at = p.Target[k];
         if (pd.Kind == ProjectileKind.Lob)

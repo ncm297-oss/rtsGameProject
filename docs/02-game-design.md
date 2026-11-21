@@ -255,6 +255,21 @@ is seen into only by its owner and by an enemy's own units standing inside it, a
 A unit is inside a zone when its centre is within the radius (the edge counts): the same test decides
 whether the zone's statuses take it and whether the zone hides it (the ground is hidden cell by cell).
 
+### Unit passives
+
+A unit type may carry up to four passives, one of each kind, all data: **while below a share of its hit points** it has a
+status (the Zealot's Frenzy of the Apocalypse); **when it dies** its own units of listed types near it take a status
+(Martyrdom); **each hit it lands** gives the surviving victim a status (the War-dog's Hamstring); and **near its own**
+(the Hound of Shadow's Pack Hunter, docs/01 "2026-11-18 (b)" (c)): each of its hits deals +10 % for each other unit of
+the listed types its owner has within 8 m, at most +30 % (step, reach and cap are data). The count is taken at the same
+moment as the first shot from stealth (a blow when struck, a shot when it lands): the attacker's owner's other live units
+whose centre is within the reach of the attacker's centre (the edge counts); an ally's units, enemies, other types and the
+attacker itself do not count, and a shot whose shooter has died has no bonus.
+
+When several damage bonuses apply to one hit they multiply: the Blood-oil Frenzy's x the first shot from stealth x the
+pack's (a Frenzied Hound with two others near, hitting from stealth, would deal 1.2 x 1.5 x 1.2 = 2.16 times its attack).
+Each is read fresh for every hit; none is remembered.
+
 ## Stealth and detection
 
 - A stealthed unit is invisible and cannot be targeted by an enemy player unless it stands inside
@@ -286,6 +301,16 @@ whether the zone's statuses take it and whether the zone hides it (the ground is
     once. Detection is the same as for any stealthed unit. A summoned unit never gets it.
   - A unit under both the forest bonus and its own stand-still rule is hidden while either holds; an ability's stealth on
     it keeps its own duration.
+- **The first shot from stealth** (the Shadow Archer's +50 %; docs/01 "2026-11-18 (b)" (a), (b)), a unit type's attack field,
+  from any stealth (forest, stand-still, an ability's):
+  - A hit deals +50 % (a number of the unit type's attack in the data) when its attacker is Stealthed, and not Revealed, at
+    the moment the hit's damage is worked out: a melee blow when it is struck, a shot when it lands (the moments the
+    Blood-oil Frenzy's bonus is read). The landing reveals the attacker (above), so its next hit has no bonus.
+  - A shot in flight follows its shooter: if the shooter is no longer Stealthed when the shot lands (it lost hit points,
+    it moved and its stand-still stealth ended, another of its own hits revealed it, or it died) the shot lands without
+    the bonus. Being detected does not remove it: it follows the Stealthed status, not whether the enemy sees the unit.
+  - The bonus reaches a hit on a building and every unit and building the same shot splashes. A building's attack never
+    has it.
 - Stealthed friendly units render semi-transparent for their owner.
 
 ## Vision and fog of war

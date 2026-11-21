@@ -322,7 +322,9 @@ public class DataContentHashTests
             }
         }
         Assert.Equal(14, fields);
-        Assert.Equal(7, typeof(UnitPassive).GetProperties().Length); // a new field must be added above and to ContentHash
+        // A new field must be added above and to ContentHash. M8-3's two pack fields (DamageBonus, MaxStacks) are hashed only
+        // when set, so they are varied on a nearbyOwn passive: Data/HitBonusLoaderTests.EveryPackField_ChangesTheHash.
+        Assert.Equal(9, typeof(UnitPassive).GetProperties().Length);
         UnitDef fewer = Clone(zealot);
         typeof(UnitDef).GetProperty(nameof(UnitDef.Passives))!.SetValue(fewer, zealot.Passives.RemoveAt(1));
         Assert.NotEqual(baseline, With(d, unit: fewer).ContentHash());

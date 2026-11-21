@@ -3,7 +3,10 @@
 # the results with the settings below. The outputs are committed, so a clone without Blender or asset-sources/ still
 # builds and runs; this script only regenerates them.
 #
-# Usage: powershell -File tools/import-assets.ps1 [-SourceRoot <dir>] [-Blender <blender.exe>] [-Only <model id>|library] [-NoGodot]
+# M6-V26: and every static building model in the manifest's "buildings" (tools/art/build_building.py), imported like a unit
+# model (no animations, its atlas extracted beside it with the same texture settings).
+#
+# Usage: powershell -File tools/import-assets.ps1 [-SourceRoot <dir>] [-Blender <blender.exe>] [-Only <model or building id>|library] [-NoGodot]
 #   Blender: -Blender, else $env:BLENDER (process, then user), else C:\Program Files\Blender Foundation\Blender 5.2\blender.exe.
 #   Sources: -SourceRoot, else <repo>/asset-sources, else (in a git worktree) the main checkout's asset-sources.
 #   Godot import: $env:GODOT (process, then user); without it the Blender outputs are written and the import is left to you.
@@ -25,6 +28,7 @@ $ErrorActionPreference = 'Stop'
 $root = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 $manifestPath = Join-Path $PSScriptRoot 'asset-manifest.json'
 $builder = Join-Path $PSScriptRoot 'art\build_unit.py'
+$buildingBuilder = Join-Path $PSScriptRoot 'art\build_building.py'
 
 if (-not $Blender) { $Blender = $env:BLENDER }
 if (-not $Blender) { $Blender = [Environment]::GetEnvironmentVariable('BLENDER', 'User') }
@@ -64,9 +68,9 @@ $work = Join-Path ([IO.Path]::GetTempPath()) "rts-import-assets-$PID"
 New-Item -ItemType Directory -Force $work | Out-Null
 
 # One Blender run; returns the parsed RESULT object, or stops the script on a FAIL line or a missing RESULT.
-function Invoke-Build([string]$what, [string[]]$extra) {
+function Invoke-Build([string]$what, [string[]]$extra, [string]$script = $builder) {
     $log = Join-Path $work "$what.log"
-    $argList = @('-b', '--factory-startup', '-P', "`"$builder`"", '--', '--manifest', "`"$manifestPath`"",
+    $argList = @('-b', '--factory-startup', '-P', "`"$script`"", '--', '--manifest', "`"$manifestPath`"",
         '--source-root', "`"$SourceRoot`"", '--repo', "`"$root`"", '--work', "`"$work`"") + $extra
     $p = Start-Process -FilePath $Blender -ArgumentList ($argList -join ' ') -NoNewWindow -Wait -PassThru `
         -RedirectStandardOutput $log -RedirectStandardError "$log.err"
@@ -101,25 +105,38 @@ function Set-Import([string]$file, [string]$importer, [string]$type, [string[]]$
     }
 }
 
-$results = @()
-foreach ($model in $m.models) {
-    if ($Only -and $Only -ne $model.id) { continue }
-    Write-Host "building $($model.id) ..."
-    $r = Invoke-Build $model.id @('--model', $model.id)
-    $results += $r
-    Set-Import (Join-Path $root $model.destination) 'scene' 'PackedScene' @(
+# A built model's .glb import settings, and (M6-V24) the textures Godot extracted from an earlier build that the model no
+# longer holds (the role textures the atlas replaced) removed with their .import and imported copy.
+function Set-ModelImport($r) {
+    Set-Import (Join-Path $root $r.destination) 'scene' 'PackedScene' @(
         'animation/import=false', 'meshes/ensure_tangents=false', 'gltf/embedded_image_handling=1')
-    # M6-V24: a texture Godot extracted from an earlier build that the model no longer holds (the role textures the atlas
-    # replaced) goes, with its .import and imported copy, so nothing stale stays beside the model.
-    $dir = Split-Path (Join-Path $root $model.destination) -Parent
-    $keep = @($r.textures.PSObject.Properties | ForEach-Object { "$($model.id)_$($_.Name).png" })
-    foreach ($old in @(Get-ChildItem -LiteralPath $dir -Filter "$($model.id)_*.png" -File)) {
+    $dir = Split-Path (Join-Path $root $r.destination) -Parent
+    $keep = @($r.textures.PSObject.Properties | ForEach-Object { "$($r.id)_$($_.Name).png" })
+    foreach ($old in @(Get-ChildItem -LiteralPath $dir -Filter "$($r.id)_*.png" -File)) {
         if ($keep -contains $old.Name) { continue }
         Write-Host "    removing $($old.Name) (no longer in the model)"
         Remove-Item -LiteralPath $old.FullName, "$($old.FullName).import" -Force -ErrorAction SilentlyContinue
         $imported = Join-Path $root 'game\.godot\imported'
         if (Test-Path -LiteralPath $imported) { Get-ChildItem -LiteralPath $imported -Filter "$($old.Name)-*" | Remove-Item -Force }
     }
+}
+
+$results = @()
+foreach ($model in $m.models) {
+    if ($Only -and $Only -ne $model.id) { continue }
+    Write-Host "building $($model.id) ..."
+    $r = Invoke-Build $model.id @('--model', $model.id)
+    $results += $r
+    Set-ModelImport $r
+}
+# M6-V26: the static building models.
+$buildingResults = @()
+foreach ($b in @($m.buildings)) {
+    if (-not $b -or ($Only -and $Only -ne $b.id)) { continue }
+    Write-Host "building $($b.id) ..."
+    $r = Invoke-Build $b.id @('--building', $b.id) $buildingBuilder
+    $buildingResults += $r
+    Set-ModelImport $r
 }
 $library = $null
 if (-not $Only -or $Only -eq 'library') {
@@ -146,7 +163,7 @@ if ($NoGodot -or -not $godot -or -not (Test-Path -LiteralPath $godot)) {
     # (generator_parameters); Set-Import below writes the file without it, so a texture changed in the manifest (a tint)
     # never reached the game. Each rebuilt model's texture imports get a placeholder md5: the import below extracts every
     # texture again (the same bytes when nothing changed) and keeps each uid; Set-Import then writes them as before.
-    foreach ($r in $results) {
+    foreach ($r in @($results) + @($buildingResults)) {
         $dir = Split-Path (Join-Path $root $r.destination) -Parent
         foreach ($imp in Get-ChildItem -LiteralPath $dir -Filter "$($r.id)_*.png.import") {
             $text = [IO.File]::ReadAllText($imp.FullName)
@@ -160,7 +177,7 @@ if ($NoGodot -or -not $godot -or -not (Test-Path -LiteralPath $godot)) {
     # The textures Godot extracted from each model: VRAM compressed with mipmaps, then imported again. M6-V24: the atlas
     # alpha is the team mask, so the importer must leave the colours under it alone (fix_alpha_border off; no texel is
     # transparent anyway).
-    foreach ($r in $results) {
+    foreach ($r in @($results) + @($buildingResults)) {
         $dir = Split-Path (Join-Path $root $r.destination) -Parent
         foreach ($png in Get-ChildItem -LiteralPath $dir -Filter '*.png') {
             Set-Import $png.FullName 'texture' 'CompressedTexture2D' @('compress/mode=2', 'mipmaps/generate=true', 'detect_3d/compress_to=0', 'process/fix_alpha_border=false')
@@ -171,8 +188,15 @@ if ($NoGodot -or -not $godot -or -not (Test-Path -LiteralPath $godot)) {
 
 # Summary: every generated file with its size, the triangles and textures of each model, the library's clips.
 $total = 0
-foreach ($r in $results) {
-    Write-Host ("{0}: {1} triangles, {2:0.00} m tall, feet at {3} m, materials [{4}]" -f $r.id, $r.triangles, $r.height, $r.feet, ($r.materials -join ' '))
+foreach ($r in @($results) + @($buildingResults)) {
+    if ($r.sourceTriangles) {
+        # M6-V26: a building: its triangles from the source's through the hidden faces and the decimation, its size as
+        # built (width x depth x height in the pack's units; the view fits it to the footprint).
+        Write-Host ("{0}: {1} triangles (source {2}, {3} after the hidden faces), {4} x {5} x {6} as built, materials [{7}]" -f $r.id, $r.triangles, $r.sourceTriangles, $r.afterHiddenFaces, $r.size[0], $r.size[1], $r.size[2], ($r.materials -join ' '))
+        foreach ($d in $r.decimated.PSObject.Properties) { Write-Host ("    decimated {0}: {1} -> {2} triangles" -f $d.Name, $d.Value[0], $d.Value[1]) }
+    } else {
+        Write-Host ("{0}: {1} triangles, {2:0.00} m tall, feet at {3} m, materials [{4}]" -f $r.id, $r.triangles, $r.height, $r.feet, ($r.materials -join ' '))
+    }
     foreach ($t in $r.textures.PSObject.Properties) { Write-Host ("    texture {0} {1} x {2}" -f $t.Name, $t.Value[0], $t.Value[1]) }
     # M6-V24: the atlas's tiles (column, row from the top-left).
     if ($r.atlas) { Write-Host ("    atlas {0} x {1} tiles of {2}: {3}" -f $r.atlas.grid[0], $r.atlas.grid[1], $r.atlas.tile, (($r.atlas.tiles.PSObject.Properties | ForEach-Object { "$($_.Name) ($($_.Value -join ', '))" }) -join ' ')) }

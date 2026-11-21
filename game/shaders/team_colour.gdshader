@@ -12,6 +12,8 @@
 // surface had it, which drew a team part 1-3 levels darker on lit faces than Burley does now).
 // Without `use_atlas` (a model file from before M6-V24) the texture is the team texture and every texel is team.
 // One ShaderMaterial per model type and player (UnitModels). No fog include: the unit views hide what the player doesn't see.
+// M6-V26: building models (BuildingModels) use it too, their tiles flat colours; `brightness` darkens the whole model for a
+// building remembered under the fog (FogView.ExploredBrightness, as the ghost box's colour); 1 everywhere else.
 shader_type spatial;
 render_mode cull_disabled, diffuse_burley, specular_schlick_ggx;
 
@@ -22,6 +24,7 @@ uniform float roughness = 0.9;
 uniform float prop_roughness = 0.8;
 uniform bool use_atlas = false;
 uniform vec2 atlas_grid = vec2(1.0);
+uniform float brightness = 1.0;
 
 void fragment() {
 	vec4 texel;
@@ -46,7 +49,7 @@ void fragment() {
 		discard;
 	}
 	float shade = clamp(texel.r * gain, 0.0, 1.0);
-	ALBEDO = mix(texel.rgb, team_colour * shade, team);
+	ALBEDO = mix(texel.rgb, team_colour * shade, team) * brightness;
 	ROUGHNESS = mix(roughness, prop_roughness, prop);
 	METALLIC = 0.0;
 }

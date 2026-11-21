@@ -26,6 +26,8 @@ public class TeamArchitectureTests
         ("CombatSystem.cs", "if (j == i || !u.Alive[j] || u.Owner[j] != owner || u.State[j] != UnitState.Attacking || u.TargetIsBuilding[j] || u.Target[j] != target) continue;"),
         ("SurroundRule.cs", "if (!u.Alive[h] || u.Owner[h] != u.Owner[i] || world.SurroundClaim[h] != key || !u.TargetIsBuilding[h]) return false;"),
         ("SurroundRule.cs", "if (u.Owner[j] != owner && !(u.TargetIsBuilding[j] && u.Target[j] == u.Target[i])) continue;"),
+        // M8-3: the pack passive counts the attacker's own units only (an ally's do not count, docs/01 2026-11-18 (b) (c)).
+        ("HitFactor.cs", "if (j == i || !u.Alive[j] || u.Owner[j] != owner || Vector2.DistanceSquared(u.Position[j], at) > r2) continue;"),
         // Vision: each player's own fog is stamped from its own units and buildings (M6-S5: the team's union is OR-ed after).
         ("FogStore.cs", "if (!u.Alive[i] || u.Owner[i] != p) continue;"),
         ("FogStore.cs", "if (!bAlive[j] || bOwner[j] != p) continue;"),

@@ -11,4 +11,10 @@ public enum PassiveTrigger
 
     /// <summary>M7-2: each hit the unit lands on a unit that survives it (a melee hit or its projectile's direct landing) gives the victim a status (the war-dog's Hamstring).</summary>
     OnHit = 2,
+
+    /// <summary>
+    /// M8-3: each hit the unit deals is multiplied by <c>1 + min(n, maxStacks) x damageBonus</c>, n its owner's other live
+    /// units of the listed types within the radius at the hit's moment (the Hound of Shadow's Pack Hunter).
+    /// </summary>
+    NearbyOwn = 3,
 }

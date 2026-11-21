@@ -29,6 +29,12 @@ namespace Rts.Game;
 /// the slot has a ghost and hidden when the sim drops the entry or the building is seen again. A remembered site
 /// (<c>BuildingGhost.Site</c>, M6-V1) draws as a foundation: the site's box at its lowest (<see cref="SiteMinHeight"/>; the
 /// entry keeps no progress) in the site colour darkened the same way.
+/// Models (M6-V26): with <see cref="UseModels"/> on, a finished building whose type has a model file (<see cref="BuildingModels"/>,
+/// found by the type's id) draws the model, fitted to its footprint, in its owner's team material, and its box is hidden; a
+/// site keeps the rising box and switches to the model the frame it is shown finished. Its bar sits
+/// <see cref="BarHeight"/> - <see cref="BoxHeight"/> over the model's highest point (a site's over its box, as before). A
+/// remembered building of such a type (not a site) draws the same model darkened (<see cref="BuildingModels.GhostMaterial"/>)
+/// on its own per-slot node in place of the ghost box. Every other type, and every type with models off, is a box as before.
 /// </remarks>
 public partial class BuildingViews : Node3D
 {
@@ -65,6 +71,16 @@ public partial class BuildingViews : Node3D
     private static readonly Color ProgressColor = new(0.95f, 0.85f, 0.35f);
     private static readonly Color HitPointColor = new(0.30f, 0.90f, 0.35f);
 
+    /// <summary>
+    /// Whether <see cref="Bind"/> draws a finished building whose type has a model file as that model (M6-V26); on unless the
+    /// command line holds <see cref="UnitViews.PlaceholderArtFlag"/>. A scene that pins a finished building's box sets it false
+    /// before binding.
+    /// </summary>
+    public static bool UseModels { get; set; } = Array.IndexOf(OS.GetCmdlineUserArgs(), UnitViews.PlaceholderArtFlag) < 0;
+
+    /// <summary>The models of the last <see cref="Bind"/>, or null when <see cref="UseModels"/> was off.</summary>
+    public BuildingModels? Models { get; private set; }
+
     /// <summary>The runner whose sim is shown each frame; null shows nothing (tests call <see cref="Sync"/> directly).</summary>
     public SimRunner? Runner { get; set; }
 
@@ -97,6 +113,12 @@ public partial class BuildingViews : Node3D
     private int[] _ghostCell = Array.Empty<int>();
     private bool[] _ghostSite = Array.Empty<bool>();
     private StandardMaterial3D _ghostSiteMat = null!;
+    // M6-V26: each slot's model node (made the first time the slot shows a finished model type) and whether it is drawn now;
+    // the same for each slot's remembered model.
+    private MeshInstance3D?[] _models = Array.Empty<MeshInstance3D?>();
+    private bool[] _shownModel = Array.Empty<bool>();
+    private MeshInstance3D?[] _ghostModels = Array.Empty<MeshInstance3D?>();
+    private bool[] _ghostModel = Array.Empty<bool>();
 
     /// <summary>View roots created so far (one per slot ever used).</summary>
     public int NodeCount { get; private set; }
@@ -149,6 +171,11 @@ public partial class BuildingViews : Node3D
         _ghostGen = new int[capacity];
         _ghostCell = new int[capacity];
         _ghostSite = new bool[capacity];
+        Models = UseModels ? new BuildingModels(data, playerRgb) : null;
+        _models = new MeshInstance3D?[capacity];
+        _shownModel = new bool[capacity];
+        _ghostModels = new MeshInstance3D?[capacity];
+        _ghostModel = new bool[capacity];
     }
 
     public override void _Process(double delta)
@@ -179,11 +206,7 @@ public partial class BuildingViews : Node3D
             bool site = b.UnderConstruction[i];
             BuildingBarKind bar = BuildingBars.Of(b, world.Data.Buildings, i, out float fill);
             float rise = site ? Math.Max(SiteMinHeight, fill) : 1f;
-            if (site != _shownSite[i])
-            {
-                _boxes[i].MaterialOverride = site ? _siteMat : _playerMats[Math.Clamp(b.Owner[i], 0, _playerMats.Length - 1)];
-                _shownSite[i] = site;
-            }
+            if (site != _shownSite[i]) SetLook(world, i, site);
             if (rise != _shownRise[i])
             {
                 // The box stands on the ground and grows upward.
@@ -230,6 +253,8 @@ public partial class BuildingViews : Node3D
                 if (_ghostGen[i] != 0)
                 {
                     _ghostBoxes[i]!.Visible = false;
+                    if (_ghostModels[i] is MeshInstance3D gm) gm.Visible = false;
+                    _ghostModel[i] = false;
                     _ghostGen[i] = 0;
                 }
                 continue;
@@ -240,18 +265,40 @@ public partial class BuildingViews : Node3D
             MeshInstance3D box = _ghostBoxes[i] ?? CreateGhost(i);
             BuildingDef def = world.Data.Buildings[g.TypeId];
             System.Numerics.Vector2 c = StartBase.FootprintCenter(world.NavGrid, def, g.Cell);
+            float ground = TerrainHeight.At(world.Heightmap, c.X, c.Y);
+            int owner = Math.Clamp(g.Owner, 0, _ghostMats.Length - 1);
+            // M6-V26: a remembered finished building of a model type is its model, darkened; a remembered site stays a foundation box.
+            bool model = !g.Site && Models != null && Models.Has(g.TypeId);
+            if (model)
+            {
+                MeshInstance3D m = _ghostModels[i] ?? CreateGhostModel(i);
+                m.Mesh = Models!.MeshOf(g.TypeId);
+                m.Transform = new Transform3D(Basis.Identity, new Vector3(c.X, ground, c.Y)) * Models.Fit(g.TypeId);
+                m.MaterialOverride = Models.GhostMaterial(g.TypeId, owner);
+                m.Visible = true;
+            }
+            else if (_ghostModels[i] is MeshInstance3D old) old.Visible = false;
+            _ghostModel[i] = model;
             // A remembered site stands as a foundation, the box at its lowest, growing upward from the ground as a live site's.
             float rise = g.Site ? SiteMinHeight : 1f;
             box.Transform = new Transform3D(Basis.FromScale(new Vector3(1f, rise, 1f)),
-                new Vector3(c.X, TerrainHeight.At(world.Heightmap, c.X, c.Y) + DrawnHeight(def) * rise / 2f, c.Y));
+                new Vector3(c.X, ground + DrawnHeight(def) * rise / 2f, c.Y));
             box.Mesh = _meshes[g.TypeId];
-            box.MaterialOverride = g.Site ? _ghostSiteMat : _ghostMats[Math.Clamp(g.Owner, 0, _ghostMats.Length - 1)];
-            box.Visible = true;
+            box.MaterialOverride = g.Site ? _ghostSiteMat : _ghostMats[owner];
+            box.Visible = !model;
             _ghostGen[i] = g.Generation;
             _ghostCell[i] = g.Cell;
             _ghostSite[i] = g.Site;
         }
         GhostsShown = count;
+    }
+
+    private MeshInstance3D CreateGhostModel(int slot)
+    {
+        var m = new MeshInstance3D { Name = $"GhostModel{slot}" };
+        AddChild(m);
+        _ghostModels[slot] = m;
+        return m;
     }
 
     private MeshInstance3D CreateGhost(int slot)
@@ -262,6 +309,21 @@ public partial class BuildingViews : Node3D
         GhostNodeCount++;
         return box;
     }
+
+    /// <summary>True while slot <paramref name="slot"/>'s ghost is drawn as its type's model, darkened (M6-V26).</summary>
+    public bool GhostShownAsModel(int slot) => IsGhostShown(slot) && _ghostModel[slot];
+
+    /// <summary>The remembered model node of slot <paramref name="slot"/>, or null if the slot never had one (M6-V26).</summary>
+    public MeshInstance3D? GhostModelOf(int slot) => (uint)slot < (uint)_ghostModels.Length ? _ghostModels[slot] : null;
+
+    /// <summary>True while slot <paramref name="slot"/> is drawn as its type's model (a finished building of a model type, M6-V26).</summary>
+    public bool ShownAsModel(int slot) => IsShown(slot) && _shownModel[slot];
+
+    /// <summary>The model node of slot <paramref name="slot"/>, or null if the slot never showed a model (M6-V26).</summary>
+    public MeshInstance3D? ModelOf(int slot) => (uint)slot < (uint)_models.Length ? _models[slot] : null;
+
+    /// <summary>The height of slot <paramref name="slot"/>'s bar centre above its ground, in meters, as drawn now.</summary>
+    public float BarY(int slot) => _barY[slot];
 
     /// <summary>The root node of building slot <paramref name="slot"/>, or null if the slot has never held a building.</summary>
     public Node3D? ViewOf(int slot) => (uint)slot < (uint)_roots.Length ? _roots[slot] : null;
@@ -303,11 +365,8 @@ public partial class BuildingViews : Node3D
         _boxes[i].Mesh = _meshes[b.TypeId[i]];
         _barLength[i] = def.FootprintWidth * MapConstants.CellSize * BarLengthShare;
         _boxHeight[i] = DrawnHeight(def);
-        _barY[i] = BarHeightOf(def);
-        _backs[i].Transform = new Transform3D(Basis.FromScale(new Vector3(_barLength[i], BarThickness * 0.8f, BarThickness * 0.8f)), new Vector3(0f, _barY[i], 0f));
-        bool site = b.UnderConstruction[i];
-        _boxes[i].MaterialOverride = site ? _siteMat : _playerMats[Math.Clamp(b.Owner[i], 0, _playerMats.Length - 1)];
-        _shownSite[i] = site;
+        _barY[i] = float.NaN; // SetLook places the bar
+        SetLook(world, i, b.UnderConstruction[i]);
         _shownRise[i] = -1f; // forces the box transform
         _shownBar[i] = BuildingBarKind.None;
         _shownFill[i] = 0f;
@@ -315,6 +374,43 @@ public partial class BuildingViews : Node3D
         _fills[i].Visible = false;
         root.Visible = true;
         _shownGen[i] = b.Generation[i];
+    }
+
+    // Site or finished: the box's material, the model shown or not (M6-V26), and the bar over what is drawn (a site's box,
+    // or the model's top). A bar moved is shown again on the next check.
+    private void SetLook(World world, int i, bool site)
+    {
+        BuildingStore b = world.Buildings;
+        int type = b.TypeId[i], owner = Math.Clamp(b.Owner[i], 0, _playerMats.Length - 1);
+        bool model = !site && Models != null && Models.Has(type);
+        _boxes[i].MaterialOverride = site ? _siteMat : _playerMats[owner];
+        _boxes[i].Visible = !model;
+        if (model)
+        {
+            MeshInstance3D m = _models[i] ?? CreateModel(i);
+            m.Mesh = Models!.MeshOf(type);
+            m.Transform = Models.Fit(type);
+            m.MaterialOverride = Models.TeamMaterial(type, owner);
+            m.Visible = true;
+        }
+        else if (_models[i] is MeshInstance3D old) old.Visible = false;
+        _shownModel[i] = model;
+        _shownSite[i] = site;
+        float barY = model ? Models!.Top(type) + (BarHeight - BoxHeight) : BarHeightOf(world.Data.Buildings[type]);
+        if (barY != _barY[i])
+        {
+            _barY[i] = barY;
+            _backs[i].Transform = new Transform3D(Basis.FromScale(new Vector3(_barLength[i], BarThickness * 0.8f, BarThickness * 0.8f)), new Vector3(0f, barY, 0f));
+            _shownFill[i] = -1f; // the fill follows on this frame's bar check
+        }
+    }
+
+    private MeshInstance3D CreateModel(int slot)
+    {
+        var m = new MeshInstance3D { Name = "Model" };
+        _roots[slot]!.AddChild(m);
+        _models[slot] = m;
+        return m;
     }
 
     // The bar grows from its left end; hidden for None.

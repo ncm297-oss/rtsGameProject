@@ -269,11 +269,14 @@ public static class CombatSystem
             int attackerType = u.TypeId[hit.Attacker.Index];
             bool splash = world.Data.Units[attackerType].Attack.Splash > 0f;
             Vector2 at = !splash ? default : hit.IsBuilding ? NearestFootprintPoint(world, hit.Victim.Index, u.Position[hit.Attacker.Index]) : u.Position[hit.Victim.Index];
+            // M8-3: the splash's factor is read before the direct hit lands, as a shot's is before its landing: the landing
+            // reveals the attacker, and a blow struck from stealth splashes with the bonus it struck with.
+            float splashFactor = splash ? AttackerFactor(world, hit.Attacker) : 1f;
             if (hit.IsBuilding) HitBuilding(world, in hit);
             else HitUnit(world, in hit, attackerType); // M7-2: the direct melee hit carries its attacker's onHit passive
             if (splash)
                 ProjectileSystem.Splash(world, at, world.Data.Units[attackerType].Attack, AttackBonus(world, hit.AttackerOwner, attackerType, false),
-                    hit.AttackerOwner, hit.Attacker, false, hit.Victim, hit.IsBuilding, hit.AttackerLevel, AttackerFactor(world, hit.Attacker));
+                    hit.AttackerOwner, hit.Attacker, false, hit.Victim, hit.IsBuilding, hit.AttackerLevel, splashFactor);
         }
         world.HitCount = 0;
         // Then the projectiles that arrived this tick (M4-2b), slot order: hits and splash in the same phase, so a unit
@@ -1164,10 +1167,11 @@ public static class CombatSystem
         UnitStore u = world.Units;
         int type = u.TypeId[i], owner = u.Owner[i], j = u.Target[i].Index;
         bool building = u.TargetIsBuilding[i];
-        // M7-4: the striker's status damage bonus (Blood-oil Frenzy) is read here, with its attack value and tech bonus.
+        // M7-4: the striker's status damage bonus (Blood-oil Frenzy) is read here, with its attack value and tech bonus;
+        // M8-3: with its first shot from stealth and its pack bonus, through the one helper.
         AttackDef attack = world.Data.Units[type].Attack;
         int bonus = AttackBonus(world, owner, type, false);
-        float factor = u.Statuses.Count[i] == 0 ? 1f : StatusSystem.DamageFactor(world, i);
+        float factor = HitFactor.Of(world, i);
         int damage = building ? DamageToBuilding(world, attack, bonus, j, factor) : DamageToUnit(world, attack, bonus, j, factor);
         if (damage <= 0) return; // data without a structure class: buildings take no damage
         world.Hits[world.HitCount++] = new PendingHit(new EntityHandle(i, u.Generation[i]), owner, u.Target[i], building, damage, world.Fog.LevelAt(u.Position[i]));
@@ -1195,14 +1199,12 @@ public static class CombatSystem
     }
 
     /// <summary>
-    /// M7-4: the status damage factor of the unit that struck (<see cref="StatusSystem.DamageFactor"/>), read with the tech
-    /// bonus where a splash or a landing shot reads it; 1 when that unit is dead (its statuses went with its slot).
+    /// M7-4: the damage factor of the unit that struck, read with the tech bonus where a splash or a landing shot reads it;
+    /// 1 when that unit is dead (its statuses went with its slot, and a dead shooter is neither hidden nor in a pack). M8-3:
+    /// the whole factor (<see cref="HitFactor.Of"/>: status x first shot x pack).
     /// </summary>
-    internal static float AttackerFactor(World world, EntityHandle attacker)
-    {
-        UnitStore u = world.Units;
-        return !u.IsAlive(attacker) || u.Statuses.Count[attacker.Index] == 0 ? 1f : StatusSystem.DamageFactor(world, attacker.Index);
-    }
+    internal static float AttackerFactor(World world, EntityHandle attacker) =>
+        !world.Units.IsAlive(attacker) ? 1f : HitFactor.Of(world, attacker.Index);
 
     /// <summary>The attack of unit type <paramref name="type"/>, or of building type <paramref name="type"/> with <paramref name="isBuilding"/> (M4-3b: a tower's, never null for a building that fired).</summary>
     internal static AttackDef AttackOf(World world, int type, bool isBuilding) =>

@@ -366,9 +366,11 @@ public sealed class UnitModels
         return scene;
     }
 
-    private const string Missing = "is missing";
+    /// <summary>What <see cref="Problem"/> says of a file that is not there (the normal case for a type the art pass hasn't reached).</summary>
+    internal const string Missing = "is missing";
 
-    private static string? Problem(string path)
+    /// <summary>Why the model file at <paramref name="path"/> can't be loaded (missing, a Git LFS pointer, not a glTF binary), or null when it can (M6-V26: shared with <see cref="BuildingModels"/>).</summary>
+    internal static string? Problem(string path)
     {
         if (FileAccess.FileExists(path))
         {
@@ -422,7 +424,7 @@ public sealed class UnitModels
     public const string ClipMapKey = "clips";
 
     // The imported glTF extras of the first node that has them (the armature's: the builder writes no other extras), or null.
-    private static Godot.Collections.Dictionary? ReadExtras(Node root)
+    internal static Godot.Collections.Dictionary? ReadExtras(Node root)
     {
         Node? holder = root.HasMeta("extras") ? root : null;
         if (holder == null)
@@ -475,7 +477,7 @@ public sealed class UnitModels
     }
 
     // The atlas layout in the extras ({grid: [c, r], tiles: {name: [c, r]}}), or null for a file from before M6-V24.
-    private static Atlas? ReadAtlas(Godot.Collections.Dictionary? extras)
+    internal static Atlas? ReadAtlas(Godot.Collections.Dictionary? extras)
     {
         if (extras == null || !extras.TryGetValue(AtlasKey, out Variant atlasVar) || atlasVar.Obj is not Godot.Collections.Dictionary atlas) return null;
         if (!atlas.TryGetValue("grid", out Variant gridVar) || gridVar.Obj is not Godot.Collections.Array grid || grid.Count != 2) return null;

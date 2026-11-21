@@ -261,6 +261,8 @@ internal sealed class PassiveJson
     public double? Duration { get; set; }
     public double? Radius { get; set; }
     public List<string?>? Units { get; set; }
+    public double? DamageBonus { get; set; } // M8-3: nearbyOwn only
+    public double? MaxStacks { get; set; } // M8-3: nearbyOwn only; read as a number so 1.5 is refused by name
 }
 
 internal sealed class AttackJson
@@ -276,6 +278,7 @@ internal sealed class AttackJson
     public string? Projectile { get; set; }
     public string? Targets { get; set; }
     public Dictionary<string, double>? BonusVs { get; set; }
+    public double? FromStealthBonus { get; set; } // M8-3, a unit's only; JSON null reads as absent
 }
 
 internal sealed class CostJson
