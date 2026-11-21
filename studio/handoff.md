@@ -1,361 +1,89 @@
 # Handoff: brief for the next session
 
-Written by the Producer at the ACCEPT of session **2026-11-17-0816** (session 1 / 8 of 2026-11-17, started 08:16; it
-ran about 26 hours: three tracks, QA full on the sim with one tests-only fix round, full-suite runs of 4-5 h under
-shared load; the ACCEPT on 2026-11-18). Sim **M8-2** ACCEPT (feature, 1 fix round, QA full FAIL → PASS_WITH_ISSUES),
-view **M6-V25** ACCEPT (feature, 0, QA standard PASS_WITH_ISSUES), data **D33** ACCEPT (feature, 0, QA standard
-PASS_WITH_ISSUES). **M5 8 / 9 (criterion 6 owner-only), M6 5 / 10, M7 3 / 4, M8 0 / 3.** Counters: **sim 2 / 4,
-view 3 / 4, data 2 / 4**. Bug ids next session: **sim 1620+, view 1630+, data 1640+ (20 ids)**. Open S1 / S2:
-none. The next session is **1 / 8 of 2026-11-18**.
+Written by the Producer at the ACCEPT of session **2026-11-18-0926** (session 1 / 8 of 2026-11-18, started 09:26; it
+ran about 21 hours: the sim's build alone 10.6 h beside the other tracks' suites; the ACCEPT on 2026-11-20). Sim
+**M8-3** ACCEPT (feature, 0 fix rounds, QA full PASS_WITH_ISSUES), view **M6-V26** ACCEPT (feature, 0, QA standard
+PASS_WITH_ISSUES), data **D34** ACCEPT (feature, 1 fix round, QA standard FAIL → PASS_WITH_ISSUES). **M5 8 / 9
+(criterion 6 owner-only), M6 5 / 10, M7 3 / 4, M8 0 / 3.** Counters: **sim 3 / 4, view 4 / 4 (hardening next),
+data 3 / 4**. Bug ids next session: **sim 1660-1679 (20 ids, a pin move), view 1680-1689, data 1690-1699**. Open
+S1 / S2: none. The next session is **1 / 8 of 2026-11-20**.
 
-**Next session in one line (proposal):** sim **M8-3: the Archer's first shot from stealth and the Hounds' pack
-bonus** (Request 56 G2 + G3; feature, QA full; test data only, no AI change) · view **M6-V26: the first building
-models** (feature, QA standard, an uncertain slice of about 800 lines) · data **D34: owner tweaks first, then what
-D33 cost** (BUG-1612 first; QA standard; the one hash move of the session).
+**Next session in one line (proposal):** sim **the AI follow-up** (BUG-1621 / 1610 first, Request 55, BUG-1555,
+the re-scout count; feature, QA full, one pin move) · view **M6-VH9, the view's hardening** (BUG-1630 first; QA
+standard) · data **D35, the Shadow page after M8-3** (light; docs and content checks only, shadow.md alone, no
+opening measured).
 
-**The default loop on `main` is green.** Expect **0 failed** (9,917 passed / 0 failed / 19 skipped of 9,936 in 42 m 23 s on the Producer's scratch clone of
-sim b70604a + view bcb48e2 + data 95fd578). Any red row is a finding. **The Stress category has no expected red row
-any more:** both `Bug0982_*` rows are green since D33.
+**The default loop on `main` is green.** Expect **0 failed** (10,061 passed / 0 failed / 20 skipped of 10,081 in 22 m 2 s on the Producer's scratch clone of sim
+5d11ae2 + view f7cd8d8 + data ac4e63e). Any red row is a finding. **The Stress category has one expected red row:**
+`FarExpandProbeQaStressTests (vathar_crossing, 2, Normal, 4)` (BUG-1621, on `main` by ruling, rule 57).
 
-**At the PLAN, first:** (1) the inbox (the owner may answer D33's review table: tweaks come before roadmap work);
-(2) the default loop on `main`; (3) **D34 may move the data hash** (only if a number moves): the golden's header and
-the two sim-owned data-hash pins go to the data developer by name (rule 51), the pin classes one a line (rule 71),
-and **the sim's M8-3 ships test data only and adds no literal pin of the shipped hash or of a save's bytes on shipped
-data (rule 73)**; (4) **M8-3 must not change Normal AI behaviour** (rule 41: D34 measures openings on `main`'s AI);
-(5) the view's building slice adds LFS binaries only of types already in `.gitattributes` and no new third-party
-pack (the Ultimate Fantasy RTS licensing row exists); (6) session length: this one ran 26 h. A tests-only fix round
-is re-checked without Stress (rule 72); QA full on the sim runs Stress once; the data's QA runs scenario rows first
-and its Stress rows alone; tell every developer again that nothing is written outside its worktree and its own
-scratch folder (rule 63: a stray `fix1.patch` this session).
+**At the PLAN, first:** (1) the inbox (the owner may answer D33's and D34's review tables and the buildings'
+pictures: tweaks come before roadmap work; "teblor opening: D33's order" restores `Content/Fixtures/
+teblor_standard_d33.json`'s order and is a hash move); (2) the default loop on `main`; (3) **bug index upkeep the
+ACCEPT left on purpose** (three branches append to `studio/bugs/README.md`): set the README rows of BUG-1612
+("open, half fixed"), BUG-1613 ("fixed, D34"), BUG-1510 ("fixed, D34") and BUG-1421 ("open, item 1") to what their
+files say; (4) **CLAUDE.md's "Current milestone" line is stale** ("M5 (sim) / M6 (view); M3 data Done"; the studio
+is on M8 (sim), M6 (view), the M7 balance pass (data)): neither the Producer nor the conductor may edit CLAUDE.md,
+so it is an owner item or an interactive-session fix; (5) the AI follow-up moves every AI pin: rules 43 / 45 / 68 /
+71 / 74 / 76 in the brief, the seven content classes of rule 68 handed to the sim developer by name, and the data
+task kept to `docs/factions/shadow.md` and its two test folders; (6) if the AI follow-up changes the save format
+(the re-scout count, BUG-1490's flag), name the view scenes that pin save bytes (rule 50) and keep the view's
+hardening off those scenes or hand them over; (7) session length: 0926 ran 21 h. The sim's full loop took 6.5 h
+under load: tell the sim developer to run the default loop once after the last edit and Stress only in QA.
 
 ## Current session plan
 
-**Session 2026-11-18-0926 (1 / 8 of 2026-11-18), planned 09:30. All three tracks GO, all feature.** Base 0317e7e.
-Bug ids: sim 1620-1629, view 1630-1639, data 1640-1659. Producer decisions for M8-3 and M6-V26: docs/01
-"2026-11-18 (b)". Everyone: record the PID of every `dotnet test` / Godot you start and end only those (rules 52 /
-69); scratch folders are new and named `<task>-...`, and nothing is written outside your worktree and your own
-scratch folder (rule 63); "build 0 / 0" means `--no-incremental` after the last edit (rule 64); run the full default
-loop after the last edit or say in the first lines that you did not (rule 62); open questions go in the docs section
-the task owns (rule 67). Developers cannot write `studio/**`. Smoke may fail once on stale `uid://` import state:
-re-run it once before calling it a finding.
-
-### Sim: M8-3, the first shot from stealth and the pack bonus, on test data only (feature, QA full)
-
-Goal: build the two damage rules the Shadow roster still lacks (shadow.md gaps G2 and G3; M8 criteria 1 and 2): the
-Shadow Archer's first shot from stealth deals +50 %, and a Hound of Shadow deals +10 % for each other Hound within
-8 m, up to +30 %. Both are generic data hooks with their schema checks. No shipped unit carries them, so nothing in
-a match changes.
-
-Scope:
-- Schema A: `units.json` `attack.fromStealthBonus` (a number above 0, at most a bound you name in `DataLimits`;
-  absent or JSON `null` = none). A building's attack may not carry it (one error).
-- Schema B: a fourth passive trigger `nearbyOwn` with `units` (the `onDeath` passive's rule: at least one, own
-  faction, no repeats), `radius` (above 0, at most `DataLimits.MaxPassiveRadius`), `damageBonus` (above 0, bounded)
-  and `maxStacks` (a whole number from 1 to a bound you name). The fields it does not use (`status`, `magnitude`,
-  `duration`, `hpFraction`) are errors on it; `damageBonus` and `maxStacks` are errors on the other three triggers;
-  one per trigger as today (`MaxUnitPassives` becomes 4; the trigger id is appended, existing ids keep their values).
-- Rule A (docs/01 2026-11-18 (b) (a), (b)): a hit by a unit whose attack carries the field is multiplied by
-  `1 + fromStealthBonus` when `World.IsStealthed(attacker)` is true (Stealthed and not Revealed) at the moment the
-  hit's damage is worked out: a melee blow at the strike (`CombatSystem.QueueHit`), a shot at its landing
-  (`ProjectileSystem.Strike`), exactly where `StatusSystem.DamageFactor` is read today. From any stealth source.
-  The landing reveals the attacker as today, so the next hit has no bonus. A dead shooter's shot has none.
-- Rule B (docs/01 2026-11-18 (b) (c)): a hit by a unit whose type has the passive is multiplied by
-  `1 + min(n, maxStacks) x damageBonus`, n = the attacker's owner's other live units of the listed types whose
-  centre is within `radius` of the attacker's centre (the boundary counts), counted through the spatial grid at the
-  same moments as rule A. An ally's units, enemies, other types and the attacker itself do not count. A dead
-  shooter's shot has none.
-- The factors multiply (status bonus x first shot x pack) in one fixed order, through one helper that every place
-  reading the status factor today calls (unit hits, building hits, splash), so no path forgets one (BUG-1281's
-  lesson). Data without either field pays one flag test.
-- **No stored state:** no new store field, save part or hash bit; save format stays 10, replay 9 / 6.
-- Test data only (rule 58: a helper that forges a row tolerates shipped data already carrying it; put the copies
-  beside `Vision/StillScenes`).
-- Docs: docs/02 "Stealth and detection" (the first-shot rule) and the passives text (the pack rule); docs/03
-  "Implementation (M8-3)" with "For the data track (M8-3)" (the two rows the Archer and the Hound will carry) and a
-  "Questions for the Producer" list; and write the Producer's answers to M8-2's Questions 1-3 into docs/03's M8-2
-  section (docs/01 2026-11-18: all three "leave it").
-- OUT of scope: any byte under `game/data/**`; the AI (no rule, no think change, no estimate); the view and
-  `ViewApi`; the 7-alive cap (G4), teleport, the Wraith row, ability `requires` (G5-G8); remembering "fired from
-  hiding" on a projectile; `docs/factions/**`; any existing pin class, fixture, the golden, or any literal of the
-  shipped data hash or of a save's bytes on shipped data (rule 73: the data track may move the hash this session).
-  If you find a shipped rule or a pin must move, stop and say so.
-
-Acceptance criteria:
-1. Both schemas load; each bad row is refused with exactly one error naming the unit and the field (bonus zero /
-   negative / over the bound; the field on a building's attack; `nearbyOwn` with a missing or bad `units`, `radius`,
-   `damageBonus`, `maxStacks`; an unused field on it; `damageBonus` or `maxStacks` on another trigger; a second
-   `nearbyOwn`). `null` reads as absent. New loader tests + `DataValidationTests` rows.
-2. `git diff 0317e7e -- game/data` is empty; no existing pin class, fixture or golden file is in the diff; every
-   existing test is green unedited (a test that pinned "three triggers" or `MaxUnitPassives` 3 may change that
-   number only, named in the report).
-3. Ranged: a Stealthed unit with `fromStealthBonus` 0.5 whose shot lands on a unit deals exactly the damage of
-   factor 1.5 (the pinned number beside the same shot from a unit that is not Stealthed), is revealed by that
-   landing, and its next shot deals the plain damage. Shown for forest stealth, stand-still stealth and a timed
-   Stealthed status.
-4. Melee: the same for a melee unit with the field: the first blow carries the bonus, the second does not.
-5. The boundary: a shot whose shooter is no longer Stealthed at the landing tick (it lost hit points, its
-   stand-still hold was let go after a move, it was Revealed by another hit of its own, or it died) deals the plain
-   damage; one still Stealthed at the landing deals the bonus even when an enemy detects it. Each case one test,
-   with the tick on both sides of the boundary pinned where there is one.
-6. The bonus reaches a hit on a building and every victim of that shot's splash; a Stealthed unit without the
-   field gets nothing.
-7. Pack: with `damageBonus` 0.1 and `maxStacks` 3 the factor is 1.0 / 1.1 / 1.2 / 1.3 / 1.3 / 1.3 for 0-5 other
-   listed units in reach (a table-driven test with pinned damage); a unit whose centre is exactly at `radius`
-   counts, one just beyond does not; the attacker itself, another type, an enemy's, an ally's and a dead unit do not
-   count.
-8. All three factors multiply: one pinned row with a status damage bonus, the first shot and a pack of two.
-9. Generic: each rule works on a unit of every shipped faction's test copy; on data with neither field the helper
-   returns the status factor alone.
-10. Determinism: twin runs agree on every tick's state hash over 4 seeds x 2,000 ticks, 3 players, random move /
-    attack / stop / hold orders, with units carrying each field on every side; a save at every 50th tick, loaded
-    and continued, equals the uninterrupted run. The diff adds no store field, save part or hash bit (save 10,
-    replay 9 / 6).
-11. No allocation per tick in a 200 v 200 fight of pack units (`[Collection(SerialCollection.Name)]`).
-12. Measure and report (not pass / fail): the tick cost of that 200 v 200 fight with and without the passive
-    (radius 8), alone under rule 42. No Perf threshold loosened.
-13. `dotnet build RtsGame.sln --no-incremental` 0 / 0; default loop 0 failed, 19 skipped (the same 19); smoke
-    PASS.
-14. docs/02 and docs/03 say what the code does; M8-2's three answers are written in.
-
-Design references: `docs/factions/shadow.md` "Unit notes", "Schema gaps (D-R38)" G2 and G3, Decisions; docs/02
-"Stealth and detection" and the passives rules; docs/01 2026-11-18 (b); docs/03 "Implementation (M7-4)" (the
-Frenzy's damage factor: where it is read is the model), "(M7-2)" (`onHit`: the passive loader's shape), "(M8-2)".
-
-Tests required: loader + validation; scene tests for criteria 3-9 with pinned damage and ticks; an invariant fuzz
-(every hit's damage equals the base damage times the product of the factors that hold at its moment; no hit by a
-unit without a field differs from the base's); determinism and save / load twins; allocation; the report.
-
-Constraints: no Godot in `Rts.Sim`; no stat in C# (0.5, 0.1, 3 and 8 are data); no allocation per tick; the count
-goes through the spatial grid, in a fixed order; float factors multiplied in one fixed order; one public type per
-file; test data only.
-
-QA focus (full): the landing-tick boundary (reveal ordering in `HitUnit` / `HitBuilding`: the damage must be worked
-out before the reveal on every path, and a second shot in flight when the first lands must not carry the bonus); a
-lob and a splash shot; a shot whose shooter's slot was freed and reused by another unit (the bonus must not come
-from the new occupant); the pack count at the exact radius, across spatial-grid cell borders and for the 0.75 m
-radius class; units of the pack dying in the same phase 11 as the hit; team games (an ally's Hounds); rounding of
-stacked factors against the damage formula (no off-by-one against a hand calculation); every path that reads the
-status factor today also reads the new ones (melee, shot on unit, shot on building, splash, friendly fire); the AI's
-`PlayerView` and shipped-data matches unchanged (a shipped-data twin against the base's state hashes over a full AI
-match). Scale: 2,000 units with both fields, 4 seeds x 2,000 ticks. Stress once, then Perf alone (rule 42); after a
-tests-only fix round no Stress re-run (rule 72).
-
-### View: M6-V26, the first building models (feature, QA standard; a first slice of about 800 lines)
-
-Goal: put the first real buildings on screen. Build the import path for a static building model from the
-Ultimate Fantasy RTS pack already on disk and use it for two Malazan buildings, the Garrison Keep
-(`malazan_garrison_keep`, 4 x 4 cells) and the Barracks (`malazan_barracks`, 3 x 3), with team colour, so the owner
-can judge buildings beside the figures before the rest follow.
-
-Scope:
-- Tooling: a `buildings` list in `tools/asset-manifest.json` and a build step in `tools/art/` run by
-  `tools/import-assets.ps1` (Blender 5.2; `asset-sources/quaternius-ultimate-fantasy-rts-2022-08/` of the main
-  checkout, read only). Output per building: one `.glb` (one surface, one material named `team`, one atlas whose
-  alpha is the team mask, as the units' since M6-V24) at
-  `game/assets/models/malazan/<building id>/<building id>.glb`. Which source model (TownCenter / Barracks, First or
-  Second Age, which level) and which parts take the player colour are your pick from the pictures; tint toward the
-  Malazan palette (steel grey, oxblood, dull bronze), muted, grounded.
-- View: a building type whose model file exists draws it when finished (found by id: docs/01 2026-11-18 (b) (e));
-  scaled uniformly to fit its footprint from the data with a small margin, origin at the ground centre. A site
-  keeps today's rising box; a remembered building under the fog draws the same model darkened as today's ghost box
-  is. The hit-point / progress bar sits above the model's top; selection, picking, the build ghost and the outline
-  work as today. Every other building type stays a box. Pointer files (no `git lfs pull`) and `--placeholder-art`
-  give today's boxes with 0 `ERROR` lines.
-- Scenes: one new scene for the two buildings (model shown when finished, box while a site, ghost, bar height,
-  two player colours, the fallback); existing scenes that pin a building's box mesh or material either read the new
-  accessor or switch models off, as the unit scenes did.
-- Docs: docs/04 (a "Building models, as built" part: the manifest entry, the fit rule, the team parts, the
-  licensing log row of the pack listing the source files used), docs/03 "Implementation (M6-V26)" with a
-  "Questions for the Producer" list.
-- OUT of scope: any file under `sim/` or `game/data/` (no `model` field for buildings; if you find you need one,
-  say so in Questions); the other eight Malazan buildings, Whirlwind and Teblor buildings, construction-stage
-  models, resource nodes, trees, props; the Teblor buildings' `scale` on a model (say in docs/03 how it will apply);
-  a new third-party pack; a new binary type (`.glb` and `.png` only); BUG-1600 / 1601 / 1602 (the next task);
-  changing unit figures.
-
-Acceptance criteria:
-1. Two manifest entries; a second run of the import leaves every model file (the units' too) sha256-identical.
-2. Each building file: one surface, the `team` material, one atlas, at most 5,000 triangles (docs/04), texture at
-   most 1024 x 1024.
-3. In a match, a finished Garrison Keep and Barracks draw their models inside their footprints (no part beyond the
-   footprint's edge by more than 0.25 m), standing on the ground; the scene checks the fitted bounds against the
-   data's footprint.
-4. A site of either type draws today's box and switches to the model the tick it is finished; a remembered one
-   under the fog draws the model with the ghost's darkening; destroying it removes it. Scene rows for each.
-5. The bar is above the model's highest point for both types; a click on the model's footprint selects it as
-   today.
-6. Team colour: the same building in two player colours reads apart at the default zoom; the scene checks that
-   team texels take the player colour and the others do not, in four colours.
-7. Pictures, looked at by you: both buildings at the default zoom and close up, in two player colours, with a
-   Laborer and a Heavy Infantry figure beside each for scale; a site, and a remembered one under the fog. The
-   report says what you picked and why. The sheets go in a scratch folder named in the report (the Producer copies
-   them to `studio/review/2026-11-18-0926/`).
-8. The bench alone (rule 42): 400 mixed figures with 60 buildings (30 of each) on screen, beside the same window's
-   boxes; and rule 61's 400- and 1,000-figure rows with the capsule figure. Over 16.7 ms a frame for 400 figures
-   with 60 building models fails.
-9. Pointer files and `--placeholder-art`: boxes, 0 `ERROR` lines.
-10. Only `.glb` and `.png` binaries added; the art pass's binaries' total size reported; the pack's licensing-log
-    row names the source files used, in the same commit.
-11. Nothing under `sim/` or `game/data/` in the diff.
-12. Build `--no-incremental` 0 / 0; default loop 0 failed; smoke PASS; scene loop all green (117 + the new one).
-13. docs/04 and docs/03 "Implementation (M6-V26)" updated.
-
-Design references: docs/04 (style guide: grounded, muted world and saturated teams; "Scale and dimensions":
-buildings fit their footprint with a small margin; "Team color"; "Buildings, nature, props"; "Directory layout and
-naming"; "Import process"; "Unit models, as built" for the atlas and mask); docs/03 "Implementation (M6-V24)" and
-"(M7-V4)" (the buildings' drawn `scale`); `game/data/factions/malazan/buildings.json` (ids, footprints);
-`game/scripts/BuildingViews.cs`, `UnitModels.cs` (the model of the loader and the fallback).
-
-Constraints: views hold no gameplay state; no player-facing text in C#; the model is found from the data's ids,
-never a list of building names in C#; counts of model types come from the manifest, never a literal;
-`tools/asset-manifest.json`, `tools/import-assets.ps1` and `tools/art/**` are the view's; nothing is downloaded.
-
-QA focus (standard): a fresh-clone import is byte-identical; the fit on both footprints and on a map's terraces
-(a model sunk into or floating over the ground); the site-to-finished switch, a building destroyed while a site and
-a finished one remembered under the fog then razed out of sight; team colour leaking onto walls or missing in four
-colours, Bone and Crimson included; the bar and the selection outline against the model's size at the closest and
-farthest zoom; units walking beside the model (figures hidden behind it or clipping through an overhang); the
-pointer-file fallback; a scene that pins a count as a literal. The bench last and alone; the rows that flake under
-load re-run alone.
-
-### Data: D34, Easy's lost upgrade and the pages after D33 (feature, QA standard; at most one data-hash move)
-
-Goal: D33 brought the Teblor AI's whole army out but cost the Easy AI its one upgrade (the Anointing 35 -> 1 of 64
-matches) and Shamans on Easy and Hard (BUG-1612). Try to win it back by the order and times of the steps alone, and
-make the pages say what `main` does (BUG-1613 and the small items).
-
-Scope (in this order; cut from the end if the budget is short and say so):
-- A. BUG-1612: `game/data/factions/teblor/ai.json` `standard`, order and step times only (the Shaman's Circle and
-  the Anointing ahead of the three new train steps; the Anointing's time earlier). Screen at least three and at
-  most five variants on a reduced row first (Easy and Normal), then run the full 64-seat row of
-  `D33TeblorRowQaStressTests`' shape for Easy / Normal / Hard on the one candidate.
-- B. BUG-1613: teblor.md's "was" column printed against `main`'s row (QA's numbers are in the bug file) or the
-  column relabelled, the AI section's short paragraph too; the `standard` tooltip softened so it promises only what
-  most Normal matches show (or the figure it rests on measured and printed). If A ships a variant, the page and the
-  tooltip follow that variant's row.
-- C. Small items: `KnownBeatenAlive` seed 19 with its `DR33QaTests` pin; BUG-1510 item 1 (two long lines); BUG-1421
-  items 1, 2, 5 (close each as fixed, as "waits for Request 55", or as wontfix with the reason on the page).
-- D. Docs only: `docs/factions/shadow.md` says gap G1 is built (M8-2: the field and its row from docs/03 "For the
-  data track (M8-2)"), keeping `Content/PagePinReadinessTests` green; the art notes on malazan.md and whirlwind.md
-  say what the figures on `main` show (BUG-1602's data half; the figures are in `studio/review/2026-11-17-0816/`
-  and docs/04 "Fourth slice (M6-V25)").
-- Print the Hard v Normal tally if a variant ships; tune nothing for it.
-- Files: `game/data/factions/teblor/ai.json` (the only data file that may change); `docs/factions/teblor.md`,
-  `malazan.md`, `whirlwind.md`, `shadow.md`; `Content/**`, `QA/Content/**`. **Only if a variant ships (the hash
-  moves),** handed over by name, values and "was" comments only (rules 51 / 71): the golden
-  `cross_map_seed1.replay` header and checksum (the reason in the `GatherWedgeQaTests` comment);
-  `Data/FactionOrderTests.TheShippedContentHash_IsTheGoldenHeaders`;
-  `QA/PackQaTests.TheShippedDataHash_IsTheGoldenHeaders`; and each of these, one line each in the report with
-  "re-measured: yes / moved to ... / unchanged":
-  - `MatchCriterionTests` (+ `CriterionMatch`, `HalfWay`)
-  - `StandardPresetPinQaTests`
-  - `NonHardMatchPinQaTests`
-  - `CounterCompositionTests.TheNonHardPins_*`
-  - `ReserveTwinTests`
-  - `SharedVisionFfaPinTests`
-  - `OutcomePinM73bQaTests`
-  - `HardKnobsPinTests`
-  - `CliTests.Match_TheLiteralRow_*`
-  - the premap AI replay, `save_ai_seed2`, `seed21_playable.replay`
-  - the Hard v Normal tally, docs/03's M5-5 table and bound comments
-  - Stress: `AiDeterminismTests`
-  - Stress: `HuntStressTests`
-  - Stress: `M6Sh2DeterminismStressTests`
-  - Stress: `M6Sh2QaStressTests`
-  - Stress: `M6S12DeterminismStressTests`
-  - Stress: `StarvedSaveTwoProcessQaStressTests`
-  - Stress: `ReservePairingsStressTests`
-  - Stress: `MatchRowsM6S10Report`
-  - Stress: `MatchCriterionSweepQaStressTests`
-  A view scene red only because its save / replay fixture carries the old data hash: regenerate that fixture file
-  and name it in the report; nothing else under `game/`.
-- OUT of scope: `game/data/common/**`, the other factions' `ai.json`, units' stats and costs, any other C# (a
-  missing rule goes in the report as evidence for Request 55); the Shadow roster's files; shadow.md's G2 / G3 rows
-  (the sim builds them this session; next task); tuning for the Hard v Normal tally; the waves D33 set (they wait
-  for the owner's answer).
-
-Acceptance criteria:
-1. The report prints, for every variant tried, Easy / Normal / Hard rows (defeated / 2nd Longhouse / Shaman /
-   Breaker / Rider / War-dog / Anointing) beside `main`'s, and says which rows are the reduced screen and which the
-   full 64.
-2. A variant ships only if, on the full rows, Easy's Anointing is back to at least 20 of 64 while on Normal and on
-   Hard each of Breakers, Riders and War-dogs stays at 8 or more, Normal's Shamans at 14 or more, its second
-   Longhouse at 9 or more and its "beaten" count at 15 or less. If none reaches that, nothing under `game/data/`
-   changes, the criterion is met by the table and the cause, BUG-1612 is marked "waits for Request 55" with the
-   best variant named, and the hash does not move.
-3. BUG-1613: every "was" figure on teblor.md is `main`'s (or the column says what it is), in the table and in the
-   AI section's paragraph; the tooltip's claims hold in most Normal matches by a printed figure, or the text is
-   softened; the page quotes the tooltip as the file has it.
-4. The small items of C are each closed or stated with a reason; pinned figures stay pinned
-   (`DR33QaTests`).
-5. shadow.md lists G1 as built with its field; `PagePinReadinessTests` green; the two art-note sections match the
-   figures.
-6. If the hash moved: the new hash stated; the golden header and the two hash pins regenerated; every class in the
-   list re-measured once (Stress classes run alone, PIDs recorded), old values kept in "was" comments; a pinned
-   criterion row that stops ending moves to the nearest seed that ends (rule 45) and the report says so; no bound
-   raised; the report says saves and recordings from before stop loading. If it did not move: `git diff 0317e7e --
-   game/data` is empty and the report says so.
-7. The pages' cells, prose and the opening's `description` match the shipped file and the measured tables; every
-   `Content/**` and `QA/Content/**` class green.
-8. The report carries the owner's review table (opening / field, old -> new, one-line why) and quotes any changed
-   player-facing text old -> new.
-9. Build `--no-incremental` 0 / 0; default loop 0 failed, 19 skipped; smoke PASS; scene loop green if anything
-   under `game/` changed.
-
-Design references: docs/02 "AI opponent" (openings, the reserve, the army mix); `docs/factions/teblor.md` (AI build
-order, "The Age II army (BUG-1420, D33)", the opening's tooltip), `malazan.md` and `whirlwind.md` (art notes, the
-lines of BUG-1510), `shadow.md` "Schema gaps (D-R38)"; docs/03 "For the data track (M8-2)"; BUG-1612, BUG-1613,
-BUG-1510, BUG-1421, BUG-1602; Request 55 in `studio/STATE.md`.
-
-Constraints: no C# outside the two content test folders except the pin values named above; player-facing text only
-in data; at most one hash move; `teblor/ai.json` is this track's alone this session; the sim's M8-3 does not
-change the AI, so openings are measured on `main`'s AI.
-
-QA focus (standard): scenario rows first, Stress rows alone. Re-run the full Easy / Normal / Hard rows of the
-shipped state independently and compare with the report; check the fallback was not taken where an order would have
-done (try one order of your own); Normal and Hard must not lose what Easy regains; every "was" figure against
-`main`; the tooltip against what the AI does in a match; pages against files both ways; if the hash moved, every
-listed pin class really run (rule 71) and a save from `main` refused cleanly.
+(Written at the next PLAN.)
 
 ## Where things stand
 
-- **`main` after this session = sim b70604a + view bcb48e2 + data 95fd578** (plus this ACCEPT's studio and docs
-  files). The Producer's scratch clone `prod0816-accept` (code merged clean; conflicts only in
-  `studio/bugs/README.md` and `studio/qa/coverage.md`): build `--no-incremental` 0 / 0, default loop **9,917 passed / 0 failed / 19 skipped of 9,936 in 42 m 23 s**,
-  smoke PASS, scene loop **117 of 117, first pass**.
-- **The data hash moved: 318E8C4256456C05** (was B74DC7AE61B4862D). Saves and recordings from before are refused
-  `DataMismatch` (QA: an AI-seat save and recording from `main`, cleanly). Formats unchanged (save 10, replay 9 / 6).
-  The golden `cross_map_seed1.replay`: header and checksum only.
-- **Stand-still stealth (M8-2), on test data only:** `units.json` `stillStealth { status, delay }` →
-  `UnitDef.StillStealthStatus` / `StillStealthDelayTicks`; `StillStealthSystem.Run` in phase 5 after
-  `ForestStealthSystem`, before `StealthSystem.Run`; `StillStealthStore` (`UnitStore.Still`, null without the
-  field); save part `STIL` after `REGN` / `FRST`; state-hash bit 23; `StatusSystem.Holders` (0-2) counts the rules
-  holding a Stealthed entry (`TicksRemaining` = timed part + holders). Test copies: `Vision/StillScenes`. Cost: 500
-  moving units +13.9 % when all can hide (the detection pass's work, not the rule's). The data track's row is in
-  docs/03 "For the data track (M8-2)".
-- **The AI's openings (D33):** `cadre_rush` 16 / 1,184, `holy_war` 14 / 918, the Teblor `standard` with three train
-  steps ahead of the expand step (29 steps; fixture `Content/Fixtures/teblor_standard_d33.json`). Teblor 64-seat
-  rows: Normal Breakers / Riders / War-dogs 12 / 22 / 39, Shamans 25, 2nd Longhouse 23, beaten 10; Hard 35 / 43 / 48;
-  Easy 27 / 36 / 51 but the Anointing 35 → 1 (BUG-1612). Hard v Normal **34 / 5 / 3** (Raraku 13 / 1 / 0, Vathar
-  14 / 0 / 0, Pale Hills 7 / 4 / 3).
-- **Pins moved by D33 (rule 45):** `MatchCriterionTests` FFA row Vathar **seed 1** (31,991; seed 2 no longer ends:
-  BUG-1610), Raraku seed 3 28,915; `M6Sh2DeterminismStressTests` **Raraku seed 5**; `ReservePairingsStressTests`
-  `NoWaveSides` 1; two rows each in `StandardPresetPinQaTests`, `NonHardMatchPinQaTests`,
-  `CounterCompositionTests.TheNonHardPins_*`, `OutcomePinM73bQaTests`. Unchanged: every other class on rule 71's list.
-- **The view (M6-V25):** 15 unit types are figures, 6 capsules (`ModelViewTest` names them). **117 scenes**
-  (`FootModelTest`, QA's `QaM6V25Test`; `QaM6V25Shot` is a windowed tool). Bench alone: 400 figures 6.88 ms, 1,000
-  figures 17.64 ms. The art pass's binaries 36.7 MB.
-- **Skipped / known rows:** the default loop's skips are the standing ones less `Malazan_Bug0982Prose_*`
-  (un-skipped). `HuntStressTests.FourAiSeats_OnPaleHills_Seed1_KnownStall` still skipped. `AliveWithoutAWave` is
-  empty. The five `KeepCornerCureQaStressTests` rows (BUG-1463) still skipped.
-- **Requests:** 58 open (dropped queued orders for the view); **55 has new evidence** (D33 cured BUG-1420 by file
-  order because a waiting expand step holds the reserve against every later step; BUG-1612 is the same cause).
+- **`main` after this session = sim 5d11ae2 + view f7cd8d8 + data ac4e63e** (plus this ACCEPT's studio and docs
+  files). The Producer's scratch clone `prod0926-accept` (code merged clean, docs/03 auto-merged; the only
+  conflict `studio/qa/coverage.md`, both sides kept; `studio/bugs/README.md` will conflict too once the sim's
+  ACCEPT rows are in: keep both): build `--no-incremental` 0 / 0, default loop **10,061 passed / 0 failed / 20 skipped of 10,081 in 22 m 2 s**, smoke PASS, scene
+  loop **119 of 119, first pass**.
+- **The data hash moved: A732F387C2BB7E4D** (was 318E8C4256456C05). Saves and recordings from before are refused
+  `DataMismatch` (QA: cleanly, nothing throws; `Content/D34HashMoveTests`, `QA/Content/D34HashMoveQaTests`).
+  Formats unchanged (save 10, replay 9 / 6). The golden `cross_map_seed1.replay`: header and checksum only
+  (checksum E7359ADD20818C67). The sim's M8-3 adds fields to `GameData.ContentHash` only when set, so the merged
+  tree's hash is the data branch's (the two golden-header pins are green on the merged tree).
+- **The first shot and the pack bonus (M8-3), on test data only:** `units.json` `attack.fromStealthBonus` (above 0,
+  at most 4) → `AttackDef.FromStealthBonus`; a fourth passive trigger `nearbyOwn { units, radius, damageBonus,
+  maxStacks }` (`PassiveTrigger.NearbyOwn` = 3, `MaxUnitPassives` 4, `UnitDef.NearbyPassive`). One helper,
+  `Combat/HitFactor.Of` = status x first shot x pack, called by `CombatSystem.QueueHit` and `AttackerFactor` (so by
+  `ProjectileSystem.Strike` and both splashes). `World.HitBonusInData` is the one flag. Nothing stored. Test
+  copies: `Vision/HitBonusScenes`. The data track's rows: docs/03 "For the data track (M8-3)". Answers to its three
+  questions: docs/01 2026-11-20 (1) (all "keep / leave").
+- **Building models (M6-V26):** `tools/art/build_building.py`, the manifest's `buildings` list,
+  `game/scripts/BuildingModels.cs` (file found by ids, uniform fit 0.25 m inside the footprint, team and remembered
+  materials, box fallback), `BuildingViews.UseModels` (off under `--placeholder-art`; `BuildingScaleViewTest` and
+  `QaM7V4Test` switch it off), `team_colour.gdshader` `brightness`. Two types are models (the Malazan Garrison Keep
+  7.5 x 7.2 x 8.1 m, the Barracks 3.9 x 5.5 x 3.5 m), 28 are boxes. **119 scenes** (`BuildingModelTest`, QA's
+  `QaM6V26Test`: its known-bug rows fail only with `--strict`). Bench alone: 400 figures + 60 building models
+  7.00 ms (boxes 6.97), 1,000 figures 17.57 ms. The art pass's binaries 38,957,228 bytes. Pictures:
+  `studio/review/2026-11-18-0926/`. Answers to its seven questions: docs/01 2026-11-20 (2) (all accepted; 4 is
+  BUG-1630; 6 goes into docs/04 in the hardening).
+- **The Teblor `standard` (D34):** the Carver at step 19 and the Anointing at step 20, both at 10:00, right after
+  the Breaker's train step (fixture `Content/Fixtures/teblor_standard_d34.json`; D33's fixture kept). 64-seat rows
+  (defeated / 2nd Longhouse / Shaman / Breaker / Rider / War-dog / Anointing): Easy 1 / 0 / 16 / 30 / 4 / 27 / 28;
+  Normal 9 / 23 / 15 / 14 / 22 / 37 / 17; Hard 11 / 23 / 22 / 39 / 33 / 46 / 23. Hard v Normal **34 / 5 / 3**
+  unchanged. **No class on rule 71's list seats a Teblor** (seats are factions 0 and 1), so none moved.
+- **Pins:** unchanged from D33's (the bullet "Pins moved by D33" in the 0816 log; `MatchCriterionTests` FFA row
+  Vathar seed 1 31,991, Raraku seed 3 28,915; `M6Sh2DeterminismStressTests` Raraku seed 5).
+- **Skipped / known rows:** the default loop's skips are the standing 19 plus
+  `HitBonusQaTests.AFullPack_45x1point3_RoundsHalfUpTo59_AsByHand` (BUG-1620). Stress: BUG-1621's row red;
+  `HuntStressTests.FourAiSeats_OnPaleHills_Seed1_KnownStall` and the five `KeepCornerCureQaStressTests` rows
+  skipped.
+- **Requests:** 58 open; **55 is the sim's next task** (D34's evidence: research and build steps ignore the
+  reserve, train steps obey it; order alone cannot give Easy both the upgrade and the army mix); 56: G1-G3 built,
+  G4-G8 open.
 - **The stray empty `C:\Dev\rtsGameProject\ModelShots.cs` is still in the owner's main checkout** (on the owner's
   list; nobody touches the owner's checkout).
-- **The conductor started each track's QA when that track's build finished** (not after all three). Keep it; timing
-  rows are judged alone (rule 42).
+- **The ACCEPT stalled about two days on an API error (529)** and was resumed on 2026-11-20 at 21:30 (the owner's "Try again"); no other session ran and `origin/main` stayed cc5614a.
+- **Usage at the ACCEPT:** weekly all models 68 %, weekly Fable 63 % (the weekly window resets about 01:00 on 2026-11-21) (the watcher holds new sessions at or over
+  60 % on any window: the owner's rule of 2026-11-10).
 
-## Standing rules (1-73)
+## Standing rules (1-76)
 
 
 Unchanged 1-51 (38: the Producer runs every suite on a scratch `git archive` / clone, never in a worktree; 39: generated map content
@@ -465,7 +193,40 @@ shipped data, as a literal (rule 49 widened: BUG-1580, S2, one fix round). The h
 session where another track moves it.
 
 
+**74 (new, 2026-11-18-0926):** "the Stress category has no expected red row" is said only after the Stress
+category ran on the merged tree. `FarExpandProbeQaStressTests` was not on rule 71's list and went red with D33
+unseen for a session (BUG-1621). Rule 71's list gains `Stress: FarExpandProbeQaStressTests`, and at PLAN the list
+is checked against a grep for every test class that plays a full AI match.
+**75 (new):** a bar in a data brief ("ship only if ...") names every figure the bug is about on every
+difficulty it is about. D34's bar guarded Easy's upgrade and Normal's / Hard's unit kinds, so the order that met it
+cost Easy its Riders (36 -> 4) with the bar green. And when a developer reports "none meets the bar", QA tries
+an order of its own before agreeing (it found one: BUG-1641).
+**76 (new):** a pin-move list is cut to what can move. A change to one faction's `ai.json` lists the classes that
+seat that faction plus the hash pins and the golden's header; the other classes are named as "cannot move: no
+seat of this faction" and are not run (D34 ran nineteen classes that seat only factions 0 and 1).
+
+
 ## Watch-outs (all tracks)
+- **New this session: a unit type may carry `attack.fromStealthBonus` and a `nearbyOwn` passive.** No shipped
+  unit does. A test that forges them uses `Vision/HitBonusScenes` (rule 58). With either anywhere in the data,
+  `World.HitBonusInData` is true and every hit by a field type reads `HitFactor.Of` (one status scan; for a pack
+  type one grid query into `World.ShoveNeighbors`, so never call it inside movement's phases 8-9).
+  `PassiveLoaderTests` pins four triggers; `DataContentHashTests` pins `UnitPassive`'s nine properties.
+- **New this session: two building types are models.** A scene that reads a finished Garrison Keep's or
+  Barracks' box mesh, material or bar height sets `BuildingViews.UseModels = false` before binding or reads
+  `ModelOf` / `BarY` (`BuildingScaleViewTest` and `QaM7V4Test` are the models). Picking still uses the 3 m box
+  (BUG-1630). A building's model is found by its id under `game/assets/models/<faction>/<id>/`; the data has no
+  `model` field for buildings. `QaM6V26Test` passes with its known-bug rows printed; `--strict` makes them fail.
+- **New this session: the Teblor `standard` has the Carver and the Anointing at steps 19 / 20 (10:00).** In
+  `ai.json`, research and build steps ignore the reserve while train steps obey it, and a step behind a waiting
+  expand step spends only above the reserve (Request 55): **file order is behaviour**, and it changes with the
+  sim's next task.
+- **The data hash moved (A732F387C2BB7E4D, D34):** every save and recording fixture from before is refused. No
+  hash move is planned next session (the sim's AI follow-up moves pins, not the hash, unless it adds an `ai`
+  knob to `game/data/common/**`: then it is the session's one hash move and the data track ships no data).
+- **Session length:** 0926 ran about 21 hours. The sim developer's last full loop took 6 h 34 m beside the other
+  tracks; the view's and data's QA were done hours before the sim's. Perf was evidence this time (214 / 0 / 3
+  alone).
 - **New this session: a unit type may carry `stillStealth`.** No shipped unit does. A test that forges it uses
   `Vision/StillScenes` (rule 58). With the field anywhere in the data, every world allocates `UnitStore.Still`, the
   save gains a `STIL` part and a held unit's Stealthed entry shows `TicksRemaining` = timed part +
@@ -486,8 +247,8 @@ session where another track moves it.
   session; it is not a finding unless the second run fails.
 - **Pinned matches after D33** are listed under "Where things stand"; the older "Pinned matches on `main` after
   M6-S12" bullet below is right except for those rows.
-- **The default loop is green on `main`** and **the Stress category has no expected red row** (both `Bug0982_*`
-  are green since D33). `main` builds **0 errors / 0 warnings**.
+- **The default loop is green on `main`**; the Stress category has one expected red row (BUG-1621, see the top).
+  `main` builds **0 errors / 0 warnings**.
 - **New this session: the AI's rally point may differ from `hall + rallyDistance`.** A test that stages an AI seat
   and expects its army at the nominal point must keep one-cell lanes (between its own buildings too) more than
   `ai.rallyReach` away, or read `Board.Rally`. A rebalance now goes to the node nearest the worker's nearest finished
@@ -517,11 +278,9 @@ session where another track moves it.
 - **`gatherOverlap` 0.5 is in the shipped `rules.json`.** A test that means "the rule off" removes the field from a
   copy (`GatherOverlapScenes` writes or removes it itself; rule 58); "the base's data" in a fixture means the field
   taken out (`D32PreFixtureTests`). Any value above 0 turns the gather floor on.
-- **The data hash moved (318E8C4256456C05, D33):** every save and recording fixture from before is refused. The next
-  hash move is the data's D34 (only if a number moves): never two tracks in one session.
 - **Session length:** 0506 ran about 9.5 hours (the sim's QA full: default loop 1 h 42 m and Stress 2 h 3 m beside
   the other tracks). Keep the data task light next session and tell the view's QA to run timing rows alone.
-- **The view's scene loop is 117 scenes** (`FootModelTest`, QA's `QaM6V25Test` are new). `BenchTest` (7 s),
+- **The view's scene loop is 119 scenes** (`BuildingModelTest`, QA's `QaM6V26Test` are new). `BenchTest` (7 s),
   `MinimapTest` (0.5 ms), `DebugOverlayTest`, `QaM25Test`, `QaM27Test` and `QaH1Test` flake under load and pass alone.
 - **`ViewApi` source may not name `World` or `UnitStore`** (`TerrainMeshBuilderQaTests.ViewApiSource_HasNoSimMutatorsOrTickCalls`):
   `OrderPath` is built from the store's arrays, handed in by the view (`OrderPathView.NewReader`).
@@ -623,78 +382,77 @@ session where another track moves it.
 ## Sim track
 
 ### Where we are
-M8-2 on `main`. Counter **2 / 4.** Fixed in-session: BUG-1580 (S2). Closed by ruling: BUG-1581 (S4, wontfix). New
-debt: BUG-1582 (S3, `RampWallQaTests`' 10 s wall clock), BUG-1610 (S3, Vathar FFA seed 2 stands). Carried: BUG-1555,
-1554 / 1556 (ruled, the AI follow-up), BUG-1557 (S3), BUG-1558 (S4), BUG-1463, BUG-1536 (the owner's question),
-BUG-1537, BUG-1539, BUG-1490 (with the next save change), BUG-1434, 1433, 1161, 1149, 1152, 1150, 1010. The
-Producer's answers to M8-2's Questions 1-3 are in docs/01 (2026-11-18): all three "leave it".
+M8-3 on `main`. Counter **3 / 4.** New debt: BUG-1620 (S4, a full pack's factor rounds an exact half down; one
+row skipped with the id), BUG-1621 (S3, `FarExpandProbeQaStressTests (vathar_crossing, 2, Normal, 4)` red on `main`
+since D33, by ruling). Carried: BUG-1582, 1610, 1555, 1554 / 1556 (ruled, the AI follow-up), 1557 (S3), 1558 (S4),
+1463, 1536 (the owner's question), 1537, 1539, 1490 (with the next save change), 1434, 1433, 1161, 1149, 1152, 1150,
+1010. The Producer's answers to M8-3's Questions 1-3 are in docs/01 (2026-11-20 (1)): keep, count it, leave it.
 
 ### Next task candidates
-1. **M8-3: the first shot from stealth and the pack bonus** (Request 56 G2 + G3; M8 criteria 1 / 2; feature, QA
-   full; test data only; no AI change, so no pin moves). G2: `units.json` `attack.fromStealthBonus` 0.5, a hit whose
-   attack was started while the attacker was Stealthed deals x1.5 (decide and document "started": the swing's start
-   tick, held with the pending hit, so the reveal at landing does not cancel it). G3: a passive
-   `{ trigger: nearbyAllies, units, radius, damageBonus, maxStacks }`, counted when the attack lands, through the
-   spatial grid. If the design of either is not clear from shadow.md, do G2 alone. Write M8-2's answers into docs/03
-   (rule 67). Rule 73 in the brief. If a save part is needed it is conditional like `STIL` (format stays 10).
-2. **The AI follow-up (QA full, one pin move, rules 43 / 45 / 68 / 71; only in a session where the data track does
-   not measure openings):** BUG-1555 first; the saved count of blind re-scouts lost capped by `ai.scoutReplacements`
-   (BUG-1554 / 1556; the save format changes, so BUG-1490's one-trip flag rides with it and the brief names the view
-   scenes that pin save bytes: rule 50); **Request 55** (a waiting expand step stops holding the reserve against
-   later steps, or a step may name itself exempt: D33 and BUG-1612 are its evidence); one trace of BUG-1610 (seats 2
-   and 3 after 34,000); BUG-1558's three edges; `ScoutCapQaTests.KnownWorkerLosses`' label; the seed-2 twin row of
-   `HuntStressTests` dropped; `AiDeterminismTests`' comments.
-3. **Request 58** (dropped queued orders for the view; small).
-4. Hardening items when the counter reaches 4 / 4: BUG-1582 (replace the 10 s `Task.Delay` race with a generous
-   limit or `[Collection(SerialCollection.Name)]`), BUG-1557, BUG-1539.
-5. Requests 54, 53 part two, 56 G4-G8. A movement task for BUG-1463 only with a design first.
+1. **The AI follow-up (feature, QA full, one pin move; rules 43 / 45 / 68 / 71 / 74 / 76; the data track measures
+   no opening beside it):** (a) **BUG-1621 with BUG-1610 first (rule 57):** one bounded trace of the four-seat
+   Vathar Crossing seed 2 match (seat 2 silent 6,780 ticks; seats 2 and 3 after 34,000), cured or the row re-stated
+   as a known-bug row with its id; (b) **Request 55:** a waiting expand step stops holding the reserve against
+   later steps (or a step may name itself exempt), and research / build steps read the reserve as train steps do;
+   say which, in docs/02 "AI opponent", before building; (c) BUG-1555; (d) the saved count of blind re-scouts
+   capped by `ai.scoutReplacements` (BUG-1554 / 1556; the save format changes, so BUG-1490's one-trip flag rides
+   with it and the brief names the view scenes that pin save bytes: rule 50); (e) BUG-1558's three edges,
+   `ScoutCapQaTests.KnownWorkerLosses`' label, the seed-2 twin row of `HuntStressTests`, `AiDeterminismTests`'
+   comments. Write M8-3's answers into docs/03 (rule 67). If (a)-(b) fill the budget, (c)-(e) wait.
+2. **Request 58** (dropped queued orders for the view; small).
+3. **M8-4:** Request 56 G4 (the Hounds' 7-alive limit) and the next of G5-G8 (teleport, the Wraith row, ability
+   `requires`), on test data only.
+4. Hardening items when the counter reaches 4 / 4 (after one more feature session): BUG-1582, BUG-1557, BUG-1539,
+   BUG-1620 (round the pack's factor from an exact sum, or state the limit and drop the row).
+5. Requests 54, 53 part two. A movement task for BUG-1463 only with a design first.
 
 ---
 
 ## View track
 
 ### Where we are
-M6-V25 on `main`. Counter **3 / 4** (one more feature session, then the view's hardening). 117 scenes. New debt:
-BUG-1600 (S3, readability in player colours), BUG-1601 (S3, the Sapper's throw is not tied to the shot), BUG-1602
-(S4, figures against the faction pages' art notes). The Producer's answers to Questions 1-5 are in docs/01
-(2026-11-18): 1, 2, 5 accepted; 3 (the Priest's veil) and 4 (the Zealot's idle blade) are with the owner.
+M6-V26 on `main`. Counter **4 / 4: the hardening is next.** 119 scenes. New debt: BUG-1630 (S3, picking uses the
+3 m box: 80.7 % of the Keep's pixels select it at zoom 20), BUG-1631 (S4, the Keep's bar and towers above the
+screen at the closest zoom), BUG-1632 (S4, two gaps in `BuildingModelTest`). Carried: BUG-1600, 1601 (S3), 1602
+(S4). The Producer's answers to Questions 1-7 are in docs/01 (2026-11-20 (2)): all accepted; the owner judges the
+pictures.
 
 ### Next task candidates
-1. **M6-V26, the first building models (feature, QA standard; uncertain: about 800 lines, first part only):** the
-   import path for a static building from `quaternius-ultimate-fantasy-rts-2022-08` (one surface, team colour by the
-   same atlas mask, footprint and height from the data's `scale` / footprint, a construction-site look kept), and
-   two Malazan buildings (the Keep and the Barracks, or whichever two the pack fits best); pictures at the default
-   zoom beside the figures in two colours; the bench with 60 buildings beside 400 figures. Pointer files and
-   `--placeholder-art` keep today's boxes. No file under `sim/` or `game/data/`.
-2. **The view's hardening (after V26, counter 4 / 4):** BUG-1600 (a darker hood or trim for Bone, a non-crimson veil
-   and wrap or a rule that props never use a setup colour, the staff head clear of the bar), BUG-1601 (one throw per
-   shot: the attack clip seeked from the sim's attack progress as the cast clip is), BUG-1602 with BUG-1613's item
-   for the data track (the pages' art notes say what the figures are), the load-flaky 1 ms rows.
+1. **M6-VH9, the view's hardening (QA standard):** BUG-1630 first (`BuildingPicker.PickRay` reads each type's
+   drawn height: a read-only `ViewApi` change; a click on a tower selects the Keep, a unit in front of it still
+   wins), then BUG-1600 (a darker hood or trim for Bone, props never in a setup colour, the staff head clear of the
+   bar), BUG-1601 (one throw per shot), BUG-1631, BUG-1632, BUG-1602's view half, docs/04 "a building's front faces
+   +Z" and "the data `scale` applies to a model's height only" (answers 5 and 6), the load-flaky 1 ms rows.
+2. **M6-V27, more building models** (the other eight Malazan buildings from the same pack; after the owner's answer
+   on the first two, or by default in the same style). A slice of this kind is about 1,900 lines with its scene:
+   budget it as such.
 3. The view's half of Request 58 once the sim exposes it.
 4. The two cavalry, the Destrier Rider, the War-dog, the Catapult and the Ram once packs are on disk (owner).
-5. An owner item (".NET 10 installed", templates, music, the sound notes, "models: ...", "priest veil: ...").
+5. An owner item (".NET 10 installed", templates, music, the sound notes, "models: ...", "priest veil: ...",
+   "buildings ok" / "keep: ..." / "roof: ...").
 
 ---
 
 ## Data track
 
 ### Where we are
-D33 on `main`. Counter **2 / 4**. Fixed: BUG-1420, BUG-1553, BUG-1524. New: BUG-1612 (S3, Easy and Hard lose the
-Anointing and Shamans), BUG-1613 (S4, the Teblor page's "was" column and the tooltip's promise), BUG-1611 (S4, one
-Malazan side falls without Age II), BUG-1610 (S3, the sim's). Open before: BUG-1421 S4 (items 1, 2, 5), BUG-1510
-S4. The Producer's answers to D33's Questions are in docs/01 (2026-11-18): the re-stated rule (16), 14-pop holy war
-and the 195-character tooltip accepted; the reserve question is Request 55.
+D34 on `main`. Counter **3 / 4**. Fixed: BUG-1641 (S2, in-session), BUG-1640, BUG-1613, BUG-1510. **BUG-1612 half
+fixed** (the Anointing is back; the Shamans / Riders / War-dogs half waits for Request 55); BUG-1421 down to item
+1 (the same wait). Open: BUG-1611 (S4). The Producer's answers to D34's Questions are in docs/01 (2026-11-20 (3)):
+Q2's costs accepted, the owner may take D33's order back; renaming QA's test was fine.
 
 ### Next task candidates
-1. **D34 (QA standard; one hash move if a number moves; the sim's M8-3 does not touch the AI):** (0) the owner's
-   answers to D33's review table, if any. (1) **BUG-1612:** try order only in `teblor/ai.json` `standard` (the
-   Shaman's Circle and the Anointing ahead of the three new train steps; the Anointing's time earlier) and print
-   Easy / Normal / Hard in `D33TeblorRowQaStressTests`' shape; ship a variant only if Easy's Anointing is back to at
-   least 20 of 64 with Normal's and Hard's Breakers / Riders / War-dogs each still at 8 or more; otherwise the table
-   and "waits for Request 55". (2) BUG-1613: the page's "was" column against `main` (QA's row has the numbers), and
-   either measure "takes part in a wave" or soften the tooltip. (3) `KnownBeatenAlive` seed 19 with its `DR33QaTests`
-   pin, BUG-1510 item 1, BUG-1421 items 1, 2, 5. (4) BUG-1602's data half: the art notes on malazan.md and
-   whirlwind.md say what the figures show (docs only). Print the Hard v Normal tally, tune nothing for it. Pin
-   classes one a line (rule 71); the owner's review table in the report.
-2. The Shadow roster as Request 56's schemas reach `main` (G1 is there; G2-G8 are not); the "Orders full" text once
-   Request 58's key exists.
+1. **D35 (light; docs and content checks only; no byte under `game/data/`; no opening measured):** (0) the owner's
+   answers to D33's / D34's tables, if any (a tweak that moves the hash goes to a session where the sim does not
+   move AI pins, or is the session's one hash move with the pins handed over). (1) `docs/factions/shadow.md` lists
+   G2 and G3 as built with the rows of docs/03 "For the data track (M8-3)"; (2) the content tests'
+   description-number reading (D-H2) learns `attack.fromStealthBonus` and the `nearbyOwn` passive's fields, so
+   "+50%" and "+10%" in a description are checked when the roster lands; `PagePinReadinessTests` green. Files:
+   `docs/factions/shadow.md`, `Content/**`, `QA/Content/**` only (the sim's AI task re-prints cells on the other
+   three pages).
+2. **After Request 55 is on `main`:** one re-measure of the Teblor `standard` (BUG-1612's open half, BUG-1421 item
+   1; the bar names every figure on every difficulty: rule 75), the hour-long Teblor Stress report classes D34 did
+   not re-run, Q2 on seat-swapped rows, malazan.md's "Age II against the Whirlwind" paragraph.
+3. The data's hardening at 4 / 4.
+4. The Shadow roster as Request 56's schemas reach `main` (G1-G3 are there; G4-G8 are not); the "Orders full" text
+   once Request 58's key exists.

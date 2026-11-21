@@ -879,6 +879,9 @@ open S1 / S2. Retro below; open S3 / S4 listed there.)_
       **M6-V25, 2026-11-17-0816:** the Cadre Mage, the Sapper, the Priest and the Zealot are figures: 15 unit types are
       models, 6 are capsules (two cavalry, the Destrier Rider, the War-dog, the Catapult, the Ram: horses, dogs and machines
       wait on the owner's packs). 400 mixed figures 6.9 ms a frame. **Not ticked:** those six and every building.
+      **M6-V26, 2026-11-18-0926:** the first two building models (the Malazan Garrison Keep and Barracks, from the
+      Ultimate Fantasy RTS pack, the roof in the player colour) and the import path for buildings
+      (`tools/art/build_building.py`, the manifest's `buildings` list). **Not ticked:** the other 28 building types.
 - [ ] Real SFX and placeholder music; alerts with sound. (M6-V12, 2026-10-17-2344: **real SFX and the alerts are in**: 16 clips cut from
       the owner's Sonniss GDC 2026 bundle (`tools/audio/trim-wav.ps1` + `sfx-manifest.json`, LFS, docs/04 licensing rows) for 12 events
       (`SfxEvent`); world sounds only for what the local player sees on screen, at most 4 per 100 ms; attack alerts (`ViewApi/AttackAlerts`
@@ -1008,7 +1011,14 @@ open S1 / S2. Retro below; open S3 / S4 listed there.)_
       only**: `units.json` `stillStealth { status, delay }`, `StillStealthSystem` in phase 5 after the forest's pass, the
       save part `STIL` written only when the data has the field (format 10 unchanged); docs/03 "Implementation (M8-2)".
       **Still not ticked:** no shipped unit or faction carries either rule; the view's check waits on the roster.
-- [ ] Hounds (pack bonus, 7-alive limit), Aptorian Stalker, Shadow-step, Summon Wraiths.
+      **M8-3, 2026-11-18-0926: the Archer's first shot from stealth (+50 %) is built as a generic attack field**
+      (`units.json` `attack.fromStealthBonus`), on test data only; nothing stored, formats unchanged; docs/03
+      "Implementation (M8-3)". Not ticked for the same reason.
+- [ ] Hounds (pack bonus, 7-alive limit), Aptorian Stalker, Shadow-step, Summon Wraiths. (M8-3, 2026-11-18-0926:
+      **the pack bonus is built as a generic passive, on test data only**: trigger `nearbyOwn { units, radius,
+      damageBonus, maxStacks }`, counted through the spatial grid at each hit; docs/03 "Implementation (M8-3)". **Not
+      ticked:** the 7-alive limit, teleport, the Wraith row and ability `requires` (Request 56 G4-G8) are not built, and
+      no shipped unit carries the passive.)
 - [ ] Shadow AI with ambush behavior; models; balance pass (watch early-game stealth, see faction page).
 
 ## M9 — Tiste Andii
