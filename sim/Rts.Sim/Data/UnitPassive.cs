@@ -33,8 +33,12 @@ public readonly record struct UnitPassive
     public float Magnitude { get; init; }
     /// <summary>OnDeath and (M7-2) OnHit: how long the status lasts, in ticks (at least 1); 0 otherwise.</summary>
     public int DurationTicks { get; init; }
-    /// <summary>OnDeath: the units whose center is within this many meters of the dying unit take it (the edge counts); 0 otherwise.</summary>
+    /// <summary>OnDeath: the units whose center is within this many meters of the dying unit take it (the edge counts); (M8-3) NearbyOwn: the reach the count looks in (the edge counts); 0 otherwise.</summary>
     public float Radius { get; init; }
-    /// <summary>OnDeath: the unit type ids (own faction, file order) that take it; empty otherwise.</summary>
+    /// <summary>OnDeath: the unit type ids (own faction, file order) that take it; (M8-3) NearbyOwn: the types counted; empty otherwise.</summary>
     public ImmutableArray<int> Units { get; init; }
+    /// <summary>M8-3, NearbyOwn: the damage bonus per counted unit (0.1 = +10 % each; above 0, at most <see cref="DataLimits.MaxPassiveDamageBonus"/>); 0 otherwise.</summary>
+    public float DamageBonus { get; init; }
+    /// <summary>M8-3, NearbyOwn: the most units counted (1 to <see cref="DataLimits.MaxPassiveStacks"/>); 0 otherwise.</summary>
+    public int MaxStacks { get; init; }
 }

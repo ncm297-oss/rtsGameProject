@@ -3,7 +3,7 @@
 | Field | Value |
 | --- | --- |
 | Severity | S4 |
-| Status | open |
+| Status | fixed (D34, 2026-11-18-0926: item 1, both lines wrapped, QA checked; item 2 was by the brief, the AI weakness behind it is BUG-1465's, closed) |
 | Found | 2026-11-15-1536, task D-R39 |
 | System | faction pages, `Content/AiOpeningPairsReportTests` |
 | Fixed by | |

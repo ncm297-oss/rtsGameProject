@@ -3,7 +3,7 @@
 | Field | Value |
 | --- | --- |
 | Severity | S4 |
-| Status | open (items 1, 2, 5: D33; items 3-4 fixed by D-R39, session 2026-11-15-1536: the measured figures pinned or labelled as dated, the long lines wrapped, the fixture renamed `save_teblor_frenzy.b64`) |
+| Status | open, item 1 only (Producer, 2026-11-18-0926 ACCEPT: item 1, the expansion's reserve starving the Shaman step, waits for Request 55 with BUG-1612; item 2 fixed by D34's softened tooltip; item 5 wontfix, the reason is on teblor.md). Before: (items 1, 2, 5: D33; items 3-4 fixed by D-R39, session 2026-11-15-1536: the measured figures pinned or labelled as dated, the long lines wrapped, the fixture renamed `save_teblor_frenzy.b64`) |
 | Found | 2026-11-14-1246, task D32 (QA) |
 | System | data (`game/data/factions/teblor/ai.json` `standard`), docs (`docs/factions/teblor.md`), tests (`Content/Fixtures/pre_d32/`) |
 | Fixed by | |

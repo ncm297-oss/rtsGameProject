@@ -793,7 +793,7 @@ public static partial class DataLoader
             Hp = c.Int(u.Hp, p + ".hp", 1),
             Armor = c.Int(u.Armor, p + ".armor", 0),
             ArmorClass = c.Ref(table?.ArmorClassKeys, u.ArmorClass, p + ".armorClass", "armor class"),
-            Attack = BuildAttack(c, c.Obj(u.Attack, p + ".attack"), p + ".attack", table, projectiles),
+            Attack = BuildAttack(c, c.Obj(u.Attack, p + ".attack"), p + ".attack", table, projectiles, u.Id ?? ""),
             SpeedPerTick = (float)(c.Pos(u.Speed, p + ".speed") / SimConstants.TicksPerSecond),
             Sight = (float)c.Sight(u.Sight, p + ".sight", u.Id!),
             Radius = (float)radius,
@@ -879,8 +879,21 @@ public static partial class DataLoader
         return (int)value;
     }
 
-    private static AttackDef BuildAttack(Checker c, AttackJson? a, string p, DamageTable? table, ProjectileDef[]? projectiles)
+    /// <summary>
+    /// A unit's or (<paramref name="unit"/> null) a building's <c>attack</c>. M8-3: a unit's optional <c>fromStealthBonus</c>
+    /// (absent or JSON null: none) is above 0 and at most <see cref="DataLimits.MaxFromStealthBonus"/>, one error at its path
+    /// naming the unit otherwise; a building's is refused by <see cref="BuildBuildingAttack"/> and not read here.
+    /// </summary>
+    private static AttackDef BuildAttack(Checker c, AttackJson? a, string p, DamageTable? table, ProjectileDef[]? projectiles, string? unit)
     {
+        double fromStealth = 0;
+        if (unit != null && a?.FromStealthBonus is double fs)
+        {
+            string fp = p + ".fromStealthBonus";
+            if (!(fs > 0)) c.Error(fp, $"{unit}: fromStealthBonus {fs.ToString(CultureInfo.InvariantCulture)} must be above 0 (leave the field out for none)");
+            else if (fs > DataLimits.MaxFromStealthBonus) c.Error(fp, $"{unit}: fromStealthBonus {fs.ToString(CultureInfo.InvariantCulture)} is above the maximum {DataLimits.MaxFromStealthBonus}");
+            else fromStealth = fs;
+        }
         int classCount = table?.ArmorClassCount ?? 0;
         var bonus = new float[classCount];
         Array.Fill(bonus, 1f);
@@ -912,6 +925,7 @@ public static partial class DataLoader
             ProjectileTypeId = projectile,
             Targets = AttackTargetsOf(c, a?.Targets, p + ".targets"),
             BonusVs = ImmutableArray.Create(bonus),
+            FromStealthBonus = (float)fromStealth,
         };
     }
 
@@ -924,7 +938,7 @@ public static partial class DataLoader
     private static AttackDef BuildBuildingAttack(Checker c, AttackJson a, string p, string owner, DamageTable? table, ProjectileDef[]? projectiles)
     {
         int errorsBefore = c.Errors.Count;
-        AttackDef def = BuildAttack(c, a, p, table, projectiles);
+        AttackDef def = BuildAttack(c, a, p, table, projectiles, unit: null);
         if (a.Value != null && def.Value == 0 && c.Errors.Count == errorsBefore)
             c.Error(p + ".value", $"{owner}: a building's attack needs a value of at least 1");
         if (a.Range != null && def.Range == 0f && c.Errors.Count == errorsBefore)
@@ -935,6 +949,10 @@ public static partial class DataLoader
             c.Error(p + ".projectile", $"{owner}: projectile '{a.Projectile}' is a lob; a building's attack fires an aimed projectile");
         if (def.Targets == AttackTargets.Buildings)
             c.Error(p + ".targets", $"{owner}: a building's attack shoots units only (targets 'buildings' is not allowed)");
+        // M8-3: a building is never stealthed, so a first-shot bonus on its attack could never apply (checked last, so the
+        // value and range checks above still see only BuildAttack's own errors).
+        if (a.FromStealthBonus != null)
+            c.Error(p + ".fromStealthBonus", $"{owner}: a building's attack may not carry fromStealthBonus (a building is never stealthed)");
         return def;
     }
 

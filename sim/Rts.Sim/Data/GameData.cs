@@ -204,6 +204,13 @@ public sealed class GameData
                 h.Add(ps.DurationTicks);
                 h.Add(ps.Radius);
                 AddAll(ref h, ps.Units);
+                // M8-3: the pack's two fields only when set (a nearbyOwn passive), so the passives that ship hash as before.
+                if (ps.DamageBonus != 0f || ps.MaxStacks != 0)
+                {
+                    h.Add(3);
+                    h.Add(ps.DamageBonus);
+                    h.Add(ps.MaxStacks);
+                }
             }
             h.Add(u.BelowHpPassive);
             h.Add(u.DeathPassive);
@@ -226,6 +233,12 @@ public sealed class GameData
                 h.Add(2);
                 h.Add(u.StillStealthStatus);
                 h.Add(u.StillStealthDelayTicks);
+            }
+            // M8-3: the nearbyOwn index only when set (a marker of its own, then the index); the entry is hashed above.
+            if (u.NearbyPassive >= 0)
+            {
+                h.Add(3);
+                h.Add(u.NearbyPassive);
             }
         }
 
@@ -542,6 +555,12 @@ public sealed class GameData
         h.Add(a.ProjectileTypeId);
         h.Add((int)a.Targets);
         AddAll(ref h, a.BonusVs);
+        // M8-3: only when set (a marker, then the value), so an attack without it hashes as before.
+        if (a.FromStealthBonus != 0f)
+        {
+            h.Add(4);
+            h.Add(a.FromStealthBonus);
+        }
     }
 
     private static void AddAll(ref StateHasher h, ImmutableArray<int> items)
@@ -582,6 +601,18 @@ public sealed class GameData
     {
         foreach (UnitDef u in Units)
             if (u.HasStillStealth) return true;
+        return false;
+    }
+
+    /// <summary>
+    /// M8-3: whether any unit type's hits carry a damage factor of their own: an <c>attack.fromStealthBonus</c> or a
+    /// <c>nearbyOwn</c> passive. Without one, a hit's factor is the status factor alone after one flag test
+    /// (docs/03 "Implementation (M8-3)"). Nothing is stored either way.
+    /// </summary>
+    public bool AnyHitBonus()
+    {
+        foreach (UnitDef u in Units)
+            if (u.Attack.FromStealthBonus > 0f || u.NearbyPassive >= 0) return true;
         return false;
     }
 

@@ -295,6 +295,127 @@ public class DataValidationTests
         Assert.Contains(message, e.Message);
     }
 
+    /// <summary>
+    /// M8-3: <c>units.json</c> <c>attack.fromStealthBonus</c> (optional; JSON null is absent): above 0 and at most
+    /// <see cref="DataLimits.MaxFromStealthBonus"/>. One error each, at the unit's field, naming the unit.
+    /// </summary>
+    [Theory]
+    [InlineData("0", "must be above 0")]
+    [InlineData("-0.5", "must be above 0")]
+    [InlineData("4.5", "above the maximum 4")]
+    [InlineData("1e300", "above the maximum 4")]
+    public void BrokenFromStealthBonus_YieldsExactlyOneError(string value, string message)
+    {
+        using TestDataDir dir = TestDataDir.CopyOfShipped();
+        dir.SetUnitField("malazan", "malazan_crossbowman", "attack.fromStealthBonus", value);
+        DataError e = Assert.Single(DataLoader.LoadAll(dir.Path).Errors);
+        Assert.Equal(("factions/malazan/units.json", "units[2].attack.fromStealthBonus"), (e.File, e.Path));
+        Assert.Contains("malazan_crossbowman", e.Message);
+        Assert.Contains(message, e.Message);
+    }
+
+    /// <summary>M8-3: the field on a building's attack is one error, naming the building, whatever its value (a building is never stealthed).</summary>
+    [Theory]
+    [InlineData("0.5")]
+    [InlineData("0")]
+    [InlineData("9")]
+    public void FromStealthBonus_OnABuildingsAttack_YieldsExactlyOneError(string value)
+    {
+        using TestDataDir dir = TestDataDir.CopyOfShipped();
+        int index = -1;
+        string id = "";
+        dir.EditJson("factions/malazan/buildings.json", r =>
+        {
+            JsonArray list = r["buildings"]!.AsArray();
+            for (int i = 0; i < list.Count && index < 0; i++)
+                if (list[i]!["attack"] is JsonObject a)
+                {
+                    a["fromStealthBonus"] = JsonNode.Parse(value);
+                    index = i;
+                    id = (string)list[i]!["id"]!;
+                }
+        });
+        Assert.True(index >= 0, "no Malazan building has an attack");
+        DataError e = Assert.Single(DataLoader.LoadAll(dir.Path).Errors);
+        Assert.Equal(("factions/malazan/buildings.json", $"buildings[{index}].attack.fromStealthBonus"), (e.File, e.Path));
+        Assert.Contains(id, e.Message);
+        Assert.Contains("a building's attack may not carry fromStealthBonus", e.Message);
+    }
+
+    /// <summary>
+    /// M8-3: a <c>nearbyOwn</c> passive (<c>units</c> as <c>onDeath</c>'s, <c>radius</c>, <c>damageBonus</c>, <c>maxStacks</c>),
+    /// on the Crossbowman (which ships none). Each bad row is one error at its field; the loader's own refusals name the unit.
+    /// <paramref name="edit"/> is a JSON object merged over the good passive (a null value removes the field).
+    /// </summary>
+    [Theory]
+    [InlineData("{\"units\": null}", "passives[0].units", "missing required field", false)]
+    [InlineData("{\"units\": []}", "passives[0].units", "needs at least one unit type", true)]
+    [InlineData("{\"units\": [\"malazan_ghost\"]}", "passives[0].units[0]", "unknown unit 'malazan_ghost'", true)]
+    [InlineData("{\"units\": [\"whirlwind_raider\"]}", "passives[0].units[0]", "belongs to faction 'whirlwind'", true)]
+    [InlineData("{\"units\": [\"malazan_crossbowman\", \"malazan_crossbowman\"]}", "passives[0].units[1]", "listed twice", true)]
+    [InlineData("{\"radius\": null}", "passives[0].radius", "missing required field", true)]
+    [InlineData("{\"radius\": 0}", "passives[0].radius", "must be positive", true)]
+    [InlineData("{\"radius\": -8}", "passives[0].radius", "must be positive", true)]
+    [InlineData("{\"radius\": 64.5}", "passives[0].radius", "above the maximum 64 m", true)]
+    [InlineData("{\"damageBonus\": null}", "passives[0].damageBonus", "missing required field", true)]
+    [InlineData("{\"damageBonus\": 0}", "passives[0].damageBonus", "must be above 0", true)]
+    [InlineData("{\"damageBonus\": -0.1}", "passives[0].damageBonus", "must be above 0", true)]
+    [InlineData("{\"damageBonus\": 1.5}", "passives[0].damageBonus", "above the maximum 1", true)]
+    [InlineData("{\"maxStacks\": null}", "passives[0].maxStacks", "missing required field", true)]
+    [InlineData("{\"maxStacks\": 0}", "passives[0].maxStacks", "not a whole number 1-8", true)]
+    [InlineData("{\"maxStacks\": 9}", "passives[0].maxStacks", "not a whole number 1-8", true)]
+    [InlineData("{\"maxStacks\": 2.5}", "passives[0].maxStacks", "not a whole number 1-8", true)]
+    [InlineData("{\"status\": \"frenzied\"}", "passives[0].status", "trigger 'nearbyOwn' has no such field", false)]
+    [InlineData("{\"magnitude\": 0.5}", "passives[0].magnitude", "trigger 'nearbyOwn' has no such field", false)]
+    [InlineData("{\"duration\": 5}", "passives[0].duration", "trigger 'nearbyOwn' has no such field", false)]
+    [InlineData("{\"hpFraction\": 0.5}", "passives[0].hpFraction", "trigger 'nearbyOwn' has no such field", false)]
+    public void BrokenNearbyOwnPassive_YieldsExactlyOneError(string edit, string path, string message, bool namesTheUnit)
+    {
+        var passive = new JsonObject
+        {
+            ["trigger"] = "nearbyOwn", ["units"] = new JsonArray("malazan_crossbowman"), ["radius"] = 8, ["damageBonus"] = 0.1, ["maxStacks"] = 3,
+        };
+        foreach ((string key, JsonNode? value) in JsonNode.Parse(edit)!.AsObject())
+        {
+            if (value == null) passive.Remove(key);
+            else passive[key] = value.DeepClone();
+        }
+        using TestDataDir dir = TestDataDir.CopyOfShipped();
+        dir.SetUnitField("malazan", "malazan_crossbowman", "passives", new JsonArray(passive).ToJsonString());
+        DataError e = Assert.Single(DataLoader.LoadAll(dir.Path).Errors);
+        Assert.Equal(("factions/malazan/units.json", "units[2]." + path), (e.File, e.Path));
+        if (namesTheUnit) Assert.Contains("malazan_crossbowman", e.Message);
+        Assert.Contains(message, e.Message);
+    }
+
+    /// <summary>M8-3: <c>damageBonus</c> and <c>maxStacks</c> on each of the other three triggers, and a second <c>nearbyOwn</c>: one error each.</summary>
+    [Theory]
+    [InlineData("{\"trigger\": \"whenBelowHp\", \"hpFraction\": 0.5, \"status\": \"frenzied\", \"magnitude\": 0.5, \"damageBonus\": 0.1}", "passives[0].damageBonus")]
+    [InlineData("{\"trigger\": \"whenBelowHp\", \"hpFraction\": 0.5, \"status\": \"frenzied\", \"magnitude\": 0.5, \"maxStacks\": 3}", "passives[0].maxStacks")]
+    [InlineData("{\"trigger\": \"onDeath\", \"status\": \"frenzied\", \"magnitude\": 0.5, \"duration\": 5, \"radius\": 6, \"units\": [\"malazan_crossbowman\"], \"damageBonus\": 0.1}", "passives[0].damageBonus")]
+    [InlineData("{\"trigger\": \"onDeath\", \"status\": \"frenzied\", \"magnitude\": 0.5, \"duration\": 5, \"radius\": 6, \"units\": [\"malazan_crossbowman\"], \"maxStacks\": 3}", "passives[0].maxStacks")]
+    [InlineData("{\"trigger\": \"onHit\", \"status\": \"slowed\", \"magnitude\": 0.2, \"duration\": 2, \"damageBonus\": 0.1}", "passives[0].damageBonus")]
+    [InlineData("{\"trigger\": \"onHit\", \"status\": \"slowed\", \"magnitude\": 0.2, \"duration\": 2, \"maxStacks\": 3}", "passives[0].maxStacks")]
+    public void PackFields_OnAnotherTrigger_YieldExactlyOneError(string passive, string path)
+    {
+        using TestDataDir dir = TestDataDir.CopyOfShipped();
+        dir.SetUnitField("malazan", "malazan_crossbowman", "passives", $"[{passive}]");
+        DataError e = Assert.Single(DataLoader.LoadAll(dir.Path).Errors);
+        Assert.Equal(("factions/malazan/units.json", "units[2]." + path), (e.File, e.Path));
+        Assert.Contains("has no such field", e.Message);
+    }
+
+    [Fact]
+    public void ASecondNearbyOwnPassive_YieldsExactlyOneError()
+    {
+        const string pack = "{\"trigger\": \"nearbyOwn\", \"units\": [\"malazan_crossbowman\"], \"radius\": 8, \"damageBonus\": 0.1, \"maxStacks\": 3}";
+        using TestDataDir dir = TestDataDir.CopyOfShipped();
+        dir.SetUnitField("malazan", "malazan_crossbowman", "passives", $"[{pack}, {pack}]");
+        DataError e = Assert.Single(DataLoader.LoadAll(dir.Path).Errors);
+        Assert.Equal(("factions/malazan/units.json", "units[2].passives[1].trigger"), (e.File, e.Path));
+        Assert.Contains("malazan_crossbowman already has a 'nearbyOwn' passive (passives[0])", e.Message);
+    }
+
     [Fact]
     public void DuplicateUnitId_AcrossFactions_YieldsOneErrorAtSecondDefinition()
     {

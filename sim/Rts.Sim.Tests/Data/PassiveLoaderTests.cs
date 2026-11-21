@@ -62,8 +62,8 @@ public class PassiveLoaderTests
         foreach (UnitDef u in d.Units)
             if (u.Id != zealot.Id) Assert.True(u.Passives.IsEmpty && u.BelowHpPassive < 0 && u.DeathPassive < 0, $"{u.Key} has passives");
         Assert.True(d.Units.All(u => u.HitPassive < 0), "a shipped unit has an onHit passive"); // M7-2: none ships yet
-        Assert.Equal(3, DataLimits.MaxUnitPassives); // M7-2: one per trigger, now three
-        Assert.Equal(new[] { "whenBelowHp", "onDeath", "onHit" }, DataLimits.PassiveTriggerIds.ToArray());
+        Assert.Equal(4, DataLimits.MaxUnitPassives); // M7-2: one per trigger, now three; M8-3: four
+        Assert.Equal(new[] { "whenBelowHp", "onDeath", "onHit", "nearbyOwn" }, DataLimits.PassiveTriggerIds.ToArray());
     }
 
     [Fact]
@@ -84,7 +84,7 @@ public class PassiveLoaderTests
     {
         AssertErrorAt(LoadWith(p => Below(p)["trigger"] = "onStrike"), At(0, "trigger"), "unknown value 'onStrike'"); // M7-2: onHit is a trigger now
         AssertErrorAt(LoadWith(p => Below(p).Remove("trigger")), At(0, "trigger"), "missing");
-        AssertErrorAt(LoadWith(p => { p.Add(Below(p).DeepClone()); p.Add(Below(p).DeepClone()); }), $"units[{ZealotIndex}].passives", "above the maximum 3");
+        AssertErrorAt(LoadWith(p => { p.Add(Below(p).DeepClone()); p.Add(Below(p).DeepClone()); p.Add(Below(p).DeepClone()); }), $"units[{ZealotIndex}].passives", "above the maximum 4"); // M8-3: 4
         AssertErrorAt(LoadWith(p => p[1] = Below(p).DeepClone()), At(1, "trigger"), "at most one per trigger");
         AssertErrorAt(LoadWith(p => p[0] = null), At(0, ""), "missing");
     }
