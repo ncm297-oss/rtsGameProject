@@ -33,7 +33,274 @@ under load: tell the sim developer to run the default loop once after the last e
 
 ## Current session plan
 
-(Written at the next PLAN.)
+**Session 2026-11-24-1431 (session 1 / 8 of 2026-11-24, scheduled; written at the PLAN on base 9eb1646).** Three
+tracks, all GO: sim **M7-8** (feature, QA full, **no pin move**), view **M6-VH9** (hardening, QA standard), data
+**D35** (feature, QA light). Bug ids: sim 1660-1679, view 1680-1689, data 1690-1699.
+
+**What changed from the handoff's proposal, and why.** The sim's "AI follow-up" is cut to what changes no shipped
+match: Request 55 is built as two per-step switches that are off unless written (docs/01 2026-11-24 (1)), the
+four-seat Vathar stall is traced and its row re-stated, not cured (2), and Request 58's sim half rides along (3).
+Every cure that changes how the AI plays (BUG-1621 / 1610, 1555, 1554 / 1556 with 1490, 1558) waits for one later
+session with one pin move, after the sim's hardening. Reason: the last three sessions ran 21-26 hours, most of it
+pin re-measures; this one has none, and BUG-1612's cure becomes a data change in the Teblor's own file (no class on
+rule 71's list seats a Teblor).
+
+**No track moves the data hash, a save format or a replay format this session.** Nobody edits `game/data/**`.
+
+### Sim: M7-8, per-step reserve switches for AI build orders, the Vathar stall traced, dropped queued orders recorded (feature, QA full)
+
+Goal: give the data track the tool that cures the Teblor opening's unit mix (BUG-1612, BUG-1421 item 1) without
+touching any other faction's play: two optional switches on a build-order step. Find out why the four-seat Vathar
+Crossing seed 2 match stands still (BUG-1621 / BUG-1610) and make its Stress row a known-bug row. Record queued
+orders the sim drops at their turn so the view can tell the player (Request 58). No match on shipped data may
+change.
+
+Scope (in this order; cut C first if the budget is short and say so in the report's first lines):
+- A. **The trace (BUG-1621 / BUG-1610, rule 57).** One report row (Stress category, no bound) on vathar_crossing,
+  seed 2, Normal, 4 seats: every 2,000 ticks from 28,000 to 40,000, then at 60,000 and at the end, per live seat:
+  gold, wood, workers, army count and pop, halls and unit-producing buildings, known live gold nodes, the think's
+  reserved step, what the military manager is doing (wave gathering / out / hunt / defend), the tick of its last
+  command. Write the cause in plain words in docs/03 "Implementation (M7-8)": why seat 2 sends nothing from 30,781
+  to 37,561, why the match runs to 88,998, whether it is the gold-gone family (BUG-1068 / 1116 / 1536) or a
+  separate defect, and the cure you recommend with its size and which pin classes it would move. **Ship no cure.**
+  Then split the red row out of `FarExpandProbeQaStressTests` as a row skipped in the repo's form
+  (`Skip = "BUG-1621 / BUG-1610 (open): <cause in one line>"`); the theory's other rows keep running.
+- B. **Request 55: two step switches in `ai.json` `buildOrder`** (Producer decision, docs/01 2026-11-24 (1)):
+  - `"throughReserve": true`, valid on a `train` step only: the step spends through an earlier step's reserve (it
+    is paid from the whole bank, as `build` and `research` steps are today).
+  - `"noReserve": true`, valid on a `build`, `research` or `expand` step only: the step never becomes the think's
+    reserved step; the next reservable step in file order may. It is still sent the think it can be paid.
+  - Absent or `false` = today's behaviour, bit for bit. On the wrong action: one load error at
+    `openings[i].buildOrder[j].<field>` naming the opening and the step. `AiStep` gains the two properties;
+    `GameData.ContentHash` adds bytes only when one is `true` (M8-3's pattern), so the shipped hash does not move.
+  - The production manager and the Town Hall rebuild's reserve (`HallFirst`) are untouched.
+  - A report (Stress category, no bound; "measure and report"): on a forged copy of the shipped Teblor `standard`
+    made in your own test folder (rule 58), Pale Hills mirror, seeds 1-8 (16 seats), Easy and Normal, to 15:00,
+    three orders: shipped; A = `throughReserve` on the Destrier Rider, War-dog and Shaman train steps; B = A plus
+    `noReserve` on the expand step. Columns: seats with the Anointing / a Shaman / a Rider / a War-dog pack / a
+    Breaker / a second Longhouse / defeated. The table goes in docs/03 "For the data track (M7-8)" with the exact
+    JSON a step carries.
+- C. **Request 58, the sim half:** a per-tick list on `World` of queued orders dropped at their turn (unit handle,
+  owner, order kind and, for a Build that `ConstructionSystem.StartBuild` refuses, its `PlacementError`), emptied
+  at the start of every tick like `World.Deaths`, preallocated, not hashed, not saved. Say in docs/03 what happens
+  when it is full and whether a full queue's `UnitQueueFull` refusal at enqueue already reaches the view (if it does
+  not, give it an entry). The `ViewApi` accessor is the view's next task: do not edit `sim/Rts.Sim/ViewApi/**`.
+- D. docs/02 "AI opponent" (the reserve bullet gains the two switches), docs/03 "Implementation (M7-8)" with "For
+  the data track (M7-8)", "For the view track (Request 58)", M8-3's answers written in (docs/01 2026-11-20 (1),
+  rule 67) and "Questions for the Producer".
+- OUT of scope: any change to what an AI seat does on shipped data (no cure for BUG-1621 / 1610, 1555, 1554 / 1556,
+  1558, 1490); every pin class's values and the golden; all of `game/data/**`; `sim/Rts.Sim/ViewApi/**`; save and
+  replay formats; `docs/factions/**`; `sim/Rts.Sim.Tests/Content/**` and `QA/Content/**`; the stale comments in
+  `AiDeterminismTests` / `HuntStressTests` (they go with the pin-move session).
+
+Acceptance criteria:
+1. The trace row exists, prints the table above, and docs/03 states the cause, the family and the recommended cure.
+2. `FarExpandProbeQaStressTests` has no red row: the (vathar_crossing, 2, Normal, 4) row is skipped with the bug
+   ids; its other rows are unchanged.
+3. Loader: both fields load on their valid actions; `false` and absent give the same `AiStep` and the same content
+   hash; each wrong-action case is exactly one error at the path above (`DataValidationTests`).
+4. The shipped data hash is unchanged: the two golden-header pins (`FactionOrderTests.TheShippedContentHash_IsThe
+   GoldenHeaders`, `QA/PackQaTests.TheShippedDataHash_IsTheGoldenHeaders`) are green and unedited; no new test
+   states the hash as a literal (rule 73). `DataContentHashTests`' property count for `AiStep` may be updated, as
+   that test demands.
+5. `throughReserve`, staged seat (forged data): with an expand (or build) step holding the reserve and a later due
+   train step the bank can pay but the bank above the reserve cannot, the train command is not sent without the
+   switch and is sent the same think with it; in that same think army production outside the build order still
+   spends only above the reserve.
+6. `noReserve`, staged seat: a due step with the switch that cannot be paid never sets `ReserveStep`; with a second
+   unpaid reservable step behind it, that one is the reserved step; with none, the reserve is 0 / 0, the gold share
+   is unshifted and a later train step is paid from the whole bank; the switched step is sent the first think the
+   bank covers it.
+7. Off is identical: on shipped data, three AI matches (a four-seat FFA, a 2v2, Hard v Normal) x 30,000 ticks with
+   a state hash every 500 ticks are equal to base 9eb1646 (shown in the report), and a kept test proves that a copy
+   of the shipped data with both switches written `false` on every step that may carry them has the shipped
+   content hash and plays the same digests.
+8. `git diff 9eb1646...HEAD -- game/` is empty; no pin class, fixture or golden file is in the diff.
+9. Determinism with the switches on: a forged Teblor copy carrying both, 2 seeds x 18,000 ticks, twin runs equal at
+   every 500 ticks, and a save taken every 2,000 ticks loads and continues to the same hashes. Save format 10 and
+   replay format 9 unchanged; no new save part or store field.
+10. Measure and report: the three-order table of scope B, for Easy and Normal. No pass / fail on its numbers.
+11. Allocation: the existing AI think allocation rows are green and a think over a build order with switched steps
+    allocates nothing. No Perf threshold changes.
+12. Request 58: a Shift-queued Build that cannot be paid at its turn is in that tick's list exactly once with
+    `CannotAfford` and the list is empty the next tick; a blocked site gives its own error; a queued Build that
+    starts gives no entry; a match's state hashes are the same as base (criterion 7 covers it); 100 ticks of a
+    scene that drops an order every tick allocate nothing.
+13. docs/02 and docs/03 as scope D.
+14. `dotnet build RtsGame.sln --no-incremental` 0 errors / 0 warnings; the default loop
+    (`Category!=Perf&Category!=Stress&Category!=Soak`) 0 failed, 20 skipped, run once after the last edit (rule
+    62); smoke PASS.
+
+Design references: docs/02 "AI opponent" (the reserve bullet: "The build order comes before the army once the army
+is wave-sized"), docs/03 "Implementation (M5-4g)" and "(M7-6)"; `Ai/BuildOrderExecutor.Run` / `Reservable` /
+`Act`, `AiPlayer.SetReserve` / `CanAffordAboveReserve` / `WantedGoldShare`; STATE Requests 55 and 58; BUG-1621,
+BUG-1610, BUG-1612, BUG-1421; docs/01 2026-11-24.
+
+Tests required: loader and validation rows; staged-seat unit tests for each switch (on / off pairs); the explicit
+`false` twin; the determinism and save rows of criterion 9; the allocation rows; the Request 58 rows; the two
+report rows (Stress category). Every forged row tolerates shipped data already carrying it (rule 58).
+
+Constraints: no Godot in `Rts.Sim`; the AI reads the world only through its view; no allocation in a think or a
+tick; no stat or text in C#; nothing iterates a dictionary in play. Run the default loop once after the last edit
+and leave the Stress category to QA (run only your own report rows); record the PID of every `dotnet test` you
+start and end only those (rules 52 / 69); scratch folders are named `m78-...` (rule 63). You cannot write
+`studio/**`: bug-file updates come as a patch in the scratchpad.
+
+QA focus (full): the default loop with Stress once on the commit with QA's files, then Perf alone (rule 42); after
+a tests-only fix round no Stress re-run (rule 72). Attack: (1) "off is identical" independently: your own shipped
+AI matches against base, different maps and seeds from the developer's, plus the Stress pin classes green and
+unedited (`AiDeterminismTests`, `HuntStressTests`, `M6Sh2DeterminismStressTests`, `M6Sh2QaStressTests`,
+`M6S12DeterminismStressTests`, `StarvedSaveTwoProcessQaStressTests`, `ReservePairingsStressTests`,
+`MatchRowsM6S10Report`, `MatchCriterionSweepQaStressTests`, `FarExpandProbeQaStressTests`); (2) the switches' edges:
+both on neighbouring steps, a `throughReserve` train step before any reserved step, `noReserve` on every step of an
+opening, a reopened step (`ReopenLost`), a seat defending, `MayReserve` false, High starting resources
+(`SpendingDown`), a save taken mid-think-window; (3) can `noReserve` on an expand step starve the expansion for good
+(report the match, do not fix); (4) a 2,000-tick fuzz of AI seats on forged openings with random switches: no
+exception, twins equal; (5) the trace: re-run it and check the written cause against the numbers; (6) Request 58:
+the list at capacity, two drops by one unit in a tick, a dropped order of a unit that dies the same tick, the list
+unread for 1,000 ticks; (7) apply docs/03's "For the data track" rows to a scratch clone's Teblor file and run the
+task's classes and the default loop (rule 58).
+
+### View: M6-VH9, the view's hardening (hardening, QA standard)
+
+Goal: work the view's debt after the art slices: a click on what the player sees selects it (BUG-1630), the new
+figures read in every player colour (BUG-1600), the Sapper throws once per shot (BUG-1601), and the small gaps
+M6-V26 left.
+
+Scope (in this order; cut from the end if the budget is short and say so in the report's first lines):
+- 1. **BUG-1630 (and BUG-1381 item 2, the same box):** `BuildingPicker.PickRay` / `PickGhostRay` test each
+  building at its drawn height: a model type's fitted top, a box type's `DrawnHeight` (the data `scale`), a site's
+  rising box as drawn, a remembered building as it is drawn. Read-only `ViewApi` change. The `KNOWN BUG-1630` rows
+  of `QaM6V26Test` become plain checks.
+- 2. **BUG-1600:** the Priest's team parts show on the Bone player (a darker hood or trim, or a darker robe); no
+  non-team part of the Zealot or the Priest reads as the Crimson player colour; the hp bar clears the Cadre Mage's
+  staff head (the overlay lines read the figure's drawn top with its props). Item 4 (Mage against Heavy Infantry in
+  grey) is "measure and report". Through `tools/asset-manifest.json` and `tools/art/**` (yours), Blender 5.2 and
+  the main checkout's `asset-sources/`; no figure is hand-edited.
+- 3. **BUG-1601:** a ranged attack clip marked one-shot in the clip map plays once per shot, started so its release
+  meets the shot leaving; between shots the figure holds its ready pose. Generic (a clip-map mark, no unit id in C#).
+- 4. BUG-1631: with the camera centred on a Garrison Keep at the closest zoom its hp bar is on screen.
+- 5. BUG-1632: the allocation row draws remembered models; the sites picture has a Keep site.
+- 6. Docs: docs/04 "a building's front faces +Z" and "the data `scale` applies to a model's height only" (answers
+  5 and 6 of docs/01 2026-11-20 (2)); BUG-1602's view half (docs/04 says the built figures are the art pass's
+  first reading and where they differ from the faction pages' art notes).
+- 7. The load-flaky 1 ms / 0.5 ms rows (`DebugOverlayTest`, `QaM25Test`, `MinimapTest`): make each measure
+  something a busy machine cannot move (a count, or the best of several runs), and say in docs/03 what each guards
+  now. Do not simply raise a limit.
+- OUT of scope: new models (M6-V27); anything under `sim/` but `sim/Rts.Sim/ViewApi/BuildingPicker.cs` and its
+  tests; `game/data/**`; `docs/factions/**`; Request 58's view half (its sim half lands this session); the
+  cavalry, dog and machine models (the owner's packs).
+
+Acceptance criteria:
+1. `QaM6V26Test`: every sampled pixel of the Keep's and the Barracks' model at zoom 20, 40 and 60 selects that
+   building (100 %), without `--strict`; the click on a tower with an own Laborer hidden behind it selects the Keep.
+2. A unit standing between the camera and a building's model is still selected by a click on the unit (a scene
+   row for a model type and for a box type).
+3. Picking follows the drawn height for a box type with `scale` 1.25 (a Teblor building), for a site (its rising
+   box only) and for a remembered building; `TerrainMeshBuilderQaTests.ViewApiSource_HasNoSimMutatorsOrTickCalls`
+   green. Measure and report: the share of sampled non-model pixels inside each of the two model types' pick box
+   that select it at zoom 20 / 40 / 60 (the Barracks' box is wider than its model).
+4. BUG-1600: for the Priest in the Bone colour, the RGB distance (0-255 per channel, Euclidean) between the team
+   colour and each adjoining non-team tint is at least 60; for the Zealot and the Priest no non-team tint or prop
+   colour is within 60 of the Crimson player colour (Producer default: the Whirlwind's reds go to a darker
+   maroon or rust rather than away from red; the owner may revisit); both read from the manifest by a test, no
+   colour literal in C#. Measure and report the same distances for every model type against every setup colour (a table).
+5. The Cadre Mage's hp bar line is above its staff head's top at the default zoom and at 20 m (a scene row); the
+   report carries every model type's bar height before and after, and a type with no prop above its head is
+   unchanged.
+6. BUG-1601: over 5 shots of a Sapper (cooldown 3.0 s) the throw clip plays once per shot (pass / fail); melee
+   clips and the crossbow's clip behave as before (their existing rows green); the mark is data in the clip map.
+   Each shot appears within 0.15 of the clip's length of its release point, if the sim state the view may read
+   (a read-only `ViewApi` accessor is allowed) tells when the next shot is due; if it cannot, start the clip at
+   the shot, report the offset, and write the missing read as a Request for the sim track in the report.
+7. BUG-1631: the row "bar malazan_garrison_keep at zoom 20, focus on its centre" has the whole bar inside the
+   screen; the bars at zoom 40 and 60 and every other type's bar are where they were.
+8. BUG-1632: the allocation row prints at least one remembered model drawn and 0 bytes; `sites-40m.png` shows a
+   Keep site.
+9. Pictures, looked at before reporting, in the scratchpad for the Producer: the Priest in the eight setup colours
+   at 40 m and 20 m; the Zealot in Cobalt, Jade and Crimson; a hurt Cadre Mage at the default zoom and 20 m; a
+   Sapper mid-throw with its munition leaving; the Keep centred at zoom 20.
+10. Bench alone (rules 42 / 61), with the capsule figure from the same window: 400 figures + 60 building models,
+    1,000 figures; read the "while 90%+ alive" column. No figure worse than M6-V26's by more than noise, or say why.
+11. Art binaries: only the re-tinted figures' files change; a second run of `tools/import-assets.ps1` is
+    byte-identical; the report states the art pass's binaries in bytes (was 38,957,228).
+12. The 1 ms / 0.5 ms rows pass in a scene loop run beside another test process, and docs/03 says what each guards.
+13. docs/04 and docs/03 "Implementation (M6-VH9)" (with "Questions for the Producer") updated.
+14. `dotnet build RtsGame.sln --no-incremental` 0 / 0; the default loop 0 failed, 20 skipped, once after the last
+    edit; smoke PASS (a first failure on stale import state is re-run once); the scene loop all green.
+
+Design references: docs/04 (style guide: "team colors are the only strong accents"; "Building models, as built";
+"Humanoid base"), docs/03 "Implementation (M6-V26)", "(M6-V25)", "(M6-V20)" (the attack clip rule); docs/01
+2026-11-20 (2); BUG-1630, 1600, 1601, 1631, 1632, 1602, 1381.
+
+Tests required: `BuildingPicker` unit rows beside the existing ones; the scene rows named above; the manifest
+colour test; the bug files' repro rows turned into checks.
+
+Constraints: views hold no gameplay state; `ViewApi` stays read-only and never names `World` or `UnitStore`; no
+player-facing text and no colour or unit id literal in C#; `.glb` / `.png` only under Git LFS. A scene that reads a
+finished Keep's or Barracks' box sets `BuildingViews.UseModels = false` or reads `ModelOf` / `BarY`. Record the PID
+of every Godot and `dotnet test` you start and end only those; scratch folders are named `m6vh9-...`; run the bench
+last and alone.
+
+QA focus (standard): the default loop, the scene loop, timing rows alone. Attack: (1) picking: every model pixel at
+five zooms and two camera yaws, a Keep on a terrace edge, two buildings one behind the other (the front one wins),
+a unit in front of and behind a tower, a remembered Keep under fog, a site at 10 % and 90 %, a Teblor building at
+`scale` 1.25, `--placeholder-art`; (2) the colours: every model type in all eight setup colours at 40 m, looking
+for a figure whose team colour does not show or whose props read as another player's; (3) the throw: 20 shots at
+game speeds 0.5 / 1 / 2, a Sapper that loses its target mid-throw, a paused tree, a replay; (4) the Keep's bar at
+the screen's four edges; (5) the bench alone, both tables; (6) the re-made timing rows still fail when the thing
+they guard is broken (break it on a scratch copy).
+
+### Data: D35, the Shadow page after M8-3 and the description checks (feature, QA light)
+
+Goal: keep the Shadow page and its checks in step with what the sim has built, so the roster can land without a
+pin gap: the page says the first shot from stealth (G2) and the pack bonus (G3) are built and carries their rows,
+and the description checks can read their numbers. No game data changes.
+
+Scope:
+- 1. `docs/factions/shadow.md`: "Schema gaps (D-R38)" lists G2 and G3 as built (M8-3) with the rows of docs/03
+  "For the data track (M8-3)" (`attack.fromStealthBonus`, the `nearbyOwn` passive: the built names, not the
+  page's proposals); the mechanics table points at them; "Decisions" records the readings of docs/01 2026-11-18
+  (b) and 2026-11-20 (1) that a player-facing sentence depends on (the bonus is decided when the arrow lands; a
+  miss does not use it up; a pack counts other Hounds of the same player within the radius, at most three).
+- 2. The content tests' description-number reading (D-H2's) learns the two shapes: a description of a unit with
+  `attack.fromStealthBonus` 0.5 must say "+50%"; one with a `nearbyOwn` passive must carry its per-mate percent,
+  its cap (`maxStacks` x `damageBonus`: "+30%") and its radius. Proven on a copy of the shipped data made in a temp
+  folder with the fields added (look the row up, then add or edit: rule 58): the right sentence passes, a wrong
+  number fails with a message naming the unit and the field.
+- 3. The page pin reads the two rows from shadow.md both ways, so the roster's landing is checked against the page;
+  `PagePinReadinessTests` reports 0 problems.
+- 4. Report only (no file): which steps of the shipped Teblor `standard` you would mark once the sim's two step
+  switches are on `main` (`throughReserve` on a train step: it spends through an earlier step's savings;
+  `noReserve` on a build / research / expand step: it never makes the AI save for it), and the bar you would
+  measure them against, naming every figure on Easy, Normal and Hard (rule 75). That is the next data task.
+- Files: `docs/factions/shadow.md`, `sim/Rts.Sim.Tests/Content/**`, `sim/Rts.Sim.Tests/QA/Content/**` only.
+- OUT of scope: every byte under `game/data/`; any other C#; the other three faction pages; measuring an opening;
+  the Shadow roster itself (Request 56 G4-G8 are not built).
+
+Acceptance criteria:
+1. shadow.md's G2 and G3 rows and mechanics rows match docs/03 "For the data track (M8-3)" field for field; no
+   sentence on the page contradicts the readings above.
+2. The description reading passes on the right "+50%" / "+10%" / "+30%" / radius sentences and fails on each wrong
+   number, with the unit and field named (one test per case).
+3. `PagePinReadinessTests` 0 problems; every `Content/**` and `QA/Content/**` class green.
+4. `git diff 9eb1646...HEAD -- game/` is empty; the data hash is unchanged (the golden-header pins green, unedited).
+5. The report carries item 4's step list and bar, and says "no game data changed: no review table".
+6. `dotnet build RtsGame.sln --no-incremental` 0 / 0; the default loop 0 failed, 20 skipped; smoke PASS.
+
+Design references: `docs/factions/shadow.md` ("Unit notes", "Schema gaps (D-R38)", "Owner review (D-R38,
+proposed)", "Decisions (D-R38)"); docs/02 "Stealth and detection", "Unit passives"; docs/03 "Implementation
+(M8-3)" and "For the data track (M8-3)"; docs/01 2026-11-18 (b), 2026-11-20 (1).
+
+Tests required: the description-reading rows of criterion 2; the page-pin rows for G2 / G3; nothing in the Stress
+category.
+
+Constraints: no C# outside the two content test folders; player-facing text only in data (none changes here); no
+hash literal (rule 73). Scratch folders are named `d35-...`; record and end only your own test processes.
+
+QA focus (light): the task's filters and the default loop only (rule 53). Check the page's rows against
+`DataJson.cs` and docs/03 by reading; feed the description check three wrong sentences of your own (a wrong cap, a
+missing radius, "+50 %" with a space) and say what it does with each; confirm nothing under `game/` moved.
 
 ## Where things stand
 
