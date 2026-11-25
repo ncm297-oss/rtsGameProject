@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S3 |
-| Status | open |
+| Status | fixed (M6-VH9, verified by QA 2026-11-24-1431) |
 | Found | 2026-11-17-0816, task M6-V25 (QA) |
 | System | unit views: attack clip timing (`UnitViews.PlayClip`, M6-V20 rule) |
-| Fixed by | |
+| Fixed by | M6-VH9: clip-map `oneShot` mark (`tools/asset-manifest.json`, `build_unit.py` extras), `UnitViews.OneShotClipTime`; rows `ViewHardenVh9Test` (S), `QaM6V25Test` (C), `QaM6VH9Test` (S) |
 
 ## Repro
 1. `& $env:GODOT --headless --path game res://tests/QaM6V25Test.tscn`, row (C): a Sapper attacks an enemy Heavy Infantry
@@ -37,3 +37,6 @@ slot and the attack's start, not by the windup.
   accept looping attacks for now. Either way it is a separate task, not M6-V25's.
 - The release phase is measured as the frame where the right hand moves fastest on the Sapper's skeleton (120 samples): a
   proxy, good to about +-0.05.
+
+## QA verification (2026-11-24-1431, M6-VH9)
+`QaM6V25Test` (C) now: `5 clip loops, 5 shots ... the throw's phase when each shot first exists [0.28 0.28 0.28 0.28 0.28] ... 1.00 throws per shot`. QA's `QaM6VH9Test`: 20 shots at game speed 0.5, 1 and 2, 20 throws each, worst offset from the release 0.000 of the clip; paused mid-windup for 30 frames the clip holds (0.007 -> 0.007 s); the target removed mid-windup leaves the Sapper Idle on its idle clip within a frame.

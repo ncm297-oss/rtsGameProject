@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S4 |
-| Status | open |
+| Status | fixed on level 0 and 1 (M6-VH9); level 2 open as BUG-1680 |
 | Found | 2026-11-18-0926, task M6-V26 |
 | System | building views (`BuildingViews` bar over `BuildingModels.Top`), camera limits |
-| Fixed by | |
+| Fixed by | M6-VH9: `BuildingViews.BarCeiling` / `PlaceBar`; rows `ViewHardenVh9Test` (K), `QaM6V26Test` bar rows, `QaM6VH9Test` (T) |
 
 ## Repro
 1. `& $env:GODOT --headless --path game res://tests/QaM6V26Test.tscn`. The `KNOWN BUG-1631` row focuses the camera on the
@@ -33,3 +33,6 @@ shows the crenellations at the top edge). The player has to pan down to see a ce
   one constant).
 - Possible fixes: cap the fitted height (Question 3), or clamp the bar into view. Either way it is a taste call for the
   Producer and the owner.
+
+## QA verification (2026-11-24-1431, M6-VH9)
+The criterion's row: `(K) bar malazan_garrison_keep at zoom 20, focus on its centre (ground 4.00 m): 7.31 m (its look's 8.69), top-left 569 28, bottom-right 1028 45, on screen`; zoom 40 / 60 and the Barracks unchanged. QA's (T) row: on level 0 the bar is not lowered (8.69 m, on screen, visible); on level 1 lowered to 7.31 m (2 of 9 bar points behind the towers); on a level-2 terrace (seed 2) it is lowered to 3.31 m, inside the model and hidden: BUG-1680.

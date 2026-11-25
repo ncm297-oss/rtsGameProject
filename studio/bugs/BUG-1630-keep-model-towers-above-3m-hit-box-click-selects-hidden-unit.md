@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S3 |
-| Status | open |
+| Status | fixed (M6-VH9, verified by QA 2026-11-24-1431) |
 | Found | 2026-11-18-0926, task M6-V26 |
 | System | building picking (`BuildingPicker.PickRay` via `SelectionController`), building views (`BuildingModels`) |
-| Fixed by | |
+| Fixed by | M6-VH9: `BuildingPicker` per-type drawn heights, `SelectionController.HiddenByBuilding`; regression rows `QaM6V26Test` (KNOWN rows now checks), `ViewHardenVh9Test` P1-P3, `QaM6VH9Test` (Z), (F), (PH), `QA/ViewApi/PickDrawnHeightQaTests` |
 
 ## Repro
 1. `& $env:GODOT --headless --path game res://tests/QaM6V26Test.tscn` (add `-- --strict` to make the rows fail).
@@ -42,3 +42,6 @@ selected. A base's units collect around the Keep, so this will happen in play.
   `BuildingPicker.PickRay` / `PickGhostRay`. A tighter fix would be a per-type hit shape, but the box at the model's top is
   probably enough. When it is fixed, make the KNOWN rows in `QaM6V26Test` plain checks.
 - The Barracks (3.49 m tall, 3.9 m wide on a 6 m footprint) loses no pixel, because its hit box is wider than the model.
+
+## QA verification (2026-11-24-1431, M6-VH9)
+QaM6V26Test (scene loop): Keep 3,933 / 681 / 265 and Barracks 1,221 / 248 / 101 sampled model pixels all select their building at zoom 20 / 40 / 60; the hidden-Laborer click selects the Keep. QA's own `QaM6VH9Test` (Z): every 5th pixel of each model at zoom 20, 30, 40, 50, 60 selects it (Keep 5,605 / 1,981 / 966 / 577 / 390; Barracks 1,780 / 673 / 344 / 208 / 154); (F) a Barracks in front of a Keep: every pixel where its model is met first selects the Barracks, every Keep-only pixel the Keep; (PH) models off, the Keep's box is picked to 3 m and not 0.3 m over it. The full-footprint box at the model's top has a side effect on right clicks: BUG-1681.

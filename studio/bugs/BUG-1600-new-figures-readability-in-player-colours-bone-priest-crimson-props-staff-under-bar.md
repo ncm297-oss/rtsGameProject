@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S3 |
-| Status | open |
+| Status | fixed (items 1-3, M6-VH9, verified by QA 2026-11-24-1431); item 4 measured only (owner taste) |
 | Found | 2026-11-17-0816, task M6-V25 (QA) |
 | System | unit models (view, art pass): `tools/asset-manifest.json` tints / prop colours |
-| Fixed by | |
+| Fixed by | M6-VH9: `tools/asset-manifest.json` Priest and Zealot re-tint; `UnitViews.OverlayLineOf` with the props' top; rows `ViewHardenVh9Test` (C), (B) |
 
 ## Repro
 1. `dotnet build game/RtsGame.csproj`
@@ -42,3 +42,6 @@ colour.
   clashes with the Bone player), a less saturated wrap and veil, or a shorter staff.
 - Pre-existing cousins: the Whirlwind Camp Follower `#d8cba8` and Desert Archer `#ddd3b8` tints are also close to Bone, but
   there the team part is the whole jerkin, not a hood inside a white robe.
+
+## QA verification (2026-11-24-1431, M6-VH9)
+Independent distances from the manifest and `ui.json` (RGB 0-255, Euclidean): Priest outfit tint and robe `#a39577` 103.7 from Bone; veil `#5e1a20` 92.8 from Crimson; Zealot outfit tint `#6e3a26` 77.7 and head-wrap `#5a1c1e` 96.8 from Crimson: all over 60. Pictures (`crop-1-4-20m.png`, `crop-5-8-20m.png`): the Bone Priest's hood reads white on a sand robe; the Zealot's legs are brown. Mage bar: line 1.961 -> 2.309 m, the bar's lower edge 2.579 m over the staff head's 2.165 m at the default zoom and at 20 m (screen y 366 vs 377, 259 vs 285). Item 4 (Mage robe vs Heavy Infantry shield in grey) is measured in docs/03 and left for the owner.

@@ -49,3 +49,6 @@ Item 2: docs/03 "Implementation (M7-V4)" now says a building below scale 1 is st
 it selects it, and wins over a building behind). Item 3 was already true on `main`: "Remembered sites" says picking keeps
 the foundation's share but not the type's scale. Item 1 (the bar off screen above about scale 2.4) is unchanged: nothing
 ships above 1.25.
+
+## M6-VH9 (QA 2026-11-24-1431)
+Item 1 is reported fixed by the developer (the bar ceiling, BUG-1631). It is not: `QaM7V4Test` now prints `bars @20: HitPoints 0.5 at y 7.315 m, screen (493, 26), drawn top centre screen (576, -52)`: the forged 3.0 Keep's bar is lowered onto the screen, but 1.7 m under the 9 m box's top at the footprint's centre, so the box's front face hides it. Same cause as BUG-1680; item 1 stays open with it.
