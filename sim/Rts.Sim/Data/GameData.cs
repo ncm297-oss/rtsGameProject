@@ -520,6 +520,13 @@ public sealed class GameData
                 h.Add(s.Target);
                 h.Add(s.TargetKey ?? "");
                 h.Add(s.Count);
+                // M7-8 (Request 55): only when one is true (a marker, then both as bits), so a build order without them,
+                // or with them written false, hashes as before (the golden's header holds).
+                if (s.ThroughReserve || s.NoReserve)
+                {
+                    h.Add(5);
+                    h.Add((s.ThroughReserve ? 1 : 0) | (s.NoReserve ? 2 : 0));
+                }
             }
         h.Add(o.Compositions.IsDefault ? -1 : o.Compositions.Length);
         if (!o.Compositions.IsDefault)

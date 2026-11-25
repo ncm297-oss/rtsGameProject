@@ -5341,7 +5341,8 @@ on `shadow_archer` (with M8-2's `stillStealth`), and on `shadow_hound`:
 
 Each moves the data hash once; land them with the Shadow roster. The Archer's bonus applies from either stealth (forest or
 stand-still), so the faction's `forestStealth` block (M8-1) needs nothing more. Before writing "+50%" or "+10%" into a
-`description`, check the content tests' description-number reading (D-H2): it knows neither field yet.
+`description`, check the content tests' description-number reading (D-H2): since D35 (2026-11-24) it reads both
+(`Content/UnitHitBonusText`; BUG-1690: it also claims every other percentage in a unit description).
 
 **Questions for the Producer (M8-3).**
 
@@ -5352,6 +5353,207 @@ stand-still), so the faction's `forestStealth` block (M8-1) needs nothing more. 
    Wraith is not a Hound). Should a summoned unit be left out, as stealth leaves it out? Default: count it (no designed
    case either way).
 3. A unit trained in phase 3 joins the count from the next tick (Known limits (1)). Leave it? Default: leave it.
+
+**The Producer's answers (docs/01 "2026-11-20" (1), written in by M7-8 under rule 67; all three the developer's
+default).** (1) A melee blow from stealth splashes with the bonus it struck with: the splash's factor is read before the
+blow lands (kept; no shipped unit has a melee splash). (2) A summoned unit of a listed type counts in a pack: the count is
+by type only (kept; nothing designed is both summoned and a pack unit). (3) A unit trained this game step joins the pack
+count one step later: left as a documented limit (Known limits (1)). QA's two notes stay as built, each following a rule
+already in docs/02: a shot that misses does not reveal the shooter, so it keeps its first-shot bonus for the next shot; a
+long ability stealth gives the bonus again after each 3 s reveal ends. A full pack's bonus can round an exact half down by
+one point of damage (BUG-1620, S4): a clean-up item. No code changed for any of them.
+
+### Implementation (M7-8)
+
+Request 55 as two per-step switches on an `ai.json` build order (docs/01 2026-11-24 (1)), the trace of the four-seat Vathar
+Crossing match that stands still (BUG-1621 / BUG-1610, docs/01 2026-11-24 (2); traced, not cured), and Request 58's sim
+half (docs/01 2026-11-24 (3)). No shipped file, data hash, pin, golden, save format (10) or replay format (9) moved. Code:
+`AiStep.ThroughReserve` / `NoReserve`, `AiStepJson` (`DataJson.cs`), `DataLoader.BuildAiSteps`, `GameData.AddOpening`,
+`BuildOrderExecutor.Run`; `Orders/DroppedOrder.cs`, `World.DroppedOrders.cs`, `OrderSystem.Run` / `Apply` / `Execute`,
+`Simulation.Tick`. Tests: `Data/ReserveSwitchLoaderTests`, `DataValidationTests.AReserveSwitch_OnTheWrongAction_*`,
+`DataContentHashTests.EveryAiStructField_ChangesTheHash` (the `AiStep` count 6 → 8), `Ai/ReserveSwitchTests`,
+`Ai/ReserveSwitchOffTwinTests`, `Ai/ReserveSwitchDeterminismTests`, `DroppedOrderTests`; Stress reports
+`Stress/VatharStallTraceTests`, `Stress/ReserveSwitchReportTests`, `Stress/ShippedDigestReportTests`.
+
+- **Schema.** A `buildOrder` step's optional `throughReserve` (a `train` step's only) and `noReserve` (a `build`,
+  `research` or `expand` step's only), each `true` / `false`; left out or JSON `null` is off, and `false` loads the very
+  same `AiStep` as leaving it out. On another action the field, at any value (`false` too), is one error at
+  `openings[i].buildOrder[j].throughReserve` / `.noReserve` naming the opening and the step (`opening 'standard' step 3
+  (build malazan_barracks): throughReserve is for a train step only ...`); the step is then dropped, as for any step
+  error. A switch is not part of the "same step written twice" key. `GameData.ContentHash` adds a marker 5 and the two
+  switches as bits only when one is `true` (M8-3's pattern), so the shipped hash, the golden's header and every save are
+  unchanged, and a file with every switch written `false` hashes as the shipped data (`ReserveSwitchLoaderTests`).
+- **The rule** (`BuildOrderExecutor.Run`, M5-4g's two lines). `throughReserve`: the train step's `TryTrain` is not told
+  `aboveReserve`, so it is paid from the whole bank, as `build` and `research` steps already are, though an earlier step
+  holds the reserve. The reserve itself stands: production outside the build order (`ProductionManager`) and later train
+  steps without the switch still spend only above it, and the gather split still leans to what it lacks. `noReserve`: the
+  step is skipped when the think names its reserved step, so the next due step in file order that only its cost holds
+  back may be named instead (with none, the reserve is 0 / 0 and the gather share is `ai.goldShare`, unshifted); the step
+  is still worked every think like any other and sent the first think the bank (and a free builder or idle building)
+  covers it. A `train` step is never reserved anyway, and a `build` / `research` step was already paid from the whole
+  bank, so the two switches cover the two halves of BUG-1421 item 1 (a held expand blocks the unit steps behind it).
+  Untouched: the production manager, the Town Hall rebuild's reserve (`HallFirst`), the reserve gate (`MayReserve`), the
+  reopened steps (`ReopenLost`), the spend-down rule. Nothing new is stored: the switches are data, read each think.
+- **Off is identical.** Absent and `false` are the same `AiStep`, so every shipped opening plays as before. Proof:
+  `Ai/ReserveSwitchOffTwinTests` (kept: the shipped data with both switches written `false` on every step that may carry
+  one has the shipped hash and plays a three-faction four-seat FFA and a Hard v Normal match to the same state hash every
+  500 ticks); and in-session, `Stress/ShippedDigestReportTests` (a four-seat FFA with a Teblor seat, a 2v2 and Hard v Normal,
+  30,000 ticks, a hash every 500) printed the same 60 hashes per match on this tree and on the base 9eb1646.
+- **On.** `Ai/ReserveSwitchTests` (criteria 5 and 6, each beside its twin without the switch); determinism with the
+  switches on: `Ai/ReserveSwitchDeterminismTests` (order B below, the Normal Teblor mirror on Pale Hills, seeds 1 and 2 x
+  18,000 ticks: twins equal at every 500 ticks, a run saved and reloaded every 2,000 ticks equal too). A think over switched
+  steps allocates nothing (`ReserveSwitchTests.Serial.AThinkOverSwitchedSteps_AllocatesNothing`).
+
+**The four-seat Vathar Crossing stall (BUG-1621 / BUG-1610), traced.** `Stress/VatharStallTraceTests` plays
+`FarExpandProbeQaStressTests`' match (Vathar Crossing, seed 2, four Normal AI seats: 0 Malazan `standard`, 1 Whirlwind
+`raider_rush`, 2 Malazan `cadre_rush`, 3 Whirlwind `standard`; the same end, 88,998 and hash 06F14EE840630135) and prints
+the brief's table (excerpt; seats 0 and 1 are defeated at 33,951 and 24,932):
+
+| tick | seat | gold / wood | workers (gold / wood / other) | army (units, pop) | halls | producers | known live gold nodes (map) | reserved step | military | last command |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 28,000 | 2 | 56 / 75 | 2 (1 / 1 / 0) | 0, 0 | 2 | 3 | 8 (15) | none | defend | 27,861 |
+| 30,000 | 2 | 56 / 85 | 1 (0 / 0 / 1) | 0, 0 | 1 | 0 | 8 (15) | none | defend | 29,101 |
+| 32,000 | 2 | 66 / 85 | 1 (1 / 0 / 0) | 0, 0 | 1 | 0 | 8 (15) | none | defend | 30,781 |
+| 34,000 | 2 | 86 / 85 | 1 (1 / 0 / 0) | 0, 0 | 1 | 0 | 8 (15) | none | wave gathering | 30,781 |
+| 36,000 | 2 | 96 / 85 | 1 (1 / 0 / 0) | 0, 0 | 1 | 0 | 8 (15) | none | wave gathering | 30,781 |
+| 38,000 | 2 | 66 / 85 | 1 (1 / 0 / 0) | 0, 0 | 1 | 0 | 8 (14) | none | wave gathering | 37,841 |
+| 60,000 | 2 | 876 / 10 | 1 (1 / 0 / 0) | 0, 0 | 1 | 0 | 8 (13) | none | wave gathering | 58,021 |
+| 30,000 | 3 | 1,700 / 550 | 26 (16 / 10 / 0) | 58, 74 | 2 | 6 | 12 (15) | none | hunt (3 hunts) | 29,101 |
+| 60,000 | 3 | 4,650 / 4,868 | 26 (16 / 10 / 0) | 58, 74 | 2 | 6 | 12 (13) | none | hunt (5 hunts) | 59,981 |
+| 88,998 | 3 | 8,020 / 8,718 | 26 (16 / 10 / 0) | 58, 74 | 2 | 6 | 11 (11) | none | out (6 hunts) | 88,961 |
+
+- **Why seat 2 sends nothing from 30,781 to 37,561.** By 30,000 seat 2 (`cadre_rush`) has lost its army, every
+  unit-producing building and its start hall to the other seats; it keeps one Garrison Keep (an expansion at cell
+  (33, 89), far west of its razed start at (195, 62)), a depot by its old start, one worker and 56 / 85 in the bank. That
+  worker gathers gold (with one gatherer the 0.6 gold share rounds to all of it) and needs no new order, and nothing the
+  seat wants is payable or trainable: production has no producer; the build order's lost buildings (reopened by
+  `ReopenLost`) cost more than the bank; the reserve is never named (no army, so the M5-4g gate is shut); and **no rule
+  trains a second worker while one lives**: the opening's worker `train` steps are done for good (they count accepted
+  commands over the step's life) and the M6-SH2 retrain (`BuildOrderExecutor.Retrain`) fires only at zero workers. So the
+  seat is silent until seat 3's army kills that worker at 37,561 (seat 3's target (381, 131) m that think); at 37,581 the
+  retrain trains one Laborer at the Keep, which builds a depot by a mine near it and gathers gold alone for the rest of the
+  match: 876 gold and 10 wood at 60,000, still one worker, still nothing trained. Its gold is not gone: it knows 8 live
+  mines throughout (11-15 on the map), and seat 3 banks thousands.
+- **Why the match runs to 88,998.** From 33,951 only seats 2 and 3 stand; seat 3 has 58 units and hunts, seat 2 has no
+  unit that can fight and one building far from anything. Seat 3 hunts with no enemy building known; its sweep point
+  nearest seat 2's Keep (point 31, (77, 179) m, 7 m from the Keep's centre) is never visited until 88,441. Hunt 5 (38,061-
+  67,401) went first to the free starts (M5-H6's rule: from the second hunt on, the starts of defeated seats first: seat 0's
+  at (128, 128) m, seat 1's at (384, 384) m, then seat 2's own start), then nearest-first across the east half, the whole
+  border ring (44,841-58,741), and back west; at (102, 154) m the tie between (77, 128) and (77, 179) (both 36 m away)
+  went to (77, 128), nearer the hunt's origin, and at 66,921 the army saw the depot seat 2's new worker had built at
+  (40, 138) m. The hunt turned into a wave on it, razed it, and **hunt 6 began from scratch** (its visited marks cleared,
+  the free starts first again), walked the map's east and the ring once more and reached point 31 only at 88,441: the Keep
+  fell at 88,998. Two full laps of about 21,000-29,000 ticks each, for a Keep 40 m from the depot found at 66,921.
+- **The family.** Not the gold-gone family (BUG-1068 / 1116 / 1536: every seat out of gold, armies that cannot be
+  rebuilt). Here gold is plentiful for both seats; this is two separate defects (proposed as BUG-1660 and BUG-1661):
+  (a) **a seat cut down to one worker never rebuilds its economy** (no worker floor above the zero-worker retrain), so a
+  beaten seat neither recovers nor acts, which is what the silent-seat oracle sees; (b) **a hunt that finds and razes a
+  building forgets its sweep**, and the next hunt restarts at the free starts across the map, so a remnant 40 m from the
+  find waits for a whole new lap. (b) is what BUG-1610's length is; (a) makes the remnant a single hidden Keep, so only
+  (b) can end the match.
+- **The cure recommended** (not built: docs/01 2026-11-24 (2) gathers every cure that changes AI play into one later
+  session with one re-measure). For BUG-1610, (b): when a hunt turns into a wave on a found building and that wave ends
+  with the building razed, the next hunt keeps the last hunt's visited marks and resumes nearest-first from where the
+  building stood, the free starts first only for a hunt with no find in the last `ai.huntMemory`. Size: small, in
+  `MilitaryManager.BeginHunt` / `NextSweep` (about 20 lines; the marks and pass are already saved in `HUNT`, so no format
+  change if the "resume" flag is derived from the wave's last target, else one saved int and a format bump). For
+  BUG-1621, (a): the zero-worker retrain becomes a floor, a seat with fewer live + queued workers than a new `rules.json`
+  `ai.minWorkers` (say 4) trains one at a hall when the bank pays it, one a think. Size: small (about 15 lines in
+  `Retrain`, a hashed rules field, loader and tests). Measure each apart (rule 70). Pin classes they would move: (b) every
+  AI match with two or more hunts (`HuntStressTests`, `AiDeterminismTests.PaleHills_ToTheEndWithAHunt_*`,
+  `MatchCriterionTests`' and `MatchCriterionSweepQaStressTests`' end ticks, `FarExpandProbeQaStressTests`,
+  `HardVersusNormalTallyQaStressTests`, the M5-5 table); (a) every AI match where a seat falls under the floor, which is
+  most long and four-seat matches (the same classes plus `AiVersusAiTests`, `TeamAiSoakStressTests`,
+  `DefeatAiStressTests`, `MapSlice2StressTests` and the content report classes of rule 68 that run whole matches). The
+  golden replay has human seats only and moves for neither. This row should end once (b) lands; re-run it then with (a)
+  apart, and un-skip `FarExpandProbeQaStressTests.VatharCrossingSeed2_FourSeats_*`.
+- **The row.** `FarExpandProbeQaStressTests`' (vathar_crossing, 2, Normal, 4) row is split out of the theory as
+  `VatharCrossingSeed2_FourSeats_FarFogOracleAndExtraOracles`, skipped with `BUG-1621 / BUG-1610 (open)` and the cause in
+  one line; the theory's other ten rows are unchanged.
+
+**Request 58: dropped queued orders.** `World.DroppedOrders` (a `ReadOnlySpan<DroppedOrder>`, `Orders/DroppedOrder.cs`):
+the shift-queued orders the sim dropped in the last tick run, emptied at the start of every tick like `World.Deaths`,
+preallocated, not hashed, not saved. An entry is `(Unit, Owner, Kind, Placement, QueueFull)`:
+
+- **At its turn** (phase 7, `OrderSystem.Run`): the head of an Idle unit's queue is popped and cannot start: a Build that
+  `ConstructionSystem.StartBuild` refuses (its `PlacementError` in `Placement`: `CannotAfford`, `Blocked`, `UnitInTheWay`,
+  `Unexplored`, ...), a Move / AttackMove whose target resolves to no passable cell, a Gather with no node there, a Repair
+  with nothing to repair, a UseAbility the unit cannot use now (`AbilitySystem.CanUse`: on cooldown, say), an Attack on
+  a target gone or no longer valid. `Placement` is `None` for every kind but a refused Build. A popped order that starts
+  gives no entry.
+- **On arrival with the queue full** (phase 1, `OrderSystem.Apply`): a queued command for a unit whose queue already holds
+  `OrderConstants.QueueCapacity` (8) orders is refused `UnitQueueFull`. Before M7-8 that refusal reached only the test seam
+  (`Simulation.RefusedForTests`), never the view; it now gives an entry with `QueueFull` true and the command's kind.
+  Other refusals of a queued command on arrival (a unit gone, not a worker, an ability unavailable, off the map) stay
+  seam-only: they are refusals of the command itself, which the view can check before sending, not of a queued order.
+- **Order and capacity.** Phase 1's queue-full entries in command order, then phase 7's in slot order. The list holds
+  units + command capacity entries: a unit starts at most one queued order a tick and each command is applied once, so it
+  never fills; were it full, a further entry would not be recorded (as `AbilityEvents` does), and nothing else changes.
+  Memory: an entry is 24 bytes, so a 4,096-slot world with 64 command slots gains 99,864 bytes;
+  `QA/FieldBuildFairnessQaTests.Serial.TwoFactionBound1024` moves by exactly that, itemised in its history (measured
+  232,503,224 bytes on the base, 232,610,424 here).
+- **Not saved.** Unlike the event lists of `World.Save.cs`, the list is not written to a save (no new part; format 10): a
+  sim loaded at tick T shows no dropped orders for tick T, so a view that loads a save misses only the notices of that one
+  tick. Nothing reads the list inside the sim; a match's state hashes are unchanged (criterion 7's digests). 100 ticks that
+  each drop an order allocate nothing (`DroppedOrderTests.ATickThatDropsAnOrder_AllocatesNothing`).
+
+**For the data track (M7-8).** No shipped opening carries a switch. To cure the Teblor unit mix (BUG-1612, BUG-1421
+item 1) in the Teblor's own file, write the switch on the step itself in `factions/teblor/ai.json` `standard`:
+
+```json
+{ "at": { "time": 600 }, "do": "train", "id": "teblor_destrier_rider", "count": 1, "throughReserve": true },
+{ "at": { "time": 600 }, "do": "train", "id": "teblor_war_dog", "count": 1, "throughReserve": true },
+{ "at": { "time": 540 }, "do": "train", "id": "teblor_shaman", "count": 2, "throughReserve": true },
+{ "at": { "time": 480 }, "do": "expand", "noReserve": true }
+```
+
+(the first three are order A; all four are order B). Leave the field out rather than write `false`: `false` is legal and
+changes nothing, but every switch written `true` moves the data hash once, so land them in one change. A switch on the
+wrong action (`throughReserve` on a build step, `noReserve` on a train step) is a load error naming the step. The
+measurement (`Stress/ReserveSwitchReportTests`, the Teblor mirror on Pale Hills, seeds 1-8, 16 Teblor seats a row, to
+15:00; seats that researched the Anointing / fielded a Shaman / a Destrier Rider / a War-dog pack / a Breaker / finished
+a second Longhouse / were defeated; measured, not judged):
+
+| difficulty | order | data hash | Anointing | Shaman | Rider | War-dog pack | Breaker | 2nd Longhouse | defeated |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| Easy | shipped | A732F387C2BB7E4D | 16 (8 + 8) | 0 | 0 | 0 | 16 (8 + 8) | 0 | 0 |
+| Easy | A | A6FC6991064EFBC1 | 0 | 16 (8 + 8) | 16 (8 + 8) | 16 (8 + 8) | 8 (0 + 8) | 0 | 0 |
+| Easy | B | 6CE38B07E3525536 | 0 | 16 (8 + 8) | 16 (8 + 8) | 16 (8 + 8) | 8 (0 + 8) | 0 | 0 |
+| Normal | shipped | A732F387C2BB7E4D | 8 (8 + 0) | 0 | 16 (8 + 8) | 16 (8 + 8) | 0 | 16 (8 + 8) | 0 |
+| Normal | A | A6FC6991064EFBC1 | 8 (8 + 0) | 16 (8 + 8) | 8 (8 + 0) | 16 (8 + 8) | 0 | 16 (8 + 8) | 0 |
+| Normal | B | 6CE38B07E3525536 | 0 | 16 (8 + 8) | 8 (0 + 8) | 16 (8 + 8) | 8 (0 + 8) | 0 | 0 |
+
+Each cell is seats of 16, split (seat 0's of 8 + seat 1's of 8); the data hashes are the forged copies' (A and B each
+move the shipped hash). **Read with care:** on this mirror the eight seeds play alike (each start gets the same result on
+every seed: Pale Hills is a fixed map and the Teblor has one opening), so each row is really two seats, not sixteen. What
+it shows: A puts Shamans on the field on both difficulties (0 → 16) and gives Easy its Riders and War-dogs (0 → 16), but
+Easy loses the Anointing (16 → 0) and one start its Breaker; on Normal, A trades one start's Rider for Shamans and keeps
+the Anointing and the second Longhouse; B (the expand never saved for) costs Normal the second Longhouse and the Anointing
+and changes nothing on Easy over A. **QA's longer rows (BUG-1663): with `noReserve` on the expand step no seat expands at all,
+0 of 24 by 30:00 on three maps against 22 of 24 shipped, because the steps behind it and the army spend the bank as it
+comes in. Read `noReserve` on an expand step as "never expand"; do not ship it there without 30-minute rows (Producer
+ruling 2026-11-24, docs/01).** So A is the candidate, with Easy's Anointing to be won back (likely the three unit
+steps, now paid through the reserve, spend the bank the research waited for; not traced here). The data track should re-measure any order on its four-map, seat-swapped rows (QA's
+D33 loop, `QA/Content/D33TeblorRowQaStressTests`) before it ships: two seats are no verdict.
+
+**For the view track (Request 58).** The sim half is `World.DroppedOrders` above; the read-only `ViewApi` accessor is the
+view's next task (not written here). Read it between ticks, as `Deaths`: for an entry of an own unit play the Refused
+sound and show the `ui.json` `placement` text for `Placement` over the unit (a Build), or the "Orders full" line the
+request plans for `QueueFull`; other kinds have no text yet. A save loaded mid-match shows no entries for its tick.
+
+**Questions for the Producer (M7-8, rule 67), each with the developer's recommendation.**
+
+1. A switch written on the wrong action at `false` is an error too (the field does not belong there at any value), as
+   M8-3 did for a building's `fromStealthBonus`. Accept `false` silently instead? Recommendation: keep the error (a
+   `false` on the wrong step is a typo for the right one).
+2. Request 58 lists every kind of queued order dropped at its turn, not only Builds (Moves to nowhere, Gathers with the
+   node gone, Repairs with nothing to repair, casts on cooldown, Attacks on a dead target). The view may show only the
+   Build and queue-full entries. Recommendation: keep the general list (one rule, no kind filter in the sim).
+3. The list is not saved, so the tick a save is loaded at shows no notices (the other event lists are saved). Save it
+   (a format bump, view scenes re-checked under rule 50)? Recommendation: no; one tick of missing notices is invisible.
+4. BUG-1621 / BUG-1610's cures, (b) the hunt's resume and (a) the worker floor, go into the later AI-play session with one
+   re-measure (docs/01 2026-11-24 (2)). Recommendation: (b) first and alone, since it alone ends this match; (a) next,
+   measured apart, with its `ai.minWorkers` value the Producer's (the trace suggests 4).
 
 ## Data format
 
@@ -9445,7 +9647,8 @@ fields are refused: see "Implementation (M5-8a)". Shape as of M5-1:
   a unit of the faction, `research` a common tech or one of the faction's (another faction's id: "... belongs to faction
   ..."; an unknown one, or one of another kind: "unknown ..."); `expand` names no id. `count` 1-200
   (`DataLimits.MaxAiStepCount`), default 1; a `research` step takes none. Two steps with the same `at`, `do` and `id` are one
-  step written twice: an error at the second (merge the counts).
+  step written twice: an error at the second (merge the counts). (M7-8) Optional `throughReserve` (a `train` step's) and
+  `noReserve` (a `build`, `research` or `expand` step's), true / false, off when left out: see "Implementation (M7-8)".
 - `compositions`: one entry per age, `{age, units}`: `age` 1 (Age I) or 2 (Age II; one age per `DataLimits.AgeTechIds` entry
   after Age I); `units` a non-empty map of the faction's unit ids to weights above 0. A missing age, a second entry for an
   age and an age past the last are errors.

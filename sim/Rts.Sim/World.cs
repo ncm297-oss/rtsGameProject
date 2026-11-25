@@ -128,6 +128,8 @@ public sealed partial class World
         // Every unit and every building dies at most once a tick, and units and buildings share the list (BUG-0330).
         _deaths = new DeathEvent[config.UnitCapacity + config.BuildingCapacity];
         _defeatEvents = new DefeatEvent[config.PlayerCount]; // M5-4b: World.Defeat.cs
+        // M7-8 (Request 58, World.DroppedOrders.cs): one start a unit a tick in phase 7, each phase-1 command applied once.
+        _droppedOrders = new Orders.DroppedOrder[config.UnitCapacity + Math.Max(0, config.CommandCapacity)];
         _abilityEvents = new Abilities.AbilityEvent[2 * config.UnitCapacity]; // M4-4a: a cast starts and resolves once per unit per tick at most
         Projectiles = new ProjectileStore(config.ProjectileSlots);
         Zones = new Abilities.ZoneStore(config.ZoneCapacity, config.PlayerCount, config.Data); // M4-4b-2

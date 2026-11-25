@@ -578,7 +578,13 @@ own cues (select, order, refused, building placed or finished, unit or tech read
   the AI saves, a wave that dies away has to be rebuilt before it saves again, and a raided base spends on its army.
   A resource the AI knows no node of is not held back, and a step short of one is not reserved at all (built in M5-4g,
   BUG-0981, BUG-1021, BUG-1023, BUG-1025; the "at home or out on a wave" wording is BUG-1026, Producer 2026-10-19;
-  [03 Implementation (M5-4g)](03-technical-design.md#implementation-m5-4g)).
+  [03 Implementation (M5-4g)](03-technical-design.md#implementation-m5-4g)). Since M7-8 (Request 55, Producer decision
+  2026-11-24) a step of an opening's build order may carry one of two switches, both off unless written: a unit step
+  marked `throughReserve` spends through an earlier step's reserve (it is paid from the whole bank, as building and
+  research steps are), and a building, research or expansion step marked `noReserve` is never saved for (the AI saves
+  for the next step instead, if any) but is still bought the moment it can be paid. Army production outside the build
+  order and the Town Hall rebuild keep the rule above unchanged. No shipped opening carries either switch yet
+  ([03 Implementation (M7-8)](03-technical-design.md#implementation-m7-8)).
 - The AI looks near home before it trusts what it sees far away: its scout sweeps until every waypoint is visited or the AI
   knows an enemy building and a forest and a gold mine within `rules.json` `ai.gatherReach` (64 m) of its Town Hall, and its
   gatherers go only to a node within that reach of one of its own finished drop-offs until home has been looked at: the

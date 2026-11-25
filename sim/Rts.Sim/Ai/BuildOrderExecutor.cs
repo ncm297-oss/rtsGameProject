@@ -32,6 +32,9 @@ namespace Rts.Sim.Ai;
 /// done whose type the player now holds fewer of (sites included) than its done <c>build</c> steps of that type comes due
 /// again, the newest such step a type a think (<see cref="ReopenLost"/>); and with no Town Hall and a worker alive the hall
 /// comes first (<see cref="HallFirst"/>): no step is worked while it is sent, in flight or banked for.</item>
+/// <item>M7-8 (Request 55, docs/03 "Implementation (M7-8)"): a step's two switches. <c>throughReserve</c> (train steps):
+/// its Trains are paid from the whole bank, through an earlier step's reserve. <c>noReserve</c> (build / research /
+/// expand steps): it is never the think's reserved step; the next reservable step in file order may be. Both off: as before.</item>
 /// </list>
 /// </remarks>
 internal static class BuildOrderExecutor
@@ -89,10 +92,11 @@ internal static class BuildOrderExecutor
             // 1.6 ms). A site freed meanwhile is taken at most that many thinks late.
             if (ai.Now < board.StepNoSiteUntil[i]) continue;
             // M5-4g: the first step from here on that only its cost holds back is the think's reserved step; the train
-            // steps after it (and the production manager) spend only above its cost.
-            if (mayReserve && ai.ReserveStep < 0 && step.Action != AiStepAction.Train && Reservable(ai, step, out int gold, out int wood)) ai.SetReserve(i, gold, wood);
+            // steps after it (and the production manager) spend only above its cost. M7-8 (Request 55): a noReserve step is
+            // never named (the next reservable one may be), and a throughReserve train step spends from the whole bank.
+            if (mayReserve && ai.ReserveStep < 0 && step.Action != AiStepAction.Train && !step.NoReserve && Reservable(ai, step, out int gold, out int wood)) ai.SetReserve(i, gold, wood);
             ai.NoSiteFound = false;
-            if (Act(ai, step, ref pending, ai.ReserveStep >= 0)) ai.ExecutorSent = true;
+            if (Act(ai, step, ref pending, ai.ReserveStep >= 0 && !step.ThroughReserve)) ai.ExecutorSent = true;
             else if (ai.NoSiteFound) board.StepNoSiteUntil[i] = ai.Now + NoSiteRetryThinks * ai.ThinkTicks;
         }
     }
