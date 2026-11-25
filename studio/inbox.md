@@ -9,6 +9,19 @@ Commit and push after editing, from either machine (or ask Claude to).
 
 ## New
 
+- 2026-11-25 · **Decision (owner): "gold gone" = a draw rule.** Answer to the open question under STATE.md "Waiting on
+  you" (M6-SH2 / BUG-1536: what a match does when the map's gold is mined out and no seat can pay for a soldier). Owner:
+  "I think that's ok. If no offensive units can be made maybe the AI can end the match in a draw." Take the draw rule
+  (the third option in BUG-1536's QA re-check: an armyless seat counting as starved, a wood-only unit, **a draw rule**);
+  do not build the other two. Notes for the Producer (the owner's call is the rule, the design is yours): a draw should be
+  a sim match-end rule checked on the tick, not something the AI decides, because the AI only sends commands and the
+  player needs the same ending; "no offensive units can be made" means no seat has an army that can fight and none can
+  afford or train one (no gold left on the map, none banked, no gold gatherers), judged once for the whole match, with the
+  wait (a few game minutes) in data under `game/data/`, deterministic, no wall clock. The result needs a "Draw" outcome
+  through the existing end-of-match path (events, view result screen, AI-vs-AI stress tests), with its text from data. It
+  should also make BUG-1536 and the Pale Hills seed rows (BUG-1523 and kin) end honestly instead of timing out. Replay
+  golden hashes may change if any match now ends earlier; say why.
+
 ## Processed
 
 - 2026-11-15 · **Bug (owner playtest, relayed by the watcher session): workers can deposit resources at a woodcutter's
