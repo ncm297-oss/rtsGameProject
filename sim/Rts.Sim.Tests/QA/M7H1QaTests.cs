@@ -206,7 +206,9 @@ public class M7H1QaTests
             if (status)
                 dir.EditJson("factions/malazan/abilities.json", root =>
                 {
-                    JsonObject e = root["abilities"]![0]!["effects"]![0]!.AsObject();
+                    // M7-H3: Tela's Fire's applyStatus effect, found by id and kind (was abilities[0].effects[0]).
+                    JsonObject e = root["abilities"]!.AsArray().Single(a => (string?)a!["id"] == "telas_fire")!["effects"]!.AsArray()
+                        .First(x => (string?)x!["kind"] == "applyStatus")!.AsObject();
                     e["status"] = "regenerating";
                     e["magnitude"] = rate;
                 });

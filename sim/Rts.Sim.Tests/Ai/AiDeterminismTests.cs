@@ -157,7 +157,9 @@ public class AiDeterminismTests
     /// ends at 45,358 after one hunt, QA's sweep) to keep a hunt in the two-process proof. M5-9b: the far expansion lengthens
     /// seed 5 past 72,000 (96,321), so the row plays seed 1 (48,858, one hunt; 50,140 since M5-H6, one hunt). M6-SH2 (BUG-1533:
     /// a site is no drop-off, which reshapes every AI match): seed 1 ends at 27,498 with no hunt, so the row plays seed 2
-    /// (42,016, seat 1, 4 hunts, the first at 34,761; the smallest Pale Hills seed that hunts on this tree).
+    /// (then 42,016, seat 1, 4 hunts, the first at 34,761; the smallest Pale Hills seed that hunts on that tree). Since M6-S12
+    /// (docs/03 "Implementation (M6-S12)", fix round 1): seed 2 ends at 51,218 with 2 hunts (was 42,016, 4), green in two
+    /// processes; re-read by M7-H3 (2026-11-25), unchanged.
     /// </summary>
     [Fact]
     [Trait("Category", "Stress")]
@@ -186,7 +188,7 @@ public class AiDeterminismTests
     /// <summary>
     /// The Pale Hills seed the hunt row plays: 3 until M5-9a, 5 in M5-9a, 1 since M5-9b (see the row: seed 5 now ends only at
     /// 96,321, past 72,000; seed 1 ends at 48,858 after one hunt), 2 since M6-SH2 (BUG-1533: seed 1 ends at 27,498 with no
-    /// hunt; seed 2 ends at 42,016 after 4 hunts). Was 1.
+    /// hunt; seed 2 then ended at 42,016 after 4 hunts). Was 1. Since M6-S12: seed 2 ends at 51,218 after 2 hunts.
     /// </summary>
     private const ulong HuntSeed = 2;
 

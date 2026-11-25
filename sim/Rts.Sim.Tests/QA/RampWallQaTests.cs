@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Reflection;
+using System.Runtime.CompilerServices;
 using Rts.Sim.Determinism;
 using Rts.Sim.Map;
 using Xunit.Abstractions;
@@ -99,9 +100,44 @@ public class RampWallQaTests
         }
     }
 
+    /// <summary>
+    /// M7-H3 (BUG-1582, docs/01 2026-11-25 (2): a hang guard, not a speed limit): how long one extreme row's generation may
+    /// run on its own thread before the row reads it as hung. 120 s: a default map generates in about 0.3 s alone (the 178
+    /// rows take 0.27 s together), so the limit is about 400 times that, room for a machine starved by three suites at once
+    /// (the old 10 s raced the thread pool, which such a run starved for up to 24 minutes); a real hang still fails the row
+    /// after 120 s instead of hanging the run.
+    /// </summary>
+    internal static readonly TimeSpan GenerationLimit = TimeSpan.FromSeconds(120);
+
     [Theory]
     [MemberData(nameof(ExtremeFieldValues))]
-    public async Task EveryField_AtExtremes_ValidateThrowsOrMapIsValid(string field, double value)
+    public void EveryField_AtExtremes_ValidateThrowsOrMapIsValid(string field, double value) =>
+        CheckExtreme(field, value, p => Gen(5, p), GenerationLimit);
+
+    /// <summary>
+    /// M7-H3 (BUG-1582): the row's seam: a generation that spins (never returns) fails its row once the limit passes, well
+    /// before the run would notice, with the row's own "generation hung" message. The spinning thread is let go afterwards.
+    /// </summary>
+    [Fact]
+    public void AGenerationThatSpins_FailsItsRow_InsideTheLimit()
+    {
+        var stop = new StrongBox<bool>(false);
+        TimeSpan limit = TimeSpan.FromMilliseconds(500);
+        var clock = Stopwatch.StartNew();
+        Exception? e = Record.Exception(() => CheckExtreme(nameof(MapGenParams.Width), MapGenParams.Default.Width, _ =>
+        {
+            while (!Volatile.Read(ref stop.Value)) { }
+            throw new InvalidOperationException("let go");
+        }, limit));
+        double took = clock.Elapsed.TotalSeconds;
+        Volatile.Write(ref stop.Value, true);
+        Assert.NotNull(e);
+        Assert.Contains("generation hung", e!.Message);
+        Assert.True(took >= limit.TotalSeconds - 0.05 && took < limit.TotalSeconds + 10, $"failed after {took:0.00} s against the limit {limit.TotalSeconds} s");
+    }
+
+    /// <summary>The body of <see cref="EveryField_AtExtremes_ValidateThrowsOrMapIsValid"/> with the generation and its limit given.</summary>
+    internal static void CheckExtreme(string field, double value, Func<MapGenParams, Heightmap> generate, TimeSpan limit)
     {
         MapGenParams p = MapGenParams.Default with { };
         PropertyInfo prop = typeof(MapGenParams).GetProperty(field)!;
@@ -114,13 +150,8 @@ public class RampWallQaTests
             return;
         }
         Heightmap? hm = null;
-        Exception? genEx = null;
-        var task = Task.Run(() =>
-        {
-            try { hm = Gen(5, p); }
-            catch (Exception e) { genEx = e; }
-        });
-        Assert.True(await Task.WhenAny(task, Task.Delay(TimeSpan.FromSeconds(10))) == task, $"{field}={value}: generation hung");
+        bool finished = HangGuard.Run(() => hm = generate(p), limit, out Exception? genEx);
+        Assert.True(finished, $"{field}={value}: generation hung (still running after {limit.TotalSeconds:0.#} s on its own thread)");
         Assert.True(genEx == null, $"{field}={value}: Validate accepted but Generate threw {genEx}");
         var nav = new NavGrid(hm!);
         var errors = StepViolations(hm!, nav);

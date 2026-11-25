@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S4 |
-| Status | open |
+| Status | open (only item 2's one-each row; item 3 re-checked by M7-H3) |
 | Found | 2026-11-14-2156, task M6-S9 (QA) |
 | System | sim: movement (`MovementSystem.GatherFloor`), tests (`Movement/GatherOverlapTests`, `Movement/GatherOverlapFuzzTests`), docs/03 "Implementation (M6-S9)" |
-| Fixed by | |
+| Fixed by |  |
 
 ## Repro
 1. **Not continuous at 0.** `dotnet test sim/Rts.Sim.Tests --filter "FullyQualifiedName~GatherOverlapQaStressTests.ATinyValue_Report" --logger "console;verbosity=detailed"`
@@ -50,3 +50,8 @@ None of these change the shipped game (the knob is off). Item 1 matters for the 
   and `KnownWedges` with their reasons.
 
 Status: open (only item 2's one-each row).
+
+## M7-H3 (2026-11-25)
+Item 3 re-read on the base: `GatherOverlapFuzzTests.KeepCenter` asserts "player 1's Keep was refused (no Keep), so the fuzz
+scene can't be built on this seed" (`Seed13_TheSceneCannotBeBuilt_AndTheHarnessSaysSo`), and `Seeds` and the class
+summary name the two left-out seeds (1: no node within a 30 m walk; 13: the Keep refused). Nothing more to change.

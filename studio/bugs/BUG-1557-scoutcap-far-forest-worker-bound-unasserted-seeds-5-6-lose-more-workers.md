@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S3 |
-| Status | open (Producer ruling 2026-11-16-2036: the re-stated row reaches `main` as a known-bug row; the next sim brief renames its label from BUG-1462 to BUG-1557; the cause, woodcutters sent to forests 147-154 m out beside the enemy, is an AI economy finding for the sim's hardening) |
+| Status | open (label renamed by M7-H3; the cause is the AI-play session's) |
 | Found | 2026-11-16-2036, task M6-12 (M6-S12), QA full |
 | System | AI economy on a far-forest start (rebalance / re-scout, BUG-1462's family); QA guard `QA/ScoutCapQaTests.OneScoutKilled_At0_200_2000_OnAFarForestStart_Seeds1To10` |
-| Fixed by | |
+| Fixed by |  |
 
 ## Repro
 1. On a scratch copy of the M6-S12 tree, put back the base's `ScoutCapQaTests.cs` (`git show 95186a7:sim/Rts.Sim.Tests/QA/ScoutCapQaTests.cs`)
@@ -39,3 +39,8 @@ still asserted and hold. (The developer's base figure for seed 6 at 200 is 18; t
   trace in the next AI task.
 - The re-read of "capped" (BUG-1550) is plausible (QA did not trace it further): the base read a released scout that later died as a gatherer as
   "the sweep ended on the first death" (seed 3's `pre-losses` row: capped at 4,259, long after the release).
+
+## M7-H3 (2026-11-25)
+`QA/ScoutCapQaTests.KnownWorkerLosses` and its comment now say BUG-1557 (no BUG-1462 left in the file). The rows still
+print the bound for seeds 5 and 6; the cause (woodcutters at the far forests beside the enemy) is left to the AI-play
+session.

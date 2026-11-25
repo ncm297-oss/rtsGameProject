@@ -210,9 +210,16 @@ public class MapFileTests
     /// As <see cref="RunChild(string, string, string)"/>, for row <paramref name="row"/> of <paramref name="testClass"/> (M6-S8:
     /// <c>AiDeterminismTests</c> uses it too); the child is killed after <paramref name="seconds"/> (M5-4d: a whole match needs longer).
     /// M5-5: <paramref name="value"/> is what the variable is set to (a theory's child names its row there: the filter selects
-    /// every row of the method).
+    /// every row of the method). M7-H3 (docs/01 2026-11-25 (2), a hang guard, not a speed limit): <paramref name="seconds"/> is the
+    /// child's <b>processor time</b> (its test host's included), not the wall clock, so a child slowed by a busy machine is not
+    /// killed; the wall ceiling is <see cref="ChildProcessLimit.WallCeilingFactor"/> times it, for a child that hangs without
+    /// spinning (<see cref="ChildProcessLimit"/>).
     /// </summary>
-    internal static string RunChild(Type testClass, string row, string variable, string marker, int seconds = 180, string value = "1")
+    internal static string RunChild(Type testClass, string row, string variable, string marker, int seconds = 180, string value = "1") =>
+        RunChild(testClass, row, variable, marker, TimeSpan.FromSeconds(seconds), TimeSpan.FromSeconds(seconds * ChildProcessLimit.WallCeilingFactor), value);
+
+    /// <summary>As <see cref="RunChild(Type, string, string, string, int, string)"/> with the two limits given (the helper's own tests use tiny ones).</summary>
+    internal static string RunChild(Type testClass, string row, string variable, string marker, TimeSpan processorLimit, TimeSpan wallCeiling, string value = "1")
     {
         string dll = typeof(MapFileTests).Assembly.Location;
         var info = new ProcessStartInfo("dotnet") { RedirectStandardOutput = true, RedirectStandardError = true, UseShellExecute = false };
@@ -222,11 +229,11 @@ public class MapFileTests
         using Process p = Process.Start(info)!;
         System.Threading.Tasks.Task<string> err = p.StandardError.ReadToEndAsync();
         System.Threading.Tasks.Task<string> output = p.StandardOutput.ReadToEndAsync();
-        if (!p.WaitForExit(seconds * 1000))
-        {
-            try { p.Kill(entireProcessTree: true); } catch (InvalidOperationException) { } // it exited meanwhile
-            Assert.Fail($"the child dotnet test did not exit within {seconds} s and was killed");
-        }
+        ChildProcessLimit.Outcome how = ChildProcessLimit.Wait(p, processorLimit, wallCeiling, out TimeSpan used);
+        if (how == ChildProcessLimit.Outcome.OverProcessorTime)
+            Assert.Fail($"the child dotnet test used more than {processorLimit.TotalSeconds:0.#} s of processor time ({used.TotalSeconds:0.#} s) and was ended");
+        if (how == ChildProcessLimit.Outcome.OverWallCeiling)
+            Assert.Fail($"the child dotnet test did not exit within the wall ceiling of {wallCeiling.TotalSeconds:0.#} s ({used.TotalSeconds:0.#} s of processor time) and was ended");
         p.WaitForExit();
         string text = output.Result;
         int at = text.IndexOf(marker, StringComparison.Ordinal);

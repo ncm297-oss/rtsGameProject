@@ -1191,6 +1191,64 @@ public class LocalMovementTests
         [InlineData(2500, false)]
         public void Perf_UnitsConvergingOnOnePoint_AvgAndWorstTick(int units, bool enforce)
         {
+            // M7-H3 (BUG-1539, docs/01 2026-11-25 (2)): the enforced row plays the same 400 ticks three times on fresh sims and
+            // bounds the least of the three worst ticks, so one OS or GC pause in one run does not decide it; a tick that is
+            // slow in every run still fails. The average is the first run's, bounded as before. Bounds unchanged: < 4 / < 8 ms.
+            int runs = enforce ? WorstOfRuns : 1;
+            var all = new List<double[]>();
+            for (int run = 0; run < runs; run++)
+            {
+                double[] times = ConvergingTicks(units, out int moving);
+                all.Add(times);
+                _out.WriteLine($"{units} units converging, run {run + 1} of {runs}: avg {times.Average():F2} ms, worst {times.Max():F2} ms, {moving} still moving after {times.Length} ticks");
+                _out.WriteLine("  fifteen worst ticks (ms): " + string.Join(", ", times.OrderByDescending(t => t).Take(15).Select(t => t.ToString("F2"))));
+            }
+            if (!enforce) return; // information only (brief M1-4d-1)
+            (double avg, double leastWorst) = Judge(all);
+            Assert.True(avg < 4.0, $"avg {avg:F2} ms (docs/03: < 4 ms)");
+            Assert.True(leastWorst < 8.0, $"the least worst tick of {runs} runs {leastWorst:F2} ms (< 8 ms)");
+        }
+
+        /// <summary>BUG-1539: how many runs the enforced convergence row takes the least worst tick of (the Producer's ruling).</summary>
+        internal const int WorstOfRuns = 3;
+
+        /// <summary>BUG-1539: what the convergence row bounds from its runs' tick times: the first run's average and the least of the runs' worst ticks.</summary>
+        internal static (double Avg, double LeastWorst) Judge(IReadOnlyList<double[]> runs)
+        {
+            double leastWorst = double.MaxValue;
+            foreach (double[] times in runs) leastWorst = Math.Min(leastWorst, times.Max());
+            return (runs[0].Average(), leastWorst);
+        }
+
+        /// <summary>
+        /// BUG-1539: the judge of the convergence row on made-up tick times (400 ticks of 2 ms): a tick padded to 20 ms in two
+        /// of the three runs passes the 8 ms bound (the clean run's 2 ms), in all three fails it (20 ms); a padded first run
+        /// moves the average the row bounds, the other runs' do not.
+        /// </summary>
+        [Theory]
+        [InlineData(0b011, 2.0)]
+        [InlineData(0b110, 2.0)]
+        [InlineData(0b101, 2.0)]
+        [InlineData(0b111, 20.0)]
+        [InlineData(0b000, 2.0)]
+        public void Bug1539_TheJudge_TakesTheLeastWorstTick_OfThreeRuns(int paddedRuns, double expectWorst)
+        {
+            var runs = new List<double[]>();
+            for (int r = 0; r < WorstOfRuns; r++)
+            {
+                double[] times = Enumerable.Repeat(2.0, 400).ToArray();
+                if ((paddedRuns >> r & 1) == 1) times[137] = 20.0;
+                runs.Add(times);
+            }
+            (double avg, double leastWorst) = Judge(runs);
+            Assert.Equal(expectWorst, leastWorst);
+            Assert.Equal(expectWorst < 8.0, leastWorst < 8.0);
+            Assert.Equal((paddedRuns & 1) == 1 ? 2.0 + 18.0 / 400 : 2.0, avg, 9);
+        }
+
+        /// <summary>One run of the convergence scene: each of its 400 ticks' wall time in ms, and how many units still move after.</summary>
+        internal static double[] ConvergingTicks(int units, out int moving)
+        {
             Simulation sim = Converging(units, out _);
             var times = new double[400];
             var sw = new Stopwatch();
@@ -1200,11 +1258,8 @@ public class LocalMovementTests
                 sim.Tick();
                 times[t] = sw.Elapsed.TotalMilliseconds;
             }
-            double avg = times.Average(), worst = times.Max();
-            _out.WriteLine($"{units} units converging: avg {avg:F2} ms, worst {worst:F2} ms, {CountMoving(sim.World.Units)} still moving after {times.Length} ticks");
-            if (!enforce) return; // information only (brief M1-4d-1)
-            Assert.True(avg < 4.0, $"avg {avg:F2} ms (docs/03: < 4 ms)");
-            Assert.True(worst < 8.0, $"worst {worst:F2} ms (< 8 ms)");
+            moving = CountMoving(sim.World.Units);
+            return times;
         }
 
         /// <summary>

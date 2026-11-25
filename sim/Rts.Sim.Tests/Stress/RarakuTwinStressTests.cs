@@ -58,26 +58,7 @@ public class RarakuTwinStressTests
         Assert.Equal(mine, child);
     }
 
-    private static string RunChild()
-    {
-        string dll = typeof(RarakuTwinStressTests).Assembly.Location;
-        var info = new ProcessStartInfo("dotnet") { RedirectStandardOutput = true, RedirectStandardError = true, UseShellExecute = false };
-        foreach (string a in new[] { "test", dll, "--filter", $"FullyQualifiedName={typeof(RarakuTwinStressTests).FullName}.{nameof(Raraku_NormalVersusNormal_12000Ticks_SameInTwoProcesses_AndAcrossASaveAt6000)}", "--logger", "console;verbosity=detailed" })
-            info.ArgumentList.Add(a);
-        info.Environment[ChildVariable] = "1";
-        using Process p = Process.Start(info)!;
-        System.Threading.Tasks.Task<string> err = p.StandardError.ReadToEndAsync();
-        System.Threading.Tasks.Task<string> output = p.StandardOutput.ReadToEndAsync();
-        if (!p.WaitForExit(600_000))
-        {
-            try { p.Kill(entireProcessTree: true); } catch (InvalidOperationException) { }
-            Assert.Fail("the child dotnet test did not exit within 600 s");
-        }
-        p.WaitForExit();
-        string text = output.Result;
-        int at = text.IndexOf(Marker, StringComparison.Ordinal);
-        Assert.True(at >= 0, $"the child printed no digest (exit {p.ExitCode}): {text} {err.Result}");
-        int from = at + Marker.Length, to = text.IndexOfAny(new[] { '\r', '\n' }, from);
-        return text[from..(to < 0 ? text.Length : to)].Trim();
-    }
+    /// <summary>M7-H3: the shared child runner, its 600 s now the child's processor time (a wall ceiling 3 times it), not the wall clock.</summary>
+    private static string RunChild() =>
+        MapFileTests.RunChild(typeof(RarakuTwinStressTests), nameof(Raraku_NormalVersusNormal_12000Ticks_SameInTwoProcesses_AndAcrossASaveAt6000), ChildVariable, Marker, seconds: 600);
 }

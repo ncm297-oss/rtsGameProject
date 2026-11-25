@@ -5400,7 +5400,12 @@ Readings: docs/01 "2026-11-18 (b)" (a)-(d), docs/02 "Stealth and detection" and 
   1 m since phase 1 would be missed (none has been seen; the fuzz's oracle walks every slot and agrees every tick).
   (3) The factors are float products (`0.1` is not exact in binary), so a raw damage that falls exactly on a half can
   round either way by the float's last bit; it is the same every run, and the test numbers do not land on one (10 / 11 /
-  12 / 13 on the Heavy Infantry's 10).
+  12 / 13 on the Heavy Infantry's 10). **A full pack (1.3) rounds an exact half down (45 x 1.3 = 58.5 deals 58)**: its
+  factor `1 + 3 x 0.1f` is 1.29999995, so every raw that is an exact half at x 1.3 lands just below it. This is against
+  docs/02 "Damage formula" (round half up, 59 by hand), and stays as built (BUG-1620, docs/01 2026-11-25 (1)): curing it
+  means changing how every hit rounds, which would move shipped matches; the designed Hound (16) never lands on a half.
+  `QA/HitBonusQaTests.AFullPack_45x1point3_DealsFiftyEight_TheDocumentedLimit` pins 58 and
+  `StackedFactors_DisagreeWithAHandCalculation_OnlyOnAFullPacksExactHalves` counts the cases (M7-H3).
 - **Tests.** `Data/HitBonusLoaderTests` (both fields load, `null` absent, the four triggers on one unit, the bounds, the
   hash rows), `DataValidationTests` (`BrokenFromStealthBonus_*`, `FromStealthBonus_OnABuildingsAttack_*`,
   `BrokenNearbyOwnPassive_*`, `PackFields_OnAnotherTrigger_*`, `ASecondNearbyOwnPassive_*`: one error each),
@@ -5623,12 +5628,22 @@ and changes nothing on Easy over A. **QA's longer rows (BUG-1663): with `noReser
 comes in. Read `noReserve` on an expand step as "never expand"; do not ship it there without 30-minute rows (Producer
 ruling 2026-11-24, docs/01).** So A is the candidate, with Easy's Anointing to be won back (likely the three unit
 steps, now paid through the reserve, spend the bank the research waited for; not traced here). The data track should re-measure any order on its four-map, seat-swapped rows (QA's
-D33 loop, `QA/Content/D33TeblorRowQaStressTests`) before it ships: two seats are no verdict.
+D33 loop, `QA/Content/D33TeblorRowQaStressTests`) before it ships: two seats are no verdict. **M7-H3 (rule 58):** the
+report's first order is now "none" (the Teblor file with every switch taken out; on today's data the same data as
+"shipped", which it prints as such instead of playing it again), so its baseline stays "no switch" once the data track
+ships switches; `Ai/TeblorSwitchOrders` sets A's and B's switches on top of whatever the file carries. The sim's switch
+classes were run on copies of the data whose Teblor `standard` already carries order A, `throughReserve` on the Shaman
+step only, and `throughReserve` on every train step: all green.
 
 **For the view track (Request 58).** The sim half is `World.DroppedOrders` above; the read-only `ViewApi` accessor is the
 view's next task (not written here). Read it between ticks, as `Deaths`: for an entry of an own unit play the Refused
 sound and show the `ui.json` `placement` text for `Placement` over the unit (a Build), or the "Orders full" line the
 request plans for `QueueFull`; other kinds have no text yet. A save loaded mid-match shows no entries for its tick.
+**The entry's unit may be dead when you read it** (BUG-1662, M7-H3): it was alive when its order was dropped (phase 1 or
+7), but it can die later in the same tick (phase 11), so `Unit` can be stale by the time the view reads the list, as
+`DeathEvent.Victim` is; check that the handle is still alive with that generation (`Units.IsAlive`) before drawing a line
+over it or playing a sound for it, so no line lands on a slot another unit has since taken
+(`QA/DroppedOrderQaTests.ADroppedOrder_OfAUnitKilledInTheSameTick*` stages it).
 
 **Questions for the Producer (M7-8, rule 67), each with the developer's recommendation.**
 
@@ -5643,6 +5658,58 @@ request plans for `QueueFull`; other kinds have no text yet. A save loaded mid-m
 4. BUG-1621 / BUG-1610's cures, (b) the hunt's resume and (a) the worker floor, go into the later AI-play session with one
    re-measure (docs/01 2026-11-24 (2)). Recommendation: (b) first and alone, since it alone ends this match; (a) next,
    measured apart, with its `ai.minWorkers` value the Producer's (the trace suggests 4).
+
+**The Producer's answers (docs/01 2026-11-24, the ACCEPT row (1), written in by M7-H3 under rule 67; all four the
+developer's recommendation).** (1) A reserve switch written on the wrong kind of step is a load error even when written
+`false`: kept (a `false` on the wrong step is a typo for the right one). (2) The list of dropped queued orders carries
+every kind of order dropped at its turn, not only buildings: kept (one rule; the view chooses what to show). (3) The list
+is not saved: kept (a loaded match misses one tick of notices; no save format change). (4) The two cures of the
+standing-still four-seat match go into the later AI-play session: the hunt's resume first and alone (BUG-1661; it alone
+ends that match), the worker floor second and measured apart (BUG-1660; `ai.minWorkers`, starting value 4, to be
+measured). With them, (e): `noReserve` on an expand step means in practice "never expand" (BUG-1663): the rule stays as
+built and documented, and no opening ships the switch on an expand step without 30-minute rows.
+
+### Implementation (M7-H3)
+
+The sim's hardening (docs/01 2026-11-25, the PLAN row): tests, docs and comments only. Nothing under `sim/Rts.Sim` changed
+but `Orders/DroppedOrder.cs`'s doc comment; no game rule, state hash, pin, fixture, golden or data hash moved.
+
+- **Hang guards, not speed limits (docs/01 2026-11-25 (2)).** Three kinds of row failed only on a busy PC; each keeps its
+  guard against a real hang and loses its dependence on how busy the machine is. (1) `QA/RampWallQaTests.EveryField_AtExtremes_*`
+  (BUG-1582) runs the generation through `HangGuard.Run`, a thread of its own (never the thread pool, which a Stress run
+  starved for up to 24 minutes) joined with `GenerationLimit` = 120 s, about 400 times the 0.3 s a default map takes
+  alone; a generator that spins fails its row at the limit (`AGenerationThatSpins_FailsItsRow_InsideTheLimit`, on 0.5 s).
+  (2) **A two-process row's child limit counts the child's processor time** (`ChildProcessLimit`): on Windows the child
+  `dotnet test` is put in a job object as it starts, and the limit reads the job's user + kernel time, so its test host
+  (a grandchild) is counted and a child slowed by other suites is not ended; the wall ceiling is
+  `ChildProcessLimit.WallCeilingFactor` = 3 times the limit, for a child that hangs without spinning. It applies wherever
+  a child is ended on a clock: `MapFileTests.RunChild` (every caller keeps its `seconds`, now processor seconds:
+  `EndGameHardeningTests.PaleHillsSeed2_FourSeats_*` 1,200 s with a 3,600 s ceiling, about 191 s alone;
+  `AiDeterminismTests`, `HardKnobsMatchTests`, `MatchCriterionTests`, `RebuildTests`, `EndGameH6QaTests`,
+  `StillStealthMatchTests`, `QA/Content/TeblorAiMatchQaStressTests`, `MapSlice2StressTests`,
+  `RebuildLookMatchQaStressTests`, `StarvedSaveTwoProcessQaStressTests`), the three Stress classes that carried their own
+  copy (`OpeningReserveShareStressTests`, `RarakuTwinStressTests`, `WorkerCarryQaStressTests`: 600 s, now the shared
+  runner) and the two Perf children (`VisionGatePerfTests`, `SharedVisionPerfTests`: 120 s, ceiling 360 s).
+  `QA/CliQaTests`' CLI child waits 120 s without ending it (its output is read first): not a two-process row, left.
+  `ChildProcessLimitTests` shows it on tiny limits: a PowerShell grandchild that spins under `cmd` (which itself uses
+  almost nothing) is ended on 3 s of processor time and is gone afterwards; a child that sleeps is ended at a 3 s ceiling;
+  through `RunChild`, a child test row that spins fails the parent row on 10 s of processor time.
+  (3) `LocalMovementTests+Serial.Perf_UnitsConvergingOnOnePoint_AvgAndWorstTick` (500, BUG-1539) plays its 400 ticks
+  three times on fresh sims and bounds the least of the three worst ticks (`Serial.Judge`) against the unchanged 8 ms;
+  the average (< 4 ms) is the first run's, as before. `Bug1539_TheJudge_*` checks the judge on made-up times: a 20 ms
+  tick in two of three runs passes, in three of three fails. No threshold moved.
+- **BUG-1620 is a documented limit**, Known limits (3) of "Implementation (M8-3)"; the QA row that expected 59 now pins 58.
+- **Rows found by id, not by file position** (the Shadow roster will add rows): the Blood-oil Anointing, the Longhouse,
+  Burning, Tela's Fire, the Holy Camp and the gold mine in `FrenzyRulesLoaderTests`, `StatusDurationTechTests`,
+  `DataContentHashTests` and `QA/M7H1QaTests`; an edit that only has to change the hash moves the row away from its own
+  value instead of writing a literal a new first row might already hold. Shown on a copy of the data with a new first
+  tech and a new first ability in the Teblor and Malazan files.
+- **The reserve-switch classes and a shipped switch (rule 58).** `Ai/TeblorSwitchOrders` gains the order "none" (every
+  switch taken out); see "For the data track (M7-8)" for the copies the classes were run on.
+- **Labels and comments.** `QA/ScoutCapQaTests.KnownWorkerLosses` says BUG-1557; `AiDeterminismTests`' and
+  `HuntStressTests`' hunt rows carry M6-S12's figures (seed 2 ends at 51,218 with 2 hunts; saved at 46,381 and 48,541),
+  re-read on this tree; the "Implementation (M7-8)" questions carry the Producer's answers; "A JSON `null`" under
+  "Data format" writes down the `null` policy.
 
 ## Data format
 
@@ -5702,6 +5769,30 @@ Example unit definition (one entry of the `"units"` array in `units.json`):
 - Stats in data are the **final** faction values (the faction bonus is already applied where it's
   a flat stat change); dynamic bonuses (regen, stealth rules, gather multipliers) are faction
   modifiers in `faction.json`.
+
+**A JSON `null` (docs/01 2026-11-25 (3), written down by M7-H3; no loader change).** A field written `null` has one of two
+meanings, fixed per field by how the loader reads it. **Most optional fields read `null` as left out**: the optional
+blocks (`faction.json` `regen` and `forestStealth`, a unit's `stillStealth`, a status's `onEnd`, a building's `attack`),
+the optional numbers read as plain numbers (a unit's or a building's `scale` and `detector`, a unit's `spawnCount`, an
+attack's `fromStealthBonus`, `minRange` and `splash`, a status's `damageBonus`, a starting-resources preset's
+`aiSpendAbove`) and the build-order switches `throughReserve` / `noReserve` (as "Implementation (M7-8)" says). **Three
+optional numbers are read raw so that `null` is one load error at the field's path** ("null is not a number / a carry /
+a fraction: leave the field out ..."): `rules.json` `gatherOverlap` (M6-S9), a unit's `carry` (M7-7) and an opening's
+`attack.reserveArmyShare` (M7-6), each of them a number whose absence means "use the rules' value" and whose `null` was
+judged a likelier typo than a wish. To leave an optional
+field out, leave it out: do not write `null` (a forge that blanks a block with `null` keeps working). Pinned by
+`Data/DataNullPolicyTests`: `ANull_ReadsAsLeftOut` (a copy with the field `null` hashes as the copy with it removed, one
+row a field above) and `ANull_IsOneLoadError` (the three fields, one error each at its path).
+
+**Questions for the Producer (M7-H3, rule 67).**
+
+1. The ruling (docs/01 2026-11-25 (3)) reads "an optional number or switch (`reserveArmyShare`, `throughReserve`,
+   `noReserve`, ...) written `null` is a load error". The loader does that only for the three raw-read numbers above; the
+   two switches, like the other optional numbers, read `null` as left out (M7-8 documented and QA pinned it:
+   `QA/ReserveSwitchQaTests.ANullSwitch_OnTheWrongAction_ReadsAsAbsent`). With no loader change allowed, the paragraph
+   and the test rows state what the loader does. Recommendation: keep it so (making the switches strict is a loader
+   change, and a `null` switch can only mean "off"); if the Producer wants every optional number and switch strict, it is
+   a small loader task of its own with a re-check of the test forges that write `null`.
 
 ### What ships today (M1)
 

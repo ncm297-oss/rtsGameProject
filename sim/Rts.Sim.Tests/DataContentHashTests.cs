@@ -66,7 +66,7 @@ public class DataContentHashTests
             BloodOilScenes.RemoveWhere(list, n => (string?)n!["id"] == BloodOilScenes.Status);
             list.Add(row);
         });
-        dir.EditJson("factions/teblor/techs.json", r => BloodOilScenes.RemoveWhere(r["techs"]![0]!["effects"]!.AsArray(), BloodOilScenes.IsStatusDuration));
+        dir.EditJson("factions/teblor/techs.json", r => BloodOilScenes.RemoveWhere(BloodOilScenes.AnointingRow(r)["effects"]!.AsArray(), BloodOilScenes.IsStatusDuration)); // M7-H3: by id
         dir.EditJson("factions/teblor/buildings.json", r =>
         {
             foreach (JsonNode? b in r["buildings"]!.AsArray()) b!.AsObject().Remove("scale");
@@ -83,11 +83,11 @@ public class DataContentHashTests
                     new JsonObject { ["status"] = "slowed", ["magnitude"] = 0.2, ["duration"] = 4 });
                 break;
             case "statusDuration":
-                dir.EditJson("factions/teblor/techs.json", r => r["techs"]![0]!["effects"]!.AsArray().Add(
+                dir.EditJson("factions/teblor/techs.json", r => BloodOilScenes.AnointingRow(r)["effects"]!.AsArray().Add(
                     new JsonObject { ["stat"] = "statusDuration", ["amount"] = 4, ["statuses"] = new JsonArray(BloodOilScenes.Status) }));
                 break;
             default:
-                dir.EditJson("factions/teblor/buildings.json", r => r["buildings"]![0]!["scale"] = field == "scale" ? 1.25 : 1);
+                dir.EditJson("factions/teblor/buildings.json", r => ById(r["buildings"]!, "teblor_longhouse")["scale"] = field == "scale" ? 1.25 : 1);
                 break;
         }
         DataLoadResult load = DataLoader.LoadAll(dir.Path);
@@ -430,8 +430,13 @@ public class DataContentHashTests
         using TestDataDir dir = TestDataDir.CopyOfShipped();
         dir.EditJson(file, root =>
         {
-            if (file.StartsWith("common")) root["statuses"]![0]!["description"] = "Edited.";
-            else root["abilities"]![0]!["cooldown"] = 24;
+            // M7-H3: rows by id, each edited away from its own value (not to a literal a new first row might already hold).
+            if (file.StartsWith("common")) ById(root["statuses"]!, "burning")["description"] = "Edited.";
+            else
+            {
+                JsonObject telas = ById(root["abilities"]!, "telas_fire");
+                telas["cooldown"] = (double)telas["cooldown"]! + 1;
+            }
         });
         DataLoadResult load = DataLoader.LoadAll(dir.Path);
         Assert.True(load.Ok, string.Join("\n", load.Errors));
@@ -444,7 +449,11 @@ public class DataContentHashTests
         GameData d = TestSim.Data;
         Assert.NotEqual(d.ContentHash(), new GameData { DamageTable = d.DamageTable, Rules = d.Rules, Factions = d.Factions, Units = d.Units, Resources = d.Resources }.ContentHash());
         using TestDataDir dir = TestDataDir.CopyOfShipped();
-        dir.EditJson("factions/whirlwind/buildings.json", root => root["buildings"]![0]!["armor"] = 6);
+        dir.EditJson("factions/whirlwind/buildings.json", root =>
+        {
+            JsonObject camp = ById(root["buildings"]!, "whirlwind_holy_camp"); // M7-H3: by id, away from its own armor
+            camp["armor"] = (int)camp["armor"]! + 1;
+        });
         DataLoadResult load = DataLoader.LoadAll(dir.Path);
         Assert.True(load.Ok, string.Join("\n", load.Errors));
         Assert.NotEqual(d.ContentHash(), load.Data!.ContentHash());
@@ -470,7 +479,7 @@ public class DataContentHashTests
         using TestDataDir plain = TestDataDir.CopyOfShipped(), dir = TestDataDir.CopyOfShipped();
         Directory.Delete(plain.FullPath("maps"), recursive: true);
         Directory.Delete(dir.FullPath("maps"), recursive: true);
-        dir.EditJson("common/resources.json", root => root["resources"]![0]!["footprint"]!["width"] = 3);
+        dir.EditJson("common/resources.json", root => ById(root["resources"]!, "gold_mine")["footprint"]!["width"] = 3); // M7-H3: by id
         DataLoadResult baseline = DataLoader.LoadAll(plain.Path), load = DataLoader.LoadAll(dir.Path);
         Assert.True(baseline.Ok && load.Ok, string.Join("\n", load.Errors));
         Assert.NotEqual(baseline.Data!.ContentHash(), load.Data!.ContentHash());
@@ -1040,5 +1049,13 @@ public class DataContentHashTests
         BuildingDef armed = Clone(keep);
         typeof(BuildingDef).GetProperty(nameof(BuildingDef.Attack))!.SetValue(armed, attack);
         Assert.NotEqual(baseline, With(d, building: armed, buildingSlot: keep.Id).ContentHash());
+    }
+
+    /// <summary>M7-H3: the row with id <paramref name="id"/> of a data file's list (shipped rows are found by id, not position: the Shadow roster will add rows).</summary>
+    private static JsonObject ById(JsonNode list, string id)
+    {
+        foreach (JsonNode? n in list.AsArray())
+            if ((string?)n!["id"] == id) return n.AsObject();
+        throw new InvalidOperationException($"no row '{id}'");
     }
 }
