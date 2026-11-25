@@ -108,7 +108,7 @@ public class StatusDurationTechTests
     private static GameData With(Action<JsonObject> editEffect) => AiScenes.DataWith(dir =>
     {
         BloodOilScenes.Edit(dir);
-        dir.EditJson("factions/teblor/techs.json", r => editEffect(r["techs"]![0]!["effects"]![BloodOilScenes.EffectIndex]!.AsObject())); // BUG-1280: not a literal 2
+        dir.EditJson("factions/teblor/techs.json", r => editEffect(BloodOilScenes.AnointingRow(r)["effects"]![BloodOilScenes.EffectIndex]!.AsObject())); // BUG-1280: not a literal 2; M7-H3: the row by id
     });
 
     private static readonly Lazy<GameData> s_shortening = new(() => With(e => e["amount"] = -20));

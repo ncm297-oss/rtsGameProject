@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S4 |
-| Status | open |
+| Status | closed by ruling (docs/01 2026-11-25 (1): stays as built, a documented limit) |
 | Found | 2026-11-18-0926, task M8-3 |
 | System | combat (hit factors, `Combat/HitFactor.cs`, `Combat/DamageCalc.cs`) |
-| Fixed by | |
+| Fixed by | M7-H3 (documentation and the pin) |
 
 ## Repro
 1. `dotnet test sim/Rts.Sim.Tests --filter "FullyQualifiedName~HitBonusQaTests.AFullPack_45x1point3"` after removing its
@@ -39,3 +39,10 @@ Grouped here (by inspection, not reproduced): the pack query's slack (`radius + 
 positions) does not cover a unit pushed out of a newly placed footprint in phase 4 (`ConstructionSystem.SetDown` can move a
 unit several metres after the grid rebuild), so such a mate is not counted for that one tick's hits. Same limit as the
 splash query; docs/03 Known limits (2) says "none has been seen". One tick, rare, deterministic.
+
+## Resolution (M7-H3, 2026-11-25)
+The ruling keeps the rounding: docs/03 "Implementation (M8-3)" Known limits (3) now says a full pack (1.3) rounds an exact
+half down (45 x 1.3 = 58.5 deals 58), against docs/02's round half up, and why it stays. The skipped row became the
+active `QA/HitBonusQaTests.AFullPack_45x1point3_DealsFiftyEight_TheDocumentedLimit`, which pins 58 and names the limit in
+its message; `StackedFactors_DisagreeWithAHandCalculation_OnlyOnAFullPacksExactHalves` stays. No change under `Combat/`.
+The grouped note (the pack query's slack after a placement push) is unchanged: docs/03 Known limits (2).

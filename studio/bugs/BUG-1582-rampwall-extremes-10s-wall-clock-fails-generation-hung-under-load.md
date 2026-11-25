@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S3 |
-| Status | open |
+| Status | fixed (M7-H3) |
 | Found | 2026-11-17-0816, task M8-2 (QA re-check, fix round 1) |
 | System | tests (QA-owned): `sim/Rts.Sim.Tests/QA/RampWallQaTests.cs` |
-| Fixed by | |
+| Fixed by | M7-H3 |
 
 ## Repro
 1. Run the full loop on a busy machine: `dotnet test sim/Rts.Sim.Tests --filter "Category!=Perf"` (Stress included),
@@ -32,3 +32,12 @@ generation task can wait for a worker longer than the timer, so the row is red a
   (a) run the generation synchronously on the test thread and keep the hang guard as an iteration cap or a
   `[Trait("Category","Perf")]` twin; (b) start the stopwatch only once the task is running; or (c) put the row in Stress.
 - Related: BUG-0012 (the reason the row exists), BUG-0015 (map-gen worst case).
+
+## Fix (M7-H3, 2026-11-25; ruling docs/01 2026-11-25 (2): a hang guard, not a speed limit)
+`EveryField_AtExtremes_ValidateThrowsOrMapIsValid` runs the generation through `HangGuard.Run`: a thread of its own (a
+background thread, never the thread pool) joined with `RampWallQaTests.GenerationLimit` = 120 s (about 400 times the
+0.3 s a default map takes alone). A real hang still fails the row ("generation hung (still running after 120 s on its own
+thread)") instead of hanging the run: `AGenerationThatSpins_FailsItsRow_InsideTheLimit` (a generator that spins, limit
+0.5 s) and `HangGuardTests`. The 178 rows passed 3 of 3 runs beside a full default loop (see the M7-H3 report).
+
+Verified by M7-H3 QA (2026-11-25-0924): the extremes rows (191 with `HangGuardTests`) passed 3 of 3 beside a full default loop and two 30,000-tick digest runs; a generator forced to spin in the real row (scratch mutation, limit 3 s) fails each row "generation hung (still running after 3 s on its own thread)" and the run finishes.

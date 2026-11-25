@@ -10,7 +10,9 @@ namespace Rts.Sim.Orders;
 /// <paramref name="QueueFull"/>, at its arrival (phase 1: the unit's queue already held <see cref="OrderConstants.QueueCapacity"/>
 /// orders, the command's <see cref="CommandRefusal.UnitQueueFull"/>).
 /// </summary>
-/// <param name="Unit">The unit whose order it was (alive: an order is dropped only for a live unit).</param>
+/// <param name="Unit">The unit whose order it was, alive when the order was dropped; it may have died later in the same tick
+/// (phase 11's deaths come after phase 7's drops), so the handle can be stale by the time it is read, as
+/// <c>DeathEvent.Victim</c>'s is: check <c>Units.IsAlive</c> before showing anything over the unit (BUG-1662).</param>
 /// <param name="Owner">The unit's owner.</param>
 /// <param name="Kind">The order's kind.</param>
 /// <param name="Placement">For a Build that <c>ConstructionSystem.StartBuild</c> refused at its turn, why (the type's

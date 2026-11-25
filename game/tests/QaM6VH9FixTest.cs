@@ -59,9 +59,17 @@ public partial class QaM6VH9FixTest : Node
             DataLoadResult loaded = DataLoader.LoadAll(ProjectSettings.GlobalizePath("res://data"));
             if (!loaded.Ok) throw new InvalidOperationException("data failed to load");
             _data = loaded.Data!;
-            for (int seed = 1; seed <= 4; seed++) await OracleRows(seed);
-            await GhostRows();
-            await BarEdgeRows();
+            // QA M6-V27: `-- --seeds <first> <last>` runs only the (O) rows on those layout seeds (BUG-1682 on new seeds); default 1-4 and every row.
+            string[] user = OS.GetCmdlineUserArgs();
+            int at = Array.IndexOf(user, "--seeds");
+            bool onlyOracle = at >= 0 && at + 2 < user.Length;
+            int first = onlyOracle ? int.Parse(user[at + 1], CultureInfo.InvariantCulture) : 1, last = onlyOracle ? int.Parse(user[at + 2], CultureInfo.InvariantCulture) : 4;
+            for (int seed = first; seed <= last; seed++) await OracleRows(seed);
+            if (!onlyOracle)
+            {
+                await GhostRows();
+                await BarEdgeRows();
+            }
         }
         catch (Exception ex)
         {
@@ -181,7 +189,7 @@ public partial class QaM6VH9FixTest : Node
         Rect2 screen = GetViewport().GetVisibleRect();
         UnitStore u = W.Units;
         int pixels = 0, ties = 0, enemyOk = 0, enemyBad = 0, ctxOk = 0, ctxBad = 0, leftOk = 0, leftBad = 0, leftSkipped = 0;
-        int byKind0 = 0, byUnit = 0, byBuilding = 0, byGhost = 0, byNode = 0, byAir = 0, enemyFrontOwnSelected = 0;
+        int byKind0 = 0, byUnit = 0, byBuilding = 0, byGhost = 0, byNode = 0, byAir = 0, enemyFrontOwnSelected = 0, enemyFrontOverOwn = 0;
         var examples = new List<string>();
         for (float py = 4f; py < screen.Size.Y - 4f; py += 10f)
             for (float px = 4f; px < screen.Size.X - 4f; px += 10f)
@@ -250,12 +258,15 @@ public partial class QaM6VH9FixTest : Node
                 // Node: drawn in front of every building (any owner), else the own building drawn first, else its air.
                 bool nodeWins = node.Kind == Kind.Node && node.T < bld.T;
                 int wantNode = nodeWins ? node.Slot : -1;
-                int wantSel = nodeWins ? -1 : own.Kind == Kind.Building ? own.Slot : ownAir;
-                if (!nodeWins && bld.Kind == Kind.Building && B.Owner[bld.Slot] == 1 && wantSel >= 0) enemyFrontOwnSelected++;
+                // M6-V27 (BUG-1682): an enemy building drawn first (before any own one) means the click is on it: nothing is selected.
+                bool enemyFront = !nodeWins && bld.Kind == Kind.Building && B.Owner[bld.Slot] == 1;
+                int wantSel = nodeWins || enemyFront ? -1 : own.Kind == Kind.Building ? own.Slot : ownAir;
+                if (enemyFront && (own.Kind == Kind.Building || ownAir >= 0)) enemyFrontOverOwn++;
                 _sel.ClearBuilding();
                 _sel.ClearResource();
                 _sel.Selection.Clear();
                 Click(p);
+                if (enemyFront && _sel.SelectedBuilding >= 0 && B.Owner[_sel.SelectedBuilding] == 0) enemyFrontOwnSelected++;
                 if (_sel.SelectedBuilding == wantSel && _sel.SelectedResource == wantNode) leftOk++;
                 else
                 {
@@ -263,7 +274,7 @@ public partial class QaM6VH9FixTest : Node
                     if (examples.Count < 18) examples.Add($"left click {p}: want building {wantSel} node {wantNode} (oracle {noUnit.Kind} {noUnit.Slot} at {noUnit.T:0.00}, own {own.Slot}, own air {ownAir}), got building {_sel.SelectedBuilding} node {_sel.SelectedResource}");
                 }
             }
-        string msg = $"{label}: {pixels} pixels ({ties} near-ties skipped; first drawn: unit {byUnit}, building {byBuilding}, ghost {byGhost}, tree {byNode}, air only {byAir}, ground {byKind0}); EnemyAt {enemyOk} right / {enemyBad} wrong; ContextTarget {ctxOk} / {ctxBad}; left click {leftOk} / {leftBad} ({leftSkipped} skipped near own units; {enemyFrontOwnSelected} select an own building behind a drawn enemy building)";
+        string msg = $"{label}: {pixels} pixels ({ties} near-ties skipped; first drawn: unit {byUnit}, building {byBuilding}, ghost {byGhost}, tree {byNode}, air only {byAir}, ground {byKind0}); EnemyAt {enemyOk} right / {enemyBad} wrong; ContextTarget {ctxOk} / {ctxBad}; left click {leftOk} / {leftBad} ({leftSkipped} skipped near own units; {enemyFrontOwnSelected} select an own building behind a drawn enemy building, of {enemyFrontOverOwn} with one there)";
         GD.Print($"  {msg}");
         foreach (string e in examples) GD.Print($"    {e}");
         Check(enemyBad == 0 && ctxBad == 0 && leftBad == 0, msg);

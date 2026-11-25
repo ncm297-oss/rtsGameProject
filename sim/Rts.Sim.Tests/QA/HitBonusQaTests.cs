@@ -505,11 +505,14 @@ public class HitBonusQaTests
     // ---------- rounding of stacked factors ----------
 
     /// <summary>
-    /// A hand calculation (docs/02 "Damage formula": round half up): a Heavy Infantry with attack 45 (test data) and a full
-    /// pack of three: 45 x 1.0 x 1.3 = 58.5 -> 59. The float factor 1 + 3 x 0.1f is 1.29999995, so the sim deals 58.
+    /// BUG-1620, a documented limit (docs/01 2026-11-25 (1): stays as built): a Heavy Infantry with attack 45 (test data) and
+    /// a full pack of three. docs/02 "Damage formula" rounds half up, so by hand 45 x 1.0 x 1.3 = 58.5 would deal 59; the
+    /// float factor 1 + 3 x 0.1f is 1.29999995, so the sim deals 58, as docs/03 "Implementation (M8-3)" Known limits (3)
+    /// states. This row pins 58: a change to how hits round (the exact arithmetic the ruling leaves for a pin-moving task)
+    /// turns it red on purpose, and that task re-pins it with the docs.
     /// </summary>
-    [Fact(Skip = "BUG-1620 (open, S4): float 1 + 3 x 0.1f = 1.29999995, so 45 x 1.3 = 58.5 rounds to 58, not the hand calculation's 59")]
-    public void AFullPack_45x1point3_RoundsHalfUpTo59_AsByHand()
+    [Fact]
+    public void AFullPack_45x1point3_DealsFiftyEight_TheDocumentedLimit()
     {
         Simulation sim = Scene(data: Value45);
         World w = sim.World;
@@ -517,7 +520,9 @@ public class HitBonusQaTests
         EntityHandle t = Dummy(sim, 1, At(sim, 20, 20, -1f));
         for (int k = 0; k < 3; k++) w.Units.Hold[Place(sim, 0, "malazan_heavy_infantry", At(sim, 20, 20, 2f + k)).Index] = true;
         sim.Enqueue(Command.Attack(0, a, t, false));
-        Assert.Equal(59, FirstHits(sim, t, 1)[0].Damage);
+        int dealt = FirstHits(sim, t, 1)[0].Damage;
+        Assert.True(dealt == 58, $"dealt {dealt}: docs/03 \"Implementation (M8-3)\" Known limits (3) says a full pack (1.3) rounds an exact "
+            + "half down (45 x 1.3 = 58.5 deals 58), against docs/02's round half up (59 by hand); BUG-1620, docs/01 2026-11-25 (1)");
     }
 
     /// <summary>

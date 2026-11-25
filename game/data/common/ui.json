@@ -252,5 +252,8 @@
     "truncated": "This save is incomplete: the file was cut short.",
     "checksum_mismatch": "This save is damaged: its contents changed after it was written.",
     "malformed": "This save is damaged and can't be read."
+  },
+  "orders": {
+    "queue_full": "Orders full"
   }
 }

@@ -186,12 +186,10 @@ public class SharedVisionPerfTests
         using Process p = Process.Start(info)!;
         System.Threading.Tasks.Task<string> err = p.StandardError.ReadToEndAsync();
         System.Threading.Tasks.Task<string> outTask = p.StandardOutput.ReadToEndAsync();
-        if (!p.WaitForExit(ChildTimeoutMs))
-        {
-            try { p.Kill(entireProcessTree: true); } catch (InvalidOperationException) { }
-            p.WaitForExit(5_000);
-            Assert.Fail($"the fresh child dotnet test ({scene}) did not exit within {ChildTimeoutMs / 1000} s and was killed");
-        }
+        // M7-H3: the bound is the child's processor time (a busy machine does not trip it), with a wall ceiling 3 times it.
+        TimeSpan limit = TimeSpan.FromMilliseconds(ChildTimeoutMs);
+        if (ChildProcessLimit.Wait(p, limit, limit * ChildProcessLimit.WallCeilingFactor, out TimeSpan used) != ChildProcessLimit.Outcome.Exited)
+            Assert.Fail($"the fresh child dotnet test ({scene}) did not finish within {ChildTimeoutMs / 1000} s of processor time or {ChildTimeoutMs / 1000 * ChildProcessLimit.WallCeilingFactor} s of wall clock ({used.TotalSeconds:0.#} s used) and was ended");
         p.WaitForExit();
         string output = outTask.Result;
         int at = output.IndexOf(ChildLine, StringComparison.Ordinal);

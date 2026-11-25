@@ -20,7 +20,8 @@ namespace Rts.Game;
 /// "placement": { "&lt;reason&gt;": text }, "train": { "&lt;reason&gt;": text }, "research": { "&lt;reason&gt;": text },
 /// "states": { "&lt;state&gt;": text }, "hud": { "&lt;label&gt;": text }, "menu": { "&lt;key&gt;": text }, "setup": { "&lt;key&gt;": text },
 /// "pause": { "&lt;key&gt;": text }, "settings": { "&lt;key&gt;": text }, "match_over": { "&lt;key&gt;": text }, "keys": { "&lt;key&gt;": text },
-/// "load": { "&lt;key&gt;": text }, "alert": { "&lt;key&gt;": text }, "save": { "&lt;key&gt;": text } }</c> (the <c>alert</c> keys those of <see cref="AlertText"/>, M6-V12;
+/// "load": { "&lt;key&gt;": text }, "alert": { "&lt;key&gt;": text }, "save": { "&lt;key&gt;": text }, "orders": { "&lt;key&gt;": text } }</c> (the <c>alert</c> keys those of <see cref="AlertText"/>, M6-V12;
+/// the <c>orders</c> keys those of <see cref="OrdersText"/>, M6-V27;
 /// the <c>save</c> keys those of <see cref="SaveText"/>, M6-V14, <c>save.saved</c> a format naming <c>{0}</c>). Command ids are <see cref="CommandIds"/>;
 /// the placement, train and research keys are the snake_case names of every <see cref="PlacementError"/>,
 /// <see cref="TrainError"/> and <see cref="ResearchError"/> member but <c>None</c> (<c>blocked</c>, <c>queue_full</c> ...),
@@ -82,6 +83,7 @@ public sealed class UiText
     private readonly string[] _load;
     private readonly string[] _alert;
     private readonly string[] _save;
+    private readonly string[] _orders;
     private readonly string[] _colourNames = Blank(ColourCount);
     private readonly uint[] _colourRgb = new uint[ColourCount];
 
@@ -101,6 +103,7 @@ public sealed class UiText
         _load = Blank(Enum.GetValues<LoadText>().Length);
         _alert = Blank(Enum.GetValues<AlertText>().Length);
         _save = Blank(Enum.GetValues<SaveText>().Length);
+        _orders = Blank(Enum.GetValues<OrdersText>().Length);
         Array.Fill(_names, "");
         Array.Fill(_hints, "");
     }
@@ -224,6 +227,9 @@ public sealed class UiText
 
     /// <summary>A save / load text (<c>ui.json</c> <c>save</c>, M6-V14).</summary>
     public string Save(SaveText key) => (uint)key < (uint)_save.Length ? _save[(int)key] : "";
+
+    /// <summary>An order notice's text (M6-V27: <c>orders.queue_full</c>, over a unit whose queued order a full queue refused).</summary>
+    public string Orders(OrdersText key) => (uint)key < (uint)_orders.Length ? _orders[(int)key] : "";
 
     /// <summary>The pause menu's line after a save: <c>save.saved</c> with <see cref="Clock"/> of <paramref name="tick"/> (the match time it was made at) for its <c>{0}</c>.</summary>
     public string SavedLine(int tick) => string.Format(CultureInfo.InvariantCulture, Save(SaveText.Saved), Clock(tick));
@@ -408,6 +414,7 @@ public sealed class UiText
             Section<AlertText>(root, "alert", ui._alert, skipZero: false, forward: false, errors); // M6-V12: the HUD's attack alerts
             // M6-V14: the pause menu's Save line and note, and one text per SaveError.
             Section<SaveText>(root, "save", ui._save, skipZero: false, forward: false, errors);
+            Section<OrdersText>(root, "orders", ui._orders, skipZero: false, forward: false, errors); // M6-V27: dropped queued orders
             string saved = ui._save[(int)SaveText.Saved];
             if (saved.Length > 0 && !IsTextFormat(saved))
                 errors.Add($"ui.json: save.{Key(SaveText.Saved)} must be a format with {{0}} (the match clock) and no other placeholder: '{saved}'");

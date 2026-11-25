@@ -4815,6 +4815,95 @@ file changed.
      seed-6 builder of `M3PlayableTest` stands behind the Keep at one step; the scene now selects it as a player would reach
      it and says so). That is the rule the brief asked for ("a click on what the player sees selects it"). Recommendation:
      accept; a see-through silhouette for units behind buildings is the usual RTS answer, a later look task.
+- **The Producer's answers (docs/01 2026-11-24, the ACCEPT row (2); written here by M6-V27, rule 67):**
+  1. Accepted: a click in the empty air inside a building's footprint box selects the building when nothing else is drawn
+     there.
+  2. Accepted: at the closest zoom a tall building's bar is lowered to stay on screen and hangs in front of its face on high
+     ground (the shorter Keep at every zoom was not taken).
+  3. Left as it is until the owner's packs (the Mage's robe against the Heavy Infantry's shield in a dark colour); measured
+     in docs/04.
+  4. The owner's taste, listed for review (the sand robe, the maroon and rust Whirlwind reds); the faction page's art note
+     follows what is drawn (BUG-1602's data half).
+  5. Accepted: a unit wholly hidden behind a model can't be clicked; a see-through outline for hidden units is a later look
+     task, on the queue only on the owner's word.
+
+### Implementation (M6-V27)
+
+Request 58's view half: the player is told when a Shift-queued order of theirs is dropped (the sim lists them since M7-8,
+`World.DroppedOrders`, "Implementation (M7-8)"). With it BUG-1682 (the left click through an enemy building), one ray walk a
+click, and M6-VH9's answers above. One `ui.json` key added (`orders.queue_full`); no sim rule, data hash or save changed.
+
+- **The accessor (`ViewApi/OrderNotices`, `OrderNotice`).** `OrderNotices.Collect(dropped, player, alive, generation, into)`
+  reads the dropped-order span and the unit store's `Alive` / `Generation` arrays, all handed in by the view (`ViewApi`
+  names neither `World` nor `UnitStore`), and writes the asked player's notices into a span: only that owner's entries and
+  only the kinds the view shows (`IsNotice`: a Build refused at its turn with a `PlacementError`, or any order a full queue
+  refused, `QueueFull`); every other kind (a Move to nowhere, a Gather with its node gone, a Repair with nothing to repair,
+  a cast on cooldown, an Attack on a gone target) gives none yet. Each notice carries the handle, the kind, the error or
+  the queue-full flag and **`Alive`**: the slot alive and still at that generation when read, since an entry's unit may
+  die later in the same tick and its slot may hold a newer unit (BUG-1662). Reads only; allocation-free (100 calls over a
+  full 4,160-entry list: 0 bytes).
+- **The lines (`ViewApi/NoticeLines`).** A pool of 64 lines, one a unit slot: a notice for a unit whose slot already has a
+  line restarts it with the new text (two refusals a few ticks apart restart, never stack); when all 64 are in use the
+  oldest is replaced. **A line lasts `NoticeLines.LifetimeSeconds` = 2.5 s of the view's clock** (the frame delta while the
+  game runs: the same 2.5 s at game speed 0.5x or 2x, and a pause holds it, since the node is paused with the tree), the
+  last `FadeSeconds` 0.5 s fading out. The timer is presentation only (not saved, not game state).
+- **The view (`OrderNoticeView`, node `World3D/OrderNotices` of `Match.tscn`).** After every tick the runner runs
+  (`SimRunner.Ticked`, so a frame of several ticks at a fast speed misses none, as `CombatViews` reads `Deaths`) it collects
+  the local player's notices; each live one starts or restarts its unit's line, and a tick with at least one plays
+  `SfxEvent.Refused` **once**, however many units (twelve refused in one tick: one sound, twelve lines). The words are
+  `ui.json`: a refused Build's `placement.<error>` (the build ghost's own texts: `cannot_afford`, `blocked`,
+  `unit_in_the_way`, `unexplored`, ...), a queue-full refusal's new **`orders.queue_full`** ("Orders full", the Producer's
+  wording, docs/01 2026-11-25 (4); `UiText` reads the `orders` section like the others, so a missing key or section is a
+  load error naming it). Each frame (`ProcessPriority` 1, after the runner and the camera) a live line is a billboard
+  `Label3D` over its unit, drawn like the lost-cast words (`AbilityViews`): over the type's overlay line
+  (`UnitViews.OverlayLines`, so a 1.5x Teblor's line is over its head) plus `BarGap + BarAbove + CueTextAbove` scaled by the
+  zoom, in the refusal colour, no depth test, its `PixelSize` `BuildGhost.ReasonPixelPerZoom` x zoom so it reads the same
+  at every zoom (an em of 38 px at zoom 20 and 36 px at 60 on a 900 px window). A line whose unit has died or whose slot holds
+  another unit draws nothing and expires on time. Shown for every own unit, selected or not, fogged ground or not (own
+  units are always seen). **Nothing** for another player's units (enemy or ally), for a unit dead when read, or in replay
+  playback (`Match` sets `Enabled = false` for Load Game -> Watch). Without the HUD (`--no-hud`) or `ui.json` there are no
+  words, as for the lost-cast words; the sound still plays. A save loaded mid-match shows nothing for its own tick (the
+  list is not saved, docs/01 2026-11-24 ACCEPT (1)(c)). A steady frame allocates nothing: a label's text, size and colour
+  are written only when they change (100 frames with twelve lines: 0 bytes; with none: 0 bytes; a tick read with no
+  entries: 0 bytes).
+- **BUG-1682 (the left click through an enemy building).** `PickBuilding` (own buildings only) now drops its building when
+  another player's building (`BuildingOnRay` over every owner, fog-filtered) or a remembered one (`GhostOnRay`) is drawn in
+  front of it on the ray: the click then means that building, which a left click does not select, so it selects nothing
+  (the BUG-1630 pattern). A building met only in its model's air (`AirDistance`) is in front of nothing, so the own
+  building's air still selects it when only air is in front. An enemy unit in front is unchanged (out of scope).
+  `QaM6VH9FixTest`'s (O) oracle now wants nothing selected where an enemy building is drawn first, and counts the own
+  buildings the code still selects there: 0 on all twelve seed x zoom rows, of 274 / 86 / 32, 124 / 14 / 3, 0 / 0 / 0,
+  0 / 82 / 23 pixels with one there (the counts the bug file reported); every other count of the row is unchanged.
+- **One ray walk for nodes a click.** `FinishSelect` asked `PickResource` and then `PickBuilding`, which asked it again;
+  it now calls the own-building pick without the resource check when `PickResource` has already answered (no behaviour
+  change). `SelectionController.ResourcePicks` counts the calls: once a click wherever no unit is picked (scene row P; the
+  old path gave 2 on every own-building click).
+- **Tests.** xUnit `ViewApi/OrderNoticesTests`: only the asked player's entries; a refused Build carries `CannotAfford` /
+  `Blocked`; queue-full flagged; a Gather and a Repair give none; a unit freed after its entry and a slot reused (real and
+  forged) read not alive; a short span takes the first notices; 100 calls on a full list 0 bytes; reading every tick leaves
+  the state hash alone; the lines restart for the same slot, expire at 2.5 s and fade, twelve lines then the oldest replaced,
+  0 bytes. New scene `OrderNoticeTest` (headless, in the loop; three seats: you, an enemy, an ally; shipped data, the
+  standard 200 / 200 start): (A) a Laborer walks, then its Shift-queued Garrison Keep (275 / 275) can't be paid at its turn:
+  the next frame one Refused sound and the line reads `placement.cannot_afford`, following the unit as it walks; (B) a queued
+  House onto the Keep's footprint: `placement.blocked`; (C) a ninth queued order sent straight to the sim: one sound,
+  `orders.queue_full`; (D) twelve Laborers refused in one tick: one sound, twelve lines, all gone 2.5 s after; the bytes
+  above; (E) forged dead and reused-slot entries on the real store: no line, no sound; (F) the enemy's and the ally's
+  refused Keeps and an own queued Gather on bare ground (all three listed by the sim): nothing shown or played; (G) the line
+  on screen and its em at zoom 20 and 60; (H) `ui.json` without `orders.queue_full` (key looked up first) or without the
+  section fails naming it, the shipped file loads, and no script's code holds a placement or orders text as a literal;
+  (P) the click count; (R) the live match's recording played back: the sim lists the same 15 own refusals, nothing shown
+  or played. Windowed with `-- --shots <dir>` it saves `m6v27-cant-afford-40m.png` and `-20m.png`. `ShellTest`'s ui rows
+  include the `orders` key and section. The scene loop is 123 scenes.
+- **Questions for the Producer (rule 67), each with the developer's recommendation:**
+  1. **2.5 s a line** on the view's clock (a pause holds it). Recommendation: keep; long enough to read two words, gone
+     before the next order. Longer lines would pile up over a crowd of workers.
+  2. **No words without the HUD** (`--no-hud`), as the lost-cast words; the sound still plays. Recommendation: keep (one
+     rule for the world-space words).
+  3. **The other dropped kinds stay silent** (a queued move to nowhere, a gather whose node is gone, a repair with nothing to
+     repair, a cast on cooldown, an attack on a gone target). Recommendation: leave until a play session shows one confuses;
+     each would need its own `orders.*` text.
+  4. **The lost-cast cue (M5-V1) still plays and shows in replay playback**, while the order notices do not (this brief's
+     rule). Recommendation: make the lost-cast cue follow the same rule in the next view hardening (BUG-1710).
 
 ## Vision, detection, fog
 
@@ -5311,7 +5400,12 @@ Readings: docs/01 "2026-11-18 (b)" (a)-(d), docs/02 "Stealth and detection" and 
   1 m since phase 1 would be missed (none has been seen; the fuzz's oracle walks every slot and agrees every tick).
   (3) The factors are float products (`0.1` is not exact in binary), so a raw damage that falls exactly on a half can
   round either way by the float's last bit; it is the same every run, and the test numbers do not land on one (10 / 11 /
-  12 / 13 on the Heavy Infantry's 10).
+  12 / 13 on the Heavy Infantry's 10). **A full pack (1.3) rounds an exact half down (45 x 1.3 = 58.5 deals 58)**: its
+  factor `1 + 3 x 0.1f` is 1.29999995, so every raw that is an exact half at x 1.3 lands just below it. This is against
+  docs/02 "Damage formula" (round half up, 59 by hand), and stays as built (BUG-1620, docs/01 2026-11-25 (1)): curing it
+  means changing how every hit rounds, which would move shipped matches; the designed Hound (16) never lands on a half.
+  `QA/HitBonusQaTests.AFullPack_45x1point3_DealsFiftyEight_TheDocumentedLimit` pins 58 and
+  `StackedFactors_DisagreeWithAHandCalculation_OnlyOnAFullPacksExactHalves` counts the cases (M7-H3).
 - **Tests.** `Data/HitBonusLoaderTests` (both fields load, `null` absent, the four triggers on one unit, the bounds, the
   hash rows), `DataValidationTests` (`BrokenFromStealthBonus_*`, `FromStealthBonus_OnABuildingsAttack_*`,
   `BrokenNearbyOwnPassive_*`, `PackFields_OnAnotherTrigger_*`, `ASecondNearbyOwnPassive_*`: one error each),
@@ -5534,12 +5628,22 @@ and changes nothing on Easy over A. **QA's longer rows (BUG-1663): with `noReser
 comes in. Read `noReserve` on an expand step as "never expand"; do not ship it there without 30-minute rows (Producer
 ruling 2026-11-24, docs/01).** So A is the candidate, with Easy's Anointing to be won back (likely the three unit
 steps, now paid through the reserve, spend the bank the research waited for; not traced here). The data track should re-measure any order on its four-map, seat-swapped rows (QA's
-D33 loop, `QA/Content/D33TeblorRowQaStressTests`) before it ships: two seats are no verdict.
+D33 loop, `QA/Content/D33TeblorRowQaStressTests`) before it ships: two seats are no verdict. **M7-H3 (rule 58):** the
+report's first order is now "none" (the Teblor file with every switch taken out; on today's data the same data as
+"shipped", which it prints as such instead of playing it again), so its baseline stays "no switch" once the data track
+ships switches; `Ai/TeblorSwitchOrders` sets A's and B's switches on top of whatever the file carries. The sim's switch
+classes were run on copies of the data whose Teblor `standard` already carries order A, `throughReserve` on the Shaman
+step only, and `throughReserve` on every train step: all green.
 
 **For the view track (Request 58).** The sim half is `World.DroppedOrders` above; the read-only `ViewApi` accessor is the
 view's next task (not written here). Read it between ticks, as `Deaths`: for an entry of an own unit play the Refused
 sound and show the `ui.json` `placement` text for `Placement` over the unit (a Build), or the "Orders full" line the
 request plans for `QueueFull`; other kinds have no text yet. A save loaded mid-match shows no entries for its tick.
+**The entry's unit may be dead when you read it** (BUG-1662, M7-H3): it was alive when its order was dropped (phase 1 or
+7), but it can die later in the same tick (phase 11), so `Unit` can be stale by the time the view reads the list, as
+`DeathEvent.Victim` is; check that the handle is still alive with that generation (`Units.IsAlive`) before drawing a line
+over it or playing a sound for it, so no line lands on a slot another unit has since taken
+(`QA/DroppedOrderQaTests.ADroppedOrder_OfAUnitKilledInTheSameTick*` stages it).
 
 **Questions for the Producer (M7-8, rule 67), each with the developer's recommendation.**
 
@@ -5554,6 +5658,58 @@ request plans for `QueueFull`; other kinds have no text yet. A save loaded mid-m
 4. BUG-1621 / BUG-1610's cures, (b) the hunt's resume and (a) the worker floor, go into the later AI-play session with one
    re-measure (docs/01 2026-11-24 (2)). Recommendation: (b) first and alone, since it alone ends this match; (a) next,
    measured apart, with its `ai.minWorkers` value the Producer's (the trace suggests 4).
+
+**The Producer's answers (docs/01 2026-11-24, the ACCEPT row (1), written in by M7-H3 under rule 67; all four the
+developer's recommendation).** (1) A reserve switch written on the wrong kind of step is a load error even when written
+`false`: kept (a `false` on the wrong step is a typo for the right one). (2) The list of dropped queued orders carries
+every kind of order dropped at its turn, not only buildings: kept (one rule; the view chooses what to show). (3) The list
+is not saved: kept (a loaded match misses one tick of notices; no save format change). (4) The two cures of the
+standing-still four-seat match go into the later AI-play session: the hunt's resume first and alone (BUG-1661; it alone
+ends that match), the worker floor second and measured apart (BUG-1660; `ai.minWorkers`, starting value 4, to be
+measured). With them, (e): `noReserve` on an expand step means in practice "never expand" (BUG-1663): the rule stays as
+built and documented, and no opening ships the switch on an expand step without 30-minute rows.
+
+### Implementation (M7-H3)
+
+The sim's hardening (docs/01 2026-11-25, the PLAN row): tests, docs and comments only. Nothing under `sim/Rts.Sim` changed
+but `Orders/DroppedOrder.cs`'s doc comment; no game rule, state hash, pin, fixture, golden or data hash moved.
+
+- **Hang guards, not speed limits (docs/01 2026-11-25 (2)).** Three kinds of row failed only on a busy PC; each keeps its
+  guard against a real hang and loses its dependence on how busy the machine is. (1) `QA/RampWallQaTests.EveryField_AtExtremes_*`
+  (BUG-1582) runs the generation through `HangGuard.Run`, a thread of its own (never the thread pool, which a Stress run
+  starved for up to 24 minutes) joined with `GenerationLimit` = 120 s, about 400 times the 0.3 s a default map takes
+  alone; a generator that spins fails its row at the limit (`AGenerationThatSpins_FailsItsRow_InsideTheLimit`, on 0.5 s).
+  (2) **A two-process row's child limit counts the child's processor time** (`ChildProcessLimit`): on Windows the child
+  `dotnet test` is put in a job object as it starts, and the limit reads the job's user + kernel time, so its test host
+  (a grandchild) is counted and a child slowed by other suites is not ended; the wall ceiling is
+  `ChildProcessLimit.WallCeilingFactor` = 3 times the limit, for a child that hangs without spinning. It applies wherever
+  a child is ended on a clock: `MapFileTests.RunChild` (every caller keeps its `seconds`, now processor seconds:
+  `EndGameHardeningTests.PaleHillsSeed2_FourSeats_*` 1,200 s with a 3,600 s ceiling, about 191 s alone;
+  `AiDeterminismTests`, `HardKnobsMatchTests`, `MatchCriterionTests`, `RebuildTests`, `EndGameH6QaTests`,
+  `StillStealthMatchTests`, `QA/Content/TeblorAiMatchQaStressTests`, `MapSlice2StressTests`,
+  `RebuildLookMatchQaStressTests`, `StarvedSaveTwoProcessQaStressTests`), the three Stress classes that carried their own
+  copy (`OpeningReserveShareStressTests`, `RarakuTwinStressTests`, `WorkerCarryQaStressTests`: 600 s, now the shared
+  runner) and the two Perf children (`VisionGatePerfTests`, `SharedVisionPerfTests`: 120 s, ceiling 360 s).
+  `QA/CliQaTests`' CLI child waits 120 s without ending it (its output is read first): not a two-process row, left.
+  `ChildProcessLimitTests` shows it on tiny limits: a PowerShell grandchild that spins under `cmd` (which itself uses
+  almost nothing) is ended on 3 s of processor time and is gone afterwards; a child that sleeps is ended at a 3 s ceiling;
+  through `RunChild`, a child test row that spins fails the parent row on 10 s of processor time.
+  (3) `LocalMovementTests+Serial.Perf_UnitsConvergingOnOnePoint_AvgAndWorstTick` (500, BUG-1539) plays its 400 ticks
+  three times on fresh sims and bounds the least of the three worst ticks (`Serial.Judge`) against the unchanged 8 ms;
+  the average (< 4 ms) is the first run's, as before. `Bug1539_TheJudge_*` checks the judge on made-up times: a 20 ms
+  tick in two of three runs passes, in three of three fails. No threshold moved.
+- **BUG-1620 is a documented limit**, Known limits (3) of "Implementation (M8-3)"; the QA row that expected 59 now pins 58.
+- **Rows found by id, not by file position** (the Shadow roster will add rows): the Blood-oil Anointing, the Longhouse,
+  Burning, Tela's Fire, the Holy Camp and the gold mine in `FrenzyRulesLoaderTests`, `StatusDurationTechTests`,
+  `DataContentHashTests` and `QA/M7H1QaTests`; an edit that only has to change the hash moves the row away from its own
+  value instead of writing a literal a new first row might already hold. Shown on a copy of the data with a new first
+  tech and a new first ability in the Teblor and Malazan files.
+- **The reserve-switch classes and a shipped switch (rule 58).** `Ai/TeblorSwitchOrders` gains the order "none" (every
+  switch taken out); see "For the data track (M7-8)" for the copies the classes were run on.
+- **Labels and comments.** `QA/ScoutCapQaTests.KnownWorkerLosses` says BUG-1557; `AiDeterminismTests`' and
+  `HuntStressTests`' hunt rows carry M6-S12's figures (seed 2 ends at 51,218 with 2 hunts; saved at 46,381 and 48,541),
+  re-read on this tree; the "Implementation (M7-8)" questions carry the Producer's answers; "A JSON `null`" under
+  "Data format" writes down the `null` policy.
 
 ## Data format
 
@@ -5613,6 +5769,30 @@ Example unit definition (one entry of the `"units"` array in `units.json`):
 - Stats in data are the **final** faction values (the faction bonus is already applied where it's
   a flat stat change); dynamic bonuses (regen, stealth rules, gather multipliers) are faction
   modifiers in `faction.json`.
+
+**A JSON `null` (docs/01 2026-11-25 (3), written down by M7-H3; no loader change).** A field written `null` has one of two
+meanings, fixed per field by how the loader reads it. **Most optional fields read `null` as left out**: the optional
+blocks (`faction.json` `regen` and `forestStealth`, a unit's `stillStealth`, a status's `onEnd`, a building's `attack`),
+the optional numbers read as plain numbers (a unit's or a building's `scale` and `detector`, a unit's `spawnCount`, an
+attack's `fromStealthBonus`, `minRange` and `splash`, a status's `damageBonus`, a starting-resources preset's
+`aiSpendAbove`) and the build-order switches `throughReserve` / `noReserve` (as "Implementation (M7-8)" says). **Three
+optional numbers are read raw so that `null` is one load error at the field's path** ("null is not a number / a carry /
+a fraction: leave the field out ..."): `rules.json` `gatherOverlap` (M6-S9), a unit's `carry` (M7-7) and an opening's
+`attack.reserveArmyShare` (M7-6), each of them a number whose absence means "use the rules' value" and whose `null` was
+judged a likelier typo than a wish. To leave an optional
+field out, leave it out: do not write `null` (a forge that blanks a block with `null` keeps working). Pinned by
+`Data/DataNullPolicyTests`: `ANull_ReadsAsLeftOut` (a copy with the field `null` hashes as the copy with it removed, one
+row a field above) and `ANull_IsOneLoadError` (the three fields, one error each at its path).
+
+**Questions for the Producer (M7-H3, rule 67).**
+
+1. The ruling (docs/01 2026-11-25 (3)) reads "an optional number or switch (`reserveArmyShare`, `throughReserve`,
+   `noReserve`, ...) written `null` is a load error". The loader does that only for the three raw-read numbers above; the
+   two switches, like the other optional numbers, read `null` as left out (M7-8 documented and QA pinned it:
+   `QA/ReserveSwitchQaTests.ANullSwitch_OnTheWrongAction_ReadsAsAbsent`). With no loader change allowed, the paragraph
+   and the test rows state what the loader does. Recommendation: keep it so (making the switches strict is a loader
+   change, and a `null` switch can only mean "off"); if the Producer wants every optional number and switch strict, it is
+   a small loader task of its own with a re-check of the test forges that write `null`.
 
 ### What ships today (M1)
 

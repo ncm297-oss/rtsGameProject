@@ -111,12 +111,12 @@ public class VisionGatePerfTests
         System.Threading.Tasks.Task<string> err = p.StandardError.ReadToEndAsync();
         System.Threading.Tasks.Task<string> outTask = p.StandardOutput.ReadToEndAsync();
         // BUG-1041: a child that hangs (a locked DLL, a discovery stall) must not hang the parent: bound it, kill it, say so.
-        if (!p.WaitForExit(ChildTimeoutMs))
+        // M7-H3: the bound is the child's processor time (a busy machine does not trip it), with a wall ceiling 3 times it.
+        TimeSpan limit = TimeSpan.FromMilliseconds(ChildTimeoutMs);
+        if (ChildProcessLimit.Wait(p, limit, limit * ChildProcessLimit.WallCeilingFactor, out TimeSpan used) != ChildProcessLimit.Outcome.Exited)
         {
-            try { p.Kill(entireProcessTree: true); } catch (InvalidOperationException) { } // it exited meanwhile
-            p.WaitForExit(5_000);
             string partial = outTask.Wait(5_000) ? outTask.Result : "(no output)";
-            Assert.Fail($"the fresh child dotnet test did not exit within {ChildTimeoutMs / 1000} s and was killed; its output: {partial}");
+            Assert.Fail($"the fresh child dotnet test did not finish within {ChildTimeoutMs / 1000} s of processor time or {ChildTimeoutMs / 1000 * ChildProcessLimit.WallCeilingFactor} s of wall clock ({used.TotalSeconds:0.#} s used) and was ended; its output: {partial}");
         }
         p.WaitForExit(); // the redirected streams have drained
         string output = outTask.Result;
