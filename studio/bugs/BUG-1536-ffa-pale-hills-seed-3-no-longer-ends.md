@@ -3,7 +3,7 @@
 | Field | Value |
 | --- | --- |
 | Severity | S3 (a four-seat AI match that never ends; the row was moved under the brief's own rule, so it no longer blocks) |
-| Status | open (row re-staged by criterion 8's rule; diagnosis corrected by QA re-check 1) |
+| Status | open (row re-staged by criterion 8's rule; diagnosis corrected by QA re-check 1). **Owner decision 2026-11-25: a draw rule** (docs/01); cure planned as the sim's M6-S13 |
 | Found | 2026-11-15-2136, task M6-SH2 (QA) |
 | System | AI end game (hunt), moved by the drop-off rule (BUG-1520) |
 | Fixed by | |

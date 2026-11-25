@@ -748,6 +748,13 @@ Carried: BUG-1620, 1582, 1555, 1554 / 1556, 1557 (S3), 1558 (S4), 1463, 1536 (th
    BUG-1557 if it changes no AI play, the stale comments in `AiDeterminismTests` / `HuntStressTests` (comments
    only). Check `Ai/TeblorSwitchOrders` and the two report classes on a copy of the data that already carries
    order A (rule 58: the data track ships switches the same session). Write M7-8's answers into docs/03 (rule 67).
+1a. **M6-S13, the owner's draw rule (inbox 2026-11-25, docs/01; next sim feature session, before the AI-play
+   session; feature, QA full, one pin move, one hash move so the data track ships no data beside it; 20 bug ids):**
+   a match-end rule in the tick: no side has a unit that can fight and none can afford or train one (no gold banked,
+   none reachable to mine or no worker), held for `rules.json`'s wait (propose 3 game minutes, measured); the
+   existing Draw outcome; save format and replay checkpoints checked (rule 50); un-skip / re-measure BUG-1536,
+   BUG-1523's kin and the Pale Hills four-seat stalls (seeds 1, 3, 4, 6, 7); docs/02 win condition. At PLAN: check
+   the view's Draw banner text and the `match` CLI's result line need nothing new, else a view rider.
 2. **The AI-play session (feature, QA full, one pin move; 20 bug ids; the data track measures no opening beside
    it):** BUG-1661, then BUG-1660, BUG-1555, BUG-1554 / 1556 with BUG-1490 (a save format change: rule 50),
    BUG-1558. Each cure measured apart (rule 70).

@@ -9,6 +9,8 @@ Commit and push after editing, from either machine (or ask Claude to).
 
 ## New
 
+## Processed
+
 - 2026-11-25 · **Decision (owner): "gold gone" = a draw rule.** Answer to the open question under STATE.md "Waiting on
   you" (M6-SH2 / BUG-1536: what a match does when the map's gold is mined out and no seat can pay for a soldier). Owner:
   "I think that's ok. If no offensive units can be made maybe the AI can end the match in a draw." Take the draw rule
@@ -21,8 +23,15 @@ Commit and push after editing, from either machine (or ask Claude to).
   through the existing end-of-match path (events, view result screen, AI-vs-AI stress tests), with its text from data. It
   should also make BUG-1536 and the Pale Hills seed rows (BUG-1523 and kin) end honestly instead of timing out. Replay
   golden hashes may change if any match now ends earlier; say why.
+  → **Recorded as your decision at the 2026-11-25-0924 PLAN (the note landed while I was planning): the draw rule, and
+  not the other two options** (docs/01 change log; BUG-1536). It is the **sim's next feature task (M6-S13), ahead of
+  roadmap work**, not this session's: the sim is on its clean-up session today (tests and docs only, by the 4-session
+  rule), the draw rule changes how test matches end (every stuck four-AI row is re-measured once) and adds a wait
+  value to the game data, and the data track already makes this session's one data change. Design as you noted: a
+  match-end rule in the game's own tick (not the AI's choice), judged for the whole match: no side has a unit that
+  can fight and none can pay for or train one, for a wait kept in `rules.json`; the result is the existing Draw
+  screen. Your saves stop loading once when it lands; you get the entry under For your review then.
 
-## Processed
 
 - 2026-11-15 · **Bug (owner playtest, relayed by the watcher session): workers can deposit resources at a woodcutter's
   hut before it is fully built.** Please treat it as a bug fix with a regression test that fails first, ahead of roadmap
