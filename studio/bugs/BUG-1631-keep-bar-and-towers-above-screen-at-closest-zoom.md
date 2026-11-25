@@ -3,7 +3,7 @@
 | Field | Value |
 | --- | --- |
 | Severity | S4 |
-| Status | fixed on level 0 and 1 (M6-VH9); level 2 open as BUG-1680 |
+| Status | fixed (M6-VH9 on level 0 and 1; level 2 by its fix round 1 as BUG-1680, verified by QA re-check 2026-11-24-1431) |
 | Found | 2026-11-18-0926, task M6-V26 |
 | System | building views (`BuildingViews` bar over `BuildingModels.Top`), camera limits |
 | Fixed by | M6-VH9: `BuildingViews.BarCeiling` / `PlaceBar`; rows `ViewHardenVh9Test` (K), `QaM6V26Test` bar rows, `QaM6VH9Test` (T) |

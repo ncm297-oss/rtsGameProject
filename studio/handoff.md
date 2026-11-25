@@ -43,8 +43,310 @@ small and tell its QA that Stress runs once.
 
 ## Current session plan
 
-None yet: the next PLAN writes it here. The proposal above and the queues in `studio/STATE.md` ("Feature queue"
-per track, "Current order (after 2026-11-24-1431)") are the starting point.
+Written at the PLAN of session **2026-11-25-0924** (1 / 8 of 2026-11-25; base 40efa16). Three tracks: sim **M7-H3**
+(hardening, QA standard), view **M6-V27** (feature, QA standard), data **D-H10** (hardening, QA standard). Bug ids:
+sim 1700-1709, view 1710-1719, data 1720-1729. Rulings behind the briefs: docs/01 2026-11-25 (PLAN row).
+
+**Who touches what under `game/data/` (never two tracks on one file):** sim: nothing. View: `game/data/common/ui.json`
+only (one new key, `orders.queue_full`; the file is read by the view's own loader `game/scripts/UiText.cs` and is not
+in the data hash). Data: `game/data/factions/teblor/ai.json` only. **One hash move at most, the data's.**
+
+**All tracks:** record the PID of every `dotnet test` / Godot you start and end only those (rules 52 / 69); a scratch
+clone is named after the task (`m7h3-...`, `m6v27-...`, `dh10-...`), created new (rule 63); "build 0 / 0" means
+`dotnet build RtsGame.sln --no-incremental` after the last edit (rule 64); run the full default loop
+(`dotnet test sim/Rts.Sim.Tests --filter "Category!=Perf&Category!=Stress&Category!=Soak"`) after the last edit or say
+in the report's first lines that you did not (rule 62); bug-file updates come as a patch that `git apply` accepts
+(BUG-1662 item 3); open questions go in a "Questions for the Producer" block in the docs section the task owns
+(rule 67). Expected default loop on the base: 0 failed, 22 skipped.
+
+### Sim track: M7-H3, the sim's hardening (tests, docs and comments; no rule changes)
+
+**Goal.** Work the sim's debt that changes no game rule: the test rows that fail only on a busy PC, stale labels and
+comments, two doc gaps the view and data tracks read this session, and proof that the sim's reserve-switch tests
+survive the data track shipping switches in the Teblor file. Nothing a player or a computer player does may change:
+no state hash, no pinned match, no data hash moves.
+
+**Scope (in).**
+1. **BUG-1662 item 1:** `Orders/DroppedOrder.cs`'s doc for `Unit` and docs/03 "For the view track (Request 58)" say
+   the unit may have died later in the same tick (stale when read, as `DeathEvent.Victim`). Doc text only.
+2. **BUG-1582** (ruling: a hang guard, not a speed limit): `QA/RampWallQaTests.EveryField_AtExtremes_*` runs the
+   generation on a dedicated thread (not the thread pool) and waits with a limit long enough for a starved machine
+   (at least 120 s; say the figure and why); a real hang must still fail the row, not hang the run.
+3. **The 1,200 s child limit** of `EndGameHardeningTests.PaleHillsSeed2_FourSeats_*_TwoProcesses_*` (ruling: the
+   limit counts the child's own processor time, same 1,200 s; a wall ceiling above it that you state). Apply the same
+   helper to any other two-process row that kills its child on a wall clock (list them).
+4. **BUG-1539** (ruling): `LocalMovementTests+Serial.Perf_UnitsConvergingOnOnePoint_AvgAndWorstTick` takes the least
+   worst tick of three runs against the unchanged 8 ms; the average bound is untouched. No threshold changes.
+5. **BUG-1620** (ruling, docs/01 2026-11-25 (1): stays as built): docs/03 "Implementation (M8-3)" Known limits (3)
+   says "a full pack (1.3) rounds an exact half down (45 x 1.3 = 58.5 deals 58)"; the skipped row
+   `QA/HitBonusQaTests.AFullPack_45x1point3_RoundsHalfUpTo59_AsByHand` becomes an active row that pins 58 and names
+   the limit; `StackedFactors_DisagreeWithAHandCalculation_*` stays. **No change to `Combat/**`.**
+6. **BUG-1557's label:** `QA/ScoutCapQaTests.KnownWorkerLosses` and its comment say BUG-1557, not BUG-1462. The
+   cause (an AI economy finding) is not this task's.
+7. **Stale comments** (comments only): `Stress/AiDeterminismTests` and `Stress/HuntStressTests` carry M6-SH2's
+   figures (docs/03 "Implementation (M6-S12)" item 6 has the current ones); docs/03 "For the data track (M8-3)"
+   still says the description reading "knows neither field yet" (BUG-1691's grouped note; D35 built it).
+8. **BUG-1433 item 3:** `Movement/GatherOverlapFuzzTests.Run` asserts "the scene cannot be built: no Keep" instead
+   of throwing a bare exception; the comment names every left-out seed.
+9. **Rows found by file position:** the `[0]` / `techs[0]` / `abilities[0]` lookups of shipped rows in
+   `FrenzyRulesLoaderTests`, `StatusDurationTechTests`, `DataContentHashTests` and `QA/M7H1QaTests` look the row up
+   by id (the Shadow roster will add rows).
+10. **The `null` policy, written down (ruling, docs/01 2026-11-25 (3); no loader change):** docs/03 "Data format"
+    gains one paragraph: an optional block (`forestStealth`, `regen`) written `null` reads as left out; an optional
+    number or switch (`reserveArmyShare`, `throughReserve`, `noReserve`, ...) written `null` is a load error. One
+    test row a side pins it, by table over the fields you find.
+11. **Rule 58 for the data track's landing:** on a scratch copy of the shipped data whose Teblor `standard` already
+    carries (a) order A, (b) `throughReserve` on the Shaman step only, (c) `throughReserve` on every train step, run
+    `Ai/ReserveSwitchTests`, `Ai/ReserveSwitchOffTwinTests`, `Ai/ReserveSwitchDeterminismTests`,
+    `Data/ReserveSwitchLoaderTests`, `QA/ReserveSwitchQaTests`, `QA/DroppedOrderQaTests` and, once,
+    `Stress/ReserveSwitchReportTests` and `Stress/M78ReserveSwitchQaStressTests`. Any row red only because the
+    shipped file carries a switch is made tolerant (tests only: look the step up, then add or edit; a row that means
+    "shipped has none" compares against a copy with the switches removed). Report the table of rows x copies.
+12. **Rule 67:** the Producer's answers to M7-8's Questions 1-4 (docs/01 2026-11-24 ACCEPT (1)) written under the
+    questions in docs/03 "Implementation (M7-8)".
+
+**Out of scope.** Any change under `sim/Rts.Sim/` other than item 1's doc comment; any
+AI-play change (BUG-1660, 1661, 1555, 1554 / 1556, 1558, 1537, 1161, 1149, 1150, 1152: the later AI-play session);
+BUG-1463 (movement, needs a design); BUG-1490 (a save format change); everything under `game/**` and `tools/**`;
+`sim/Rts.Sim/ViewApi/**` (the view's this session); `sim/Rts.Sim.Tests/Content/**`, `QA/Content/**`,
+`docs/factions/**` and the golden replay headers (the data's this session: do not touch `GatherWedgeQaTests`'
+header comment, `FactionOrderTests.TheShippedContentHash_*`, `QA/PackQaTests.TheShippedDataHash_*`).
+
+**Acceptance criteria.**
+1. `git diff <base>...HEAD -- sim/Rts.Sim` shows comment / doc-comment lines only; `-- game tools` is empty.
+2. No pin, fixture, golden or replay file is in the diff; the golden replay test and `HardKnobsPinTests` are green
+   and untouched.
+3. Item 2: the `RampWallQaTests` extremes rows pass 3 of 3 runs while another full default loop runs beside them
+   (say what ran); a generation forced to spin (a test seam or a cancelled token) fails its row inside the limit.
+4. Item 3: the two-process row passes beside a running default loop (once) and alone (once); a child that spins
+   past the processor-time limit is still ended and the row fails (shown on a tiny limit in a test of the helper).
+5. Item 4: the 500-unit row alone (rule 42) passes 5 of 5 runs; the 8 ms and the average bound are unchanged in the
+   diff. If it cannot (the PC's slow state: `ASweepRetarget` near 85 us), report the fifteen worst ticks and stop:
+   measure and report, not pass / fail.
+6. Item 5: the row is active, pins 58, and its message names docs/03's limit; `git diff -- sim/Rts.Sim/Combat` empty.
+7. Items 6-9: the label reads BUG-1557; no `BUG-1462` left in `ScoutCapQaTests`; the four classes find shipped rows
+   by id (the rows that used a position lookup stay green on a copy of the data with a new first tech and a new
+   first ability: show it once).
+8. Item 10: docs/03's paragraph and the two table rows; no file under `sim/Rts.Sim/Data` in the diff.
+9. Item 11: the table; every listed class green on copies (a), (b) and (c) and on the shipped data.
+10. Items 1, 7, 12: the doc lines are there (quote them in the report).
+11. Build 0 errors / 0 warnings; default loop 0 failed / 22 skipped (the standing 20 + D35's two; minus one if
+    item 5's skip is lifted: say the new count); smoke PASS.
+
+**Design references.** docs/03 "Implementation (M7-8)" (Request 58, "For the data track", the questions),
+"Implementation (M8-3)" Known limits, "Data format"; docs/02 "Damage formula" (round half up: the documented limit
+is against it and must say so); docs/01 2026-11-25 PLAN row and 2026-11-24 ACCEPT row (1); the bug files 1662,
+1582, 1539, 1620, 1557, 1433.
+
+**Tests required.** The helper's own tests (dedicated-thread guard, processor-time child limit); the active 58 row;
+the two `null` table rows; the by-id proof; the rule-58 table. Perf: only the one row, alone.
+
+**Constraints.** No behaviour change (CLAUDE.md rules 2, 4: nothing in the tick or the hash moves); never loosen a
+Perf threshold; tests use xUnit's own asserts; no new NuGet package; the developer cannot write `studio/**`.
+
+**QA focus (standard).** Prove "nothing moved": four shipped AI matches x 30,000 ticks hash-equal on base and head
+(`Stress/M78ShippedDigestQaStressTests` is the tool: same digests on both trees). Attack the guards: do they still
+catch a real hang and a real slow tick (mutate: a generator that spins, a child that spins, a tick padded to 20 ms
+in two of three runs and in three of three)? Is the 58 row an honest pin and not a loosened one? Re-run item 11 on
+a copy of your own (the Anointing step moved ahead of the three train steps, plus switches). Suites: the task's
+classes, the default loop, the Stress rows the task touches (the two-process rows, the two switch Stress classes
+once), the one Perf row alone. **Not the whole Stress or Perf category** (rule 53): tell the Producer if anything
+suggests it is needed.
+
+### View track: M6-V27, tell the player when a queued order is dropped (Request 58's view half)
+
+**Goal.** When a Shift-queued order cannot start at its turn the unit just stands there and the player is not told.
+The sim lists such orders since M7-8 (`World.DroppedOrders`). Show it: for the local player's unit, the Refused sound
+and a short line over the unit saying why a queued building was not started ("Can't afford", "Blocked", ...), and
+"Orders full" when a ninth queued order is refused. With it three small leftovers of M6-VH9.
+
+**Scope (in).**
+1. A read-only accessor in `sim/Rts.Sim/ViewApi/` over the dropped-order span (handed in by the view: `ViewApi`
+   source may not name `World` or `UnitStore`): for a given player, the notices to show (unit handle, whether it is
+   still alive with that generation, a refused Build's `PlacementError`, or queue-full). No sim state written.
+2. The view reads it once per sim tick run, as it reads `Deaths`. For an entry of the **local player's** unit:
+   a Build with `Placement != None` -> the Refused sound and the `ui.json` `placement` text for that error over the
+   unit; `QueueFull` -> the Refused sound and the new `ui.json` `orders.queue_full` text. Every other kind (a Move to
+   nowhere, a Gather with the node gone, ...): nothing yet. One sound a tick however many entries; one line a unit;
+   the line follows the unit, lasts a fixed time on the view's clock (your figure, a view constant, in docs/03) and
+   is drawn like the other world-space overlays (readable at zoom 20 to 60).
+3. `game/data/common/ui.json`: one new section `"orders": { "queue_full": "Orders full" }` (the Producer's wording,
+   docs/01 2026-11-25 (4)), read by `UiText` like the other sections (a missing key is a load error naming it).
+   **The only file under `game/data/` this task edits.**
+4. Nothing is shown or played for another player's units (enemy or ally), for a unit that is dead when read
+   (BUG-1662: check alive and generation; no line may land on a slot another unit has taken), or while watching a
+   replay (Load Game -> Watch).
+5. **BUG-1682:** a left click where an enemy building is the nearest drawn thing on the ray selects nothing instead
+   of the own building behind it (the BUG-1630 pattern in the bug file). Enemy units in front: unchanged, out of
+   scope.
+6. `FinishSelect` walks `PickResource` once a click, not twice (no behaviour change).
+7. Commit `game/tests/QaM6VH9FixTest.cs.uid` (run an import; the tree must be clean after an import and the scene
+   loop).
+8. docs/03 "Implementation (M6-V27)"; the Producer's answers to M6-VH9's Questions 1-5 (docs/01 2026-11-24 ACCEPT
+   (2)) written under those questions (rule 67); docs/02's controls text if it describes queued orders.
+
+**Out of scope.** Any sim file outside `sim/Rts.Sim/ViewApi/**` and its tests under `sim/Rts.Sim.Tests/ViewApi/`;
+`DroppedOrder.cs` (the sim edits its doc this session); texts for other order kinds; saving notices; building or
+unit models, `tools/**`; any other `game/data/**` file; a see-through outline for hidden units.
+
+**Acceptance criteria.**
+1. Accessor unit tests: only the asked player's entries; a refused Build carries its error; queue-full is flagged;
+   an entry whose unit died in the same tick, and one whose slot was reused, are reported not alive; 100 calls on a
+   full list allocate 0 bytes; `TerrainMeshBuilderQaTests.ViewApiSource_HasNoSimMutatorsOrTickCalls` green.
+2. A new scene on the shipped data: a worker with a Shift-queued building it cannot pay for at its turn -> in the
+   frame after that tick the Refused sound has played once and the line over the worker reads `ui.json`
+   `placement.cannot_afford`; a second case with the site blocked reads that error's text.
+3. A unit with 8 queued orders is sent a ninth queued order past the view's own pre-check -> one Refused sound and
+   the line reads `orders.queue_full`. No C# file contains "Orders full" or any placement text (grep in the report).
+4. Twelve workers refused in one tick: one sound, twelve lines; every line is gone after the stated time; with no
+   entries a frame allocates 0 bytes in the notice code; with twelve, state the bytes.
+5. A refused unit killed in the same tick: no error, no line; a slot reused by a new unit shows no line.
+6. An enemy's and an ally's entries, and every entry kind other than a refused Build / queue-full: nothing shown,
+   nothing played. In replay playback: nothing shown, nothing played.
+7. `ui.json` without `orders.queue_full` fails to load with an error naming the key (a forged copy; look the key up
+   before removing it: rule 58); the shipped data loads.
+8. BUG-1682: `QaM6VH9FixTest`'s (O) rows print 0 "select an own building behind a drawn enemy building" on every
+   seed and zoom it runs; its other counts (own building in front, unit in front, the oracle's agreement) unchanged.
+9. `PickResource` runs once per click (a counted row or the code path shown).
+10. `git status` is clean after an import and the scene loop; the `.cs.uid` is committed.
+11. Two pictures looked at before the report: the "Can't afford" line over a worker at zoom 40 (the default) and at
+    zoom 20, 1600 x 900, in the scratchpad, named in the report (the Producer copies them to `studio/review/`).
+12. docs as in scope item 8.
+13. Build 0 errors / 0 warnings; default loop 0 failed / 22 skipped; smoke PASS; scene loop all green, first pass or
+    with the known load-flaky rows named (handoff watch-outs) and green alone.
+
+**Design references.** docs/03 "Implementation (M7-8)", "Request 58: dropped queued orders" and "For the view track
+(Request 58)"; docs/02 the order-queue rules (Shift appends, 8 orders a unit); docs/01 2026-11-24 ACCEPT (1)(b), (c)
+and 2026-11-25 (4); CLAUDE.md rules 7 and 8.
+
+**Tests required.** `sim/Rts.Sim.Tests/ViewApi/` tests for the accessor; one new Godot scene for criteria 2-7; the
+(O) row of `QaM6VH9FixTest` re-read for 8.
+
+**Constraints.** The accessor reads and never writes sim state, the tick or the hash (the ViewApi rule); no gameplay
+state in the view (the line's timer is presentation only); player-facing text only from `ui.json`; no allocation per
+frame in the steady state; the developer cannot write `studio/**`. The sim track edits `DroppedOrder.cs`'s doc
+comment this session: do not touch that file.
+
+**QA focus (standard).** The notice against the sim's truth: fuzz 16 seeds of workers with Shift-queued buildings,
+gold drained and sites blocked at random, and check every own entry gives exactly one line with the right text and
+every foreign or dead entry none (an oracle of your own over `World.DroppedOrders`). Timing: an entry in the tick a
+save is loaded, at game speed 2x and paused (does a line outlive a pause sensibly, do two refusals of one unit a few
+ticks apart restart the line rather than stack), a unit refused then selected, a line over a Teblor giant (1.5x) and
+at the closest and farthest zoom, in a fogged area (own units are always seen). The click: BUG-1682's fix against the
+M6-VH9 oracle on new seeds; a right click on the enemy building in front still attacks it; a click on an enemy
+building's site and on a remembered (ghost) enemy building in front of an own one. Suites: the task's tests, the
+default loop, the scene loop; run timing-sensitive scene rows after the other tracks' suites have ended when you can
+(rule 77).
+
+### Data track: D-H10, the data's hardening: the Teblor opening with the reserve switches, then two check gaps
+
+**Goal.** BUG-1612's open half: since D34 the Easy Teblor computer player researches its upgrade again but rarely
+brings Destrier Riders, War-dogs or Shamans. The sim now lets a build-order step be marked `throughReserve` /
+`noReserve` (M7-8). Find the order of switches (and, if needed, steps) in the Teblor `standard` opening that meets
+the bar on Easy, Normal and Hard, and ship it; if none does, ship nothing and report the table. Then close the two
+check gaps D35's QA found (BUG-1691, BUG-1690).
+
+**Files.** `game/data/factions/teblor/ai.json` (the only data file; the `standard` opening's `buildOrder` only: no
+other opening, no faction-level knob, no text unless the tooltip becomes untrue), `docs/factions/teblor.md`,
+`docs/factions/shadow.md`, `sim/Rts.Sim.Tests/Content/**`, `sim/Rts.Sim.Tests/QA/Content/**`. Handed to you by
+name for the hash move (rule 51), and only if an order ships: the golden replay's header and checksum with the
+reason in `QA/GatherWedgeQaTests`' header comment, `Replays/cross_map_seed1.replay`'s header if it carries the data
+hash. Nothing else outside your folders: no C# under `sim/Rts.Sim`, no other sim test.
+
+**Scope (in), in this order.**
+1. **Baseline first.** Re-measure the shipped order on today's `main` with D34's full rows (64 Teblor seats a
+   difficulty: four maps, seat-swapped, seeds 1-8, to 15:00; `QA/Content/D33TeblorRowQaStressTests` /
+   `Content/D34TeblorStepOrderReportTests` are the tools). It must give D34's figures (defeated / 2nd Longhouse /
+   Shaman / Breaker / Rider / War-dog / Anointing: Easy 1 / 0 / 16 / 30 / 4 / 27 / 28; Normal 9 / 23 / 15 / 14 /
+   22 / 37 / 17; Hard 11 / 23 / 22 / 39 / 33 / 46 / 23). If it does not, stop and report: that is a finding about
+   `main`, not a new baseline.
+2. **Candidates** (docs/03 "For the data track (M7-8)" has the JSON rows; steps by D35's reading: 21 Destrier
+   Rider, 22 War-dog, 24 expand, 27 Shaman x2, 28 research armor_1): **A** `throughReserve` on the Rider, War-dog
+   and Shaman steps; **S** on the Shaman step only; **RS** on the Rider and Shaman steps; **AR** = A with the
+   Anointing's research step (and the Carver it needs) moved ahead of the three train steps or timed earlier; **AN**
+   = A with `noReserve` on the armor_1 research step; plus up to six of your own. **Never `noReserve` on the expand
+   step** (BUG-1663: it means "never expand"). Screen on reduced rows (seeds 1-2, labelled as reduced), then run the
+   full rows on all three difficulties for every candidate the screen does not rule out.
+3. **The bar (docs/01 2026-11-24 ACCEPT (3)(c); full rows, every figure, all three difficulties: rule 75).** Easy:
+   Anointing >= 20, Rider >= 20, War-dog >= 40, Shaman >= 25, Breaker >= 20, defeated <= 2. Normal: Anointing >=
+   17, Rider >= 22, War-dog >= 37, Shaman >= 20, Breaker >= 12, 2nd Longhouse >= 18, defeated <= 10. Hard:
+   Anointing >= 20, Rider >= 40, War-dog >= 46, Shaman >= 22, Breaker >= 35, 2nd Longhouse >= 18, defeated <= 12.
+   **The first candidate that meets every figure ships. If none does, nothing ships** (`git diff -- game/` empty),
+   the table goes on teblor.md with the nearest candidate and what it misses, and BUG-1612 stays open.
+4. **If an order ships (one hash move):** write it in one change; `Content/Fixtures/teblor_standard_dh10.json` and
+   the fixture test follow it (the d34 fixture stays); regenerate the golden header and checksum; re-base D34's hash
+   tests the way D34 re-based D33's (**no new literal of the shipped hash anywhere: rule 73, read it from the golden
+   header**); teblor.md's AI build order section, a dated "The unit mix (BUG-1612, D-H10)" section with the table,
+   and the opening's tooltip only if it is no longer true (quote old -> new). The report says "saves and recordings
+   from before this session stop loading".
+5. **The pin list (rules 71 / 76), one a line with "re-measured: yes / moved to ... / unchanged / cannot move" in
+   your report.** Before choosing, apply the candidate on a scratch clone and run the default loop plus every test
+   class that seats a Teblor AI (grep `FindFaction("teblor")` and `"teblor"` under `sim/Rts.Sim.Tests`, Stress
+   included; list the classes you found). Known: the two golden-header pins
+   (`FactionOrderTests.TheShippedContentHash_IsTheGoldenHeaders`, `QA/PackQaTests.TheShippedDataHash_IsTheGoldenHeaders`:
+   they read the header and should follow the regeneration), `Content/D34HashMoveTests`, `QA/Content/D34QaTests`
+   (`D34Hash`), `QA/Content/D34HashMoveQaTests`, `Content/TeblorOpeningFixtureTests`,
+   `QA/Content/TeblorOpeningQaTests`, the D33 tests that read the shipped order, teblor.md's house note, and any
+   content class of rule 68's list that seats a Teblor. (`Data/StillStealthLoaderTests` reads the hash and holds no
+   literal: checked at this PLAN; the last handoff's note was wrong.) Classes that seat only Malazan / Whirlwind: name them "cannot move: no Teblor seat" and do not run them.
+   **A sim-owned class outside your folders that turns red** (the sim's switch tests `Ai/ReserveSwitch*`,
+   `Data/ReserveSwitchLoaderTests`, `QA/ReserveSwitchQaTests`, `Stress/ReserveSwitchReportTests`,
+   `Stress/M78ReserveSwitchQaStressTests`): do not edit it; name the rows in the report's first lines (the sim's
+   hardening makes them tolerant this session; the Producer checks the merged tree).
+6. **BUG-1691** (ruling): the page keeps "Passive **Shadowed**"; `PassiveContentTests` learns that a stand-still
+   stealth sentence ("Stealthed after <n> s without moving") is the unit's `stillStealth` field, compared to its
+   `delay`; un-skip `QA_TheShadowedSentence_LandsGreenOnItsStillStealthRow`.
+7. **BUG-1690** (ruling): `Content/UnitHitBonusText` reads a percentage as a hit bonus only when the unit has the
+   matching field or the sentence has first-shot or pack words ("other ... within"); other percentages are left to
+   the passive and status pins; un-skip `QA_TheWarDogsHamstringSlow_IsNotReadAsAPackBonus`.
+8. **BUG-1602's page half, if the budget allows** (say in the first lines if dropped): malazan.md's and
+   whirlwind.md's art notes say what is drawn since M6-VH9 (the sand robe, maroon veil, rust outfit: docs/04).
+
+**Out of scope.** Any other faction's files, `game/data/common/**` (the view adds one `ui.json` key this session:
+do not touch that file), any stat, cost or text other than the tooltip clause above, the Shadow roster, C# outside
+the two content test folders, the hour-long Teblor Stress report classes beyond the pin list.
+
+**Acceptance criteria.**
+1. The baseline row reproduces D34's 21 figures exactly (or the task stops with the difference reported).
+2. teblor.md carries one table: every candidate's reduced row and every full row, labelled, all seven figures, all
+   three difficulties, with the bar's figures beside them and each miss marked.
+3. The shipped order meets every figure of the bar on the full rows, **or** `git diff <base>...HEAD -- game/` is
+   empty and the report's first line says "none meets the bar" with the nearest candidate named. No `noReserve` on
+   an expand step in any shipped file (a content test pins that).
+4. If shipped: the data hash old -> new stated; the golden header and checksum regenerated with the reason in the
+   `GatherWedgeQaTests` comment; the pin list with a verdict a line; no bound raised, no row skipped to make it
+   green; no literal of the new hash in any test (grep in the report); the d34 -> dh10 fixture pair.
+5. BUG-1691 and BUG-1690: the two QA rows un-skipped and green; `PagePinReadinessTests` 0 problems;
+   `EveryShippedUnitDescription_StatesItsHitBonuses` green; a true Hamstring sentence and a wrong pack percentage
+   both judged right (rows).
+6. The review table for the owner in the report (step, switch or position, old -> new, one-line why; the seven
+   figures old -> new on each difficulty; the tooltip quoted if changed), or "no game data changed".
+7. `Content/**` and `QA/Content/**` green in the default loop on your branch.
+8. Build 0 errors / 0 warnings; default loop 0 failed, skipped 20 (22 minus the two un-skipped rows) **except** the
+   sim-owned rows named under scope item 5's last clause, each listed; smoke PASS.
+
+**Design references (the numbers must match).** docs/01 2026-11-24 ACCEPT row (3) (the bar, the two rulings) and
+(1)(e); docs/03 "Implementation (M7-8)" "For the data track" (the fields, what each switch does, the two-seat
+table); docs/02 "AI opponent" (build orders, the reserve); docs/factions/teblor.md "AI build order (Normal)",
+"Opening 1: `standard`", "Easy's Anointing (BUG-1612, D34)", "Difficulty"; docs/factions/shadow.md (G1's row).
+
+**Tests required.** A report class for the candidates (D34's shape); the fixture test; the "no `noReserve` on an
+expand step" content row; the two un-skipped QA rows and the rows of criterion 5; data validation green.
+
+**Constraints.** File order is behaviour in `ai.json` (a step behind a waiting expand step spends only above the
+reserve unless switched). Leave a switch out rather than write `false`. One hash move, in one commit. Long runs:
+record every PID; say the exact filter you ran for each row in the report (D35's QA lost two hours to a wrong
+filter). The developer cannot write `studio/**`.
+
+**QA focus (standard).** Re-run the shipped (or nearest) order's full rows yourself and compare match for match.
+**If the developer says "none meets the bar", try at least two orders of your own before agreeing** (rule 75; D34's
+QA found one). If one ships: seat-swapped rows and a fifth map or seeds 9-12 (does the bar hold off the measured
+rows, or was it fitted?); a 30-minute row on two maps (does the seat still expand and still end its matches:
+defeated and 2nd Longhouse at 30:00 against the shipped order); the loader refuses the file with a switch on the
+wrong step; saves from the base are refused with the `ui.json` text, new ones load. The pin list: run every class
+on it, Stress pin classes included, and grep for any class seating a Teblor that is not on it (rule 74). BUG-1690 /
+1691: sentences of your own (a status percentage, "within 6 m" in an on-death sentence, a wrong `delay`). Suites:
+the task's filters, the default loop, the Stress classes on the pin list; not the whole Stress category.
 
 **Rulings the next briefs must carry (docs/01, 2026-11-24 ACCEPT row):**
 - Sim, the later AI-play session (not the hardening): BUG-1661 first and alone (the hunt resumes from a razed
