@@ -262,6 +262,12 @@ public partial class Match : Node3D
         abilityViews.OverlayLines = units.OverlayLines; // M6-VH8: as the hp bars
         abilityViews.Bind(data, sim.World.Units.Capacity, _runner, selection, playerRgb: playerRgb, zoneCapacity: sim.World.Zones.Capacity);
         abilityViews.Sound = GetNode<Sfx>("Sfx"); // M5-V1: the lost-cast sound
+        // M6-V27 (Request 58): the local player's dropped queued orders, the Refused sound and a line over the unit; words as
+        // the lost cast's (none without the HUD or ui.json); nothing in a replay.
+        var notices = GetNode<OrderNoticeView>("World3D/OrderNotices");
+        notices.Camera = camera;
+        notices.Sound = GetNode<Sfx>("Sfx");
+        notices.Init(_runner, data, units.OverlayLines, options.NoHud ? null : UiText.Shared, SelectionController.LocalPlayer, enabled: live);
 
         // M6-V3: no army (the menu's match, --skirmish, --units 0) spawns none; the bases are planned exactly as with one
         // (StartBase.Plan stands a one-unit block in for an empty one).

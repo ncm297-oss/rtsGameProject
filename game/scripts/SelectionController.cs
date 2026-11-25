@@ -209,6 +209,7 @@ public partial class SelectionController : Node
     public int PickResource(Vector2 screen)
     {
         if (_runner?.Simulation is not Simulation sim) return -1;
+        ResourcePicks++;
         World world = sim.World;
         Vector3 o = _camera.ProjectRayOrigin(screen), d = _camera.ProjectRayNormal(screen).Normalized();
         System.Numerics.Vector3 so = new(o.X, o.Y, o.Z), sd = new(d.X, d.Y, d.Z);
@@ -224,6 +225,9 @@ public partial class SelectionController : Node
         GhostOnRay(world, fog, o, d, out float ghostT);
         return nodeT < buildingT && nodeT <= ghostT ? node : -1;
     }
+
+    /// <summary>Calls of <see cref="PickResource"/> so far (M6-V27: a left click on open ground walks the ray for nodes once).</summary>
+    public int ResourcePicks { get; private set; }
 
     /// <summary>Drops the resource node selection, if any.</summary>
     public void ClearResource() => _resource = -1;
@@ -640,7 +644,8 @@ public partial class SelectionController : Node
         // M6-VH9 (BUG-1681): a resource node PickResource gives is drawn in front of every building on the ray (a model's air
         // included), so it comes before the building pick (PickBuilding gives none there); a node behind a drawn building is not given.
         int node = slot < 0 ? PickResource(release) : -1;
-        int building = slot < 0 && node < 0 ? PickBuilding(release) : -1;
+        // M6-V27: node < 0 is PickBuilding's own resource check already answered, so the ray is walked for nodes once a click.
+        int building = slot < 0 && node < 0 ? OwnBuildingAt(release) : -1;
         if (building >= 0)
         {
             // A building is selected alone (M3-V2), Shift or not.
@@ -800,14 +805,30 @@ public partial class SelectionController : Node
     /// The own building a left click at screen point <paramref name="screen"/> selects, or -1: the own building whose drawn shape
     /// is met first (<see cref="BuildingOnRay"/>: a model's pick box met only in its air still picks it when no other own
     /// building is drawn on the ray), unless a resource node is drawn in front of it there (<see cref="PickResource"/>, M6-VH9
-    /// BUG-1681: a tree seen through the Keep's gaps is the tree, for the left click as for the right).
+    /// BUG-1681: a tree seen through the Keep's gaps is the tree, for the left click as for the right) or another player's
+    /// building, live or remembered, is drawn in front of it there (M6-V27, BUG-1682: the click then selects nothing).
     /// </summary>
     public int PickBuilding(Vector2 screen)
     {
+        int building = OwnBuildingAt(screen);
+        return building >= 0 && PickResource(screen) >= 0 ? -1 : building;
+    }
+
+    // PickBuilding without the resource check (FinishSelect has already asked PickResource: M6-V27, one ray walk a click).
+    // M6-V27 (BUG-1682): the own building drawn first, unless another player's building (or a remembered one) is drawn in
+    // front of it on the ray: the click then means that building, which a left click doesn't select, so nothing (the
+    // BUG-1630 pattern). A building met only in its model's air (AirDistance) is in front of nothing.
+    private int OwnBuildingAt(Vector2 screen)
+    {
         World world = _runner.Simulation!.World;
         Vector3 o = _camera.ProjectRayOrigin(screen), d = _camera.ProjectRayNormal(screen).Normalized();
-        int building = BuildingOnRay(world, null, LocalPlayer, o, d, out _);
-        return building >= 0 && PickResource(screen) >= 0 ? -1 : building;
+        int building = BuildingOnRay(world, null, LocalPlayer, o, d, out float ownT);
+        if (building < 0) return -1;
+        FogView? fog = Fog?.Refreshed(world);
+        int front = BuildingOnRay(world, fog, -1, o, d, out float frontT);
+        if (front >= 0 && front != building && world.Buildings.Owner[front] != LocalPlayer && frontT < ownT) return -1;
+        if (GhostOnRay(world, fog, o, d, out float ghostT) >= 0 && ghostT < ownT) return -1;
+        return building;
     }
 
     /// <summary>

@@ -435,8 +435,13 @@ camera keys are not rebindable yet.
 replacing what it does: move, attack-move, attack (a unit or a building), gather, build, repair, an ability (at a point,
 or a no-target one such as a frenzy), stop and hold position. A unit holds at most **8** queued orders; a ninth is
 ignored (a Shift-placed building for a worker whose queue is full is refused with the "no" sound, and the ghost stays
-up). A unit starts its next queued order when it has finished what it is doing (arrived, the target is dead, the
-building is up, the cast is done); stop and hold position end the queue. **A queued order behind a gathering worker
+up; a ninth order that still reaches a full queue plays the "no" sound and shows "Orders full" over the unit). A unit
+starts its next queued order when it has finished what it is doing (arrived, the target is dead, the
+building is up, the cast is done); stop and hold position end the queue. **A queued building that can't be started at
+its turn** (not enough gold or wood by then, the site taken, units in the way, ...) is dropped: the "no" sound plays and
+a short line over the worker says why, in the build ghost's words ("Can't afford", "Blocked", ...), for about two and a
+half seconds (M6-V27). Other queued orders that are dropped at their turn (a move to nowhere, a gather whose node is
+gone) are not announced yet. **A queued order behind a gathering worker
 waits for its current trip only:** a worker walking out to its node with nothing carried starts the queue at once; one
 working at its node or walking back loaded fills up as usual, delivers the load and then starts the queue instead of walking
 out again; with no finished drop-off of its own standing (a site does not count) it starts the queue at once and keeps

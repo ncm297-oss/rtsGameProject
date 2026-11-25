@@ -4815,6 +4815,95 @@ file changed.
      seed-6 builder of `M3PlayableTest` stands behind the Keep at one step; the scene now selects it as a player would reach
      it and says so). That is the rule the brief asked for ("a click on what the player sees selects it"). Recommendation:
      accept; a see-through silhouette for units behind buildings is the usual RTS answer, a later look task.
+- **The Producer's answers (docs/01 2026-11-24, the ACCEPT row (2); written here by M6-V27, rule 67):**
+  1. Accepted: a click in the empty air inside a building's footprint box selects the building when nothing else is drawn
+     there.
+  2. Accepted: at the closest zoom a tall building's bar is lowered to stay on screen and hangs in front of its face on high
+     ground (the shorter Keep at every zoom was not taken).
+  3. Left as it is until the owner's packs (the Mage's robe against the Heavy Infantry's shield in a dark colour); measured
+     in docs/04.
+  4. The owner's taste, listed for review (the sand robe, the maroon and rust Whirlwind reds); the faction page's art note
+     follows what is drawn (BUG-1602's data half).
+  5. Accepted: a unit wholly hidden behind a model can't be clicked; a see-through outline for hidden units is a later look
+     task, on the queue only on the owner's word.
+
+### Implementation (M6-V27)
+
+Request 58's view half: the player is told when a Shift-queued order of theirs is dropped (the sim lists them since M7-8,
+`World.DroppedOrders`, "Implementation (M7-8)"). With it BUG-1682 (the left click through an enemy building), one ray walk a
+click, and M6-VH9's answers above. One `ui.json` key added (`orders.queue_full`); no sim rule, data hash or save changed.
+
+- **The accessor (`ViewApi/OrderNotices`, `OrderNotice`).** `OrderNotices.Collect(dropped, player, alive, generation, into)`
+  reads the dropped-order span and the unit store's `Alive` / `Generation` arrays, all handed in by the view (`ViewApi`
+  names neither `World` nor `UnitStore`), and writes the asked player's notices into a span: only that owner's entries and
+  only the kinds the view shows (`IsNotice`: a Build refused at its turn with a `PlacementError`, or any order a full queue
+  refused, `QueueFull`); every other kind (a Move to nowhere, a Gather with its node gone, a Repair with nothing to repair,
+  a cast on cooldown, an Attack on a gone target) gives none yet. Each notice carries the handle, the kind, the error or
+  the queue-full flag and **`Alive`**: the slot alive and still at that generation when read, since an entry's unit may
+  die later in the same tick and its slot may hold a newer unit (BUG-1662). Reads only; allocation-free (100 calls over a
+  full 4,160-entry list: 0 bytes).
+- **The lines (`ViewApi/NoticeLines`).** A pool of 64 lines, one a unit slot: a notice for a unit whose slot already has a
+  line restarts it with the new text (two refusals a few ticks apart restart, never stack); when all 64 are in use the
+  oldest is replaced. **A line lasts `NoticeLines.LifetimeSeconds` = 2.5 s of the view's clock** (the frame delta while the
+  game runs: the same 2.5 s at game speed 0.5x or 2x, and a pause holds it, since the node is paused with the tree), the
+  last `FadeSeconds` 0.5 s fading out. The timer is presentation only (not saved, not game state).
+- **The view (`OrderNoticeView`, node `World3D/OrderNotices` of `Match.tscn`).** After every tick the runner runs
+  (`SimRunner.Ticked`, so a frame of several ticks at a fast speed misses none, as `CombatViews` reads `Deaths`) it collects
+  the local player's notices; each live one starts or restarts its unit's line, and a tick with at least one plays
+  `SfxEvent.Refused` **once**, however many units (twelve refused in one tick: one sound, twelve lines). The words are
+  `ui.json`: a refused Build's `placement.<error>` (the build ghost's own texts: `cannot_afford`, `blocked`,
+  `unit_in_the_way`, `unexplored`, ...), a queue-full refusal's new **`orders.queue_full`** ("Orders full", the Producer's
+  wording, docs/01 2026-11-25 (4); `UiText` reads the `orders` section like the others, so a missing key or section is a
+  load error naming it). Each frame (`ProcessPriority` 1, after the runner and the camera) a live line is a billboard
+  `Label3D` over its unit, drawn like the lost-cast words (`AbilityViews`): over the type's overlay line
+  (`UnitViews.OverlayLines`, so a 1.5x Teblor's line is over its head) plus `BarGap + BarAbove + CueTextAbove` scaled by the
+  zoom, in the refusal colour, no depth test, its `PixelSize` `BuildGhost.ReasonPixelPerZoom` x zoom so it reads the same
+  at every zoom (an em of 38 px at zoom 20 and 36 px at 60 on a 900 px window). A line whose unit has died or whose slot holds
+  another unit draws nothing and expires on time. Shown for every own unit, selected or not, fogged ground or not (own
+  units are always seen). **Nothing** for another player's units (enemy or ally), for a unit dead when read, or in replay
+  playback (`Match` sets `Enabled = false` for Load Game -> Watch). Without the HUD (`--no-hud`) or `ui.json` there are no
+  words, as for the lost-cast words; the sound still plays. A save loaded mid-match shows nothing for its own tick (the
+  list is not saved, docs/01 2026-11-24 ACCEPT (1)(c)). A steady frame allocates nothing: a label's text, size and colour
+  are written only when they change (100 frames with twelve lines: 0 bytes; with none: 0 bytes; a tick read with no
+  entries: 0 bytes).
+- **BUG-1682 (the left click through an enemy building).** `PickBuilding` (own buildings only) now drops its building when
+  another player's building (`BuildingOnRay` over every owner, fog-filtered) or a remembered one (`GhostOnRay`) is drawn in
+  front of it on the ray: the click then means that building, which a left click does not select, so it selects nothing
+  (the BUG-1630 pattern). A building met only in its model's air (`AirDistance`) is in front of nothing, so the own
+  building's air still selects it when only air is in front. An enemy unit in front is unchanged (out of scope).
+  `QaM6VH9FixTest`'s (O) oracle now wants nothing selected where an enemy building is drawn first, and counts the own
+  buildings the code still selects there: 0 on all twelve seed x zoom rows, of 274 / 86 / 32, 124 / 14 / 3, 0 / 0 / 0,
+  0 / 82 / 23 pixels with one there (the counts the bug file reported); every other count of the row is unchanged.
+- **One ray walk for nodes a click.** `FinishSelect` asked `PickResource` and then `PickBuilding`, which asked it again;
+  it now calls the own-building pick without the resource check when `PickResource` has already answered (no behaviour
+  change). `SelectionController.ResourcePicks` counts the calls: once a click wherever no unit is picked (scene row P; the
+  old path gave 2 on every own-building click).
+- **Tests.** xUnit `ViewApi/OrderNoticesTests`: only the asked player's entries; a refused Build carries `CannotAfford` /
+  `Blocked`; queue-full flagged; a Gather and a Repair give none; a unit freed after its entry and a slot reused (real and
+  forged) read not alive; a short span takes the first notices; 100 calls on a full list 0 bytes; reading every tick leaves
+  the state hash alone; the lines restart for the same slot, expire at 2.5 s and fade, twelve lines then the oldest replaced,
+  0 bytes. New scene `OrderNoticeTest` (headless, in the loop; three seats: you, an enemy, an ally; shipped data, the
+  standard 200 / 200 start): (A) a Laborer walks, then its Shift-queued Garrison Keep (275 / 275) can't be paid at its turn:
+  the next frame one Refused sound and the line reads `placement.cannot_afford`, following the unit as it walks; (B) a queued
+  House onto the Keep's footprint: `placement.blocked`; (C) a ninth queued order sent straight to the sim: one sound,
+  `orders.queue_full`; (D) twelve Laborers refused in one tick: one sound, twelve lines, all gone 2.5 s after; the bytes
+  above; (E) forged dead and reused-slot entries on the real store: no line, no sound; (F) the enemy's and the ally's
+  refused Keeps and an own queued Gather on bare ground (all three listed by the sim): nothing shown or played; (G) the line
+  on screen and its em at zoom 20 and 60; (H) `ui.json` without `orders.queue_full` (key looked up first) or without the
+  section fails naming it, the shipped file loads, and no script's code holds a placement or orders text as a literal;
+  (P) the click count; (R) the live match's recording played back: the sim lists the same 15 own refusals, nothing shown
+  or played. Windowed with `-- --shots <dir>` it saves `m6v27-cant-afford-40m.png` and `-20m.png`. `ShellTest`'s ui rows
+  include the `orders` key and section. The scene loop is 123 scenes.
+- **Questions for the Producer (rule 67), each with the developer's recommendation:**
+  1. **2.5 s a line** on the view's clock (a pause holds it). Recommendation: keep; long enough to read two words, gone
+     before the next order. Longer lines would pile up over a crowd of workers.
+  2. **No words without the HUD** (`--no-hud`), as the lost-cast words; the sound still plays. Recommendation: keep (one
+     rule for the world-space words).
+  3. **The other dropped kinds stay silent** (a queued move to nowhere, a gather whose node is gone, a repair with nothing to
+     repair, a cast on cooldown, an attack on a gone target). Recommendation: leave until a play session shows one confuses;
+     each would need its own `orders.*` text.
+  4. **The lost-cast cue (M5-V1) still plays and shows in replay playback**, while the order notices do not (this brief's
+     rule). Recommendation: make the lost-cast cue follow the same rule in the next view hardening (BUG-1710).
 
 ## Vision, detection, fog
 
