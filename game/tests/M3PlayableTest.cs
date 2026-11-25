@@ -595,7 +595,24 @@ public partial class M3PlayableTest : Node
         for (int attempt = 0; attempt < 20; attempt++)
         {
             await LookAt(U.Position[unit.Index]);
-            await LeftClick(ScreenOf(unit.Index));
+            // M6-VH9 (BUG-1630): a unit a drawn building hides is not what a click on it selects (the building is). A builder at
+            // work behind the Keep's 8.1 m model is clicked where the player sees it: the first point of its pick disc the building
+            // doesn't hide; hidden whole, it is selected as a player would reach it (its portrait), and the step says so.
+            Vector2 at = ScreenOf(unit.Index);
+            if (_sel.HiddenByBuilding(unit.Index, at))
+            {
+                float r = Math.Max(2f, (Screen(U.Position[unit.Index], 0f) - Screen(U.Position[unit.Index] + new System.Numerics.Vector2(U.Radius[unit.Index], 0f), 0f)).Length() * 0.8f);
+                bool found = false;
+                foreach (Vector2 off in new[] { new Vector2(0f, -r), new Vector2(-r, 0f), new Vector2(r, 0f), new Vector2(0f, r) })
+                    if (!_sel.HiddenByBuilding(unit.Index, at + off)) { at += off; found = true; break; }
+                if (!found)
+                {
+                    GD.Print($"  worker {unit.Index} is hidden behind a building at tick {_sim.TickNumber}: selected without a click");
+                    _sel.SelectOnly(unit);
+                    break;
+                }
+            }
+            await LeftClick(at);
             await Frames(1);
             if (_sel.Selection.Count == 1 && _sel.Selection.Contains(unit)) break; // else another worker stood nearer the cursor: again
         }

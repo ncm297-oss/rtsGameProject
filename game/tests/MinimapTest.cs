@@ -81,15 +81,19 @@ public partial class MinimapTest : Node
         Check(wrong == 0, $"{wrong} units with the wrong dot colour");
 
         // Refresh cost at 2,000 units.
-        double total = 0, worst = 0;
-        for (int k = 0; k < 50; k++)
+        double total = 0, worst = 0, batch = 0, best = double.MaxValue;
+        const int runs = 50, perBatch = 5;
+        for (int k = 0; k < runs; k++)
         {
             _mini.Refresh(_sim);
             total += _mini.LastRefreshMs;
+            batch += _mini.LastRefreshMs;
             worst = Math.Max(worst, _mini.LastRefreshMs);
+            if ((k + 1) % perBatch == 0) (best, batch) = (Math.Min(best, batch / perBatch), 0);
         }
-        GD.Print($"minimap refresh at {u.Count} units: avg {total / 50:F3} ms, worst {worst:F3} ms");
-        Check(total / 50 <= 0.5, $"refresh avg {total / 50:F3} ms > 0.5 ms");
+        GD.Print($"minimap refresh at {u.Count} units: avg {total / runs:F3} ms, worst {worst:F3} ms, best of {runs / perBatch} runs of {perBatch} {best:F3} ms");
+        // M6-VH9: the best run's average (a busy machine stretches some runs, a slower refresh every run; docs/03 "(M6-VH9)").
+        Check(best <= 0.5, $"refresh: the best of {runs / perBatch} runs averages {best:F3} ms > 0.5 ms");
 
         // Select 40 own units; a left click on the minimap must not reach the selection controller.
         _sel.Selection.Clear();

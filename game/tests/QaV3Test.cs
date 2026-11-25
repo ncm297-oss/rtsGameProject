@@ -529,7 +529,10 @@ public partial class QaV3Test : Node
         int a = B.Cell[slot];
         float cs = MapConstants.CellSize;
         float x0 = a % G.Width * cs, z0 = a / G.Width * cs, x1 = x0 + def.FootprintWidth * cs, z1 = z0 + def.FootprintHeight * cs;
-        float baseY = TerrainHeight.At(W.Heightmap, c.X, c.Y), top = baseY + BuildingViews.BoxHeight;
+        // M6-VH9 (BUG-1630): picking tests the building at its drawn height (a model's fitted top: the hall is the Keep's
+        // model), so the box swept here is that height, not the old 3 m.
+        float drawnTop = _match.GetNode<BuildingViews>("World3D/BuildingViews").PickTops[B.TypeId[slot]];
+        float baseY = TerrainHeight.At(W.Heightmap, c.X, c.Y), top = baseY + drawnTop;
         float minX = float.MaxValue, minY = float.MaxValue, maxX = float.MinValue, maxY = float.MinValue;
         foreach (float x in new[] { x0, x1 })
             foreach (float y in new[] { baseY, top })

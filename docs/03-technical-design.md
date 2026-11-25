@@ -3725,7 +3725,8 @@ file changed.
   the 3 m box, so the empty air over it up to 3 m still selects it (a 0.5 Barracks, drawn 1.5 m tall, at the default zoom:
   about 437 pixels of air), and where a unit or another building stands behind that air a click picks the short building
   instead (units pick first, so only a building behind). No shipped building is below scale 1; if one ships, `PickRay`
-  can take the drawn height.
+  can take the drawn height. **Changed by M6-VH9 (BUG-1630, BUG-1381 item 2):** the hit test now follows each type's drawn
+  height both ways (a box type's `DrawnHeight`, a model's fitted top); see "Implementation (M6-VH9)".
 - **Scale-1 buildings draw exactly as before:** `EconomyViewTest`'s six `--placeholder-art` pictures (the Malazan bases of
   seeds 1, 6 and 31, hauling, the site, cargo at 60 m), taken at 43ab896 and with this change in one tree, are
   byte-identical for three (seeds 1 and 6, hauling); the other three differ only in the HUD's frames-per-second number, a
@@ -3819,6 +3820,8 @@ docs/04 "Import process" ("Unit models, as built").
   library has no finger tracks.
 - Changed by M6-V24: a model is one surface (one atlas, the team material draws the whole figure: the team surface is
   surface 0, the only one), and the cast clip has no crowd phase.
+- Changed by M6-VH9 (BUG-1601): an attack clip the clip map marks one-shot (the Sapper's throw) has no crowd phase either:
+  it plays once per shot, its release on the shot leaving (`UnitViews.OneShotClipTime`); see "Implementation (M6-VH9)".
 
 ### Implementation (M6-VH7)
 
@@ -4153,7 +4156,8 @@ ViewApi or data file changed.
 
   The row checks at least 16 px a marker and 3 px a line at 60 m, and at most 32 px a marker, 56 px a ring and 4 px a
   line at 20 m.
-- **Overlays over the head (BUG-1441 item 2).** `UnitViews.OverlayLines` (per type, made in `Bind`): for a capsule type its
+- **Overlays over the head (BUG-1441 item 2; changed by M6-VH9: a prop over the head, the Mage's staff, lifts the line, see
+  "Implementation (M6-VH9)").** `UnitViews.OverlayLines` (per type, made in `Bind`): for a capsule type its
   capsule's top (`DrawnHeight`), exactly as before; for a model type `(TopBone + ModelHeadRoom) x scale`, where
   `UnitModels.TopBone(type)` is the highest bone of the model file's skeleton over every clip the type's players hold
   (17 poses a clip, from the clips' own tracks and the bones' rest poses, computed once per skeleton and clip per run:
@@ -4553,7 +4557,7 @@ sim, ViewApi or data file changed (docs/01 2026-11-18 (b) (e), (f)).
   remembered models drawn). New accessors: `Models`, `ModelOf`, `ShownAsModel`, `GhostModelOf`, `GhostShownAsModel`,
   `BarY`; every old one keeps its meaning (`BoxOf` is still the box, hidden under a model).
 - **Not changed:** the hit test keeps the 3 m box (a click on the footprint selects the building; a click on a Keep tower
-  above 3 m selects what is behind, as for any building taller than 3 m since M7-V4), the placement ghost (the box), the
+  above 3 m selects what is behind, as for any building taller than 3 m since M7-V4; **fixed by M6-VH9**, BUG-1630), the placement ghost (the box), the
   outline and rings (the footprint), the minimap, every other type and the data `scale` (no model is drawn by it yet; see the
   questions).
 - **Existing scenes:** the scenes that pin a finished Keep's or Barracks' box (its `BoxMesh`, its material, its visibility
@@ -4612,7 +4616,7 @@ sim, ViewApi or data file changed (docs/01 2026-11-18 (b) (e), (f)).
      constant if play shows figures lost behind keeps.
   4. **The hit test keeps the 3 m box**, so a click on a Keep tower above 3 m does not select the Keep (M7-V4's rule).
      Recommendation: a later task gives `BuildingPicker.PickRay` each type's drawn height (a `ViewApi` change, out of this
-     task's scope), once more buildings are models.
+     task's scope), once more buildings are models. (Done in M6-VH9.)
   5. **The data `scale` on a model** (the Teblor buildings' 1.25): not applied yet (no Teblor building has a model).
      Recommendation: apply it as the boxes do since M7-V4, to the height only (the fit's scale times `scale` on the vertical
      axis), so a Teblor model stays inside its footprint and stands 25 % taller; the alternative (uniform, then refit to the
@@ -4623,6 +4627,194 @@ sim, ViewApi or data file changed (docs/01 2026-11-18 (b) (e), (f)).
   7. **A site is today's mauve box**, rising, until the frame it finishes, then the model appears whole. The pack has no
      construction stage that fits (its Levels are upgrades). Recommendation: accept for this slice (docs/01 2026-11-18 (b)
      (f)); a scaffold or a model rising through the ground is a later look task.
+
+### Implementation (M6-VH9)
+
+The view's debt after the art slices: a click on what the player sees selects it (BUG-1630, BUG-1381 item 2), the new
+figures read in every player colour and the Mage's staff head clears its bar (BUG-1600), the Sapper throws once per shot
+(BUG-1601), the Keep's bar stays on screen at the closest zoom (BUG-1631), two test gaps (BUG-1632), the docs half of
+BUG-1602, and the three load-flaky timing rows. One read-only `ViewApi` change (`BuildingPicker`); no sim, data or faction
+file changed.
+
+- **Picking by drawn height (BUG-1630).** `BuildingPicker.PickRay` and `PickGhostRay` gain overloads taking two per-type
+  spans: `finishedTops` (the height a finished building of the type is drawn to) and `siteHeights` (the height its site's
+  box rises to); a live site is `siteHeights[type] x max(siteMinShare, progress)` (its rising box only, never the model's
+  top), a remembered site `siteHeights[type] x siteShare` (its foundation), a live or remembered finished building
+  `finishedTops[type]`. A type past a span's end is not picked (no out-of-range read). The old single-height overloads keep
+  their meaning (a private core takes either). Still allocation-free, still read-only (`ViewApiSource_HasNoSimMutatorsOrTickCalls`
+  green). The view's spans are `BuildingViews.PickTops` (a model type's `BuildingModels.Top`, the Keep 8.09 m and the
+  Barracks 3.49 m; every other type its `DrawnHeight`, `BoxHeight x scale`, so a Teblor building at 1.25 is picked to 3.75 m
+  and one below scale 1 no longer in the air over it, BUG-1381 item 2) and `BuildingViews.SiteHeights` (`DrawnHeight`), made
+  in `Bind`. `SelectionController` passes them in every pick (the click, the enemy pick, the right-click target, the
+  resource pick's occlusion, the ghost pick) through its new `Buildings` property, set by `Match`; without building views it
+  uses each type's `DrawnHeight`.
+- **A unit hidden behind a building is not what a click there selects.** A left click picks own units first, in screen
+  space (`ScreenPicker`, M3), so a Laborer standing behind the Keep's tower, hidden by it, was selected through the tower
+  (QA's row). New `SelectionController.HiddenByBuilding(slot, screen)`: the unit the screen pick chose is dropped when a
+  drawn building's pick box is entered on the camera ray before the unit's body (its centre's distance less its radius)
+  **and**, for a model, the ray meets the model's triangles before it (`BuildingViews.ModelRayDistance`, through
+  `BuildingModels.RayDistance` over the fitted faces, made once per type: the Barracks' box is wider than its model, so the
+  box alone would hide units the player sees beside it), **and** the same holds on the ray to the unit's top (its
+  `DrawnHeight` over its ground): a unit whose head shows over a low building (a worker at the far side of its site, the
+  `M3PlayableTest` builder) is still the unit, since the screen pick's disc (the radius round the body centre) does not
+  reach the head the player would click. The click then means what is in front (the building). A unit in front of a
+  building is still the unit (P1 rows: the Keep and the Armory's box, at zoom 20, 40 and 60; P1b: a Laborer behind the
+  Armory with its head over it). Box select is unchanged.
+- **Measured (criterion 3), the pick box against the model:** of the sampled pixels (every 6th) whose ray enters a model
+  type's pick box but meets none of its triangles, the share that selects it: Barracks 100 % / 99.6 % / 98.2 % (1,313 /
+  285 / 109 pixels) at zoom 20 / 40 / 60, Keep 99.9 % / 100 % / 100 % (3,617 / 632 / 256). That is the air beside the
+  Barracks' narrower model (3.9 m on 6 m) and round the Keep's towers; at most 3 such pixels a zoom don't select it (not
+  traced). Recommendation (question 1 below): accept; a per-type hit shape is the tighter fix.
+- **The bar's ceiling (BUG-1631).** `BuildingViews.Camera` (set by `Match`): when the zoom or the field of view changes,
+  every placed bar is put under `BarCeiling(zoom, fov, groundY)`, the highest bar over its ground that a building at the
+  camera's focus shows under the screen's top edge (the top edge's ray, `pitch - fov / 2` under the horizon, passes over
+  the focus at `zoom - zoom / tan(pitch) x tan(pitch - fov / 2)`; less the ground's height, since the camera's height is
+  the zoom above 0, and less `BarTopMargin` 0.6 m). Only a bar that wants to be higher moves: at zoom 20 over 4 m ground
+  the Keep's bar goes from 8.69 m to 7.31 m (screen y 28-45 of 900, was -51); at 40 and 60, and the Barracks' at every
+  zoom, nothing changes (row K). `BarY` is the drawn height, `BarWanted` the look's. A zoom change rewrites each shown bar
+  once (no allocation); a steady frame writes nothing.
+- **The figures in the setup's colours (BUG-1600 items 1, 2).** Manifest only: the Priest's outfit tint and robe a
+  weathered sand `#a39577` (were bleached `#e2d9c2` at brightness 1.4 and `#d9d0bc`), its veil maroon `#5e1a20` (was
+  `#8e1f24`); the Zealot's outfit tint rust `#6e3a26` (was crimson `#8a2a26`), its head-wrap maroon `#5a1c1e` (was
+  `#7e1d1d`). Rule and the full table in docs/04 "Re-tint in the setup's colours (M6-VH9)". Row (C) of
+  `ViewHardenVh9Test` reads the manifest and `ui.json` (no colour literal in C#) and checks the Priest's non-team colours at
+  least 60 from Bone (nearest now 104) and the Priest's and Zealot's at least 60 from Crimson (nearest 78). Item 4 (the
+  Mage and the Heavy Infantry alike in grey) is measured, not changed (question 3 below).
+- **The bar over the Mage's staff head (BUG-1600 item 3).** `UnitModels` also samples each model's **props** (the
+  vertices reading the atlas's props tile, skinned to their bone through the skin's bind pose) over the same 17 poses of
+  each clip as `TopBone`: `PropTop(type)` and `PropTop(type, clip)`. `UnitViews.PlayedPropTop` takes the highest over the
+  clips the type's data has it play (idle, walk, attack; the cast clip when one of its abilities has a cast longer than a
+  tick; a worker's gathering and building clips), so a soldier's weapon swung overhead in `gather_wood`, a clip it never
+  plays, doesn't count. The line is `max(TopBone + ModelHeadRoom, PlayedPropTop + PropHeadRoom) x scale`
+  (`UnitViews.OverlayLineOf`, `PropHeadRoom` 0.10 m: a prop's top is its own surface, while the bones' 0.18 m covers the
+  head mesh over the head bone, so a helmet, a wrap or a blade at head height leaves its type's line alone).
+
+  | Type | Line before (m) | After (m) | Props' top in its clips (m) |
+  | --- | --- | --- | --- |
+  | Malazan Cadre Mage | 1.961 | **2.309** | 2.209 (the staff head) |
+  | Whirlwind Desert Archer | 1.961 | **2.011** | 1.911 (the bow's tip in its shot) |
+  | Teblor Breaker | 2.941 | **3.264** | 3.114 (the maul) |
+  | Teblor Javelin Thrower | 2.941 | **3.528** | 3.378 (the javelin) |
+  | Teblor Shaman | 2.941 | **3.434** | 3.284 (the staff) |
+  | Teblor Warrior | 2.941 | **3.482** | 3.332 (the greatsword) |
+  | Laborer, Crossbowman, Heavy Infantry, Sapper, Camp Follower, Priest, Raider, Zealot, Teblor Gatherer | 1.961 (2.941) | unchanged | under the line, or none |
+
+  A hurt Mage at the default zoom and at 20 m: the staff head's top 2.165 m over the ground in the pose drawn, the line
+  2.309 m, the bar's lower edge 2.579 m, 12 px (40 m) and 28 px (20 m) above the staff head on screen (row B).
+  `OverlayLineTest` (1) measures the props' top on a real player and skeleton over the same clips (equal within 2 cm) and
+  keeps its 0.3 m margin over the higher of bones and props.
+- **The Sapper throws once per shot (BUG-1601).** The asset manifest's `oneShot` (docs/04 "One-shot clips") rides in the
+  Sapper's file as extras; `UnitModels.OneShotRelease(type, clip)` reads it (0: the clip loops as before). `PlayClip`
+  starts a marked clip at its first frame, and from then on `Sync` puts it at `UnitViews.OneShotClipTime` and
+  `AdvanceAnimations` seeks it there (the cast clip's path since M6-V24). The time comes from the unit store, read as the
+  view always has: mid-windup the shot leaves in `WindupTicks - alpha` ticks; between shots the next swing starts when the
+  cooldown runs out and then winds up (`CooldownTicks + windup - alpha`, a cooldown of 0 waiting one tick); the clip stands
+  at `release x length - time to the shot`, holding its first frame (the ready pose) until then, and after the shot plays
+  on from the release to its end (the time since the shot from the data cooldown, so a Frenzied cooldown shortens the
+  follow-through a little; no Sapper has Frenzy). No sim read was missing, so no request to the sim track. Row S: 5 shots,
+  5 throws, each shot first existing at the release (offset 0.00 of the clip, tolerance 0.15); the clip map's 0.28 equals
+  the throwing hand's fastest frame on the skeleton. Melee clips, the Crossbowman's and the casters' are unmarked and
+  unchanged (`ModelViewTest`, `QaM6V25Test`, `CastClipTest`, `FootModelTest` green).
+- **Test gaps (BUG-1632).** `BuildingModelTest`'s allocation row runs while the remembered models are drawn ("20 syncs with
+  2 models and 2 remembered models drawn: 0 bytes"), and checks at least one is; the sites picture waits up to 400 ticks for
+  each site (the Laborer walks to the 8 x 8 Keep's edge first; 40 were too few) and fails a site that never comes.
+- **The timing rows measure the best of several runs.** `DebugOverlayTest` (overlay layers at 2,000 units while panning,
+  1 ms), `QaM25Test` (the overlay at each map corner, 1 ms) and `MinimapTest` (the refresh at 2,000 units, 0.5 ms) each
+  split their frames into ten runs (12, 12 and 5 frames) and check the **best run's average** against the same budget; the
+  whole average and the worst frame are printed as before. What each guards now: the code's own cost per frame. Another
+  process on the machine stretches some runs but not all ten, while a slower overlay or refresh slows every run, so a real
+  regression still fails and a busy machine no longer does. No limit was raised. Passed in a scene run beside a full
+  `dotnet test` of the sim suite.
+- **Tests.** New `game/tests/ViewHardenVh9Test` (headless, in the loop): (P1) an own Laborer standing between the camera
+  and a model (the Keep) or a box (the Armory) is selected by a click on it at zoom 20, 40 and 60; (P2) the Teblor
+  Longhouse (scale 1.25, a box) is picked between the old 3 m box's top and its drawn 3.75 m, and not 0.3 m over it;
+  (P3) the measured shares above; (K) the bar rows; (B) the overlay table and the hurt Mage; (S) the Sapper; (C) the colour
+  table and checks. Windowed with `-- --shots <dir>` it saves `m6vh9-priest-zealot-colours-1-4-{40,20}m.png` and
+  `-5-8-{40,20}m.png` (the Priest in the eight setup colours, four a match, the most a match seats; the Zealot in Crimson,
+  Cobalt and Jade), `m6vh9-hurt-mage-40m.png` / `-20m.png`,
+  `m6vh9-keep-centred-20m.png` and `m6vh9-sapper-throw-20m.png`. xUnit (`BuildingPickerTests`): a model type picked up to
+  its fitted top and no higher, and a 1.5 m type not in the air over it; a scaled box type at its drawn height; a site at
+  its rising box, not the model's top; remembered buildings at their top and remembered sites as foundations; 0 bytes for
+  the new overloads. `QaM6V26Test`'s `KNOWN BUG-1630` / `BUG-1631` rows are plain checks (100 % of the sampled model pixels
+  at zoom 20 / 40 / 60 for both types; the click on the tower with a Laborer hidden behind selects the Keep; the Keep's bar
+  on screen at zoom 20). Older scenes that pinned the 3 m hit box or the bar over the drawn top, changed with the rule:
+  `BuildingScaleViewTest` (a click on the 2.0 Barracks above 3 m now selects it), `QaM7V4Test` (the forged 3.0 Keep's bar
+  at zoom 20 is checked on screen when the ceiling lowers it, over the drawn top otherwise: BUG-1381 item 1 is the same
+  fix), `QaV3Test` (its terrain-occlusion sweep measures the hall's box at its drawn top), `ReplayPlaybackTest` (the live
+  right click picks a pixel that is open ground: 60 px beside the worker can now be the hall's 8.1 m pick box).
+- **Cost** (rules 42 / 61; 2026-11-24 18:20-18:23, 1600 x 900, `ModelShots --bench 30 --vsync off`, all five runs back to
+  back in one window after 30 s idle, the last thing run and none of the developer's own processes running; one of the other
+  tracks' `testhost`s ran throughout and could not be stopped, and the 400-capsule figure, 1.73 ms against M6-V26's 0.86,
+  says this window was about twice as busy as that one). The building row as M6-V26's (60 models packed round the crowds,
+  zoom 60).
+
+  | Run | Average | While 90 %+ alive | Worst 1 % (90 %+ alive) | Draw calls | M6-V26 (90 %+ alive) |
+  | --- | --- | --- | --- | --- | --- |
+  | 400 figures + 60 building models (60 m) | 9.97 ms | **10.33 ms** (at most 16.7) | 17.43 ms | 800 | 7.00 ms, 801 calls |
+  | 400 figures, fifteen types (40 m) | 9.48 ms | 10.11 ms | 17.59 ms | 966 | 7.02 ms, 959 calls |
+  | 400 capsules | 1.51 ms | 1.73 ms | 7.30 ms | 171 | 0.86 ms, 171 calls |
+  | 1,000 figures, fifteen types | 31.39 ms | 32.78 ms | 47.72 ms | 2,588 | 17.57 ms, 2,602 calls |
+  | 1,000 capsules | 3.29 ms | 3.40 ms | 12.32 ms | 243 | 1.51 ms, 243 calls |
+
+  Every row is slower by less than the window's own factor (capsules x2.0 at 400 and x2.3 at 1,000; figures x1.5 and
+  x1.9), and the draw calls are the same within the crowd's spread, as they should be: nothing here draws anything more.
+  The per-frame additions are the one-shot clip's time for each attacking Sapper (a few reads and sums, and the seek the
+  cast clip already does), the bar ceiling's check (a compare a frame; a rewrite only when the zoom changes) and nothing per unit; picking
+  runs per click. The 400 + 60 row is under the 16.7 ms gate; a quiet window would give the comparable figure.
+- **Fix round (QA's BUG-1681, BUG-1680).** *What the box's air means.* The taller pick box put the air round the Keep's
+  towers in front of what the player sees behind it: a right click on an enemy seen through the gaps targeted it at 0 of
+  967 sampled pixels (zoom 20; the old 3 m box left 869). Every pick that compares a building with something else on the
+  camera ray now takes the building by its **drawn shape**: `SelectionController.BuildingOnRay` (and `GhostOnRay` for
+  remembered buildings) walks the pick boxes along the ray in entry order (`BuildingPicker.PickRay` / `PickGhostRay`
+  again with the last box struck off a scratch copy of the shown list) and gives the first building whose drawn shape is
+  met: a box type or a site at its box's entry, a model at its triangles (`BuildingViews.ModelRayDistance`, new
+  `GhostModelRayDistance`). A building met only in its model's box (its air) is still given, at `AirDistance`
+  (`float.MaxValue`): it means the building only when nothing else drawn is on the ray. Used by the enemy pick
+  (`EnemyAt`, so the right click, A + click and the ability point), the right-click target (`ContextTarget`: a resource
+  node, a ghost or another building seen through the air comes first), the resource pick (`PickResource`), the left
+  click's building pick (`PickBuilding`, own buildings; criterion 1's model pixels are met on the triangles, so they still
+  select it, and the air with nothing else behind still does, P3 unchanged) and the hidden-unit rule (`HiddenByBuilding`,
+  now over every building on the ray, not just the first box). A left click now asks for a resource node before a
+  building: `PickResource` gives a node only when it is drawn in front of every building on the ray, so a tree seen through
+  the Keep's gaps (or in front of a box) is the tree, and `PickBuilding` gives no building there (so it still names what a
+  left click selects, and `QaV3Test`'s sweep, every `PickBuilding` pixel right-clicks the hall, holds: the first loop run
+  after the change failed it on 2,446 pixels where a tree stands behind the hall's air). No hover or attack cursor picks anything yet; the minimap's pick has
+  no building ray. `ViewHardenVh9Test` (E): enemy Heavy Infantry 1.5-7 m behind an own Keep, every sampled pixel where the
+  ray meets an enemy before the model's triangles and before any tree is an Attack on it (1,366 / 280 / 105 of as many at
+  zoom 20 / 40 / 60; 0 before the fix), and none of the 868 / 109 / 25 where the model is in front is. QA's (E) row is a
+  plain check (880 / 166 / 69 against the old box's 869 / 157 / 62; its other pixels are where a tree stands in front of the
+  enemy, which a click there means). *The lowered bar.* On a level-2 terrace at zoom 20 the ceiling put the Keep's bar
+  3.31 m up, inside its hall (9 of 9 points hidden), and on level 1 two of nine points were behind the towers. A bar the
+  ceiling lowers now also moves to the building's camera side: `BarZ` is the drawn front (the footprint's edge or the
+  model's fitted front, the farther) plus the bar's thickness, toward +z (the camera never turns), so the ray from the
+  camera to any point of it stays in front of the whole building; a bar not lowered stays over the centre (`BarZ` 0). QA's
+  (T) row reads the bar where it is drawn and is a plain check: 0 of 9 points hidden on levels 0, 1 and 2; (K) checks the
+  same for every model type, and `QaM7V4Test` now checks that the forged 3.0 Keep's lowered bar is not behind its box
+  (BUG-1381 item 1).
+- **Questions for the Producer (rule 67), each with a recommendation:**
+  1. **The pick box is the footprint at the drawn top**, so the air beside a narrower model (the Barracks) or round the
+     Keep's towers selects the building (P3: nearly every such pixel) when nothing else is behind it there; since the fix
+     round anything drawn behind the air (a unit, a tree, another building) comes first. Recommendation: accept.
+  2. **The bar's ceiling lowers the Keep's bar at the closest zoom** (7.31 m against the towers' 8.09 m on 4 m ground,
+     3.31 m on 8 m ground), and since the fix round moves it to the building's front so it is not hidden: at zoom 20 on
+     high ground the bar hangs in front of the Keep's face rather than over it. Recommendation: accept; the alternative is
+     a height cap on the fit (the Keep shorter at every zoom).
+  3. **The Mage and the Heavy Infantry in grey (BUG-1600 item 4, measured).** The two big dark squares at 40 m are the
+     Mage's robe (its own colour, `#4e2a26`) and the Heavy Infantry's shield (the team colour at the team shade, so about the
+     player colour). Their grey (Rec. 601 luma of the colours, 0-255, unlit): robe 52; shield Iron 78, Ochre 145, Crimson 83,
+     Cobalt 64, Jade 120, Violet 87, Rose 119, Bone 211, so the robe is 12 (Cobalt), 26 (Iron), 31 (Crimson) and 35
+     (Violet) darker than the shield and 67-159 against the light colours (QA's lit picture: 67 / 83 Crimson, 54 / 79
+     Cobalt, 58 / 150 Jade, 66 / 213 Bone, the same order). With a dark player colour the two read apart in grey by shape
+     only: the Mage's staff over its head and the Heavy Infantry's helmet and wider shield. Nothing changed for it here.
+     Recommendation: leave to the owner's packs (a lighter robe would leave the oxblood palette); if the owner wants it
+     sooner, the Mage's robe a step darker (toward `#3a1f1c`) widens the Cobalt gap to about 20 without a new colour.
+  4. **The Priest's robe is no longer white** (a sand robe), so the faction page's "sun-bleached white" is now the
+     Camp Follower's and the Desert Archer's colour, both 13-14 from Bone. Recommendation: owner's taste; the table in docs/04
+     lists every pair under 60.
+  5. **A unit wholly hidden behind a model can't be clicked**, only box-selected, grouped or picked from its portrait (the
+     seed-6 builder of `M3PlayableTest` stands behind the Keep at one step; the scene now selects it as a player would reach
+     it and says so). That is the rule the brief asked for ("a click on what the player sees selects it"). Recommendation:
+     accept; a see-through silhouette for units behind buildings is the usual RTS answer, a later look task.
 
 ## Vision, detection, fog
 
@@ -5149,7 +5341,8 @@ on `shadow_archer` (with M8-2's `stillStealth`), and on `shadow_hound`:
 
 Each moves the data hash once; land them with the Shadow roster. The Archer's bonus applies from either stealth (forest or
 stand-still), so the faction's `forestStealth` block (M8-1) needs nothing more. Before writing "+50%" or "+10%" into a
-`description`, check the content tests' description-number reading (D-H2): it knows neither field yet.
+`description`, check the content tests' description-number reading (D-H2): since D35 (2026-11-24) it reads both
+(`Content/UnitHitBonusText`; BUG-1690: it also claims every other percentage in a unit description).
 
 **Questions for the Producer (M8-3).**
 
@@ -5160,6 +5353,207 @@ stand-still), so the faction's `forestStealth` block (M8-1) needs nothing more. 
    Wraith is not a Hound). Should a summoned unit be left out, as stealth leaves it out? Default: count it (no designed
    case either way).
 3. A unit trained in phase 3 joins the count from the next tick (Known limits (1)). Leave it? Default: leave it.
+
+**The Producer's answers (docs/01 "2026-11-20" (1), written in by M7-8 under rule 67; all three the developer's
+default).** (1) A melee blow from stealth splashes with the bonus it struck with: the splash's factor is read before the
+blow lands (kept; no shipped unit has a melee splash). (2) A summoned unit of a listed type counts in a pack: the count is
+by type only (kept; nothing designed is both summoned and a pack unit). (3) A unit trained this game step joins the pack
+count one step later: left as a documented limit (Known limits (1)). QA's two notes stay as built, each following a rule
+already in docs/02: a shot that misses does not reveal the shooter, so it keeps its first-shot bonus for the next shot; a
+long ability stealth gives the bonus again after each 3 s reveal ends. A full pack's bonus can round an exact half down by
+one point of damage (BUG-1620, S4): a clean-up item. No code changed for any of them.
+
+### Implementation (M7-8)
+
+Request 55 as two per-step switches on an `ai.json` build order (docs/01 2026-11-24 (1)), the trace of the four-seat Vathar
+Crossing match that stands still (BUG-1621 / BUG-1610, docs/01 2026-11-24 (2); traced, not cured), and Request 58's sim
+half (docs/01 2026-11-24 (3)). No shipped file, data hash, pin, golden, save format (10) or replay format (9) moved. Code:
+`AiStep.ThroughReserve` / `NoReserve`, `AiStepJson` (`DataJson.cs`), `DataLoader.BuildAiSteps`, `GameData.AddOpening`,
+`BuildOrderExecutor.Run`; `Orders/DroppedOrder.cs`, `World.DroppedOrders.cs`, `OrderSystem.Run` / `Apply` / `Execute`,
+`Simulation.Tick`. Tests: `Data/ReserveSwitchLoaderTests`, `DataValidationTests.AReserveSwitch_OnTheWrongAction_*`,
+`DataContentHashTests.EveryAiStructField_ChangesTheHash` (the `AiStep` count 6 → 8), `Ai/ReserveSwitchTests`,
+`Ai/ReserveSwitchOffTwinTests`, `Ai/ReserveSwitchDeterminismTests`, `DroppedOrderTests`; Stress reports
+`Stress/VatharStallTraceTests`, `Stress/ReserveSwitchReportTests`, `Stress/ShippedDigestReportTests`.
+
+- **Schema.** A `buildOrder` step's optional `throughReserve` (a `train` step's only) and `noReserve` (a `build`,
+  `research` or `expand` step's only), each `true` / `false`; left out or JSON `null` is off, and `false` loads the very
+  same `AiStep` as leaving it out. On another action the field, at any value (`false` too), is one error at
+  `openings[i].buildOrder[j].throughReserve` / `.noReserve` naming the opening and the step (`opening 'standard' step 3
+  (build malazan_barracks): throughReserve is for a train step only ...`); the step is then dropped, as for any step
+  error. A switch is not part of the "same step written twice" key. `GameData.ContentHash` adds a marker 5 and the two
+  switches as bits only when one is `true` (M8-3's pattern), so the shipped hash, the golden's header and every save are
+  unchanged, and a file with every switch written `false` hashes as the shipped data (`ReserveSwitchLoaderTests`).
+- **The rule** (`BuildOrderExecutor.Run`, M5-4g's two lines). `throughReserve`: the train step's `TryTrain` is not told
+  `aboveReserve`, so it is paid from the whole bank, as `build` and `research` steps already are, though an earlier step
+  holds the reserve. The reserve itself stands: production outside the build order (`ProductionManager`) and later train
+  steps without the switch still spend only above it, and the gather split still leans to what it lacks. `noReserve`: the
+  step is skipped when the think names its reserved step, so the next due step in file order that only its cost holds
+  back may be named instead (with none, the reserve is 0 / 0 and the gather share is `ai.goldShare`, unshifted); the step
+  is still worked every think like any other and sent the first think the bank (and a free builder or idle building)
+  covers it. A `train` step is never reserved anyway, and a `build` / `research` step was already paid from the whole
+  bank, so the two switches cover the two halves of BUG-1421 item 1 (a held expand blocks the unit steps behind it).
+  Untouched: the production manager, the Town Hall rebuild's reserve (`HallFirst`), the reserve gate (`MayReserve`), the
+  reopened steps (`ReopenLost`), the spend-down rule. Nothing new is stored: the switches are data, read each think.
+- **Off is identical.** Absent and `false` are the same `AiStep`, so every shipped opening plays as before. Proof:
+  `Ai/ReserveSwitchOffTwinTests` (kept: the shipped data with both switches written `false` on every step that may carry
+  one has the shipped hash and plays a three-faction four-seat FFA and a Hard v Normal match to the same state hash every
+  500 ticks); and in-session, `Stress/ShippedDigestReportTests` (a four-seat FFA with a Teblor seat, a 2v2 and Hard v Normal,
+  30,000 ticks, a hash every 500) printed the same 60 hashes per match on this tree and on the base 9eb1646.
+- **On.** `Ai/ReserveSwitchTests` (criteria 5 and 6, each beside its twin without the switch); determinism with the
+  switches on: `Ai/ReserveSwitchDeterminismTests` (order B below, the Normal Teblor mirror on Pale Hills, seeds 1 and 2 x
+  18,000 ticks: twins equal at every 500 ticks, a run saved and reloaded every 2,000 ticks equal too). A think over switched
+  steps allocates nothing (`ReserveSwitchTests.Serial.AThinkOverSwitchedSteps_AllocatesNothing`).
+
+**The four-seat Vathar Crossing stall (BUG-1621 / BUG-1610), traced.** `Stress/VatharStallTraceTests` plays
+`FarExpandProbeQaStressTests`' match (Vathar Crossing, seed 2, four Normal AI seats: 0 Malazan `standard`, 1 Whirlwind
+`raider_rush`, 2 Malazan `cadre_rush`, 3 Whirlwind `standard`; the same end, 88,998 and hash 06F14EE840630135) and prints
+the brief's table (excerpt; seats 0 and 1 are defeated at 33,951 and 24,932):
+
+| tick | seat | gold / wood | workers (gold / wood / other) | army (units, pop) | halls | producers | known live gold nodes (map) | reserved step | military | last command |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 28,000 | 2 | 56 / 75 | 2 (1 / 1 / 0) | 0, 0 | 2 | 3 | 8 (15) | none | defend | 27,861 |
+| 30,000 | 2 | 56 / 85 | 1 (0 / 0 / 1) | 0, 0 | 1 | 0 | 8 (15) | none | defend | 29,101 |
+| 32,000 | 2 | 66 / 85 | 1 (1 / 0 / 0) | 0, 0 | 1 | 0 | 8 (15) | none | defend | 30,781 |
+| 34,000 | 2 | 86 / 85 | 1 (1 / 0 / 0) | 0, 0 | 1 | 0 | 8 (15) | none | wave gathering | 30,781 |
+| 36,000 | 2 | 96 / 85 | 1 (1 / 0 / 0) | 0, 0 | 1 | 0 | 8 (15) | none | wave gathering | 30,781 |
+| 38,000 | 2 | 66 / 85 | 1 (1 / 0 / 0) | 0, 0 | 1 | 0 | 8 (14) | none | wave gathering | 37,841 |
+| 60,000 | 2 | 876 / 10 | 1 (1 / 0 / 0) | 0, 0 | 1 | 0 | 8 (13) | none | wave gathering | 58,021 |
+| 30,000 | 3 | 1,700 / 550 | 26 (16 / 10 / 0) | 58, 74 | 2 | 6 | 12 (15) | none | hunt (3 hunts) | 29,101 |
+| 60,000 | 3 | 4,650 / 4,868 | 26 (16 / 10 / 0) | 58, 74 | 2 | 6 | 12 (13) | none | hunt (5 hunts) | 59,981 |
+| 88,998 | 3 | 8,020 / 8,718 | 26 (16 / 10 / 0) | 58, 74 | 2 | 6 | 11 (11) | none | out (6 hunts) | 88,961 |
+
+- **Why seat 2 sends nothing from 30,781 to 37,561.** By 30,000 seat 2 (`cadre_rush`) has lost its army, every
+  unit-producing building and its start hall to the other seats; it keeps one Garrison Keep (an expansion at cell
+  (33, 89), far west of its razed start at (195, 62)), a depot by its old start, one worker and 56 / 85 in the bank. That
+  worker gathers gold (with one gatherer the 0.6 gold share rounds to all of it) and needs no new order, and nothing the
+  seat wants is payable or trainable: production has no producer; the build order's lost buildings (reopened by
+  `ReopenLost`) cost more than the bank; the reserve is never named (no army, so the M5-4g gate is shut); and **no rule
+  trains a second worker while one lives**: the opening's worker `train` steps are done for good (they count accepted
+  commands over the step's life) and the M6-SH2 retrain (`BuildOrderExecutor.Retrain`) fires only at zero workers. So the
+  seat is silent until seat 3's army kills that worker at 37,561 (seat 3's target (381, 131) m that think); at 37,581 the
+  retrain trains one Laborer at the Keep, which builds a depot by a mine near it and gathers gold alone for the rest of the
+  match: 876 gold and 10 wood at 60,000, still one worker, still nothing trained. Its gold is not gone: it knows 8 live
+  mines throughout (11-15 on the map), and seat 3 banks thousands.
+- **Why the match runs to 88,998.** From 33,951 only seats 2 and 3 stand; seat 3 has 58 units and hunts, seat 2 has no
+  unit that can fight and one building far from anything. Seat 3 hunts with no enemy building known; its sweep point
+  nearest seat 2's Keep (point 31, (77, 179) m, 7 m from the Keep's centre) is never visited until 88,441. Hunt 5 (38,061-
+  67,401) went first to the free starts (M5-H6's rule: from the second hunt on, the starts of defeated seats first: seat 0's
+  at (128, 128) m, seat 1's at (384, 384) m, then seat 2's own start), then nearest-first across the east half, the whole
+  border ring (44,841-58,741), and back west; at (102, 154) m the tie between (77, 128) and (77, 179) (both 36 m away)
+  went to (77, 128), nearer the hunt's origin, and at 66,921 the army saw the depot seat 2's new worker had built at
+  (40, 138) m. The hunt turned into a wave on it, razed it, and **hunt 6 began from scratch** (its visited marks cleared,
+  the free starts first again), walked the map's east and the ring once more and reached point 31 only at 88,441: the Keep
+  fell at 88,998. Two full laps of about 21,000-29,000 ticks each, for a Keep 40 m from the depot found at 66,921.
+- **The family.** Not the gold-gone family (BUG-1068 / 1116 / 1536: every seat out of gold, armies that cannot be
+  rebuilt). Here gold is plentiful for both seats; this is two separate defects (proposed as BUG-1660 and BUG-1661):
+  (a) **a seat cut down to one worker never rebuilds its economy** (no worker floor above the zero-worker retrain), so a
+  beaten seat neither recovers nor acts, which is what the silent-seat oracle sees; (b) **a hunt that finds and razes a
+  building forgets its sweep**, and the next hunt restarts at the free starts across the map, so a remnant 40 m from the
+  find waits for a whole new lap. (b) is what BUG-1610's length is; (a) makes the remnant a single hidden Keep, so only
+  (b) can end the match.
+- **The cure recommended** (not built: docs/01 2026-11-24 (2) gathers every cure that changes AI play into one later
+  session with one re-measure). For BUG-1610, (b): when a hunt turns into a wave on a found building and that wave ends
+  with the building razed, the next hunt keeps the last hunt's visited marks and resumes nearest-first from where the
+  building stood, the free starts first only for a hunt with no find in the last `ai.huntMemory`. Size: small, in
+  `MilitaryManager.BeginHunt` / `NextSweep` (about 20 lines; the marks and pass are already saved in `HUNT`, so no format
+  change if the "resume" flag is derived from the wave's last target, else one saved int and a format bump). For
+  BUG-1621, (a): the zero-worker retrain becomes a floor, a seat with fewer live + queued workers than a new `rules.json`
+  `ai.minWorkers` (say 4) trains one at a hall when the bank pays it, one a think. Size: small (about 15 lines in
+  `Retrain`, a hashed rules field, loader and tests). Measure each apart (rule 70). Pin classes they would move: (b) every
+  AI match with two or more hunts (`HuntStressTests`, `AiDeterminismTests.PaleHills_ToTheEndWithAHunt_*`,
+  `MatchCriterionTests`' and `MatchCriterionSweepQaStressTests`' end ticks, `FarExpandProbeQaStressTests`,
+  `HardVersusNormalTallyQaStressTests`, the M5-5 table); (a) every AI match where a seat falls under the floor, which is
+  most long and four-seat matches (the same classes plus `AiVersusAiTests`, `TeamAiSoakStressTests`,
+  `DefeatAiStressTests`, `MapSlice2StressTests` and the content report classes of rule 68 that run whole matches). The
+  golden replay has human seats only and moves for neither. This row should end once (b) lands; re-run it then with (a)
+  apart, and un-skip `FarExpandProbeQaStressTests.VatharCrossingSeed2_FourSeats_*`.
+- **The row.** `FarExpandProbeQaStressTests`' (vathar_crossing, 2, Normal, 4) row is split out of the theory as
+  `VatharCrossingSeed2_FourSeats_FarFogOracleAndExtraOracles`, skipped with `BUG-1621 / BUG-1610 (open)` and the cause in
+  one line; the theory's other ten rows are unchanged.
+
+**Request 58: dropped queued orders.** `World.DroppedOrders` (a `ReadOnlySpan<DroppedOrder>`, `Orders/DroppedOrder.cs`):
+the shift-queued orders the sim dropped in the last tick run, emptied at the start of every tick like `World.Deaths`,
+preallocated, not hashed, not saved. An entry is `(Unit, Owner, Kind, Placement, QueueFull)`:
+
+- **At its turn** (phase 7, `OrderSystem.Run`): the head of an Idle unit's queue is popped and cannot start: a Build that
+  `ConstructionSystem.StartBuild` refuses (its `PlacementError` in `Placement`: `CannotAfford`, `Blocked`, `UnitInTheWay`,
+  `Unexplored`, ...), a Move / AttackMove whose target resolves to no passable cell, a Gather with no node there, a Repair
+  with nothing to repair, a UseAbility the unit cannot use now (`AbilitySystem.CanUse`: on cooldown, say), an Attack on
+  a target gone or no longer valid. `Placement` is `None` for every kind but a refused Build. A popped order that starts
+  gives no entry.
+- **On arrival with the queue full** (phase 1, `OrderSystem.Apply`): a queued command for a unit whose queue already holds
+  `OrderConstants.QueueCapacity` (8) orders is refused `UnitQueueFull`. Before M7-8 that refusal reached only the test seam
+  (`Simulation.RefusedForTests`), never the view; it now gives an entry with `QueueFull` true and the command's kind.
+  Other refusals of a queued command on arrival (a unit gone, not a worker, an ability unavailable, off the map) stay
+  seam-only: they are refusals of the command itself, which the view can check before sending, not of a queued order.
+- **Order and capacity.** Phase 1's queue-full entries in command order, then phase 7's in slot order. The list holds
+  units + command capacity entries: a unit starts at most one queued order a tick and each command is applied once, so it
+  never fills; were it full, a further entry would not be recorded (as `AbilityEvents` does), and nothing else changes.
+  Memory: an entry is 24 bytes, so a 4,096-slot world with 64 command slots gains 99,864 bytes;
+  `QA/FieldBuildFairnessQaTests.Serial.TwoFactionBound1024` moves by exactly that, itemised in its history (measured
+  232,503,224 bytes on the base, 232,610,424 here).
+- **Not saved.** Unlike the event lists of `World.Save.cs`, the list is not written to a save (no new part; format 10): a
+  sim loaded at tick T shows no dropped orders for tick T, so a view that loads a save misses only the notices of that one
+  tick. Nothing reads the list inside the sim; a match's state hashes are unchanged (criterion 7's digests). 100 ticks that
+  each drop an order allocate nothing (`DroppedOrderTests.ATickThatDropsAnOrder_AllocatesNothing`).
+
+**For the data track (M7-8).** No shipped opening carries a switch. To cure the Teblor unit mix (BUG-1612, BUG-1421
+item 1) in the Teblor's own file, write the switch on the step itself in `factions/teblor/ai.json` `standard`:
+
+```json
+{ "at": { "time": 600 }, "do": "train", "id": "teblor_destrier_rider", "count": 1, "throughReserve": true },
+{ "at": { "time": 600 }, "do": "train", "id": "teblor_war_dog", "count": 1, "throughReserve": true },
+{ "at": { "time": 540 }, "do": "train", "id": "teblor_shaman", "count": 2, "throughReserve": true },
+{ "at": { "time": 480 }, "do": "expand", "noReserve": true }
+```
+
+(the first three are order A; all four are order B). Leave the field out rather than write `false`: `false` is legal and
+changes nothing, but every switch written `true` moves the data hash once, so land them in one change. A switch on the
+wrong action (`throughReserve` on a build step, `noReserve` on a train step) is a load error naming the step. The
+measurement (`Stress/ReserveSwitchReportTests`, the Teblor mirror on Pale Hills, seeds 1-8, 16 Teblor seats a row, to
+15:00; seats that researched the Anointing / fielded a Shaman / a Destrier Rider / a War-dog pack / a Breaker / finished
+a second Longhouse / were defeated; measured, not judged):
+
+| difficulty | order | data hash | Anointing | Shaman | Rider | War-dog pack | Breaker | 2nd Longhouse | defeated |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| Easy | shipped | A732F387C2BB7E4D | 16 (8 + 8) | 0 | 0 | 0 | 16 (8 + 8) | 0 | 0 |
+| Easy | A | A6FC6991064EFBC1 | 0 | 16 (8 + 8) | 16 (8 + 8) | 16 (8 + 8) | 8 (0 + 8) | 0 | 0 |
+| Easy | B | 6CE38B07E3525536 | 0 | 16 (8 + 8) | 16 (8 + 8) | 16 (8 + 8) | 8 (0 + 8) | 0 | 0 |
+| Normal | shipped | A732F387C2BB7E4D | 8 (8 + 0) | 0 | 16 (8 + 8) | 16 (8 + 8) | 0 | 16 (8 + 8) | 0 |
+| Normal | A | A6FC6991064EFBC1 | 8 (8 + 0) | 16 (8 + 8) | 8 (8 + 0) | 16 (8 + 8) | 0 | 16 (8 + 8) | 0 |
+| Normal | B | 6CE38B07E3525536 | 0 | 16 (8 + 8) | 8 (0 + 8) | 16 (8 + 8) | 8 (0 + 8) | 0 | 0 |
+
+Each cell is seats of 16, split (seat 0's of 8 + seat 1's of 8); the data hashes are the forged copies' (A and B each
+move the shipped hash). **Read with care:** on this mirror the eight seeds play alike (each start gets the same result on
+every seed: Pale Hills is a fixed map and the Teblor has one opening), so each row is really two seats, not sixteen. What
+it shows: A puts Shamans on the field on both difficulties (0 → 16) and gives Easy its Riders and War-dogs (0 → 16), but
+Easy loses the Anointing (16 → 0) and one start its Breaker; on Normal, A trades one start's Rider for Shamans and keeps
+the Anointing and the second Longhouse; B (the expand never saved for) costs Normal the second Longhouse and the Anointing
+and changes nothing on Easy over A. **QA's longer rows (BUG-1663): with `noReserve` on the expand step no seat expands at all,
+0 of 24 by 30:00 on three maps against 22 of 24 shipped, because the steps behind it and the army spend the bank as it
+comes in. Read `noReserve` on an expand step as "never expand"; do not ship it there without 30-minute rows (Producer
+ruling 2026-11-24, docs/01).** So A is the candidate, with Easy's Anointing to be won back (likely the three unit
+steps, now paid through the reserve, spend the bank the research waited for; not traced here). The data track should re-measure any order on its four-map, seat-swapped rows (QA's
+D33 loop, `QA/Content/D33TeblorRowQaStressTests`) before it ships: two seats are no verdict.
+
+**For the view track (Request 58).** The sim half is `World.DroppedOrders` above; the read-only `ViewApi` accessor is the
+view's next task (not written here). Read it between ticks, as `Deaths`: for an entry of an own unit play the Refused
+sound and show the `ui.json` `placement` text for `Placement` over the unit (a Build), or the "Orders full" line the
+request plans for `QueueFull`; other kinds have no text yet. A save loaded mid-match shows no entries for its tick.
+
+**Questions for the Producer (M7-8, rule 67), each with the developer's recommendation.**
+
+1. A switch written on the wrong action at `false` is an error too (the field does not belong there at any value), as
+   M8-3 did for a building's `fromStealthBonus`. Accept `false` silently instead? Recommendation: keep the error (a
+   `false` on the wrong step is a typo for the right one).
+2. Request 58 lists every kind of queued order dropped at its turn, not only Builds (Moves to nowhere, Gathers with the
+   node gone, Repairs with nothing to repair, casts on cooldown, Attacks on a dead target). The view may show only the
+   Build and queue-full entries. Recommendation: keep the general list (one rule, no kind filter in the sim).
+3. The list is not saved, so the tick a save is loaded at shows no notices (the other event lists are saved). Save it
+   (a format bump, view scenes re-checked under rule 50)? Recommendation: no; one tick of missing notices is invisible.
+4. BUG-1621 / BUG-1610's cures, (b) the hunt's resume and (a) the worker floor, go into the later AI-play session with one
+   re-measure (docs/01 2026-11-24 (2)). Recommendation: (b) first and alone, since it alone ends this match; (a) next,
+   measured apart, with its `ai.minWorkers` value the Producer's (the trace suggests 4).
 
 ## Data format
 
@@ -7501,7 +7895,9 @@ game/tests/ShellTest.tscn      the headless flow test
   tall (the old overload, full height for every ghost, is kept for its callers), and `SelectionController` passes
   `BoxHeight` and `SiteMinHeight`, so a remembered site is picked on a 0.45 m box whatever its type's scale. That matches
   the drawing at scale 1 only (a 3.0 type's foundation is drawn 1.35 m tall, the Teblor's 1.25 0.56 m); like the live hit
-  test (see "Implementation (M7-V4)"), picking stays on the 3 m box by the Producer's M7-V4 decision. Tests: xUnit
+  test (see "Implementation (M7-V4)"), picking stays on the 3 m box by the Producer's M7-V4 decision (**changed by
+  M6-VH9:** a remembered site is picked as its foundation of the type's drawn height, a remembered finished building at its
+  drawn top, a model's included; see "Implementation (M6-VH9)"). Tests: xUnit
   `FogViewTests.GhostPick_ARememberedSite_IsPickedAsAFoundation` (a ray 1 m up meets the remembered box, misses it once the
   entry is a site, still meets the foundation 0.2 m up; the old overload unchanged); headless `FogViewTest` adds, per seed,
   that the House seen as a site is drawn as a foundation (flag, material, scale, base on the ground) and the finished
@@ -9251,7 +9647,8 @@ fields are refused: see "Implementation (M5-8a)". Shape as of M5-1:
   a unit of the faction, `research` a common tech or one of the faction's (another faction's id: "... belongs to faction
   ..."; an unknown one, or one of another kind: "unknown ..."); `expand` names no id. `count` 1-200
   (`DataLimits.MaxAiStepCount`), default 1; a `research` step takes none. Two steps with the same `at`, `do` and `id` are one
-  step written twice: an error at the second (merge the counts).
+  step written twice: an error at the second (merge the counts). (M7-8) Optional `throughReserve` (a `train` step's) and
+  `noReserve` (a `build`, `research` or `expand` step's), true / false, off when left out: see "Implementation (M7-8)".
 - `compositions`: one entry per age, `{age, units}`: `age` 1 (Age I) or 2 (Age II; one age per `DataLimits.AgeTechIds` entry
   after Age I); `units` a non-empty map of the faction's unit ids to weights above 0. A missing age, a second entry for an
   age and an age past the last are errors.

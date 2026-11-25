@@ -11,9 +11,10 @@ namespace Rts.Sim.ViewApi;
 /// <summary>Which building lies under a cursor (M3-V2): the cell lookup for the right-click context order and a ray pick against the drawn boxes for a click. Read-only, allocation-free.</summary>
 /// <remarks>
 /// <see cref="SlotAt"/> is a thin wrapper round <see cref="BuildingStore.SlotAt"/> that takes meters. <see cref="PickRay"/>
-/// tests the camera ray against each live building's placeholder box as the view draws it: the footprint
+/// tests the camera ray against each live building's box as the view draws it: the footprint
 /// (cells x <see cref="MapConstants.CellSize"/>) standing on the terrain height at its centre, <c>boxHeight</c> tall, or for a
-/// site <c>max(siteMinShare, progress)</c> of that. View coordinates are Y-up meters (X = sim x, Y = elevation, Z = sim y).
+/// site <c>max(siteMinShare, progress)</c> of that. M6-VH9 (BUG-1630): the overloads taking per-type spans give each type its
+/// drawn height (a model's fitted top, a box's data-scaled height), so a click on what the player sees selects it. View coordinates are Y-up meters (X = sim x, Y = elevation, Z = sim y).
 /// </remarks>
 public static class BuildingPicker
 {
@@ -86,7 +87,36 @@ public static class BuildingPicker
     /// <param name="shown">Per building slot, whether it is drawn (a slot past its end is not); empty for every slot.</param>
     /// <param name="entry">Ray parameter of the hit.</param>
     public static int PickRay(BuildingStore buildings, ImmutableArray<BuildingDef> defs, NavGrid grid, Heightmap map, int owner,
-        Vector3 origin, Vector3 direction, float boxHeight, float siteMinShare, ReadOnlySpan<bool> shown, out float entry)
+        Vector3 origin, Vector3 direction, float boxHeight, float siteMinShare, ReadOnlySpan<bool> shown, out float entry) =>
+        Pick(buildings, defs, grid, map, owner, origin, direction, ReadOnlySpan<float>.Empty, ReadOnlySpan<float>.Empty, boxHeight, siteMinShare, shown, out entry);
+
+    /// <summary>
+    /// As the overload with one <c>boxHeight</c>, but each building tested at its type's drawn height (M6-VH9, BUG-1630): a
+    /// finished building <paramref name="finishedTops"/>[type] tall (a model's fitted top, a box's drawn height), a site
+    /// <paramref name="siteHeights"/>[type] x <c>max(siteMinShare, progress)</c> (its rising box). A type past either span's
+    /// end is not picked. Allocation-free.
+    /// </summary>
+    /// <param name="buildings">The match's building store (read only).</param>
+    /// <param name="defs">Building types, for footprints and site progress.</param>
+    /// <param name="grid">The nav grid (cell indices to coordinates).</param>
+    /// <param name="map">Terrain, for each box's base height.</param>
+    /// <param name="owner">Only this player's buildings, or every building when negative.</param>
+    /// <param name="origin">Ray start (the camera), view coordinates.</param>
+    /// <param name="direction">Ray direction; need not be normalized.</param>
+    /// <param name="finishedTops">Per building type, the height in meters a finished building of it is drawn to.</param>
+    /// <param name="siteHeights">Per building type, the height in meters its site's box rises to at completion.</param>
+    /// <param name="siteMinShare">Smallest share of the site height a site's box has.</param>
+    /// <param name="shown">Per building slot, whether it is drawn (a slot past its end is not); empty for every slot.</param>
+    /// <param name="entry">Ray parameter of the hit.</param>
+    public static int PickRay(BuildingStore buildings, ImmutableArray<BuildingDef> defs, NavGrid grid, Heightmap map, int owner,
+        Vector3 origin, Vector3 direction, ReadOnlySpan<float> finishedTops, ReadOnlySpan<float> siteHeights, float siteMinShare,
+        ReadOnlySpan<bool> shown, out float entry) =>
+        Pick(buildings, defs, grid, map, owner, origin, direction, finishedTops, siteHeights, float.NaN, siteMinShare, shown, out entry);
+
+    // The live-building pick: per-type heights from the spans, or (spans empty) one boxHeight for every type.
+    private static int Pick(BuildingStore buildings, ImmutableArray<BuildingDef> defs, NavGrid grid, Heightmap map, int owner,
+        Vector3 origin, Vector3 direction, ReadOnlySpan<float> finishedTops, ReadOnlySpan<float> siteHeights, float boxHeight,
+        float siteMinShare, ReadOnlySpan<bool> shown, out float entry)
     {
         entry = float.PositiveInfinity;
         if (!IsFinite(origin) || !IsFinite(direction) || direction == Vector3.Zero) return -1;
@@ -101,13 +131,17 @@ public static class BuildingPicker
         {
             if (!alive[i] || (owner >= 0 && buildings.Owner[i] != owner)) continue;
             if (!shown.IsEmpty && (i >= shown.Length || !shown[i])) continue;
-            BuildingDef def = defs[buildings.TypeId[i]];
+            int type = buildings.TypeId[i];
+            BuildingDef def = defs[type];
+            float height = buildings.UnderConstruction[i]
+                ? HeightOf(siteHeights, type, boxHeight) * BoxRise(buildings, defs, i, siteMinShare)
+                : HeightOf(finishedTops, type, boxHeight);
+            if (!(height > 0f)) continue;
             int anchor = buildings.Cell[i];
             float x0 = anchor % w * cs, z0 = anchor / w * cs;
             float x1 = x0 + def.FootprintWidth * cs, z1 = z0 + def.FootprintHeight * cs;
             float baseY = TerrainHeight.At(map, (x0 + x1) / 2f, (z0 + z1) / 2f);
-            float top = baseY + boxHeight * BoxRise(buildings, defs, i, siteMinShare);
-            if (!Box(origin, direction, x0, x1, baseY, top, z0, z1, bestT, out float t0)) continue;
+            if (!Box(origin, direction, x0, x1, baseY, baseY + height, z0, z1, bestT, out float t0)) continue;
             if (Hidden(t0, groundT, ground, x0, x1, z0, z1)) continue;
             if (t0 < bestT)
             {
@@ -118,6 +152,11 @@ public static class BuildingPicker
         if (best >= 0) entry = bestT;
         return best;
     }
+
+    // A type's height: the span's entry, or the one box height when the span is empty (the single-height overloads); a type
+    // past a non-empty span's end is 0 (not picked).
+    private static float HeightOf(ReadOnlySpan<float> heights, int type, float boxHeight) =>
+        heights.IsEmpty ? boxHeight : (uint)type < (uint)heights.Length ? heights[type] : 0f;
 
     /// <summary>
     /// The remembered building (M4-V5: a ghost, <see cref="FogView.GhostShown"/>) whose drawn box the ray meets first, or
@@ -146,7 +185,33 @@ public static class BuildingPicker
     /// at its lowest), the others full height. Allocation-free.
     /// </summary>
     public static int PickGhostRay(ReadOnlySpan<bool> shown, ReadOnlySpan<BuildingGhost> ghosts, ImmutableArray<BuildingDef> defs, NavGrid grid,
-        Heightmap map, Vector3 origin, Vector3 direction, float boxHeight, float siteShare, out float entry)
+        Heightmap map, Vector3 origin, Vector3 direction, float boxHeight, float siteShare, out float entry) =>
+        Ghost(shown, ghosts, defs, grid, map, origin, direction, ReadOnlySpan<float>.Empty, ReadOnlySpan<float>.Empty, boxHeight, siteShare, out entry);
+
+    /// <summary>
+    /// As the overload with one <c>boxHeight</c>, but each remembered building tested as it is drawn (M6-VH9, BUG-1630): a
+    /// remembered finished building <paramref name="finishedTops"/>[type] tall (its model's fitted top, or its box's drawn
+    /// height), a remembered site <paramref name="siteShare"/> x <paramref name="siteHeights"/>[type] (the foundation). A type
+    /// past either span's end is not picked. Allocation-free.
+    /// </summary>
+    /// <param name="shown">Per building slot, whether a ghost is drawn there (a slot past its end is not).</param>
+    /// <param name="ghosts">Per building slot, the remembered entry (read where <paramref name="shown"/> is true).</param>
+    /// <param name="defs">Building types, for footprints.</param>
+    /// <param name="grid">The nav grid (cell indices to coordinates).</param>
+    /// <param name="map">Terrain, for each box's base height.</param>
+    /// <param name="origin">Ray start (the camera), view coordinates.</param>
+    /// <param name="direction">Ray direction; need not be normalized.</param>
+    /// <param name="finishedTops">Per building type, the height in meters a finished building of it is drawn to.</param>
+    /// <param name="siteHeights">Per building type, the height in meters its site's box rises to at completion.</param>
+    /// <param name="siteShare">The share of the site height a remembered site is drawn at.</param>
+    /// <param name="entry">Ray parameter of the hit.</param>
+    public static int PickGhostRay(ReadOnlySpan<bool> shown, ReadOnlySpan<BuildingGhost> ghosts, ImmutableArray<BuildingDef> defs, NavGrid grid,
+        Heightmap map, Vector3 origin, Vector3 direction, ReadOnlySpan<float> finishedTops, ReadOnlySpan<float> siteHeights, float siteShare, out float entry) =>
+        Ghost(shown, ghosts, defs, grid, map, origin, direction, finishedTops, siteHeights, float.NaN, siteShare, out entry);
+
+    private static int Ghost(ReadOnlySpan<bool> shown, ReadOnlySpan<BuildingGhost> ghosts, ImmutableArray<BuildingDef> defs, NavGrid grid,
+        Heightmap map, Vector3 origin, Vector3 direction, ReadOnlySpan<float> finishedTops, ReadOnlySpan<float> siteHeights, float boxHeight,
+        float siteShare, out float entry)
     {
         entry = float.PositiveInfinity;
         if (!IsFinite(origin) || !IsFinite(direction) || direction == Vector3.Zero) return -1;
@@ -157,13 +222,16 @@ public static class BuildingPicker
         int n = Math.Min(shown.Length, ghosts.Length);
         for (int i = 0; i < n; i++)
         {
-            if (!shown[i] || (uint)ghosts[i].TypeId >= (uint)defs.Length) continue;
-            BuildingDef def = defs[ghosts[i].TypeId];
+            int type = ghosts[i].TypeId;
+            if (!shown[i] || (uint)type >= (uint)defs.Length) continue;
+            BuildingDef def = defs[type];
+            float height = ghosts[i].Site ? HeightOf(siteHeights, type, boxHeight) * siteShare : HeightOf(finishedTops, type, boxHeight);
+            if (!(height > 0f)) continue;
             int anchor = ghosts[i].Cell;
             float x0 = anchor % w * cs, z0 = anchor / w * cs;
             float x1 = x0 + def.FootprintWidth * cs, z1 = z0 + def.FootprintHeight * cs;
             float baseY = TerrainHeight.At(map, (x0 + x1) / 2f, (z0 + z1) / 2f);
-            if (!Box(origin, direction, x0, x1, baseY, baseY + (ghosts[i].Site ? boxHeight * siteShare : boxHeight), z0, z1, bestT, out float t0)) continue;
+            if (!Box(origin, direction, x0, x1, baseY, baseY + height, z0, z1, bestT, out float t0)) continue;
             if (Hidden(t0, groundT, ground, x0, x1, z0, z1)) continue;
             if (t0 < bestT)
             {

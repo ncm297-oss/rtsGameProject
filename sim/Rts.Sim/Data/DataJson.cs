@@ -530,6 +530,8 @@ internal sealed class AiStepJson
     public string? Do { get; set; }
     public string? Id { get; set; }
     public int? Count { get; set; }
+    public bool? ThroughReserve { get; set; } // M7-8 (Request 55): a train step's only; JSON null reads as absent
+    public bool? NoReserve { get; set; } // M7-8 (Request 55): a build / research / expand step's only; JSON null reads as absent
 }
 
 internal sealed class AiAtJson

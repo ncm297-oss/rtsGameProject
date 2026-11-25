@@ -1,5 +1,5 @@
 {
-  "about": "Art import manifest (docs/04 'Import process'). tools/import-assets.ps1 rebuilds every model and the animation library from these entries with Blender (tools/art/build_unit.py). Paths: 'source' relative to sourceRoot, 'destination' relative to the repo root. A model's 'clips' maps docs/04's state names to library clip names; 'library.clips' maps each library name to its source clip. Since M6-V24 a model is one surface drawing one atlas: 'textureSize' is the size of each role's tile in it (docs/04 'Unit models, as built'). Since M6-V26 'buildings' lists the static building models (tools/art/build_building.py): one source glTF each, its faces no camera above the ground sees dropped, the 'decimate' materials cut to their triangle counts, every source material one flat 'colours' tile (sRGB as on screen) or, for the 'team' materials, the team grey; one surface, one 'team' material, one atlas whose alpha is the team mask, as the units' (docs/04 'Building models, as built').",
+  "about": "Art import manifest (docs/04 'Import process'). tools/import-assets.ps1 rebuilds every model and the animation library from these entries with Blender (tools/art/build_unit.py). Paths: 'source' relative to sourceRoot, 'destination' relative to the repo root. A model's 'clips' maps docs/04's state names to library clip names; 'library.clips' maps each library name to its source clip. Since M6-V24 a model is one surface drawing one atlas: 'textureSize' is the size of each role's tile in it (docs/04 'Unit models, as built'). Since M6-V26 'buildings' lists the static building models (tools/art/build_building.py): one source glTF each, its faces no camera above the ground sees dropped, the 'decimate' materials cut to their triangle counts, every source material one flat 'colours' tile (sRGB as on screen) or, for the 'team' materials, the team grey; one surface, one 'team' material, one atlas whose alpha is the team mask, as the units' (docs/04 'Building models, as built'). Since M6-VH9 a model may carry 'oneShot' (state name -> the clip's release point as a share of its length): that state's clip plays once per attack, its release on the shot leaving (docs/04 'Unit models, as built').",
   "sourceRoot": "asset-sources",
   "licences": [
     "Universal Base Characters[Standard]/Universal Base Characters[Standard]/License_Standard.txt",
@@ -540,7 +540,8 @@
         "walk": "walk",
         "attack": "attack_throw",
         "attack_cast": "attack_throw"
-      }
+      },
+      "oneShot": { "attack": 0.28 }
     },
     {
       "id": "whirlwind_priest",
@@ -551,7 +552,7 @@
       "materials": { "MI_Ranger": "outfit", "MI_Regular_Male": "skin", "MI_Superhero_Male": "head" },
       "teamRole": "outfit",
       "propColourSpace": "srgb",
-      "tints": { "outfit": { "colour": "#e2d9c2", "amount": 0.65, "brightness": 1.4 } },
+      "tints": { "outfit": { "colour": "#a39577", "amount": 0.65 } },
       "parts": [
         { "source": "Modular Character Outfits - Fantasy[Standard]/Modular Character Outfits - Fantasy[Standard]/Exports/glTF (Godot-Unreal)/Outfits/Male_Ranger.gltf", "mesh": "Male_Ranger_Body", "triangles": 600, "team": true },
         { "source": "Modular Character Outfits - Fantasy[Standard]/Modular Character Outfits - Fantasy[Standard]/Exports/glTF (Godot-Unreal)/Outfits/Male_Ranger.gltf", "mesh": "Male_Ranger_Head_Hood", "triangles": 350, "team": true },
@@ -562,7 +563,7 @@
       ],
       "props": [
         {
-          "name": "robe", "bone": "pelvis", "material": "robe", "colour": "#d9d0bc",
+          "name": "robe", "bone": "pelvis", "material": "robe", "colour": "#a39577",
           "pose": { "source": "UAL1", "clip": "Idle_Loop", "at": 0.0 },
           "offset": [0.0, 0.0, 0.0],
           "boxes": [
@@ -574,7 +575,7 @@
           ]
         },
         {
-          "name": "veil", "bone": "Head", "material": "veil", "colour": "#8e1f24",
+          "name": "veil", "bone": "Head", "material": "veil", "colour": "#5e1a20",
           "pose": { "source": "UAL1", "clip": "Idle_Loop", "at": 0.0 },
           "offset": [0.0, 0.0, 0.0],
           "boxes": [
@@ -598,7 +599,7 @@
       "materials": { "MI_Peasant": "outfit", "MI_Regular_Male": "skin", "MI_Superhero_Male": "head" },
       "teamRole": "outfit",
       "propColourSpace": "srgb",
-      "tints": { "outfit": { "colour": "#8a2a26", "amount": 0.6 } },
+      "tints": { "outfit": { "colour": "#6e3a26", "amount": 0.6 } },
       "parts": [
         { "source": "Modular Character Outfits - Fantasy[Standard]/Modular Character Outfits - Fantasy[Standard]/Exports/glTF (Godot-Unreal)/Outfits/Male_Peasant.gltf", "mesh": "Male_Peasant_Body", "triangles": 750, "team": true },
         { "source": "Modular Character Outfits - Fantasy[Standard]/Modular Character Outfits - Fantasy[Standard]/Exports/glTF (Godot-Unreal)/Outfits/Male_Peasant.gltf", "mesh": "Male_Peasant_Arms", "triangles": 600 },
@@ -630,7 +631,7 @@
           ]
         },
         {
-          "name": "head_wrap", "bone": "Head", "material": "wrap", "colour": "#7e1d1d",
+          "name": "head_wrap", "bone": "Head", "material": "wrap", "colour": "#5a1c1e",
           "pose": { "source": "UAL1", "clip": "Idle_Loop", "at": 0.0 },
           "offset": [0.0, 0.0, 0.0],
           "boxes": [

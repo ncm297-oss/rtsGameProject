@@ -24,8 +24,9 @@ namespace Rts.Game.Tests;
 /// "OVERLAY LINE TEST PASS" and exits 0, or each failure and exits 1. Rows, on the shipped data:
 /// (1) per model type (the count is the asset manifest's entries): its highest bone over every clip its players hold, measured
 ///     here on a real player and skeleton (17 poses a clip, as <see cref="UnitModels.TopBone"/> samples), equals
-///     <c>TopBone x scale</c> within 2 cm; the overlay line is above it and at most <see cref="Margin"/> over it (the gap is
-///     printed per type), above the head's crown in every pose (the head bone's highest point plus its rest distance to
+///     <c>TopBone x scale</c> within 2 cm; M6-VH9: so do its props' highest point over the clips its data plays and
+///     <see cref="UnitViews.PlayedPropTop"/>; the overlay line is above the higher of the two and at most <see cref="Margin"/>
+///     over it (the gap is printed per type), above the head's crown in every pose (the head bone's highest point plus its rest distance to
 ///     the rest-pose top), and the hp bar's lower edge clears the figure's rest-pose top (its body without the props);
 /// (2) every capsule type's line is its capsule's top, <see cref="UnitViews.DrawnHeight"/>, exactly (unchanged);
 /// (3) in a real match the hp bars and the ability overlays read the same line for every type, a hurt Teblor Warrior's and a
@@ -104,9 +105,12 @@ public partial class OverlayLineTest : Node
                 continue;
             }
             models++;
-            (float measured, string bone, string clip, float head, float restHead) = await MeasuredTop(views, type);
+            (float measured, string bone, string clip, float head, float restHead, float propMeasured) = await MeasuredTop(views, type);
             float computed = views.Models!.TopBone(type) * def.Scale;
-            float gap = line - measured;
+            // M6-VH9 (BUG-1600 item 3): a prop over the head in a clip the type plays (the Mage's staff head) sets the line.
+            float propComputed = UnitViews.PlayedPropTop(views.Models, _data, type) * def.Scale;
+            float under = float.IsFinite(propComputed) ? Math.Max(measured, propMeasured) : measured;
+            float gap = line - under;
             float restTop = RestTop(views, type);
             // The crown in any pose: the head bone's highest point plus the rest pose's head bone to crown.
             float crown = head + (restTop - restHead);
@@ -116,7 +120,12 @@ public partial class OverlayLineTest : Node
                 $"(1) {def.Key} (scale {def.Scale}): highest bone {bone} in {clip} at {measured:F3} m (TopBone x scale {computed:F3}), line {line:F3} m, gap {gap:F3} m"
                 + $" (was {UnitViews.DrawnHeight(def):F2} m, gap {UnitViews.DrawnHeight(def) - measured:F2}); head's crown at most {crown:F3} m, line {line - crown:F3} m over it; rest top {restTop:F3} m, hp bar's lower edge {barBottom - restTop:F3} m over it"));
             Check(MathF.Abs(measured - computed) < 0.02f, $"(1) {def.Key}: measured highest bone {measured:F3} m, TopBone x scale {computed:F3} m");
-            Check(gap > 0f && gap <= Margin, $"(1) {def.Key}: line {line:F3} m is {gap:F3} m over the highest bone {measured:F3} m (want above it, at most {Margin} m)");
+            if (float.IsFinite(propComputed))
+            {
+                GD.Print(string.Create(CultureInfo.InvariantCulture, $"(1) {def.Key}: props' top over the clips it plays {propMeasured:F3} m measured, {propComputed:F3} m computed"));
+                Check(MathF.Abs(propMeasured - propComputed) < 0.02f, $"(1) {def.Key}: measured props' top {propMeasured:F3} m, PlayedPropTop x scale {propComputed:F3} m");
+            }
+            Check(gap > 0f && gap <= Margin, $"(1) {def.Key}: line {line:F3} m is {gap:F3} m over the highest bone or prop {under:F3} m (want above it, at most {Margin} m)");
             Check(barBottom > restTop, $"(1) {def.Key}: the hp bar's lower edge {barBottom:F3} m is inside the figure (rest top {restTop:F3} m)");
             Check(head > 0f && line > crown, $"(1) {def.Key}: line {line:F3} m under the head's crown {crown:F3} m in some clip");
             if (gap > worstGap) (worstGap, worstType) = (gap, def.Key);
@@ -127,8 +136,9 @@ public partial class OverlayLineTest : Node
 
     // The highest counted bone over 17 poses of every clip the type's players hold, on a real player and skeleton (blend off,
     // so each pose is the clip's own), in meters above the feet at the data scale.
-    // Also the head bone's highest point over those poses and its rest height ("Head", QaM7V5Test's name; 0 when absent).
-    private async Task<(float Top, string Bone, string Clip, float Head, float RestHead)> MeasuredTop(UnitViews views, int type)
+    // Also the head bone's highest point over those poses and its rest height ("Head", QaM7V5Test's name; 0 when absent), and
+    // (M6-VH9) the props' highest skinned vertex over the poses of the clips the type plays (NaN without props).
+    private async Task<(float Top, string Bone, string Clip, float Head, float RestHead, float Prop)> MeasuredTop(UnitViews views, int type)
     {
         UnitDef def = _data.Units[type];
         var holder = new Node3D();
@@ -141,8 +151,12 @@ public partial class OverlayLineTest : Node
         (float top, string bone, string clip) = (float.MinValue, "", "");
         int headBone = skel.FindBone("Head");
         float head = 0f, restHead = headBone >= 0 ? (skel.GlobalTransform * skel.GetBoneGlobalRest(headBone)).Origin.Y : 0f;
+        float prop = float.NaN;
+        UnitModels.Atlas? atlas = views.Models.AtlasOf(type);
         foreach (StringName name in anim.GetAnimationList())
         {
+            int c = Array.IndexOf(UnitModels.ClipNames, name);
+            bool played = c >= 0 && Plays(def, (UnitModels.Clip)c);
             anim.Play(name);
             double len = anim.CurrentAnimationLength;
             for (int k = 0; k <= UnitModels.TopBoneSamples; k++)
@@ -157,10 +171,57 @@ public partial class OverlayLineTest : Node
                     if (y > top) (top, bone, clip) = (y, n, name.ToString());
                     if (b == headBone) head = Math.Max(head, y);
                 }
+                if (played && atlas != null)
+                {
+                    float y = PropTopNow(mesh, skel, atlas);
+                    if (float.IsNaN(prop) || y > prop) prop = y;
+                }
             }
         }
         holder.Free();
-        return (top, bone, clip, head, restHead);
+        return (top, bone, clip, head, restHead, prop);
+    }
+
+    // The clips a type's data has it play (UnitViews.PlayedPropTop's rule): idle, walk, attack; a shown cast; a worker's.
+    private bool Plays(UnitDef def, UnitModels.Clip clip)
+    {
+        bool casts = false;
+        foreach (int a in def.Abilities) casts |= _data.Abilities[a].CastTicks > 1;
+        return clip switch
+        {
+            UnitModels.Clip.Idle or UnitModels.Clip.Walk or UnitModels.Clip.Attack => true,
+            UnitModels.Clip.Cast => casts,
+            _ => def.IsWorker,
+        };
+    }
+
+    // The highest prop vertex (the props' atlas tile) in the skeleton's current pose, world y; NaN without props.
+    private static float PropTopNow(MeshInstance3D mesh, Skeleton3D skel, UnitModels.Atlas atlas)
+    {
+        Skin skin = mesh.Skin;
+        Godot.Collections.Array arrays = mesh.Mesh.SurfaceGetArrays(0);
+        Vector3[] v = arrays[(int)Mesh.ArrayType.Vertex].AsVector3Array();
+        Vector2[] uv = arrays[(int)Mesh.ArrayType.TexUV].AsVector2Array();
+        int[] bones = arrays[(int)Mesh.ArrayType.Bones].AsInt32Array();
+        float[] weights = arrays[(int)Mesh.ArrayType.Weights].AsFloat32Array();
+        int per = bones.Length / Math.Max(1, v.Length);
+        float top = float.NaN;
+        for (int k = 0; k < v.Length; k++)
+        {
+            if (!atlas.IsProp(uv[k])) continue;
+            Vector3 p = Vector3.Zero;
+            for (int j = 0; j < per; j++)
+            {
+                float w = weights[k * per + j];
+                if (w <= 0f) continue;
+                int bind = bones[k * per + j];
+                int bone = skin.GetBindBone(bind);
+                if (bone < 0) bone = skel.FindBone(skin.GetBindName(bind));
+                p += w * (skel.GlobalTransform * skel.GetBoneGlobalPose(bone) * skin.GetBindPose(bind) * v[k]);
+            }
+            if (float.IsNaN(top) || p.Y > top) top = p.Y;
+        }
+        return top;
     }
 
     // The figure's rest-pose top at the data scale, without the props' own surfaces (TeblorModelTest's box).

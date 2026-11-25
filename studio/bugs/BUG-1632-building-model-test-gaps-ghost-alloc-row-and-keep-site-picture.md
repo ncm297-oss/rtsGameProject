@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S4 |
-| Status | open |
+| Status | fixed (M6-VH9, verified by QA 2026-11-24-1431) |
 | Found | 2026-11-18-0926, task M6-V26 |
 | System | Godot test scenes (`game/tests/BuildingModelTest.cs`) |
-| Fixed by | |
+| Fixed by | M6-VH9: `BuildingModelTest` allocation row moved into `Remembered`, site wait 400 ticks with a check |
 
 ## Repro
 1. `& $env:GODOT --headless --path game res://tests/BuildingModelTest.tscn` and read the allocation line.
@@ -29,3 +29,6 @@
   The developer's row can either move before the scout returns or drop "remembered models" from its claim.
 - Item 2: the picture still meets the criterion ("a site"). The Laborer probably has no time or path to start the 8 x 8
   site within the 40 ticks the scene waits. Either wait longer, or say in the log that the Keep site was skipped.
+
+## QA verification (2026-11-24-1431, M6-VH9)
+Scene loop log: `20 syncs with 2 models and 2 remembered models drawn: 0 bytes`; the row now also checks that a remembered model is drawn. `sites-40m.png` (developer's picture) shows two sites, and the picture code now fails the scene when a site is not placed.

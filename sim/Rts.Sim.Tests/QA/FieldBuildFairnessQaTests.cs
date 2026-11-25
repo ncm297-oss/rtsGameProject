@@ -425,7 +425,7 @@ public class FieldBuildFairnessQaTests
         }
 
         /// <summary>The two-faction bound of <see cref="World_1024Map_CacheStays32_MemoryBounded"/>: the itemised history is there.</summary>
-        internal const long TwoFactionBound1024 = 232_539_984;
+        internal const long TwoFactionBound1024 = 232_639_848; // M7-8: +99,864 (World._droppedOrders), was 232,539,984
 
         /// <summary>
         /// M7-5 (BUG-1222 ruling): what one more collision-radius class costs a 1024-map world with 4,096 unit slots and two
@@ -527,6 +527,12 @@ public class FieldBuildFairnessQaTests
             // - World.RegenPerTickOf / RegenDelayOf (an int a player): 2 x (2 x 4 + 24) = 64 bytes.
             // 232,474,768 measured alone on the diff base d164a5f, 232,510,464-232,517,576 on M7-1's tree (+35.7 to +42.8 KB:
             // these 37,000 bytes and the probe's rounding); the bound moves by the same 37,000 bytes.
+            // M7-8 re-baselines (Request 58, the dropped queued orders, docs/03 "Implementation (M7-8)"), itemised:
+            // - World._droppedOrders, one 24-byte DroppedOrder (handle 8, owner 4, kind 4, placement error 4, flag 1, padded)
+            //   per unit slot plus one per command slot, preallocated so the list never fills: (4,096 + 64) x 24 = 99,840
+            //   bytes + a 24-byte header = 99,864.
+            // 232,503,224 measured on the base 9eb1646, 232,610,424 on M7-8's tree (QA/RadiusClassAllowanceQaTests' figure:
+            // +107,200, these 99,864 bytes and about 7.3 KB of the probe's rounding); the bound moves by the same 99,864 bytes.
             Assert.True(bytes < TwoFactionBound1024, $"{bytes / 1e6:F1} MB");
         }
 

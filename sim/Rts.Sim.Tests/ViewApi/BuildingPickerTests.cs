@@ -4,6 +4,7 @@ using Rts.Sim.Data;
 using Rts.Sim.Entities;
 using Rts.Sim.Map;
 using Rts.Sim.ViewApi;
+using Rts.Sim.Vision;
 using Xunit.Abstractions;
 
 namespace Rts.Sim.Tests.ViewApi;
@@ -237,6 +238,146 @@ public class BuildingPickerTests
         block();
         int runs = AllocationProbe.AssertZero(block, _out);
         _out.WriteLine($"BuildingPicker: 0 bytes (runs {runs}), checksum {sum}");
+    }
+
+    // M6-VH9 (BUG-1630): a horizontal ray from the west at height `y` over the footprint's ground, through the middle.
+    private static int WestRay(World w, int slot, float y, ReadOnlySpan<float> tops, ReadOnlySpan<float> sites)
+    {
+        Vector2 c = Center(w, slot);
+        float half = w.Data.Buildings[w.Buildings.TypeId[slot]].FootprintWidth * MapConstants.CellSize / 2f;
+        var from = new Vector3(c.X - half - 0.5f, TerrainHeight.At(w.Heightmap, c.X, c.Y) + y, c.Y);
+        return BuildingPicker.PickRay(w.Buildings, w.Data.Buildings, w.NavGrid, w.Heightmap, -1, from, Vector3.UnitX, tops, sites, SiteMin, ReadOnlySpan<bool>.Empty, out _);
+    }
+
+    // Per type the view's drawn heights: a box type's DrawnHeight (BoxHeight x scale), with `modelType` given `modelTop` as a model's fitted top.
+    private static (float[] Tops, float[] Sites) Heights(World w, int modelType = -1, float modelTop = 0f)
+    {
+        var tops = new float[w.Data.Buildings.Length];
+        var sites = new float[tops.Length];
+        for (int t = 0; t < tops.Length; t++) tops[t] = sites[t] = BoxHeight * w.Data.Buildings[t].Scale;
+        if (modelType >= 0) tops[modelType] = modelTop;
+        return (tops, sites);
+    }
+
+    [Fact]
+    public void PickRay_PerTypeHeights_AModelTypeIsPickedUpToItsFittedTop_AndNoHigher()
+    {
+        Simulation sim = GatherMaps.NewSim(LocalMovementTests.Flat(32));
+        World w = sim.World;
+        int slot = GatherMaps.Building(sim, 12, 12).Index;
+        int type = w.Buildings.TypeId[slot];
+        (float[] tops, float[] sites) = Heights(w, type, 8.09f);
+        // BUG-1630: the 8.09 m Keep model's tower at 6 m was over the 3 m box; now it is the building.
+        Vector2 c = Center(w, slot);
+        float half = w.Data.Buildings[type].FootprintWidth * MapConstants.CellSize / 2f;
+        Assert.Equal(-1, BuildingPicker.PickRay(w.Buildings, w.Data.Buildings, w.NavGrid, w.Heightmap, -1,
+            new Vector3(c.X - half - 0.5f, TerrainHeight.At(w.Heightmap, c.X, c.Y) + 6f, c.Y), Vector3.UnitX, BoxHeight, SiteMin));
+        Assert.Equal(slot, WestRay(w, slot, 6f, tops, sites));
+        Assert.Equal(slot, WestRay(w, slot, 8.0f, tops, sites));
+        Assert.Equal(-1, WestRay(w, slot, 8.2f, tops, sites));
+        // BUG-1381 item 2, the other way: a building drawn 1.5 m tall is not picked in the air above it.
+        tops[type] = 1.5f;
+        Assert.Equal(slot, WestRay(w, slot, 1.4f, tops, sites));
+        Assert.Equal(-1, WestRay(w, slot, 2.0f, tops, sites));
+        // A type past the span's end is not picked (no out-of-range read).
+        Assert.Equal(-1, WestRay(w, slot, 1f, tops.AsSpan(0, type), sites.AsSpan(0, type)));
+    }
+
+    [Fact]
+    public void PickRay_PerTypeHeights_AScaledBoxType_FollowsItsDrawnHeight()
+    {
+        Simulation sim = GatherMaps.NewSim(LocalMovementTests.Flat(32));
+        World w = sim.World;
+        int scaled = -1;
+        for (int t = 0; t < w.Data.Buildings.Length && scaled < 0; t++)
+            if (w.Data.Buildings[t].Scale > 1.01f && w.Data.Buildings[t].FootprintWidth <= 4) scaled = t;
+        Assert.True(scaled >= 0, "no building type with a data scale above 1 (the Teblor's 1.25)");
+        int slot = GatherMaps.Building(sim, 12, 12, type: scaled).Index;
+        (float[] tops, float[] sites) = Heights(w);
+        float drawn = BoxHeight * w.Data.Buildings[scaled].Scale;
+        _out.WriteLine($"{w.Data.Buildings[scaled].Key}: scale {w.Data.Buildings[scaled].Scale}, drawn {drawn} m");
+        Assert.Equal(slot, WestRay(w, slot, drawn - 0.1f, tops, sites));
+        Assert.Equal(-1, WestRay(w, slot, drawn + 0.1f, tops, sites));
+        // The single-height overload kept the 3 m box: the same ray under the drawn top missed (the old row, for the record).
+        Assert.True(drawn - 0.1f > BoxHeight);
+    }
+
+    [Fact]
+    public void PickRay_PerTypeHeights_ASiteIsItsRisingBox_NotTheModelsTop()
+    {
+        Simulation sim = GatherMaps.NewSim(LocalMovementTests.Flat(32));
+        World w = sim.World;
+        int keep = GatherMaps.Keep;
+        int slot = TowerTests.PlaceBuilding(sim, 0, keep, 12, 12, site: true).Index;
+        Assert.True(w.Buildings.UnderConstruction[slot]);
+        (float[] tops, float[] sites) = Heights(w, keep, 8.09f);
+        float rise = BuildingPicker.BoxRise(w.Buildings, w.Data.Buildings, slot, SiteMin);
+        float drawn = sites[keep] * rise;
+        Assert.Equal(slot, WestRay(w, slot, drawn * 0.5f, tops, sites));
+        Assert.Equal(-1, WestRay(w, slot, drawn + 0.2f, tops, sites));
+        Assert.Equal(-1, WestRay(w, slot, 6f, tops, sites));
+    }
+
+    [Fact]
+    public void PickGhostRay_PerTypeHeights_ARememberedModelAtItsTop_ARememberedSiteAsItsFoundation()
+    {
+        Simulation sim = GatherMaps.NewSim(LocalMovementTests.Flat(32));
+        World w = sim.World;
+        int keep = GatherMaps.Keep;
+        (float[] tops, float[] sites) = Heights(w, keep, 8.09f);
+        NavGrid g = w.NavGrid;
+        int anchor = 12 * g.Width + 12, siteAnchor = 12 * g.Width + 22;
+        var ghosts = new BuildingGhost[4];
+        var shown = new bool[4];
+        ghosts[1] = new BuildingGhost(3, keep, anchor, 1);
+        ghosts[2] = new BuildingGhost(5, keep, siteAnchor, 1, Site: true);
+        shown[1] = shown[2] = true;
+        float half = w.Data.Buildings[keep].FootprintWidth * MapConstants.CellSize / 2f;
+        int Ray(int a, float y, ReadOnlySpan<float> t, ReadOnlySpan<float> s)
+        {
+            Vector2 c = StartBase.FootprintCenter(g, w.Data.Buildings[keep], a);
+            var from = new Vector3(c.X - half - 0.5f, TerrainHeight.At(w.Heightmap, c.X, c.Y) + y, c.Y);
+            return BuildingPicker.PickGhostRay(shown, ghosts, w.Data.Buildings, g, w.Heightmap, from, Vector3.UnitX, t, s, SiteMin, out _);
+        }
+        Assert.Equal(1, Ray(anchor, 6f, tops, sites));
+        Assert.Equal(-1, Ray(anchor, 8.2f, tops, sites));
+        float foundation = sites[keep] * SiteMin;
+        Assert.Equal(2, Ray(siteAnchor, foundation * 0.5f, tops, sites));
+        Assert.Equal(-1, Ray(siteAnchor, foundation + 0.1f, tops, sites));
+        // The single-height overload: the remembered Keep's tower at 6 m was missed (BUG-1630's ghost half).
+        Vector2 kc = StartBase.FootprintCenter(g, w.Data.Buildings[keep], anchor);
+        Assert.Equal(-1, BuildingPicker.PickGhostRay(shown, ghosts, w.Data.Buildings, g, w.Heightmap,
+            new Vector3(kc.X - half - 0.5f, 6f, kc.Y), Vector3.UnitX, BoxHeight, SiteMin, out _));
+    }
+
+    [Fact]
+    public void PickRay_PickGhostRay_PerTypeHeights_AllocateZeroBytes()
+    {
+        (Simulation sim, _, _, _) = Base(1);
+        World w = sim.World;
+        (float[] tops, float[] sites) = Heights(w, w.Buildings.TypeId[HallOf(w, 0)], 8.09f);
+        var ghosts = new BuildingGhost[w.Buildings.Capacity];
+        var shown = new bool[w.Buildings.Capacity];
+        for (int k = 0; k < w.Buildings.Capacity; k++)
+            if (w.Buildings.Alive[k])
+            {
+                ghosts[k] = new BuildingGhost(1, w.Buildings.TypeId[k], w.Buildings.Cell[k], w.Buildings.Owner[k], w.Buildings.UnderConstruction[k]);
+                shown[k] = true;
+            }
+        long sum = 0;
+        Action block = () =>
+        {
+            for (int i = 0; i < 200; i++)
+            {
+                var o = new Vector3(i * 1.3f, 60f, i * 1.1f);
+                var d = new Vector3(0.1f, -1f, -0.6f);
+                sum += BuildingPicker.PickRay(w.Buildings, w.Data.Buildings, w.NavGrid, w.Heightmap, -1, o, d, tops, sites, SiteMin, ReadOnlySpan<bool>.Empty, out _);
+                sum += BuildingPicker.PickGhostRay(shown, ghosts, w.Data.Buildings, w.NavGrid, w.Heightmap, o, d, tops, sites, SiteMin, out _);
+            }
+        };
+        block();
+        int runs = AllocationProbe.AssertZero(block, _out);
+        _out.WriteLine($"per-type picks: 0 bytes (runs {runs}), checksum {sum}");
     }
 
     private static Vector2 Center(World w, int slot) =>

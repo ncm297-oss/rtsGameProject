@@ -346,6 +346,13 @@ tools/
   linear base colour glTF holds). Without it a prop's hex is written as the linear value itself, as M6-V20 / V21 built:
   those props show lighter than their hex (the crossbow's `#4a3626` draws about `#937f6c`); left as it is (re-cutting
   them is BUG-1411's).
+- **One-shot clips (M6-VH9, BUG-1601).** A model may carry `oneShot` beside its `clips`: a state name -> the share of that
+  clip's length at which the figure releases its shot (the Sapper: `"oneShot": { "attack": 0.28 }`, its throwing hand's
+  fastest frame in `OverhandThrow`, measured on the skeleton by `ViewHardenVh9Test`). The builder checks the state is in the
+  clip map and the share is in (0, 1), and writes the marks into the armature's extras beside the clip map (`{"oneShot":
+  {...}}`) only for a model that has any, so every other file is byte-identical. The view then plays that clip once per
+  attack with its release on the shot leaving, and holds the clip's first frame (the ready pose) between shots (docs/03
+  "Implementation (M6-VH9)"); an unmarked clip loops from the crowd phase as before.
 - **Stale extracted textures (fixed in M7-V5).** Godot re-extracts a model's texture beside it only when the `.png.import`
   names the md5 Godot wrote (`generator_parameters`), and the script's `.import` rewrite dropped it, so a changed tint never
   reached the game (no texture had changed since M6-V20, so nothing showed it). The script now gives each rebuilt model's
@@ -396,13 +403,49 @@ tools/
   **What tells them apart** (developer's read of the pictures, owner may revisit): the Mage is the only Malazan figure with
   a long robe and a staff over its head; the Sapper the only one with a pack standing over its shoulders and bags on its
   hips (the Laborer is bare, the Crossbowman hooded with a crossbow, the Heavy Infantry has the big team shield and helmet);
-  the Priest the only Whirlwind figure in a long white robe, its hood in the team colour and a red veil; the Zealot the
-  only one with a red head-wrap and a blade in each hand (the Raider is hooded with one blade, the Camp Follower bare).
+  the Priest the only Whirlwind figure in a long white robe (since M6-VH9 a sand robe, below), its hood in the team colour
+  and a red veil; the Zealot the only one with a red head-wrap and a blade in each hand (the Raider is hooded with one blade,
+  the Camp Follower bare).
   **Stand-ins (developer's default):** no robe, veil, satchel or turban mesh is on disk, so each is boxes bound to one bone
   (the robe to the pelvis: in a stride the legs show through its front and sides, which at 20-60 m reads as a split
   robe). The models are 1.82-1.90 m tall (the hood, the head-wrap), feet at the origin, 65 bones. Sizes (Git LFS): the four
   `.glb` 5,242,232 bytes and atlases 4,371,895 (9,614,127, 9.2 MB); all the art pass's generated binaries **38,442,384 bytes
   (36.7 MB), was 28,828,257 (27.5 MB)**. A full run leaves the eleven earlier models and the library byte-identical.
+
+  **Re-tint in the setup's colours (M6-VH9, BUG-1600; developer's pick, owner may revisit).** The rule (style guide: "team
+  colors are the only strong accents"): no non-team tint or prop colour of a figure lies within 60 (RGB 0-255 a channel,
+  Euclidean) of a player colour it must read against, checked by `ViewHardenVh9Test` row (C) from this manifest and
+  `ui.json`, which also prints every model type against all eight setup colours. The Priest's team parts (hood, jerkin) took
+  the Bone colour on a bleached outfit and robe 19-22 away from it, so a Bone Priest showed no team colour; the Priest's veil
+  and the Zealot's wrap and trousers were strong reds 45-62 from Crimson. Producer default: the reds go darker (maroon,
+  rust), not away from red.
+
+  | Type | Was | Now | Nearest player colour now |
+  | --- | --- | --- | --- |
+  | Priest of the Whirlwind | outfit tint bleached `#e2d9c2` 0.65, brightness 1.4; robe `#d9d0bc`; veil crimson `#8e1f24` | outfit tint weathered sand `#a39577` 0.65 (brightness 1); robe the same sand `#a39577`; veil maroon `#5e1a20` | Bone 104 (outfit, robe), Crimson 93 (veil) |
+  | Whirlwind Zealot | outfit tint crimson `#8a2a26` 0.6; head-wrap `#7e1d1d` | outfit tint rust `#6e3a26` 0.6; head-wrap maroon `#5a1c1e` | Crimson 78 (outfit), 97 (wrap) |
+
+  So the Priest reads as a long **sand** robe (no longer white) with its hood and jerkin in the player colour and a dark veil;
+  the Zealot as a team tunic over rust trousers with a dark red wrap. The table's other pairs under 60 are left for the
+  owner (`ViewHardenVh9Test`'s printout): the Camp Follower's, Desert Archer's and Teblor Shaman's light outfits 13-16 from
+  Bone (their team part is the whole jerkin or tunic, not a hood inside a robe), the steel blades 56 from Bone, the Raider's
+  ochre outfit 28, the Mage's bronze staff head 44 and the Sapper's clay munition 36 from Ochre, and the dark leathers and
+  woods 43-59 from Iron. Only the two figures' files changed (the eleven others, the Sapper's atlas and the
+  library are byte-identical over two runs). Sizes: the Priest `.glb` 1,318,860 and atlas 1,099,600 bytes (were 1,362,152 /
+  1,142,890), the Zealot 1,219,256 / 1,014,341 (were 1,226,548 / 1,021,633), the Sapper `.glb` 1,326,368 (was 1,326,344:
+  its one-shot mark below); all the art pass's generated binaries **38,856,086 bytes (37.1 MB), was 38,957,228**.
+
+  **The figures as built are the art pass's first reading of the faction pages (BUG-1602).** Where they differ from the
+  pages' "Art notes" it is the stand-in, not a change of design; revisit with the owner's packs:
+  - **Priest of the Whirlwind** (`whirlwind.md`: "tall headdresses with a staff trailing ribbons"): a hood (the outfit's,
+    team colour), a flat veil and a box robe; no headdress or staff (none on disk; boxes on the head bone read as a hat, not
+    a headdress).
+  - **Zealot** (`whirlwind.md`: "bare-chested, red-painted, twin knives"): clothed in the Peasant outfit (its tunic is the
+    team part; a bare chest would leave no team colour on the figure), a head-wrap, and two copies of the Raider's 0.7 m
+    curved blade rather than knives (a knife is 2-3 px at 40 m).
+  - **Sapper** (`malazan.md`: "leather aprons with munition satchels and a crouched stance"): the satchels are built; no
+    apron (an apron box hides the legs' stride) and the idle stance is the library's upright one (no crouched idle clip).
+  - The Cadre Mage matches its notes ("hooded robes, no armor").
 - The view: `UnitViews` draws a type whose file loads as its model, any other type as its capsule (docs/03 "Implementation
   (M6-V20)").
 
@@ -454,6 +497,14 @@ the Ultimate Fantasy RTS pack (CC0, already on disk); every other building type 
   keeps the ground plan `FitMargin` (0.25 m) inside every edge of the footprint (cells x 2 m from the data), the plan
   centred on the footprint's centre, its lowest point on the ground at that centre (as the box's base). The file keeps the
   pack's size; nothing about a footprint is baked into it.
+- **Facing and the data `scale` (docs/01 2026-11-20 (2), answers 5 and 6 of docs/03 "Implementation (M6-V26)").** A
+  building's front (its door) faces **+Z**, toward the match camera, and never turns: a building file keeps the pack's
+  +Z entrance (`yawDegrees` 0), unlike a unit's -Z forward. The data `scale` (the Teblor buildings' 1.25) applies to a
+  model's **height only**, as it does to a box since M7-V4: the fit's uniform scale for the plan, times `scale` on the
+  vertical axis, so a scaled model stays inside its footprint and stands taller. No building with a model has a `scale`
+  other than 1 yet, so `BuildingModels` does not apply it today; the first scaled building model (a Teblor one) brings
+  the code with it. The drawn top (`BuildingModels.Top`) is what picking and the bar read either way (docs/03
+  "Implementation (M6-VH9)").
 - **Sizes (Git LFS):** the two `.glb` 348,712 + 164,296 bytes and the two atlases 918 + 918: **514,844 bytes (0.49 MB)**
   for the building art; all the art pass's generated binaries **38,957,228 bytes (37.2 MB), was 38,442,384 (36.7 MB)**.
 - **The view:** `BuildingViews` draws a finished building whose type's file loads as its model, any other (and every site)

@@ -26,8 +26,8 @@ namespace Rts.Game.Tests;
 /// <c>SiteMinHeight</c> of 6 m to exactly 6 m with its progress bar over its full top on every frame; the placement ghost of each
 /// type is the same box, its reason label over the drawn top; an enemy Billet and Barracks scouted and left are drawn as ghosts
 /// of the same height; 20 frames of the scaled views during the site's rise allocate nothing.</item>
-/// <item>The hit test keeps the 3 m box: a click on the 2.0 Barracks just above 3 m, where the old box isn't, selects what
-/// <see cref="SelectionController.PickBuilding"/> gives there (not the Barracks); a click on its lower half selects it. The
+/// <item>The hit test follows the drawn height (M6-VH9, BUG-1630; it kept the 3 m box until then): a click on the 2.0
+/// Barracks just above 3 m, where the old box wasn't, selects the Barracks; so does a click on its lower half. The
 /// footprint, outline, ring and rally point read the footprint, not the height.</item>
 /// <item>Shipped data: every type's drawn height is <c>3 m x scale</c>; a Teblor base (Longhouse, Hut, War Lodge) beside a Malazan
 /// one at the default zoom draws each box at its type's height (1.0 today; 1.25 once the data track's D31 rows land).</item>
@@ -174,7 +174,7 @@ public partial class BuildingScaleViewTest : Node
         PlacementGhost(data, new[] { keep, billet, barracks }, keepSlot);
         await GhostLabel(barracks, keepSlot);
 
-        // Criterion 5: the hit test keeps the 3 m box.
+        // Criterion 5 (M7-V4), changed by M6-VH9: the hit test follows the drawn height, not the 3 m box.
         HitRows(barracksSlot, keepSlot);
 
         // Criterion 3: hit-point bars on the hurt 1.0, 1.25 and 2.0 buildings.
@@ -312,7 +312,8 @@ public partial class BuildingScaleViewTest : Node
         ghost.End();
     }
 
-    // A click above the old 3 m top on the 2.0 Barracks's drawn box selects what the unchanged hit test gives; a low click the Barracks.
+    // A click above the old 3 m top on the 2.0 Barracks's drawn box selects the Barracks (M6-VH9: picking by drawn height); a low
+    // click too.
     private void HitRows(int barracksSlot, int keepSlot)
     {
         System.Numerics.Vector2 c = Centre(barracksSlot);
@@ -336,7 +337,8 @@ public partial class BuildingScaleViewTest : Node
                 Vector3 o = _camera.ProjectRayOrigin(px), d = _camera.ProjectRayNormal(px);
                 if (RayHit(drawn, o, d) is not Vector3 hit) continue;
                 if (hit.Y < ground + BuildingViews.BoxHeight + 0.05f || hit.Y >= bestY) continue;
-                if (_sel.PickBuilding(px) == barracksSlot) continue; // the old box is behind it there
+                // Only where the old 3 m box is not behind the pixel: there the old hit test gave something else.
+                if (RayHit(new Aabb(drawn.Position, new Vector3(drawn.Size.X, BuildingViews.BoxHeight, drawn.Size.Z)), o, d) != null) continue;
                 best = px;
                 bestY = hit.Y;
             }
@@ -346,7 +348,7 @@ public partial class BuildingScaleViewTest : Node
         Click(best);
         int after = _sel.SelectedBuilding;
         GD.Print($"  hit test: a click on the 2.0 Barracks's drawn box {bestY - ground:0.###} m up (old top 3 m) picks {before}, selected {after}");
-        Check(after != barracksSlot && after == before, $"hit test: a click {bestY - ground} m up the drawn 2.0 box selected building {after}, the 3 m hit test gives {before}");
+        Check(after == barracksSlot && before == barracksSlot, $"hit test: a click {bestY - ground} m up the drawn 2.0 box selected building {after} (pick {before}), not the Barracks {barracksSlot}");
         // Low on the box (1 m up its near face), inside the old box too: the Barracks.
         Vector2 low = _camera.UnprojectPosition(new Vector3(c.X, ground + 1f, c.Y));
         _sel.SelectBuilding(keepSlot);

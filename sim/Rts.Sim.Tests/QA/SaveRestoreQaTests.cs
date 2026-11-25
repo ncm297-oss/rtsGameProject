@@ -472,6 +472,8 @@ public class SaveRestoreQaTests
         "sim.World.Fog._box", "sim.World.Spatial._scratch",
         // The event arrays past their counts (the spans, up to the counts, are compared directly by AssertSameState).
         "sim.World._deaths", "sim.World._impacts", "sim.World._abilityEvents", "sim.World._defeatEvents",
+        // M7-8 (Request 58): the dropped queued orders are output, not saved (docs/03 "Implementation (M7-8)"): a load shows none.
+        "sim.World._droppedOrders", "sim.World.DroppedOrderCount",
         // A loaded config has explicit seats where the match had defaults: checked seat by seat in the test instead.
         "sim.World.Config.Seats",
     };

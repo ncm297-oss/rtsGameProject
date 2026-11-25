@@ -882,6 +882,9 @@ open S1 / S2. Retro below; open S3 / S4 listed there.)_
       **M6-V26, 2026-11-18-0926:** the first two building models (the Malazan Garrison Keep and Barracks, from the
       Ultimate Fantasy RTS pack, the roof in the player colour) and the import path for buildings
       (`tools/art/build_building.py`, the manifest's `buildings` list). **Not ticked:** the other 28 building types.
+      **M6-VH9, 2026-11-24-1431 (the view's hardening):** a click follows what is drawn (a model's triangles, a box's
+      drawn height), the Priest and the Zealot re-tinted so every player colour reads, the Sapper throws once a shot.
+      Nothing ticked.
 - [ ] Real SFX and placeholder music; alerts with sound. (M6-V12, 2026-10-17-2344: **real SFX and the alerts are in**: 16 clips cut from
       the owner's Sonniss GDC 2026 bundle (`tools/audio/trim-wav.ps1` + `sfx-manifest.json`, LFS, docs/04 licensing rows) for 12 events
       (`SfxEvent`); world sounds only for what the local player sees on screen, at most 4 per 100 ms; attack alerts (`ViewApi/AttackAlerts`
@@ -996,6 +999,10 @@ open S1 / S2. Retro below; open S3 / S4 listed there.)_
       War-dogs (Normal 12 / 22 / 39 of 64 matches, Hard 35 / 43 / 48; BUG-1420 fixed); `cadre_rush` waves at 16 army pop,
       `holy_war` at 14 (BUG-1553 fixed); data hash 318E8C4256456C05. **Not ticked:** Easy lost the Anointing (BUG-1612,
       D34), unit stats are untouched, the Destrier Rider and the War-dog are still capsules (the owner's packs).
+      **M7-8, 2026-11-24-1431: the tool for the unit mix.** A build-order step may carry `throughReserve` (a unit step
+      spends through an earlier step's savings) or `noReserve` (a building, research or expansion step is never saved
+      for); off unless written, no shipped opening carries one yet. **Not ticked:** the Teblor opening with the
+      switches (the data track's next task, BUG-1612's open half), the rest of the balance pass, the two models.
 
 ## M8 — Shadow
 

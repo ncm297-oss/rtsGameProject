@@ -132,6 +132,10 @@ public partial class UnitViews : Node3D
     private float[] _castAt = Array.Empty<float>();
     private int[] _castSlots = Array.Empty<int>();
     private int _castCount;
+    // M6-VH9 (BUG-1601): per slot the length and release share of the one-shot attack clip it plays (0: none, or a looping
+    // clip); such a slot is put on the same seek list as a caster (its time in _castAt).
+    private float[] _shotLength = Array.Empty<float>();
+    private float[] _shotRelease = Array.Empty<float>();
 
     /// <summary>The models of the last <see cref="Bind"/>, or null when <see cref="UseModels"/> was off.</summary>
     public UnitModels? Models => _models;
@@ -270,12 +274,60 @@ public partial class UnitViews : Node3D
         _castSlots = new int[unitCapacity];
         _castCount = 0;
         _crowd = new CrowdAnimator(unitCapacity);
+        _shotLength = new float[unitCapacity];
+        _shotRelease = new float[unitCapacity];
         _overlayLine = new float[data.Units.Length];
         for (int t = 0; t < _overlayLine.Length; t++)
+            _overlayLine[t] = OverlayLineOf(_models?.TopBone(t) ?? float.NaN, _models == null ? float.NaN : PlayedPropTop(_models, data, t), data.Units[t]);
+    }
+
+    /// <summary>
+    /// Type <paramref name="type"/>'s highest prop point (scale 1; NaN without props) over the clips its data has it play
+    /// (M6-VH9): idle, walk and attack; the cast clip when one of its abilities has a cast the view shows (more than one
+    /// tick); a worker's gathering and building clips. A soldier's weapon swung overhead in a gathering clip it never plays
+    /// does not lift its bars.
+    /// </summary>
+    public static float PlayedPropTop(UnitModels models, GameData data, int type)
+    {
+        UnitDef def = data.Units[type];
+        bool casts = false;
+        foreach (int a in def.Abilities) casts |= data.Abilities[a].CastTicks > 1;
+        float top = float.NaN;
+        for (int c = 0; c < UnitModels.ClipNames.Length; c++)
         {
-            float top = _models?.TopBone(t) ?? float.NaN; // NaN for a capsule type (or a model without a skeleton)
-            _overlayLine[t] = float.IsFinite(top) ? (top + ModelHeadRoom) * data.Units[t].Scale : DrawnHeight(data.Units[t]);
+            var clip = (UnitModels.Clip)c;
+            bool plays = clip switch
+            {
+                UnitModels.Clip.Idle or UnitModels.Clip.Walk or UnitModels.Clip.Attack => true,
+                UnitModels.Clip.Cast => casts,
+                _ => def.IsWorker,
+            };
+            float y = models.PropTop(type, clip);
+            if (plays && (float.IsNaN(top) || y > top)) top = y;
         }
+        return top;
+    }
+
+    /// <summary>
+    /// The room over a model type's highest prop point (M6-VH9, BUG-1600 item 3), in meters at scale 1: a prop that reaches
+    /// above the head (the Cadre Mage's staff head) lifts the overlay line to this far over its top. Less than
+    /// <see cref="ModelHeadRoom"/>: a prop's top is its own surface, while the bones' room covers the head mesh over the head
+    /// bone, so a prop worn on the head (a helmet, a wrap) stays under the line and its type keeps it.
+    /// </summary>
+    public const float PropHeadRoom = 0.1f;
+
+    /// <summary>
+    /// A type's overlay line (<see cref="OverlayLines"/>) from its model's highest bone <paramref name="topBone"/> and highest
+    /// prop point <paramref name="propTop"/> (scale 1; NaN when absent): <c>max(topBone + ModelHeadRoom, propTop + PropHeadRoom)</c>
+    /// times the data <c>scale</c>, so a prop over the head is under the bars (M6-VH9) and a type with none is unchanged;
+    /// <see cref="DrawnHeight"/> for a capsule type (no bone).
+    /// </summary>
+    public static float OverlayLineOf(float topBone, float propTop, UnitDef def)
+    {
+        if (!float.IsFinite(topBone)) return DrawnHeight(def);
+        float line = topBone + ModelHeadRoom;
+        if (float.IsFinite(propTop)) line = Math.Max(line, propTop + PropHeadRoom);
+        return line * def.Scale;
     }
 
     /// <summary>The state whose tint slot <paramref name="slot"/> shows (<see cref="UnitState.Idle"/>: none).</summary>
@@ -460,6 +512,12 @@ public partial class UnitViews : Node3D
                     _castAt[i] = CastClipTime(world, i, alpha, _castLength[i]);
                     _castSlots[_castCount++] = i;
                 }
+                else if (_shotLength[i] > 0f)
+                {
+                    // M6-VH9 (BUG-1601): a one-shot attack clip stands where the swing is, not where the clock is.
+                    _castAt[i] = OneShotClipTime(world, i, alpha, _shotLength[i], _shotRelease[i]);
+                    _castSlots[_castCount++] = i;
+                }
             }
             sbyte cargo = u.Cargo[i] > 0 ? (sbyte)u.CargoKind[i] : (sbyte)-1;
             if (cargo != _shownCargo[i]) ShowCargo(i, view, type, cargo);
@@ -596,6 +654,7 @@ public partial class UnitViews : Node3D
         _shownTint[slot] = (UnitState)byte.MaxValue;
         _shownClip[slot] = -1;
         _castLength[slot] = 0f;
+        _shotLength[slot] = 0f;
         bool model = _models?.Has(type) == true;
         bool sameScene = model && old >= 0 && _model[slot] != null && _modelPath[old] == _modelPath[type];
         if (_model[slot] != null && !sameScene)
@@ -667,12 +726,50 @@ public partial class UnitViews : Node3D
         }
         anim.Play(UnitModels.ClipNames[clip]);
         float length = _models.ClipLength(type, (UnitModels.Clip)clip);
+        _shotLength[slot] = 0f;
+        float release = _models.OneShotRelease(type, (UnitModels.Clip)clip);
         if (clip == (int)UnitModels.Clip.Cast)
         {
             _castLength[slot] = length;
             anim.Seek(0.0, true);
         }
+        else if (release > 0f && length > 0f)
+        {
+            // M6-VH9 (BUG-1601): a clip the clip map marks one-shot (the Sapper's throw) starts in its ready pose and from then
+            // on follows the swing (Sync, AdvanceAnimations), once per shot.
+            _shotLength[slot] = length;
+            _shotRelease[slot] = release;
+            anim.Seek(0.0, true);
+        }
         else if (length > 0f) anim.Seek(slot * CrowdPhase % length, true);
+    }
+
+    /// <summary>
+    /// The time in a one-shot attack clip of <paramref name="length"/> seconds for slot <paramref name="slot"/> (M6-VH9,
+    /// BUG-1601), whose release is <paramref name="release"/> of the way in: the clip is placed so its release meets the shot
+    /// leaving. The sim's swing says when that is: mid-windup the shot leaves in <c>WindupTicks - alpha</c> ticks; between
+    /// shots the next swing starts when the cooldown runs out, then winds up (<c>CooldownTicks + windup - alpha</c>, a cooldown
+    /// of 0 waiting one tick). After a shot the clip plays on from the release to its end (the time since the shot from the
+    /// data cooldown); before the lead-in it holds its first frame, the ready pose. Reads the unit store and the data only.
+    /// </summary>
+    public static float OneShotClipTime(World world, int slot, float alpha, float length, float release)
+    {
+        if (length <= 0f) return 0f;
+        UnitStore u = world.Units;
+        AttackDef attack = world.Data.Units[u.TypeId[slot]].Attack;
+        float a = Math.Clamp(float.IsNaN(alpha) ? 1f : alpha, 0f, 1f);
+        const float tick = (float)FixedStepClock.TickSeconds;
+        float releaseAt = release * length;
+        int windup = u.WindupTicks[slot], cooldown = u.CooldownTicks[slot];
+        if (windup == 0)
+        {
+            // The follow-through of the shot just gone (its cooldown started with the swing, a windup before the shot).
+            float since = (attack.CooldownTicks - attack.WindupTicks - cooldown + a) * tick;
+            if (since >= 0f && releaseAt + since < length - CastEndMargin) return releaseAt + since;
+        }
+        float toShot = (windup > 0 ? windup - a : Math.Max(cooldown, 1) + attack.WindupTicks - a) * tick;
+        float t = releaseAt - toShot;
+        return t <= 0f ? 0f : Math.Min(t, length - CastEndMargin);
     }
 
     /// <summary>Seconds of clip between neighbouring slots' start phases (M6-V20), so a crowd doesn't move in step; the cast clip has none (BUG-1530).</summary>
