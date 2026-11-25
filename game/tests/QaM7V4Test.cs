@@ -455,7 +455,14 @@ public partial class QaM7V4Test : Node
             // M6-VH9 (BUG-1631, BUG-1381 item 1): where the drawn top is over the screen's top edge the bar is kept under the
             // camera's ceiling, on screen (over the building, not over its top); elsewhere it is over the drawn top as before.
             if (_views.BarY(keep) < _views.BarWanted(keep) - 1e-4f)
+            {
                 Check(on, $"bars @{zoom}: the bar lowered under the ceiling to {_views.BarY(keep):0.##} m is still off screen at {barScreen}");
+                // BUG-1680 / BUG-1381 item 1: on screen is not enough, the lowered bar must not be behind its own building's drawn shape.
+                Vector3 eye = _camera.GlobalPosition, toBar = barWorld - eye;
+                int front = _sel.BuildingOnRay(W, null, -1, eye, toBar.Normalized(), out float frontT);
+                GD.Print($"    bars @{zoom}: lowered bar {_views.BarZ(keep):0.##} m toward the camera; first building drawn on the eye-to-bar ray {front} at {frontT:0.##} m, the bar at {toBar.Length():0.##} m");
+                Check(!(front == keep && frontT < toBar.Length() - 0.05f), $"bars @{zoom}: the lowered bar at {_views.BarY(keep):0.##} m is behind its own building (met at {frontT:0.##} m, bar at {toBar.Length():0.##} m)");
+            }
             else Check(barScreen.Y < topScreen.Y, $"bars @{zoom}: bar at screen y {barScreen.Y} not over the drawn top {topScreen.Y}");
             if (_shots != null && DisplayServer.GetName() != "headless") await Shot($"qa-keep3-bar-zoom{zoom:0}");
         }

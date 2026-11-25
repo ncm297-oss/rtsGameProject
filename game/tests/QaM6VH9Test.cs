@@ -219,12 +219,13 @@ public partial class QaM6VH9Test : Node
                 await Frames(2);
                 Rect2 screen = GetViewport().GetVisibleRect();
                 float y = _views.BarY(slot), wanted = _views.BarWanted(slot);
-                Vector3 root = _views.ViewOf(slot)!.GlobalPosition;
+                // Where the bar is drawn: since the BUG-1680 fix a lowered bar sits on the building's camera side, not over its centre.
+                Vector3 bar = _views.ViewOf(slot)!.GetNode<MeshInstance3D>("BarBack").GlobalPosition;
                 int hidden = 0, n = 9;
                 bool on = true;
                 for (int k = 0; k < n; k++)
                 {
-                    var pt = new Vector3(root.X - half + 2f * half * k / (n - 1), root.Y + y, root.Z);
+                    var pt = new Vector3(bar.X - half + 2f * half * k / (n - 1), bar.Y, bar.Z);
                     Vector2 s = _camera.UnprojectPosition(pt);
                     on &= screen.HasPoint(s);
                     Vector3 o = _camera.GlobalPosition, d = (pt - o).Normalized();
@@ -235,7 +236,7 @@ public partial class QaM6VH9Test : Node
                 GD.Print($"  {msg}");
                 Check(on, msg);
                 Check(y > 0.5f, msg + " (bar at or under the ground)");
-                Known(hidden <= n / 2, "BUG-1680", msg + " (bar hidden inside the model)");
+                Check(hidden <= n / 2, "BUG-1680: " + msg + " (bar hidden inside the model)");
             }
         }
     }
@@ -299,11 +300,10 @@ public partial class QaM6VH9Test : Node
                 if (oldBox < 0 || oldT >= unitT) oldClear++;
                 bool enemy = _sel.EnemyAt(p, out EntityHandle target, out bool isBuilding);
                 if (enemy && !isBuilding && target.Index == unit) attacked++;
-                else if (!enemy) own++;
-            }
+                else if (!enemy) own++;            }
             string msg = $"(E) zoom {zoom}: {seen} pixels show an enemy behind the own Keep (not hidden by its model); a right click there targets it at {attacked} ({100f * attacked / Math.Max(1, seen):0.#}%), means the own Keep / ground at {own}; the old 3 m box left {oldClear} of them clear (targeted before M6-VH9)";
             GD.Print($"  {msg}");
-            Known(attacked >= oldClear, "BUG-1681", msg);
+            Check(seen > 0 && attacked >= oldClear, "BUG-1681: " + msg);
         }
         _camera.SetZoom(CameraLimits.DefaultZoom);
         await EndMatch();

@@ -4761,13 +4761,44 @@ file changed.
   The per-frame additions are the one-shot clip's time for each attacking Sapper (a few reads and sums, and the seek the
   cast clip already does), the bar ceiling's check (a compare a frame; a rewrite only when the zoom changes) and nothing per unit; picking
   runs per click. The 400 + 60 row is under the 16.7 ms gate; a quiet window would give the comparable figure.
+- **Fix round (QA's BUG-1681, BUG-1680).** *What the box's air means.* The taller pick box put the air round the Keep's
+  towers in front of what the player sees behind it: a right click on an enemy seen through the gaps targeted it at 0 of
+  967 sampled pixels (zoom 20; the old 3 m box left 869). Every pick that compares a building with something else on the
+  camera ray now takes the building by its **drawn shape**: `SelectionController.BuildingOnRay` (and `GhostOnRay` for
+  remembered buildings) walks the pick boxes along the ray in entry order (`BuildingPicker.PickRay` / `PickGhostRay`
+  again with the last box struck off a scratch copy of the shown list) and gives the first building whose drawn shape is
+  met: a box type or a site at its box's entry, a model at its triangles (`BuildingViews.ModelRayDistance`, new
+  `GhostModelRayDistance`). A building met only in its model's box (its air) is still given, at `AirDistance`
+  (`float.MaxValue`): it means the building only when nothing else drawn is on the ray. Used by the enemy pick
+  (`EnemyAt`, so the right click, A + click and the ability point), the right-click target (`ContextTarget`: a resource
+  node, a ghost or another building seen through the air comes first), the resource pick (`PickResource`), the left
+  click's building pick (`PickBuilding`, own buildings; criterion 1's model pixels are met on the triangles, so they still
+  select it, and the air with nothing else behind still does, P3 unchanged) and the hidden-unit rule (`HiddenByBuilding`,
+  now over every building on the ray, not just the first box). A left click now asks for a resource node before a
+  building: `PickResource` gives a node only when it is drawn in front of every building on the ray, so a tree seen through
+  the Keep's gaps (or in front of a box) is the tree, and `PickBuilding` gives no building there (so it still names what a
+  left click selects, and `QaV3Test`'s sweep, every `PickBuilding` pixel right-clicks the hall, holds: the first loop run
+  after the change failed it on 2,446 pixels where a tree stands behind the hall's air). No hover or attack cursor picks anything yet; the minimap's pick has
+  no building ray. `ViewHardenVh9Test` (E): enemy Heavy Infantry 1.5-7 m behind an own Keep, every sampled pixel where the
+  ray meets an enemy before the model's triangles and before any tree is an Attack on it (1,366 / 280 / 105 of as many at
+  zoom 20 / 40 / 60; 0 before the fix), and none of the 868 / 109 / 25 where the model is in front is. QA's (E) row is a
+  plain check (880 / 166 / 69 against the old box's 869 / 157 / 62; its other pixels are where a tree stands in front of the
+  enemy, which a click there means). *The lowered bar.* On a level-2 terrace at zoom 20 the ceiling put the Keep's bar
+  3.31 m up, inside its hall (9 of 9 points hidden), and on level 1 two of nine points were behind the towers. A bar the
+  ceiling lowers now also moves to the building's camera side: `BarZ` is the drawn front (the footprint's edge or the
+  model's fitted front, the farther) plus the bar's thickness, toward +z (the camera never turns), so the ray from the
+  camera to any point of it stays in front of the whole building; a bar not lowered stays over the centre (`BarZ` 0). QA's
+  (T) row reads the bar where it is drawn and is a plain check: 0 of 9 points hidden on levels 0, 1 and 2; (K) checks the
+  same for every model type, and `QaM7V4Test` now checks that the forged 3.0 Keep's lowered bar is not behind its box
+  (BUG-1381 item 1).
 - **Questions for the Producer (rule 67), each with a recommendation:**
   1. **The pick box is the footprint at the drawn top**, so the air beside a narrower model (the Barracks) or round the
-     Keep's towers selects the building (P3: nearly every such pixel). It is what a box type always did. Recommendation:
-     accept; a per-type hit shape (the model's triangles, already used for occlusion) when a model's air causes a misclick.
-  2. **The bar's ceiling lowers the Keep's bar into its towers at the closest zoom** (7.31 m against the towers' 8.09 m:
-     drawn over the tower tops, `m6vh9-keep-centred-20m.png`). Recommendation: accept; the alternative is a height cap on
-     the fit (the Keep shorter at every zoom).
+     Keep's towers selects the building (P3: nearly every such pixel) when nothing else is behind it there; since the fix
+     round anything drawn behind the air (a unit, a tree, another building) comes first. Recommendation: accept.
+  2. **The bar's ceiling lowers the Keep's bar at the closest zoom** (7.31 m against the towers' 8.09 m on 4 m ground,
+     3.31 m on 8 m ground), and since the fix round moves it to the building's front so it is not hidden: at zoom 20 on
+     high ground the bar hangs in front of the Keep's face rather than over it. Recommendation: accept; the alternative is
+     a height cap on the fit (the Keep shorter at every zoom).
   3. **The Mage and the Heavy Infantry in grey (BUG-1600 item 4, measured).** The two big dark squares at 40 m are the
      Mage's robe (its own colour, `#4e2a26`) and the Heavy Infantry's shield (the team colour at the team shade, so about the
      player colour). Their grey (Rec. 601 luma of the colours, 0-255, unlit): robe 52; shield Iron 78, Ochre 145, Crimson 83,

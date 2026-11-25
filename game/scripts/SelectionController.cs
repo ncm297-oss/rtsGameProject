@@ -210,7 +210,7 @@ public partial class SelectionController : Node
     {
         if (_runner?.Simulation is not Simulation sim) return -1;
         World world = sim.World;
-        Vector3 o = _camera.ProjectRayOrigin(screen), d = _camera.ProjectRayNormal(screen);
+        Vector3 o = _camera.ProjectRayOrigin(screen), d = _camera.ProjectRayNormal(screen).Normalized();
         System.Numerics.Vector3 so = new(o.X, o.Y, o.Z), sd = new(d.X, d.Y, d.Z);
         SeenResources? seen = Fog?.Resources(world);
         ResourceStore r = world.Resources;
@@ -219,9 +219,9 @@ public partial class SelectionController : Node
             : ResourcePicker.PickRay(world.NavGrid, world.Data.Resources, r.Alive, r.TypeId, r.Cell, world.Heightmap, so, sd, PropsView.Shape, out nodeT);
         if (node < 0) return -1;
         FogView? fog = Fog?.Refreshed(world);
-        BuildingPicker.PickRay(world.Buildings, world.Data.Buildings, world.NavGrid, world.Heightmap, -1,
-            so, sd, PickTops, SiteHeights, BuildingViews.SiteMinHeight, fog != null ? fog.BuildingShown : ReadOnlySpan<bool>.Empty, out float buildingT);
-        PickGhost(world, fog, so, sd, out float ghostT);
+        // M6-VH9 (BUG-1681): buildings and ghosts by their drawn shapes; a node seen through a model's gaps is the node.
+        BuildingOnRay(world, fog, -1, o, d, out float buildingT);
+        GhostOnRay(world, fog, o, d, out float ghostT);
         return nodeT < buildingT && nodeT <= ghostT ? node : -1;
     }
 
@@ -637,7 +637,10 @@ public partial class SelectionController : Node
         int slot = ScreenPicker.PickClick(_screen, _radiusPx, _candidate, ToNumerics(release));
         // M6-VH9 (BUG-1630): an own unit behind a building's drawn shape is hidden there; the click means what is in front.
         if (slot >= 0 && HiddenByBuilding(slot, release)) slot = -1;
-        int building = slot < 0 ? PickBuilding(release) : -1;
+        // M6-VH9 (BUG-1681): a resource node PickResource gives is drawn in front of every building on the ray (a model's air
+        // included), so it comes before the building pick (PickBuilding gives none there); a node behind a drawn building is not given.
+        int node = slot < 0 ? PickResource(release) : -1;
+        int building = slot < 0 && node < 0 ? PickBuilding(release) : -1;
         if (building >= 0)
         {
             // A building is selected alone (M3-V2), Shift or not.
@@ -649,7 +652,6 @@ public partial class SelectionController : Node
         if (slot < 0)
         {
             // M6-V8: a resource node is selected alone, Shift or not, like a building; it sends no command.
-            int node = PickResource(release);
             if (node >= 0)
             {
                 int was = SelectedResource;
@@ -790,24 +792,100 @@ public partial class SelectionController : Node
         return BuildingInFront(world, o, toTop.Normalized(), toTop.Length());
     }
 
-    // True when a drawn building (pick box, and a model's triangles) is met on the ray from o along the unit d within `within` meters.
-    private bool BuildingInFront(World world, Vector3 o, Vector3 d, float within)
-    {
-        FogView? fog = Fog?.Refreshed(world);
-        int building = BuildingPicker.PickRay(world.Buildings, world.Data.Buildings, world.NavGrid, world.Heightmap, -1, new(o.X, o.Y, o.Z), new(d.X, d.Y, d.Z),
-            PickTops, SiteHeights, BuildingViews.SiteMinHeight, fog != null ? fog.BuildingShown : ReadOnlySpan<bool>.Empty, out float boxT);
-        if (building < 0 || boxT >= within) return false;
-        return Buildings?.ShownAsModel(building) != true || Buildings.ModelRayDistance(building, o, d) < within;
-    }
+    // True when a drawn building (a box, or a model's triangles) is met on the ray from o along the unit d within `within` meters.
+    private bool BuildingInFront(World world, Vector3 o, Vector3 d, float within) =>
+        BuildingOnRay(world, Fog?.Refreshed(world), -1, o, d, out float t) >= 0 && t < within;
 
-    /// <summary>The own building whose drawn box is under screen point <paramref name="screen"/>, or -1 (<see cref="BuildingPicker.PickRay"/>; M6-VH9: at each type's drawn height).</summary>
+    /// <summary>
+    /// The own building a left click at screen point <paramref name="screen"/> selects, or -1: the own building whose drawn shape
+    /// is met first (<see cref="BuildingOnRay"/>: a model's pick box met only in its air still picks it when no other own
+    /// building is drawn on the ray), unless a resource node is drawn in front of it there (<see cref="PickResource"/>, M6-VH9
+    /// BUG-1681: a tree seen through the Keep's gaps is the tree, for the left click as for the right).
+    /// </summary>
     public int PickBuilding(Vector2 screen)
     {
         World world = _runner.Simulation!.World;
-        Vector3 o = _camera.ProjectRayOrigin(screen), d = _camera.ProjectRayNormal(screen);
-        return BuildingPicker.PickRay(world.Buildings, world.Data.Buildings, world.NavGrid, world.Heightmap, LocalPlayer,
-            new(o.X, o.Y, o.Z), new(d.X, d.Y, d.Z), PickTops, SiteHeights, BuildingViews.SiteMinHeight, ReadOnlySpan<bool>.Empty, out _);
+        Vector3 o = _camera.ProjectRayOrigin(screen), d = _camera.ProjectRayNormal(screen).Normalized();
+        int building = BuildingOnRay(world, null, LocalPlayer, o, d, out _);
+        return building >= 0 && PickResource(screen) >= 0 ? -1 : building;
     }
+
+    /// <summary>
+    /// The ray distance <see cref="BuildingOnRay"/> and <see cref="GhostOnRay"/> give a building met only in its model's pick box,
+    /// not on its triangles (its air): farther than anything drawn, so the air means the building only when nothing else drawn
+    /// is on the ray (M6-VH9, BUG-1681).
+    /// </summary>
+    public const float AirDistance = float.MaxValue;
+
+    // Scratch copies of a shown list for the drawn-shape picks (a building met in its air is struck off and the ray picked
+    // again), sized once per store.
+    private bool[] _drawnShown = Array.Empty<bool>();
+
+    /// <summary>
+    /// The building of <paramref name="owner"/> (any owner when negative; only those the fog draws when <paramref name="fog"/>
+    /// is set) whose drawn shape the ray from <paramref name="o"/> along the unit <paramref name="d"/> meets first (M6-VH9,
+    /// BUG-1681), its distance in <paramref name="t"/>: a box type or a site at its box (<see cref="BuildingPicker.PickRay"/>
+    /// at the drawn heights), a model at its triangles (<see cref="BuildingViews.ModelRayDistance"/>), so what is seen through a
+    /// model's gaps or over its roof is not behind its pick box. When the ray meets no drawn shape but enters a model's pick box,
+    /// that building with <see cref="AirDistance"/>. -1 and +infinity for none. Allocation-free after the first call.
+    /// </summary>
+    public int BuildingOnRay(World world, FogView? fog, int owner, Vector3 o, Vector3 d, out float t) =>
+        DrawnOnRay(world, fog, ghosts: false, owner, o, d, out t);
+
+    /// <summary>As <see cref="BuildingOnRay"/> for the fog's ghosts (remembered buildings, <see cref="FogView.GhostShown"/>): a remembered model at its triangles (<see cref="BuildingViews.GhostModelRayDistance"/>), a remembered box or foundation at its box; -1 without a fog.</summary>
+    public int GhostOnRay(World world, FogView? fog, Vector3 o, Vector3 d, out float t)
+    {
+        t = float.PositiveInfinity;
+        if (fog == null || fog.GhostCount == 0) return -1;
+        return DrawnOnRay(world, fog, ghosts: true, -1, o, d, out t);
+    }
+
+    // The drawn-first walk: the boxes along the ray in entry order (each pick strikes the last one off a scratch copy of the
+    // shown list) until the next box is entered past the nearest drawn shape found. A box is its own drawn shape, so the
+    // first box ends the walk unless it is a model met in its air or behind another box's entry.
+    private int DrawnOnRay(World world, FogView? fog, bool ghosts, int owner, Vector3 o, Vector3 d, out float t)
+    {
+        System.Numerics.Vector3 so = new(o.X, o.Y, o.Z), sd = new(d.X, d.Y, d.Z);
+        ReadOnlySpan<bool> shown = ghosts ? fog!.GhostShown : fog != null ? fog.BuildingShown : ReadOnlySpan<bool>.Empty;
+        int first = PickBox(world, fog, ghosts, owner, so, sd, shown, out float entry);
+        t = entry;
+        if (first < 0 || !IsModel(first, ghosts)) return first;
+        int n = ghosts ? shown.Length : world.Buildings.Capacity;
+        if (_drawnShown.Length < n) _drawnShown = new bool[n];
+        Span<bool> scratch = _drawnShown.AsSpan(0, n);
+        for (int i = 0; i < n; i++) scratch[i] = shown.IsEmpty || (i < shown.Length && shown[i]);
+        int best = -1;
+        float bestT = float.PositiveInfinity;
+        for (int slot = first; slot >= 0 && entry < bestT; slot = PickBox(world, fog, ghosts, owner, so, sd, scratch, out entry))
+        {
+            float drawn = !IsModel(slot, ghosts) ? entry
+                : ghosts ? Buildings!.GhostModelRayDistance(slot, o, d) : Buildings!.ModelRayDistance(slot, o, d);
+            if (drawn < bestT)
+            {
+                best = slot;
+                bestT = drawn;
+            }
+            scratch[slot] = false;
+        }
+        if (best >= 0)
+        {
+            t = bestT;
+            return best;
+        }
+        t = AirDistance;
+        return first;
+    }
+
+    private bool IsModel(int slot, bool ghost) =>
+        Buildings is BuildingViews v && (ghost ? v.GhostShownAsModel(slot) : v.ShownAsModel(slot));
+
+    private int PickBox(World world, FogView? fog, bool ghosts, int owner, System.Numerics.Vector3 so, System.Numerics.Vector3 sd,
+        ReadOnlySpan<bool> shown, out float entry) => ghosts
+        // A remembered site is drawn as a foundation (M6-V1), so it is picked as one; M6-VH9: a remembered model at its top.
+        ? BuildingPicker.PickGhostRay(shown, fog!.Ghosts, world.Data.Buildings, world.NavGrid, world.Heightmap, so, sd, PickTops, SiteHeights,
+            BuildingViews.SiteMinHeight, out entry)
+        : BuildingPicker.PickRay(world.Buildings, world.Data.Buildings, world.NavGrid, world.Heightmap, owner, so, sd, PickTops, SiteHeights,
+            BuildingViews.SiteMinHeight, shown, out entry);
 
     /// <summary>Live selected units in the <c>worker</c> slot (prunes the selection first).</summary>
     public int SelectedWorkerCount()
@@ -1050,7 +1128,8 @@ public partial class SelectionController : Node
 
     /// <summary>
     /// The enemy under screen point <paramref name="screen"/> (M4-V2): what the camera ray meets first among unit bodies
-    /// (<see cref="UnitPicker.PickRay"/>), building boxes (<see cref="BuildingPicker.PickRay(BuildingStore, System.Collections.Immutable.ImmutableArray{BuildingDef}, Rts.Sim.Map.NavGrid, Rts.Sim.Map.Heightmap, int, System.Numerics.Vector3, System.Numerics.Vector3, float, float, out float)"/>)
+    /// (<see cref="UnitPicker.PickRay"/>), buildings by their drawn shapes (<see cref="BuildingOnRay"/>, M6-VH9: a model at its
+    /// triangles, its pick box's air only when nothing else is on the ray; BUG-1681), ghosts the same (<see cref="GhostOnRay"/>)
     /// and resource props, when it is an enemy's live unit or building (M6-V16: <see cref="Enemies"/>, so not an ally's): its
     /// handle in <paramref name="target"/>, <paramref name="isBuilding"/> for a building. False when the first thing hit is own,
     /// an ally's, a prop, or nothing (the click then means what it meant before: a Move). Allocation-free.
@@ -1061,22 +1140,22 @@ public partial class SelectionController : Node
         isBuilding = false;
         if (_runner?.Simulation is not Simulation sim) return false;
         World world = sim.World;
-        Vector3 o = _camera.ProjectRayOrigin(screen), d = _camera.ProjectRayNormal(screen);
+        Vector3 o = _camera.ProjectRayOrigin(screen), d = _camera.ProjectRayNormal(screen).Normalized();
         System.Numerics.Vector3 so = new(o.X, o.Y, o.Z), sd = new(d.X, d.Y, d.Z);
         UnitStore u = world.Units;
         // Only what the screen draws can be clicked (M4-V4): the fog's shown lists stand in for Alive.
         FogView? fog = Fog?.Refreshed(world);
         ReadOnlySpan<bool> units = fog != null ? fog.UnitShown : u.Alive;
         int unit = UnitPicker.PickRay(units, u.PrevPosition, u.Position, u.Radius, world.Heightmap, (float)_runner.Alpha, so, sd, UnitViews.ExtraBodyHeight, out float unitT);
-        int building = BuildingPicker.PickRay(world.Buildings, world.Data.Buildings, world.NavGrid, world.Heightmap, -1,
-            so, sd, PickTops, SiteHeights, BuildingViews.SiteMinHeight, fog != null ? fog.BuildingShown : ReadOnlySpan<bool>.Empty, out float buildingT);
+        // M6-VH9 (BUG-1681): a building by its drawn shape, so an enemy seen through a model's gaps is not behind its pick box.
+        int building = BuildingOnRay(world, fog, -1, o, d, out float buildingT);
         ResourceStore r = world.Resources;
         ResourcePicker.PickRay(world.NavGrid, world.Data.Resources, r.Alive, r.TypeId, r.Cell, world.Heightmap, so, sd, PropsView.Shape, out float nodeT);
         // A ghost (M4-V5) met before anything drawn is an Attack on the remembered building; the sim accepts the handle. M6-V16:
         // an ally's remembered building in front is no target (the sim would drop the Attack), as an ally's drawn one. Unreachable
         // since M6-S5 (an ally's building is never a ghost: always seen while it stands, collapsed when the ally is out); kept as a guard.
         ReadOnlySpan<bool> enemies = Enemies(world);
-        int ghost = PickGhost(world, fog, so, sd, out float ghostT);
+        int ghost = GhostOnRay(world, fog, o, d, out float ghostT);
         if (ghost >= 0 && ghostT < unitT && ghostT < buildingT && ghostT <= nodeT)
         {
             if (!EnemyTable.IsEnemyOwner(fog!.Ghosts[ghost].Owner, LocalPlayer, enemies)) return false;
@@ -1085,16 +1164,6 @@ public partial class SelectionController : Node
             return true;
         }
         return UnitPicker.ResolveEnemy(units, u.Owner, u.Generation, unit, unitT, world.Buildings, building, buildingT, nodeT, LocalPlayer, enemies, out target, out isBuilding);
-    }
-
-    // The ghost (FogView.GhostShown) whose box the ray meets first, or -1 (no fog, or none).
-    private int PickGhost(World world, FogView? fog, System.Numerics.Vector3 so, System.Numerics.Vector3 sd, out float entry)
-    {
-        entry = float.PositiveInfinity;
-        if (fog == null || fog.GhostCount == 0) return -1;
-        // A remembered site is drawn as a foundation (M6-V1), so it is picked as one; M6-VH9: a remembered model at its top.
-        return BuildingPicker.PickGhostRay(fog.GhostShown, fog.Ghosts, world.Data.Buildings, world.NavGrid, world.Heightmap, so, sd, PickTops, SiteHeights,
-            BuildingViews.SiteMinHeight, out entry);
     }
 
     /// <summary>The remembered footprint centre (meters) of slot <paramref name="slot"/>'s ghost in <paramref name="fog"/>.</summary>
@@ -1122,8 +1191,9 @@ public partial class SelectionController : Node
     }
 
     /// <summary>
-    /// Where a right click at <paramref name="screen"/> points (BUG-0108): the building of any owner whose drawn box the
-    /// camera ray meets first (<see cref="BuildingPicker.PickRay"/>; its slot in <paramref name="building"/>) gives its
+    /// Where a right click at <paramref name="screen"/> points (BUG-0108): the building of any owner whose drawn shape the
+    /// camera ray meets first (<see cref="BuildingOnRay"/>, M6-VH9: a model's pick box's air only when no node, ghost or other
+    /// building is drawn on the ray; its slot in <paramref name="building"/>) gives its
     /// footprint centre, so the visible top of a box means the building and not the ground 2 m behind it; else the ground
     /// under the ray (<paramref name="building"/> -1). False when the ray meets neither. A resource node's drawn prop
     /// works the same way (M3-V3b; since M3-V4 <see cref="ResourcePicker.PickRay"/> tests <see cref="PropsView.Shape"/>, the
@@ -1134,15 +1204,15 @@ public partial class SelectionController : Node
     public bool ContextTarget(Vector2 screen, out System.Numerics.Vector2 point, out int building)
     {
         World world = _runner.Simulation!.World;
-        Vector3 o = _camera.ProjectRayOrigin(screen), d = _camera.ProjectRayNormal(screen);
+        Vector3 o = _camera.ProjectRayOrigin(screen), d = _camera.ProjectRayNormal(screen).Normalized();
         System.Numerics.Vector3 so = new(o.X, o.Y, o.Z), sd = new(d.X, d.Y, d.Z);
         FogView? fog = Fog?.Refreshed(world);
-        building = BuildingPicker.PickRay(world.Buildings, world.Data.Buildings, world.NavGrid, world.Heightmap, -1,
-            so, sd, PickTops, SiteHeights, BuildingViews.SiteMinHeight, fog != null ? fog.BuildingShown : ReadOnlySpan<bool>.Empty, out float buildingT);
+        // M6-VH9 (BUG-1681): by drawn shape; a model's air means it only when no node, ghost or other building is drawn on the ray.
+        building = BuildingOnRay(world, fog, -1, o, d, out float buildingT);
         ResourceStore r = world.Resources;
         int node = ResourcePicker.PickRay(world.NavGrid, world.Data.Resources, r.Alive, r.TypeId, r.Cell, world.Heightmap, so, sd,
             PropsView.Shape, out float nodeT);
-        int ghost = PickGhost(world, fog, so, sd, out float ghostT);
+        int ghost = GhostOnRay(world, fog, o, d, out float ghostT);
         if (ghost >= 0 && ghostT < buildingT && ghostT <= nodeT)
         {
             // A ghost's remembered footprint is a point like a drawn box's (M4-V5); it is no live building to name.

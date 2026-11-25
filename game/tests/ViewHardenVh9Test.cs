@@ -36,7 +36,10 @@ namespace Rts.Game.Tests;
 /// shot, and each shot first exists within <see cref="ShotTolerance"/> of the clip's length of the release; the clip map's
 /// release share is within 0.1 of the throwing hand's fastest frame on the skeleton.
 /// (K) The bar of a Garrison Keep with the camera centred on it at zoom 20 is inside the screen; at 40 and 60, and every other
-/// model type's at every zoom, it is where its look puts it (no ceiling applied).
+/// model type's at every zoom, it is where its look puts it (no ceiling applied); no point along the bar, where it is drawn, is
+/// behind its own model from the camera (BUG-1680: a lowered bar sits on the building's camera side).
+/// (E) Enemy units behind an own Keep: every sampled pixel where the camera ray meets an enemy before the Keep model's triangles
+/// (and before any tree) is an Attack on it, and none where the model is met first (BUG-1681: the pick box's air is not in front of what is seen).
 /// Windowed with <c>-- --shots &lt;dir&gt;</c>: the Priest in the eight setup colours at 40 m and 20 m, the Zealot in Cobalt,
 /// Jade and Crimson, a hurt Cadre Mage at the default zoom and 20 m, a Sapper as its munition leaves, the Keep centred at 20 m.
 /// </remarks>
@@ -78,6 +81,7 @@ public partial class ViewHardenVh9Test : Node
             _data = loaded.Data!;
             ColourRows();
             await PickRows();
+            await SeenBehindRows();
             await BarCeilingRows();
             await MageBarRows();
             await ThrowRows();
@@ -347,6 +351,79 @@ public partial class ViewHardenVh9Test : Node
         }
     }
 
+    // ---- (E) what is seen through a model's gaps (BUG-1681) ----
+
+    // Enemy Heavy Infantry 1.5-7 m behind an own Keep (away from the camera): every sampled pixel of the Keep's screen rectangle
+    // where the camera ray meets an enemy before any of the model's triangles is an Attack on that enemy (EnemyAt), and every
+    // one where the model is met first is not (the own Keep in front). The unit pick uses the runner's interpolation, as EnemyAt.
+    private async Task SeenBehindRows()
+    {
+        StartMatch("--players", "2", "--no-fog", "--no-combat", "--faction", "1", "malazan", "--faction", "2", "malazan", "--resources", "high");
+        int keep = _data.FindBuilding("malazan_garrison_keep"), heavy = _data.FindUnit("malazan_heavy_infantry");
+        int slot = Spawn(0, keep, StartLayout.Block(W.NavGrid, 1, west: true, 1f)[0] + new NVector2(-40f, 10f));
+        if (!Check(slot >= 0 && _views.Models!.Has(keep), "(E) no Keep model")) { await EndMatch(); return; }
+        NVector2 c = Centre(slot);
+        float half = _data.Buildings[keep].FootprintHeight * MapConstants.CellSize / 2f;
+        foreach (float back in new[] { 1.5f, 4f, 7f })
+            for (float dx = -6f; dx <= 6.01f; dx += 2f)
+                SpawnUnit(1, heavy, c + new NVector2(dx, -(half + back)));
+        _views.Sync(W);
+        float alpha = (float)_match.GetNode<SimRunner>("SimRunner").Alpha;
+        foreach (float zoom in new[] { CameraLimits.MinZoom, CameraLimits.DefaultZoom, CameraLimits.MaxZoom })
+        {
+            _camera.SetZoom(zoom);
+            _camera.SetFocus(c.X, c.Y);
+            await Frames(2);
+            int seen = 0, attacked = 0, hidden = 0, hiddenAttacked = 0, byTree = 0;
+            UnitStore u = W.Units;
+            ResourceStore r = W.Resources;
+            MeshInstance3D m = _views.ModelOf(slot)!;
+            Aabb box = m.GlobalTransform * m.Mesh.GetAabb();
+            Rect2 screen = GetViewport().GetVisibleRect();
+            float x0 = float.MaxValue, y0 = float.MaxValue, x1 = float.MinValue, y1 = float.MinValue;
+            for (int k = 0; k < 8; k++)
+            {
+                Vector2 s = _camera.UnprojectPosition(box.GetEndpoint(k));
+                x0 = Math.Min(x0, s.X); y0 = Math.Min(y0, s.Y); x1 = Math.Max(x1, s.X); y1 = Math.Max(y1, s.Y);
+            }
+            x0 = Math.Max(x0, 1f); y0 = Math.Max(y0, 1f); x1 = Math.Min(x1, screen.Size.X - 2f); y1 = Math.Min(y1, screen.Size.Y - 2f);
+            for (float py = MathF.Floor(y0); py <= y1; py += 4f)
+                for (float px = MathF.Floor(x0); px <= x1; px += 4f)
+                {
+                    var p = new Vector2(px, py);
+                    Vector3 o = _camera.ProjectRayOrigin(p), d = _camera.ProjectRayNormal(p).Normalized();
+                    int unit = UnitPicker.PickRay(u.Alive, u.PrevPosition, u.Position, u.Radius, W.Heightmap, alpha, new(o.X, o.Y, o.Z), new(d.X, d.Y, d.Z),
+                        UnitViews.ExtraBodyHeight, out float unitT);
+                    if (unit < 0 || u.Owner[unit] != 1) continue;
+                    bool hit = _sel.EnemyAt(p, out EntityHandle target, out bool isBuilding) && !isBuilding && target.Index == unit;
+                    if (_views.ModelRayDistance(slot, o, d) < unitT)
+                    {
+                        hidden++;
+                        if (hit) hiddenAttacked++;
+                    }
+                    else
+                    {
+                        // A tree drawn in front of the enemy hides it (a click there is on the tree), as the model does.
+                        ResourcePicker.PickRay(W.NavGrid, W.Data.Resources, r.Alive, r.TypeId, r.Cell, W.Heightmap, new(o.X, o.Y, o.Z), new(d.X, d.Y, d.Z),
+                            PropsView.Shape, out float nodeT);
+                        if (nodeT < unitT)
+                        {
+                            byTree++;
+                            continue;
+                        }
+                        seen++;
+                        if (hit) attacked++;
+                    }
+                }
+            string msg = $"(E) zoom {zoom}: {seen} pixels show an enemy behind the own Keep, a right click targets it at {attacked}; {hidden} pixels where the Keep's model hides it, targeted at {hiddenAttacked}; {byTree} where a tree in front hides it";
+            GD.Print($"  {msg}");
+            Check(seen > 0 && attacked == seen, msg + " (a seen enemy is not the right click's target)");
+            Check(hiddenAttacked == 0, msg + " (an enemy behind the model is targeted through it)");
+        }
+        _camera.SetZoom(CameraLimits.DefaultZoom);
+        await EndMatch();
+    }
+
     // ---- (K) the bar's ceiling ----
 
     private async Task BarCeilingRows()
@@ -370,14 +447,24 @@ public partial class ViewHardenVh9Test : Node
                 _camera.SetFocus(c.X, c.Y);
                 await Frames(2);
                 Rect2 screen = GetViewport().GetVisibleRect();
-                float y = _views.BarY(slot), wanted = _views.BarWanted(slot);
-                Vector2 l = _camera.UnprojectPosition(new Vector3(c.X - half, ground + y + BuildingViews.BarThickness / 2f, c.Y));
-                Vector2 r = _camera.UnprojectPosition(new Vector3(c.X + half, ground + y - BuildingViews.BarThickness / 2f, c.Y));
+                float y = _views.BarY(slot), wanted = _views.BarWanted(slot), z = c.Y + _views.BarZ(slot);
+                Vector2 l = _camera.UnprojectPosition(new Vector3(c.X - half, ground + y + BuildingViews.BarThickness / 2f, z));
+                Vector2 r = _camera.UnprojectPosition(new Vector3(c.X + half, ground + y - BuildingViews.BarThickness / 2f, z));
                 bool on = screen.HasPoint(l) && screen.HasPoint(r);
-                GD.Print($"  (K) bar {def.Key} at zoom {zoom}, focus on its centre (ground {ground:0.00} m): {y:0.00} m (its look's {wanted:0.00}), top-left {l.X:0} {l.Y:0}, bottom-right {r.X:0} {r.Y:0}, {(on ? "on" : "OFF")} screen");
+                // BUG-1680: no point along the bar (where it is drawn) is behind its own model from the camera.
+                int behind = 0;
+                for (int k = 0; k < 9; k++)
+                {
+                    var pt = new Vector3(c.X - half + 2f * half * k / 8f, ground + y, z);
+                    Vector3 o = _camera.GlobalPosition, d = (pt - o).Normalized();
+                    if (_views.ModelRayDistance(slot, o, d) < (pt - o).Length() - 0.05f) behind++;
+                }
+                GD.Print($"  (K) bar {def.Key} at zoom {zoom}, focus on its centre (ground {ground:0.00} m): {y:0.00} m (its look's {wanted:0.00}), {_views.BarZ(slot):0.00} m toward the camera, top-left {l.X:0} {l.Y:0}, bottom-right {r.X:0} {r.Y:0}, {(on ? "on" : "OFF")} screen, {behind} of 9 points behind its model");
                 Check(on, $"(K) {def.Key}: bar off screen at zoom {zoom} ({l} - {r})");
+                Check(behind == 0, $"(K) {def.Key}: {behind} of 9 bar points behind its own model at zoom {zoom}");
                 bool lowered = y < wanted - 1e-4f;
                 if (zoom > CameraLimits.MinZoom) Check(!lowered, $"(K) {def.Key}: bar lowered to {y:0.00} m at zoom {zoom} (want its look's {wanted:0.00})");
+                Check(lowered || _views.BarZ(slot) == 0f, $"(K) {def.Key}: a bar not lowered is off its centre by {_views.BarZ(slot):0.00} m at zoom {zoom}");
             }
         }
         _camera.SetZoom(CameraLimits.DefaultZoom);
