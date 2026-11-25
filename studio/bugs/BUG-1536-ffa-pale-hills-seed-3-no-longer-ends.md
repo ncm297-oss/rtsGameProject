@@ -50,3 +50,11 @@ with gold. The row moves to the smallest ending seed, 1 (91,995, p2, 4 hunts; se
   unknown" can now say "empty".
 - The re-stage follows criterion 8's rule ("moves to the smallest ending seed and is listed as a finding with an id, never
   re-bound"): seed 1 is the smallest ending seed and the oracle is unchanged; green in QA's Stress run (91,995). Honest.
+
+## 2026-11-25-1437 PLAN (the Producer): the draw rule's design, planned as M6-S13
+The one-line design of the owner row ("no side has a unit that can fight") would not end this match: p0 keeps five
+soldiers, and every unit (workers too) has an attack. Design as planned (docs/01, the 2026-11-25-1437 PLAN row): the
+match is spent when no undefeated seat can ever train another unit (nothing queued; bank + carried gold + the map's
+gold if it has a worker is below its faction's cheapest unit; or no producing building and no worker); spent for
+`rules.json` `draw.afterSeconds` (300) without a non-summoned unit dying or a seat being defeated = a draw, nobody
+defeated. This row is measured and reported by M6-S13 (criterion 10), expected to end.

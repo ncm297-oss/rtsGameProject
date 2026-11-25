@@ -31,7 +31,372 @@ now (`ChildProcessLimit`): a child that uses several cores can pass a small limi
 first; (8) the view's draw screen: check at PLAN whether the result screen and `ui.json` already have a draw text
 (the sim brief's "for the view track" note must say what the view reads).
 
-## Proposed briefs (the PLAN writes the final ones)
+## Current session plan (2026-11-25-1437, session 2 / 8 of 2026-11-25; written at the PLAN)
+
+All three tracks GO, all feature sessions (counters before: sim 0 / 4, view 1 / 4, data 0 / 4). Bug ids: sim
+1730-1749, view 1750-1759, data 1760-1769. **One hash move, the sim's** (`rules.json` gains `draw`); the data track
+ships no byte under `game/data/`; the view touches no data file. The draw rule's design is docs/01's
+"2026-11-25-1437 PLAN" row (it replaces the one-line design of the owner row above it: every unit can fight and
+costs gold, and BUG-1536's stuck seat still has five soldiers).
+
+PLAN checks on scratch clone `prod1437-plan` at base 6b6363f: build `--no-incremental` 0 errors / 0 warnings; the
+default loop **10,301 passed / 0 failed / 21 skipped of 10,322 in 22 m 11 s**; smoke **PASS**. Rule 54's rehearsal
+could not be run (a `draw` key has no reader on the base): criterion 13 of the sim brief carries that risk (staged
+two-sided worlds without gold that now draw). The view's banner reads "nobody stands" for Draw
+(`Match.ResultFor`), so a drawn match shows "Victory" until M6-V29 (next session, the view's first item); the
+`match` command's result line is fixed in the sim task.
+
+### Sim: M6-S13, a spent match ends in a draw (feature, QA full)
+
+Goal: Build the owner's draw rule (inbox 2026-11-25, BUG-1536). A match in which no side can ever train another
+unit ends in a draw after a wait kept in the data, as a match-end rule on the sim's tick, so a mined-out match ends
+honestly for a human player and in the AI test matches instead of running for ever.
+
+Design (docs/01, the 2026-11-25-1437 PLAN row; do not widen or narrow it, ask through "Questions for the
+Producer"):
+- **A seat can still train** when it has a unit in a production queue, or when `banked gold + gold carried by its
+  own units + (it has a live worker ? the gold left in every gold node on the map : 0)` is at least the gold cost of
+  its faction's cheapest unit (any unit of the faction, whether or not it has the building for it; a faction with a
+  0-gold unit can always train) **and** it has a finished unit-producing building or a live worker. Wood is ignored.
+- **The match is spent** on a tick when it is not over, at least two sides that ever built still stand, and no
+  undefeated seat can still train.
+- **The clock** counts the ticks the match has been spent without a break. It goes back to 0 on a tick the match is
+  not spent, on a tick a non-summoned unit died (any cause; a summon's death or expiry does not count), and on a tick
+  a seat is defeated. When it reaches the wait, the match is **drawn** on that tick: `MatchOver` is true for good,
+  a new read-only `MatchDrawn` (name yours) is true for good, **no seat is defeated by it, nothing collapses, no
+  defeat event**; ticks go on as after any result. A win that falls on the same tick stands (the defeat check runs
+  first; the draw is only looked at when there is no result).
+- **The wait** is `game/data/common/rules.json` `"draw": { "afterSeconds": 300 }` (the loader converts to ticks).
+  The block left out = no draw rule (the clock stays 0). No number of this rule in C#.
+
+Scope:
+- The schema, its validation and the shipped value (`rules.json` only; this is the session's one data-hash move).
+- The rule in the tick (after the defeat check of phase 11b), its state (the clock, the drawn flag) in the state
+  hash and in the save, and read-only accessors for the next view task: drawn or not, and the ticks left on the
+  clock (or "not running").
+- **"Zero is free":** a world whose clock is 0 and which is not drawn hashes and saves exactly as on the base, so a
+  match that is never spent keeps every tick hash and every pin. Save format 10 is kept with the new bytes present
+  exactly when the data has `draw` and they are not zero (the FRST / STIL pattern), or say in docs/03 why not.
+- `tools/Rts.Cli` `match`: a drawn match prints `result draw at <tick> (<m:ss>)` and exits as a result does (today
+  the line would name a standing seat the winner).
+- One re-measure of the pinned AI matches (list below) and of the stalled rows.
+- docs/02 "Game flow" 4 (the draw paragraph, in plain words), docs/03 "Implementation (M6-S13)".
+- OUT of scope: any change to how the AI plays (no AI rule reads the clock; BUG-1661, 1660, 1555, 1554 / 1556, 1558
+  are the next sim session); the two options the owner did not take (an armyless seat counting as starved, a
+  wood-only unit); the defeat rule itself; anything under `game/` except `game/data/common/rules.json` (the banner
+  and a countdown are the view's M6-V29, next session); `sim/Rts.Sim/ViewApi/**`; faction data; `docs/factions/**`;
+  loosening any Perf threshold; BUG-1700.
+- Content tests: `sim/Rts.Sim.Tests/Content/**` and `QA/Content/**` are the data track's and it is working there
+  this session. You may edit a row there **only** to re-pin a literal the hash move or a draw forces, and never in
+  `UnitHitBonusText*`, `DH10TextPinQaTests`, `DH10TeblorOrderQaStressTests` or any file whose name starts `D36`;
+  list every such edit in the report. Anything else red there: name it, do not edit it.
+
+Acceptance criteria:
+1. **Schema.** `draw.afterSeconds` 300 loads as 6,000 ticks; the block left out loads as "no rule"; zero, a
+   negative, a non-number and a value over the cap you choose (at least 86,400 s, so a test can put the wait out of
+   reach) are load errors that name the field; what a JSON `null` means for the block and for the number is stated
+   in docs/03 "Data format" and pinned in `Data/DataNullPolicyTests`. `DataValidationTests` covers it. The shipped
+   `rules.json` carries 300 and the field is part of the data hash.
+2. **"Can still train", clause by clause** (staged worlds on test data, each clause alone flips the answer): a unit
+   in a queue; the bank at the cheapest unit's gold cost exactly, and one below; gold carried by an own unit that
+   closes the gap; gold left in a node with a live worker, and the same node with no worker; a seat with the gold but
+   neither a finished unit-producing building nor a worker; a site does not count as a building; a defeated seat is
+   ignored; a forged faction with a 0-gold unit is never spent (rule 58: the forge tolerates shipped rows).
+3. **Spent needs a live match:** never spent with fewer than two standing sides that ever built, in a sandbox (no
+   seat ever built), or after the match is over. Two allied seats alone are one side: never spent.
+4. **The clock and the draw.** With the wait at N ticks the draw falls on the first tick the clock reaches N (rows at
+   N - 1 and N); a non-summoned unit's death at clock N - 1 restarts it; a summon's expiry or death does not; a
+   seat's defeat restarts it (three sides); a cancel that refunds enough gold makes the match not spent and restarts
+   it; a win on the tick the wait ends is a win, not a draw. At the draw: `MatchOver` and the drawn flag true and
+   still true 1,000 ticks later, no seat's defeated flag changed, no building freed, no defeat event, the tick goes on.
+5. **It always ends while spent (invariant fuzz, at least 200 seeds):** in a staged spent match with two to four
+   seats, units on every side and seeded random move / attack / stop / hold orders (no cancel, so it stays spent),
+   the match is over within `wait x (non-summoned units alive at the first spent tick + seats + 1)` ticks, and the
+   clock never restarts without a death or a defeat on that tick.
+6. **Off and never-spent are the base.** (a) On a copy of the shipped data with `draw` removed the clock stays 0
+   and the match never draws (one stalled row, 144,000 ticks or its old bound). (b) A twin with the wait out of
+   reach is hash-equal, checkpoint by checkpoint, to the shipped-data run up to that run's draw tick, on at least
+   three matches that draw. (c) No pin literal (end tick, winner, digest) of a match that is never spent before its
+   old end is edited; the golden replay's tick hashes are unchanged and only its header is regenerated, with the
+   reason in the `GatherWedgeQaTests` comment (if a tick hash does move, stop and say why). No new test pins the
+   data hash or a save's bytes as a literal (rules 49 / 73).
+7. **Save and replay.** A save taken mid-clock loads and draws on the same tick with the same hashes as the
+   unsaved run (in process, and once through the two-process path `MapFileTests.RunChild`); a save taken after the
+   draw loads as over and drawn; a save whose clock is negative or above the wait, or that is drawn without being
+   over, is refused; `SaveRestoreQaTests`' field list knows the new state. A recorded match that draws replays to
+   the same draw tick with every checkpoint equal. docs/03 says which bytes were added and when they are present.
+8. **Determinism.** A drawn AI match run twice (and once in two processes) gives the same draw tick and state hash.
+9. **The command line.** `match` on a drawn match prints `result draw at ...` and exits 0 (`CliTests`); the progress
+   lines are unchanged for a match that is never spent.
+10. **The stalled rows, measured and reported (not pass / fail: no AI cure is in scope, rule 48).** For each of
+    the four-seat Pale Hills free-for-all seeds 1, 3, 4, 6, 7, the skipped Vathar four-seat row (BUG-1621 /
+    BUG-1610), `EndGameHardeningTests.ALoneIdleWorker_*` (BUG-1116) and `M5H5HuntAfterDefeatQaTests.A2v2_*`
+    (BUG-1149): the first spent tick, how often the clock restarted, and the end (winner or draw, tick). Expected by
+    the design: seed 3 (BUG-1536: gold gone from 30,000, banks 2-16) ends in a draw or a late win well inside
+    144,000. A row that now ends is un-skipped and pinned with its end, old value in a "was" comment
+    (`HuntStressTests.FourAiSeats_OnPaleHills_Seed1_KnownStall` and its seed-2 twin are re-staged or dropped as the
+    handoff notes). A row that still does not end stays skipped with its id, and the report says which clause kept
+    it un-spent (a seat sitting on gold it never spends is an AI-play finding with a new bug id, not cured here).
+11. **The pins (rules 43 / 45 / 71 / 74).** Run the default loop and the whole Stress category on the head. The
+    report carries the list below one class a line with "unchanged / moved to ... (spent at tick ..., drew or won
+    at ...) / not run because ...". A pinned match may move only because it became spent before its old end. If a
+    criterion row of M5 (`MatchCriterionTests`) turns from a winner into a draw or stops ending inside its bound,
+    do not re-pin it as a draw: move it to the smallest seed that ends with a winner inside the bound, file it as a
+    finding with an id, and say if that seed is already another row's (rule 45). If any of the Hard v Normal
+    tally's 42 matches is spent before the tally's bound, re-measure the tally and print it as wins / losses /
+    draws / unfinished, with docs/03's M5-5 table and the bound comments in the same commit (rule 43).
+12. **Cost.** The per-tick check allocates nothing (an allocation row in a `[Collection(SerialCollection.Name)]`
+    class) and scans no store every tick that it could count instead; the Perf category, run alone (rule 42), has
+    no new failure and no threshold is touched.
+13. **Other tests staged without gold.** Every row of the default loop, the Stress category and the scene loop that
+    goes red only because its staged two-sided world now draws is sorted (rule 68): sim-owned rows are re-staged
+    (the test's own data copy without `draw`, or a mine) with a one-line why; content rows and scenes are named in
+    the report, not edited (the content exception above aside). If more than about twenty sim rows need it, say so
+    and propose one helper instead.
+14. **Green.** `dotnet build RtsGame.sln --no-incremental` 0 errors / 0 warnings after the last edit (rule 64); the
+    full default loop after the last edit: 0 failed, the skip count stated with each id (21 on the base; rule 62);
+    the Stress category: no red row but the skipped ones, named; `tools/qa/smoke.ps1` PASS; the scene loop run once
+    on your branch with its result (you cannot edit `game/tests`; the scenes that play to a result or write a save
+    are `MatchOverViewTest`, `QaM6V4Test`, `QaM6V14Test`, `QaM6V9Test`, `AiSeatTest`, `ReplayPlaybackTest`,
+    `TeamsTest`, `FreeForAllTest`, `TeamFilesTest`: rule 50).
+15. **Docs.** docs/02 "Game flow" 4: the draw rule in plain words (what "spent" means, the 5 minutes, what restarts
+    the clock, nobody is defeated, the banner until M6-V29). docs/03 "Implementation (M6-S13)": the formula, where
+    it runs in the tick, the hash and save layout, a "For the view track" note naming the accessors M6-V29 reads, a
+    "Questions for the Producer" section with your recommendation on each (rule 67), and the answer to M7-H3's
+    Question 1 written into "Data format" (docs/01 2026-11-25 ACCEPT (1): keep). Bug-file updates (BUG-1536, 1523's
+    kin, 1068 / 1116 / 1559, any new id) as a patch in your scratch folder: you cannot write `studio/**`.
+
+Pin classes (rule 71; add any class a grep for full AI matches finds that is missing here, rule 74):
+- Default loop: `Ai/MatchCriterionTests` (with `Ai/CriterionMatch`)
+- `QA/StandardPresetPinQaTests`
+- `QA/NonHardMatchPinQaTests`
+- `Ai/CounterCompositionTests` (`TheNonHardPins_*`)
+- `Ai/ReserveTwinTests`
+- `Vision/SharedVisionFfaPinTests`
+- `QA/OutcomePinM73bQaTests`
+- `HardKnobsPinTests`, `Ai/HardKnobsMatchTests`, `QA/HardKnobsQaTests`, `QA/HardKnobsFightsOnQaTests`
+- `Ai/AiVersusAiTests`, `Ai/AiDeterminismTests`
+- `Ai/EndGameHardeningTests` (the two-process Pale Hills seed 2 four-seat rows; `ALoneIdleWorker_*`)
+- `Ai/FarExpandTests`, `Ai/StarvedWaveTests`, `QA/StarvedWaveQaTests`, `Ai/RebuildTests`, `QA/RetrainQaTests`
+- `Ai/OpeningReserveShareTests`, `QA/SpendDownQaTests`, `Economy/StartingResourcesTests`, `QA/StartingResourcesQaTests`
+- `MatchOverTests`, `TeamTests`, `QA/TeamQaTests`, `QA/WinConditionQaTests`, `QA/DefeatRuleQaTests`
+- `Save/SaveRoundTripTests`, `Save/SaveRefusalTests`, `QA/AiSaveQaTests`, `QA/SaveRestoreQaTests` (`save_ai_seed2`)
+- `ReplayGoldenTests`, the premap AI replay, `seed21_playable.replay`, `cross_map_seed1.replay`
+- `CliTests.Match_TheLiteralRow_*`
+- `Data/FactionOrderTests.TheShippedContentHash_IsTheGoldenHeaders`, `QA/PackQaTests.TheShippedDataHash_IsTheGoldenHeaders`
+- Stress: `HuntStressTests` (the four-seat oracle rows, `MidHuntSeed`, the known-stall rows)
+- Stress: `HuntSweepQaStressTests`, `HuntSweepRound2QaStressTests`, `M5H5HuntAfterDefeatQaTests`
+- Stress: `M6Sh2DeterminismStressTests`, `M6Sh2QaStressTests`, `M6S12AiRulesQaStressTests`, `M6S12DeterminismStressTests`
+- Stress: `StarvedSaveTwoProcessQaStressTests`, `StarvedPickOracleQaStressTests`, `StarvedWaveProbeQaStressTests`
+- Stress: `ReservePairingsStressTests`, `OpeningReserveShareStressTests`, `M78ReserveSwitchQaStressTests`, `M78ShippedDigestQaStressTests`, `ShippedDigestReportTests`
+- Stress: `MatchRowsM6S10Report` (seeds 1-8 on the three maps)
+- Stress: `FarExpandProbeQaStressTests`, `VatharStallTraceTests`, `EndGameH6ProbeQaStressTests`
+- Stress: `HardVersusNormalTallyQaStressTests`
+- Stress: `DefeatAiStressTests`, `RarakuTwinStressTests`, `RebuildLookMatchQaStressTests`, `TeamAiSoakStressTests`, `MapSlice2StressTests`, `MatchStatsFuzzStressTests`, `RegenQaStressTests`
+- The data track's, read and reported (edited only under the content exception): `Content/D33BalanceReportTests`,
+  `Content/D34HashMoveTests`, `Content/TeblorOpeningVariantsReportTests`, `Content/AiOpeningPairsReportTests`,
+  `Content/HolyWarFirstWaveReportTests`, `Content/AiSpendingReportTests`, `QA/Content/DR35ProsePinQaTests`,
+  `QA/Content/TeblorOpeningQaTests`, `QA/Content/D21OpeningsQaTests`, `QA/Content/D20PinQaTests`,
+  `QA/Content/D33QaTests`, `QA/Content/D27HardMirrorQaStressTests`, `QA/Content/TeblorAiMatchQaStressTests`
+
+Design references: docs/01 change log (the 2026-11-25 owner row and the 2026-11-25-1437 PLAN row); docs/02 "Game
+flow" 4 (the defeat rule this sits beside); docs/03 "Save/load and replays", "Data format" ("A JSON `null`"),
+"Implementation (M5-4e)" (the defeat check), "Implementation (M8-1)" / "(M8-2)" (a save part present only when the
+data asks for it); `sim/Rts.Sim/World.Defeat.cs`; `studio/bugs/BUG-1536-*.md`.
+
+Tests required: unit rows for criteria 1-4 and 9; the invariant fuzz of 5; the twins of 6; save, refusal and
+replay rows of 7; the determinism rows of 8 (the two-process ones may be Stress); the allocation row of 12; a
+report class for 10 (Stress). Every bug fix in passing gets a test that failed first.
+
+Constraints: no Godot in `Rts.Sim`; the wait only from data; no wall clock; seats walked in player order, no
+`Dictionary` / `HashSet` iteration, no LINQ or `new` in the per-tick check; no player-facing text in C#; docs in the
+same commit. Process: record the PID of every `dotnet test` / Godot you start and end only those (rules 52 / 69);
+scratch folders named `m6s13-...`, created new (rule 63); run the full default loop after your last edit or say in
+the report's first lines that you did not (rule 62); the Perf category only alone (rule 42).
+
+QA focus (full): attack the rule's edges before the matches: every clause of "can still train" at its boundary
+(bank exactly at the price, a carried load that closes the gap, the last gold leaving a node on the tick a worker
+dies); what else adds gold (every refund path: a cancelled unit, site, research; anything that pays gold on a kill
+or a collapse) and whether each makes the match un-spent on that tick; teams (2v2 with one side spent, a defeated
+ally); a draw and a defeat on one tick; a seat that places its first building after the draw (the latch); summons
+and packs (a Teblor war-dog pack's deaths, a summoned unit's expiry); regenerating giants in a stand-off. Fuzz the
+invariant of criterion 5 with 1,000 seeds and with cancels allowed (then only "the clock never restarts without a
+death, a defeat or a tick un-spent"). Save at every 500th tick of a clock run and compare draw ticks; tamper the
+new bytes. Prove "zero is free" yourself: every tick hash of the golden and of two never-spent pinned matches
+against the base. Check the per-tick cost at 2,000 units and four seats (Perf alone, rule 42). Re-run two of the
+developer's stalled rows and one moved pin. Suites: the default loop with Stress, then Perf alone; the scene loop
+once (rule 53). Re-check after a tests-only fix round: touched classes + the default loop + the build (rule 72).
+
+### View: M6-V28, four more Malazan building models (feature, QA standard)
+
+Goal: Continue the art pass on buildings. Two of 30 building types are models (the Garrison Keep and the Legion
+Barracks, M6-V26); this task adds the four Malazan buildings the pack covers most plainly, through the same import
+path, so a Malazan base starts to read as a base instead of grey boxes.
+
+Scope:
+- Models for **`malazan_billet`** (2 x 2 cells; the pack's Houses line), **`malazan_depot`** (2 x 2; the Storage
+  line), **`malazan_crossbow_range`** (3 x 3; the Archery line) and **`malazan_watchtower`** (2 x 2; the WatchTower
+  line), from `asset-sources/quaternius-ultimate-fantasy-rts-2022-08/` (read it in the owner's main checkout; never
+  copy the pack into the repo). The pick of the exact model (age, level) is yours, said in docs/04 with the reason,
+  by M6-V26's reasoning: a large team-coloured part that faces the camera, the Malazan tint (steel grey, oxblood,
+  dull bronze), and each building told apart from the others at the default zoom.
+- `tools/asset-manifest.json` `buildings` (four entries), `tools/art/build_building.py` and
+  `tools/import-assets.ps1` only if a model needs something the builder lacks (those three are the view track's;
+  the rest of `tools/**` is not). Blender 5.2 is installed.
+- `BuildingModels` / `BuildingViews` only as far as the four need; the Watchtower shoots: check where its shot is
+  drawn from and make it leave from the drawn tower, not from the old box's height, if it does not already.
+- One scene (or `BuildingModelTest` extended) and the existing scenes that read one of these four as a box adapted
+  (`BuildingViews.UseModels = false` before binding, or `ModelOf` / `BarY`: `BuildingScaleViewTest` and
+  `QaM7V4Test` are the models).
+- docs/04 "Building models, as built" (the table, the picks, the tints, the sizes, the licensing log row in the
+  same commit), docs/03 "Implementation (M6-V28)", and the Producer's answers to M6-V27's Questions 1-4 written
+  into docs/03 "Implementation (M6-V27)" (docs/01 2026-11-25 ACCEPT (3): keep, keep, keep, BUG-1710 next hardening).
+- OUT of scope: the other four Malazan buildings (Wickan Corral, Armory, Cadre Tower, Engineers' Yard: no plain
+  match in the pack, a later task); Whirlwind and Teblor buildings; construction-stage models (a site stays its
+  box); resource and nature models; the data `scale` on a model; unit models; the draw banner and countdown
+  (M6-V29, next session, after the sim's rule is on `main`); BUG-1710; anything under `sim/` or `game/data/`.
+
+Acceptance criteria:
+1. Four manifest entries and four built files `game/assets/models/malazan/<id>/<id>.glb` with their atlases; a
+   re-run of the import is byte-identical for all six buildings and every unit model (`git status` clean after it).
+2. Each model: one surface, one material named `team`, one atlas, at most 5,000 triangles (docs/04), origin on the
+   ground at the plan's centre, entrance toward +Z.
+3. Fit: each stands at least 0.25 m inside every edge of its footprint (4 x 4 m or 6 x 6 m) and on the ground, on
+   flat ground and on a terrace edge; the rows read the building list from the manifest, not a literal count.
+4. Life cycle for each of the four: a site is the box, the finished building the model, a remembered one darkened,
+   a destroyed one gone; with `--placeholder-art` and with an LFS pointer file in place of the `.glb` it is the box
+   and the log has no `ERROR` line.
+5. Picking and the health bar follow the drawn shape (M6-VH9's path): a click on a pixel of the model selects it, a
+   unit in front is picked first, the bar sits above the drawn top and stays on screen at the closest zoom.
+6. The Watchtower's shot leaves from the drawn tower (a row that reads the shot's start height against the model's
+   top); a tower site still shoots nothing.
+7. Team colour: for four player colours (Bone, Crimson, Iron, Jade) the team part of each building reads as that
+   colour at the default zoom (the measured rows M6-V26 used for the Keep, on all four).
+8. Pictures, looked at before you report, saved to your scratch folder and listed in the report (the Producer
+   copies them to `studio/review/`): each building at zoom 40 and 20; one Malazan base with all six models and the
+   four boxes left; the Billet beside the Depot and the Crossbow Range beside the Barracks at zoom 40 (told apart
+   or not: say what you see); the four in four player colours; a site and a remembered one.
+9. Frame time (rules 61 / 77), the bench alone after the other suites have ended when you can: 400 figures with 60
+   building models of the six types mixed, and 1,000 figures, each beside the boxes / capsules figure from the same
+   window; 400 + 60 stays under 16.7 ms and the report says what the models cost over boxes. Judged on a quiet
+   window: the Producer re-runs the pinned rows at the ACCEPT.
+10. Sizes: each new `.glb` and atlas in bytes and the art pass's binaries' new total (Git LFS; `.glb` and `.png`
+    are already in `.gitattributes`); the licensing log names the four source files.
+11. Nothing under `sim/` or `game/data/` changes; under `tools/` only the three files named above.
+12. Green: build `--no-incremental` 0 / 0 after the last edit; the default loop 0 failed (21 skipped on the base);
+    `tools/qa/smoke.ps1` PASS; the scene loop green (124 on the base plus yours; `BenchTest`, `MinimapTest`,
+    `DebugOverlayTest`, `QaM25Test`, `QaM27Test`, `QaH1Test` may flake under load and must pass alone).
+13. Docs as in the scope, with a "Questions for the Producer" section in docs/03 "Implementation (M6-V28)"
+    (rule 67): each pick that is a taste call, with your recommendation.
+
+Design references: docs/04 "Building models, as built (M6-V26)", "Scale and dimensions", the style guide and the
+Malazan palette; docs/03 "Implementation (M6-V26)" and "(M6-VH9)"; docs/01 2026-11-18 (b) (e) and 2026-11-20 (2);
+`game/data/factions/malazan/buildings.json` (read only: ids and footprints).
+
+Tests required: the scene rows for criteria 2-7 (headless where the base's are); the bench rows of 9; every bug fix
+in passing gets a row that failed first.
+
+Constraints: dumb views (no gameplay state in a view; picking reads what is drawn); no player-facing text in C#;
+binaries through Git LFS only, no raw pack file committed, the licensing log in the same commit; visuals changed, so
+run windowed, take the pictures and look at them before claiming it works. Process: PIDs recorded, end only your own
+Godot / `testhost` (rules 52 / 69); scratch folders named `m6v28-...` (rule 63); the full default loop after the
+last edit (rule 62). A smoke failure on stale import state (`Unrecognized UID`) counts only if the re-run fails.
+
+QA focus (standard): the pictures first: does each building read as what it is, in every player colour, at zoom 40
+and 60, and are the two 2 x 2 and the two 3 x 3 buildings told apart; clicks on every part of each model and beside
+it (a unit in front, a unit behind, an enemy's building in front of an own one: BUG-1682's shape); the bar at the
+closest zoom; the Watchtower's shot start on flat and high ground; the life cycle with fog (a remembered model that
+is razed unseen, a site cancelled); a fresh-clone import for byte identity; the pointer-file and
+`--placeholder-art` paths. Run the bench last, alone (rule 77), and say what else was running. Suites: the default
+loop and the scene loop (rule 53); no Stress, no Perf category.
+
+### Data: D36, the Teblor opening's second search, and BUG-1720 (feature, QA standard)
+
+Goal: Find the Teblor `standard` opening that gives the Easy, Normal and Hard computer player its unit mix back
+(BUG-1612), by a bounded search around the one-Shaman orders QA found (BUG-1721), and close the description
+check's two gaps (BUG-1720). **Measured and reported only: no byte under `game/data/` this session** (the sim moves
+the data hash); the order found ships next session (D37) after one re-measure on the draw rule's `main`.
+
+Scope:
+- (0) Nothing from the owner is waiting (inbox New is empty).
+- (1) **The search.** Start from QA's table in `studio/bugs/BUG-1721-*.md` and `studio/qa/2026-11-25-0924-D-H10.md`
+  (QA1, QRD1, QA1T); the tool is `QA/Content/DH10TeblorOrderQaStressTests` (D34's row through
+  `D34TeblorStepOrderReportTests.Play`: 64 seats a difficulty, to 15:00). Write your orders in a **new** report
+  class whose name starts `D36` (Stress category), not into the existing classes. **The levers (rule 78), each
+  varied or said not to be:** the Shaman step's count (1 or 2) and its position; which of the three train steps
+  (Breaker, Destrier Rider, War-dog) carry `throughReserve`; the Shamans' Circle's time; the Anointing step's time
+  or position; the Carver's time; `noReserve` on the `armor_1` research step. Never `noReserve` on the expand step
+  (docs/01 2026-11-24 ACCEPT (1)(e)). **At most twelve full-row orders** (a full row = Easy + Normal + Hard, 64
+  seats each); reduced rows to choose candidates are free but are not evidence. Use at most 6 threads
+  (`QA_DH10_THREADS` or your class's equal): the sim track's long suites run beside you.
+- (2) **The bar** (docs/01 2026-11-24 ACCEPT (3)(c), unchanged; 64 matches a difficulty to 15:00): Easy: Anointing
+  at least 20, Destrier Rider 20, War-dog 40, Shaman 25, Breaker 20, defeated at most 2; Normal: Anointing 17,
+  Rider 22, War-dog 37, Shaman 20, Breaker 12, second Longhouse 18, defeated at most 10; Hard: Anointing 20, Rider
+  40, War-dog 46, Shaman 22, Breaker 35, second Longhouse 18, defeated at most 12.
+- (3) **The result.** If an order meets every figure: the whole opening as it would sit in `ai.json` goes to
+  `sim/Rts.Sim.Tests/Content/Fixtures/teblor_standard_d36.json`, with a default-loop row that loads it through the
+  shipped loader on a copy of the shipped data (valid against today's schema, the tooltip still true) and its full
+  row in the page. If none does: no fixture; the table, and the nearest order named **by figures missed, then by
+  seats short**.
+- (4) `docs/factions/teblor.md` "The unit mix": the D36 table added; BUG-1721's corrections (the nearest order,
+  the "No candidate brings Hard's Riders past 37" sentence, Question 1's premise); the Producer's answers to
+  D-H10's Questions 1-2 written in (docs/01 2026-11-25 ACCEPT (4); rule 67); a "Questions for the Producer" section
+  for anything new, each with your recommendation.
+- (5) **BUG-1720** by docs/01 2026-11-25 ACCEPT (5): in `Content/UnitHitBonusText`, "other ... within" counts as
+  pack words only in a sentence that is not an on-death sentence ("dies", "death", "dying"); a percentage beside
+  "hidden" / "stealthed" is the first-shot bonus only with first-shot words ("first shot", "first hit", "from
+  hiding") or when the unit has the field. The two skipped rows in `QA/Content/DH10TextPinQaTests` are un-skipped.
+- Files you may change: `docs/factions/teblor.md`; under `sim/Rts.Sim.Tests/Content/` and `QA/Content/`: new files
+  named `D36*`, the fixture, `UnitHitBonusText*` and its tests, `DH10TextPinQaTests`. **Do not edit any other
+  existing content class this session** (the sim developer may re-pin literals in them for its hash move).
+- OUT of scope: any file under `game/data/`; C# outside the two content folders; the reserve rules themselves; an
+  opening per difficulty (a schema request, the Producer's call if the search fails); a restated bar; the other
+  factions' openings; the Shadow roster; BUG-1612's closing (D37).
+
+Acceptance criteria:
+1. The report lists every lever of (1) as varied (with the values tried) or not varied (with the reason), and at
+   most twelve full-row orders, each with its `ai.json` steps or its difference from QRD1 / QA1.
+2. A table of every full row: order | Easy | Normal | Hard (defeated / 2nd Longhouse / Shaman / Breaker / Rider /
+   War-dog / Anointing) | figures missed | seats short, with the shipped order's row re-measured on this base as
+   the first line (it must equal D-H10's: Easy 1 / 0 / 16 / 30 / 4 / 27 / 28, Normal 9 / 23 / 15 / 14 / 22 / 37 /
+   17, Hard 11 / 23 / 22 / 39 / 33 / 46 / 23; if it does not, stop and say so).
+3. Either the fixture of (3) with its load row and a statement "meets every figure" backed by its row, or "none of
+   these twelve meets the bar" with the nearest named by figures missed, then seats short. Neither outcome fails
+   the task; a wrong "nearest" or a fixture whose row misses a figure does.
+4. `git diff <base> -- game/` is empty; the shipped data hash still equals the golden header's (the existing rows).
+5. teblor.md says what (4) asks and its prose pins are green; no sentence on the page contradicts the table.
+6. BUG-1720: the two QA rows un-skipped and green; new rows for each half of the ruling in both directions (an
+   on-death "other Zealots within 6 m" is not the pack's reach, a true pack sentence still is; a status percentage
+   beside "hidden" without first-shot words is not the first-shot bonus, with the words or the field it is); every
+   shipped description of the three factions and the Shadow page's still passes.
+7. Green: build `--no-incremental` 0 / 0 after the last edit; the default loop
+   (`--filter "Category!=Perf&Category!=Stress&Category!=Soak"`) 0 failed, 19 skipped (21 on the base less the two
+   BUG-1720 rows), run in full after the last edit (rule 62); your `D36` report class is Stress and not in it.
+
+Design references: docs/01 2026-11-24 ACCEPT (1)(e) and (3)(b)(c), 2026-11-25 ACCEPT (4)(5);
+`docs/factions/teblor.md` "The unit mix (BUG-1612, D-H10)" and the opening's tooltip; docs/03 "Implementation
+(M7-8)" (the two switches: research and build steps ignore the reserve, train steps obey it, a step behind a
+waiting expand step spends only above the reserve: file order is behaviour); `studio/bugs/BUG-1721-*.md`,
+`BUG-1720-*.md`, `BUG-1612-*.md`.
+
+Tests required: the `D36` report class (Stress); the fixture's load row if there is a fixture; BUG-1720's rows
+(failing first).
+
+Constraints: player-facing text only in data (none changes); no C# outside the two content folders; no data byte.
+Process: PIDs recorded, end only your own test hosts (rules 52 / 69); scratch folders named `d36-...` (rule 63);
+bug-file updates as a patch in your scratch folder.
+
+QA focus (standard): rule 75: before agreeing with "none meets the bar" (or with the order found), try up to four
+full-row orders of your own on levers the report says were not varied, and re-run the developer's best row and
+the shipped row to confirm the figures; check the fixture is the order the table measured (load it, diff its
+steps against the report class's order) and that it carries no `noReserve` on the expand step; check "nearest" by
+the stated rule; read teblor.md against the table line by line. BUG-1720: adversarial sentences for both halves
+(an on-death sentence with "other" and "within" in different clauses, "death" inside another word, a pack sentence
+that mentions a death; "hidden" with a first-shot bonus on a unit without the field). Suites: the task's filters,
+the default loop with the filter of criterion 7, and only the `D36` / `DH10` Stress rows you re-run (rule 53); cap
+your threads at 6.
+
+## Proposed briefs (superseded by the plan above; kept for the record)
 
 ### Sim: M6-S13, a match with the gold gone ends in a draw (owner decision, inbox 2026-11-25; BUG-1536)
 Design: docs/01 2026-11-25 owner-decision row. A match-end rule on the sim's tick, for the whole match: no side has
