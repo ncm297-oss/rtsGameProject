@@ -28,3 +28,15 @@ Seat 2 (and seat 3 by 1,139) goes silent for 6,780 ticks (30,781-37,561); the ma
   between base and branch, and this row's end tick and hash are identical on both trees.
 - Most likely the same cause as BUG-1610 (D33's changed openings on this map and seed; two survivors that stop acting). The
   developer's report says the row was already red on 0317e7e. The Producer may fold this into BUG-1610.
+
+## M7-8 trace (2026-11-24-1431, the sim; no cure shipped; QA re-ran it and got the same numbers)
+- `Stress/VatharStallTraceTests` (same match: 88,998, hash 06F14EE840630135). By 30,000 seat 2 (`cadre_rush`) has no army,
+  no unit-producing building, one Garrison Keep (an expansion at cell (33, 89)), one worker and 56 / 85. The worker
+  gathers and needs no order; nothing is payable or trainable, and no rule trains a second worker while one lives (the
+  worker `train` steps are done; `BuildOrderExecutor.Retrain` fires only at zero workers). Silent until seat 3 kills the
+  worker at 37,561; the retrain then trains one Laborer, which gathers alone to the end (876 gold at 60,000, still one
+  worker). Gold is not gone (8 live mines known throughout): not the BUG-1068 / 1116 / 1536 family. Defect filed as
+  BUG-1660.
+- The row is now `FarExpandProbeQaStressTests.VatharCrossingSeed2_FourSeats_FarFogOracleAndExtraOracles`, skipped with
+  this id and BUG-1610's (rule 57 satisfied: the Stress category has no red row from it). Un-skip with BUG-1661's cure.
+- docs/03 "Implementation (M7-8)" has the table, the cause and the recommended cures.

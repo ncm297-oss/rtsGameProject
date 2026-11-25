@@ -21,3 +21,12 @@ The match ends inside the 60-minute bound, as it did before D33 (38,690 after M6
   66,919 / 62,482 / 59,255).
 - Same shape as the Pale Hills four-seat stalls: two survivors that never finish each other. The sim's AI follow-up
   reads one trace of seats 2 and 3 after 34,000 (who has an army, who has gold) before anything is tuned.
+
+## M7-8 trace (2026-11-24-1431, the sim; no cure shipped; QA re-ran it and got the same numbers)
+- From 33,951 only seats 2 and 3 stand. Seat 3 (58 units) hunts; seat 2's last Keep stands 7 m from hunt sweep point 31,
+  which no hunt reaches until 88,441. Hunt 5 (38,061-67,401) went to the free starts first (M5-H6), then the east and the
+  whole border ring, and at 66,921 found the depot seat 2's new worker had built 40 m from the Keep; razing it ended the
+  hunt, and hunt 6 began from scratch (marks cleared, free starts first), so the Keep waited a second full lap. Defect
+  filed as BUG-1661; the worker half (why seat 2 is only a Keep) is BUG-1660.
+- Recommended cure: BUG-1661 (a hunt that turned into a wave on a found building resumes its marks nearest-first from
+  that building), measured alone; then BUG-1660 apart. Both wait for the AI-play session (docs/01 2026-11-24 (2)).
