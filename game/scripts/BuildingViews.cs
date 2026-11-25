@@ -35,6 +35,9 @@ namespace Rts.Game;
 /// <see cref="BarHeight"/> - <see cref="BoxHeight"/> over the model's highest point (a site's over its box, as before). A
 /// remembered building of such a type (not a site) draws the same model darkened (<see cref="BuildingModels.GhostMaterial"/>)
 /// on its own per-slot node in place of the ghost box. Every other type, and every type with models off, is a box as before.
+/// M6-VH9: <see cref="PickTops"/> and <see cref="SiteHeights"/> give picking each type's drawn height (BUG-1630), and with
+/// <see cref="Camera"/> set a bar is kept under <see cref="BarCeiling"/>, so a tall building's bar stays on screen at the
+/// closest zoom (BUG-1631).
 /// </remarks>
 public partial class BuildingViews : Node3D
 {
@@ -80,6 +83,58 @@ public partial class BuildingViews : Node3D
 
     /// <summary>The models of the last <see cref="Bind"/>, or null when <see cref="UseModels"/> was off.</summary>
     public BuildingModels? Models { get; private set; }
+
+    /// <summary>
+    /// Per building type, the height in meters a finished building of it is drawn to (M6-VH9, BUG-1630): its model's fitted top
+    /// (<see cref="BuildingModels.Top"/>) for a model type, else <see cref="DrawnHeight"/>. Made in <see cref="Bind"/>; picking
+    /// (<see cref="BuildingPicker"/>'s per-type overloads, through <see cref="SelectionController"/>) reads it, so a click on what
+    /// is drawn selects it. A remembered finished building is drawn the same, so it is picked the same.
+    /// </summary>
+    public float[] PickTops { get; private set; } = Array.Empty<float>();
+
+    /// <summary>Per building type, the height its site's box rises to at completion: <see cref="DrawnHeight"/> (a site is always its box; M6-VH9).</summary>
+    public float[] SiteHeights { get; private set; } = Array.Empty<float>();
+
+    /// <summary>
+    /// The camera whose zoom keeps a tall building's bar on screen (M6-VH9, BUG-1631): the bar never sits higher over its
+    /// ground than the top edge shows for a building at the screen's centre (<see cref="BarCeiling"/>). Null: no ceiling.
+    /// </summary>
+    public RtsCamera? Camera { get; set; }
+
+    /// <summary>The gap in meters the bar keeps under the screen's top edge when <see cref="BarCeiling"/> lowers it.</summary>
+    public const float BarTopMargin = 0.6f;
+
+    /// <summary>
+    /// The highest bar centre over its ground, in meters, that stays on screen for a building standing at the camera's focus on
+    /// ground <paramref name="groundY"/> high (M6-VH9, BUG-1631): the camera sits <paramref name="zoom"/> m high and
+    /// <c>zoom / tan(pitch)</c> back, so the top edge's ray (<c>pitch - fov / 2</c> under the horizon) passes over the focus
+    /// at <c>zoom - back x tan(pitch - fov / 2)</c>; less <see cref="BarTopMargin"/>. Pure: the view's camera numbers only.
+    /// </summary>
+    public static float BarCeiling(float zoom, float fovDegrees, float groundY)
+    {
+        float pitch = Mathf.DegToRad(CameraLimits.PitchDegrees), top = pitch - Mathf.DegToRad(fovDegrees) / 2f;
+        float back = zoom / Mathf.Tan(pitch);
+        return zoom - back * Mathf.Tan(top) - groundY - BarTopMargin;
+    }
+
+    private float _ceilingZoom = float.NaN;
+    private float _ceilingFov = float.NaN;
+    // Each slot's bar height as its look asks (the model's top or the box's, over BarHeight - BoxHeight), before the ceiling.
+    private float[] _barWanted = Array.Empty<float>();
+
+    /// <summary>
+    /// The distance from <paramref name="origin"/> along the unit <paramref name="direction"/> (world space) to slot
+    /// <paramref name="slot"/>'s drawn model, or +infinity when the ray misses it or the slot is not drawn as a model now
+    /// (M6-VH9: a unit behind a model is hidden only where the model's triangles are, not its whole pick box).
+    /// </summary>
+    public float ModelRayDistance(int slot, Vector3 origin, Vector3 direction)
+    {
+        if (!ShownAsModel(slot) || Models == null) return float.PositiveInfinity;
+        int type = _modelType[slot];
+        return Models.RayDistance(type, origin - _roots[slot]!.Position, direction);
+    }
+
+    private int[] _modelType = Array.Empty<int>();
 
     /// <summary>The runner whose sim is shown each frame; null shows nothing (tests call <see cref="Sync"/> directly).</summary>
     public SimRunner? Runner { get; set; }
@@ -176,6 +231,16 @@ public partial class BuildingViews : Node3D
         _shownModel = new bool[capacity];
         _ghostModels = new MeshInstance3D?[capacity];
         _ghostModel = new bool[capacity];
+        _barWanted = new float[capacity];
+        _modelType = new int[capacity];
+        PickTops = new float[data.Buildings.Length];
+        SiteHeights = new float[data.Buildings.Length];
+        for (int t = 0; t < PickTops.Length; t++)
+        {
+            SiteHeights[t] = DrawnHeight(data.Buildings[t]);
+            PickTops[t] = Models != null && Models.Has(t) ? Models.Top(t) : SiteHeights[t];
+        }
+        _ceilingZoom = _ceilingFov = float.NaN;
     }
 
     public override void _Process(double delta)
@@ -183,11 +248,37 @@ public partial class BuildingViews : Node3D
         if (Runner?.Simulation is Simulation sim) Sync(sim.World);
     }
 
+    // M6-VH9 (BUG-1631): a new zoom (or field of view) moves the ceiling; every placed bar is put under it again.
+    private void FollowCamera()
+    {
+        if (Camera == null || (Camera.Zoom == _ceilingZoom && Camera.Fov == _ceilingFov)) return;
+        _ceilingZoom = Camera.Zoom;
+        _ceilingFov = Camera.Fov;
+        for (int i = 0; i < _roots.Length; i++)
+            if (_shownGen[i] != 0) PlaceBar(i);
+    }
+
+    // The bar at the height its look asks for, under the camera's ceiling; its back moved, its fill on the next check.
+    private void PlaceBar(int i)
+    {
+        float barY = _barWanted[i];
+        if (Camera != null && float.IsFinite(_ceilingZoom))
+            barY = Math.Min(barY, BarCeiling(_ceilingZoom, _ceilingFov, _roots[i]!.Position.Y));
+        if (barY == _barY[i]) return;
+        _barY[i] = barY;
+        _backs[i].Transform = new Transform3D(Basis.FromScale(new Vector3(_barLength[i], BarThickness * 0.8f, BarThickness * 0.8f)), new Vector3(0f, barY, 0f));
+        _shownFill[i] = -1f; // the fill follows on this frame's bar check
+    }
+
+    /// <summary>The height of slot <paramref name="slot"/>'s bar centre above its ground as its look asks for, before the camera's ceiling (M6-VH9).</summary>
+    public float BarWanted(int slot) => _barWanted[slot];
+
     /// <summary>Shows every live building and hides freed slots. No allocation once each slot has its nodes.</summary>
     public void Sync(World world)
     {
         BuildingStore b = world.Buildings;
         FogView? fog = Fog?.Refreshed(world);
+        FollowCamera();
         int n = Math.Min(b.Capacity, _roots.Length);
         for (int i = 0; i < n; i++)
         {
@@ -322,7 +413,7 @@ public partial class BuildingViews : Node3D
     /// <summary>The model node of slot <paramref name="slot"/>, or null if the slot never showed a model (M6-V26).</summary>
     public MeshInstance3D? ModelOf(int slot) => (uint)slot < (uint)_models.Length ? _models[slot] : null;
 
-    /// <summary>The height of slot <paramref name="slot"/>'s bar centre above its ground, in meters, as drawn now.</summary>
+    /// <summary>The height of slot <paramref name="slot"/>'s bar centre above its ground, in meters, as drawn now (under the camera's ceiling, M6-VH9).</summary>
     public float BarY(int slot) => _barY[slot];
 
     /// <summary>The root node of building slot <paramref name="slot"/>, or null if the slot has never held a building.</summary>
@@ -395,14 +486,10 @@ public partial class BuildingViews : Node3D
         }
         else if (_models[i] is MeshInstance3D old) old.Visible = false;
         _shownModel[i] = model;
+        _modelType[i] = model ? type : -1;
         _shownSite[i] = site;
-        float barY = model ? Models!.Top(type) + (BarHeight - BoxHeight) : BarHeightOf(world.Data.Buildings[type]);
-        if (barY != _barY[i])
-        {
-            _barY[i] = barY;
-            _backs[i].Transform = new Transform3D(Basis.FromScale(new Vector3(_barLength[i], BarThickness * 0.8f, BarThickness * 0.8f)), new Vector3(0f, barY, 0f));
-            _shownFill[i] = -1f; // the fill follows on this frame's bar check
-        }
+        _barWanted[i] = model ? Models!.Top(type) + (BarHeight - BoxHeight) : BarHeightOf(world.Data.Buildings[type]);
+        PlaceBar(i);
     }
 
     private MeshInstance3D CreateModel(int slot)

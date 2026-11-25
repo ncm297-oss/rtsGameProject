@@ -49,6 +49,7 @@ public sealed class BuildingModels
     private readonly Transform3D[] _fit;
     private readonly Aabb[] _bounds;
     private readonly ShaderMaterial?[][] _team, _ghost;
+    private readonly Vector3[]?[] _faces;
 
     /// <summary>Types with a model.</summary>
     public int ModelTypes { get; }
@@ -68,6 +69,7 @@ public sealed class BuildingModels
         _bounds = new Aabb[n];
         _team = new ShaderMaterial?[n][];
         _ghost = new ShaderMaterial?[n][];
+        _faces = new Vector3[n][];
         Shader shader = _teamShader ??= GD.Load<Shader>(UnitModels.TeamShaderPath);
         // The ghost box's colour is the player colour x ExploredBrightness in sRGB; the shader multiplies linear albedo.
         float k = FogView.ExploredBrightness;
@@ -112,6 +114,50 @@ public sealed class BuildingModels
 
     /// <summary>The height of type <paramref name="type"/>'s fitted model's highest point above the ground, in meters (0 for a box type).</summary>
     public float Top(int type) => Has(type) ? _bounds[type].End.Y : 0f;
+
+    /// <summary>
+    /// Type <paramref name="type"/>'s triangles as fitted, in its building's root space (three corners a triangle; empty for a
+    /// box type): what a click's ray is tested against when a unit behind the building may be hidden by it (M6-VH9, BUG-1630).
+    /// Made once per type at the first call.
+    /// </summary>
+    public Vector3[] FittedFaces(int type)
+    {
+        if (!Has(type)) return Array.Empty<Vector3>();
+        if (_faces[type] is Vector3[] known) return known;
+        Vector3[] faces = _source[type]!.Mesh.GetFaces();
+        for (int k = 0; k < faces.Length; k++) faces[k] = _fit[type] * faces[k];
+        _faces[type] = faces;
+        return faces;
+    }
+
+    /// <summary>
+    /// The distance along the ray from <paramref name="origin"/> (in the building's root space) along the unit
+    /// <paramref name="direction"/> to type <paramref name="type"/>'s nearest fitted triangle, or +infinity (a miss, or a box
+    /// type). Allocation-free once <see cref="FittedFaces"/> is made.
+    /// </summary>
+    public float RayDistance(int type, Vector3 origin, Vector3 direction)
+    {
+        Vector3[] faces = FittedFaces(type);
+        float best = float.PositiveInfinity;
+        for (int i = 0; i + 2 < faces.Length; i += 3)
+        {
+            // Moller-Trumbore, both faces of a triangle.
+            Vector3 a = faces[i], e1 = faces[i + 1] - a, e2 = faces[i + 2] - a;
+            Vector3 p = direction.Cross(e2);
+            float det = e1.Dot(p);
+            if (Math.Abs(det) < 1e-9f) continue;
+            float inv = 1f / det;
+            Vector3 s = origin - a;
+            float u = s.Dot(p) * inv;
+            if (u < 0f || u > 1f) continue;
+            Vector3 q = s.Cross(e1);
+            float v = direction.Dot(q) * inv;
+            if (v < 0f || u + v > 1f) continue;
+            float t = e2.Dot(q) * inv;
+            if (t > 0f && t < best) best = t;
+        }
+        return best;
+    }
 
     /// <summary>The team material of type <paramref name="type"/> in colour <paramref name="colour"/>, or null.</summary>
     public ShaderMaterial? TeamMaterial(int type, int colour) =>

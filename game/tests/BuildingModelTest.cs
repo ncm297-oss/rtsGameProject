@@ -298,16 +298,9 @@ public partial class BuildingModelTest : Node
         // A hurt model's hit-point bar over its top (criterion 5), and a destroyed one leaves nothing drawn (criterion 4).
         await HurtAndDestroy(data, finished);
 
-        // Criterion 4: remembered models under the fog, and one razed out of sight.
+        // Criterion 4: remembered models under the fog, and one razed out of sight. M6-VH9 (BUG-1632 item 1): the allocation
+        // row runs inside it, while the remembered models are drawn.
         await Remembered(data, types, west);
-
-        // 20 frames with models and remembered models drawn allocate nothing.
-        _views.Sync(W);
-        long before = GC.GetAllocatedBytesForCurrentThread();
-        for (int f = 0; f < 20; f++) _views.Sync(W);
-        long bytes = GC.GetAllocatedBytesForCurrentThread() - before;
-        GD.Print($"20 syncs with {CountShownModels()} models and {CountGhostModels()} remembered models drawn: {bytes} bytes");
-        Check(bytes == 0, $"20 syncs with models allocated {bytes} bytes");
         await EndMatch();
     }
 
@@ -538,6 +531,17 @@ public partial class BuildingModelTest : Node
             await Shot("remembered-under-fog-40m");
         }
 
+        // 20 frames with models and remembered models drawn allocate nothing (M6-VH9, BUG-1632 item 1: measured here, while the
+        // remembered models are drawn; it ran after they were gone).
+        _views.Sync(W);
+        long before = GC.GetAllocatedBytesForCurrentThread();
+        for (int f = 0; f < 20; f++) _views.Sync(W);
+        long bytes = GC.GetAllocatedBytesForCurrentThread() - before;
+        int ghosts = CountGhostModels();
+        GD.Print($"20 syncs with {CountShownModels()} models and {ghosts} remembered models drawn: {bytes} bytes");
+        Check(ghosts > 0, "the allocation row drew no remembered model");
+        Check(bytes == 0, $"20 syncs with models and {ghosts} remembered models allocated {bytes} bytes");
+
         // Player 2 razes the last one out of player 0's sight: still remembered, until the scout sees the spot again.
         int target = enemy[^1], tgen = B.Generation[target];
         BuildingDef tdef = W.Data.Buildings[B.TypeId[target]];
@@ -707,9 +711,12 @@ public partial class BuildingModelTest : Node
                 if (W.Units.Alive[i] && W.Units.Owner[i] == 0 && W.Units.TypeId[i] == laborer && W.Units.State[i] == UnitState.Idle
                     && NVector2.Distance(W.Units.Position[i], at) < 3f) builder = i;
             if (builder >= 0) _sim.Enqueue(Command.Build(0, new EntityHandle(builder, W.Units.Generation[builder]), type, PlacementGhost.AnchorPoint(W.NavGrid, anchor)));
-            for (int t = 0; t < 40 && B.SlotAt(anchor % W.NavGrid.Width, anchor / W.NavGrid.Width) < 0; t++) _sim.Tick();
+            // M6-VH9 (BUG-1632 item 2): the Laborer walks to the 8 x 8 Keep's edge before the site exists; 40 ticks were too few.
+            for (int t = 0; t < 400 && B.SlotAt(anchor % W.NavGrid.Width, anchor / W.NavGrid.Width) < 0; t++) _sim.Tick();
             W.CanPlace(0, type, anchor, out PlacementError why);
-            GD.Print($"picture site {def.Key}: builder {builder}, site {B.SlotAt(anchor % W.NavGrid.Width, anchor / W.NavGrid.Width)} (placement now {why})");
+            int site = B.SlotAt(anchor % W.NavGrid.Width, anchor / W.NavGrid.Width);
+            GD.Print($"picture site {def.Key}: builder {builder}, site {site} (placement now {why}){(site < 0 ? " - skipped, no site in the picture" : "")}");
+            Check(site >= 0, $"picture: no {def.Key} site was placed");
             sites.Add(c);
         }
         for (int t = 0; t < 300; t++) _sim.Tick();

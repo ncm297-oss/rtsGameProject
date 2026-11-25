@@ -65,6 +65,8 @@ public sealed class UnitModels
     private readonly AnimationLibrary?[] _libs;
     private readonly float[]?[] _lengths;
     private readonly Atlas?[] _atlas;
+    // M6-VH9 (BUG-1601): per type and Clip, the one-shot release share from the file's extras (0: the clip loops as before).
+    private readonly float[][] _oneShot;
 
     /// <summary>Types with a model.</summary>
     public int ModelTypes { get; }
@@ -84,14 +86,16 @@ public sealed class UnitModels
         _libs = new AnimationLibrary?[n];
         _lengths = new float[n][];
         _atlas = new Atlas?[n];
+        _oneShot = new float[n][];
         Shader shader = _teamShader ??= GD.Load<Shader>(TeamShaderPath);
         var missing = new List<string>();
         for (int t = 0; t < n; t++)
         {
             _team[t] = Array.Empty<ShaderMaterial?>();
+            _oneShot[t] = new float[ClipNames.Length];
             string path = PathFor(data.Units[t].Model);
             PackedScene? scene = Load(path, missing);
-            if (scene == null || !FindTeam(scene, path, out NodePath meshPath, out int surface, out Texture2D? texture, out string[] clipMap, out Atlas? atlas)) continue;
+            if (scene == null || !FindTeam(scene, path, out NodePath meshPath, out int surface, out Texture2D? texture, out string[] clipMap, out Atlas? atlas, _oneShot[t])) continue;
             _scenes[t] = scene;
             _clipMap[t] = clipMap;
             _meshPath[t] = meshPath;
@@ -137,25 +141,44 @@ public sealed class UnitModels
         _topBone = new float[n];
         _topBoneName = new string[n];
         _topBoneClip = new string[n];
+        _propTop = new float[n];
+        _propTopClip = new string[n];
+        _propTops = new float[n][];
         for (int t = 0; t < n; t++)
         {
-            _topBoneName[t] = _topBoneClip[t] = "";
-            _topBone[t] = float.NaN;
+            _topBoneName[t] = _topBoneClip[t] = _propTopClip[t] = "";
+            _topBone[t] = _propTop[t] = float.NaN;
+            _propTops[t] = new float[ClipNames.Length];
+            Array.Fill(_propTops[t], float.NaN);
             if (_scenes[t] == null) continue;
-            Rig? rig = RigOf(_scenes[t]!, PathFor(data.Units[t].Model));
+            string path = PathFor(data.Units[t].Model);
+            Rig? rig = RigOf(_scenes[t]!, path);
             if (rig == null) continue; // no skeleton: NaN, and the view keeps the capsule's top
+            Props props = PropsOf(_scenes[t]!, path, rig, _atlas[t]);
             (float top, string bone, string clip) = (float.MinValue, "", "");
+            (float propTop, string propClip) = (float.NaN, "");
             AnimationLibrary? lib = _libs[t];
-            if (lib == null || lib.GetAnimationList().Count == 0) (top, bone) = ClipTop(rig, null);
+            if (lib == null || lib.GetAnimationList().Count == 0)
+            {
+                (top, bone) = ClipTop(rig, null);
+                propTop = PropTopOf(rig, null, props, path);
+            }
             else
                 foreach (StringName name in lib.GetAnimationList())
                 {
-                    (float y, string b) = ClipTop(rig, lib.GetAnimation(name));
+                    Animation anim = lib.GetAnimation(name);
+                    (float y, string b) = ClipTop(rig, anim);
                     if (y > top) (top, bone, clip) = (y, b, name.ToString());
+                    float py = PropTopOf(rig, anim, props, path);
+                    int c = Array.IndexOf(ClipNames, name);
+                    if (c >= 0) _propTops[t][c] = py;
+                    if (py > propTop || (float.IsNaN(propTop) && !float.IsNaN(py))) (propTop, propClip) = (py, name.ToString());
                 }
             _topBone[t] = top;
             _topBoneName[t] = bone;
             _topBoneClip[t] = clip;
+            _propTop[t] = propTop;
+            _propTopClip[t] = propClip;
         }
         TopBoneMs += sampling.Elapsed.TotalMilliseconds;
     }
@@ -165,6 +188,144 @@ public sealed class UnitModels
 
     private readonly float[] _topBone;
     private readonly string[] _topBoneName, _topBoneClip;
+    private readonly float[] _propTop;
+    private readonly string[] _propTopClip;
+
+    /// <summary>
+    /// Type <paramref name="type"/>'s highest prop point in meters above its feet at scale 1 (M6-VH9, BUG-1600 item 3): the
+    /// vertices that read the props' own tile (<see cref="Atlas.IsProp"/>: the Mage's staff and its bronze head, a javelin, a
+    /// helmet), skinned to their bone, over the same 17 poses of every clip as <see cref="TopBone"/>; NaN for a type without
+    /// props, a capsule type, or a file without the atlas layout. A team prop (the shield) is not counted.
+    /// </summary>
+    public float PropTop(int type) => Has(type) ? _propTop[type] : float.NaN;
+
+    /// <summary>The state clip in which <see cref="PropTop"/> is reached (empty without props).</summary>
+    public string PropTopClip(int type) => Has(type) ? _propTopClip[type] : "";
+
+    /// <summary>Type <paramref name="type"/>'s highest prop point (as <see cref="PropTop(int)"/>) over the 17 poses of clip <paramref name="clip"/> alone; NaN when it has no props or doesn't hold that clip.</summary>
+    public float PropTop(int type, Clip clip) => Has(type) && (uint)clip < (uint)ClipNames.Length ? _propTops[type][(int)clip] : float.NaN;
+
+    private readonly float[][] _propTops;
+
+    /// <summary>
+    /// The share of clip <paramref name="clip"/>'s length at which type <paramref name="type"/>'s figure releases its shot,
+    /// when its file's clip map marks that clip one-shot (M6-VH9, BUG-1601: <c>oneShot</c> in the extras, from the asset
+    /// manifest); 0 when the clip loops as every clip did before.
+    /// </summary>
+    public float OneShotRelease(int type, Clip clip) => Has(type) && (uint)clip < (uint)ClipNames.Length ? _oneShot[type][(int)clip] : 0f;
+
+    /// <summary>The name of the glTF extras key that holds a model's one-shot clip marks (M6-VH9, tools/art/build_unit.py).</summary>
+    public const string OneShotKey = "oneShot";
+
+    // A model file's prop vertices (the props' tile), each with its skeleton bone and its place in that bone's bind frame.
+    private sealed class Props
+    {
+        public int[] Bone = Array.Empty<int>();
+        public Vector3[] Local = Array.Empty<Vector3>();
+    }
+
+    private static readonly Dictionary<string, Props> PropSets = new();
+    // Per (file, clip instance): its props' highest point over the clip's samples.
+    private static readonly Dictionary<(string, ulong), float> PropTops = new();
+
+    // The prop vertices of the scene's skinned mesh: each vertex reading the props' tile, with its most-weighted bone (a prop
+    // is bound to one bone, build_unit.py) and its position in that bone's frame (the skin's bind pose); read once per file.
+    private static Props PropsOf(PackedScene scene, string path, Rig rig, Atlas? atlas)
+    {
+        if (PropSets.TryGetValue(path, out Props? known)) return known;
+        var props = new Props();
+        Node probe = scene.Instantiate();
+        if (atlas != null)
+            foreach (Node n in probe.FindChildren("*", "MeshInstance3D", true, false))
+            {
+                var mi = (MeshInstance3D)n;
+                if (mi.Mesh == null || mi.Skin == null || mi.Mesh.GetSurfaceCount() == 0) continue;
+                Godot.Collections.Array arrays = mi.Mesh.SurfaceGetArrays(0);
+                Vector3[] vertices = arrays[(int)Mesh.ArrayType.Vertex].AsVector3Array();
+                Vector2[] uvs = arrays[(int)Mesh.ArrayType.TexUV].AsVector2Array();
+                int[] bones = arrays[(int)Mesh.ArrayType.Bones].AsInt32Array();
+                float[] weights = arrays[(int)Mesh.ArrayType.Weights].AsFloat32Array();
+                int per = vertices.Length > 0 ? bones.Length / vertices.Length : 0;
+                Skin skin = mi.Skin;
+                var bone = new List<int>();
+                var local = new List<Vector3>();
+                for (int v = 0; v < vertices.Length && per > 0; v++)
+                {
+                    if (v >= uvs.Length || !atlas.IsProp(uvs[v])) continue;
+                    int best = 0;
+                    for (int k = 1; k < per; k++) if (weights[v * per + k] > weights[v * per + best]) best = k;
+                    int bind = bones[v * per + best];
+                    if ((uint)bind >= (uint)skin.GetBindCount()) continue;
+                    int b = skin.GetBindBone(bind);
+                    if (b < 0) b = Array.IndexOf(rig.Names, skin.GetBindName(bind).ToString());
+                    if (b < 0) continue;
+                    bone.Add(b);
+                    local.Add(skin.GetBindPose(bind) * vertices[v]);
+                }
+                props.Bone = bone.ToArray();
+                props.Local = local.ToArray();
+                break;
+            }
+        probe.Free();
+        PropSets[path] = props;
+        return props;
+    }
+
+    // The props' highest point (model space, scale 1) over TopBoneSamples + 1 poses of clip `anim` (the rest pose for null);
+    // NaN without props.
+    private static float PropTopOf(Rig rig, Animation? anim, Props props, string path)
+    {
+        if (props.Bone.Length == 0) return float.NaN;
+        (string, ulong) key = (path, anim?.GetInstanceId() ?? 0);
+        if (PropTops.TryGetValue(key, out float known)) return known;
+        int nb = rig.Names.Length;
+        var pos = new Vector3[nb];
+        var rot = new Quaternion[nb];
+        var scale = new Vector3[nb];
+        var global = new Transform3D[nb];
+        var done = new bool[nb];
+        float top = float.MinValue;
+        int samples = anim == null ? 0 : TopBoneSamples;
+        for (int k = 0; k <= samples; k++)
+        {
+            Pose(rig, anim, anim == null ? 0.0 : anim.Length * k / samples, pos, rot, scale, done);
+            for (int v = 0; v < props.Bone.Length; v++)
+            {
+                float y = (rig.ToModel * Global(rig, props.Bone[v], pos, rot, scale, global, done) * props.Local[v]).Y;
+                if (y > top) top = y;
+            }
+        }
+        PropTops[key] = top;
+        return top;
+    }
+
+    // Clip `anim`'s pose at `time` into pos / rot / scale (each bone's rest where the clip has no track for it), done cleared.
+    private static void Pose(Rig rig, Animation? anim, double time, Vector3[] pos, Quaternion[] rot, Vector3[] scale, bool[] done)
+    {
+        for (int b = 0; b < rig.Names.Length; b++)
+        {
+            pos[b] = rig.Rest[b].Origin;
+            rot[b] = rig.Rest[b].Basis.GetRotationQuaternion();
+            scale[b] = rig.Rest[b].Basis.Scale;
+            done[b] = false;
+        }
+        int tracks = anim?.GetTrackCount() ?? 0;
+        for (int t = 0; t < tracks; t++)
+        {
+            Animation.TrackType type = anim!.TrackGetType(t);
+            if (type is not (Animation.TrackType.Position3D or Animation.TrackType.Rotation3D or Animation.TrackType.Scale3D)) continue;
+            NodePath path = anim.TrackGetPath(t);
+            if (path.GetSubNameCount() == 0) continue;
+            int b = Array.IndexOf(rig.Names, path.GetSubName(0).ToString());
+            if (b < 0) continue;
+            switch (type)
+            {
+                case Animation.TrackType.Position3D: pos[b] = anim.PositionTrackInterpolate(t, time); break;
+                case Animation.TrackType.Rotation3D: rot[b] = anim.RotationTrackInterpolate(t, time); break;
+                default: scale[b] = anim.ScaleTrackInterpolate(t, time); break;
+            }
+        }
+    }
 
     /// <summary>
     /// Type <paramref name="type"/>'s highest bone in meters above its feet at scale 1 (the file's base figure), over every
@@ -386,7 +547,7 @@ public sealed class UnitModels
 
     // The model's first mesh with a "team" surface: its path from the root, the surface, and the texture the team shader
     // shades; and its clip map (M6-V21): per Clip, the library clip its extras name, else the state's own name.
-    private static bool FindTeam(PackedScene scene, string path, out NodePath meshPath, out int surface, out Texture2D? texture, out string[] clipMap, out Atlas? atlas)
+    private static bool FindTeam(PackedScene scene, string path, out NodePath meshPath, out int surface, out Texture2D? texture, out string[] clipMap, out Atlas? atlas, float[] oneShot)
     {
         meshPath = new NodePath();
         surface = -1;
@@ -395,6 +556,7 @@ public sealed class UnitModels
         Godot.Collections.Dictionary? extras = ReadExtras(probe);
         clipMap = ReadClipMap(extras);
         atlas = ReadAtlas(extras);
+        ReadOneShot(extras, oneShot);
         foreach (Node n in probe.FindChildren("*", "MeshInstance3D", true, false))
         {
             Mesh? mesh = ((MeshInstance3D)n).Mesh;
@@ -442,6 +604,18 @@ public sealed class UnitModels
         for (int c = 0; c < map.Length; c++)
             if (clips.TryGetValue(ClipNames[c].ToString(), out Variant v) && v.VariantType == Variant.Type.String) map[c] = v.AsString();
         return map;
+    }
+
+    // The one-shot marks in the extras (state name -> release share in (0, 1)); anything else leaves the clip looping.
+    private static void ReadOneShot(Godot.Collections.Dictionary? extras, float[] oneShot)
+    {
+        if (extras == null || !extras.TryGetValue(OneShotKey, out Variant v) || v.Obj is not Godot.Collections.Dictionary marks) return;
+        for (int c = 0; c < oneShot.Length; c++)
+            if (marks.TryGetValue(ClipNames[c].ToString(), out Variant r) && r.VariantType is Variant.Type.Float or Variant.Type.Int)
+            {
+                float share = (float)r.AsDouble();
+                if (share > 0f && share < 1f) oneShot[c] = share;
+            }
     }
 
     /// <summary>The name of the glTF extras key that holds a model's atlas layout (M6-V24, tools/art/build_unit.py).</summary>

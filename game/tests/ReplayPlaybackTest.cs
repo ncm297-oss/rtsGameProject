@@ -368,7 +368,18 @@ public partial class ReplayPlaybackTest : Node
         int issued = Issued(sel);
         if (sel.TryScreenPosition(w.Index, out Vector2 at))
         {
+            // Open ground beside the worker: M6-VH9 picks the hall at its drawn height (the Keep's model, 8.1 m), so the pixel
+            // 60 px to the right can be the hall now; take the first offset whose right click means the ground.
             Vector2 ground = at + new Vector2(60f, 0f);
+            bool open = false;
+            for (int k = 0; k < 16 && !open; k++)
+            {
+                float a = k * Mathf.Pi / 8f, d = k < 8 ? 60f : 120f;
+                Vector2 p = at + new Vector2(Mathf.Cos(a), Mathf.Sin(a)) * d;
+                if (sel.ContextTarget(p, out _, out int building) && building < 0 && sel.PickResource(p) < 0 && sel.EnemyAt(p, out _, out _) == false)
+                    (ground, open) = (p, true);
+            }
+            GD.Print($"{label}: live right click at {ground} ({(open ? "open ground" : "no open ground found near the worker")}), worker at {at}");
             Push(new InputEventMouseMotion { Position = ground, GlobalPosition = ground });
             Push(new InputEventMouseButton { ButtonIndex = MouseButton.Right, Pressed = true, Position = ground, GlobalPosition = ground, ButtonMask = MouseButtonMask.Right });
             Push(new InputEventMouseButton { ButtonIndex = MouseButton.Right, Pressed = false, Position = ground, GlobalPosition = ground });

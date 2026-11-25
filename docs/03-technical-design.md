@@ -3725,7 +3725,8 @@ file changed.
   the 3 m box, so the empty air over it up to 3 m still selects it (a 0.5 Barracks, drawn 1.5 m tall, at the default zoom:
   about 437 pixels of air), and where a unit or another building stands behind that air a click picks the short building
   instead (units pick first, so only a building behind). No shipped building is below scale 1; if one ships, `PickRay`
-  can take the drawn height.
+  can take the drawn height. **Changed by M6-VH9 (BUG-1630, BUG-1381 item 2):** the hit test now follows each type's drawn
+  height both ways (a box type's `DrawnHeight`, a model's fitted top); see "Implementation (M6-VH9)".
 - **Scale-1 buildings draw exactly as before:** `EconomyViewTest`'s six `--placeholder-art` pictures (the Malazan bases of
   seeds 1, 6 and 31, hauling, the site, cargo at 60 m), taken at 43ab896 and with this change in one tree, are
   byte-identical for three (seeds 1 and 6, hauling); the other three differ only in the HUD's frames-per-second number, a
@@ -3819,6 +3820,8 @@ docs/04 "Import process" ("Unit models, as built").
   library has no finger tracks.
 - Changed by M6-V24: a model is one surface (one atlas, the team material draws the whole figure: the team surface is
   surface 0, the only one), and the cast clip has no crowd phase.
+- Changed by M6-VH9 (BUG-1601): an attack clip the clip map marks one-shot (the Sapper's throw) has no crowd phase either:
+  it plays once per shot, its release on the shot leaving (`UnitViews.OneShotClipTime`); see "Implementation (M6-VH9)".
 
 ### Implementation (M6-VH7)
 
@@ -4153,7 +4156,8 @@ ViewApi or data file changed.
 
   The row checks at least 16 px a marker and 3 px a line at 60 m, and at most 32 px a marker, 56 px a ring and 4 px a
   line at 20 m.
-- **Overlays over the head (BUG-1441 item 2).** `UnitViews.OverlayLines` (per type, made in `Bind`): for a capsule type its
+- **Overlays over the head (BUG-1441 item 2; changed by M6-VH9: a prop over the head, the Mage's staff, lifts the line, see
+  "Implementation (M6-VH9)").** `UnitViews.OverlayLines` (per type, made in `Bind`): for a capsule type its
   capsule's top (`DrawnHeight`), exactly as before; for a model type `(TopBone + ModelHeadRoom) x scale`, where
   `UnitModels.TopBone(type)` is the highest bone of the model file's skeleton over every clip the type's players hold
   (17 poses a clip, from the clips' own tracks and the bones' rest poses, computed once per skeleton and clip per run:
@@ -4553,7 +4557,7 @@ sim, ViewApi or data file changed (docs/01 2026-11-18 (b) (e), (f)).
   remembered models drawn). New accessors: `Models`, `ModelOf`, `ShownAsModel`, `GhostModelOf`, `GhostShownAsModel`,
   `BarY`; every old one keeps its meaning (`BoxOf` is still the box, hidden under a model).
 - **Not changed:** the hit test keeps the 3 m box (a click on the footprint selects the building; a click on a Keep tower
-  above 3 m selects what is behind, as for any building taller than 3 m since M7-V4), the placement ghost (the box), the
+  above 3 m selects what is behind, as for any building taller than 3 m since M7-V4; **fixed by M6-VH9**, BUG-1630), the placement ghost (the box), the
   outline and rings (the footprint), the minimap, every other type and the data `scale` (no model is drawn by it yet; see the
   questions).
 - **Existing scenes:** the scenes that pin a finished Keep's or Barracks' box (its `BoxMesh`, its material, its visibility
@@ -4612,7 +4616,7 @@ sim, ViewApi or data file changed (docs/01 2026-11-18 (b) (e), (f)).
      constant if play shows figures lost behind keeps.
   4. **The hit test keeps the 3 m box**, so a click on a Keep tower above 3 m does not select the Keep (M7-V4's rule).
      Recommendation: a later task gives `BuildingPicker.PickRay` each type's drawn height (a `ViewApi` change, out of this
-     task's scope), once more buildings are models.
+     task's scope), once more buildings are models. (Done in M6-VH9.)
   5. **The data `scale` on a model** (the Teblor buildings' 1.25): not applied yet (no Teblor building has a model).
      Recommendation: apply it as the boxes do since M7-V4, to the height only (the fit's scale times `scale` on the vertical
      axis), so a Teblor model stays inside its footprint and stands 25 % taller; the alternative (uniform, then refit to the
@@ -4623,6 +4627,163 @@ sim, ViewApi or data file changed (docs/01 2026-11-18 (b) (e), (f)).
   7. **A site is today's mauve box**, rising, until the frame it finishes, then the model appears whole. The pack has no
      construction stage that fits (its Levels are upgrades). Recommendation: accept for this slice (docs/01 2026-11-18 (b)
      (f)); a scaffold or a model rising through the ground is a later look task.
+
+### Implementation (M6-VH9)
+
+The view's debt after the art slices: a click on what the player sees selects it (BUG-1630, BUG-1381 item 2), the new
+figures read in every player colour and the Mage's staff head clears its bar (BUG-1600), the Sapper throws once per shot
+(BUG-1601), the Keep's bar stays on screen at the closest zoom (BUG-1631), two test gaps (BUG-1632), the docs half of
+BUG-1602, and the three load-flaky timing rows. One read-only `ViewApi` change (`BuildingPicker`); no sim, data or faction
+file changed.
+
+- **Picking by drawn height (BUG-1630).** `BuildingPicker.PickRay` and `PickGhostRay` gain overloads taking two per-type
+  spans: `finishedTops` (the height a finished building of the type is drawn to) and `siteHeights` (the height its site's
+  box rises to); a live site is `siteHeights[type] x max(siteMinShare, progress)` (its rising box only, never the model's
+  top), a remembered site `siteHeights[type] x siteShare` (its foundation), a live or remembered finished building
+  `finishedTops[type]`. A type past a span's end is not picked (no out-of-range read). The old single-height overloads keep
+  their meaning (a private core takes either). Still allocation-free, still read-only (`ViewApiSource_HasNoSimMutatorsOrTickCalls`
+  green). The view's spans are `BuildingViews.PickTops` (a model type's `BuildingModels.Top`, the Keep 8.09 m and the
+  Barracks 3.49 m; every other type its `DrawnHeight`, `BoxHeight x scale`, so a Teblor building at 1.25 is picked to 3.75 m
+  and one below scale 1 no longer in the air over it, BUG-1381 item 2) and `BuildingViews.SiteHeights` (`DrawnHeight`), made
+  in `Bind`. `SelectionController` passes them in every pick (the click, the enemy pick, the right-click target, the
+  resource pick's occlusion, the ghost pick) through its new `Buildings` property, set by `Match`; without building views it
+  uses each type's `DrawnHeight`.
+- **A unit hidden behind a building is not what a click there selects.** A left click picks own units first, in screen
+  space (`ScreenPicker`, M3), so a Laborer standing behind the Keep's tower, hidden by it, was selected through the tower
+  (QA's row). New `SelectionController.HiddenByBuilding(slot, screen)`: the unit the screen pick chose is dropped when a
+  drawn building's pick box is entered on the camera ray before the unit's body (its centre's distance less its radius)
+  **and**, for a model, the ray meets the model's triangles before it (`BuildingViews.ModelRayDistance`, through
+  `BuildingModels.RayDistance` over the fitted faces, made once per type: the Barracks' box is wider than its model, so the
+  box alone would hide units the player sees beside it), **and** the same holds on the ray to the unit's top (its
+  `DrawnHeight` over its ground): a unit whose head shows over a low building (a worker at the far side of its site, the
+  `M3PlayableTest` builder) is still the unit, since the screen pick's disc (the radius round the body centre) does not
+  reach the head the player would click. The click then means what is in front (the building). A unit in front of a
+  building is still the unit (P1 rows: the Keep and the Armory's box, at zoom 20, 40 and 60; P1b: a Laborer behind the
+  Armory with its head over it). Box select is unchanged.
+- **Measured (criterion 3), the pick box against the model:** of the sampled pixels (every 6th) whose ray enters a model
+  type's pick box but meets none of its triangles, the share that selects it: Barracks 100 % / 99.6 % / 98.2 % (1,313 /
+  285 / 109 pixels) at zoom 20 / 40 / 60, Keep 99.9 % / 100 % / 100 % (3,617 / 632 / 256). That is the air beside the
+  Barracks' narrower model (3.9 m on 6 m) and round the Keep's towers; at most 3 such pixels a zoom don't select it (not
+  traced). Recommendation (question 1 below): accept; a per-type hit shape is the tighter fix.
+- **The bar's ceiling (BUG-1631).** `BuildingViews.Camera` (set by `Match`): when the zoom or the field of view changes,
+  every placed bar is put under `BarCeiling(zoom, fov, groundY)`, the highest bar over its ground that a building at the
+  camera's focus shows under the screen's top edge (the top edge's ray, `pitch - fov / 2` under the horizon, passes over
+  the focus at `zoom - zoom / tan(pitch) x tan(pitch - fov / 2)`; less the ground's height, since the camera's height is
+  the zoom above 0, and less `BarTopMargin` 0.6 m). Only a bar that wants to be higher moves: at zoom 20 over 4 m ground
+  the Keep's bar goes from 8.69 m to 7.31 m (screen y 28-45 of 900, was -51); at 40 and 60, and the Barracks' at every
+  zoom, nothing changes (row K). `BarY` is the drawn height, `BarWanted` the look's. A zoom change rewrites each shown bar
+  once (no allocation); a steady frame writes nothing.
+- **The figures in the setup's colours (BUG-1600 items 1, 2).** Manifest only: the Priest's outfit tint and robe a
+  weathered sand `#a39577` (were bleached `#e2d9c2` at brightness 1.4 and `#d9d0bc`), its veil maroon `#5e1a20` (was
+  `#8e1f24`); the Zealot's outfit tint rust `#6e3a26` (was crimson `#8a2a26`), its head-wrap maroon `#5a1c1e` (was
+  `#7e1d1d`). Rule and the full table in docs/04 "Re-tint in the setup's colours (M6-VH9)". Row (C) of
+  `ViewHardenVh9Test` reads the manifest and `ui.json` (no colour literal in C#) and checks the Priest's non-team colours at
+  least 60 from Bone (nearest now 104) and the Priest's and Zealot's at least 60 from Crimson (nearest 78). Item 4 (the
+  Mage and the Heavy Infantry alike in grey) is measured, not changed (question 3 below).
+- **The bar over the Mage's staff head (BUG-1600 item 3).** `UnitModels` also samples each model's **props** (the
+  vertices reading the atlas's props tile, skinned to their bone through the skin's bind pose) over the same 17 poses of
+  each clip as `TopBone`: `PropTop(type)` and `PropTop(type, clip)`. `UnitViews.PlayedPropTop` takes the highest over the
+  clips the type's data has it play (idle, walk, attack; the cast clip when one of its abilities has a cast longer than a
+  tick; a worker's gathering and building clips), so a soldier's weapon swung overhead in `gather_wood`, a clip it never
+  plays, doesn't count. The line is `max(TopBone + ModelHeadRoom, PlayedPropTop + PropHeadRoom) x scale`
+  (`UnitViews.OverlayLineOf`, `PropHeadRoom` 0.10 m: a prop's top is its own surface, while the bones' 0.18 m covers the
+  head mesh over the head bone, so a helmet, a wrap or a blade at head height leaves its type's line alone).
+
+  | Type | Line before (m) | After (m) | Props' top in its clips (m) |
+  | --- | --- | --- | --- |
+  | Malazan Cadre Mage | 1.961 | **2.309** | 2.209 (the staff head) |
+  | Whirlwind Desert Archer | 1.961 | **2.011** | 1.911 (the bow's tip in its shot) |
+  | Teblor Breaker | 2.941 | **3.264** | 3.114 (the maul) |
+  | Teblor Javelin Thrower | 2.941 | **3.528** | 3.378 (the javelin) |
+  | Teblor Shaman | 2.941 | **3.434** | 3.284 (the staff) |
+  | Teblor Warrior | 2.941 | **3.482** | 3.332 (the greatsword) |
+  | Laborer, Crossbowman, Heavy Infantry, Sapper, Camp Follower, Priest, Raider, Zealot, Teblor Gatherer | 1.961 (2.941) | unchanged | under the line, or none |
+
+  A hurt Mage at the default zoom and at 20 m: the staff head's top 2.165 m over the ground in the pose drawn, the line
+  2.309 m, the bar's lower edge 2.579 m, 12 px (40 m) and 28 px (20 m) above the staff head on screen (row B).
+  `OverlayLineTest` (1) measures the props' top on a real player and skeleton over the same clips (equal within 2 cm) and
+  keeps its 0.3 m margin over the higher of bones and props.
+- **The Sapper throws once per shot (BUG-1601).** The asset manifest's `oneShot` (docs/04 "One-shot clips") rides in the
+  Sapper's file as extras; `UnitModels.OneShotRelease(type, clip)` reads it (0: the clip loops as before). `PlayClip`
+  starts a marked clip at its first frame, and from then on `Sync` puts it at `UnitViews.OneShotClipTime` and
+  `AdvanceAnimations` seeks it there (the cast clip's path since M6-V24). The time comes from the unit store, read as the
+  view always has: mid-windup the shot leaves in `WindupTicks - alpha` ticks; between shots the next swing starts when the
+  cooldown runs out and then winds up (`CooldownTicks + windup - alpha`, a cooldown of 0 waiting one tick); the clip stands
+  at `release x length - time to the shot`, holding its first frame (the ready pose) until then, and after the shot plays
+  on from the release to its end (the time since the shot from the data cooldown, so a Frenzied cooldown shortens the
+  follow-through a little; no Sapper has Frenzy). No sim read was missing, so no request to the sim track. Row S: 5 shots,
+  5 throws, each shot first existing at the release (offset 0.00 of the clip, tolerance 0.15); the clip map's 0.28 equals
+  the throwing hand's fastest frame on the skeleton. Melee clips, the Crossbowman's and the casters' are unmarked and
+  unchanged (`ModelViewTest`, `QaM6V25Test`, `CastClipTest`, `FootModelTest` green).
+- **Test gaps (BUG-1632).** `BuildingModelTest`'s allocation row runs while the remembered models are drawn ("20 syncs with
+  2 models and 2 remembered models drawn: 0 bytes"), and checks at least one is; the sites picture waits up to 400 ticks for
+  each site (the Laborer walks to the 8 x 8 Keep's edge first; 40 were too few) and fails a site that never comes.
+- **The timing rows measure the best of several runs.** `DebugOverlayTest` (overlay layers at 2,000 units while panning,
+  1 ms), `QaM25Test` (the overlay at each map corner, 1 ms) and `MinimapTest` (the refresh at 2,000 units, 0.5 ms) each
+  split their frames into ten runs (12, 12 and 5 frames) and check the **best run's average** against the same budget; the
+  whole average and the worst frame are printed as before. What each guards now: the code's own cost per frame. Another
+  process on the machine stretches some runs but not all ten, while a slower overlay or refresh slows every run, so a real
+  regression still fails and a busy machine no longer does. No limit was raised. Passed in a scene run beside a full
+  `dotnet test` of the sim suite.
+- **Tests.** New `game/tests/ViewHardenVh9Test` (headless, in the loop): (P1) an own Laborer standing between the camera
+  and a model (the Keep) or a box (the Armory) is selected by a click on it at zoom 20, 40 and 60; (P2) the Teblor
+  Longhouse (scale 1.25, a box) is picked between the old 3 m box's top and its drawn 3.75 m, and not 0.3 m over it;
+  (P3) the measured shares above; (K) the bar rows; (B) the overlay table and the hurt Mage; (S) the Sapper; (C) the colour
+  table and checks. Windowed with `-- --shots <dir>` it saves `m6vh9-priest-zealot-colours-1-4-{40,20}m.png` and
+  `-5-8-{40,20}m.png` (the Priest in the eight setup colours, four a match, the most a match seats; the Zealot in Crimson,
+  Cobalt and Jade), `m6vh9-hurt-mage-40m.png` / `-20m.png`,
+  `m6vh9-keep-centred-20m.png` and `m6vh9-sapper-throw-20m.png`. xUnit (`BuildingPickerTests`): a model type picked up to
+  its fitted top and no higher, and a 1.5 m type not in the air over it; a scaled box type at its drawn height; a site at
+  its rising box, not the model's top; remembered buildings at their top and remembered sites as foundations; 0 bytes for
+  the new overloads. `QaM6V26Test`'s `KNOWN BUG-1630` / `BUG-1631` rows are plain checks (100 % of the sampled model pixels
+  at zoom 20 / 40 / 60 for both types; the click on the tower with a Laborer hidden behind selects the Keep; the Keep's bar
+  on screen at zoom 20). Older scenes that pinned the 3 m hit box or the bar over the drawn top, changed with the rule:
+  `BuildingScaleViewTest` (a click on the 2.0 Barracks above 3 m now selects it), `QaM7V4Test` (the forged 3.0 Keep's bar
+  at zoom 20 is checked on screen when the ceiling lowers it, over the drawn top otherwise: BUG-1381 item 1 is the same
+  fix), `QaV3Test` (its terrain-occlusion sweep measures the hall's box at its drawn top), `ReplayPlaybackTest` (the live
+  right click picks a pixel that is open ground: 60 px beside the worker can now be the hall's 8.1 m pick box).
+- **Cost** (rules 42 / 61; 2026-11-24 18:20-18:23, 1600 x 900, `ModelShots --bench 30 --vsync off`, all five runs back to
+  back in one window after 30 s idle, the last thing run and none of the developer's own processes running; one of the other
+  tracks' `testhost`s ran throughout and could not be stopped, and the 400-capsule figure, 1.73 ms against M6-V26's 0.86,
+  says this window was about twice as busy as that one). The building row as M6-V26's (60 models packed round the crowds,
+  zoom 60).
+
+  | Run | Average | While 90 %+ alive | Worst 1 % (90 %+ alive) | Draw calls | M6-V26 (90 %+ alive) |
+  | --- | --- | --- | --- | --- | --- |
+  | 400 figures + 60 building models (60 m) | 9.97 ms | **10.33 ms** (at most 16.7) | 17.43 ms | 800 | 7.00 ms, 801 calls |
+  | 400 figures, fifteen types (40 m) | 9.48 ms | 10.11 ms | 17.59 ms | 966 | 7.02 ms, 959 calls |
+  | 400 capsules | 1.51 ms | 1.73 ms | 7.30 ms | 171 | 0.86 ms, 171 calls |
+  | 1,000 figures, fifteen types | 31.39 ms | 32.78 ms | 47.72 ms | 2,588 | 17.57 ms, 2,602 calls |
+  | 1,000 capsules | 3.29 ms | 3.40 ms | 12.32 ms | 243 | 1.51 ms, 243 calls |
+
+  Every row is slower by less than the window's own factor (capsules x2.0 at 400 and x2.3 at 1,000; figures x1.5 and
+  x1.9), and the draw calls are the same within the crowd's spread, as they should be: nothing here draws anything more.
+  The per-frame additions are the one-shot clip's time for each attacking Sapper (a few reads and sums, and the seek the
+  cast clip already does), the bar ceiling's check (a compare a frame; a rewrite only when the zoom changes) and nothing per unit; picking
+  runs per click. The 400 + 60 row is under the 16.7 ms gate; a quiet window would give the comparable figure.
+- **Questions for the Producer (rule 67), each with a recommendation:**
+  1. **The pick box is the footprint at the drawn top**, so the air beside a narrower model (the Barracks) or round the
+     Keep's towers selects the building (P3: nearly every such pixel). It is what a box type always did. Recommendation:
+     accept; a per-type hit shape (the model's triangles, already used for occlusion) when a model's air causes a misclick.
+  2. **The bar's ceiling lowers the Keep's bar into its towers at the closest zoom** (7.31 m against the towers' 8.09 m:
+     drawn over the tower tops, `m6vh9-keep-centred-20m.png`). Recommendation: accept; the alternative is a height cap on
+     the fit (the Keep shorter at every zoom).
+  3. **The Mage and the Heavy Infantry in grey (BUG-1600 item 4, measured).** The two big dark squares at 40 m are the
+     Mage's robe (its own colour, `#4e2a26`) and the Heavy Infantry's shield (the team colour at the team shade, so about the
+     player colour). Their grey (Rec. 601 luma of the colours, 0-255, unlit): robe 52; shield Iron 78, Ochre 145, Crimson 83,
+     Cobalt 64, Jade 120, Violet 87, Rose 119, Bone 211, so the robe is 12 (Cobalt), 26 (Iron), 31 (Crimson) and 35
+     (Violet) darker than the shield and 67-159 against the light colours (QA's lit picture: 67 / 83 Crimson, 54 / 79
+     Cobalt, 58 / 150 Jade, 66 / 213 Bone, the same order). With a dark player colour the two read apart in grey by shape
+     only: the Mage's staff over its head and the Heavy Infantry's helmet and wider shield. Nothing changed for it here.
+     Recommendation: leave to the owner's packs (a lighter robe would leave the oxblood palette); if the owner wants it
+     sooner, the Mage's robe a step darker (toward `#3a1f1c`) widens the Cobalt gap to about 20 without a new colour.
+  4. **The Priest's robe is no longer white** (a sand robe), so the faction page's "sun-bleached white" is now the
+     Camp Follower's and the Desert Archer's colour, both 13-14 from Bone. Recommendation: owner's taste; the table in docs/04
+     lists every pair under 60.
+  5. **A unit wholly hidden behind a model can't be clicked**, only box-selected, grouped or picked from its portrait (the
+     seed-6 builder of `M3PlayableTest` stands behind the Keep at one step; the scene now selects it as a player would reach
+     it and says so). That is the rule the brief asked for ("a click on what the player sees selects it"). Recommendation:
+     accept; a see-through silhouette for units behind buildings is the usual RTS answer, a later look task.
 
 ## Vision, detection, fog
 
@@ -7501,7 +7662,9 @@ game/tests/ShellTest.tscn      the headless flow test
   tall (the old overload, full height for every ghost, is kept for its callers), and `SelectionController` passes
   `BoxHeight` and `SiteMinHeight`, so a remembered site is picked on a 0.45 m box whatever its type's scale. That matches
   the drawing at scale 1 only (a 3.0 type's foundation is drawn 1.35 m tall, the Teblor's 1.25 0.56 m); like the live hit
-  test (see "Implementation (M7-V4)"), picking stays on the 3 m box by the Producer's M7-V4 decision. Tests: xUnit
+  test (see "Implementation (M7-V4)"), picking stays on the 3 m box by the Producer's M7-V4 decision (**changed by
+  M6-VH9:** a remembered site is picked as its foundation of the type's drawn height, a remembered finished building at its
+  drawn top, a model's included; see "Implementation (M6-VH9)"). Tests: xUnit
   `FogViewTests.GhostPick_ARememberedSite_IsPickedAsAFoundation` (a ray 1 m up meets the remembered box, misses it once the
   entry is a site, still meets the foundation 0.2 m up; the old overload unchanged); headless `FogViewTest` adds, per seed,
   that the House seen as a site is drawn as a foundation (flag, material, scale, base on the ground) and the finished

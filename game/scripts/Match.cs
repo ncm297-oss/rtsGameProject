@@ -226,6 +226,7 @@ public partial class Match : Node3D
         buildings.Bind(data, sim.World.Buildings.Capacity, playerRgb);
         buildings.Runner = _runner;
         buildings.Fog = fog;
+        buildings.Camera = camera; // M6-VH9 (BUG-1631): a tall building's bar stays on screen at the closest zoom
         var combat = GetNode<CombatViews>("World3D/CombatViews");
         combat.Fog = fog;
         combat.MaxHp = units.MaxHp; // one max-hp fill a frame for the bars and the hit flash (BUG-0490)
@@ -244,6 +245,7 @@ public partial class Match : Node3D
         selection.Init(_runner, camera, GetNode<SelectionRings>("World3D/SelectionRings"), GetNode<Sfx>("Sfx"));
         selection.Outline = GetNode<BuildingOutline>("World3D/BuildingOutline");
         selection.Fog = fog;
+        selection.Buildings = buildings; // M6-VH9 (BUG-1630): clicks follow each building's drawn height
         GetNode<RallyMarker>("World3D/RallyMarker").Init(_runner, selection);
         var targetRing = GetNode<TargetRing>("World3D/TargetRing");
         targetRing.Init(_runner);

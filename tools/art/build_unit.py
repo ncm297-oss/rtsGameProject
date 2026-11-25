@@ -539,6 +539,15 @@ def build_model(manifest, model, src_root, repo, work):
     arm["clips"] = {k: model["clips"][k] for k in sorted(model["clips"])}
     # M6-V24: the atlas layout beside it (the team shader keeps each sample inside its tile; tests find the props' faces).
     arm["atlas"] = layout
+    # M6-VH9 (BUG-1601): the clip map's one-shot marks (state -> the clip's release as a share of its length), only when the
+    # model has any, so every other model's file stays byte-identical.
+    if model.get("oneShot"):
+        for state, release in model["oneShot"].items():
+            if state not in model["clips"]:
+                fail(f"{model['id']}: oneShot {state} is not in its clip map")
+            if not (0.0 < float(release) < 1.0):
+                fail(f"{model['id']}: oneShot {state} release {release}, want a share of the clip in (0, 1)")
+        arm["oneShot"] = {k: float(model["oneShot"][k]) for k in sorted(model["oneShot"])}
 
     tris = triangles(body)
     zs = [v.co.z for v in body.data.vertices]

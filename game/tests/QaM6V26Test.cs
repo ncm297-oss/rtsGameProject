@@ -28,8 +28,8 @@ namespace Rts.Game.Tests;
 /// hidden, bar over the box); the reverse draws the model (box hidden, bar over the model).</item>
 /// <item>A site of each model type razed while a site: its box until then, nothing after, no model.</item>
 /// <item>Zero allocation with remembered models drawn (the developer's row ran with none drawn).</item>
-/// <item>The bar on screen at the closest (BUG-1631) and farthest zoom, the camera focused on the building.</item>
-/// <item>Picking (BUG-1630): a click on any pixel the fitted model covers, at the closest, default and farthest zoom, selects
+/// <item>The bar on screen at the closest (BUG-1631, fixed in M6-VH9) and farthest zoom, the camera focused on the building.</item>
+/// <item>Picking (BUG-1630, fixed in M6-VH9): a click on any pixel the fitted model covers, at the closest, default and farthest zoom, selects
 /// the building; an own unit standing behind the Keep, hidden by it on screen, is not what a click there selects.</item>
 /// </list>
 /// Windowed with <c>-- --shots &lt;dir&gt;</c> it also saves both types in Bone, Crimson, Iron and Jade at the default zoom,
@@ -304,9 +304,9 @@ public partial class QaM6V26Test : Node
                 GD.Print($"  bar {W.Data.Buildings[type].Key} at zoom {zoom}: {left} - {right} on a {screen.Size} screen");
                 bool on = screen.HasPoint(left) && screen.HasPoint(right);
                 string msg = $"{W.Data.Buildings[type].Key}: bar {(on ? "on" : "off")} screen at zoom {zoom}, focus on its centre ({left} - {right})";
-                // BUG-1631: a model taller than the box it replaces (the 8.1 m Keep) has its bar over the top edge at the closest zoom.
-                if (zoom == CameraLimits.MinZoom && _views.Models!.Top(type) > BuildingViews.DrawnHeight(W.Data.Buildings[type])) Known(on, "BUG-1631", msg);
-                else Check(on, msg);
+                // BUG-1631 (fixed in M6-VH9): the 8.1 m Keep's bar was over the top edge at the closest zoom; the bar now stays under
+                // the camera's ceiling.
+                Check(on, msg);
             }
         }
         _camera.SetZoom(CameraLimits.DefaultZoom);
@@ -335,9 +335,8 @@ public partial class QaM6V26Test : Node
                 string msg = $"{def.Key} at zoom {zoom}: {picked} of {hits} sampled model pixels select it ({100f * picked / Math.Max(1, hits):0.#}%)";
                 GD.Print($"  pick {msg}");
                 Check(hits > 0, $"{def.Key} at zoom {zoom}: no model pixel sampled");
-                // BUG-1630: picking still uses the box's height, so only a model taller than it (the Keep) misses.
-                if (_views.Models!.Top(type) > BuildingViews.DrawnHeight(def)) Known(picked == hits, "BUG-1630", msg);
-                else Check(picked == hits, msg);
+                // BUG-1630 (fixed in M6-VH9): picking used the 3 m box, so the Keep's towers above it missed; it now uses the model's top.
+                Check(picked == hits, msg);
             }
         }
 
@@ -377,7 +376,7 @@ public partial class QaM6V26Test : Node
                       + (unitPicked ? "the hidden Laborer" : _sel.SelectedBuilding == ks ? "the Keep" : $"building {_sel.SelectedBuilding}, {_sel.Selection.Count} units");
         GD.Print($"  hidden unit: {what}");
         Check(hidden, "hidden unit: the Laborer behind the Keep is not hidden by its model on screen (the row's setup)");
-        if (hidden) Known(!unitPicked && _sel.SelectedBuilding == ks, "BUG-1630", what);
+        if (hidden) Check(!unitPicked && _sel.SelectedBuilding == ks, $"BUG-1630: {what}");
         _sel.ClearBuilding();
         _sel.Selection.Clear();
     }

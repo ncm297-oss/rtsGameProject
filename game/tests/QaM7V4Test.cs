@@ -28,9 +28,10 @@ namespace Rts.Game.Tests;
 /// its remembered foundation is 15 % of 9 m, on the ground.</item>
 /// <item>The placement ghost over blocked ground: red, its reason label over the drawn top of a 3.0 Keep, then lowered when
 /// <c>Begin</c> switches to a 0.5 type.</item>
-/// <item>A damaged 3.0 Keep's bar at the nearest and farthest zoom: on screen and above the drawn top on screen.</item>
+/// <item>A damaged 3.0 Keep's bar at the nearest and farthest zoom: on screen and above the drawn top on screen (M6-VH9: where
+/// the drawn top is over the screen's top edge, the bar is kept on screen under the camera's ceiling instead).</item>
 /// <item>A 3.0 Keep behind a 0.5 Barracks: what a click on each visible pixel of the tall box selects (reported; the hit test
-/// keeps the 3 m box by the Producer's decision).</item>
+/// kept the 3 m box by the Producer's decision until M6-VH9, which picks at the drawn height).</item>
 /// <item>No allocation over 20 syncs with the limit types, sites and ghosts shown.</item>
 /// </list>
 /// Headless: prints "QA M7-V4 TEST PASS" or FAIL lines. Windowed with <c>-- --shots &lt;dir&gt; --placeholder-art</c> it saves pictures.
@@ -451,7 +452,11 @@ public partial class QaM7V4Test : Node
             Check(teblorBar.Y >= 0 && teblorBar.Y <= view.Y, $"bars @{zoom}: a 1.25 building's bar off screen at {teblorBar}");
             bool on = !behind && barScreen.X >= 0 && barScreen.Y >= 0 && barScreen.X <= view.X && barScreen.Y <= view.Y;
             if (!on) GD.Print($"    note: bars @{zoom}: the 3.0 keep's bar is off screen at {barScreen} with the keep centred (BUG-1381)");
-            Check(barScreen.Y < topScreen.Y, $"bars @{zoom}: bar at screen y {barScreen.Y} not over the drawn top {topScreen.Y}");
+            // M6-VH9 (BUG-1631, BUG-1381 item 1): where the drawn top is over the screen's top edge the bar is kept under the
+            // camera's ceiling, on screen (over the building, not over its top); elsewhere it is over the drawn top as before.
+            if (_views.BarY(keep) < _views.BarWanted(keep) - 1e-4f)
+                Check(on, $"bars @{zoom}: the bar lowered under the ceiling to {_views.BarY(keep):0.##} m is still off screen at {barScreen}");
+            else Check(barScreen.Y < topScreen.Y, $"bars @{zoom}: bar at screen y {barScreen.Y} not over the drawn top {topScreen.Y}");
             if (_shots != null && DisplayServer.GetName() != "headless") await Shot($"qa-keep3-bar-zoom{zoom:0}");
         }
         _camera.SetZoom(CameraLimits.DefaultZoom);
