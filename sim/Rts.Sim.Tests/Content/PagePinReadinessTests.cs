@@ -128,6 +128,10 @@ public class PagePinReadinessTests
             UnreadPassiveProblems(page, lines, notes, problems);
         }
 
+        // D35 (M8-3): the units.json rows a page carries in "Schema gaps" (shadow.md's G2 / G3) against its own unit notes,
+        // both ways for a page written ahead of its data, so the roster lands as the notes the pins compare say.
+        problems.AddRange(HitBonusPagePin.RowProblems(page, lines, ahead: !ContentFactions.Keys.Contains(faction)));
+
         // AbilityContentTests: the shared header (columns by name).
         int abilities = Section("## Abilities", "AbilityContentTests");
         if (abilities >= 0)

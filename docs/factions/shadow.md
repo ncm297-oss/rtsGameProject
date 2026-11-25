@@ -66,15 +66,19 @@ the Shadow are drawn at the template's size). The Hound of Shadow needs Age II (
 
 - **Edur Warrior:** ×1.5 vs Mounted (docs/02's Line rule). Slightly lighter and faster than template line infantry.
 - **Shadow Archer:** Passive **Shadowed**: becomes Stealthed after 3 s without moving or attacking, anywhere (not just
-  forests). The first shot from stealth deals +50% damage. The stand-still stealth has its field since M8-2
-  (`units.json` `stillStealth`, Schema gaps G1); neither is in the data yet (the Archer's row lands with the roster; G2).
+  forests). The first shot from stealth deals +50% damage, from either stealth (forest or stand-still): the bonus is
+  decided when the arrow lands, not when it is loosed, and a shot that misses does not use it up ("Decisions (D-R38)").
+  The stand-still stealth has its field since M8-2 (`units.json` `stillStealth`, Schema gaps G1) and the first shot since
+  M8-3 (`attack.fromStealthBonus`, G2); neither is in the data yet (the Archer's row lands with the roster).
 - **Aptorian Stalker:** ×1.5 vs Light. A demon scout with long sight (20 m). Raids and spots.
 - **K'risnan Sorcerer:** splash 1.5 m, detector 10 m. Signature ability **Shadow-step**; gains **Summon Wraiths** with
   Wraith-binding (below).
 - **Edur Ram:** attacks buildings only (`attack.targets` `buildings`). Shares the Battering Ram's base model, dressed in
   blackwood and dark sailcloth (saves art time).
-- **Hound of Shadow (unique, Age II):** Passive **Pack Hunter**: +10% damage for each other Hound within 8 m (max +30%).
-  **At most 7 Hounds alive** at once, as in the legend. Neither is in the data yet (Schema gaps G3, G4).
+- **Hound of Shadow (unique, Age II):** Passive **Pack Hunter**: +10% damage for each other Hound of Shadow within 8 m
+  (max +30%): its owner's own Hounds only, at most three counted. **At most 7 Hounds alive** at once, as in the legend.
+  The pack bonus has its field since M8-3 (`passives` `nearbyOwn`, Schema gaps G3), the cap has none (G4); neither is in
+  the data yet.
 
 ### Summoned unit
 
@@ -341,7 +345,7 @@ bonus** is extra gather rate (docs/02: Hard's 40%); **expands after** is the ear
 ## Schema gaps (D-R38)
 
 What each mechanic on this page needs from the loader on `main` (2026-11-14; G1 re-read 2026-11-18 by D34: built by
-M8-2). Every mechanic of the faction bonus, the unit notes, the summoned unit, the abilities, the techs and the AI
+M8-2; G2 and G3 re-read 2026-11-24 by D35: built by M8-3). Every mechanic of the faction bonus, the unit notes, the summoned unit, the abilities, the techs and the AI
 sketch is listed once: either the field that holds it today,
 or a gap row below with the field the data track would want (a proposal; the sim track names the real one).
 
@@ -355,8 +359,8 @@ or a gap row below with the field the data track would want (a proposal; the sim
 | Attacks buildings only (Edur Ram) | Unit notes | `attack.targets` `buildings` (M4-2a) |
 | Hound needs Age II, trained at the Shadow Kennels | Units | `requires` `["age_ii"]`, `trainedAt` `shadow_kennels` |
 | Stand-still stealth anywhere (Shadow Archer) | Unit notes | `units.json` `stillStealth` `{ status, delay }` (M8-2; gap G1, built) |
-| First shot from stealth +50% (Shadow Archer) | Unit notes | gap G2 |
-| Pack Hunter: +10% per other Hound within 8 m, max +30% | Unit notes | gap G3 |
+| First shot from stealth +50% (Shadow Archer) | Unit notes | `units.json` `attack.fromStealthBonus` (M8-3; gap G2, built) |
+| Pack Hunter: +10% per other Hound within 8 m, max +30% | Unit notes | `units.json` `passives` `{ trigger: nearbyOwn, units, radius, damageBonus, maxStacks }` (M8-3; gap G3, built) |
 | At most 7 Hounds alive | Unit notes | gap G4 |
 | Shadow-step: group teleport, siege excepted, formation kept, snap to free cells | Abilities | gap G5 (`teleport` is planned, refused) |
 | Summon Wraiths: 3 units beside the caster for 20 s, 1.0 s cast, 50 s cooldown | Abilities | `kind` `summon`, effect `spawn` `{ unit, count, lifetime }` (M4-4b-3b) |
@@ -372,8 +376,8 @@ or a gap row below with the field the data track would want (a proposal; the sim
 | Gap | Mechanic | Why no field holds it | Field wanted (proposal) |
 | --- | --- | --- | --- |
 | G1 | Shadow Archer: Stealthed after 3 s without moving or attacking, anywhere | **Built (M8-2, 2026-11-17):** the field is on `main` (docs/03 "Implementation (M8-2)"), on test data only; no shipped unit carries it. Before M8-2, `forestStealth` was faction-wide and needed a tree, and no unit field gave a stealth | `units.json` `stillStealth { "status": "stealthed", "delay": 3 }` (docs/03 "For the data track (M8-2)"): held while the unit has not moved, attacked or cast, or lost hp for `delay`; the Archer's row carries it when the roster lands |
-| G2 | Shadow Archer: the first shot from stealth deals +50% | No attack field reads the attacker's stealth; `damageBonus` is a status's (frenzied kind) | `units.json` `attack.fromStealthBonus` 0.5: a hit whose attack was started while the attacker was Stealthed deals ×1.5 |
-| G3 | Pack Hunter: +10% damage per other Hound within 8 m, max +30% | Passive triggers are `whenBelowHp`, `onDeath`, `onHit`; nothing counts nearby friends | a passive `{ "trigger": "nearbyAllies", "units": ["shadow_hound"], "radius": 8, "damageBonus": 0.1, "maxStacks": 3 }`, the count taken when the attack lands |
+| G2 | Shadow Archer: the first shot from stealth deals +50% | **Built (M8-3, 2026-11-20):** the field is on `main` (docs/03 "Implementation (M8-3)"), on test data only; no shipped unit carries it. Before M8-3 no attack field read the attacker's stealth (`damageBonus` was a status's, frenzied kind) | `units.json` `shadow_archer` `"attack": { "fromStealthBonus": 0.5 }`, beside its other attack fields (docs/03 "For the data track (M8-3)"): a hit whose attacker is Stealthed, and not Revealed, when its damage is worked out (an arrow when it lands) deals ×1.5, from any stealth; the Archer's row carries it when the roster lands |
+| G3 | Pack Hunter: +10% damage per other Hound within 8 m, max +30% | **Built (M8-3, 2026-11-20):** the trigger is on `main` (docs/03 "Implementation (M8-3)"), on test data only; no shipped unit carries it. Before M8-3 the passive triggers were `whenBelowHp`, `onDeath`, `onHit`, and nothing counted nearby friends | `units.json` `shadow_hound` `"passives": [{ "trigger": "nearbyOwn", "units": ["shadow_hound"], "radius": 8, "damageBonus": 0.1, "maxStacks": 3 }]` (docs/03 "For the data track (M8-3)"; the page proposed `nearbyAllies`): the owner's other live Hounds whose centre is within 8 m, counted when the hit's damage is worked out, at most 3; the Hound's row carries it when the roster lands |
 | G4 | At most 7 Hounds alive at once | No per-type cap; only the population cap limits training | `units.json` `maxAlive` 7: live units plus queue items count, a train command at the cap is refused (and the AI skips the unit while at it) |
 | G5 | Shadow-step: the caster and own non-siege units within 4 m move to the point, keeping their formation; blocked cells snap to the nearest free one | `teleport` is in `PlannedAbilityEffectKindIds`: refused "not supported yet" | effect `{ "kind": "teleport", "exceptSlots": ["siege"] }` on a `targetGround` ability, its `radius` the gather radius, `affects` `own_units`; formation kept and the snap as the rule, not fields |
 | G6 | The Wraith as a unit type with no slot, no producer, no cost or train time | `units.json` takes one unit per template slot (`CheckSlots`) and requires `trainedAt`, `cost`, `pop`, `trainTime`; docs/03's M4-4b-3b example names `shadow_wraith` as "an ordinary units.json entry", which the slot rule refuses | `"slot": "summoned"`: outside the one-per-slot rule, no `trainedAt` / `cost` / `pop` / `trainTime` (refused if given), usable only as a `spawn` effect's `unit` |
@@ -392,7 +396,10 @@ The words the Shadow files would carry, for the owner to read (codenames, as the
 are the table above, and none of them appears here). Each description is one or two short sentences of at most 144
 characters, names only Shadow things, and says "needs X" exactly for a building's requirements (the content pins' rules
 for every faction). The Archer's, the Hound's and the two abilities' numbers are the page's; they are copied only once
-their schema exists (G1-G7).
+their schema exists (G1-G7). G1-G3 exist (M8-2, M8-3), and since D35 the content checks read the two bonuses in a unit's
+description: a unit with `attack.fromStealthBonus` must state it ("50% more damage" in its first-shot sentence), one with
+a `nearbyOwn` passive its per-Hound percent, its cap and its reach (`Content/UnitHitBonusText`); the Archer's and the
+Hound's sentences below pass it.
 
 | File | Id | Name (`displayName`) | Description (`description`) |
 | --- | --- | --- | --- |
@@ -460,3 +467,22 @@ order; the last is Q4. Where the page already reads that way, the line says wher
 - (Q4) The content checks that refuse another faction's names blank out the faction's own names first ("Edur Warrior"
   and "Warrior Lodge" contain the Teblor's "Warrior"); the units keep their names. Done in D-H9: `UnitContentTests` E
   and `BuildingContentTests` F.
+
+**M8-3's readings the player-facing words depend on** (docs/01 "2026-11-18 (b)" (a)-(d) and "2026-11-20" (1), Producer
+decisions the owner may revisit; recorded by D35). The Unit notes, Schema gaps G2 / G3 and the Owner review sentences of
+the Archer and the Hound read this way:
+
+- **The first shot is decided when the arrow lands.** The bonus applies when the Archer is Stealthed, and not Revealed, at
+  the moment the hit's damage is worked out: an arrow when it lands (a melee blow when it is struck), not when it is
+  loosed. An Archer hurt, moved (its stand-still stealth ends) or killed while its arrow flies loses the bonus on that
+  arrow; being detected does not take it away. The landing reveals the Archer, so its next shot has none. Remembering
+  "fired from hiding" on the arrow is a later task if play shows it matters.
+- **A miss does not use it up.** A shot that misses does not reveal the Archer, so its next shot from the same stealth
+  still carries the bonus.
+- **From any stealth.** Forest, stand-still or an ability's stealth all give it; a building's attack never has it.
+- **A pack counts the Hound's own player's Hounds.** Each hit counts the attacker's owner's other live Hounds of Shadow
+  whose centre is within 8 m of its own (the edge counts), at the same moment as the first shot; an ally's Hounds, an
+  enemy's, other units and the Hound itself do not count. At most three count: +10% each, +30% at most. A Hound trained
+  this game step joins the count one step later.
+- **The bonuses multiply** (a status's damage bonus x the first shot x the pack), each read fresh for every hit; none is
+  stored.

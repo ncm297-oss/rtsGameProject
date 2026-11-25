@@ -12,7 +12,8 @@ namespace Rts.Sim.Tests.Content;
 /// passive fails unless it is a named allowance (<see cref="PendingPassives"/>), and a data passive with no page sentence
 /// fails. The data has no passive names, so a page sentence is matched to a data passive by its trigger wording:
 /// "below &lt;n&gt;% HP" is <c>whenBelowHp</c>, "when a &lt;Unit&gt; dies" is <c>onDeath</c>, and (D-R36, ahead of the war-dog's
-/// Hamstring) "each bite" / "each hit" is <c>onHit</c>, whose sentence states the status, its magnitude and "for &lt;n&gt; s".
+/// Hamstring) "each bite" / "each hit" is <c>onHit</c>, whose sentence states the status, its magnitude and "for &lt;n&gt; s",
+/// and (D35, M8-3) "+&lt;n&gt;% damage for each other &lt;Unit&gt; within &lt;n&gt; m (max +&lt;n&gt;%)" is <c>nearbyOwn</c>.
 /// </summary>
 public class PassiveContentTests
 {
@@ -53,6 +54,32 @@ public class PassiveContentTests
     private static readonly Regex For = new(@"\bfor " + Num + @" ?s\b", Opts);
     private static readonly Regex Takers = new(@"\bdies, (?<list>.+?) within\b", Opts);
     private static readonly Regex AttackSpeed = new(@"\+" + Num + @" ?% attack speed\b", Opts);
+
+    /// <summary>
+    /// D35 (M8-3's <c>nearbyOwn</c>, shadow.md's Pack Hunter): "+10% damage for each other Hound of Shadow within 8 m": the
+    /// per-mate bonus, the counted types (one or a list, "or" / "and" / commas) and the radius.
+    /// </summary>
+    private static readonly Regex Nearby = new(@"^\+?" + Num + @" ?% damage for each other (?<list>.+?) within (?<r>\d+(?:\.\d+)?) ?m\b", Opts);
+
+    /// <summary>The pack's cap: "(max +30%)", "up to +30%", "at most 30%".</summary>
+    private static readonly Regex NearbyCap = new(@"\b(?:max(?:imum)?|up to|at most)\s*\+?" + Num + @" ?%", Opts);
+
+    /// <summary>D35: what a <c>nearbyOwn</c> sentence states: per-mate and cap in percent (null when unstated), radius in metres, counted names.</summary>
+    public sealed record NearbyReading(double PerMate, double? Cap, double Radius, string[] Units);
+
+    /// <summary>
+    /// D35: <paramref name="text"/> (a "Passive **Name**:" sentence's words) read as a <c>nearbyOwn</c> passive, or null when
+    /// its wording is not that shape. The counted names are singular ("Hounds of Shadow" stays as written: name them singly).
+    /// </summary>
+    public static NearbyReading? ReadNearby(string text)
+    {
+        Match m = Nearby.Match(text);
+        if (!m.Success) return null;
+        Match cap = NearbyCap.Match(text, m.Index + m.Length);
+        string[] units = Regex.Split(m.Groups["list"].Value, @",\s*|\s+(?:and|or)\s+", Opts).Select(s => s.Trim()).Where(s => s.Length > 0).ToArray();
+        return new NearbyReading(Number(m), cap.Success ? Number(cap) : null,
+            double.Parse(m.Groups["r"].Value, CultureInfo.InvariantCulture), units);
+    }
 
     [Theory]
     [MemberData(nameof(ContentFactions.Theory), MemberType = typeof(ContentFactions))]
@@ -314,7 +341,7 @@ public class PassiveContentTests
     /// <summary>The trigger a page sentence's wording names, or null when it is neither shape.</summary>
     private static PassiveTrigger? TriggerOf(string text) =>
         BelowHp.IsMatch(text) ? PassiveTrigger.WhenBelowHp : OnDeath.IsMatch(text) ? PassiveTrigger.OnDeath
-        : OnHit.IsMatch(text) ? PassiveTrigger.OnHit : null;
+        : OnHit.IsMatch(text) ? PassiveTrigger.OnHit : Nearby.IsMatch(text) ? PassiveTrigger.NearbyOwn : null;
 
     private static string TriggerId(PassiveTrigger t) => DataLimits.PassiveTriggerIds[(int)t];
 
@@ -373,7 +400,7 @@ public class PassiveContentTests
             bool loaded = u != null && t is PassiveTrigger trigger && of(u).Any(p => p.Trigger == trigger);
             if (loaded) continue;
             string what = u == null ? $"no {faction} unit is named '{pp.Unit}'"
-                : t == null ? "its wording names no trigger the sim has (\"below <n>% HP\", \"when a <Unit> dies\", \"each bite\" / \"each hit\")"
+                : t == null ? "its wording names no trigger the sim has (\"below <n>% HP\", \"when a <Unit> dies\", \"each bite\" / \"each hit\", \"+<n>% damage for each other <Unit> within <n> m\")"
                 : $"'{pp.Unit}' has no {TriggerId(t.Value)} passive in units.json";
             if (pending.Contains(pp.Name)) r.Reports.Add($"{where} '{pp.Unit}' passive '{pp.Name}' trigger: {what} (pending: reported, not failed)");
             else r.Problems.Add($"{where} '{pp.Unit}' passive '{pp.Name}' trigger: {what}");
@@ -384,6 +411,11 @@ public class PassiveContentTests
     /// <summary>Each field of <paramref name="p"/> against the words of its page sentence <paramref name="text"/>.</summary>
     private static IEnumerable<(string Field, string Problem)> FieldProblems(GameData data, UnitDef unit, UnitPassive p, string text)
     {
+        if (p.Trigger == PassiveTrigger.NearbyOwn)
+        {
+            foreach (var x in NearbyProblems(data, p, text)) yield return x;
+            yield break;
+        }
         StatusDef status = data.Statuses[p.Status];
 
         Match gains = Gains.Match(text);
@@ -420,6 +452,29 @@ public class PassiveContentTests
             : Array.Empty<string>();
         if (!got.SequenceEqual(want))
             yield return ("units", $"page '{(takers.Success ? takers.Groups["list"].Value : text)}', data {string.Join(", ", want)}");
+    }
+
+    /// <summary>
+    /// D35: a <c>nearbyOwn</c> passive against its sentence: <c>damageBonus</c> the per-mate percent, <c>maxStacks</c> the
+    /// cap (<c>maxStacks</c> x <c>damageBonus</c>, "(max +30%)"), <c>radius</c> the "within N m", <c>units</c> the counted
+    /// types by display name. The passive has no status, magnitude or duration to state.
+    /// </summary>
+    private static IEnumerable<(string Field, string Problem)> NearbyProblems(GameData data, UnitPassive p, string text)
+    {
+        NearbyReading? r = ReadNearby(text);
+        double perMate = Math.Round(p.DamageBonus * 100.0, 4), cap = Math.Round(p.MaxStacks * p.DamageBonus * 100.0, 4);
+        if (r == null)
+        {
+            yield return ("trigger", $"page '{text}' is not '+<n>% damage for each other <Unit> within <n> m', data nearbyOwn");
+            yield break;
+        }
+        if (!Same(r.PerMate, perMate)) yield return ("damageBonus", $"page +{Text(r.PerMate)}% for each other, data +{Text(perMate)}%");
+        if (r.Cap is not double c) yield return ("maxStacks", $"page '{text}' states no cap ('max +<n>%'), data {p.MaxStacks} x +{Text(perMate)}% = +{Text(cap)}%");
+        else if (!Same(c, cap)) yield return ("maxStacks", $"page cap +{Text(c)}%, data {p.MaxStacks} x +{Text(perMate)}% = +{Text(cap)}%");
+        if (!Same(r.Radius, p.Radius)) yield return ("radius", $"page within {Text(r.Radius)} m, data {Text(p.Radius)} m");
+        string[] want = p.Units.Select(id => data.Units[id].DisplayName).OrderBy(x => x, StringComparer.Ordinal).ToArray();
+        string[] got = r.Units.OrderBy(x => x, StringComparer.Ordinal).ToArray();
+        if (!got.SequenceEqual(want)) yield return ("units", $"page '{string.Join(", ", r.Units)}', data {string.Join(", ", want)}");
     }
 
     /// <summary>
