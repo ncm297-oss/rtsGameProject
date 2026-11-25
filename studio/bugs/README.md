@@ -609,3 +609,5 @@ bugs outrank new features.
 | [BUG-1632](BUG-1632-building-model-test-gaps-ghost-alloc-row-and-keep-site-picture.md) | S4 | open (found by M6-V26 QA) | BuildingModelTest: its allocation row draws no remembered model; its sites picture has no Keep site |
 | [BUG-1640](BUG-1640-malazan-page-raider-rush-counts-stale-after-seed-19-waves.md) | S4 | fixed (D34 fix round 1) | malazan.md counted `crossbow_push` seed 19 as "no wave" in two sentences after D34 measured it waving |
 | [BUG-1641](BUG-1641-d34-an-order-meets-the-bar-but-none-shipped.md) | S2 | fixed (D34 fix round 1: QA's order Q2 shipped) | D34 took the "none ships" fallback although an order-only variant met criterion 2's bar |
+| [BUG-1690](BUG-1690-hit-bonus-text-reads-every-unit-percent-as-a-hit-bonus.md) | S3 | open (found by D35 QA) | UnitHitBonusText reads every unit-description percentage as a hit bonus: a true Hamstring "slows by 20%" is refused |
+| [BUG-1691](BUG-1691-shadowed-sentence-fails-the-passive-pin-at-landing.md) | S3 | open (found by D35 QA) | shadow.md's "Passive **Shadowed**" (stillStealth, G1) fails the passive pin once the roster lands; readiness says 0 (+ stale docs/03 line) |
