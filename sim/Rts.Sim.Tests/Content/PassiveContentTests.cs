@@ -14,6 +14,8 @@ namespace Rts.Sim.Tests.Content;
 /// "below &lt;n&gt;% HP" is <c>whenBelowHp</c>, "when a &lt;Unit&gt; dies" is <c>onDeath</c>, and (D-R36, ahead of the war-dog's
 /// Hamstring) "each bite" / "each hit" is <c>onHit</c>, whose sentence states the status, its magnitude and "for &lt;n&gt; s",
 /// and (D35, M8-3) "+&lt;n&gt;% damage for each other &lt;Unit&gt; within &lt;n&gt; m (max +&lt;n&gt;%)" is <c>nearbyOwn</c>.
+/// D-H10 (BUG-1691): a stand-still sentence ("becomes Stealthed after &lt;n&gt; s without moving") is not a data passive
+/// but the unit's <c>stillStealth</c> field, compared to its status and <c>delay</c>, both ways.
 /// </summary>
 public class PassiveContentTests
 {
@@ -60,6 +62,19 @@ public class PassiveContentTests
     /// per-mate bonus, the counted types (one or a list, "or" / "and" / commas) and the radius.
     /// </summary>
     private static readonly Regex Nearby = new(@"^\+?" + Num + @" ?% damage for each other (?<list>.+?) within (?<r>\d+(?:\.\d+)?) ?m\b", Opts);
+
+    /// <summary>
+    /// D-H10 (BUG-1691, ruling docs/01 2026-11-24 ACCEPT (3)(a)): "becomes Stealthed after 3 s without moving": a stand-still
+    /// stealth, which is the unit's <c>stillStealth</c> field (M8-2: <c>status</c> by display name, <c>delay</c> in seconds),
+    /// not a data passive. The page keeps the "Passive **Name**:" shape for it (shadow.md's Shadowed).
+    /// </summary>
+    private static readonly Regex StillSentence = new(@"^(?:becomes |is |turns )?(?<status>[A-Z][A-Za-z]*) after " + Num + @" ?s without moving\b", Opts);
+
+    /// <summary>
+    /// Whether a page sentence's wording is one the pin reads: a trigger the sim has, or (BUG-1691) a stand-still stealth.
+    /// <see cref="PagePinReadinessTests"/> uses it so a sentence the pin cannot place is named before its data lands.
+    /// </summary>
+    public static bool ReadsAsDataField(string text) => TriggerOf(text) != null || StillSentence.IsMatch(text);
 
     /// <summary>The pack's cap: "(max +30%)", "up to +30%", "at most 30%".</summary>
     private static readonly Regex NearbyCap = new(@"\b(?:max(?:imum)?|up to|at most)\s*\+?" + Num + @" ?%", Opts);
@@ -303,6 +318,65 @@ public class PassiveContentTests
         Assert.Contains(r.Problems, p => p.Contains("'Sapper' passive 'Hamstring' trigger: 'Sapper' has no onHit passive", StringComparison.Ordinal));
     }
 
+    /// <summary>shadow.md's Shadowed sentence, as <see cref="PagePassives"/> reads it from the Shadow Archer's note.</summary>
+    private static PagePassive ShadowShadowed() =>
+        Assert.Single(PagePassives(PageTables.FactionLines("shadow"), "shadow.md"), p => p.Name == "Shadowed");
+
+    /// <summary>
+    /// teblor.md with <paramref name="sentence"/> (default shadow.md's Shadowed words) as "Passive **Shadowed**:" on the
+    /// Javelin Thrower's note, compared on <paramref name="data"/> (default <see cref="StillScenes.Still"/>: the Thrower carries
+    /// <c>stillStealth</c> stealthed, 3 s, G1's row).
+    /// </summary>
+    private static AbilityContentTests.Result CompareShadowed(string? sentence = null, GameData? data = null, bool onPage = true)
+    {
+        string[] lines = PageTables.FactionLines("teblor");
+        int thrower = Array.FindIndex(lines, l => l.StartsWith("- **Javelin Thrower:**", StringComparison.Ordinal));
+        Assert.True(thrower >= 0, "teblor.md has no '- **Javelin Thrower:**' bullet");
+        if (onPage) lines[thrower] += $" Passive **Shadowed**: {sentence ?? ShadowShadowed().Text}";
+        return Compare(data ?? StillScenes.Still, "teblor", lines);
+    }
+
+    /// <summary>BUG-1691: the Shadowed sentence is the stand-still stealth, the unit's <c>stillStealth</c>, and lands green on G1's row.</summary>
+    [Fact]
+    public void ShadowsShadowedSentence_IsTheStillStealthField()
+    {
+        PagePassive p = ShadowShadowed();
+        Assert.Equal("Shadow Archer", p.Unit);
+        Assert.True(ReadsAsDataField(p.Text));
+        UnitDef thrower = StillScenes.Still.Units[StillScenes.Still.FindUnit("teblor_javelin_thrower")];
+        Assert.True(thrower.HasStillStealth);
+        AbilityContentTests.Result r = CompareShadowed();
+        Assert.True(r.Problems.Count == 0, string.Join("\n", r.Problems));
+    }
+
+    /// <summary>BUG-1691: each stand-still field is read: a wrong delay or status fails naming it; so does either side alone.</summary>
+    [Theory]
+    [InlineData("after 3 s", "after 4 s", "'Shadowed' stillStealth.delay: page 'becomes Stealthed after 4 s without moving', data 3 s")]
+    [InlineData("after 3 s", "after 2.5 s", "'Shadowed' stillStealth.delay:")]
+    [InlineData("becomes Stealthed", "becomes Slowed", "'Shadowed' stillStealth.status: page 'Slowed', data 'Stealthed'")]
+    [InlineData("without moving", "while still", "'Shadowed' trigger: its wording names no trigger")]
+    public void AMutatedShadowedSentence_FailsNamingTheField(string text, string mutant, string want)
+    {
+        string sentence = ShadowShadowed().Text;
+        Assert.Contains(text, sentence, StringComparison.Ordinal);
+        AbilityContentTests.Result r = CompareShadowed(sentence.Replace(text, mutant, StringComparison.Ordinal));
+        Assert.True(r.Problems.Any(p => p.Contains(want, StringComparison.Ordinal)), $"no problem naming {want}\n" + string.Join("\n", r.Problems));
+    }
+
+    [Fact]
+    public void AShadowedSentence_OnAUnitWithoutStillStealth_Fails()
+    {
+        AbilityContentTests.Result r = CompareShadowed(data: Data);
+        Assert.Contains(r.Problems, p => p.Contains("'Javelin Thrower' passive 'Shadowed' stillStealth: page 'becomes Stealthed after 3 s without moving', 'Javelin Thrower' has no stillStealth", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void AUnitWithStillStealth_AndNoSentence_Fails()
+    {
+        AbilityContentTests.Result r = CompareShadowed(onPage: false);
+        Assert.Contains(r.Problems, p => p.Contains("'Javelin Thrower' stillStealth: no \"Passive **Name**:\" sentence states the stand-still stealth ('Stealthed after 3 s without moving')", StringComparison.Ordinal));
+    }
+
     /// <summary>The faction page's lines with <paramref name="text"/> (which must be on exactly one line) replaced.</summary>
     private static string[] Mutated(string faction, string text, string mutant)
     {
@@ -379,6 +453,11 @@ public class PassiveContentTests
                 foreach ((string field, string problem) in FieldProblems(data, u, p, pp.Text))
                     sink.Add($"{where} '{u.DisplayName}' passive '{pp.Name}' {field}: {problem}");
             }
+        // BUG-1691: a unit's stillStealth is stated by a stand-still sentence on its bullet.
+        foreach (UnitDef u in units)
+            if (u.HasStillStealth && !page.Any(x => x.Unit == u.DisplayName && StillSentence.IsMatch(x.Text)))
+                r.Problems.Add($"{where} '{u.DisplayName}' stillStealth: no \"Passive **Name**:\" sentence states the stand-still stealth "
+                    + $"('{data.Statuses[u.StillStealthStatus].DisplayName} after {Text(u.StillStealthDelayTicks / (double)SimConstants.TicksPerSecond)} s without moving')");
 
         // Page -> data: every sentence is a loaded passive of its unit, or pending; and at most one sentence per (unit,
         // trigger), because units.json holds at most one passive per trigger (BUG-0470): data -> page above reads only the
@@ -387,6 +466,23 @@ public class PassiveContentTests
         {
             PagePassive pp = page[i];
             UnitDef? u = units.FirstOrDefault(x => x.DisplayName == pp.Unit);
+            Match still = StillSentence.Match(pp.Text);
+            if (still.Success)
+            {
+                // BUG-1691: the stand-still stealth is the unit's stillStealth field, compared to its status and delay.
+                List<string> stillSink = pending.Contains(pp.Name) ? r.Reports : r.Problems;
+                string head = $"{where} '{pp.Unit}' passive '{pp.Name}' stillStealth";
+                if (u == null) stillSink.Add($"{head}: no {faction} unit is named '{pp.Unit}'");
+                else if (!u.HasStillStealth) stillSink.Add($"{head}: page '{still.Value}', '{pp.Unit}' has no stillStealth in units.json");
+                else
+                {
+                    string status = data.Statuses[u.StillStealthStatus].DisplayName;
+                    double delay = u.StillStealthDelayTicks / (double)SimConstants.TicksPerSecond;
+                    if (still.Groups["status"].Value != status) stillSink.Add($"{head}.status: page '{still.Groups["status"].Value}', data '{status}'");
+                    if (!Same(Number(still), delay)) stillSink.Add($"{head}.delay: page '{still.Value}', data {Text(delay)} s");
+                }
+                continue;
+            }
             PassiveTrigger? t = TriggerOf(pp.Text);
             PagePassive? first = t == null ? null : page.Take(i).FirstOrDefault(x => x.Unit == pp.Unit && TriggerOf(x.Text) == t);
             if (first != null)

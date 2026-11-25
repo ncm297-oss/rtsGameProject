@@ -411,13 +411,17 @@ both ways (J), and docs/02's stated numbers to the file (K).
 - **Likely sources:** KayKit Adventurers (Barbarian and Rogue bases recolored), Quaternius horse,
   Kenney Castle Kit / Quaternius Ultimate Fantasy RTS for buildings (tent and mudbrick variants
   may need AI generation or Blender kit-bashing). Details in [04-art-pipeline.md](../04-art-pipeline.md).
-- **As built (M6-V25, stand-ins; BUG-1602):** the Priest and the Zealot on `main` differ from the silhouettes above.
-  The Priest wears a team-coloured hood, a long bleached-white robe and a crimson veil over the lower face, with no
-  headdress and no staff. The Zealot is clothed, not bare-chested: a team-coloured tunic, crimson trousers and a crimson
-  head-wrap with a tail, and it carries two curved blades (the Raider's 0.7 m blade, one in each hand), not knives. Each
-  still reads apart from the Raider (hooded, one blade). Both are the outfits on disk recoloured, with box props
-  (docs/04 "Fourth slice (M6-V25)", the team parts and props "developer's pick, owner may revisit"); the Priest's veil
-  and the Zealot's idle blade are with the owner. The notes above stay the target for a later art pass.
+- **As built (M6-V25, stand-ins, re-tinted in M6-VH9; BUG-1602):** the Priest and the Zealot on `main` differ from the
+  silhouettes and the palette above. The Priest wears a team-coloured hood and jerkin, a long weathered-sand robe
+  (`#a39577`; bleached white until M6-VH9, which hid a Bone player's colour) and a dark maroon veil over the lower face
+  (`#5e1a20`; crimson until M6-VH9), with no headdress and no staff. The Zealot is clothed, not bare-chested: a
+  team-coloured tunic over rust trousers (`#6e3a26`; crimson until M6-VH9) and a maroon head-wrap with a tail (`#5a1c1e`),
+  and it carries two curved blades (the Raider's 0.7 m blade, one in each hand), not knives. The reds went darker, not
+  away from red, so no non-team part sits within 60 of the Crimson player's colour (docs/04 "Re-tint in the setup's
+  colours (M6-VH9, BUG-1600)"). Each still reads apart from the Raider (hooded, one blade). Both are the outfits on disk
+  recoloured, with box props (docs/04 "Fourth slice (M6-V25)", the team parts, props and tints "developer's pick, owner
+  may revisit"); the Priest's veil and robe colour and the Zealot's idle blade are with the owner. The notes above stay
+  the target for a later art pass.
 
 ## Codename → release name
 

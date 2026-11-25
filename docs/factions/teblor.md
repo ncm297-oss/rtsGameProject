@@ -597,6 +597,108 @@ and D33 and D34 measured that this order is what fields the Age II army. BUG-105
 yet due, in file order) acts only while the AI spends down at High starting resources; it then follows the same
 priority, which is the intent. Sorting the file by time would change what the AI buys first.
 
+## The unit mix (BUG-1612, D-H10, 2026-11-25)
+
+**None meets the bar; nothing ships.** The Teblor `standard` is still D34's order (Q2 above,
+`Fixtures/teblor_standard_d34.json`); BUG-1612's unit-mix half stays open. The nearest candidate is **A**
+(`throughReserve` on the Destrier Rider, War-dog and Shaman steps), which misses six figures of twenty: Easy's Breaker
+(11, the bar 20) and Anointing (9, 20), Normal's Breaker (11, 12) and Anointing (13, 17), Hard's Destrier Rider (35, 40)
+and War-dog (42, 46).
+
+Measured by `Content/DH10TeblorSwitchReportTests.Variants_Row_Report` (2026-11-25, on the task's base; D34's row through
+`D34TeblorStepOrderReportTests.Play`: the Teblor against the Malazan on seat 0 and against the Whirlwind on seat 1, the
+same difficulty on both seats, four maps, to 15:00; a column counts the matches in which the kind was alive at some second
+before 15:00, the 2nd Longhouse the matches with two finished). M is the shipped order; each candidate adds the M7-8 step
+switches (docs/03 "For the data track (M7-8)") and, for AR, AT, ASE and ASES, moves or re-times steps. A, S, RS, AR and
+AN are the brief's; AT, AB, ANS, DS, ASE and ASES the developer's six. No candidate puts `noReserve` on the expand step
+(BUG-1663). The baseline first: M's full rows give D34's 21 figures exactly (Easy 1 / 0 / 16 / 30 / 4 / 27 / 28, Normal
+9 / 23 / 15 / 14 / 22 / 37 / 17, Hard 11 / 23 / 22 / 39 / 33 / 46 / 23).
+
+The bar (docs/01 2026-11-24 ACCEPT (3)(c); full rows of 64, every figure, all three difficulties): **Easy** Anointing
+>= 20, Rider >= 20, War-dog >= 40, Shaman >= 25, Breaker >= 20, defeated <= 2; **Normal** Anointing >= 17, Rider >= 22,
+War-dog >= 37, Shaman >= 20, Breaker >= 12, 2nd Longhouse >= 18, defeated <= 10; **Hard** Anointing >= 20, Rider >= 40,
+War-dog >= 46, Shaman >= 22, Breaker >= 35, 2nd Longhouse >= 18, defeated <= 12.
+
+The reduced screen (seeds 1-2: 16 matches a row; labelled reduced, not judged against the bar; "!" marks a figure under a
+quarter of the bar, rounded: Easy An 5, Ri 5, Dog 10, Sh 7, Br 5, def 0; Normal An 5, Ri 6, Dog 10, Sh 5, Br 3, 2nd 5,
+def 2; Hard An 5, Ri 10, Dog 12, Sh 6, Br 9, 2nd 5, def 3). Figures: defeated / 2nd Longhouse / Shaman / Breaker / Rider /
+War-dog / Anointing.
+
+| variant | change | Easy (reduced) | Normal (reduced) | Hard (reduced) | screen |
+| --- | --- | --- | --- | --- | --- |
+| M | the shipped order (D34's Q2) | 0 / 0 / 4! / 9 / 1! / 6! / 8 | 2 / 3! / 3! / 5 / 4! / 7! / 4! | 3 / 5 / 5! / 9 / 8! / 10! / 5 | baseline |
+| A | M with `throughReserve` on the Rider, War-dog and Shaman steps | 0 / 0 / 10 / 3! / 6 / 12 / 3! | 2 / 3! / 6 / 4 / 7 / 10 / 3! | 3 / 3! / 10 / 8! / 8! / 9! / 5 | full rows |
+| S | M with `throughReserve` on the Shaman step only | 0 / 0 / 12 / 8 / 0! / 8! / 4! | 2 / 3! / 5 / 4 / 5! / 9! / 5 | 3 / 3! / 10 / 8! / 8! / 9! / 5 | out: Easy's Riders 0 |
+| RS | M with `throughReserve` on the Rider and Shaman steps | 0 / 0 / 10 / 3! / 8 / 8! / 3! | 2 / 3! / 4! / 6 / 8 / 10 / 4! | 3 / 3! / 10 / 8! / 8! / 9! / 5 | full rows |
+| AR | A with the Carver and the Anointing moved ahead of the Breaker, Rider and War-dog train steps | 0 / 0 / 12 / 1! / 6 / 12 / 1! | 2 / 3! / 6 / 2! / 7 / 10 / 3! | 3 / 3! / 10 / 6! / 8! / 10! / 6 | out: Easy's Breaker and Anointing 1 |
+| AN | A with `noReserve` on the armor_1 research step | 0 / 0 / 10 / 3! / 6 / 12 / 3! | 2 / 3! / 6 / 4 / 7 / 10 / 3! | 3 / 3! / 10 / 8! / 8! / 9! / 5 | full rows |
+| AT | A with the Carver and the Anointing due at 9:00 (were 10:00), file order kept | 0 / 0 / 4! / 8 / 6 / 12 / 10 | 4! / 3! / 3! / 2! / 5! / 8! / 6 | 3 / 3! / 8 / 7! / 9! / 10! / 7 | full rows |
+| AB | A with `throughReserve` on the Breaker step too | 0 / 0 / 10 / 3! / 6 / 12 / 3! | 2 / 3! / 6 / 4 / 7 / 10 / 3! | 3 / 3! / 10 / 8! / 8! / 9! / 5 | full rows |
+| ANS | AN with `noReserve` on the Stables, the Breakers Hall and the Shamans' Circle build steps too | 0 / 0 / 2! / 1! / 13 / 14 / 6 | 2 / 3! / 7 / 5 / 7 / 10 / 0! | 3 / 3! / 7 / 5! / 9! / 9! / 6 | out: Easy's Shaman 2, Breaker 1; Normal's Anointing 0 |
+| DS | M with `throughReserve` on the War-dog and Shaman steps | 0 / 0 / 10 / 5 / 0! / 12 / 3! | 2 / 3! / 5 / 5 / 7 / 10 / 4! | 3 / 3! / 10 / 8! / 8! / 9! / 5 | out: Easy's Riders 0 |
+| ASE | A with the Shamans' Circle and the Shaman step due at 8:00 (were 9:00) | 0 / 0 / 13 / 0! / 9 / 13 / 6 | 2 / 0! / 10 / 4 / 3! / 6! / 1! | 4! / 3! / 11 / 6! / 6! / 8! / 5 | out: Easy's Breaker 0, Normal's 2nd Longhouse 0 |
+| ASES | ASE with the Stables due at 9:00 (was 10:00) and moved ahead of the expand step | 0 / 0 / 13 / 0! / 11 / 14 / 8 | 2 / 0! / 8 / 5 / 8 / 9! / 2! | 2 / 3! / 10 / 5! / 7! / 7! / 5 | out: Easy's Breaker 0, Normal's 2nd Longhouse 0 |
+
+The full rows (seeds 1-8: 64 matches), every candidate the screen did not rule out; "!" marks a miss of the bar.
+
+| variant | difficulty | defeated | 2nd Longhouse | Shaman | Breaker | Rider | War-dog | Anointing | misses |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| bar | Easy | <= 2 | — | >= 25 | >= 20 | >= 20 | >= 40 | >= 20 | |
+| M | Easy | 1 | 0 | 16! | 30 | 4! | 27! | 28 | 3 |
+| A | Easy | 1 | 0 | 36 | 11! | 28 | 48 | 9! | 2 |
+| RS | Easy | 1 | 0 | 36 | 12! | 31 | 36! | 10! | 3 |
+| AN | Easy | 1 | 0 | 36 | 11! | 28 | 48 | 9! | 2 |
+| AT | Easy | 1 | 0 | 18! | 29 | 29 | 51 | 38 | 1 |
+| AB | Easy | 1 | 0 | 36 | 11! | 28 | 48 | 9! | 2 |
+| bar | Normal | <= 10 | >= 18 | >= 20 | >= 12 | >= 22 | >= 37 | >= 17 | |
+| M | Normal | 9 | 23 | 15! | 14 | 22 | 37 | 17 | 1 |
+| A | Normal | 9 | 23 | 28 | 11! | 28 | 41 | 13! | 2 |
+| RS | Normal | 9 | 23 | 23 | 18 | 32 | 40 | 14! | 1 |
+| AN | Normal | 9 | 23 | 28 | 11! | 28 | 41 | 13! | 2 |
+| AT | Normal | 13! | 23 | 16! | 5! | 20! | 34! | 23 | 5 |
+| AB | Normal | 9 | 23 | 28 | 11! | 28 | 41 | 13! | 2 |
+| bar | Hard | <= 12 | >= 18 | >= 22 | >= 35 | >= 40 | >= 46 | >= 20 | |
+| M | Hard | 11 | 23 | 22 | 39 | 33! | 46 | 23 | 1 |
+| A | Hard | 11 | 18 | 40 | 38 | 35! | 42! | 20 | 2 |
+| RS | Hard | 11 | 18 | 40 | 37 | 35! | 40! | 20 | 2 |
+| AN | Hard | 11 | 18 | 40 | 38 | 35! | 42! | 20 | 2 |
+| AT | Hard | 8 | 18 | 37 | 31! | 37! | 43! | 27 | 3 |
+| AB | Hard | 11 | 18 | 40 | 38 | 35! | 42! | 20 | 2 |
+
+Misses over the three difficulties: M 5, A 6, RS 6, AN 6, AT 9, AB 6. A, AN and AB play the same 192 matches to the figure:
+`noReserve` on Armor (due 12:00) and `throughReserve` on the Breaker step (ahead of every step that can be the reserve)
+change nothing before 15:00. A is named the nearest for its smallest total shortfall (34 seats below the bar's figures,
+RS 36, AT 36, M 50).
+
+**What the rows show** (read against the executor's rule, docs/02 "AI opponent", and a per-seat timeline of the Easy
+rows; not traced think by think). The Easy AI's Age II spending all falls in its last five minutes: with its 30 s slack
+the 9:00 and 10:00 steps act at 9:30 and 10:30, its bank at 10:00 is about 85 gold and 130 wood (the medians of the 64
+seats), and the Age II buildings finish at about 10:50-12:50 and the Anointing at about 14:15. So every switch moves
+money from one figure to another: `throughReserve` on the Shaman step fields Shamans on every difficulty (Easy 16 -> 36,
+Normal 15 -> 28, Hard 22 -> 40) and on the Rider and War-dog steps gives Easy its Riders and War-dogs (4 -> 28, 27 -> 48),
+but those steps then pay before the Anointing and the Breaker that waited for the money (Easy's Anointing 28 -> 9 and
+Breaker 30 -> 11, Normal's 17 -> 13 and 14 -> 11), and Hard's War-dogs fall (46 -> 42) as its Shamans rise. The Carver and the
+Anointing a minute sooner (AT) win the Anointing back everywhere (Easy 38, Normal 23, Hard 27), but on Easy the Circle then
+waits behind the Carver (Shamans 18), and on Normal the earlier upgrade costs the army (Breakers 5, defeats 9 -> 13). The
+Shamans two minutes sooner (ASE, ASES) lose Easy's Breaker and Normal's second Longhouse, which their 8:00 Circle takes
+the money from. No candidate brings Hard's Riders past 37 (the bar 40): its Generated and Raraku seats field almost none
+on any order (3 of 16 each with M), where 3 and 8 of the 16 seats are defeated by 15:00.
+
+## Questions for the Producer (D-H10, 2026-11-25)
+
+Raised by D-H10 (BUG-1612), each with the developer's recommendation.
+
+1. **The bar may not be reachable by one opening on all three difficulties.** The Easy AI's income between 10:00 and
+   15:00 pays for the Anointing or for Shamans with Riders and War-dogs, not for both with a Breaker; the Normal and Hard
+   bars sit at or above the shipped order's own figures, so any money moved to a new kind on those difficulties shows as
+   a miss elsewhere. Recommendation: keep D34's order shipped and BUG-1612 open; the cure is a schema question for the sim
+   (an opening per difficulty, or a `difficulties`-level time offset for the build order) or a bar per difficulty that
+   names what Easy should trade, the owner's call.
+2. **A is the nearest; on Normal it fields three kinds more often than the shipped order and two less often** (Shaman
+   15 -> 28, Rider 22 -> 28, War-dog 37 -> 41; Breaker 14 -> 11, Anointing 17 -> 13). Recommendation: do not ship it under this bar (rule 75); if the
+   owner prefers a Normal opponent with every kind fielded over Easy's and Normal's upgrade, say "teblor opening: order A"
+   (one hash move; `Content/DH10TeblorSwitchReportTests.AllVariants` holds it).
+
 ## Questions for the Producer (D33, 2026-11-17)
 
 Raised by D33 (BUG-1420), each with the developer's recommendation.

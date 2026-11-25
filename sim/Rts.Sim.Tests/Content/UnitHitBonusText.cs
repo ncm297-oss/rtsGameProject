@@ -11,8 +11,12 @@ namespace Rts.Sim.Tests.Content;
 /// damage", "+50%"); a unit with a <c>nearbyOwn</c> passive must state its per-mate percent (in a sentence with "each" /
 /// "per" / "for every"), its cap (<c>maxStacks</c> x <c>damageBonus</c>, after "up to" / "max" / "at most") and its radius
 /// ("within N m"). Each percentage and each "within N m" is read in the role its words give it and must be that field's
-/// number; a percentage no role claims fails too (a unit has no other percentage field). Seconds, counts and other
-/// distances are not read here (a unit's other numbers have no description rule yet). Problems read
+/// number. D-H10 (BUG-1690, ruling docs/01 2026-11-24 ACCEPT (3)(b)): a percentage is read as a hit bonus only when the
+/// unit has the matching field or its sentence has first-shot words (a stealth / first-shot sentence) or pack words
+/// ("other ... within", "each other"); every other percentage (a Hamstring's "slows by 20%", a Frenzy's attack speed) is left to the
+/// passive and status pins. A "within N m" likewise is the pack's reach only in a pack sentence ("other ... within"), or in
+/// an "each" / "per" sentence of a unit that has the pack (an on-death "Warriors within 6 m" is not read). Seconds, counts
+/// and other distances are not read here (a unit's other numbers have no description rule yet). Problems read
 /// <c>&lt;unit id&gt; description &lt;field&gt;: ...</c>.
 /// </summary>
 public static class UnitHitBonusText
@@ -36,6 +40,12 @@ public static class UnitHitBonusText
     private static readonly Regex StealthWords = new(@"\b(?:first|stealth|stealthed|hiding|hidden|hides?)\b", Words);
 
     private static readonly Regex EachWords = new(@"\b(?:each|per|for every)\b", Words);
+
+    /// <summary>
+    /// BUG-1690: the pack's words in one sentence: "other ... within" ("+10% for each other War-dog within 8 m") or "each
+    /// other" / "per other" / "for every other" ("Each other Warrior adds +10%"). "Each bite" is not one.
+    /// </summary>
+    private static readonly Regex PackWords = new(@"\bother\b.*\bwithin\b|\b(?:each|per|for every) other\b", Words);
 
     private enum Role { Stealth, PerMate, Cap, None }
 
@@ -62,9 +72,12 @@ public static class UnitHitBonusText
         {
             double n = Number(m);
             string sentence = SentenceAt(text, m.Index);
-            Role role = CapBefore.IsMatch(text[..m.Index].TrimEnd('+', ' ')) ? Role.Cap
+            // BUG-1690: the pack's roles only for a unit with the pack or in a sentence with pack words; the first shot's only
+            // in a sentence with first-shot words. Any other percentage is not a hit bonus and is not read here.
+            bool packRead = pack != null || PackWords.IsMatch(sentence);
+            Role role = packRead && CapBefore.IsMatch(text[..m.Index].TrimEnd('+', ' ')) ? Role.Cap
                 : StealthWords.IsMatch(sentence) ? Role.Stealth
-                : EachWords.IsMatch(sentence) ? Role.PerMate
+                : packRead && EachWords.IsMatch(sentence) ? Role.PerMate
                 : Role.None;
             string token = m.Value.Trim();
             switch (role)
@@ -82,12 +95,13 @@ public static class UnitHitBonusText
                     else problems.Add($"{u.Key} description {CapField}: '{token}' reads as the pack's cap, data {CapText(pack, cap)}");
                     break;
                 default:
-                    problems.Add($"{u.Key} description: '{token}' reads as no hit bonus (no first-shot, 'each' or cap words in its sentence), and a unit has no other percentage field");
-                    break;
+                    break; // BUG-1690: not a hit bonus; the passive and status pins own it
             }
         }
         foreach (Match m in Within.Matches(text))
         {
+            string sentence = SentenceAt(text, m.Index);
+            if (!PackWords.IsMatch(sentence) && !(pack != null && EachWords.IsMatch(sentence))) continue; // BUG-1690: not the pack's reach
             double n = Number(m);
             if (radius is double r && Math.Abs(r - n) < 1e-3) statedRadius = true;
             else problems.Add($"{u.Key} description {RadiusField}: '{m.Value.Trim()}' reads as the pack's reach, data {(radius is double rr ? FactionPage.Text(rr) + " m" : "none")}");

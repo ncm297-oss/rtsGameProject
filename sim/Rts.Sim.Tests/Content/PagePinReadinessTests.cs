@@ -220,7 +220,14 @@ public class PagePinReadinessTests
     private static void UnreadPassiveProblems(string page, string[] lines, int notes, List<string> problems)
     {
         var read = new List<string>();
-        foreach (PassiveContentTests.PagePassive p in PassiveContentTests.PagePassives(lines, page)) read.Add(p.Name);
+        foreach (PassiveContentTests.PagePassive p in PassiveContentTests.PagePassives(lines, page))
+        {
+            read.Add(p.Name);
+            // BUG-1691: a sentence the pin reads but cannot place (no trigger the sim has, not a stand-still stealth) would
+            // land red with its data; named here, ahead of the data, unless it is a named pending passive.
+            if (!PassiveContentTests.ReadsAsDataField(p.Text) && !PassiveContentTests.PendingPassives.Contains(p.Name))
+                problems.Add($"{page} Unit notes '{p.Unit}' passive '{p.Name}': its wording names no trigger the sim has and no stand-still stealth (PassiveContentTests)");
+        }
         // Each bullet with its continuation lines joined (as the pin reads it), named by the line it starts on.
         var bullets = new List<(int Line, string Text)>();
         for (int i = notes + 1; i < lines.Length && !lines[i].StartsWith('#'); i++)
@@ -464,6 +471,27 @@ public class PagePinReadinessTests
         Assert.True(problems.Count == 1, string.Join("\n", problems));
         Assert.StartsWith($"shadow.md Unit notes line {i + 1}: ", problems[0], StringComparison.Ordinal);
         Assert.Contains($"**{name}**:", problems[0], StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// BUG-1691: a passive sentence the pin reads but cannot place (its words name no trigger and no stand-still stealth) is
+    /// one readiness problem naming the unit and the passive, ahead of its data; shadow.md as shipped has none (its Shadowed
+    /// sentence is a stand-still stealth), and the pending Shield Wall / Charge are not named.
+    /// </summary>
+    [Theory]
+    [InlineData("becomes Stealthed after 3 s without moving", "becomes Stealthed when it stands still for 3 s", "Shadow Archer", "Shadowed")]
+    [InlineData("+10% damage for each other Hound of Shadow within 8 m", "+10% damage for every Hound of Shadow near it", "Hound of Shadow", "Pack Hunter")]
+    public void AShadowPassiveThePinCannotPlace_IsOneProblemNamingIt(string find, string replace, string unit, string name)
+    {
+        string[] lines = PageTables.FactionLines("shadow");
+        Assert.Empty(Problems("shadow", lines));
+        Assert.Empty(Problems("malazan", PageTables.FactionLines("malazan")));
+        int i = Array.FindIndex(lines, l => l.Contains(find, StringComparison.Ordinal));
+        Assert.True(i >= 0, $"shadow.md has no line containing '{find}'");
+        string[] edited = (string[])lines.Clone();
+        edited[i] = lines[i].Replace(find, replace, StringComparison.Ordinal);
+        List<string> problems = Problems("shadow", edited);
+        Assert.Contains($"shadow.md Unit notes '{unit}' passive '{name}': its wording names no trigger the sim has and no stand-still stealth (PassiveContentTests)", problems);
     }
 
     /// <summary>A pin's typed per-faction table fails naming the table and the page when the data ships a faction it lacks.</summary>

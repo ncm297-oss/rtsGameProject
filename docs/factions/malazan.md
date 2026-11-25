@@ -441,8 +441,11 @@ both ways (J), and docs/02's stated numbers to the file (K).
   matches: a team-coloured hood, an oxblood robe and a staff, no armor. The Sapper has its munition satchels (a pack on
   the back with a strap across the chest, a bag on each hip, a clay munition in hand) but no leather apron, and it
   stands upright at idle like the other figures; it bends low only in its throw. It is the outfit on disk recoloured,
-  with box props (docs/04 "Fourth slice (M6-V25)", the team parts and props "developer's pick, owner may revisit"). The
-  note above stays the target for a later art pass.
+  with box props (docs/04 "Fourth slice (M6-V25)", the team parts and props "developer's pick, owner may revisit"). M6-VH9
+  changed no Malazan colour or prop: it timed the Sapper's throw so the munition leaves its hand at 28 % of the clip, as
+  the sim releases the shot (docs/04, the manifest's `oneShot`), and left the Cadre Mage's dark robe beside a Heavy
+  Infantry shield in a dark player colour (told apart by shape) for the owner's packs. The note above stays the target
+  for a later art pass.
 
 ## Codename → release name
 

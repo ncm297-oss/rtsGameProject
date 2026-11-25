@@ -82,16 +82,12 @@ public class D35HitBonusTextQaTests
         Assert.Empty(Read(Hound, "+10% damage for each other War-dog within 8 m (max +30%)."));
 
     /// <summary>
-    /// BUG-1690: a description stating the shipped War-dog's own Hamstring slow (an onHit passive's Slowed magnitude, a
-    /// real unit number) is refused as a wrong pack bonus, so the reading blocks a true sentence. Expected: no problem
-    /// (the reading does not own that number). Runs on the shipped data, where the War-dog has no pack passive.
-    /// </summary>
-    /// <summary>
     /// BUG-1691: shadow.md's Archer note "Passive **Shadowed**: becomes Stealthed after 3 s ..." is G1's <c>stillStealth</c>,
     /// not a data passive. Landed as written (on the Javelin Thrower stand-in, with <c>stillStealth</c> in its data), the
-    /// passive pin refuses it, so the roster cannot land as the page says, though the readiness check reports 0 problems.
+    /// passive pin refused it, so the roster could not land as the page says, though the readiness check reported 0
+    /// problems. Fixed in D-H10: the pin reads a stand-still sentence as the <c>stillStealth</c> field (status and delay).
     /// </summary>
-    [Fact(Skip = "BUG-1691 (open): the Shadowed sentence (stillStealth, G1) is read as a passive with no trigger; the Shadow roster would land red")]
+    [Fact]
     public void QA_TheShadowedSentence_LandsGreenOnItsStillStealthRow()
     {
         using TestDataDir dir = TestDataDir.CopyOfShipped();
@@ -113,7 +109,13 @@ public class D35HitBonusTextQaTests
         Assert.True(problems.Count == 0, string.Join("\n", problems));
     }
 
-    [Fact(Skip = "BUG-1690 (open): UnitHitBonusText reads every unit percentage as a hit bonus; a true Hamstring 'slows by 20%' is refused as passives[nearbyOwn].damageBonus")]
+    /// <summary>
+    /// BUG-1690: a description stating the shipped War-dog's own Hamstring slow (an onHit passive's Slowed magnitude, a
+    /// real unit number) was refused as a wrong pack bonus, so the reading blocked a true sentence. Expected: no problem
+    /// (the reading does not own that number). Runs on the shipped data, where the War-dog has no pack passive. Fixed in
+    /// D-H10: a percentage is a hit bonus only when the unit has the field or the sentence has first-shot or pack words.
+    /// </summary>
+    [Fact]
     public void QA_TheWarDogsHamstringSlow_IsNotReadAsAPackBonus()
     {
         GameData d = TestSim.Data;

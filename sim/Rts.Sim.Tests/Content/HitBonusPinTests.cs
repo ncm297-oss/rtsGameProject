@@ -245,7 +245,9 @@ public class HitBonusPinTests
     [InlineData(Archer, "Its first shot from hiding deals +40% damage.", UnitHitBonusText.StealthField)]
     [InlineData(Archer, "Its first shot from hiding deals 5% more damage.", UnitHitBonusText.StealthField)]
     [InlineData(Archer, "Its first shot from hiding deals more damage.", UnitHitBonusText.StealthField)]
-    [InlineData(Archer, "Hurls javelins, 50% harder.", null)]
+    // BUG-1690 (D-H10): was field null ("'50%' reads as no hit bonus"); a percentage with no first-shot or pack words is no
+    // longer read, so the row fails as the bonus not stated in a first-shot sentence.
+    [InlineData(Archer, "Hurls javelins, 50% harder.", UnitHitBonusText.StealthField)]
     [InlineData(Hound, "Each other War-dog within 8 m adds +20% damage, up to +30%.", UnitHitBonusText.PerMateField)]
     [InlineData(Hound, "Each other War-dog within 8 m adds +30% damage, up to +30%.", UnitHitBonusText.PerMateField)]
     [InlineData(Hound, "Each other War-dog within 8 m adds +10% damage, up to +40%.", UnitHitBonusText.CapField)]
@@ -256,14 +258,35 @@ public class HitBonusPinTests
     [InlineData(Hound, "Big shaggy dogs that hunt in packs.", UnitHitBonusText.PerMateField)]
     [InlineData("teblor_warrior", "Its first shot from hiding deals +50% damage.", UnitHitBonusText.StealthField)]
     [InlineData("teblor_warrior", "Each other Warrior adds +10% damage.", UnitHitBonusText.PerMateField)]
-    [InlineData("teblor_warrior", "Stronger in a crowd, up to +30%.", UnitHitBonusText.CapField)]
-    [InlineData("teblor_warrior", "Fights best within 8 m of a Shaman.", UnitHitBonusText.RadiusField)]
+    [InlineData("teblor_warrior", "Each other Warrior within 6 m adds +10% damage.", UnitHitBonusText.PerMateField)]
+    [InlineData("teblor_warrior", "Each other Warrior within 6 m adds +10% damage.", UnitHitBonusText.RadiusField)]
+    [InlineData("teblor_warrior", "Stronger with each other Warrior near, up to +30%.", UnitHitBonusText.CapField)]
+    [InlineData(Hound, "Each other War-dog within 8 m adds +10% damage, up to +30%. Each bite also adds 5%.", UnitHitBonusText.PerMateField)]
     public void AWrongNumber_FailsNamingTheUnitAndTheField(string unit, string description, string? field)
     {
         List<string> problems = UnitHitBonusText.Problems(UnitOf(Forged.Value, unit), description);
 
         string want = field == null ? $"{unit} description: " : $"{unit} description {field}: ";
         Assert.True(problems.Any(p => p.StartsWith(want, StringComparison.Ordinal)), $"no problem starting '{want}':\n" + string.Join("\n", problems));
+    }
+
+    /// <summary>
+    /// BUG-1690 (D-H10, ruling docs/01 2026-11-24 ACCEPT (3)(b)): a percentage or a "within N m" in a sentence with no
+    /// first-shot or pack words, on a unit without the matching field, is not a hit bonus and is not read (the passive and
+    /// status pins own it): a Hamstring's slow, a Frenzy's cap, an on-death reach. Two rows here were failing rows before
+    /// the ruling ("Stronger in a crowd, up to +30%" as a cap, "Fights best within 8 m of a Shaman" as a reach).
+    /// </summary>
+    [Theory]
+    [InlineData("teblor_warrior", "Stronger in a crowd, up to +30%.")]
+    [InlineData("teblor_warrior", "Fights best within 8 m of a Shaman.")]
+    [InlineData("teblor_warrior", "Below half health it gains Frenzied, up to +50% attack speed.")]
+    [InlineData("teblor_warrior", "When a Warrior dies, Warriors within 6 m gain 20% attack speed for 5 s.")]
+    [InlineData("teblor_breaker", "Each swing slows its target by 20% for 2 s.")]
+    [InlineData(Archer, "Its first shot from hiding deals +50% damage. Each hit slows by 20%; Javelin Throwers within 6 m of a dying one flee.")]
+    public void APercentageThatIsNoHitBonus_IsNotRead(string unit, string description)
+    {
+        List<string> problems = UnitHitBonusText.Problems(UnitOf(Forged.Value, unit), description);
+        Assert.True(problems.Count == 0, string.Join("\n", problems));
     }
 
     // ---------- the page pins, both ways, on the forged copy (criterion 3) ----------

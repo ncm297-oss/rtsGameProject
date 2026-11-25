@@ -69,7 +69,9 @@ the Shadow are drawn at the template's size). The Hound of Shadow needs Age II (
   forests). The first shot from stealth deals +50% damage, from either stealth (forest or stand-still): the bonus is
   decided when the arrow lands, not when it is loosed, and a shot that misses does not use it up ("Decisions (D-R38)").
   The stand-still stealth has its field since M8-2 (`units.json` `stillStealth`, Schema gaps G1) and the first shot since
-  M8-3 (`attack.fromStealthBonus`, G2); neither is in the data yet (the Archer's row lands with the roster).
+  M8-3 (`attack.fromStealthBonus`, G2); neither is in the data yet (the Archer's row lands with the roster). The
+  passive check reads "Shadowed" as that field, not as a data passive: a "<Status> after <n> s without moving" sentence
+  is compared to the unit's `stillStealth` status and `delay`, both ways (D-H10, BUG-1691).
 - **Aptorian Stalker:** ×1.5 vs Light. A demon scout with long sight (20 m). Raids and spots.
 - **K'risnan Sorcerer:** splash 1.5 m, detector 10 m. Signature ability **Shadow-step**; gains **Summon Wraiths** with
   Wraith-binding (below).
@@ -399,7 +401,9 @@ for every faction). The Archer's, the Hound's and the two abilities' numbers are
 their schema exists (G1-G7). G1-G3 exist (M8-2, M8-3), and since D35 the content checks read the two bonuses in a unit's
 description: a unit with `attack.fromStealthBonus` must state it ("50% more damage" in its first-shot sentence), one with
 a `nearbyOwn` passive its per-Hound percent, its cap and its reach (`Content/UnitHitBonusText`); the Archer's and the
-Hound's sentences below pass it.
+Hound's sentences below pass it. Since D-H10 (BUG-1690) that check reads a percentage as a hit bonus only when the unit
+has the field or the sentence has first-shot or pack words ("other ... within", "each other"), so a sentence stating a
+slow or a frenzy ("each bite slows by 20%") is left to the passive and status pins.
 
 | File | Id | Name (`displayName`) | Description (`description`) |
 | --- | --- | --- | --- |
