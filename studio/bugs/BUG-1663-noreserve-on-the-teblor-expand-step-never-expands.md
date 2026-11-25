@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S3 (the switch works as specified; the order docs/03 offers the data track as "B" never expands, and the page does not say so) |
-| Status | open (found by M7-8 QA; no shipped opening carries the switch) |
+| Status | closed by ruling (Producer, 2026-11-24-1431 ACCEPT: the rule stays as built; documented in docs/03 "For the data track (M7-8)" and docs/01 2026-11-24; no opening ships `noReserve` on an expand step without 30-minute rows) |
 | Found | 2026-11-24-1431, task M7-8 |
 | System | AI build order (`BuildOrderExecutor.Run`'s `noReserve`), docs/03 "For the data track (M7-8)" |
-| Fixed by | |
+| Fixed by | docs only (the Producer's line in docs/03 at the ACCEPT); QA's `M78ReserveSwitchQaStressTests.NoReserveOnTheTeblorExpand` keeps the measurement |
 
 ## Repro
 1. `dotnet test sim/Rts.Sim.Tests --filter "FullyQualifiedName~M78ReserveSwitchQaStressTests.NoReserveOnTheTeblorExpand"`

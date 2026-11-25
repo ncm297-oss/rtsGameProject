@@ -5149,7 +5149,8 @@ on `shadow_archer` (with M8-2's `stillStealth`), and on `shadow_hound`:
 
 Each moves the data hash once; land them with the Shadow roster. The Archer's bonus applies from either stealth (forest or
 stand-still), so the faction's `forestStealth` block (M8-1) needs nothing more. Before writing "+50%" or "+10%" into a
-`description`, check the content tests' description-number reading (D-H2): it knows neither field yet.
+`description`, check the content tests' description-number reading (D-H2): since D35 (2026-11-24) it reads both
+(`Content/UnitHitBonusText`; BUG-1690: it also claims every other percentage in a unit description).
 
 **Questions for the Producer (M8-3).**
 
@@ -5336,7 +5337,10 @@ every seed: Pale Hills is a fixed map and the Teblor has one opening), so each r
 it shows: A puts Shamans on the field on both difficulties (0 → 16) and gives Easy its Riders and War-dogs (0 → 16), but
 Easy loses the Anointing (16 → 0) and one start its Breaker; on Normal, A trades one start's Rider for Shamans and keeps
 the Anointing and the second Longhouse; B (the expand never saved for) costs Normal the second Longhouse and the Anointing
-and changes nothing on Easy over A. So A is the candidate, with Easy's Anointing to be won back (likely the three unit
+and changes nothing on Easy over A. **QA's longer rows (BUG-1663): with `noReserve` on the expand step no seat expands at all,
+0 of 24 by 30:00 on three maps against 22 of 24 shipped, because the steps behind it and the army spend the bank as it
+comes in. Read `noReserve` on an expand step as "never expand"; do not ship it there without 30-minute rows (Producer
+ruling 2026-11-24, docs/01).** So A is the candidate, with Easy's Anointing to be won back (likely the three unit
 steps, now paid through the reserve, spend the bank the research waited for; not traced here). The data track should re-measure any order on its four-map, seat-swapped rows (QA's
 D33 loop, `QA/Content/D33TeblorRowQaStressTests`) before it ships: two seats are no verdict.
 
