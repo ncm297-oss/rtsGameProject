@@ -847,8 +847,8 @@ public class DataContentHashTests
                 ExpectInOpening($"AiComposition.{p.Name}", nameof(AiOpening.Compositions), first.Compositions.SetItem(0, WithField(first.Compositions[0], p)));
         }
         // A new field must be added to ContentHash (these counts fail first).
-        Assert.Equal((9, 6, 3), (typeof(AiDifficultyDef).GetProperties().Length, typeof(AiStep).GetProperties().Length, typeof(AiComposition).GetProperties().Length));
-        Assert.Equal(18 * d.Ai.Length, fields); // M5-9a: counterStrength
+        Assert.Equal((9, 8, 3), (typeof(AiDifficultyDef).GetProperties().Length, typeof(AiStep).GetProperties().Length, typeof(AiComposition).GetProperties().Length));
+        Assert.Equal(20 * d.Ai.Length, fields); // M5-9a: counterStrength; M7-8: an AiStep's two reserve switches
         GameData noAi = With(d);
         typeof(GameData).GetProperty(nameof(GameData.Ai))!.SetValue(noAi, ImmutableArray<AiDef>.Empty);
         Assert.NotEqual(baseline, noAi.ContentHash());

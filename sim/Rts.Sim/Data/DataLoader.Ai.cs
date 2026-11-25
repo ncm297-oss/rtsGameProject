@@ -116,7 +116,7 @@ public static partial class DataLoader
                 Id = id,
                 DisplayName = name,
                 Description = description,
-                BuildOrder = BuildAiSteps(c, o.BuildOrder, faction, ids, p + ".buildOrder"),
+                BuildOrder = BuildAiSteps(c, o.BuildOrder, faction, ids, p + ".buildOrder", id),
                 Compositions = BuildAiCompositions(c, o.Compositions, faction, ids, p + ".compositions"),
                 AttackMinHalfPop = attack == null ? 0 : HalfPopField(c, attack.MinArmyPop, p + ".attack.minArmyPop"),
                 AttackMinCost = attack == null ? 0 : c.Int(attack.MinArmyCost, p + ".attack.minArmyCost", 0),
@@ -148,8 +148,13 @@ public static partial class DataLoader
         };
     }
 
-    /// <summary>A build order at <paramref name="path"/> (M5-8a: <c>openings[i].buildOrder</c>).</summary>
-    private static ImmutableArray<AiStep> BuildAiSteps(Checker c, List<AiStepJson?>? list, int faction, AiIds? ids, string path)
+    /// <summary>
+    /// A build order at <paramref name="path"/> (M5-8a: <c>openings[i].buildOrder</c>) of opening <paramref name="opening"/>.
+    /// M7-8 (Request 55): a step's optional <c>throughReserve</c> (a train step's only) and <c>noReserve</c> (a build, research
+    /// or expand step's only); either on another action, at any value, is one error at its own path naming the opening and
+    /// the step. Absent (or JSON <c>null</c>) and <c>false</c> load the same step.
+    /// </summary>
+    private static ImmutableArray<AiStep> BuildAiSteps(Checker c, List<AiStepJson?>? list, int faction, AiIds? ids, string path, string opening)
     {
         if (c.Obj(list, path) == null) return ImmutableArray<AiStep>.Empty;
         if (list!.Count == 0)
@@ -197,6 +202,13 @@ public static partial class DataLoader
                         c.Error(p + ".count", $"{s.Count} is outside 1-{DataLimits.MaxAiStepCount}");
                     else count = s.Count.Value;
                 }
+                // M7-8 (Request 55): each switch belongs to its actions alone.
+                string what = DataLimits.AiStepActionIds[(int)action];
+                string step = action == AiStepAction.Expand ? $"opening '{opening}' step {i} (expand)" : $"opening '{opening}' step {i} ({what} {s.Id})";
+                if (s.ThroughReserve != null && action != AiStepAction.Train)
+                    c.Error(p + ".throughReserve", $"{step}: throughReserve is for a train step only (a {what} step is paid from the whole bank already)");
+                if (s.NoReserve != null && action == AiStepAction.Train)
+                    c.Error(p + ".noReserve", $"{step}: noReserve is for a build, research or expand step only (a train step is never the reserved step)");
             }
             if (c.Errors.Count != errors) continue;
             if (first.TryGetValue((trigger, at, action, key), out int earlier))
@@ -205,7 +217,11 @@ public static partial class DataLoader
                 continue;
             }
             first.Add((trigger, at, action, key), i);
-            steps.Add(new AiStep { Trigger = trigger, At = at, Action = action, Target = target, TargetKey = key, Count = count });
+            steps.Add(new AiStep
+            {
+                Trigger = trigger, At = at, Action = action, Target = target, TargetKey = key, Count = count,
+                ThroughReserve = s.ThroughReserve == true, NoReserve = s.NoReserve == true, // M7-8
+            });
         }
         return steps.ToImmutable();
     }

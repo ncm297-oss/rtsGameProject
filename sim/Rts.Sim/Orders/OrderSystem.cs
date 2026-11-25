@@ -36,7 +36,9 @@ public static class OrderSystem
             int typeId = u.QueueTypeId[head];
             EntityHandle attackTarget = kind == CommandKind.Attack ? u.QueuedTarget(head) : default;
             Pop(u, i);
-            Execute(world, i, kind, target, typeId, attackTarget);
+            // M7-8 (Request 58): an order that could not start at its turn is listed for the view (World.DroppedOrders).
+            if (!Execute(world, i, kind, target, typeId, attackTarget, out PlacementError why))
+                world.RecordDroppedOrder(new DroppedOrder(new EntityHandle(i, u.Generation[i]), u.Owner[i], kind, why, QueueFull: false));
         }
     }
 
@@ -66,7 +68,12 @@ public static class OrderSystem
         if (command.IsQueued)
         {
             int at = Append(u, i, command.Kind, positional ? command.Position : Vector2.Zero, command.Kind is CommandKind.Build or CommandKind.UseAbility ? command.TypeId : 0);
-            if (at < 0) return CommandRefusal.UnitQueueFull;
+            if (at < 0)
+            {
+                // M7-8 (Request 58): the refusal reached only the test seam; the view hears of it through World.DroppedOrders.
+                world.RecordDroppedOrder(new DroppedOrder(command.Unit, command.Player, command.Kind, PlacementError.None, QueueFull: true));
+                return CommandRefusal.UnitQueueFull;
+            }
             if (command.Kind == CommandKind.Attack) u.SetQueuedTarget(at, command.Target, command.TargetIsBuilding);
             return CommandRefusal.None;
         }
@@ -159,19 +166,24 @@ public static class OrderSystem
             if (command.Kind == CommandKind.AttackMove && world.CombatEnabled) CombatSystem.StartAttackMove(u, i, u.Goal[i]);
             return CommandRefusal.None;
         }
-        Execute(world, i, command.Kind, Vector2.Zero, 0, default);
+        Execute(world, i, command.Kind, Vector2.Zero, 0, default, out _);
         return CommandRefusal.None;
     }
 
-    /// <summary>Starts an order now: the unqueued semantics, minus clearing the queue for Move, AttackMove, Gather, Build, Repair and Attack.</summary>
-    private static void Execute(World world, int i, CommandKind kind, Vector2 target, int typeId, EntityHandle attackTarget)
+    /// <summary>
+    /// Starts an order now: the unqueued semantics, minus clearing the queue for Move, AttackMove, Gather, Build, Repair and
+    /// Attack. M7-8: false when the order could not start and was dropped, with <paramref name="why"/> a refused Build's
+    /// placement error (else <see cref="PlacementError.None"/>).
+    /// </summary>
+    private static bool Execute(World world, int i, CommandKind kind, Vector2 target, int typeId, EntityHandle attackTarget, out PlacementError why)
     {
         UnitStore u = world.Units;
+        why = PlacementError.None;
         switch (kind)
         {
             case CommandKind.Move:
             case CommandKind.AttackMove: // M4-1: walks like a Move, scanning on the way (CombatSystem)
-                if (!ResolveTarget(world.NavGrid, target, out int cell, out Vector2 goal)) return;
+                if (!ResolveTarget(world.NavGrid, target, out int cell, out Vector2 goal)) return false;
                 u.Hold[i] = false;
                 EndLoop(u, i);
                 CombatSystem.ClearForOrder(u, i);
@@ -181,21 +193,26 @@ public static class OrderSystem
             case CommandKind.Gather:
                 // Popped from the queue: the rest of the queue stays, for when the loop ends.
                 int node = EconomySystem.ResolveNode(world, target);
-                if (node < 0) break;
+                if (node < 0) return false;
                 CombatSystem.ClearForOrder(u, i);
                 EconomySystem.StartGather(world, i, node);
                 break;
             case CommandKind.Build: // popped: the rest of the queue stays, as for Gather
-                if (ConstructionSystem.StartBuild(world, i, typeId, target, replaceQueue: false)) CombatSystem.ClearForOrder(u, i);
+                if (!ConstructionSystem.StartBuild(world, i, typeId, target, replaceQueue: false, out why)) return false;
+                why = PlacementError.None;
+                CombatSystem.ClearForOrder(u, i);
                 break;
             case CommandKind.Repair:
-                if (ConstructionSystem.StartRepair(world, i, target, replaceQueue: false)) CombatSystem.ClearForOrder(u, i);
+                if (!ConstructionSystem.StartRepair(world, i, target, replaceQueue: false)) return false;
+                CombatSystem.ClearForOrder(u, i);
                 break;
             case CommandKind.UseAbility: // popped: dropped if on cooldown now; the rest of the queue stays, for after the cast
-                if (AbilitySystem.CanUse(world, i, typeId, target)) StartAbility(world, i, typeId, target);
+                if (!AbilitySystem.CanUse(world, i, typeId, target)) return false;
+                StartAbility(world, i, typeId, target);
                 break;
             case CommandKind.Attack: // popped: dropped if the target died or turned invalid while it waited; the rest of the queue stays
-                if (CombatSystem.MayAttack(world, i, attackTarget, typeId == 1)) StartAttack(world, i, attackTarget, typeId == 1);
+                if (!CombatSystem.MayAttack(world, i, attackTarget, typeId == 1)) return false;
+                StartAttack(world, i, attackTarget, typeId == 1);
                 break;
             case CommandKind.Stop:
                 CombatSystem.ClearForOrder(u, i);
@@ -210,6 +227,7 @@ public static class OrderSystem
                 u.Hold[i] = true;
                 break;
         }
+        return true;
     }
 
     /// <summary>Whether unit <paramref name="i"/> walks (or fights on) an attack-move leg whose end resolves to <paramref name="cell"/>.</summary>

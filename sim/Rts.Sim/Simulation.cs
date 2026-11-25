@@ -297,6 +297,7 @@ public sealed partial class Simulation : ICommandSink
         World.ClearImpacts(); // and its projectile landings (M4-2b)
         World.ClearAbilityEvents(); // and its cast starts and resolves (M4-4a)
         World.ClearDefeatEvents(); // and its defeats (M5-4b)
+        World.ClearDroppedOrders(); // and its dropped queued orders (M7-8, Request 58)
 
         // M4-3a: the initial fog stamp, before the first tick's commands, so units already in the world (placed before
         // the first tick) are seen from tick 0. The first phase-12 update is tick 1's, the tick the start commands apply in.

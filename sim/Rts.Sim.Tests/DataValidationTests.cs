@@ -343,6 +343,41 @@ public class DataValidationTests
     }
 
     /// <summary>
+    /// M7-8 (Request 55): a build-order step's reserve switch on an action it does not belong to is exactly one error at
+    /// <c>openings[i].buildOrder[j].&lt;field&gt;</c> naming the opening and the step, whatever its value (<c>false</c> too):
+    /// <c>throughReserve</c> on a build, research or expand step, <c>noReserve</c> on a train step.
+    /// </summary>
+    [Theory]
+    [InlineData("build", "throughReserve", "true")]
+    [InlineData("build", "throughReserve", "false")]
+    [InlineData("research", "throughReserve", "true")]
+    [InlineData("expand", "throughReserve", "true")]
+    [InlineData("train", "noReserve", "true")]
+    [InlineData("train", "noReserve", "false")]
+    public void AReserveSwitch_OnTheWrongAction_YieldsExactlyOneError(string what, string field, string value)
+    {
+        using TestDataDir dir = TestDataDir.CopyOfShipped();
+        (int i, int j) = (-1, -1);
+        string opening = "", id = "";
+        dir.EditJson("factions/malazan/ai.json", root =>
+        {
+            (i, j) = ReserveSwitchLoaderTests.FirstStep(root, what);
+            JsonNode o = root["openings"]![i]!;
+            opening = (string)o["id"]!;
+            JsonObject step = o["buildOrder"]![j]!.AsObject();
+            id = (string?)step["id"] ?? "expand";
+            step.Remove(ReserveSwitchLoaderTests.SwitchFor(what)); // only the wrong field (rule 58: a shipped valid one is taken off)
+            step[field] = JsonNode.Parse(value);
+        });
+        DataError e = Assert.Single(DataLoader.LoadAll(dir.Path).Errors);
+        Assert.Equal(("factions/malazan/ai.json", $"openings[{i}].buildOrder[{j}].{field}"), (e.File, e.Path));
+        Assert.Contains($"opening '{opening}'", e.Message);
+        Assert.Contains($"step {j}", e.Message);
+        Assert.Contains(id, e.Message);
+        Assert.Contains($"{field} is for", e.Message);
+    }
+
+    /// <summary>
     /// M8-3: a <c>nearbyOwn</c> passive (<c>units</c> as <c>onDeath</c>'s, <c>radius</c>, <c>damageBonus</c>, <c>maxStacks</c>),
     /// on the Crossbowman (which ships none). Each bad row is one error at its field; the loader's own refusals name the unit.
     /// <paramref name="edit"/> is a JSON object merged over the good passive (a null value removes the field).
