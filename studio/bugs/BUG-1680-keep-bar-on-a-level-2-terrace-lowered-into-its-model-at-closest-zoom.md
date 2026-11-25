@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S3 |
-| Status | open |
+| Status | fixed (verified by QA re-check round 1, 2026-11-24-1431) |
 | Found | 2026-11-24-1431, task M6-VH9 (QA) |
 | System | building views (`BuildingViews.BarCeiling` / `PlaceBar`, BUG-1631's fix) |
-| Fixed by | |
+| Fixed by | M6-VH9 fix round 1 (`5942d4a`: a lowered bar moves to `BarZ`, the building's camera side); regression: `QaM6VH9Test` (T) plain check, `QaM6VH9FixTest` (BZ), `ViewHardenVh9Test` (K) |
 
 ## Repro
 1. `dotnet build game/RtsGame.csproj`
@@ -42,3 +42,14 @@ hidden, so the player still cannot see it. Zoom 30 and up are unchanged on every
 - Options: never lower a bar below the model's top's screen point less a margin (accept it off screen on high ground), draw
   the bar without depth test when lowered, or follow the focus ground in `BarCeiling` (the camera does not, so the
   building really is nearer to it on high ground).
+
+## Re-check round 1 (QA, 2026-11-24-1431)
+Verified fixed. The developer changed QA's (T) row to sample the bar where it is drawn (the `BarBack` node) rather than over
+the footprint's centre; threshold unchanged. That is the right measurement (the bug is "the drawn bar is hidden"), not a
+weaker one. (T): 0 of 9 points behind the model on levels 0, 1 and 2 at every zoom (level 2 at zoom 20: bar 3.31 m, 4.30 m
+toward the camera). QA's new (BZ) row puts a Keep, a Barracks, the Watchtower and a Teblor Longhouse (scale 1.25) on level 2
+at zoom 20 at each screen edge (base on screen): 0 bar points behind its own drawn shape in all 16 placements, and `BarZ`
+is 0 exactly when the bar is not lowered. Windowed screenshots (Keep at the top and bottom edges, the forged 3.0 Keep of
+`QaM7V4Test`) show the bar in front of the building's face, readable. Note, not a defect: at the edges, part of the bar
+can be off screen while the base is on screen (perspective; the Watchtower at the top edge has all of it off, as it was over
+the centre before the fix).

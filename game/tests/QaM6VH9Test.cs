@@ -25,7 +25,8 @@ namespace Rts.Game.Tests;
 /// (T) a Keep on each terrace level (0, 1, 2) centred at zoom 20, 30, 40 and 60: its bar on screen, over its ground, and not
 /// hidden inside its own model (BUG-1631's ceiling on high ground);
 /// (E) enemy units behind an own Keep, seen through the gaps of its model: a right click where the enemy is seen (the ray meets
-/// the unit before any model triangle) targets that enemy (measured: the share that does);
+/// the unit before any model triangle) targets that enemy, every such pixel unless a tree is drawn in front of the enemy there
+/// (re-check round 1; the share is printed);
 /// (PH) with building models off (<c>--placeholder-art</c>), a Keep's box is picked to its 3 m and not 0.3 m over it;
 /// (S) a Sapper's one-shot throw at game speeds 0.5, 1 and 2 over 20 shots each (one throw a shot, each shot within 0.15 of the
 /// clip of its release); paused mid-windup the clip holds still; the target removed mid-windup leaves no stuck throw.
@@ -285,8 +286,9 @@ public partial class QaM6VH9Test : Node
             _camera.SetZoom(zoom);
             _camera.SetFocus(c.X, c.Y);
             await Frames(2);
-            int seen = 0, attacked = 0, own = 0, oldClear = 0;
+            int seen = 0, attacked = 0, own = 0, oldClear = 0, byTree = 0, missed = 0;
             UnitStore u = W.Units;
+            ResourceStore res = W.Resources;
             foreach (Vector2 p in ModelPixels(slot))
             {
                 Vector3 o = _camera.ProjectRayOrigin(p), d = _camera.ProjectRayNormal(p).Normalized();
@@ -299,11 +301,19 @@ public partial class QaM6VH9Test : Node
                     BuildingViews.BoxHeight, BuildingViews.SiteMinHeight, ReadOnlySpan<bool>.Empty, out float oldT);
                 if (oldBox < 0 || oldT >= unitT) oldClear++;
                 bool enemy = _sel.EnemyAt(p, out EntityHandle target, out bool isBuilding);
+                // Re-check round 1: a tree drawn in front of the enemy is what the click means (a prop: no Attack).
+                ResourcePicker.PickRay(W.NavGrid, W.Data.Resources, res.Alive, res.TypeId, res.Cell, W.Heightmap, new(o.X, o.Y, o.Z), new(d.X, d.Y, d.Z),
+                    PropsView.Shape, out float nodeT);
+                bool tree = nodeT < unitT;
+                if (tree) byTree++;
                 if (enemy && !isBuilding && target.Index == unit) attacked++;
-                else if (!enemy) own++;            }
-            string msg = $"(E) zoom {zoom}: {seen} pixels show an enemy behind the own Keep (not hidden by its model); a right click there targets it at {attacked} ({100f * attacked / Math.Max(1, seen):0.#}%), means the own Keep / ground at {own}; the old 3 m box left {oldClear} of them clear (targeted before M6-VH9)";
+                else if (!enemy) own++;
+                if (!tree && !(enemy && !isBuilding && target.Index == unit)) missed++;
+            }
+            string msg = $"(E) zoom {zoom}: {seen} pixels show an enemy behind the own Keep (not hidden by its model); a right click there targets it at {attacked} ({100f * attacked / Math.Max(1, seen):0.#}%), no Attack at {own} ({byTree} of the {seen} have a tree drawn in front of the enemy); {missed} seen with no tree in front and not targeted; the old 3 m box left {oldClear} of them clear (targeted before M6-VH9)";
             GD.Print($"  {msg}");
             Check(seen > 0 && attacked >= oldClear, "BUG-1681: " + msg);
+            Check(missed == 0, "BUG-1681 (re-check): " + msg);
         }
         _camera.SetZoom(CameraLimits.DefaultZoom);
         await EndMatch();

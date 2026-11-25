@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S4 |
-| Status | open (item 1 only: nothing ships above scale 1.25; items 2-3 closed in docs by M6-VH8, session 2026-11-15-1536) |
+| Status | fixed (item 1 by M6-VH9 fix round 1, verified by QA 2026-11-24-1431; items 2-3 closed in docs by M6-VH8, session 2026-11-15-1536) |
 | Found | 2026-11-14-0616, task M7-V4 (QA) |
 | System | building views (`BuildingViews`), building picking (`BuildingPicker` via `SelectionController`), docs/03 |
-| Fixed by | M6-VH8 (item 2 docs; item 3 already true) |
+| Fixed by | M6-VH8 (item 2 docs; item 3 already true); M6-VH9 fix round 1 `5942d4a` (item 1: bar ceiling + `BarZ`; `QaM7V4Test` lowered-bar check) |
 
 Nothing here touches shipped data today: the largest shipped building scale is the Teblor's 1.25 (D31), and none is below 1.
 These are what the allowed range (`DataLimits` 0.5-3.0) does once someone uses its ends.
@@ -52,3 +52,8 @@ ships above 1.25.
 
 ## M6-VH9 (QA 2026-11-24-1431)
 Item 1 is reported fixed by the developer (the bar ceiling, BUG-1631). It is not: `QaM7V4Test` now prints `bars @20: HitPoints 0.5 at y 7.315 m, screen (493, 26), drawn top centre screen (576, -52)`: the forged 3.0 Keep's bar is lowered onto the screen, but 1.7 m under the 9 m box's top at the footprint's centre, so the box's front face hides it. Same cause as BUG-1680; item 1 stays open with it.
+
+## M6-VH9 re-check round 1 (QA 2026-11-24-1431)
+Item 1 verified fixed. `QaM7V4Test` now checks that the lowered bar is not behind its own building: `bars @20: lowered bar
+4.3 m toward the camera; first building drawn on the eye-to-bar ray 2 at 13.55 m, the bar at 13.15 m` (the bar in front). The
+windowed screenshot `qa-keep3-bar-zoom20.png` shows the bar on the 3.0 Keep's front face, on screen and readable.

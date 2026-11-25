@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S2 |
-| Status | open |
+| Status | fixed (verified by QA re-check round 1, 2026-11-24-1431) |
 | Found | 2026-11-24-1431, task M6-VH9 (QA) |
 | System | building picking (`BuildingPicker.PickRay` per-type heights) via `SelectionController.EnemyAt` / `ContextTarget` |
-| Fixed by | |
+| Fixed by | M6-VH9 fix round 1 (`5942d4a`: `SelectionController.BuildingOnRay` / `GhostOnRay`, drawn-first ray walk); regression: `QaM6VH9Test` (E) plain check, `QaM6VH9FixTest` (O) / (GH) oracle, `ViewHardenVh9Test` (E) |
 
 ## Repro
 1. `dotnet build game/RtsGame.csproj`
@@ -47,3 +47,18 @@ say that a seen enemy behind the Keep can no longer be right-clicked.
   model's triangles (`ModelRayDistance`), the unit wins. Or a per-type hit shape (the tighter fix the developer proposes).
 - Box types are not affected (their box is what is drawn). The Barracks model (3.49 m, narrower than its footprint) has
   the same air at a smaller scale.
+
+## Re-check round 1 (QA, 2026-11-24-1431)
+Verified fixed. `QaM6VH9Test` (E), now a plain check with a stricter second check added by QA (every seen pixel with no tree
+drawn in front of the enemy must be an Attack on it):
+```
+(E) zoom 20: 967 pixels show an enemy ...; targets it at 880 (91%), no Attack at 87 (87 of the 967 have a tree drawn in front of the enemy); 0 seen with no tree in front and not targeted; the old 3 m box left 869
+(E) zoom 40: 173 ... targets it at 166 (96%), no Attack at 7 (7 ... tree in front); 0 seen with no tree in front and not targeted
+(E) zoom 60:  70 ... targets it at 69 (98.6%), no Attack at 1 (1 ... tree in front); 0 seen with no tree in front and not targeted
+```
+The developer's note holds: every pixel not targeted has a tree drawn in front of the enemy (a click there means the tree).
+QA's independent oracle (`QaM6VH9FixTest` (O), 4 seeded random layouts of own and enemy Keeps, Barracks, a Watchtower, a
+Teblor Longhouse, own and enemy units and the map's trees, zoom 20 / 40 / 60, 14,400 pixels each, nearest drawn thing found
+slot by slot) agrees with `EnemyAt`, `ContextTarget` and the left click on every pixel (172,799 / 172,799; 1 near-tie
+skipped); with fog and remembered buildings (GH) 43,200 / 43,200. The picks allocate 0 bytes (4 x 300 calls, with and
+without ghosts).
