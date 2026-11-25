@@ -20,6 +20,12 @@ public class FrenzyRulesLoaderTests
     /// <summary>Blood-oil Anointing's statusDuration effect index in the copy (after its armor effects; BUG-1280 as <see cref="Row"/>).</summary>
     private static readonly int Effect = BloodOilScenes.EffectIndex;
 
+    /// <summary>M7-H3: Blood-oil Anointing's row in the Teblor techs file, found by id (was <c>techs[0]</c>: the Shadow roster will add rows).</summary>
+    private static readonly int Anointing = IndexOf(TeblorTechs, "techs", BloodOilScenes.AnointingTech);
+
+    /// <summary>M7-H3: the Longhouse's row in the Teblor buildings file, found by id (was <c>buildings[0]</c>).</summary>
+    private static readonly int Longhouse = IndexOf(TeblorBuildings, "buildings", "teblor_longhouse");
+
     private static JsonArray ShippedArray(string rel, string list) =>
         JsonNode.Parse(File.ReadAllText(Path.Combine(TestDataDir.Shipped, rel)))![list]!.AsArray();
 
@@ -47,7 +53,7 @@ public class FrenzyRulesLoaderTests
         LoadWith(dir => dir.EditJson(Statuses, r => edit(r["statuses"]!.AsArray().Single(n => (string)n!["id"]! == id)!.AsObject())));
 
     private static DataLoadResult WithTechEffect(Action<JsonObject> edit) =>
-        LoadWith(dir => dir.EditJson(TeblorTechs, r => edit(r["techs"]![0]!["effects"]![Effect]!.AsObject())));
+        LoadWith(dir => dir.EditJson(TeblorTechs, r => edit(BloodOilScenes.AnointingRow(r)["effects"]![Effect]!.AsObject())));
 
     /// <summary>Exactly one error, at <paramref name="file"/> <paramref name="path"/>, its message containing <paramref name="text"/>.</summary>
     private static void AssertOneErrorAt(DataLoadResult r, string file, string path, string text)
@@ -79,8 +85,8 @@ public class FrenzyRulesLoaderTests
         Assert.All(TestSim.Data.Buildings.Where(b => b.Faction != teblor), b => Assert.Equal(1f, b.Scale));
         // The ends of the ranges load.
         Assert.True(WithFrenzy(x => x["damageBonus"] = 4).Ok);
-        Assert.True(LoadWith(dir => dir.EditJson(TeblorBuildings, r => r["buildings"]![0]!["scale"] = 3.0)).Ok);
-        Assert.True(LoadWith(dir => dir.EditJson(TeblorBuildings, r => r["buildings"]![0]!["scale"] = 0.5)).Ok);
+        Assert.True(LoadWith(dir => dir.EditJson(TeblorBuildings, r => r["buildings"]![Longhouse]!["scale"] = 3.0)).Ok);
+        Assert.True(LoadWith(dir => dir.EditJson(TeblorBuildings, r => r["buildings"]![Longhouse]!["scale"] = 0.5)).Ok);
     }
 
     [Theory]
@@ -161,7 +167,7 @@ public class FrenzyRulesLoaderTests
 
     [Fact]
     public void AStatusDurationEffect_NamingAnUnknownStatus_IsOneError() =>
-        AssertOneErrorAt(WithTechEffect(e => e["statuses"] = new JsonArray("dazed")), TeblorTechs, $"techs[0].effects[{Effect}].statuses[0]", "unknown status 'dazed'");
+        AssertOneErrorAt(WithTechEffect(e => e["statuses"] = new JsonArray("dazed")), TeblorTechs, $"techs[{Anointing}].effects[{Effect}].statuses[0]", "unknown status 'dazed'");
 
     [Theory]
     [InlineData("appliesTo", "{\"units\": [\"teblor_warrior\"]}", "appliesTo", "names statuses, not units")]
@@ -177,7 +183,7 @@ public class FrenzyRulesLoaderTests
             if (json == null) e.Remove(field);
             else e[field] = JsonNode.Parse(json);
         });
-        AssertOneErrorAt(r, TeblorTechs, $"techs[0].effects[{Effect}].{at}", text);
+        AssertOneErrorAt(r, TeblorTechs, $"techs[{Anointing}].effects[{Effect}].{at}", text);
     }
 
     [Fact]
@@ -186,8 +192,16 @@ public class FrenzyRulesLoaderTests
         DataLoadResult r = WithTechEffect(e => e["amount"] = -2);
         Assert.True(r.Ok, string.Join("; ", r.Errors));
         Assert.Equal(-40f, r.Data!.Techs[r.Data.FindTech("teblor_blood_oil_anointing")].Effects[Effect].Amount);
-        DataLoadResult armor = LoadWith(dir => dir.EditJson(TeblorTechs, root => root["techs"]![0]!["effects"]![0]!["statuses"] = new JsonArray("slowed")));
-        AssertOneErrorAt(armor, TeblorTechs, "techs[0].effects[0].statuses", "only a statusDuration effect");
+        // The Anointing's first effect that is not its statusDuration one (an armor effect), found in the copy.
+        int other = -1;
+        DataLoadResult armor = LoadWith(dir => dir.EditJson(TeblorTechs, root =>
+        {
+            JsonArray effects = BloodOilScenes.AnointingRow(root)["effects"]!.AsArray();
+            other = effects.ToList().FindIndex(e => !BloodOilScenes.IsStatusDuration(e));
+            Assert.True(other >= 0, "the Anointing has no effect other than its statusDuration one");
+            effects[other]!["statuses"] = new JsonArray("slowed");
+        }));
+        AssertOneErrorAt(armor, TeblorTechs, $"techs[{Anointing}].effects[{other}].statuses", "only a statusDuration effect");
     }
 
     [Theory]

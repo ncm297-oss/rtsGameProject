@@ -130,28 +130,9 @@ public class OpeningReserveShareStressTests
         Assert.Equal(mine, second);
     }
 
-    private static string RunChild()
-    {
-        string dll = typeof(OpeningReserveShareStressTests).Assembly.Location;
-        var info = new ProcessStartInfo("dotnet") { RedirectStandardOutput = true, RedirectStandardError = true, UseShellExecute = false };
-        foreach (string a in new[] { "test", dll, "--filter", $"FullyQualifiedName={typeof(OpeningReserveShareStressTests).FullName}.{nameof(AShareLayout_SameInThreeProcesses)}", "--logger", "console;verbosity=detailed" })
-            info.ArgumentList.Add(a);
-        info.Environment[ChildVariable] = "1";
-        using Process p = Process.Start(info)!;
-        System.Threading.Tasks.Task<string> err = p.StandardError.ReadToEndAsync();
-        System.Threading.Tasks.Task<string> output = p.StandardOutput.ReadToEndAsync();
-        if (!p.WaitForExit(600_000))
-        {
-            try { p.Kill(entireProcessTree: true); } catch (InvalidOperationException) { }
-            Assert.Fail("the child dotnet test did not exit within 600 s");
-        }
-        p.WaitForExit();
-        string text = output.Result;
-        int at = text.IndexOf(Marker, StringComparison.Ordinal);
-        Assert.True(at >= 0, $"the child printed no digest (exit {p.ExitCode}): {text} {err.Result}");
-        int from = at + Marker.Length, to = text.IndexOfAny(new[] { '\r', '\n' }, from);
-        return text[from..(to < 0 ? text.Length : to)].Trim();
-    }
+    /// <summary>M7-H3: the shared child runner, its 600 s now the child's processor time (a wall ceiling 3 times it), not the wall clock.</summary>
+    private static string RunChild() =>
+        MapFileTests.RunChild(typeof(OpeningReserveShareStressTests), nameof(AShareLayout_SameInThreeProcesses), ChildVariable, Marker, seconds: 600);
 
     // ---------- share 0: the first wave ----------
 

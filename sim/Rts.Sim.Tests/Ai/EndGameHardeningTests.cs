@@ -378,6 +378,8 @@ public class EndGameHardeningTests
         _out!.WriteLine($"this process: {mine}; saved mid-hunt at {savedAt}, followed {followed} ticks");
         Assert.True(firstDefeat > 0, "no seat was defeated by 100,000");
         Assert.True(savedAt > 0 && followed == 1000, "no hunt after a defeat to save in");
+        // M7-H3 (docs/01 2026-11-25 (2)): 1,200 s of the child's processor time (about 191 s alone), wall ceiling 3,600 s; the
+        // wall clock alone failed it under a contended Stress run.
         Assert.Equal(mine, MapFileTests.RunChild(typeof(EndGameHardeningTests), nameof(PaleHillsSeed2_FourSeats_PastADefeat_TwoProcesses_AndASaveMidHunt), FourSeatChild, FourSeatLine, seconds: 1200));
     }
 

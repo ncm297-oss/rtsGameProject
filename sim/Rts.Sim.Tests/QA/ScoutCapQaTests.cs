@@ -181,16 +181,17 @@ public class ScoutCapQaTests
 
     /// <summary>
     /// M6-S12: seeds whose worker bound (14) the far-forest start misses for a reason that is not the scout role, printed and
-    /// not asserted there (the scout count still is). BUG-1462's family (M6-S10 listed seed 5: 11 losses on the 157 m forest
-    /// walk; green in M6-SH2): on M6-S12's tree (a rebalance measured from the drop-off; the match diverges) the seat's
-    /// woodcutters at the forests 147-154 m out are killed by the enemy there, every scout count within the cap. Seed 5:
-    /// 11 / 12 / 15 workers at 0 / 200 / 2,000 (the unharmed run 13, losses 10, its deaths all at the far forest); seed 6:
-    /// 17 / 18 / 13. The base (95186a7): seed 5 15 / 17 / 17, seed 6 17 / 18 / 18.
+    /// not asserted there (the scout count still is). BUG-1557 (open; an AI economy finding of the far-forest family, its cause
+    /// for the AI-play session: M6-S10 listed seed 5: 11 losses on the 157 m forest walk; green in M6-SH2): on M6-S12's tree
+    /// (a rebalance measured from the drop-off; the match diverges) the seat's woodcutters at the forests 147-154 m out are
+    /// killed by the enemy there, every scout count within the cap. Seed 5: 11 / 12 / 15 workers at 0 / 200 / 2,000 (the
+    /// unharmed run 13, losses 10, its deaths all at the far forest); seed 6: 17 / 18 / 13. The base (95186a7): seed 5
+    /// 15 / 17 / 17, seed 6 17 / 18 / 18. M7-H3: the label was the closed family bug's id until the Producer's ruling.
     /// </summary>
     private static readonly Dictionary<ulong, string> KnownWorkerLosses = new()
     {
-        [5] = "BUG-1462",
-        [6] = "BUG-1462",
+        [5] = "BUG-1557",
+        [6] = "BUG-1557",
     };
 
     private static Vector2 Toward(World w, Vector2 hall)

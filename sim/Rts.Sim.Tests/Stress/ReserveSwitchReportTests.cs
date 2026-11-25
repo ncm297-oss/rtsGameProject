@@ -7,9 +7,13 @@ namespace Rts.Sim.Tests.Stress;
 
 /// <summary>
 /// M7-8 (Request 55), a measurement with no bound (rule 48: only its preconditions are asserted). The Teblor mirror on Pale
-/// Hills, seeds 1-8 (16 Teblor seats a row), both seats at the row's difficulty, to 15:00, on the three orders of
-/// <see cref="TeblorSwitchOrders"/>: the shipped <c>standard</c>; A, <c>throughReserve</c> on the Destrier Rider, War-dog and
-/// Shaman train steps; B, A plus <c>noReserve</c> on the expand step. Per row, the seats that researched Blood-oil
+/// Hills, seeds 1-8 (16 Teblor seats a row; BUG-1662: on this fixed map with one Teblor opening the eight seeds play alike,
+/// so each row is really two seats, one a start: read it as two data points, and re-measure on the data track's four-map,
+/// seat-swapped rows before shipping), both seats at the row's difficulty, to 15:00, on the orders of
+/// <see cref="TeblorSwitchOrders"/>: "none" (every switch taken out; M7-H3), the shipped <c>standard</c>; A, <c>throughReserve</c>
+/// on the Destrier Rider, War-dog and Shaman train steps; B, A plus <c>noReserve</c> on the expand step. An order whose data
+/// hashes as an earlier one is the same data (while the shipped file has no switch, "shipped" is "none"; once it ships
+/// order A, A is "shipped") and is printed as such, not played again. Per row, the seats that researched Blood-oil
 /// Anointing, fielded a Shaman / a Destrier Rider / a War-dog pack / a Breaker (alive at some whole second), finished a
 /// second Longhouse, and were defeated. docs/03 "For the data track (M7-8)" carries the table.
 /// </summary>
@@ -64,9 +68,18 @@ public class ReserveSwitchReportTests(ITestOutputHelper output)
     {
         AiDifficulty diff = Enum.Parse<AiDifficulty>(difficulty);
         var data = TeblorSwitchOrders.Names.Select(TeblorSwitchOrders.Data).ToArray();
+        // M7-H3 (rule 58): an order that is the same data as an earlier one is not played twice.
+        var sameAs = new int[data.Length];
+        for (int o = 0; o < data.Length; o++)
+        {
+            sameAs[o] = -1;
+            for (int e = 0; e < o && sameAs[o] < 0; e++)
+                if (sameAs[e] < 0 && data[e].ContentHash() == data[o].ContentHash()) sameAs[o] = e;
+        }
         var jobs = new List<(int Order, ulong Seed)>();
         for (int o = 0; o < data.Length; o++)
-            foreach (ulong s in Seeds) jobs.Add((o, s));
+            if (sameAs[o] < 0)
+                foreach (ulong s in Seeds) jobs.Add((o, s));
         var results = new Seat[jobs.Count][];
         var errors = new ConcurrentQueue<string>();
         var clock = System.Diagnostics.Stopwatch.StartNew();
@@ -81,6 +94,11 @@ public class ReserveSwitchReportTests(ITestOutputHelper output)
         output.WriteLine("| --- | --- | --- | --- | --- | --- | --- | --- | --- |");
         for (int o = 0; o < data.Length; o++)
         {
+            if (sameAs[o] >= 0)
+            {
+                output.WriteLine($"| {TeblorSwitchOrders.Names[o]} | {data[o].ContentHash():X16} | the same data as {TeblorSwitchOrders.Names[sameAs[o]]} | | | | | | |");
+                continue;
+            }
             var seats = Enumerable.Range(0, jobs.Count).Where(i => jobs[i].Order == o).SelectMany(i => results[i]).ToList();
             Assert.Equal(16, seats.Count);
             output.WriteLine($"| {TeblorSwitchOrders.Names[o]} | {data[o].ContentHash():X16} | {Count(seats, s => s.Anointed)} | {Count(seats, s => s.Fielded[0])} | {Count(seats, s => s.Fielded[1])} | "

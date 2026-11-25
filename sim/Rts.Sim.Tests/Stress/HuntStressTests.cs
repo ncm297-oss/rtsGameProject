@@ -217,8 +217,9 @@ public class HuntStressTests
     /// it hunts a sighting; each load follows the uninterrupted run hash for hash to the match's end, the AI seats field for field equal there.
     /// M5-9a: with Normal's counter shift seed 3 ends at 31,891 without a hunt, so the row plays seed 5 (<see cref="MidHuntSeed"/>,
     /// one hunt, ends at 45,358) to keep a save taken mid-hunt. M5-9b: seed 1 (one hunt, ends at 48,858; seed 5 ends past 72,000;
-    /// M5-H6: 50,140, one hunt). M6-SH2 (BUG-1533): seed 1 ends at 27,498 with no hunt, so the row plays seed 2 (42,016, 4
-    /// hunts, the first at 34,761).
+    /// M5-H6: 50,140, one hunt). M6-SH2 (BUG-1533): seed 1 ends at 27,498 with no hunt, so the row plays seed 2 (then 42,016,
+    /// 4 hunts, the first at 34,761). Since M6-S12 (docs/03 "Implementation (M6-S12)", fix round 1): seed 2 ends at 51,218
+    /// (was 42,016), saved at a sighting (p1, 46,381) and a sweep (p1, 48,541); re-read by M7-H3 (2026-11-25), unchanged.
     /// </summary>
     [Fact]
     [Trait("Category", "Stress")]
