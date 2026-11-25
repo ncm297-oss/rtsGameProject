@@ -33,3 +33,19 @@ The new train steps should not cost Easy and Hard the faction's one upgrade.
 - **The Shaman half is worse, not better**: Easy 34 -> 16 (pre-D33 51), Hard 25 -> 22, Normal 25 -> 15 (bar 14). The
   brief's bar does not cover Easy's or Hard's Shamans, and the trade is printed in teblor.md's D34 questions. Suggest the
   Producer either closes the Anointing half and moves the Shaman loss under Request 55, or keeps this bug open for it.
+
+## D-H10 (2026-11-25): the switches against the bar; none meets it, nothing ships
+- Baseline: the shipped order's full rows (`Content/DH10TeblorSwitchReportTests`, D34's row) give D34's 21 figures exactly.
+- Eleven candidates (the brief's A, S, RS, AR, AN; the developer's AT, AB, ANS, DS, ASE, ASES), screened on seeds 1-2,
+  full rows (64 a difficulty) for A, RS, AN, AT, AB. None meets every figure of docs/01 2026-11-24 ACCEPT (3)(c). Nearest:
+  A (`throughReserve` on the Rider, War-dog and Shaman steps), six misses: Easy Breaker 11 (20) and Anointing 9 (20),
+  Normal Breaker 11 (12) and Anointing 13 (17), Hard Rider 35 (40) and War-dog 42 (46). The table and the reading are in
+  teblor.md "The unit mix (BUG-1612, D-H10)"; questions for the Producer under it. `git diff -- game/` empty; the data
+  hash did not move.
+- Status stays open (the unit-mix half).
+
+## QA (D-H10, 2026-11-25-0924)
+- M's and A's full rows re-run in QA's own class (`QA/Content/DH10TeblorOrderQaStressTests`): equal to the developer's
+  figures on every map of every difficulty. "None meets the bar" confirmed for QA's own orders too (seven on full rows,
+  four more screened). The nearest is not A: one-Shaman orders miss 4 figures (QRD1 16 seats short, every Hard figure
+  met); see BUG-1721. Stays open.
