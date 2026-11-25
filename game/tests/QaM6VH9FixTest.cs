@@ -59,9 +59,17 @@ public partial class QaM6VH9FixTest : Node
             DataLoadResult loaded = DataLoader.LoadAll(ProjectSettings.GlobalizePath("res://data"));
             if (!loaded.Ok) throw new InvalidOperationException("data failed to load");
             _data = loaded.Data!;
-            for (int seed = 1; seed <= 4; seed++) await OracleRows(seed);
-            await GhostRows();
-            await BarEdgeRows();
+            // QA M6-V27: `-- --seeds <first> <last>` runs only the (O) rows on those layout seeds (BUG-1682 on new seeds); default 1-4 and every row.
+            string[] user = OS.GetCmdlineUserArgs();
+            int at = Array.IndexOf(user, "--seeds");
+            bool onlyOracle = at >= 0 && at + 2 < user.Length;
+            int first = onlyOracle ? int.Parse(user[at + 1], CultureInfo.InvariantCulture) : 1, last = onlyOracle ? int.Parse(user[at + 2], CultureInfo.InvariantCulture) : 4;
+            for (int seed = first; seed <= last; seed++) await OracleRows(seed);
+            if (!onlyOracle)
+            {
+                await GhostRows();
+                await BarEdgeRows();
+            }
         }
         catch (Exception ex)
         {
