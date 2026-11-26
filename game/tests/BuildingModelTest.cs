@@ -32,7 +32,7 @@ namespace Rts.Game.Tests;
 /// <item>Team colour (criterion 6): in every colour of the setup's table (eight, Crimson and Bone included), each player's
 /// material draws a team texel in exactly that colour at the team shade, and every other tile's texel the same for every
 /// colour; the remembered material is the same darkened as a ghost box.</item>
-/// <item>In a real match, three Malazan players, fog on (criteria 3-5): each finished model stands on its footprint's ground
+/// <item>In a real match, three players of the building's faction, fog on (criteria 3-5): each finished model stands on its footprint's ground
 /// with every part inside the footprint (at most 0.25 m over an edge is the brief's bound; the fit keeps
 /// <see cref="BuildingModels.FitMargin"/> inside), its box hidden; a site of each type is the rising box and is the model on the
 /// first frame after the tick it is finished; the bar is over the model's highest point (a hurt building's too); a click on
@@ -46,6 +46,9 @@ namespace Rts.Game.Tests;
 /// M6-V28 (six types): a type that needs Age II (the Watchtower) is built by player 2 once it has researched it, seen
 /// through a player-0 Billet beside it (player 0's stock can't pay Age II and every site); the remembered row sends a scout
 /// to each enemy building and frees them once seen.
+/// M6-V30 (the Teblor models): the match rows run once per faction the manifest's buildings belong to, every seat of that
+/// faction, with its own worker (builder and scout), line unit (the razing party), house (the watcher) and halls (Age II),
+/// all found by the data's slots, so no faction's unit or building is named here.
 /// Windowed with <c>-- --shots &lt;dir&gt;</c> it also saves the pictures of criterion 7 (default zoom and close up, two and
 /// four player colours, a Laborer and a Heavy Infantry beside each building, a site, and the remembered models under the fog).
 /// </remarks>
@@ -73,6 +76,15 @@ public partial class BuildingModelTest : Node
         ["malazan_depot"] = new() { ["team"] = 699, ["Stone"] = 12, ["Stone_Light"] = 438, ["Walls"] = 12, ["Wood"] = 2222, ["Wood_Light"] = 958, ["Metal_Light"] = 623 },
         ["malazan_crossbow_range"] = new() { ["team"] = 759, ["Stone"] = 422, ["Stone_Light"] = 816, ["Wood"] = 1001, ["Wood_Light"] = 311, ["White"] = 893, ["Red"] = 112 },
         ["malazan_watchtower"] = new() { ["team"] = 594, ["Stone"] = 557, ["Stone_Light"] = 723, ["Wood"] = 336, ["Wood_Light"] = 211 },
+        // M6-V30: the Teblor buildings (their team tile holds the roof faces the manifest's teamFaces rules pick, plus any Main).
+        ["teblor_longhouse"] = new() { ["team"] = 158, ["Stone"] = 38, ["Wood"] = 865, ["Wood_Light"] = 22 },
+        ["teblor_hut"] = new() { ["team"] = 76, ["Stone"] = 16, ["Wood"] = 276 },
+        ["teblor_woodcutters_lodge"] = new() { ["team"] = 65, ["Wood"] = 1234, ["Wood_Light"] = 911 },
+        ["teblor_war_lodge"] = new() { ["team"] = 272, ["Stone"] = 248, ["Stone_Light"] = 64, ["Wood"] = 777, ["Wood_Light"] = 76, ["Gold"] = 176, ["Metal_Light"] = 108, ["White"] = 158 },
+        ["teblor_javelin_ground"] = new() { ["team"] = 286, ["Wood"] = 1218, ["Wood_Light"] = 319, ["White"] = 770, ["Red"] = 84 },
+        ["teblor_stone_cairn"] = new() { ["team"] = 59, ["Wood"] = 336, ["Wood_Light"] = 37 },
+        ["teblor_bloodwood_carver"] = new() { ["team"] = 528, ["Wood"] = 1147, ["Wood_Light"] = 720, ["Yellow"] = 160 },
+        ["teblor_shamans_circle"] = new() { ["team"] = 536, ["Wood"] = 2256, ["Wood_Light"] = 44 },
     };
 
     private readonly List<string> _failures = new();
@@ -109,9 +121,10 @@ public partial class BuildingModelTest : Node
             _entries = manifest["buildings"]!.AsArray();
             Check(_entries.Count > 0, "the manifest lists no building");
             FileRows(data);
-            await MatchRows(data);
+            foreach (int faction in ManifestFactions(data)) await MatchRows(data, faction);
             FallbackRows(data);
-            if (_shots != null) await Pictures(data);
+            if (_shots != null)
+                foreach (int faction in ManifestFactions(data)) await Pictures(data, faction);
         }
         catch (Exception ex)
         {
@@ -260,27 +273,60 @@ public partial class BuildingModelTest : Node
         return new Color(lin.R * shade, lin.G * shade, lin.B * shade).LinearToSrgb();
     }
 
-    // The model types, by the manifest's ids, in its order.
-    private int[] ModelTypes(GameData data)
+    // The model types, by the manifest's ids, in its order (M6-V30: only faction `faction`'s when it is 0 or more).
+    private int[] ModelTypes(GameData data, int faction = -1)
     {
         var types = new List<int>();
-        foreach (JsonNode? e in _entries) types.Add(data.FindBuilding((string)e!["id"]!));
+        foreach (JsonNode? e in _entries)
+        {
+            int t = data.FindBuilding((string)e!["id"]!);
+            if (faction < 0 || (t >= 0 && data.Buildings[t].Faction == faction)) types.Add(t);
+        }
         return types.ToArray();
     }
 
-    private async Task MatchRows(GameData data)
+    // M6-V30: the factions the manifest's buildings belong to, in the order of their first entry.
+    private List<int> ManifestFactions(GameData data)
     {
-        StartMatch(data, "--players", "3", "--faction", "1", "malazan", "--faction", "2", "malazan", "--faction", "3", "malazan", "--resources", "high",
+        var list = new List<int>();
+        foreach (int t in ModelTypes(data))
+            if (t >= 0 && !list.Contains(data.Buildings[t].Faction)) list.Add(data.Buildings[t].Faction);
+        return list;
+    }
+
+    // M6-V30: faction `faction`'s first unit / building of a slot (its worker, its line unit, its house, its halls).
+    private static int UnitOf(GameData data, int faction, UnitSlot slot)
+    {
+        for (int u = 0; u < data.Units.Length; u++) if (data.Units[u].Faction == faction && data.Units[u].Slot == slot) return u;
+        return -1;
+    }
+
+    private static int BuildingOf(GameData data, int faction, BuildingSlot slot)
+    {
+        for (int b = 0; b < data.Buildings.Length; b++) if (data.Buildings[b].Faction == faction && data.Buildings[b].Slot == slot) return b;
+        return -1;
+    }
+
+    // The faction of the match the rows run in (M6-V30), and the pictures' name prefix.
+    private int _faction;
+    private string _prefix = "";
+
+    private async Task MatchRows(GameData data, int faction)
+    {
+        _faction = faction;
+        string key = data.Factions[faction].Key;
+        _prefix = faction == ManifestFactions(data)[0] ? "" : key + "-";
+        GD.Print($"match rows: {key}");
+        StartMatch(data, "--players", "3", "--faction", "1", key, "--faction", "2", key, "--faction", "3", key, "--resources", "high",
             "--zoom", CameraLimits.DefaultZoom.ToString(CultureInfo.InvariantCulture));
         if (_views.Models is not BuildingModels models)
         {
             Check(false, "the match's building views have no models");
             return;
         }
-        int[] types = ModelTypes(data);
-        int malazan = data.FindFaction("malazan");
+        int[] types = ModelTypes(data, faction);
         int boxType = -1;
-        for (int t = 0; t < data.Buildings.Length && boxType < 0; t++) if (data.Buildings[t].Faction == malazan && !models.Has(t)) boxType = t;
+        for (int t = 0; t < data.Buildings.Length && boxType < 0; t++) if (data.Buildings[t].Faction == faction && !models.Has(t)) boxType = t;
         NVector2 west = StartLayout.Block(W.NavGrid, 1, west: true, 1f)[0];
 
         // Finished models: the fit, the ground, the bar, the click (criteria 3 and 5).
@@ -296,7 +342,7 @@ public partial class BuildingModelTest : Node
         _views.Sync(W);
         await Frames(1);
         foreach (int slot in finished) await FitRow(slot);
-        if (Check(boxSlot >= 0, "no Malazan type without a model to spawn"))
+        if (Check(boxSlot >= 0, $"no {key} type without a model to spawn"))
             Check(_views.IsShown(boxSlot) && !_views.ShownAsModel(boxSlot) && _views.BoxOf(boxSlot).Visible && _views.ModelOf(boxSlot) == null,
                 $"{data.Buildings[boxType].Key} (no model file): not its box");
 
@@ -322,21 +368,25 @@ public partial class BuildingModelTest : Node
     // M6-V28: player 0 sees another player's site through a building of its own east of it (a building's sight, and no
     // unit to start a fight with the builders).
     private void Watch(GameData data, BuildingDef def, NVector2 c) =>
-        Check(Spawn(0, data.FindBuilding("malazan_billet"), c + new NVector2(def.FootprintWidth * MapConstants.CellSize / 2f + 4f, 0f)) >= 0,
-            $"{def.Key}: no watcher Billet beside {c}");
+        Check(Spawn(0, BuildingOf(data, _faction, BuildingSlot.House), c + new NVector2(def.FootprintWidth * MapConstants.CellSize / 2f + 4f, 0f)) >= 0,
+            $"{def.Key}: no watcher house beside {c}");
+
+    // M6-V30: how far outside a footprint's front edge a builder is spawned: 0.8 m for a 0.4 m worker (the Malazan rows as
+    // before), more for a wider one (a 0.75 m Teblor Gatherer at 0.8 m stood in the footprint: "UnitInTheWay").
+    private float Clear(GameData data) => 0.8f + Math.Max(0f, data.Units[UnitOf(data, _faction, UnitSlot.Worker)].Radius - 0.4f);
 
     private static bool Aged(GameData data, int type) => data.Buildings[type].RequiresTechs.Contains(data.FindTech("age_ii"));
 
-    // M6-V28: player `player` gets a Garrison Keep, a Barracks and a Crossbow Range near `near` (spawned) and researches Age II
-    // at the Keep, ticking until it has it (Age II needs two kinds of hall).
+    // M6-V28: player `player` gets a town hall, an infantry hall and a ranged hall near `near` (spawned) and researches Age II
+    // at the hall, ticking until it has it (Age II needs two kinds of hall). M6-V30: the match's faction's.
     private void AgeTwo(GameData data, int player, NVector2 near)
     {
         int age = data.FindTech("age_ii");
         if (age < 0 || W.HasTech(player, age)) return;
-        int hall = Spawn(player, data.FindBuilding("malazan_garrison_keep"), near);
-        Check(Spawn(player, data.FindBuilding("malazan_barracks"), near + new NVector2(14f, 0f)) >= 0, "Age II: no Barracks");
-        Check(Spawn(player, data.FindBuilding("malazan_crossbow_range"), near + new NVector2(26f, 0f)) >= 0, "Age II: no Crossbow Range");
-        if (!Check(hall >= 0, "Age II: no Keep to research it at")) return;
+        int hall = Spawn(player, BuildingOf(data, _faction, BuildingSlot.TownHall), near);
+        Check(Spawn(player, BuildingOf(data, _faction, BuildingSlot.InfantryHall), near + new NVector2(14f, 0f)) >= 0, "Age II: no infantry hall");
+        Check(Spawn(player, BuildingOf(data, _faction, BuildingSlot.RangedHall), near + new NVector2(26f, 0f)) >= 0, "Age II: no ranged hall");
+        if (!Check(hall >= 0, "Age II: no town hall to research it at")) return;
         _sim.Enqueue(Command.Research(player, Centre(hall), age));
         for (int t = 0; t < 4000 && !W.HasTech(player, age); t++) _sim.Tick();
         Check(W.HasTech(player, age), $"Age II not researched by player {player} (gold {W.Gold[player]}, wood {W.Wood[player]})");
@@ -408,13 +458,13 @@ public partial class BuildingModelTest : Node
     private void SiteRow(GameData data, int type, NVector2 near, int pl)
     {
         BuildingDef def = data.Buildings[type];
-        int laborer = data.FindUnit("malazan_laborer");
-        int anchor = OpenAnchor(def, near);
+        int laborer = UnitOf(data, _faction, UnitSlot.Worker);
+        int anchor = OpenAnchor(def, near, clearOfUnits: true);
         if (!Check(anchor >= 0, $"{def.Key} site: no open anchor")) return;
         NVector2 c = StartBase.FootprintCenter(W.NavGrid, def, anchor);
         if (pl != 0) Watch(data, def, c);
         var workers = new List<int>();
-        for (int k = 0; k < 4; k++) _sim.Enqueue(Command.SpawnUnit(pl, laborer, c + new NVector2(-3f + 2f * k, def.FootprintHeight * MapConstants.CellSize / 2f + 0.8f)));
+        for (int k = 0; k < 4; k++) _sim.Enqueue(Command.SpawnUnit(pl, laborer, c + new NVector2(-3f + 2f * k, def.FootprintHeight * MapConstants.CellSize / 2f + Clear(data))));
         _sim.Tick();
         _sim.Tick();
         for (int i = 0; i < W.Units.Capacity; i++)
@@ -459,12 +509,12 @@ public partial class BuildingModelTest : Node
         Check(model != null && _views.BarY(site) - BuildingViews.BarThickness / 2f > _views.Models!.Top(type), $"{def.Key} site finished: the bar not over the model's top");
 
         // Another site of the type, cancelled: nothing left drawn. South of the builders, in ground they have explored.
-        int anchor2 = OpenAnchor(def, c + new NVector2(0f, def.FootprintHeight * MapConstants.CellSize + 6f));
+        int anchor2 = OpenAnchor(def, c + new NVector2(0f, def.FootprintHeight * MapConstants.CellSize + 6f), clearOfUnits: true);
         if (!Check(anchor2 >= 0, $"{def.Key} cancel: no open anchor")) return;
         NVector2 at2 = PlacementGhost.AnchorPoint(W.NavGrid, anchor2);
         if (pl != 0) Watch(data, def, StartBase.FootprintCenter(W.NavGrid, def, anchor2));
         // A Laborer beside it explores the ground (a Build needs every footprint cell explored).
-        _sim.Enqueue(Command.SpawnUnit(pl, laborer, StartBase.FootprintCenter(W.NavGrid, def, anchor2) + new NVector2(0f, def.FootprintHeight * MapConstants.CellSize / 2f + 0.8f)));
+        _sim.Enqueue(Command.SpawnUnit(pl, laborer, StartBase.FootprintCenter(W.NavGrid, def, anchor2) + new NVector2(0f, def.FootprintHeight * MapConstants.CellSize / 2f + Clear(data))));
         // Through a fog update (every 4th tick): a Build onto unexplored ground is refused at once.
         for (int t = 0; t < 6; t++) _sim.Tick();
         W.CanPlace(pl, type, anchor2, out PlacementError why);
@@ -487,7 +537,7 @@ public partial class BuildingModelTest : Node
     // Player 2's Heavy Infantry hurt then raze each finished model; the bar over the top while hurt, nothing drawn after.
     private async Task HurtAndDestroy(GameData data, List<int> slots)
     {
-        int heavy = data.FindUnit("malazan_heavy_infantry");
+        int heavy = UnitOf(data, _faction, UnitSlot.Line);
         foreach (int slot in slots)
         {
             BuildingDef def = W.Data.Buildings[B.TypeId[slot]];
@@ -543,7 +593,7 @@ public partial class BuildingModelTest : Node
         if (enemy.Count == 0) return;
         // M6-V28: one scout in front of each (the row of six is wider than one Laborer's sight; the enemy Watchtower may shoot
         // its scout, whose death leaves the spot out of sight just as walking away does).
-        int laborer = data.FindUnit("malazan_laborer");
+        int laborer = UnitOf(data, _faction, UnitSlot.Worker);
         var aliveBefore = new bool[W.Units.Capacity];
         for (int i = 0; i < aliveBefore.Length; i++) aliveBefore[i] = W.Units.Alive[i];
         foreach (int s in enemy) _sim.Enqueue(Command.SpawnUnit(0, laborer, Centre(s) + new NVector2(0f, W.Data.Buildings[B.TypeId[s]].FootprintHeight * MapConstants.CellSize / 2f + 5f)));
@@ -603,7 +653,7 @@ public partial class BuildingModelTest : Node
         int target = enemy[^1], tgen = B.Generation[target];
         BuildingDef tdef = W.Data.Buildings[B.TypeId[target]];
         NVector2 tc = Centre(target);
-        int heavy = data.FindUnit("malazan_heavy_infantry");
+        int heavy = UnitOf(data, _faction, UnitSlot.Line);
         float rr = tdef.FootprintHeight * MapConstants.CellSize / 2f + 1.2f;
         for (int k = 0; k < 16; k++) _sim.Enqueue(Command.SpawnUnit(2, heavy, tc + new NVector2(-6f + 0.8f * k, k % 2 == 0 ? rr : -rr)));
         _sim.Tick();
@@ -702,14 +752,18 @@ public partial class BuildingModelTest : Node
         return ok;
     }
 
-    // Criterion 7's pictures (windowed): no fog, four players.
-    private async Task Pictures(GameData data)
+    // Criterion 7's pictures (windowed): no fog, four players. M6-V30: once per faction, four seats of it; a faction after
+    // the first prefixes its pictures' names with its id.
+    private async Task Pictures(GameData data, int faction)
     {
-        StartMatch(data, "--players", "4", "--no-fog", "--no-combat", "--resources", "high", "--faction", "1", "malazan", "--faction", "2", "malazan",
-            "--faction", "3", "malazan", "--faction", "4", "malazan");
+        _faction = faction;
+        string key = data.Factions[faction].Key;
+        _prefix = faction == ManifestFactions(data)[0] ? "" : key + "-";
+        StartMatch(data, "--players", "4", "--no-fog", "--no-combat", "--resources", "high", "--faction", "1", key, "--faction", "2", key,
+            "--faction", "3", key, "--faction", "4", key);
         _match.GetNode<SimRunner>("SimRunner").ProcessMode = ProcessModeEnum.Inherit; // figures animate
-        int[] types = ModelTypes(data);
-        int laborer = data.FindUnit("malazan_laborer"), heavy = data.FindUnit("malazan_heavy_infantry");
+        int[] types = ModelTypes(data, faction);
+        int laborer = UnitOf(data, _faction, UnitSlot.Worker), heavy = UnitOf(data, _faction, UnitSlot.Line);
         NVector2 o = StartLayout.Block(W.NavGrid, 1, west: true, 1f)[0] + new NVector2(-40f, -16f);
         // Rows: per type, players 1 and 2 side by side, a Laborer and a Heavy Infantry before each building.
         var centres = new List<NVector2>();
@@ -762,7 +816,7 @@ public partial class BuildingModelTest : Node
             if (anchor < 0) continue;
             int pl = Aged(data, type) ? 2 : 0;
             if (pl != 0) AgeTwo(data, pl, o + new NVector2(70f, 0f));
-            NVector2 c = StartBase.FootprintCenter(W.NavGrid, def, anchor), at = c + new NVector2(0f, def.FootprintHeight * MapConstants.CellSize / 2f + 0.8f);
+            NVector2 c = StartBase.FootprintCenter(W.NavGrid, def, anchor), at = c + new NVector2(0f, def.FootprintHeight * MapConstants.CellSize / 2f + Clear(data));
             _sim.Enqueue(Command.SpawnUnit(pl, laborer, at));
             _sim.Tick();
             _sim.Tick();
@@ -852,7 +906,9 @@ public partial class BuildingModelTest : Node
         return slot >= 0 && B.Cell[slot] == anchor && B.TypeId[slot] == type ? slot : -1;
     }
 
-    private int OpenAnchor(BuildingDef def, NVector2 near)
+    // M6-V30: `clearOfUnits` also skips an anchor with a live unit on or within 1.5 m of the footprint (a site row's builders
+    // and explorers stay where they stood; a 0.75 m Teblor Gatherer left by the row before made the next site "UnitInTheWay").
+    private int OpenAnchor(BuildingDef def, NVector2 near, bool clearOfUnits = false)
     {
         int type = W.Data.FindBuilding(def.Key);
         for (int r = 0; r <= 8; r++)
@@ -865,9 +921,22 @@ public partial class BuildingModelTest : Node
                     int a = cy * W.NavGrid.Width + cx;
                     if (cx < 1 || cy < 1 || cx + def.FootprintWidth >= W.NavGrid.Width - 1 || cy + def.FootprintHeight >= W.NavGrid.Height - 1) continue;
                     if (!B.Fits(type, a) || !FitsWithMargin(def, cx, cy)) continue;
+                    if (clearOfUnits && UnitNear(cx * MapConstants.CellSize, cy * MapConstants.CellSize,
+                            (cx + def.FootprintWidth) * MapConstants.CellSize, (cy + def.FootprintHeight) * MapConstants.CellSize)) continue;
                     return a;
                 }
         return -1;
+    }
+
+    private bool UnitNear(float x0, float z0, float x1, float z1)
+    {
+        for (int i = 0; i < W.Units.Capacity; i++)
+        {
+            if (!W.Units.Alive[i]) continue;
+            NVector2 p = W.Units.Position[i];
+            if (p.X > x0 - 1.5f && p.X < x1 + 1.5f && p.Y > z0 - 1.5f && p.Y < z1 + 1.5f) return true;
+        }
+        return false;
     }
 
     // One free cell round the footprint, so neighbours never touch and units can pass.
@@ -901,7 +970,7 @@ public partial class BuildingModelTest : Node
                     float l = 0.2126f * px.R + 0.7152f * px.G + 0.0722f * px.B;
                     img.SetPixel(x, y, new Color(l, l, l));
                 }
-        string path = Path.Combine(_shots!, name + ".png");
+        string path = Path.Combine(_shots!, _prefix + name + ".png");
         Error e = img.SavePng(path);
         GD.Print($"screenshot {path} ({e})");
     }

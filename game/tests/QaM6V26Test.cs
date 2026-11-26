@@ -66,21 +66,30 @@ public partial class QaM6V26Test : Node
             DataLoadResult loaded = DataLoader.LoadAll(ProjectSettings.GlobalizePath("res://data"));
             if (!loaded.Ok) throw new InvalidOperationException("data failed to load");
             GameData data = loaded.Data!;
-            StartMatch(data, "--players", "3", "--faction", "1", "malazan", "--faction", "2", "malazan", "--faction", "3", "malazan", "--resources", "high");
-            if (_views.Models is not BuildingModels models || models.ModelTypes == 0)
-                Check(false, "no building models loaded");
-            else
+            // M6-V30: the rows run once per faction that has building models (the Teblor's joined the Malazan's), three seats
+            // of that faction, its own worker, line unit and halls (found by slot).
+            foreach (int faction in ModelFactions(data))
             {
-                int[] types = ModelTypes(data);
-                KeepAlive(data);
-                TerraceRows(types);
-                await ReuseRows(data, types);
-                await SiteRazedRows(data, types);
-                await GhostAllocationRow(data, types);
-                await BarOnScreenRows(types);
-                await PickRows(data, types);
+                _faction = faction;
+                string key = data.Factions[faction].Key;
+                GD.Print($"rows: {key}");
+                StartMatch(data, "--players", "3", "--faction", "1", key, "--faction", "2", key, "--faction", "3", key, "--resources", "high");
+                if (_views.Models is not BuildingModels models || models.ModelTypes == 0)
+                    Check(false, "no building models loaded");
+                else
+                {
+                    int[] types = ModelTypes(data);
+                    KeepAlive(data);
+                    TerraceRows(types);
+                    await ReuseRows(data, types);
+                    await SiteRazedRows(data, types);
+                    await GhostAllocationRow(data, types);
+                    await BarOnScreenRows(types);
+                    await PickRows(data, types);
+                }
+                await EndMatch();
             }
-            await EndMatch();
+            _faction = data.FindFaction("malazan");
             if (_shots != null) await Pictures(data);
         }
         catch (Exception ex)
@@ -94,18 +103,44 @@ public partial class QaM6V26Test : Node
         SceneExit.Quit(this, _failures.Count == 0 ? 0 : 1);
     }
 
+    // M6-V30: the faction the rows run for; its model types only.
+    private int _faction;
+
     private int[] ModelTypes(GameData data)
     {
         var list = new List<int>();
-        for (int t = 0; t < data.Buildings.Length; t++) if (_views.Models!.Has(t)) list.Add(t);
+        for (int t = 0; t < data.Buildings.Length; t++) if (_views.Models!.Has(t) && data.Buildings[t].Faction == _faction) list.Add(t);
         return list.ToArray();
     }
 
-    // A Garrison Keep per player away from the rows (a box type such as the Armory can't be spawned before one), so razing a
-    // row's building never eliminates its owner (whose commands then stop).
+    // M6-V30: the factions with a building model file, in faction order.
+    private static List<int> ModelFactions(GameData data)
+    {
+        var list = new List<int>();
+        for (int t = 0; t < data.Buildings.Length; t++)
+            if (ResourceLoader.Exists(BuildingModels.PathFor(data, data.Buildings[t])) && !list.Contains(data.Buildings[t].Faction)) list.Add(data.Buildings[t].Faction);
+        list.Sort();
+        return list;
+    }
+
+    // M6-V30: the rows' faction's first unit / building of a slot.
+    private int UnitOf(GameData data, UnitSlot slot)
+    {
+        for (int u = 0; u < data.Units.Length; u++) if (data.Units[u].Faction == _faction && data.Units[u].Slot == slot) return u;
+        return -1;
+    }
+
+    private int BuildingOf(GameData data, BuildingSlot slot)
+    {
+        for (int b = 0; b < data.Buildings.Length; b++) if (data.Buildings[b].Faction == _faction && data.Buildings[b].Slot == slot) return b;
+        return -1;
+    }
+
+    // A Garrison Keep (M6-V30: the faction's town hall) per player away from the rows (a box type such as the Armory can't be
+    // spawned before one), so razing a row's building never eliminates its owner (whose commands then stop).
     private void KeepAlive(GameData data)
     {
-        int keep = data.FindBuilding("malazan_garrison_keep");
+        int keep = BuildingOf(data, BuildingSlot.TownHall);
         NVector2 block = StartLayout.Block(W.NavGrid, 1, west: true, 1f)[0];
         for (int p = 0; p < 3; p++)
             Check(Spawn(p, keep, block + new NVector2(-30f + 14f * p, 44f)) >= 0, $"keep-alive Keep of player {p} not spawned");
@@ -157,7 +192,7 @@ public partial class QaM6V26Test : Node
     // A model slot freed and taken by a box type before the view syncs, and back.
     private async Task ReuseRows(GameData data, int[] types)
     {
-        int malazan = data.FindFaction("malazan");
+        int malazan = _faction; // M6-V30: the rows' faction
         int boxType = -1;
         for (int t = 0; t < data.Buildings.Length && boxType < 0; t++)
             if (data.Buildings[t].Faction == malazan && !_views.Models!.Has(t) && data.Buildings[t].FootprintWidth <= 3) boxType = t;
@@ -196,7 +231,7 @@ public partial class QaM6V26Test : Node
     // and no model ever shown for it.
     private async Task SiteRazedRows(GameData data, int[] types)
     {
-        int laborer = data.FindUnit("malazan_laborer");
+        int laborer = UnitOf(data, UnitSlot.Worker);
         // M6-V28: a type that needs Age II (the Watchtower) is built by player 1, which researches it first (player 0's stock
         // can't pay Age II and all six sites); a player-0 Laborer beside the site sees it for the view.
         int age = data.FindTech("age_ii");
@@ -211,6 +246,7 @@ public partial class QaM6V26Test : Node
             int pl = def.RequiresTechs.Contains(age) ? 1 : 0;
             int anchor = OpenAnchor(def, near);
             near += new NVector2(16f, 0f);
+            if (types.Length > 6 && Array.IndexOf(types, type) == 5) near += new NVector2(-96f, 20f); // M6-V30: wrap after six
             if (!Check(anchor >= 0, $"{def.Key} razed site: no open anchor")) continue;
             NVector2 c = StartBase.FootprintCenter(W.NavGrid, def, anchor), at = c + new NVector2(0f, def.FootprintHeight * MapConstants.CellSize / 2f + 1f);
             _sim.Enqueue(Command.SpawnUnit(pl, laborer, at));
@@ -258,11 +294,11 @@ public partial class QaM6V26Test : Node
         int age = data.FindTech("age_ii");
         if (W.HasTech(pl, age)) return;
         NVector2 block = StartLayout.Block(W.NavGrid, 1, west: true, 1f)[0];
-        Check(Spawn(pl, data.FindBuilding("malazan_barracks"), block + new NVector2(-30f, 60f)) >= 0, "Age II: no Barracks");
-        Check(Spawn(pl, data.FindBuilding("malazan_crossbow_range"), block + new NVector2(-16f, 60f)) >= 0, "Age II: no Crossbow Range");
+        Check(Spawn(pl, BuildingOf(data, BuildingSlot.InfantryHall), block + new NVector2(-30f, 60f)) >= 0, "Age II: no infantry hall");
+        Check(Spawn(pl, BuildingOf(data, BuildingSlot.RangedHall), block + new NVector2(-16f, 60f)) >= 0, "Age II: no ranged hall");
         int keep = -1;
         for (int i = 0; i < B.Capacity; i++)
-            if (B.Alive[i] && B.Owner[i] == pl && !B.UnderConstruction[i] && data.Buildings[B.TypeId[i]].Key == "malazan_garrison_keep") keep = i;
+            if (B.Alive[i] && B.Owner[i] == pl && !B.UnderConstruction[i] && B.TypeId[i] == BuildingOf(data, BuildingSlot.TownHall)) keep = i;
         if (!Check(keep >= 0, "Age II: no keep")) return;
         _sim.Enqueue(Command.Research(pl, Centre(keep), age));
         for (int t = 0; t < 4000 && !W.HasTech(pl, age); t++) _sim.Tick();
@@ -283,7 +319,7 @@ public partial class QaM6V26Test : Node
         }
         if (!Check(enemy.Count == types.Length, "ghost allocation: enemy buildings not spawned")) return;
         // M6-V28: one scout in front of each building (six models in a row are wider than one Laborer's sight).
-        int laborer = data.FindUnit("malazan_laborer");
+        int laborer = UnitOf(data, UnitSlot.Worker);
         var aliveBefore = new bool[W.Units.Capacity];
         for (int i = 0; i < aliveBefore.Length; i++) aliveBefore[i] = W.Units.Alive[i];
         foreach (int s in enemy) _sim.Enqueue(Command.SpawnUnit(0, laborer, Centre(s) + new NVector2(0f, data.Buildings[B.TypeId[s]].FootprintHeight * MapConstants.CellSize / 2f + 5f)));
@@ -323,6 +359,7 @@ public partial class QaM6V26Test : Node
             int slot = Spawn(0, type, near);
             if (!Check(slot >= 0, $"bar: {W.Data.Buildings[type].Key} not spawned")) continue;
             near += new NVector2(16f, 0f);
+            if (types.Length > 6 && Array.IndexOf(types, type) == 5) near += new NVector2(-96f, 16f); // M6-V30: wrap after six
             _views.Sync(W);
             NVector2 c = Centre(slot);
             float ground = TerrainHeight.At(W.Heightmap, c.X, c.Y);
@@ -355,6 +392,8 @@ public partial class QaM6V26Test : Node
             BuildingDef def = data.Buildings[type];
             int slot = Spawn(0, type, near);
             near += new NVector2(0f, 24f);
+            // M6-V30: more than six types (the Teblor's eight) wrap after the sixth, so the row stays on the open ground; six keep their old spots.
+            if (types.Length > 6 && Array.IndexOf(types, type) == 5) near += new NVector2(30f, -144f);
             if (!Check(slot >= 0, $"pick: {def.Key} not spawned")) continue;
             _views.Sync(W);
             MeshInstance3D m = _views.ModelOf(slot)!;
@@ -375,14 +414,15 @@ public partial class QaM6V26Test : Node
         }
 
         // An own Laborer just behind the Keep (north, away from the camera), hidden by its towers on screen.
+        // M6-V30: the Keep's row, in the Malazan rows only (the 8.1 m towers hide a unit; the Teblor Longhouse is 4.9 m).
         int keep = data.FindBuilding("malazan_garrison_keep");
-        if (keep < 0 || !_views.Models!.Has(keep)) return;
+        if (keep < 0 || data.Buildings[keep].Faction != _faction || !_views.Models!.Has(keep)) return;
         BuildingDef kd = data.Buildings[keep];
         int ks = Spawn(0, keep, near + new NVector2(0f, 6f));
         if (!Check(ks >= 0, "hidden unit: no Keep")) return;
         NVector2 kc = Centre(ks);
         NVector2 behind = kc + new NVector2(0f, -(kd.FootprintHeight * MapConstants.CellSize / 2f + 1.2f));
-        _sim.Enqueue(Command.SpawnUnit(0, data.FindUnit("malazan_laborer"), behind));
+        _sim.Enqueue(Command.SpawnUnit(0, UnitOf(data, UnitSlot.Worker), behind));
         _sim.Tick();
         _sim.Tick();
         int unit = -1;
@@ -475,7 +515,7 @@ public partial class QaM6V26Test : Node
         int gen = B.Generation[slot];
         BuildingDef def = W.Data.Buildings[B.TypeId[slot]];
         NVector2 c = Centre(slot);
-        int heavy = W.Data.FindUnit("malazan_heavy_infantry");
+        int heavy = UnitOf(W.Data, UnitSlot.Line);
         float r = def.FootprintHeight * MapConstants.CellSize / 2f + 1.2f;
         for (int k = 0; k < 16; k++) _sim.Enqueue(Command.SpawnUnit(2, heavy, c + new NVector2(-6f + 0.8f * k, k % 2 == 0 ? r : -r)));
         _sim.Tick();
@@ -515,7 +555,7 @@ public partial class QaM6V26Test : Node
             }
             z += data.Buildings[type].FootprintHeight * MapConstants.CellSize + 5f;
         }
-        int laborer = data.FindUnit("malazan_laborer");
+        int laborer = UnitOf(data, UnitSlot.Worker);
         foreach (NVector2 c in all) _sim.Enqueue(Command.SpawnUnit(0, laborer, c + new NVector2(0f, -5.5f)));
         _sim.Tick();
         _sim.Tick();

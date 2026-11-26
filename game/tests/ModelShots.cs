@@ -43,6 +43,7 @@ namespace Rts.Game.Tests;
 /// the two crowds and owned by the two sides in turn; <c>--building-boxes</c> draws them as today's boxes (the same window's
 /// comparison; the figures stay models); <c>--bench-zoom Z</c> sets the camera distance (default 40 m). The run prints how
 /// many of the buildings are on screen (at the start and the end); <c>--bench-shot &lt;png&gt;</c> saves the first measured frame.
+/// M6-V30: <c>--bench-building-types &lt;id,id&gt;</c> keeps only the named building types (one type's models against its boxes).
 /// </remarks>
 public partial class ModelShots : Node
 {
@@ -679,6 +680,9 @@ public partial class ModelShots : Node
         World w = _sim.World;
         var types = new System.Collections.Generic.List<int>();
         for (int t = 0; t < data.Buildings.Length; t++) if (ResourceLoader.Exists(BuildingModels.PathFor(data, data.Buildings[t]))) types.Add(t);
+        // M6-V30: --bench-building-types <id,id> keeps only those of them (one type's cost against its box).
+        if (Arg(OS.GetCmdlineUserArgs(), "--bench-building-types") is string only)
+            types = types.FindAll(t => Array.IndexOf(only.Split(','), data.Buildings[t].Key) >= 0);
         if (types.Count == 0) { GD.Print("bench: no building type has a model file"); return; }
         const float cs = Rts.Sim.Map.MapConstants.CellSize;
         int gw = w.NavGrid.Width, gh = w.NavGrid.Height;

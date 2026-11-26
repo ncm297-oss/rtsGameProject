@@ -1,5 +1,5 @@
 {
-  "about": "Art import manifest (docs/04 'Import process'). tools/import-assets.ps1 rebuilds every model and the animation library from these entries with Blender (tools/art/build_unit.py). Paths: 'source' relative to sourceRoot, 'destination' relative to the repo root. A model's 'clips' maps docs/04's state names to library clip names; 'library.clips' maps each library name to its source clip. Since M6-V24 a model is one surface drawing one atlas: 'textureSize' is the size of each role's tile in it (docs/04 'Unit models, as built'). Since M6-V26 'buildings' lists the static building models (tools/art/build_building.py): one source glTF each, its faces no camera above the ground sees dropped, the 'decimate' materials cut to their triangle counts, every source material one flat 'colours' tile (sRGB as on screen) or, for the 'team' materials, the team grey; one surface, one 'team' material, one atlas whose alpha is the team mask, as the units' (docs/04 'Building models, as built'). Since M6-VH9 a model may carry 'oneShot' (state name -> the clip's release point as a share of its length): that state's clip plays once per attack, its release on the shot leaving (docs/04 'Unit models, as built').",
+  "about": "Art import manifest (docs/04 'Import process'). tools/import-assets.ps1 rebuilds every model and the animation library from these entries with Blender (tools/art/build_unit.py). Paths: 'source' relative to sourceRoot, 'destination' relative to the repo root. A model's 'clips' maps docs/04's state names to library clip names; 'library.clips' maps each library name to its source clip. Since M6-V24 a model is one surface drawing one atlas: 'textureSize' is the size of each role's tile in it (docs/04 'Unit models, as built'). Since M6-V26 'buildings' lists the static building models (tools/art/build_building.py): one source glTF each, its faces no camera above the ground sees dropped, the 'decimate' materials cut to their triangle counts, every source material one flat 'colours' tile (sRGB as on screen) or, for the 'team' materials, the team grey; one surface, one 'team' material, one atlas whose alpha is the team mask, as the units' (docs/04 'Building models, as built'). Since M6-VH9 a model may carry 'oneShot' (state name -> the clip's release point as a share of its length): that state's clip plays once per attack, its release on the shot leaving (docs/04 'Unit models, as built'). Since M6-V30 a building may carry 'teamFaces' (a list of rules, each {materials, minUp, above}): the faces of those source materials whose normal points up by at least 'minUp' and whose centre stands at least 'above' of the model's height over its lowest point take the team colour too (a timber roof drawn in the walls' material; docs/04 'Building models, as built (M6-V30)').",
   "sourceRoot": "asset-sources",
   "licences": [
     "Universal Base Characters[Standard]/Universal Base Characters[Standard]/License_Standard.txt",
@@ -763,6 +763,109 @@
         "Wood": "#4d3a30",
         "Wood_Light": "#5c4334"
       }
+    },
+    {
+      "id": "teblor_longhouse",
+      "destination": "game/assets/models/teblor/teblor_longhouse/teblor_longhouse.glb",
+      "source": "quaternius-ultimate-fantasy-rts-2022-08/Ultimate Fantasy RTS - Aug 2022/glTF/Houses_FirstAge_2_Level3.gltf",
+      "maxTriangles": 5000,
+      "tileSize": 32,
+      "yawDegrees": 0,
+      "viewElevationDegrees": 15,
+      "team": [],
+      "teamFaces": [{ "materials": ["Wood"], "minUp": 0.5, "above": 0.4 }],
+      "teamShade": 0.8,
+      "colours": { "Stone": "#6f665a", "Wood": "#5b4632", "Wood_Light": "#6e3f2c" }
+    },
+    {
+      "id": "teblor_hut",
+      "destination": "game/assets/models/teblor/teblor_hut/teblor_hut.glb",
+      "source": "quaternius-ultimate-fantasy-rts-2022-08/Ultimate Fantasy RTS - Aug 2022/glTF/Houses_FirstAge_1_Level1.gltf",
+      "maxTriangles": 5000,
+      "tileSize": 32,
+      "yawDegrees": 0,
+      "viewElevationDegrees": 15,
+      "team": [],
+      "teamFaces": [{ "materials": ["Wood"], "minUp": 0.5, "above": 0.4 }],
+      "teamShade": 0.8,
+      "colours": { "Stone": "#6f665a", "Wood": "#5b4632" }
+    },
+    {
+      "id": "teblor_woodcutters_lodge",
+      "destination": "game/assets/models/teblor/teblor_woodcutters_lodge/teblor_woodcutters_lodge.glb",
+      "source": "quaternius-ultimate-fantasy-rts-2022-08/Ultimate Fantasy RTS - Aug 2022/glTF/Storage_FirstAge_Level1.gltf",
+      "maxTriangles": 5000,
+      "tileSize": 32,
+      "yawDegrees": 0,
+      "viewElevationDegrees": 15,
+      "team": [],
+      "teamFaces": [{ "materials": ["Wood", "Wood_Light"], "minUp": 0.5, "above": 0.6 }],
+      "teamShade": 0.8,
+      "colours": { "Wood": "#5b4632", "Wood_Light": "#6e3f2c" }
+    },
+    {
+      "id": "teblor_war_lodge",
+      "destination": "game/assets/models/teblor/teblor_war_lodge/teblor_war_lodge.glb",
+      "source": "quaternius-ultimate-fantasy-rts-2022-08/Ultimate Fantasy RTS - Aug 2022/glTF/Barracks_FirstAge_Level2.gltf",
+      "maxTriangles": 5000,
+      "tileSize": 32,
+      "yawDegrees": 0,
+      "viewElevationDegrees": 15,
+      "team": ["Main"],
+      "teamFaces": [{ "materials": ["Wood"], "minUp": 0.5, "above": 0.4 }],
+      "teamShade": 0.8,
+      "colours": { "Stone": "#6f665a", "Stone_Light": "#857b6c", "Wood": "#5b4632", "Wood_Light": "#6e3f2c", "Gold": "#8a6a3a", "Metal_Light": "#55514b", "White": "#c9bfa5" }
+    },
+    {
+      "id": "teblor_javelin_ground",
+      "destination": "game/assets/models/teblor/teblor_javelin_ground/teblor_javelin_ground.glb",
+      "source": "quaternius-ultimate-fantasy-rts-2022-08/Ultimate Fantasy RTS - Aug 2022/glTF/Archery_FirstAge_Level1.gltf",
+      "maxTriangles": 5000,
+      "tileSize": 32,
+      "yawDegrees": 0,
+      "viewElevationDegrees": 15,
+      "team": ["Main"],
+      "teamFaces": [{ "materials": ["Wood"], "minUp": 0.5, "above": 0.6 }],
+      "teamShade": 0.8,
+      "colours": { "Wood": "#5b4632", "Wood_Light": "#6e3f2c", "White": "#c9bfa5", "Red": "#6e2a22" }
+    },
+    {
+      "id": "teblor_stone_cairn",
+      "destination": "game/assets/models/teblor/teblor_stone_cairn/teblor_stone_cairn.glb",
+      "source": "quaternius-ultimate-fantasy-rts-2022-08/Ultimate Fantasy RTS - Aug 2022/glTF/WatchTower_FirstAge_Level1.gltf",
+      "maxTriangles": 5000,
+      "tileSize": 32,
+      "yawDegrees": 0,
+      "viewElevationDegrees": 15,
+      "team": ["Main"],
+      "teamFaces": [{ "materials": ["Wood"], "minUp": 0.5, "above": 0.7 }],
+      "teamShade": 0.8,
+      "colours": { "Wood": "#77736a", "Wood_Light": "#8b877c" }
+    },
+    {
+      "id": "teblor_bloodwood_carver",
+      "destination": "game/assets/models/teblor/teblor_bloodwood_carver/teblor_bloodwood_carver.glb",
+      "source": "quaternius-ultimate-fantasy-rts-2022-08/Ultimate Fantasy RTS - Aug 2022/glTF/Market_FirstAge_Level1.gltf",
+      "maxTriangles": 5000,
+      "tileSize": 32,
+      "yawDegrees": 0,
+      "viewElevationDegrees": 15,
+      "team": ["Green", "Red"],
+      "teamShade": 0.8,
+      "colours": { "Wood": "#5b4632", "Wood_Light": "#6e3f2c", "Yellow": "#b59a62" }
+    },
+    {
+      "id": "teblor_shamans_circle",
+      "destination": "game/assets/models/teblor/teblor_shamans_circle/teblor_shamans_circle.glb",
+      "source": "quaternius-ultimate-fantasy-rts-2022-08/Ultimate Fantasy RTS - Aug 2022/glTF/Temple_FirstAge_Level1.gltf",
+      "maxTriangles": 5000,
+      "tileSize": 32,
+      "yawDegrees": 0,
+      "viewElevationDegrees": 15,
+      "team": ["Main"],
+      "teamFaces": [{ "materials": ["Wood"], "minUp": 0.5, "above": 0.4 }],
+      "teamShade": 0.8,
+      "colours": { "Wood": "#5b4632", "Wood_Light": "#6e3f2c" }
     }
   ]
 }

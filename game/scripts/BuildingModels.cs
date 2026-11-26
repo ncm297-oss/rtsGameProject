@@ -20,8 +20,10 @@ namespace Rts.Game;
 /// <see cref="MeshInstance3D"/> (no instanced scene), so a building view stays one root, a box, a model and its bar.
 /// The fit (docs/04 "Scale and dimensions"): one uniform scale, the largest that keeps the model's ground plan
 /// <see cref="FitMargin"/> inside each edge of the footprint (cells x <see cref="MapConstants.CellSize"/> from the data), the
-/// plan's centre on the footprint's centre and its lowest point on the ground. The data's <c>scale</c> is not applied to a
-/// model yet (docs/03 "Implementation (M6-V26)": no Teblor building has a model).
+/// plan's centre on the footprint's centre and its lowest point on the ground. Then the data's <c>scale</c> multiplies the
+/// height only (M6-V30, as a box's since M7-V4): the Teblor's 1.25 stands a quarter taller and no wider; at scale 1 the fit
+/// is the same transform as before. Everything read from the fit (the top, the faces a click is tested against, the bar,
+/// a tower's shot height, the remembered model) is the drawn shape.
 /// Materials, made here once: per type and player the team material (the player colour on the team tiles) and the
 /// remembered (ghost) material, the same darkened by <see cref="FogView.ExploredBrightness"/> as a ghost box's colour is.
 /// </remarks>
@@ -173,15 +175,18 @@ public sealed class BuildingModels
     /// <summary>Type <paramref name="type"/>'s atlas texture, or null for a box type.</summary>
     public Texture2D? TextureOf(int type) => Has(type) ? _source[type]!.Texture : null;
 
-    // The largest uniform scale that keeps the plan FitMargin inside each footprint edge; plan centred, lowest point on the ground.
+    // The largest uniform scale that keeps the plan FitMargin inside each footprint edge; plan centred, lowest point on the
+    // ground. M6-V30: the height then times the data scale (docs/01 2026-11-26 (3), M7-V4's box rule): a scaled model stands
+    // taller and never wider than its footprint. At scale 1 the product is exactly s, so a scale-1 model is unchanged.
     private static (Transform3D Fit, Aabb Bounds) FitTo(BuildingDef def, Source src)
     {
         Aabb b = src.MeshToRoot * src.Mesh.GetAabb();
         float w = def.FootprintWidth * MapConstants.CellSize - 2f * FitMargin;
         float d = def.FootprintHeight * MapConstants.CellSize - 2f * FitMargin;
         float s = Math.Min(w / Math.Max(b.Size.X, 1e-4f), d / Math.Max(b.Size.Z, 1e-4f));
+        float sy = s * def.Scale;
         Vector3 centre = b.GetCenter();
-        var place = new Transform3D(Basis.FromScale(new Vector3(s, s, s)), new Vector3(-centre.X * s, -b.Position.Y * s, -centre.Z * s));
+        var place = new Transform3D(Basis.FromScale(new Vector3(s, sy, s)), new Vector3(-centre.X * s, -b.Position.Y * sy, -centre.Z * s));
         Transform3D fit = place * src.MeshToRoot;
         return (fit, fit * src.Mesh.GetAabb());
     }

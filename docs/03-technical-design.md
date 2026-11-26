@@ -3729,7 +3729,8 @@ file changed.
   about 437 pixels of air), and where a unit or another building stands behind that air a click picks the short building
   instead (units pick first, so only a building behind). No shipped building is below scale 1; if one ships, `PickRay`
   can take the drawn height. **Changed by M6-VH9 (BUG-1630, BUG-1381 item 2):** the hit test now follows each type's drawn
-  height both ways (a box type's `DrawnHeight`, a model's fitted top); see "Implementation (M6-VH9)".
+  height both ways (a box type's `DrawnHeight`, a model's fitted top); see "Implementation (M6-VH9)". **M6-V30:** a
+  building model takes the data `scale` on its height by the same rule (see "Implementation (M6-V30)").
 - **Scale-1 buildings draw exactly as before:** `EconomyViewTest`'s six `--placeholder-art` pictures (the Malazan bases of
   seeds 1, 6 and 31, hauling, the site, cargo at 60 m), taken at 43ab896 and with this change in one tree, are
   byte-identical for three (seeds 1 and 6, hauling); the other three differ only in the HUD's frames-per-second number, a
@@ -5052,6 +5053,87 @@ no sim, `ViewApi`, data hash or save changed.
      keep; the owner judges `draw-notice.png`.
   3. **No sound** when the clock starts. Recommendation: keep silent; the alert sound means "under attack", and the notice
      shows for minutes.
+- **The Producer's answers (docs/01 2026-11-26, the 0207 ACCEPT row (2); written here by M6-V30, rule 67):**
+  1. **Not kept:** a side that falls after the draw must go on reading Draw after a save is loaded, as it does live and in
+     playback (a draw is final; nobody is defeated by it). BUG-1790 (S3) is cured in two steps: the view reads a drawn
+     two-sided match as Draw for both sides, in the view's next clean-up; matches of three or more sides need the sim to
+     remember which seats stood at the draw (Request 60, with the sim's next save-format change). The sentence in
+     Question 1 about a recording watched past the fall is wrong (measured: Draw) and is corrected with that fix.
+  2. Kept: the notice's place and look (top centre under the alert line, pale gold, from the clock's first second); the
+     owner judges `draw-notice.png`. BUG-1792 (S4, a longer text runs off centre) waits for the clean-up.
+  3. Kept: no sound when the clock starts.
+
+### Implementation (M6-V30)
+
+The Teblor buildings as models, and the data `scale` drawn on a model for the first time. Eight of the ten Teblor types are
+models from the building pack's timber First Age set (docs/04 "Building models, as built (M6-V30)": the picks, triangles,
+sizes, palette); the Stables & Kennels and the Breaker's Hall stay boxes. Tooling, view code, view tests and docs; no sim,
+`ViewApi` or data file changed.
+
+- **The files:** eight entries in `tools/asset-manifest.json` `buildings`, built by `tools/art/build_building.py` into
+  `game/assets/models/teblor/<id>/<id>.glb` with `<id>_atlas.png` (368 to 2,836 triangles, one surface, one `team` material,
+  a 64 x 64 or 128 x 128 atlas). Found by id as every building model (`BuildingModels.PathFor`).
+- **The builder's one new option, `teamFaces`** (the First Age draws its roofs in the walls' material): after the hidden-face
+  pass, the faces of a rule's source materials whose normal's vertical part is at least `minUp` and whose centre stands at
+  least `above` of the model's height move to a new material `team_faces`, a team part, so they land on the team tile.
+  An entry without it runs no new line: a full re-import (`tools/import-assets.ps1`, two runs) left all 107 pre-existing
+  model, atlas, library and `.import` files byte for byte (SHA-256 before and after each run) and the 32 new files the same
+  on both runs.
+- **The scale (`BuildingModels.FitTo`, docs/01 2026-11-26 (3)):** the fit as M6-V26's (the largest uniform scale `s` keeping
+  the plan `FitMargin` inside the footprint, plan centred, lowest point on the ground), then the vertical axis `s x scale`
+  (`Basis.FromScale(s, s x scale, s)`, the ground offset scaled the same). At scale 1 the product is exactly `s`, so every
+  Malazan model's transform is the same float for float. Everything read from the fit follows the drawn shape with no
+  other change: `Top` (so `PickTops`, the bar's height `Top + 0.6`, `ShotHeights` = `Top x ModelShotShare`), `FittedBounds`
+  (the lowered bar's front), `FittedFaces` (a click's ray against the model, `HiddenByBuilding`), and the remembered model's
+  node (`Fit`). A site is still its box at `DrawnHeight` (3 m x 1.25), switched to the model on the first frame it reads
+  finished; nothing is computed per frame (the fit is per type at `Bind`).
+- **The Stone Cairn shoots from its drawn top:** `ShotHeights[cairn]` = 7.054 x 0.85 = 5.996 m (the box tower's 1.2 m before).
+- **Tests.** New `game/tests/TeblorBuildingsTest` (headless, in the loop; the Teblor model types read from the manifest):
+  (H) every manifest building against M6-V26's fit recomputed from its file: a scale-1 model (the six Malazan) drawn exactly
+  that size (1e-4 m), a Teblor one that plan and that height x 1.25 within 1 cm, 0.25 m inside its footprint; (T) each Teblor
+  model at a terrace's foot and on its edge: inside its footprint, base on the ground, the drawn height the fitted height x
+  `scale` within 1 cm, the bar over it; (P) a Gatherer in front of each selected by a click at zoom 20, 40 and 60, every 12th
+  model pixel at zoom 40 selects the building (23 to 147 pixels a type), the bar's ends on screen at the closest zoom over
+  the drawn top; (S) the Cairn's shot height `ModelShotShare` of its scaled top, a shot on flat ground and from a terrace
+  leaving and drawn there, a Cairn site with an enemy held 10 m away firing nothing in 200 ticks and drawn as its box with
+  its bar over the box; (F) with models off and with the files missing every Teblor model type is its box, 3.75 m tall with
+  its bar at 4.35 m, and an LFS pointer for one type gives that box and exactly one warning; (3) a Malazan, a Whirlwind and
+  a Teblor seat in one match with every building type of each: drawn as its model exactly when its file is there (14
+  models, the Whirlwind's 10 and the four Malazan and two Teblor box types as boxes), each model at its fitted height x its
+  faction's `scale`. Windowed with
+  `-- --shots <dir>` it saves the M6-V30 pictures (docs/04). `BuildingModelTest` now runs its match rows once per faction the
+  manifest's buildings belong to, with that faction's worker, line unit, house and halls found by slot (it named Malazan
+  ids), and pins the eight new types' triangles per tile; its builders stand clear of the footprint by the worker's radius
+  (a Teblor Gatherer at the Laborer's 0.8 m stood in it) and a site's anchor is chosen clear of standing units.
+  `ModelShots` gains `--bench-building-types <id,id>` (one type's models against its boxes). Scenes adapted, no row deleted:
+  `QaM6V26Test` runs its rows once per faction with building models (its worker, line unit, town hall and halls by slot; the
+  Keep's hidden-unit row in the Malazan pass only; rows of more than six types wrap after the sixth, the six Malazan spots
+  unchanged); `ViewHardenVh9Test`'s (P3) puts the seventh model type on east of the first six and (K) runs rows of seven
+  (fourteen types in one row ran off the map), and (P2), which needs a Teblor type drawn as a box at scale 1.25, takes the
+  Stables & Kennels (the Longhouse is a model now) after a Longhouse of the same player. The scenes the brief named as
+  pinning a Teblor building's box pass unchanged: `BuildingScaleViewTest` and `QaM7V4Test` already set
+  `BuildingViews.UseModels = false`, `TeblorModelTest`, `QaM7V3cTest` and `ModelViewTest` read unit models only. The scene
+  loop is 129 scenes.
+- **Cost** (docs/04 "Building models, as built (M6-V30)" has the tables and the window): in a quiet window (no other track's
+  `testhost` or Godot) 400 figures with 60 building models of the fourteen types 6.42 ms while 90 %+ alive, the same with
+  boxes 6.49 ms; the eight Teblor types 6.49 against 6.52 ms; each Teblor type alone within +0.20 ms of its boxes; 400
+  capsules 0.82 ms, 1,000 figures 16.52 ms, 1,000 capsules 1.38 ms. Nothing is computed per frame for the scale.
+- **Questions for the Producer (rule 67), each with a recommendation:**
+  1. **The Longhouse is a long house (`Houses_FirstAge_2_Level3`), not a `TownCenter_FirstAge_*`** as the brief named. The
+     First Age town centres are a fence round an empty square, a fenced yard with an antler shrine, and a plank deck under a
+     stag statue: plazas, the reason M6-V26 did not use the Second Age's either. Recommendation: keep the two-roofed timber
+     hall (8 m footprint, 4.9 m drawn); `TownCenter_FirstAge_Level3` (the stag deck) is a one-line `source` change if the
+     owner prefers a totem square.
+  2. **The Stone Cairn is a timber watchtower tinted grey,** the pack having no stone cairn: it reads as a tall grey tower
+     beside the brown halls, not as piled stones. Recommendation: accept for now; a real cairn (stacked rocks: the Stylized
+     Nature MegaKit's rocks are on disk) is a kit-bash for a later look task.
+  3. **The Whirlwind's buildings** (docs/04, the M6-V30 paragraph): the pack has no tent or desert camp. Recommendation: a
+     CC0 tent / desert-camp pack if the owner has one (imported through this path unchanged), else a small builder feature
+     for kit-bashed box-and-prism tents with team-coloured cloth; not the Second Age set recoloured (a second Malazan base).
+  4. **The Hut is 3.85 m drawn** (3.08 m fitted x 1.25), a metre over a Teblor figure's head (2.8 m). Recommendation: accept
+     (a giant's hut); a lower Hut is a `FitMargin`-style height cap, not wanted while the Malazan Billet is 3.03 m.
+  5. **Two types stay boxes** (Stables & Kennels, Breaker's Hall): the First Age's `Farm_*` are flat dirt plots, and nothing
+     else is a plain match. Recommendation: wait for a stable / kennel source with the Rider's and War-dog's packs.
 
 ## Vision, detection, fog
 

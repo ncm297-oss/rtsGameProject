@@ -270,7 +270,10 @@ public partial class ViewHardenVh9Test : Node
         for (int type = 0; type < _data.Buildings.Length; type++)
         {
             if (!_views.Models!.Has(type)) continue;
-            int slot = Spawn(0, type, near + new NVector2(26f * (p3 % 3), 26f * (p3 / 3)));
+            // M6-V30: the seventh type on (the Teblor's eight) in rows of three east of the first six, whose spots are unchanged
+            // (five rows south ran off the open ground).
+            NVector2 at = p3 < 6 ? near + new NVector2(26f * (p3 % 3), 26f * (p3 / 3)) : near + new NVector2(78f + 26f * ((p3 - 6) % 3), 26f * ((p3 - 6) / 3));
+            int slot = Spawn(0, type, at);
             p3++;
             if (!Check(slot >= 0, $"(P3) {_data.Buildings[type].Key} not spawned")) continue;
             _views.Sync(W);
@@ -279,11 +282,22 @@ public partial class ViewHardenVh9Test : Node
 
         // (P2) The Teblor hall (data scale 1.25, a box; the type a player may spawn first): a click on its back edge between 3 m
         // and its 3.75 m top selects it.
+        // M6-V30: the Longhouse is a model now, so the row takes the first Teblor type still drawn as a box at a scale above 1
+        // (the Stables & Kennels), after a Longhouse of player 1's away from the spot (a hall comes first).
         int scaled = -1;
         int teblor = _data.FindFaction("teblor");
         for (int t = 0; t < _data.Buildings.Length && scaled < 0; t++)
             if (_data.Buildings[t].Faction == teblor && _data.Buildings[t].Slot == BuildingSlot.TownHall && _data.Buildings[t].Scale > 1.01f && !_views.Models!.Has(t)) scaled = t;
-        if (Check(scaled >= 0, "(P2) no Teblor hall drawn as a box at a scale above 1"))
+        for (int t = 0; t < _data.Buildings.Length && scaled < 0; t++)
+            if (_data.Buildings[t].Faction == teblor && _data.Buildings[t].Scale > 1.01f && !_views.Models!.Has(t)) scaled = t;
+        if (scaled >= 0 && _data.Buildings[scaled].Slot != BuildingSlot.TownHall)
+            for (int t = 0; t < _data.Buildings.Length; t++)
+                if (_data.Buildings[t].Faction == teblor && _data.Buildings[t].Slot == BuildingSlot.TownHall)
+                {
+                    Check(Spawn(1, t, StartLayout.Block(W.NavGrid, 1, west: true, 1f)[0] + new NVector2(-60f, 116f)) >= 0, "(P2) no Teblor hall for player 1");
+                    break;
+                }
+        if (Check(scaled >= 0, "(P2) no Teblor building drawn as a box at a scale above 1"))
         {
             BuildingDef def = _data.Buildings[scaled];
             // The spot the first runs used (west block, 30 m west, 116 m south): open, level ground on seed 1.
@@ -431,13 +445,16 @@ public partial class ViewHardenVh9Test : Node
     private async Task BarCeilingRows()
     {
         StartMatch("--players", "2", "--no-fog", "--no-combat", "--faction", "1", "malazan", "--resources", "high");
-        NVector2 near = StartLayout.Block(W.NavGrid, 1, west: true, 1f)[0] + new NVector2(0f, 30f);
+        NVector2 start = StartLayout.Block(W.NavGrid, 1, west: true, 1f)[0] + new NVector2(0f, 30f);
+        int k0 = 0;
         for (int type = 0; type < _data.Buildings.Length; type++)
         {
             if (!_views.Models!.Has(type)) continue;
             BuildingDef def = _data.Buildings[type];
-            int slot = Spawn(0, type, near);
-            near += new NVector2(16f, 0f);
+            // M6-V30: rows of seven, 26 m apart (fourteen model types in one row of 16 m steps ran off the map); the first six
+            // keep their spots.
+            int slot = Spawn(0, type, start + new NVector2(16f * (k0 % 7), 26f * (k0 / 7)));
+            k0++;
             if (!Check(slot >= 0, $"(K) {def.Key} not spawned")) continue;
             _views.Sync(W);
             NVector2 c = Centre(slot);
