@@ -1393,7 +1393,7 @@ public class DataValidationTests
                 case "blank displayName": second["displayName"] = "   "; break;
                 case "long displayName": second["displayName"] = new string('a', 41); break;
                 case "long description": second["description"] = new string('a', 201); break;
-                case "old buildOrder": root["buildOrder"] = first["buildOrder"]!.DeepClone(); break;
+                case "old buildOrder": AiScenes.SetBuildOrder(root, first["buildOrder"]!.DeepClone()); break;
                 case "old compositions": root["compositions"] = first["compositions"]!.DeepClone(); break;
                 case "old attack": root["attack"] = first["attack"]!.DeepClone(); break;
                 case "bad inner step": second["buildOrder"]![2] = JsonNode.Parse("""{ "at": { "time": 1 }, "do": "build", "id": "malazan_ghost" }"""); break;

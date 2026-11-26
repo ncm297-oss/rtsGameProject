@@ -260,7 +260,7 @@ public class ReservePairingsStressTests
                 lastStep = x.ReserveStep;
                 if (run > s.LongestHold)
                 {
-                    AiStep st = x.Opening.BuildOrder[x.ReserveStep];
+                    AiStep st = x.Steps[x.ReserveStep];
                     s.HoldText = $"step {x.ReserveStep + 1} {st.Action} reserve {x.ReserveGold}/{x.ReserveWood} from {Sec(runFrom)} to {Sec(x.Now)}, bank {x.View.Gold}/{x.View.Wood}, short {(x.ReserveShortGold ? "gold" : "")}{(x.ReserveShortWood ? "wood" : "")}, defending {runDefending} thinks of it";
                 }
                 s.LongestHold = Math.Max(s.LongestHold, run);
@@ -328,10 +328,10 @@ public class ReservePairingsStressTests
         World w = sim.World;
         GameData d = w.Data;
         int p = ai.Player;
-        for (int i = 0; i < ai.Opening.BuildOrder.Length; i++)
+        for (int i = 0; i < ai.Steps.Length; i++)
         {
             if (ai.Board.StepDone[i] || ai.Board.StepDueTick[i] < 0) continue;
-            AiStep st = ai.Opening.BuildOrder[i];
+            AiStep st = ai.Steps[i];
             if (st.Action == AiStepAction.Build && st.Target == ai.HouseType && w.HalfPopCap[p] >= d.Rules.HalfPopCap) continue;
             (int gold, int wood) = st.Action switch
             {

@@ -442,7 +442,7 @@ public class SimHardeningM5H3QaTests
     public void ABuildStepWaitingOnARequirement_SendsItsBuildAtTheThinkAfterTheRequirementIsMet()
     {
         var data = AiScenes.DataWithAi("malazan", root =>
-            AiScenes.Opening(root)["buildOrder"] = AiScenes.BuildOrder(("time", 0, "build", "malazan_wickan_corral", 0)));
+            AiScenes.SetBuildOrder(AiScenes.Opening(root), AiScenes.BuildOrder(("time", 0, "build", "malazan_wickan_corral", 0))));
         int corral = data.FindBuilding("malazan_wickan_corral");
         // Some thinks with no Barracks, then one; the next thinks may build. Repeated at several phases of the wait.
         var lags = new List<int>();

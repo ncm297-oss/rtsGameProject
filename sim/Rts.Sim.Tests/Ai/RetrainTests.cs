@@ -22,7 +22,7 @@ public class RetrainTests
 
     /// <summary>One Laborer at time 0 (the opening's only worker step, done at once) and nothing else.</summary>
     private static readonly Lazy<GameData> s_oneWorker = new(() => AiScenes.DataWithAi("malazan", root =>
-        AiScenes.Opening(root)["buildOrder"] = AiScenes.BuildOrder(("time", 0, "train", "malazan_laborer", 1))));
+        AiScenes.SetBuildOrder(AiScenes.Opening(root), AiScenes.BuildOrder(("time", 0, "train", "malazan_laborer", 1)))));
 
     /// <summary>Player 0 the Malazan AI (the test's opening), player 1 a human Whirlwind; combat on.</summary>
     private static Simulation Scene()

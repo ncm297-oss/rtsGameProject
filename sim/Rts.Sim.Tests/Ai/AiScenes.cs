@@ -1,4 +1,5 @@
 using System.Collections.Immutable;
+using System.Diagnostics.CodeAnalysis;
 using System.Numerics;
 using System.Text.Json.Nodes;
 using Rts.Sim.Ai;
@@ -112,6 +113,20 @@ internal static class AiScenes
 
     /// <summary>M5-8a: opening <paramref name="index"/> (the first by default) of an ai.json root, where its buildOrder, compositions and attack live.</summary>
     internal static JsonNode Opening(JsonNode root, int index = 0) => root["openings"]![index]!;
+
+    /// <summary>
+    /// M8-4 (BUG-1771, rule 79): writes <paramref name="steps"/> as <paramref name="opening"/>'s <c>buildOrder</c> and takes its
+    /// <c>buildOrders</c> out, so every seat plays the list the test wrote whatever per-difficulty entries the shipped file
+    /// carries. The one place the sim's tests write <c>buildOrder</c> (<c>BuildOrderHelperSourceTests</c> pins it); the
+    /// legacy-field rows pass the ai.json root here too.
+    /// </summary>
+    internal static void SetBuildOrder([NotNull] JsonNode? opening, JsonNode? steps)
+    {
+        ArgumentNullException.ThrowIfNull(opening);
+        JsonObject o = opening.AsObject();
+        o.Remove("buildOrders");
+        o["buildOrder"] = steps;
+    }
 
     /// <summary>A build order as ai.json writes it, from (trigger, value, do, id, count) rows (count 0: none written).</summary>
     internal static JsonArray BuildOrder(params (string Trigger, double At, string Do, string? Id, int Count)[] steps)

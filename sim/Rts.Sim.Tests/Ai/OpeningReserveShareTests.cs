@@ -37,7 +37,7 @@ public class OpeningReserveShareTests
                     if (share != null && (faction == null || faction == f)) o!["attack"]!["reserveArmyShare"] = share.Value;
                     if (ageTwoOnly && f == "malazan")
                     {
-                        o!["buildOrder"] = AiScenes.BuildOrder(("time", 0, "research", "age_ii", 0));
+                        AiScenes.SetBuildOrder(o, AiScenes.BuildOrder(("time", 0, "research", "age_ii", 0)));
                         o["compositions"] = JsonNode.Parse("""[{ "age": 1, "units": { "malazan_heavy_infantry": 1 } }, { "age": 2, "units": { "malazan_heavy_infantry": 1 } }]""");
                     }
                 }

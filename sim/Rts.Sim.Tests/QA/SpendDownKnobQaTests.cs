@@ -18,10 +18,10 @@ public class SpendDownKnobQaTests
         {
             foreach (JsonNode? o in root["openings"]!.AsArray())
             {
-                o!["buildOrder"] = AiScenes.BuildOrder(
+                AiScenes.SetBuildOrder(o, AiScenes.BuildOrder(
                     ("time", 0, "train", "malazan_laborer", 30),
                     ("time", 600, "build", "malazan_billet", 0),
-                    ("time", 700, "build", "malazan_billet", 0));
+                    ("time", 700, "build", "malazan_billet", 0)));
                 o["compositions"] = JsonNode.Parse("""[{ "age": 1, "units": { "malazan_heavy_infantry": 1 } }, { "age": 2, "units": { "malazan_heavy_infantry": 1 } }]""");
             }
         });

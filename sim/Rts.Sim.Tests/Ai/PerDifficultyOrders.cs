@@ -5,7 +5,8 @@ namespace Rts.Sim.Tests;
 
 /// <summary>
 /// M7-9 (Request 59): the sim's own forged Teblor <c>standard</c> build orders for the per-difficulty rows. Rule 58: every
-/// order is built from the shipped <c>buildOrder</c> by finding steps by action and id, and every forge looks the opening up
+/// order is built from D34's <c>buildOrder</c> (M8-4: the fixture, <see cref="TeblorSwitchOrders.D34Order"/>; was the shipped
+/// file's) by finding steps by action and id, and every forge looks the opening up
 /// by id and writes (or replaces) its <c>buildOrder</c> and <c>buildOrders</c>, so a shipped file that already carries
 /// <c>buildOrders</c> (D38) gives the same copies.
 /// <list type="bullet">
@@ -24,10 +25,11 @@ internal static class PerDifficultyOrders
     internal const string Lodge = "teblor_war_lodge";
     internal const string BreakersHall = "teblor_breakers_hall";
 
+    // M8-4 (BUG-1771): built on D34's order (the fixture), not the shipped file's, so A-C and the figures measured on them stay
+    // put when the data track ships another order (D38); while the shipped order is D34's they are the lists they were.
     private static readonly Lazy<JsonArray> s_a = new(() =>
     {
-        JsonArray order = null!;
-        AiScenes.DataWithAi(Faction, root => order = (JsonArray)TeblorSwitchOrders.Standard(root)["buildOrder"]!.DeepClone());
+        JsonArray order = TeblorSwitchOrders.D34Order();
         foreach (JsonNode? s in order)
         {
             s!.AsObject().Remove("throughReserve");
@@ -81,7 +83,7 @@ internal static class PerDifficultyOrders
     /// </summary>
     internal static void Write(JsonObject opening, JsonArray order, params (AiDifficulty Difficulty, JsonArray Steps)[] entries)
     {
-        opening["buildOrder"] = order;
+        AiScenes.SetBuildOrder(opening, order);
         opening.Remove("buildOrders");
         if (entries.Length == 0) return;
         var map = new JsonObject();

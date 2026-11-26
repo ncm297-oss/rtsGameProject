@@ -100,7 +100,7 @@ public class PopulationTests
         dir.EditJson("factions/malazan/ai.json", root =>
         {
             foreach (JsonNode? o in root["openings"]!.AsArray())
-                o!["buildOrder"] = AiScenes.BuildOrder(("pop", 4.5, "build", "malazan_armory", 0));
+                AiScenes.SetBuildOrder(o, AiScenes.BuildOrder(("pop", 4.5, "build", "malazan_armory", 0)));
         });
     }));
 
@@ -129,7 +129,7 @@ public class PopulationTests
         {
             foreach (JsonNode? o in root["openings"]!.AsArray())
             {
-                o!["buildOrder"] = AiScenes.BuildOrder(("time", 3600, "train", "malazan_laborer", 1));
+                AiScenes.SetBuildOrder(o, AiScenes.BuildOrder(("time", 3600, "train", "malazan_laborer", 1)));
                 o["attack"] = new JsonObject { ["minArmyPop"] = pop, ["minArmyCost"] = 0 };
             }
             root["difficulties"]!["normal"]!["waveSizeMultiplier"] = 1;

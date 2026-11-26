@@ -23,7 +23,7 @@ public class HighGroundLookTests
 
     private static readonly Lazy<GameData> s_data = new(() => AiScenes.DataWithAi("malazan", root =>
     {
-        AiScenes.Opening(root)["buildOrder"] = AiScenes.BuildOrder(("time", 3600, "train", "malazan_laborer", 1));
+        AiScenes.SetBuildOrder(AiScenes.Opening(root), AiScenes.BuildOrder(("time", 3600, "train", "malazan_laborer", 1)));
         AiScenes.Opening(root)["attack"] = new JsonObject { ["minArmyPop"] = 1, ["minArmyCost"] = 0 };
     }));
 

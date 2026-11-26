@@ -21,7 +21,7 @@ public class AbilityManagerTests
         foreach (string f in TestSim.ShippedFactions) // M7-H1 (BUG-1173 item 3): every faction, its own ids by slot
             dir.EditJson($"factions/{f}/ai.json", root =>
             {
-                AiScenes.Opening(root)["buildOrder"] = AiScenes.BuildOrder(("time", 3600, "train", AiScenes.UnitKey(f, UnitSlot.Worker), 1));
+                AiScenes.SetBuildOrder(AiScenes.Opening(root), AiScenes.BuildOrder(("time", 3600, "train", AiScenes.UnitKey(f, UnitSlot.Worker), 1)));
                 AiScenes.Opening(root)["attack"] = new JsonObject { ["minArmyPop"] = 100, ["minArmyCost"] = 0 };
             });
         dir.EditJson("common/rules.json", r =>
