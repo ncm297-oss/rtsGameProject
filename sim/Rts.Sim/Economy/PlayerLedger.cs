@@ -51,6 +51,7 @@ internal sealed partial class PlayerLedger
         Array.Fill(Wood, start.Wood);
         _rulesCap = rules.HalfPopCap;
         InitDrawCounts(players, data); // M6-S13: PlayerLedger.Draw.cs
+        InitLimits(players, data); // M8-4: PlayerLedger.Limits.cs
     }
 
     /// <summary>Each player's gold.</summary>
@@ -97,12 +98,13 @@ internal sealed partial class PlayerLedger
         if (delta > 0) EverBuilt[player] = true;
     }
 
-    /// <summary>A unit of <paramref name="player"/>'s of type <paramref name="typeId"/> is spawned (+1) or freed (-1), M5-4e; M6-S13: a worker in <see cref="LiveWorkers"/> too.</summary>
+    /// <summary>A unit of <paramref name="player"/>'s of type <paramref name="typeId"/> is spawned (+1) or freed (-1), M5-4e; M6-S13: a worker in <see cref="LiveWorkers"/> too; M8-4: a limited type in <see cref="LimitedCount"/>.</summary>
     public void AddLiveUnit(int player, int typeId, int delta)
     {
         if (!Has(player)) return;
         LiveUnits[player] += delta;
         if ((uint)typeId < (uint)_isWorkerType.Length && _isWorkerType[typeId]) LiveWorkers[player] += delta;
+        AddLimited(player, typeId, delta); // M8-4
     }
 
     /// <summary>

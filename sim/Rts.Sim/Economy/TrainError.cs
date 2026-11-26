@@ -1,6 +1,9 @@
 namespace Rts.Sim.Economy;
 
-/// <summary>Why a unit can't be queued at a building (<see cref="World.CanTrain"/>, M3-4), in the order the rules are checked.</summary>
+/// <summary>
+/// Why a unit can't be queued at a building (<see cref="World.CanTrain"/>, M3-4), in the order the rules are checked, except
+/// <see cref="LimitReached"/> (M8-4), appended last but checked between <see cref="LockedByRequirement"/> and <see cref="QueueFull"/>.
+/// </summary>
 public enum TrainError
 {
     /// <summary>It can be queued.</summary>
@@ -26,4 +29,11 @@ public enum TrainError
 
     /// <summary>The player has less gold or wood than the unit costs.</summary>
     CannotAfford,
+
+    /// <summary>
+    /// M8-4 (Request 56 G4): the unit type's <c>maxAlive</c> would be passed: the player's live units of the type plus those its
+    /// queued items will spawn, plus this item's <c>spawnCount</c>, is above the limit. Appended last so no value moves, but
+    /// checked after <see cref="LockedByRequirement"/> and before <see cref="QueueFull"/> and <see cref="CannotAfford"/>.
+    /// </summary>
+    LimitReached,
 }

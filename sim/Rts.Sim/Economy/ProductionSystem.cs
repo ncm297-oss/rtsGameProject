@@ -36,6 +36,9 @@ public static class ProductionSystem
         if (def.TrainedAtTypeId != b.TypeId[slot]) return TrainError.NotTrainedHere;
         // M3-6: checked when the Train applies, not again at completion (Requirements).
         if (!Requirements.Met(world, player, def.RequiresTechs, def.RequiresBuildings)) return TrainError.LockedByRequirement;
+        // M8-4 (Request 56 G4): a kept count (live + queued x spawnCount), so the check walks nothing; a type without the
+        // field costs one compare.
+        if (def.MaxAlive > 0 && world.LimitedCount(player, unitType) + def.SpawnCount > def.MaxAlive) return TrainError.LimitReached;
         if (b.QueueCount[slot] >= EconomyConstants.ProductionQueueCapacity) return TrainError.QueueFull;
         if (world.Gold[player] < def.CostGold || world.Wood[player] < def.CostWood) return TrainError.CannotAfford;
         return TrainError.None;

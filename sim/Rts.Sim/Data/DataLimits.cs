@@ -25,6 +25,13 @@ public static class DataLimits
     public const int MaxSpawnCount = 8;
 
     /// <summary>
+    /// M8-4 (Request 56 G4): the largest per-type unit limit (<c>units.json</c> <c>maxAlive</c>, a whole number from the type's
+    /// <c>spawnCount</c> to this; the Hound of Shadow: 7). A rule of the format: far above any designed limit, and it keeps a
+    /// count plus a queue's worth of packs well inside an int.
+    /// </summary>
+    public const int MaxUnitMaxAlive = 1000;
+
+    /// <summary>
     /// M7-1: the most HP per second a regeneration may add: <c>faction.json</c> <c>regen.hpPerSecond</c> and a
     /// <c>regenerating</c> status's magnitude. Far above any designed rate (docs/factions: 1-1.5 HP/s); bounds the
     /// fixed-point rate (<see cref="Combat.CombatConstants.RegenFixedOne"/>) well inside an int.

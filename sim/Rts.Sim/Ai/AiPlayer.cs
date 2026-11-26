@@ -49,6 +49,9 @@ internal sealed partial class AiPlayer
             MilitaryManager.HuntPoints(cols, rows));
         Live = new int[data.Units.Length];
         Queued = new int[data.Units.Length];
+        _limitSent = new int[data.Units.Length];
+        _limitSentAt = new int[data.Units.Length];
+        Array.Fill(_limitSentAt, -1);
         WorkerSlots = new int[view.UnitSlots];
         ArmySlots = new int[view.UnitSlots];
         OwnBuildingSlots = new int[view.BuildingSlots];
@@ -160,6 +163,25 @@ internal sealed partial class AiPlayer
 
     /// <summary>Per unit type, the units in the player's queues (the head in progress included).</summary>
     internal int[] Queued { get; }
+
+    // M8-4 (Request 56 G4): per unit type with a limit, the units this think's Trains will add (spawnCount each) and the think
+    // they were sent at. A Train applies the tick after its think and a seat thinks again at least a tick later, so only this
+    // think's sends are missing from the world's count. Scratch keyed by the think's tick: not saved, not hashed.
+    private readonly int[] _limitSent, _limitSentAt;
+
+    /// <summary>
+    /// M8-4 (Request 56 G4): whether one more item of <paramref name="unitType"/> would pass its <c>maxAlive</c>: the player's
+    /// count (<see cref="PlayerView.UnitLimit"/>) plus this think's Trains of the type plus one item's <c>spawnCount</c>. False
+    /// for a type without a limit (one compare). Production skips such a type; a build-order train step on it is done unsent.
+    /// </summary>
+    internal bool AtUnitLimit(int unitType)
+    {
+        if ((uint)unitType >= (uint)Data.Units.Length) return false;
+        UnitDef def = Data.Units[unitType];
+        if (def.MaxAlive == 0 || !View.UnitLimit(unitType, out int count, out int limit)) return false;
+        int sent = _limitSentAt[unitType] == Now ? _limitSent[unitType] : 0;
+        return count + sent + def.SpawnCount > limit;
+    }
 
     /// <summary>Per unit type, whether it is a worker (<see cref="UnitSlot.Worker"/>).</summary>
     internal bool[] IsWorkerType { get; }
@@ -1079,6 +1101,7 @@ internal sealed partial class AiPlayer
         if ((uint)unitType >= (uint)Data.Units.Length) return false;
         UnitDef def = Data.Units[unitType];
         if (aboveReserve ? !CanAffordAboveReserve(def.CostGold, def.CostWood) : !CanAfford(def.CostGold, def.CostWood)) return false;
+        if (AtUnitLimit(unitType)) return false; // M8-4: with this think's earlier Trains of the type counted
         int best = -1, bestQueue = int.MaxValue;
         for (int k = 0; k < OwnBuildingCount; k++)
         {
@@ -1094,6 +1117,12 @@ internal sealed partial class AiPlayer
         int b = OwnBuildingSlots[best];
         if (!Send(Command.Train(Player, BuildingCentre(OwnBuildingTypes[best], OwnBuildingCells[best]), unitType))) return false;
         Spend(def.CostGold, def.CostWood);
+        if (def.MaxAlive > 0)
+        {
+            // M8-4: counted until it applies (the next tick), so a second Train this think sees it.
+            if (_limitSentAt[unitType] != Now) (_limitSentAt[unitType], _limitSent[unitType]) = (Now, 0);
+            _limitSent[unitType] += def.SpawnCount;
+        }
         Board.BuildingBusyUntil[b] = Stamp;
         View.TryGetBuilding(b, out SeenBuilding seen);
         int ofType = 0, head = -1, n = View.QueueCount(b);
