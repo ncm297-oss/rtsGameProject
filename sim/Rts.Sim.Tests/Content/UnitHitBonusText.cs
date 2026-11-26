@@ -15,7 +15,11 @@ namespace Rts.Sim.Tests.Content;
 /// unit has the matching field or its sentence has first-shot words (a stealth / first-shot sentence) or pack words
 /// ("other ... within", "each other"); every other percentage (a Hamstring's "slows by 20%", a Frenzy's attack speed) is left to the
 /// passive and status pins. A "within N m" likewise is the pack's reach only in a pack sentence ("other ... within"), or in
-/// an "each" / "per" sentence of a unit that has the pack (an on-death "Warriors within 6 m" is not read). Seconds, counts
+/// an "each" / "per" sentence of a unit that has the pack (an on-death "Warriors within 6 m" is not read). D36 (BUG-1720,
+/// ruling docs/01 2026-11-25 ACCEPT (5)): "other ... within" is pack words only in a sentence that is not an on-death
+/// sentence ("dies", "death", "dying"; "each other" still is), and a percentage beside "hidden" / "stealthed" is the first
+/// shot's only with first-shot words ("first shot", "first hit", "from hiding") or on a unit with the field, where only the
+/// field's own number counts as stating it (another number there is a status's, left to its pins). Seconds, counts
 /// and other distances are not read here (a unit's other numbers have no description rule yet). Problems read
 /// <c>&lt;unit id&gt; description &lt;field&gt;: ...</c>.
 /// </summary>
@@ -39,13 +43,29 @@ public static class UnitHitBonusText
 
     private static readonly Regex StealthWords = new(@"\b(?:first|stealth|stealthed|hiding|hidden|hides?)\b", Words);
 
+    /// <summary>
+    /// BUG-1720 (ruling docs/01 2026-11-25 ACCEPT (5)): the first-shot words, "first shot", "first hit", "from hiding" (and
+    /// their near twins "first strike / attack", "from stealth"). A stealth word alone ("hidden", "stealthed") is not one.
+    /// </summary>
+    private static readonly Regex FirstShotWords = new(@"\bfirst\s+(?:shot|hit|strike|attack)s?\b|\bfrom\s+(?:hiding|stealth)\b", Words);
+
     private static readonly Regex EachWords = new(@"\b(?:each|per|for every)\b", Words);
 
     /// <summary>
     /// BUG-1690: the pack's words in one sentence: "other ... within" ("+10% for each other War-dog within 8 m") or "each
-    /// other" / "per other" / "for every other" ("Each other Warrior adds +10%"). "Each bite" is not one.
+    /// other" / "per other" / "for every other" ("Each other Warrior adds +10%"). "Each bite" is not one. BUG-1720: "other
+    /// ... within" counts only in a sentence that is not an on-death sentence (<see cref="OnDeathWords"/>).
     /// </summary>
-    private static readonly Regex PackWords = new(@"\bother\b.*\bwithin\b|\b(?:each|per|for every) other\b", Words);
+    private static readonly Regex OtherWithin = new(@"\bother\b.*\bwithin\b", Words);
+
+    private static readonly Regex EachOther = new(@"\b(?:each|per|for every) other\b", Words);
+
+    /// <summary>BUG-1720: an on-death sentence's words, whole words only ("deathless" is not one).</summary>
+    private static readonly Regex OnDeathWords = new(@"\b(?:dies|death|dying)\b", Words);
+
+    /// <summary>Whether <paramref name="sentence"/> has the pack's words (BUG-1690, BUG-1720).</summary>
+    private static bool PackWords(string sentence) =>
+        EachOther.IsMatch(sentence) || OtherWithin.IsMatch(sentence) && !OnDeathWords.IsMatch(sentence);
 
     private enum Role { Stealth, PerMate, Cap, None }
 
@@ -74,9 +94,13 @@ public static class UnitHitBonusText
             string sentence = SentenceAt(text, m.Index);
             // BUG-1690: the pack's roles only for a unit with the pack or in a sentence with pack words; the first shot's only
             // in a sentence with first-shot words. Any other percentage is not a hit bonus and is not read here.
-            bool packRead = pack != null || PackWords.IsMatch(sentence);
+            bool packRead = pack != null || PackWords(sentence);
+            // BUG-1720: the first shot's role with first-shot words; a stealth word alone ("While stealthed it moves 20%
+            // slower") only on a unit with the field and only when the number is the field's (a status percentage beside
+            // "hidden" is the status pins' to read, and the field must still be stated somewhere).
+            bool firstShot = FirstShotWords.IsMatch(sentence) || stealth != null && Same(stealth, n) && StealthWords.IsMatch(sentence);
             Role role = packRead && CapBefore.IsMatch(text[..m.Index].TrimEnd('+', ' ')) ? Role.Cap
-                : StealthWords.IsMatch(sentence) ? Role.Stealth
+                : firstShot ? Role.Stealth
                 : packRead && EachWords.IsMatch(sentence) ? Role.PerMate
                 : Role.None;
             string token = m.Value.Trim();
@@ -101,7 +125,7 @@ public static class UnitHitBonusText
         foreach (Match m in Within.Matches(text))
         {
             string sentence = SentenceAt(text, m.Index);
-            if (!PackWords.IsMatch(sentence) && !(pack != null && EachWords.IsMatch(sentence))) continue; // BUG-1690: not the pack's reach
+            if (!PackWords(sentence) && !(pack != null && EachWords.IsMatch(sentence))) continue; // BUG-1690 / BUG-1720: not the pack's reach
             double n = Number(m);
             if (radius is double r && Math.Abs(r - n) < 1e-3) statedRadius = true;
             else problems.Add($"{u.Key} description {RadiusField}: '{m.Value.Trim()}' reads as the pack's reach, data {(radius is double rr ? FactionPage.Text(rr) + " m" : "none")}");

@@ -58,9 +58,10 @@ public class DH10TextPinQaTests
     /// <summary>
     /// BUG-1720 (a): an on-death sentence with "other ... within" (the natural English for the Zealot's own Martyrdom) is
     /// read as the pack's reach on a unit with no pack, so a true description is refused (the ruling's "other ... within"
-    /// pack words do not tell a pack from an on-death area).
+    /// pack words do not tell a pack from an on-death area). Un-skipped by D36: "other ... within" no longer counts in an
+    /// on-death sentence (ruling docs/01 2026-11-25 ACCEPT (5)).
     /// </summary>
-    [Theory(Skip = "BUG-1720 (open): 'other <Unit>s within N m' in an on-death sentence reads as passives[nearbyOwn].radius")]
+    [Theory]
     [InlineData("whirlwind_zealot", "When a Zealot dies, other Zealots within 6 m gain Frenzied (+50% attack speed) for 5 s.")]
     [InlineData("whirlwind_zealot", "Its death drives the other Zealots within 6 m wild.")]
     public void QA_AnOnDeathSentenceWithOther_IsNotReadAsThePack(string unit, string text)
@@ -72,9 +73,10 @@ public class DH10TextPinQaTests
     /// <summary>
     /// BUG-1720 (b): a status percentage in a sentence that names stealth ("hidden", "stealthed") but not a first shot is
     /// read as the first-shot bonus: on a unit without the field it fails "data none", on the Archer it fails as a wrong
-    /// first-shot bonus beside a correct first-shot sentence.
+    /// first-shot bonus beside a correct first-shot sentence. Un-skipped by D36: only first-shot words, or the unit's own
+    /// field with its own number, make the first-shot role (ruling docs/01 2026-11-25 ACCEPT (5)).
     /// </summary>
-    [Theory(Skip = "BUG-1720 (open): a percentage beside 'hidden' / 'stealthed' reads as attack.fromStealthBonus without first-shot words")]
+    [Theory]
     [InlineData(false, "teblor_warrior", "Hidden enemies it strikes are Slowed 20% for 2 s.")]
     [InlineData(true, Archer, "Its first shot from hiding deals +50% damage. While stealthed it moves 20% slower.")]
     public void QA_AStealthWordStatusPercent_IsNotReadAsTheFirstShot(bool forged, string unit, string text)

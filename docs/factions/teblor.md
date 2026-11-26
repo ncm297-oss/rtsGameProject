@@ -600,10 +600,13 @@ priority, which is the intent. Sorting the file by time would change what the AI
 ## The unit mix (BUG-1612, D-H10, 2026-11-25)
 
 **None meets the bar; nothing ships.** The Teblor `standard` is still D34's order (Q2 above,
-`Fixtures/teblor_standard_d34.json`); BUG-1612's unit-mix half stays open. The nearest candidate is **A**
-(`throughReserve` on the Destrier Rider, War-dog and Shaman steps), which misses six figures of twenty: Easy's Breaker
-(11, the bar 20) and Anointing (9, 20), Normal's Breaker (11, 12) and Anointing (13, 17), Hard's Destrier Rider (35, 40)
-and War-dog (42, 46).
+`Fixtures/teblor_standard_d34.json`); BUG-1612's unit-mix half stays open. The nearest of D-H10's own eleven candidates
+is **A** (`throughReserve` on the Destrier Rider, War-dog and Shaman steps), which misses six figures of twenty: Easy's
+Breaker (11, the bar 20) and Anointing (9, 20), Normal's Breaker (11, 12) and Anointing (13, 17), Hard's Destrier Rider
+(35, 40) and War-dog (42, 46). **Corrected by BUG-1721 (QA) and D36:** A is not the nearest order measured. Every D-H10
+candidate kept the Shaman step's count of 2; QA's orders with a count of 1 miss four figures (QA1: A with one Shaman, 17
+seats short; QRD1: `throughReserve` on the Rider and War-dog steps only, one Shaman, 16 seats short), and D36's second
+search ("The unit mix, second search" below) re-measures QRD1 and names the nearest of its full rows (QRD1).
 
 Measured by `Content/DH10TeblorSwitchReportTests.Variants_Row_Report` (2026-11-25, on the task's base; D34's row through
 `D34TeblorStepOrderReportTests.Play`: the Teblor against the Malazan on seat 0 and against the Whirlwind on seat 1, the
@@ -667,8 +670,8 @@ The full rows (seeds 1-8: 64 matches), every candidate the screen did not rule o
 
 Misses over the three difficulties: M 5, A 6, RS 6, AN 6, AT 9, AB 6. A, AN and AB play the same 192 matches to the figure:
 `noReserve` on Armor (due 12:00) and `throughReserve` on the Breaker step (ahead of every step that can be the reserve)
-change nothing before 15:00. A is named the nearest for its smallest total shortfall (34 seats below the bar's figures,
-RS 36, AT 36, M 50).
+change nothing before 15:00. A was named the nearest of these for its smallest total shortfall (34 seats below the bar's
+figures, RS 36, AT 36, M 50); QA's one-Shaman orders are nearer (BUG-1721, above).
 
 **What the rows show** (read against the executor's rule, docs/02 "AI opponent", and a per-seat timeline of the Easy
 rows; not traced think by think). The Easy AI's Age II spending all falls in its last five minutes: with its 30 s slack
@@ -681,8 +684,110 @@ Breaker 30 -> 11, Normal's 17 -> 13 and 14 -> 11), and Hard's War-dogs fall (46 
 Anointing a minute sooner (AT) win the Anointing back everywhere (Easy 38, Normal 23, Hard 27), but on Easy the Circle then
 waits behind the Carver (Shamans 18), and on Normal the earlier upgrade costs the army (Breakers 5, defeats 9 -> 13). The
 Shamans two minutes sooner (ASE, ASES) lose Easy's Breaker and Normal's second Longhouse, which their 8:00 Circle takes
-the money from. No candidate brings Hard's Riders past 37 (the bar 40): its Generated and Raraku seats field almost none
-on any order (3 of 16 each with M), where 3 and 8 of the 16 seats are defeated by 15:00.
+the money from. None of these eleven candidates brings Hard's Riders past 37 (the bar 40): its Generated and Raraku seats
+field almost none on any of them (3 of 16 each with M), where 3 and 8 of the 16 seats are defeated by 15:00. That holds
+only for D-H10's candidates: QA's QRD1 and QA1T field Riders in 42 and 45 of Hard's 64 (BUG-1721), and D36 re-measured
+QRD1's 42.
+
+## The unit mix, second search (BUG-1612, BUG-1721, D36, 2026-11-25)
+
+**None of these meets the bar; nothing ships, and there is no D36 fixture.** D36 searched around QA's one-Shaman orders
+(BUG-1721) against the same bar (above; docs/01 2026-11-24 ACCEPT (3)(c)). Five candidate orders were measured on full
+rows beside the shipped order; none meets every figure. **The nearest is QRD1** (QA's order, re-measured here to the
+seat): it misses **4 figures, 16 seats short** (Easy's Shaman 17 and Anointing 18, Normal's Shaman 19 and Anointing 12;
+every Hard figure met). Next: RSC, 5 figures and 23 seats short; RSX 6 and 21; K9KC10S 7 and 47; K9KC930 8 and 38. The
+shipped order misses 5 figures, 50 seats short. The Teblor `standard` stays D34's order; BUG-1612's unit-mix half stays
+open, and the Producer's choice of docs/01 2026-11-25 ACCEPT (4) (an opening per difficulty, or a bar that says what
+Easy trades) is asked below.
+
+Measured by `Content/D36TeblorOrderSearchReportTests.Orders_Row_Report` (Stress; 2026-11-25 on the task's base 2336d58;
+D34's row through `D34TeblorStepOrderReportTests.Play`, as in the D-H10 table above: four maps, the Teblor against the
+Malazan on seat 0 and the Whirlwind on seat 1, the same difficulty on both seats, to 15:00; a full row is seeds 1-8, 64
+seats a difficulty; six threads). `D36_VARIANTS`, `D36_DIFFS`, `D36_SEEDS` and `D36_SEATS` narrow a run. The baseline
+first: the shipped order's full rows give D-H10's figures exactly. "Seats short" adds, over the figures missed, how far
+each falls below its bar (or, for defeats, above it).
+
+The full rows (seeds 1-8: 64 matches a difficulty; figures defeated / 2nd Longhouse / Shaman / Breaker / Destrier Rider
+/ War-dog / Anointing; "!" marks a miss of the bar):
+
+| order | Easy | Normal | Hard | figures missed | seats short |
+| --- | --- | --- | --- | --- | --- |
+| bar | <= 2 / — / >= 25 / >= 20 / >= 20 / >= 40 / >= 20 | <= 10 / >= 18 / >= 20 / >= 12 / >= 22 / >= 37 / >= 17 | <= 12 / >= 18 / >= 22 / >= 35 / >= 40 / >= 46 / >= 20 | | |
+| M (shipped, re-measured) | 1 / 0 / 16! / 30 / 4! / 27! / 28 | 9 / 23 / 15! / 14 / 22 / 37 / 17 | 11 / 23 / 22 / 39 / 33! / 46 / 23 | 5 | 50 |
+| QRD1 | 1 / 0 / 17! / 29 / 36 / 47 / 18! | 9 / 23 / 19! / 13 / 25 / 38 / 12! | 11 / 23 / 23 / 40 / 42 / 47 / 25 | 4 | 16 |
+| RSX | 1 / 0 / 17! / 29 / 28 / 47 / 18! | 9 / 23 / 19! / 13 / 30 / 43 / 12! | 11 / 18 / 38 / 37 / 38! / 43! / 25 | 6 | 21 |
+| RSC | 1 / 0 / 36 / 20 / 28 / 48 / 10! | 9 / 23 / 31 / 12 / 26 / 38 / 13! | 11 / 18 / 40 / 32! / 38! / 42! / 25 | 5 | 23 |
+| K9KC930 | 1 / 0 / 32 / 17! / 36 / 48 / 51 | 12! / 23 / 21 / 3! / 22 / 35! / 16! | 8 / 18 / 35 / 23! / 36! / 41! / 32 | 8 | 38 |
+| K9KC10S | 1 / 0 / 38 / 28 / 34 / 42 / 22 | 12! / 23 / 21 / 6! / 16! / 30! / 23 | 8 / 22 / 34 / 28! / 28! / 39! / 33 | 7 | 47 |
+
+The orders, as they would sit in `ai.json` (steps 0-16, the Gatherers, Huts, War Lodge, Woodcutters' Lodge, Javelin
+Ground and Age II, are the shipped file's in every order; only the steps named change):
+
+- **QRD1** (QA's): the shipped order with `"throughReserve": true` on the `teblor_destrier_rider` and `teblor_war_dog`
+  train steps and the `teblor_shaman` step's `count` 2 -> 1. Its steps from 17 on, in file order: train
+  `teblor_breaker` x1 at 10:00; build `teblor_bloodwood_carver` 10:00; research `teblor_blood_oil_anointing` 10:00; train
+  `teblor_destrier_rider` x1 10:00 `throughReserve`; train `teblor_war_dog` x1 10:00 `throughReserve`; build
+  `teblor_breakers_hall` 9:00; `expand` 8:00; build `teblor_stables` 10:00; build `teblor_shamans_circle` 9:00; train
+  `teblor_shaman` x1 9:00; research `armor_1` 12:00; train `teblor_gatherer` x8 10:00.
+- **RSX**: QRD1 with the `teblor_shaman` train step moved to just before the `expand` step.
+- **RSC**: QRD1 with the `teblor_shaman` train step moved to just before the `teblor_bloodwood_carver` build step (after
+  the Breaker's train step).
+- **K9KC930**: QRD1 with the Carver due at 9:00 (`"time": 540`), the Shamans' Circle due at 9:30 (570), and the Circle's
+  build step and the Shaman's train step moved, in that order, to just before the Destrier Rider's train step (after the
+  Anointing).
+- **K9KC10S**: K9KC930 with the Circle due at 10:00 (600) instead of 9:30 and `"throughReserve": true` on the Shaman's
+  train step.
+
+No order puts `noReserve` on the expand step (docs/01 2026-11-24 ACCEPT (1)(e)); none writes a switch `false`; every
+order keeps the shipped steps (as actions and ids), compositions, wave, share and description, so the tooltip stays true
+(it names Shamans, Breakers and Destrier Riders as "may follow", true with one Shaman). The class's load row
+(`EveryOrder_Loads_KeepsMsSteps_AndNeverSwitchesTheExpand`) checks all of it and that QRD1 and QA1 are QA's orders.
+
+**The levers (rule 78), each varied.** Reduced rows (seeds 1-2, 16 seats a difficulty, or seeds 1-4 on Normal and Hard
+where named) only chose the candidates and are not evidence; 57 orders were screened this way (QA's QRD1 and QA1 among
+them), every one in the class. "Plays as" below means the same figures and the same Carver, Circle, Anointing, second
+Longhouse and defeat ticks on every screen seat.
+
+| lever | values tried (orders) | full rows | what the rows show |
+| --- | --- | --- | --- |
+| the Shaman step's count | 1 (every full row), 2 (R2 = QA's QRD, K9KC2, RSX2) | count 1 only | 2 is never better: R2 plays Normal's 32 screen seats as QRD1 does and gives Easy two Riders fewer; K9KC2 and RSX2 likewise (QA's A against QA1 is the full-row case: 6 misses against 4) |
+| the Shaman step's position | after the expand (QRD1), just ahead of the expand (RSX, K9SX, RA1BX, RSX2), ahead of the Carver (RSC, RSCA), last in the file (RSE), with the Circle ahead of the Breakers' Hall, the Rider or the Carver (RCH, RCR, RCK, the K9KC family) | RSX, RSC, K9KC930, K9KC10S | Easy never expands before 15:00 (`expandAfter` 900 s), so on Easy RSX moves only Raraku's Riders (the Shaman now comes ahead of the Stables in the file: Riders 36 -> 28); on Normal and Hard the Shaman ahead of the waiting expand is paid sooner (Hard's Shamans 23 -> 38) and the Riders and War-dogs pay for it (Hard 42 -> 38, 47 -> 43). Ahead of the Carver (RSC) it fields Shamans everywhere but takes Easy's Anointing. The Circle ahead of the Breakers' Hall takes the Breakers (screen: Easy 1-2 of 16, Normal 0) |
+| `throughReserve` on the train steps | Rider + War-dog (QRD1), + Breaker (RB, RA1B, AA1B), War-dog only (RD), Rider only (RR), + Shaman (QA1, K9S, K9A9S, K9C830S, K830S, K9KCS, K9KC10S, C830S, K9C930S, K9C10S, K930KC10S), War-dog + Shaman (AD) | Rider + War-dog; + Shaman (K9KC10S) | the Breaker's switch changes nothing (it is the first Age II step in the file, ahead of every step that can hold the reserve); without it on the Rider Easy fields almost no Riders (RD 2, AD 0 of 16), without it on the War-dog Easy's War-dogs fall (RR 8 of 16, the bar's share 10); on the Shaman it pays the Shaman before the Anointing |
+| the Shamans' Circle's time | 8:30 (RC830, K9C830, C830S), 9:00, 9:30 (RC930, K9KC930, AC930, K9C930S), 10:00 (K9KC10, K9KC10S, K9C10S, K930KC10), 10:30 (K9KC1030) | 9:00, 9:30, 10:00 | sooner costs Normal's second Longhouse (RC830: 0 of 16) and Easy's Anointing; later gives the Breakers' Hall the money first |
+| the Anointing's time or position | 9:00 (K9A9), 9:30 (RA930, K9KC10A930), 10:00; ahead of the Breaker (RAB, RA1, RA1B, RA1BX, AA1B), ahead of the Shaman (RSCA) | 10:00, after the Carver | its time alone changes nothing (RA930 plays every screen seat as QRD1, K9A9 as RK900; it waits for the Carver); ahead of the Breaker it takes Easy's Breakers (RA1: 1 of 16) |
+| the Carver's time | 8:30 (K830 family), 9:00 (RK900, the K9 family), 9:30 (RK930, AK930, K930KC10), 10:00 | 9:00, 10:00 | the Anointing's lever: at 9:00 Easy's Anointing 18 -> 51 / 22 and Normal's 12 -> 16 / 23, but Hard's Breakers, Riders and War-dogs and Normal's Breakers fall (Hard 40 / 42 / 47 -> 23-28 / 28-36 / 39-41) |
+| `noReserve` on `armor_1` | RN, K9N, K9SN, K9A9SN, K9SXN, K9C830SN, K830SN, C830SN | none | inert before 15:00: seven of the eight play every screen seat as their twin without it (K9C830SN: one Easy War-dog seat fewer); why was not traced |
+
+**What the rows show.** On Easy's three fixed maps a seat plays the same match on every seed (only the generated map
+varies), so Easy's figures move in steps of 8 seats, and one of its eight seats (Raraku against the Whirlwind) fields no
+Age II kind on any order. Easy's Age II comes in its last minutes: on QRD1's screen seats the Carver finishes at about
+11:10-12:00 and the Anointing, where it lands at all, at 14:27-14:55, so any order that pays a Shaman first (QA1, RSC) loses the
+Anointing, and the order that brings the Carver forward a minute (the K9KC family) wins it back with the Shamans but
+spends Normal's and Hard's army money on it. **K9KC10S is the first order measured that meets every Easy figure** (38 /
+28 / 34 / 42 / 22), and it also meets Normal's Shaman and Anointing; **QRD1 meets every Hard figure** with 1-5 seats to
+spare; **RSC meets every Normal figure but the Anointing** (13, the bar 17). No order moves a figure without moving
+another: Hard's margins on QRD1 (Rider 42, War-dog 47, defeated 11) are where every Easy cure lands.
+
+## Questions for the Producer (D36, 2026-11-25)
+
+Raised by D36 (BUG-1612, BUG-1721, BUG-1720), each with the developer's recommendation.
+
+1. **None of the six full-row orders meets the bar (five candidates and the shipped order; the brief allowed twelve);
+   the choice of docs/01 2026-11-25 ACCEPT (4) is due.** One opening that meets
+   Easy's figures (K9KC10S) misses seven on Normal and Hard; the one that meets Hard's (QRD1) misses four on Easy and
+   Normal. Recommendation: **an opening per difficulty** (a sim schema request: a difficulty may name its own
+   `buildOrder`, or its own opening), with K9KC10S for Easy and QRD1 for Hard as measured here, and Normal's searched
+   again with that freedom (RSC is one figure short there, the Anointing 13 of 17). A restated bar instead would have to
+   drop Easy's Anointing or Shamans, or Hard's Riders. Until then, keep D34's order shipped: QRD1 misses fewer figures (4
+   against 5) but does not meet the bar, and rule 75 asks for the bar.
+2. **BUG-1720's "or when the unit has the field".** Read literally (every percentage beside "hidden" / "stealthed" of a
+   unit with `attack.fromStealthBonus` is the first shot), QA's own un-skipped row "While stealthed it moves 20% slower"
+   (on a Javelin Thrower forged with the field) would fail. D36 reads it as "the field's own number": on such a unit a
+   stealth-word sentence with the field's percentage states the bonus, any other percentage there is a status's and is
+   left to the status pins, and the field must still be stated somewhere. Recommendation: keep (a wrong first-shot number
+   in a sentence with first-shot words still fails, and a description that never states the field still fails).
+3. **`noReserve` on `armor_1` is inert before 15:00** on every order screened. Recommendation: leave it out of later
+   Teblor searches (it can matter only after the Anointing is paid, which is past the bar's horizon).
 
 ## Questions for the Producer (D-H10, 2026-11-25)
 
@@ -694,10 +799,16 @@ Raised by D-H10 (BUG-1612), each with the developer's recommendation.
    a miss elsewhere. Recommendation: keep D34's order shipped and BUG-1612 open; the cure is a schema question for the sim
    (an opening per difficulty, or a `difficulties`-level time offset for the build order) or a bar per difficulty that
    names what Easy should trade, the owner's call.
+   **Producer's answer (docs/01 2026-11-25 ACCEPT (4)): not accepted as shown.** The premise rested on an incomplete
+   search: every D-H10 candidate trained two Shamans, and QA's one-Shaman orders miss 4 figures where the shipped order
+   misses 5 and A 6, two of them meeting every Hard figure (BUG-1721). The data track's next task (D36) searches around
+   those orders against the same bar; only if that fails does the Producer choose between an opening per difficulty (a
+   sim schema request) and a bar that says what Easy trades. D36's result is in "The unit mix, second search" below.
 2. **A is the nearest; on Normal it fields three kinds more often than the shipped order and two less often** (Shaman
    15 -> 28, Rider 22 -> 28, War-dog 37 -> 41; Breaker 14 -> 11, Anointing 17 -> 13). Recommendation: do not ship it under this bar (rule 75); if the
    owner prefers a Normal opponent with every kind fielded over Easy's and Normal's upgrade, say "teblor opening: order A"
    (one hash move; `Content/DH10TeblorSwitchReportTests.AllVariants` holds it).
+   **Producer's answer (docs/01 2026-11-25 ACCEPT (4)): order A does not ship** (it is not the nearest order measured).
 
 ## Questions for the Producer (D33, 2026-11-17)
 
