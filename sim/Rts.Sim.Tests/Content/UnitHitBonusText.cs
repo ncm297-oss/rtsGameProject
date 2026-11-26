@@ -46,8 +46,10 @@ public static class UnitHitBonusText
     /// <summary>
     /// BUG-1720 (ruling docs/01 2026-11-25 ACCEPT (5)): the first-shot words, "first shot", "first hit", "from hiding" (and
     /// their near twins "first strike / attack", "from stealth"). A stealth word alone ("hidden", "stealthed") is not one.
+    /// BUG-1760 (D37): the two words may be joined by a hyphen or any dash ("first-shot bonus", "first–shot", the
+    /// non-breaking hyphen) or several spaces, as well as one space: the same words.
     /// </summary>
-    private static readonly Regex FirstShotWords = new(@"\bfirst\s+(?:shot|hit|strike|attack)s?\b|\bfrom\s+(?:hiding|stealth)\b", Words);
+    private static readonly Regex FirstShotWords = new(@"\bfirst[\s\p{Pd}]+(?:shot|hit|strike|attack)s?\b|\bfrom[\s\p{Pd}]+(?:hiding|stealth)\b", Words);
 
     private static readonly Regex EachWords = new(@"\b(?:each|per|for every)\b", Words);
 

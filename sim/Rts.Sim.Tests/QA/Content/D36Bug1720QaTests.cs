@@ -65,9 +65,10 @@ public class D36Bug1720QaTests
 
     /// <summary>
     /// BUG-1760: the first-shot words written with a hyphen ("first-shot") are not read, so a first-shot bonus a unit does
-    /// not have passes. On the base ("first" was a stealth word) these failed as they should.
+    /// not have passes. On the base ("first" was a stealth word) these failed as they should. D37 fixed it (the first-shot
+    /// words allow a hyphen, any dash or several spaces between the two words): un-skipped.
     /// </summary>
-    [Theory(Skip = "BUG-1760 (open): 'first-shot' (hyphen) is not a first-shot word, so a false first-shot bonus passes")]
+    [Theory]
     [InlineData(Warrior, "Hidden, its first-shot bonus is +50%.")]
     [InlineData(Warrior, "It deals +50% first-shot damage while stealthed.")]
     public void QA_HyphenatedFirstShot_OnAUnitWithoutTheField_Fails(string unit, string text) => Fails(Read(TestSim.Data, unit, text), unit, UnitHitBonusText.StealthField);

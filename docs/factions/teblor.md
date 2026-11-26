@@ -768,6 +768,109 @@ spends Normal's and Hard's army money on it. **K9KC10S is the first order measur
 spare; **RSC meets every Normal figure but the Anointing** (13, the bar 17). No order moves a figure without moving
 another: Hard's margins on QRD1 (Rider 42, War-dog 47, defeated 11) are where every Easy cure lands.
 
+## The unit mix, per difficulty (BUG-1612, D37, 2026-11-26)
+
+**Three orders meet every Normal figure; nothing ships yet.** With a build order per difficulty decided (docs/01
+2026-11-26 (3); the sim's Request 59 adds the field), D37 searched Normal's order alone against Normal's figures of the
+bar (unchanged: docs/01 2026-11-24 ACCEPT (3)(c), "The unit mix" above) and re-measured Easy's and Hard's orders on their
+own difficulty. **M1SC, M1RS and RSCR each meet every Normal figure** on the full 64 seats; **M1RS is the one handed to
+D38** (`Fixtures/teblor_standard_d37_normal.json`): it is the only one of the three with at least one seat to spare on
+every figure (M1SC and RSCR field War-dogs in exactly 37, the bar), and its Shaman step still follows its Circle in the
+file. **K9KC10S on Easy and QRD1 on Hard give D36's rows to the cell.** The Teblor `standard` stays D34's order (no byte
+under `game/data/` changed); D38 ships the three orders once Request 59 is on `main` (one hash move).
+
+Measured by `Content/D37TeblorNormalOrderReportTests` (Stress; 2026-11-26 on the task's base 6f9975a, after the draw rule
+M6-S13: a match to 15:00 is never spent, so the draw cannot end one): `Orders_Row_Report` (Normal) and
+`EasyAndHard_Remeasured_Report`, both on D34's row as in the tables above (four maps, the Teblor against the Malazan on
+seat 0 and the Whirlwind on seat 1, the same difficulty on both seats, to 15:00; a full row is seeds 1-8, 64 seats; six
+threads). `D37_VARIANTS`, `D37_DIFFS`, `D37_SEEDS` and `D37_SEATS` narrow a run. "Seats short" adds, over the figures
+missed, how far each falls below its bar (or, for defeats, above it).
+
+The full rows (seeds 1-8: 64 seats; figures defeated / 2nd Longhouse / Shaman / Breaker / Destrier Rider / War-dog /
+Anointing; "!" marks a miss of the bar). M and RSC were re-measured first and equal D36's rows; six of the eight full
+Normal rows the brief allowed were used.
+
+| order | difficulty | defeated / 2nd Longhouse / Shaman / Breaker / Rider / War-dog / Anointing | figures missed | seats short |
+| --- | --- | --- | --- | --- |
+| bar | Normal | <= 10 / >= 18 / >= 20 / >= 12 / >= 22 / >= 37 / >= 17 | | |
+| M (shipped, re-measured) | Normal | 9 / 23 / 15! / 14 / 22 / 37 / 17 | 1 | 5 |
+| RSC (D36's, re-measured) | Normal | 9 / 23 / 31 / 12 / 26 / 38 / 13! | 1 | 4 |
+| M1S | Normal | 9 / 23 / 24 / 14 / 19! / 40 / 21 | 1 | 3 |
+| M1SC | Normal | 9 / 23 / 27 / 14 / 23 / 37 / 21 | 0 | 0 |
+| **M1RS** (handed to D38) | Normal | 9 / 23 / 23 / 18 / 30 / 40 / 18 | 0 | 0 |
+| RSCR | Normal | 9 / 23 / 26 / 18 / 30 / 37 / 18 | 0 | 0 |
+| bar | Easy | <= 2 / — / >= 25 / >= 20 / >= 20 / >= 40 / >= 20 | | |
+| K9KC10S (re-measured) | Easy | 1 / 0 / 38 / 28 / 34 / 42 / 22 | 0 | 0 |
+| bar | Hard | <= 12 / >= 18 / >= 22 / >= 35 / >= 40 / >= 46 / >= 20 | | |
+| QRD1 (re-measured) | Hard | 11 / 23 / 23 / 40 / 42 / 47 / 25 | 0 | 0 |
+
+Per map on Normal (defeated / Shaman / Breaker / Rider / War-dog / Anointing, 16 seats a map): M1RS Generated 3 / 2 / 2 /
+4 / 4 / 3, Raraku 5 / 3 / 6 / 9 / 10 / 0, Pale Hills 0 / 9 / 5 / 12 / 13 / 11, Vathar Crossing 1 / 9 / 5 / 5 / 13 / 4;
+M Generated 3 / 0 / 2 / 2 / 4 / 2, Raraku 5 / 3 / 2 / 5 / 10 / 4, Pale Hills 0 / 7 / 5 / 11 / 15 / 7, Vathar Crossing 1 /
+5 / 5 / 4 / 8 / 4.
+
+The orders (steps 0-16, the Gatherers, Huts, War Lodge, Woodcutters' Lodge, Javelin Ground and Age II, are the shipped
+file's in every order; only the steps named change; no order writes `noReserve` anywhere or a switch `false`, and each
+keeps the shipped steps as actions and ids, the compositions, the wave, the share and the description):
+
+- **M1RS** (Normal, `Fixtures/teblor_standard_d37_normal.json`): the shipped order with the `teblor_shaman` step's
+  `count` 2 -> 1 and `"throughReserve": true` on the `teblor_destrier_rider` and `teblor_shaman` train steps. Its steps
+  from 17 on, in file order: train `teblor_breaker` x1 at 10:00; build `teblor_bloodwood_carver` 10:00; research
+  `teblor_blood_oil_anointing` 10:00; train `teblor_destrier_rider` x1 10:00 `throughReserve`; train `teblor_war_dog` x1
+  10:00; build `teblor_breakers_hall` 9:00; `expand` 8:00; build `teblor_stables` 10:00; build `teblor_shamans_circle`
+  9:00; train `teblor_shaman` x1 9:00 `throughReserve`; research `armor_1` 12:00; train `teblor_gatherer` x8 10:00.
+- **M1SC**: the shipped order with the Shaman step's `count` 1 and that step moved to just before the Carver's build step
+  (after the Breaker's train step); no switch.
+- **RSCR**: RSC (D36's) without `throughReserve` on the War-dog step; that is, M1SC with `throughReserve` on the Rider step.
+- **M1S**: the shipped order with the Shaman step's `count` 1 and `throughReserve` on it.
+- **K9KC10S** (Easy, `Fixtures/teblor_standard_d37_easy.json`) and **QRD1** (Hard, `Fixtures/teblor_standard_d37_hard.json`):
+  D36's, as listed in "The unit mix, second search" above.
+
+Each fixture is the whole `standard` opening as a plain opening (today's schema: its order as `buildOrder`, no
+`buildOrders` field), the shipped opening's other fields unchanged. `Content/D37TeblorFixtureTests` (default loop) loads
+each through the shipped loader on a copy of the shipped data, checks its steps are the measured order's, and checks the
+tooltip's claims on it (the War Lodge and Javelin Ground before Age II, the four-Warrior raid at 8 army pop, a step for
+every kind named, the expand step after Age II).
+
+**The levers (rule 78).** Reduced rows (seeds 1-2, 16 Normal seats an order; then seeds 3-6, 32 seats, on 14 of them)
+only chose the candidates and are not evidence; 39 orders were screened, every one in the class (`AllVariants`).
+
+| lever | values tried (orders) | full rows | what the rows show |
+| --- | --- | --- | --- |
+| the Shaman step's count | 1 (every new order), 2 (M, M2SC, M2SH, RSC2, RS) | 2 (M), 1 (the other five) | while the step is held the count changes nothing (M1 gives M's screen figures on every map); once it is paid a second Shaman costs a Breaker on the screen (M2SC 4 against M1SC 5, RSC2 4 against RSC 5) and, against D-H10's full row of RS (two Shamans, the Anointing 14), M1RS's one Shaman gives the Anointing 18 |
+| the Shaman step's position | after the expand (M, M1, M1S, M1RS), just ahead of the expand (M1SX, M1RSX), ahead of the Carver (M1SC, M2SC, the RSC family), ahead of the Rider (M1SR, QSR), ahead of the Breakers' Hall (M1SH, M2SH, the QSH family) | after the expand (M, M1S, M1RS), ahead of the Carver (RSC, M1SC, RSCR) | without a switch, behind the Anointing it is still held (M1SR, M1SH: Shaman 4 of 16 on the screen, M 3); ahead of the Carver it is paid before the Carver and the reserve (M1SC 27 of 64); ahead of the expand it moves nothing on Normal's screen (M1RSX gives M1RS's figures on every map of seeds 3-6) |
+| `throughReserve` on the train steps | none (M, M1, M1SC), Shaman (M1S, M1SHS, RSCS), Rider (M1R, RSCR, QSHR), War-dog (M1D, RSCD, QSHD), Rider + Shaman (M1RS, RS, RSCRS, QSHRS, M1RSX), War-dog + Shaman (M1DS), Rider + War-dog (RSC, QRD1, QSH, QSR) | none, Shaman, Rider, Rider + Shaman, Rider + War-dog | the War-dog's switch is what costs Normal its Anointing: RSC and RSCR are one switch apart (13 against 18); on the War-dog alone the Riders fall short on the screen (M1DS, RSCD, QSHD 10 of 32 on seeds 3-6). The Rider's switch fields Riders and Breakers (M1S 19 / 14 -> M1RS 30 / 18) for three Anointings (21 -> 18); the Shaman's switch pays the Shaman behind the waiting expand (full rows: M 15 -> M1S 24 Shamans) and does nothing ahead of the Carver (RSCS gives RSC's screen figures on every map) |
+| the Shamans' Circle's time | 8:30 (M1C830, RSCC830), 9:00, 9:30 (RSCC930), 10:00 (RSCC10, QSHC10) | 9:00 | sooner takes Normal's second Longhouse (0 of 16 on the screen, as D36's RC830); later takes Shamans and the Anointing (RSCC10: 3 and 2 of 16, QSHC10 1 and 2) |
+| the Anointing's time and position | 9:30 (RSCA930), 10:00; ahead of the Shaman step (RSCA), ahead of the Breaker step (RSCAB) | 10:00, after the Carver | its time alone changes nothing (RSCA930 gives RSC's screen figures on every map: it waits for the Carver); ahead of the Breaker it takes the Breakers (RSCAB 2 of 16); ahead of the Shaman it moves one Shaman seat |
+| the Carver's time | 9:30 (M1K930, RSCK930 = QA's QSCK), 10:00 | 10:00 | at 9:30 the army pays: defeats 4 of 16 against 2, and M1K930's Shamans 1 and Breakers 2 of 16 |
+| `noReserve` | not varied | none | not on `armor_1` (docs/01 2026-11-26 (4): inert before 15:00) and never on the expand step (docs/01 2026-11-24 ACCEPT (1)(e)) |
+
+**What the rows show.** Normal's misses on M and RSC were one trade, as the rows read: M's Shamans wait behind the expansion's reserve (the
+Shaman step comes after the expand step in the file and carries no switch), and RSC's War-dog step spends through the
+reserve that the Anointing was waiting on. One Shaman paid early (ahead of the Carver, or through the reserve) with the
+War-dog's step left without a switch gives both: the three orders that meet the bar all do that. The Rider's switch is
+the margin: with it (M1RS, RSCR) Riders and Breakers rise well past the bar, without it (M1SC) Riders sit one seat above
+it, and with the Shaman through but no Rider switch (M1S) Riders fall to 19.
+
+## Questions for the Producer (D37, 2026-11-26)
+
+Raised by D37 (BUG-1612, BUG-1760), each with the developer's recommendation.
+
+1. **Normal's order: M1RS, M1SC or RSCR?** All three meet every Normal figure on the full row. Recommendation: **M1RS**
+   (handed to D38 as `Fixtures/teblor_standard_d37_normal.json`): at least one seat over the bar on every figure, the
+   most Breakers and Riders with RSCR (18, 30), and the Shaman step stays after its Circle in the file, so the shipped-opening
+   checks of `QA/Content/D32DescriptionQaTests` keep reading it as they do today. M1SC fields more Shamans and Anointings
+   (27, 21) with no switch at all but sits on the bar's edge for War-dogs (37) and one seat over for Riders (23); RSCR
+   sits on the edge for War-dogs. Say "teblor normal: M1SC" to hand M1SC over instead.
+2. **Which order is the opening's own `buildOrder` once Request 59 lands?** Recommendation: Normal's (M1RS), with Easy and
+   Hard named per difficulty, so the page's "AI build order (Normal)" table goes on describing the plain order. One check to
+   carry into D38: K9KC10S trains its Shaman due at 9:00 behind a Circle due at 10:00 (it waits for the Circle), which
+   `D32DescriptionQaTests.Shamans_HaveTheirOwnTrainStep_AfterTheCircleStep` would refuse if it read the Easy order; the
+   tooltip says "may follow", a claim about a step, not a time.
+3. **BUG-1760's neighbours.** QA named "opening shot" and "ambush" as possible first-shot words. Recommendation: leave them
+   out until a description uses them (no shipped description or the Shadow page's sentences do); the ruling's words with
+   any dash or spacing are read since D37.
+
 ## Questions for the Producer (D36, 2026-11-25)
 
 Raised by D36 (BUG-1612, BUG-1721, BUG-1720), each with the developer's recommendation.
@@ -780,14 +883,24 @@ Raised by D36 (BUG-1612, BUG-1721, BUG-1720), each with the developer's recommen
    again with that freedom (RSC is one figure short there, the Anointing 13 of 17). A restated bar instead would have to
    drop Easy's Anointing or Shamans, or Hard's Riders. Until then, keep D34's order shipped: QRD1 misses fewer figures (4
    against 5) but does not meet the bar, and rule 75 asks for the bar.
+   **Producer's answer (docs/01 2026-11-26 (3)): accepted, an opening may carry a build order per difficulty.** The bar
+   of 2026-11-24 ACCEPT (3)(c) is unchanged (a restated bar would drop Easy's upgrade or Shamans or Hard's Riders, a
+   taste call left to the owner). The sim adds an optional per-difficulty `buildOrder` inside an opening (Request 59; left
+   out = today's behaviour and hashes); then the data track ships K9KC10S for Easy, QRD1 for Hard and a Normal order
+   searched with that freedom (D37 measures it, "The unit mix, per difficulty" above; D38 ships, one hash move). D34's
+   order stays shipped until then.
 2. **BUG-1720's "or when the unit has the field".** Read literally (every percentage beside "hidden" / "stealthed" of a
    unit with `attack.fromStealthBonus` is the first shot), QA's own un-skipped row "While stealthed it moves 20% slower"
    (on a Javelin Thrower forged with the field) would fail. D36 reads it as "the field's own number": on such a unit a
    stealth-word sentence with the field's percentage states the bonus, any other percentage there is a status's and is
    left to the status pins, and the field must still be stated somewhere. Recommendation: keep (a wrong first-shot number
    in a sentence with first-shot words still fails, and a description that never states the field still fails).
+   **Producer's answer (docs/01 2026-11-26 (4)): kept.** "Or when the unit has the field" means the field's own number;
+   any other percentage beside "hidden" / "stealthed" is a status's. The hyphenated "first-shot" gap (BUG-1760) was the
+   data track's next small fix: D37 reads "first-shot" (a hyphen, any dash or several spaces) as "first shot".
 3. **`noReserve` on `armor_1` is inert before 15:00** on every order screened. Recommendation: leave it out of later
    Teblor searches (it can matter only after the Anointing is paid, which is past the bar's horizon).
+   **Producer's answer (docs/01 2026-11-26 (4)): kept**, left out of later Teblor searches (D37 does not vary it).
 
 ## Questions for the Producer (D-H10, 2026-11-25)
 
@@ -803,7 +916,7 @@ Raised by D-H10 (BUG-1612), each with the developer's recommendation.
    search: every D-H10 candidate trained two Shamans, and QA's one-Shaman orders miss 4 figures where the shipped order
    misses 5 and A 6, two of them meeting every Hard figure (BUG-1721). The data track's next task (D36) searches around
    those orders against the same bar; only if that fails does the Producer choose between an opening per difficulty (a
-   sim schema request) and a bar that says what Easy trades. D36's result is in "The unit mix, second search" below.
+   sim schema request) and a bar that says what Easy trades. D36's result is in "The unit mix, second search" above.
 2. **A is the nearest; on Normal it fields three kinds more often than the shipped order and two less often** (Shaman
    15 -> 28, Rider 22 -> 28, War-dog 37 -> 41; Breaker 14 -> 11, Anointing 17 -> 13). Recommendation: do not ship it under this bar (rule 75); if the
    owner prefers a Normal opponent with every kind fielded over Easy's and Normal's upgrade, say "teblor opening: order A"
