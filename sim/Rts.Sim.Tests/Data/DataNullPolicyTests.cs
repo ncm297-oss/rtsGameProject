@@ -53,6 +53,8 @@ public class DataNullPolicyTests
         new object[] { "common/rules.json", "", "gatherOverlap", "gatherOverlap" },
         new object[] { "factions/teblor/units.json", "units[id=teblor_gatherer]", "carry", "units[{0}].carry" },
         new object[] { "factions/malazan/ai.json", "openings[id=standard].attack", "reserveArmyShare", "openings[{0}].attack.reserveArmyShare" },
+        // M7-9: an opening's per-difficulty build orders written null is an error (leave the field out for "no entry").
+        new object[] { "factions/teblor/ai.json", "openings[id=standard]", "buildOrders", "openings[{0}].buildOrders" },
         // M6-S13: inside the draw block the wait is required; null is an error, not "no rule" (leave the block out for that).
         new object[] { "common/rules.json", "draw", "afterSeconds", "draw.afterSeconds" },
     };

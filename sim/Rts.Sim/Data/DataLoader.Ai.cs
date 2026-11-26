@@ -73,7 +73,8 @@ public static partial class DataLoader
     /// M5-8a: <c>openings</c>, 1 to <see cref="DataLimits.MaxAiOpenings"/> entries in file order: a snake_case <c>id</c> unique
     /// in the file, a <c>displayName</c> (1 to <see cref="DataLimits.MaxAiOpeningNameLength"/> characters), an optional
     /// <c>description</c> (at most <see cref="DataLimits.MaxAiOpeningDescriptionLength"/>), and a build order, compositions and
-    /// attack thresholds under the M5-1 rules, reported at <c>openings[i]...</c>.
+    /// attack thresholds under the M5-1 rules, reported at <c>openings[i]...</c>. M7-9: an optional per-difficulty
+    /// <c>buildOrders</c> (<see cref="BuildAiBuildOrders"/>).
     /// </summary>
     private static ImmutableArray<AiOpening> BuildAiOpenings(Checker c, List<AiOpeningJson?>? list, int faction, AiIds? ids)
     {
@@ -117,6 +118,7 @@ public static partial class DataLoader
                 DisplayName = name,
                 Description = description,
                 BuildOrder = BuildAiSteps(c, o.BuildOrder, faction, ids, p + ".buildOrder", id),
+                BuildOrders = BuildAiBuildOrders(c, o, faction, ids, p + ".buildOrders", id), // M7-9
                 Compositions = BuildAiCompositions(c, o.Compositions, faction, ids, p + ".compositions"),
                 AttackMinHalfPop = attack == null ? 0 : HalfPopField(c, attack.MinArmyPop, p + ".attack.minArmyPop"),
                 AttackMinCost = attack == null ? 0 : c.Int(attack.MinArmyCost, p + ".attack.minArmyCost", 0),
@@ -124,6 +126,55 @@ public static partial class DataLoader
             });
         }
         return result.ToImmutable();
+    }
+
+    /// <summary>
+    /// M7-9 (Request 59, docs/03 "Implementation (M7-9)"): an opening's optional <c>buildOrders</c> at <paramref name="path"/>,
+    /// one entry per difficulty id that has its own build order, each under <see cref="BuildAiSteps"/>' rules at
+    /// <c>buildOrders.&lt;difficulty&gt;</c> (an empty list for a difficulty without one). Left out: empty (every difficulty
+    /// plays <c>buildOrder</c>). The field
+    /// <c>null</c> or <c>{}</c>, an entry <c>null</c> or <c>[]</c>, and an entry for every difficulty (then <c>buildOrder</c>
+    /// could never be played) are one error each. The keys are read in difficulty order, never in the file's.
+    /// </summary>
+    private static ImmutableArray<ImmutableArray<AiStep>> BuildAiBuildOrders(Checker c, AiOpeningJson o, int faction, AiIds? ids, string path, string opening)
+    {
+        var none = ImmutableArray<ImmutableArray<AiStep>>.Empty;
+        if (!o.HasBuildOrders) return none;
+        AiBuildOrdersJson? j = o.BuildOrders;
+        if (j == null)
+        {
+            c.Error(path, "null is not a set of build orders (leave the field out for every difficulty to play buildOrder)");
+            return none;
+        }
+        int n = DataLimits.AiDifficultyIds.Length;
+        var lists = new ImmutableArray<AiStep>[n]; // load time only; an empty entry is "no entry"
+        int entries = 0;
+        for (int k = 0; k < n; k++)
+        {
+            (bool has, List<AiStepJson?>? list) = (AiDifficulty)k switch
+            {
+                AiDifficulty.Easy => (j.HasEasy, j.Easy),
+                AiDifficulty.Normal => (j.HasNormal, j.Normal),
+                _ => (j.HasHard, j.Hard),
+            };
+            if (!has) continue;
+            entries++;
+            string id = DataLimits.AiDifficultyIds[k];
+            string p = path + "." + id;
+            if (list == null)
+                c.Error(p, $"null is not a build order (leave the key out for a {id} seat to play buildOrder)");
+            else if (list.Count == 0)
+                c.Error(p, $"the build order has no steps (at least one; leave the key out for a {id} seat to play buildOrder)");
+            else
+                lists[k] = BuildAiSteps(c, list, faction, ids, p, opening);
+        }
+        if (entries == 0)
+            c.Error(path, "no entries (at least one difficulty; leave the field out for every difficulty to play buildOrder)");
+        else if (entries == n)
+            c.Error(path, "an entry for every difficulty: buildOrder could never be played (write one of them as buildOrder)");
+        for (int k = 0; k < n; k++)
+            if (lists[k].IsDefault) lists[k] = ImmutableArray<AiStep>.Empty;
+        return ImmutableArray.Create(lists);
     }
 
     private static AiDifficultyDef BuildAiDifficulty(Checker c, AiDifficultyJson j, string p)

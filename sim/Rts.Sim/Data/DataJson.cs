@@ -509,6 +509,72 @@ internal sealed class AiOpeningJson
     public List<AiStepJson?>? BuildOrder { get; set; }
     public List<AiCompositionJson?>? Compositions { get; set; }
     public AiAttackJson? Attack { get; set; }
+
+    // M7-9 (Request 59): optional; a JSON null is an error, not "absent". The deserializer calls the setter for a JSON null
+    // too (and never for a missing key), so the flag tells the two apart.
+    private AiBuildOrdersJson? _buildOrders;
+
+    public AiBuildOrdersJson? BuildOrders
+    {
+        get => _buildOrders;
+        set
+        {
+            _buildOrders = value;
+            HasBuildOrders = true;
+        }
+    }
+
+    [JsonIgnore]
+    public bool HasBuildOrders { get; private set; }
+}
+
+/// <summary>
+/// M7-9 (Request 59): an opening's <c>buildOrders</c>, one optional step list per difficulty id. Each setter marks its key
+/// present (a JSON <c>null</c> calls it too), so the loader tells a key written <c>null</c> (an error) from one left out
+/// ("no entry"). An unknown key is the deserializer's unknown-property error, as everywhere.
+/// </summary>
+internal sealed class AiBuildOrdersJson
+{
+    private List<AiStepJson?>? _easy, _normal, _hard;
+
+    public List<AiStepJson?>? Easy
+    {
+        get => _easy;
+        set
+        {
+            _easy = value;
+            HasEasy = true;
+        }
+    }
+
+    public List<AiStepJson?>? Normal
+    {
+        get => _normal;
+        set
+        {
+            _normal = value;
+            HasNormal = true;
+        }
+    }
+
+    public List<AiStepJson?>? Hard
+    {
+        get => _hard;
+        set
+        {
+            _hard = value;
+            HasHard = true;
+        }
+    }
+
+    [JsonIgnore]
+    public bool HasEasy { get; private set; }
+
+    [JsonIgnore]
+    public bool HasNormal { get; private set; }
+
+    [JsonIgnore]
+    public bool HasHard { get; private set; }
 }
 
 internal sealed class AiDifficultiesJson
