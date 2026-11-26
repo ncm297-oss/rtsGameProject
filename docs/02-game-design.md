@@ -684,6 +684,20 @@ own cues (select, order, refused, building placed or finished, unit or tech read
    only what an enemy destroyed (Producer decisions 2026-10-14 and 2026-10-16, BUG-0703; built in M5-H2). Likewise a
    friendly-fire death (a unit killed by its own player's or an ally's splash, Cusser or other area effect) is a loss for
    its owner and **nobody's kill** (Producer decision 2026-10-27, BUG-1044; built in M6-S5).
+
+   **A spent match ends in a draw** (owner decision 2026-11-25, design in docs/01's 2026-11-25-1437 row; built in M6-S13).
+   A match is *spent* when at least two sides that ever built are still in, and no player still in can ever train another
+   unit: it has no unit waiting in a production queue, and its banked gold, plus the gold its units are carrying, plus (only
+   if it still has a worker) all the gold left in every mine on the map, is less than the gold price of its faction's
+   cheapest unit, or it has neither a finished unit-producing hall nor a worker. Wood does not count. When a match has been
+   spent for **5 game minutes** in a row (`rules.json` `draw.afterSeconds` 300), it ends in a **draw**: nobody is
+   defeated by it, no building collapses, the match is simply over (and play goes on behind the result, as after a win).
+   The 5 minutes start again from zero whenever a unit dies (a summoned unit's death or expiry does not count), whenever a
+   player is knocked out, and whenever the match stops being spent (a cancelled order that refunds enough gold, say). So
+   a side that is still finishing the others off with what it has is never cut short, while a stand-off in which nobody
+   loses anything ends; a win on the same tick as the draw would fall is a win. Until the view's next task (M6-V29) the
+   end-of-match banner reads the old rule, so a drawn match shows Victory to a player who still stands; the command-line
+   `match` already prints `result draw`.
 5. **Post-match stats:** resources gathered, units trained/lost/killed, buildings built/lost,
    army value over time (graph), time to Age II, and for each AI seat the opening it played ("Malazan Empire opened with
    Combined arms", the opening's description on hover; a human seat shows none; a watched replay shows the same line; built in

@@ -1,3 +1,4 @@
+using Rts.Sim.Data;
 using Rts.Sim.Save;
 
 namespace Rts.Sim.Entities;
@@ -35,11 +36,13 @@ public sealed partial class ResourceStore
         _highWater = r.ReadInt32In(0, Capacity);
         if (r.Failed) return;
         int live = 0;
+        GoldLeft = 0;
         for (int i = 0; i < Capacity; i++)
         {
             if (!_alive[i]) continue;
             live++;
             if (!r.Check(i < _highWater && (uint)_typeId[i] < (uint)_defs.Length && (uint)_cell[i] < (uint)cells && _remaining[i] >= 1)) return;
+            if (_defs[_typeId[i]].Resource == ResourceKind.Gold) GoldLeft += _remaining[i]; // M6-S13: recounted, not stored
         }
         if (!r.Check(live == Capacity - _freeCount)) return;
         for (int k = 0; k < _freeCount; k++)

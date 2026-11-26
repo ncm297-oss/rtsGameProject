@@ -131,6 +131,9 @@ phases in this fixed order:
     can take a unit or a building away (a `Cancel` in phase 1, a summon's expiry in phase 5, an ability in phase 6, hits and
     landings here), every player that ever built, isn't defeated yet and has no live unit and no finished unit-producing
     building is defeated, in player order; see "Implementation (M5-4e)" (the rule) and "(M5-4b)" (the flags, the door).
+    **M6-S13: then the draw rule** (`World.UpdateDraw`, "phase 11c"): with a `rules.json` `draw` block, the draw clock goes up
+    on a spent tick and back to 0 on any other, on a tick a non-summoned unit died or a seat was defeated; at the wait the
+    match is drawn; see "Implementation (M6-S13)".
 12. **Vision and detection:** recompute fog every 4 ticks (5 Hz) per player. (M4-3a: `VisionSystem.Run` rebuilds every
     player's unexplored / explored / visible grid on the ticks where `tick % 4 == 1`, from its own units' and buildings'
     sight with the high-ground rule; an initial stamp also runs at the start of tick 0; see "Vision, detection, fog".
@@ -5797,7 +5800,7 @@ game/data/
   common/
     damage_table.json        # type × armor class multipliers
     statuses.json            # status definitions
-    rules.json               # starting resources, pop cap, gather rates, repair factors, building sight
+    rules.json               # starting resources, pop cap, gather rates, repair factors, building sight; draw wait (M6-S13, optional)
     resources.json           # resource node types: tree, gold mine (M3-1)
     techs.json               # techs every faction shares: Age II, Forge upgrades (M3-5)
     projectiles.json         # projectile types: aimed / lob, speed, hit tolerance, lead speed (M4-2b)
@@ -5859,6 +5862,11 @@ judged a likelier typo than a wish. To leave an optional
 field out, leave it out: do not write `null` (a forge that blanks a block with `null` keeps working). Pinned by
 `Data/DataNullPolicyTests`: `ANull_ReadsAsLeftOut` (a copy with the field `null` hashes as the copy with it removed, one
 row a field above) and `ANull_IsOneLoadError` (the three fields, one error each at its path).
+**M6-S13 adds one of each:** `rules.json` `draw` (the optional block) written `null` reads as left out, i.e. no draw rule;
+inside the block `afterSeconds` is required and read raw, so `"afterSeconds": null` is one load error at
+`draw.afterSeconds` ("null is not a number (leave the whole draw block out for no draw rule)"), as is a missing field, a
+non-number, zero or a negative, a value over `DataLimits.MaxDrawSeconds` (86,400 s, a game day) and a value that rounds to 0
+ticks. Both rows are in `DataNullPolicyTests`.
 
 **Questions for the Producer (M7-H3, rule 67).**
 
@@ -5869,6 +5877,8 @@ row a field above) and `ANull_IsOneLoadError` (the three fields, one error each 
    and the test rows state what the loader does. Recommendation: keep it so (making the switches strict is a loader
    change, and a `null` switch can only mean "off"); if the Producer wants every optional number and switch strict, it is
    a small loader task of its own with a re-check of the test forges that write `null`.
+   **Producer's answer (docs/01 2026-11-25, the 0924 ACCEPT row (1)): keep.** The two switches and the other optional
+   numbers keep reading `null` as left out; only the raw-read numbers above refuse it. Written in by M6-S13.
 
 ### What ships today (M1)
 
@@ -11963,6 +11973,13 @@ tests `Ai/CriterionMatch.cs` (the harness), `Ai/MatchCriterionTests`, `CommandRe
   waves 96, defeats 3 / 2, as at D33. No pin value moved: `StandardPresetPinQaTests`, `NonHardMatchPinQaTests`,
   `CounterCompositionTests`, `OutcomePinM73bQaTests`, `ReserveTwinTests`, `SharedVisionFfaPinTests`, `HardKnobsPinTests`,
   `CliTests.Match_TheLiteralRow_*`, the premap replays, `save_ai_seed2` and `seed21_playable.replay` all green unchanged.
+  **Re-measured for M6-S13** (the owner's draw rule, rule 43; data hash A732F387C2BB7E4D -> 3D93D45345A3B4EA): no criterion
+  row is ever spent before its end (every row green unchanged, `HalfWay` 11,622, no bound moved, no row moved seed). The Hard
+  v Normal tally now prints draws apart (Hard / Normal / draw / none): **34 / 5 / 0 / 3**, unchanged (Raraku 13 / 1 / 0 / 0,
+  Vathar Crossing 14 / 0 / 0 / 0, Pale Hills 7 / 4 / 0 / 3). One of its matches is spent before the bound: Pale Hills with
+  Hard in seat 0, seeds 7 and 8 (one match on the map file), spent from 71,281 (59:24) and not drawn by 72,000 (720 ticks
+  into the 6,000-tick wait); its outcome at 72,000 (none) is the base's, since nothing but the draw reads the clock. The
+  other "none" (seed 2) and every "Normal" result are never spent (`Stress/DrawStalledRowsReportTests.ATallyMatchWithoutAHardWin_Measured`).
   The golden `cross_map_seed1.replay`: header and checksum only (its k lines did not move).
   **Re-measured for M6-S12** (the AI's rally point off one-cell passages, a rebalanced gatherer's node measured from its
   drop-off, a blind seat's re-scout; "Implementation (M6-S12)"): Vathar Crossing seed 7 ends at 30,482, past 24,000, so the
@@ -12704,7 +12721,7 @@ version 2) stores the AI seats too, so every match saves. Code in `sim/Rts.Sim/S
   | Tag | Holds |
   | --- | --- |
   | `HMAP` | the heightmap: width, height, levels, elevations, start locations (stored, not re-generated) |
-  | `WRLD` | `HasGeneratedMap`, `ResourcePlacement`, `SeenBlockVersion`, the movement scratch epoch `PlugEpoch`, the surround / flank rule seams, the match-over latch |
+  | `WRLD` | `HasGeneratedMap`, `ResourcePlacement`, `SeenBlockVersion`, the movement scratch epoch `PlugEpoch`, the surround / flank rule seams, the match-over latch; then (format 10, M6-S13), exactly when the data has a `draw` block and the draw clock or the drawn flag is not 0, the tag `DRAW`, the clock (int32) and the drawn flag (byte) ("Implementation (M6-S13)") |
   | `RNGS` | every stream's `State` and `Increment`, the never-drawn AI streams too |
   | `GRID` | the nav grid: every cell's flags and cost, `Version`, `BlockVersion`, `PassableCount` |
   | `RSSC` | the resource store whole (felled trees' freed slots and generations), free list, high-water mark |
@@ -14475,6 +14492,124 @@ move. Allocation: `Ai/RallyPassageTests.TheRallySearch_AllocatesNothing` (20 thi
    twice). Recommendation: keep the rule's seed now; at the next pin move either drop the seed-2 twin row or move the oracle
    row to seed 5 (73,778). The bug id range for the sim was used up (1550-1559), so the stall is filed under BUG-1559
    itself rather than a new id.
+
+### Implementation (M6-S13)
+
+The owner's draw rule (inbox 2026-11-25, BUG-1536; design: docs/01 2026-11-25-1437 PLAN row; player words: docs/02 "Game
+flow" 4). A match in which no side can ever train another unit ends in a draw after a wait kept in the data.
+
+**Files.** `World.Draw.cs` (the rule, its state, the accessors, the save part), `Economy/PlayerLedger.Draw.cs` (the counts
+it reads), hooks in `UnitStore` (live workers, carried gold of a freed unit, `PermanentFrees`), `BuildingStore` (unit items
+queued), `ResourceStore` (`GoldLeft`), `EconomySystem` (carried gold taken, delivered, dropped); `Simulation.Tick` (phase
+11c) and `StateHash`; `World.Save.cs`, `Save/SaveFormat.TagDraw`, `SaveReader.TryTag`; `Data/DataJson` (`DrawJson`),
+`DataLoader.DrawAfter`, `RulesDef.DrawAfterTicks`, `DataLimits.MaxDrawSeconds`, `GameData.ContentHash`;
+`tools/Rts.Cli/AiMatch.cs`; `game/data/common/rules.json` (`"draw": { "afterSeconds": 300 }`).
+
+**The formula.** For seat `p` (`World.CanStillTrain(p)`), with `cheapest` the lowest `cost.gold` of its faction's units
+(any unit the faction lists, whether or not it has the building; a per-seat table filled at construction from the data and
+the seats):
+- `cheapest == 0` (a faction with a 0-gold unit): true, always.
+- a unit item in any of its production queues (`PlayerLedger.QueuedUnits`; a research item is not one): true.
+- it can produce = a finished unit-producing building (`ProductionBuildings`, sites excluded) or a live worker
+  (`PlayerLedger.LiveWorkers`, `UnitDef.IsWorker`, a summoned worker too). Cannot produce: false.
+- else `Gold[p] + CarriedGold[p] + (LiveWorkers[p] > 0 ? Resources.GoldLeft : 0) >= cheapest`. Wood is never read.
+
+`World.MatchSpent` = not `MatchOver`, at least two sides that ever built still stand (sides as `MatchOver` counts them:
+`AreAllied`), and no undefeated seat `CanStillTrain` (seats in player order; a seat that never built and is not defeated
+counts like any other).
+
+**Where it runs.** Phase 11c, `World.UpdateDraw`, right after the defeat check (11b), before the fog. It first reads and
+zeroes `UnitStore.PermanentFrees` (the non-summoned units `Free` released since the last check: every death of phases 1-11
+of this tick; a summon's death or expiry is not counted), whether or not the rule is on. Then, with a draw rule and not yet
+drawn: a death, a defeat event this tick (`DefeatEventCount > 0`) or a tick that is not spent sets the clock to 0;
+otherwise the clock goes up by one, and on the tick it reaches `DrawWaitTicks` the match is drawn: `_drawn` and the result
+latch (`_matchOverLatched`, so `MatchOver` is true for good) are set; nobody's defeated flag changes, nothing collapses,
+no event is written; the ticks go on. A win on the same tick stands: phase 11b latched the result first, so the match is
+not spent. Once drawn the check returns at once (the clock stays at the wait). Without the `draw` block (`DrawWaitTicks`
+0) the clock stays 0.
+
+**Cost.** The check reads per-seat counters only (no store is walked): `LiveWorkers` moves with `LiveUnits` in
+`PlayerLedger.AddLiveUnit` (now given the type id); `QueuedUnits` in `BuildingStore.Enqueue` and `Shift` (every removal:
+trained, cancelled, freed with its building); `CarriedGold` where cargo of gold changes (`EconomySystem.Work` takes it,
+`Deposit` delivers it, `StartGather` drops it, `UnitStore.Free` loses it with its carrier); `ResourceStore.GoldLeft` in
+`Spawn` and `Take`. All are derived: not hashed, not saved, rebuilt at a load (`World.RecountDraw`, after every store is
+read; `ResourceStore.ReadFrom` recounts `GoldLeft`). A test that writes a store's arrays directly (cargo, a queue entry)
+calls `World.RecountDraw()` after it (`Draw/DrawRuleTests.GoldCarriedByAnOwnUnit_ClosesTheGap`); `Draw/DrawTwinTests.
+TheCounters_EqualARecount_ThroughAnAiMatch` checks the counts against a recount every 50 ticks of an AI match.
+`Draw/DrawCostTests` (serial): 0 bytes allocated over 40,000 checks on every path; the same time with 8 units and 2,000.
+
+**Hash.** Bit 37 of every player's gold word is "the draw state is set" (`_drawClock != 0 || _drawn`); when it is, the
+clock and the drawn flag follow the player words. A match whose clock is 0 and that is not drawn hashes exactly as before
+the rule ("zero is free": `Draw/DrawTwinTests.ANeverSpentAiMatch_HashesTheSame_WithAndWithoutTheRule_EveryTick`).
+
+**Save (format 10 kept).** Inside `WRLD`, after the result latch: the tag `DRAW`, the clock (int32), the drawn flag (byte),
+written exactly when the data has a `draw` block and the clock or the flag is not 0 (M8-1 / M8-2's pattern), so a save of a
+match never spent is byte for byte what the base wrote. The reader takes the part when the next word is `DRAW`
+(`SaveReader.TryTag`) and refuses (`Malformed`) a part on data without the rule, one that holds nothing (clock 0, not
+drawn), a clock below 0 or above the wait, a clock at the wait without the draw, a draw whose clock is not the wait, and a
+draw without the result latch. The two-process path: `Draw/DrawSaveReplayTests.ASaveTakenMidClock_TwoProcesses_*`.
+`SaveScenes` gains `draw_clock` (a spent three-seat match, wait 60 s), so every save round-trip theory and
+`QA/SaveRestoreQaTests`' whole-graph rows cover a running clock and a draw.
+
+**The data.** `rules.json` `draw.afterSeconds`: the block left out (or `null`) is no rule; inside it the number is required,
+read raw, above 0, at most `DataLimits.MaxDrawSeconds` (86,400 s), at least one tick; converted to ticks by
+`DataLoader.SecondsToTicks` (300 s = 6,000). In `GameData.ContentHash` only when present (a marker 2, then the ticks), so the
+data hash moved with the shipped block: older saves and recordings are refused `DataMismatch`.
+
+**The command line.** `match` on a drawn match prints `result draw at tick N (m:ss)` (the format of the other result lines)
+and exits 0 as a win does (`Cli/CliTests.Match_ADrawnMatch_PrintsResultDraw_Exit0`); a match never spent prints what it did.
+
+**For the view track (M6-V29).** Read-only, between ticks: `World.MatchDrawn` (true for good once drawn; `MatchOver` is
+true with it); `World.DrawTicksLeft` (the ticks before the draw while the clock runs, -1 when it does not: no rule, not
+spent, or over); `World.DrawClock` and `World.DrawWaitTicks` (the raw clock and the wait, 0 = no rule); `World.MatchSpent`
+and `World.CanStillTrain(p)` (for a "no one can train" hint). Today `Match.ResultFor` reads a drawn match with a standing
+local side as Victory; it should read `MatchDrawn` first. A drawn match writes no `DefeatEvents`.
+
+**The stalled AI matches, measured** (`Stress/DrawStalledRowsReportTests`, shipped data, four Normal seats, to 144,000; every
+draw's twin with the wait out of reach is hash-equal up to the draw tick, and each ran twice to the same end):
+
+| Match | First spent | Clock restarts | End (was) |
+| --- | --- | --- | --- |
+| Pale Hills FFA seed 1 | 35,541 (29:37) | 69 | draw at 61,779 (was: no result by 144,000) |
+| Pale Hills FFA seed 2 | 26,442 (22:02) | 114 | draw at 58,378 (was: p1 at 59,951) |
+| Pale Hills FFA seed 3 | never | 0 | p1 at 40,674 (unchanged; BUG-1536's stall is gone on this tree without the rule) |
+| Pale Hills FFA seed 4 | 34,201 (28:30) | 87 | draw at 63,124 (was: no result by 144,000) |
+| Pale Hills FFA seed 6 | 44,145 (36:47) | 5 | draw at 51,216 (was: no result by 144,000) |
+| Pale Hills FFA seed 7 | 27,141 (22:37) | 121 | draw at 80,167 (was: no result by 144,000) |
+| Vathar FFA seed 2 (BUG-1621 / 1610) | never | 0 | p3 at 88,998 (unchanged; p3 keeps 8,020 gold) |
+| Pale Hills 2v2 seed 2 (BUG-1149) | never | 0 | team 1 at 42,081 (unchanged) |
+| BUG-1116's lone-worker scene | never | 0 | no end by its 20,000 (unchanged; p0 keeps its hall and 400 gold) |
+
+Pins: no default-loop pin moved (every `MatchCriterionTests` row and the other pin classes are never spent before their old
+end). The Hard v Normal tally is unchanged at 34 / 5 / 0 / 3 (one Pale Hills match spent from 71,281, not drawn by its
+72,000 bound; "Implementation (M5-5)", "Re-measured for M6-S13"). In Stress, the four-seat Pale Hills seed 2 moved to its draw: `HuntStressTests`' oracle row pins the draw at
+58,378, its twin row `FourAiSeats_OnPaleHills_Seed2_KnownStall` is dropped, the skipped seed-1 row is un-skipped and pinned to
+its draw at 61,779, and `EndGameHardeningTests.PaleHillsSeed2_FourSeats_PastADefeat_*` (about a hunt past a defeat, which the
+draw at 58,378 now comes before) plays on the shipped data with the draw block taken out (`Draw/DrawScenes.Off`).
+The data track's rows that rebuild a pre-M6-S13 data hash from the shipped files (D32 / D33 / D34) take the `draw` block
+back out (`DrawScenes.TakeOutDraw`, `DrawScenes.TeblorOpeningBeforeDraw`), as M6-S10's took `gatherOverlap` out. The golden
+`cross_map_seed1.replay`'s header data hash and checksum were regenerated (its one seat is never in a spent match; every k
+line unchanged; the reason in `QA/GatherWedgeQaTests`' comment).
+
+**Questions for the Producer (M6-S13, rule 67).**
+
+1. **The counts the check reads are kept by the stores, not scanned** (criterion 12). A test that writes a store's arrays
+   directly (a worker's `Cargo`, a queue entry) must call `World.RecountDraw()` afterwards or the check reads the old count.
+   The sim's own paths keep them (checked against a recount through a whole AI match). Recommendation: keep; the alternative,
+   a scan of the unit store on every tick a seat is short of gold (every tick of a spent match), costs little (a few
+   microseconds at 2,000 units) but is what criterion 12 asked to avoid.
+2. **The command line's draw line** reads `result draw at tick N (m:ss)`, the format of the existing `result winner p1 at
+   tick N (m:ss)` and `result none by tick N (m:ss)` lines (the brief wrote `result draw at <tick> (<m:ss>)`). Recommendation:
+   keep, so a script reads every result line the same way.
+3. **A seat that never built still counts** in "no undefeated seat can still train": a human sandbox seat with a worker and
+   gold in a two-sided match keeps the match from being spent. That is the design's wording ("no undefeated seat") and such a
+   seat could still build and join. Recommendation: keep.
+4. **After the draw the ticks go on as after a win**: the AI reads `MatchOver` and stands down (no waves, no hunts), and if
+   units still fight and a side falls, the match stays drawn (`MatchDrawn` never clears; the CLI and the view should read it
+   before looking for a winner). Recommendation: keep.
+5. **BUG-1536's match (seed 3) is not one of the draws**: on this tree it ends with a winner at 40,674 without being spent;
+   the handoff's "known stalls" line for seeds 3 / 4 was half stale (seed 4 did stall; it now draws at 63,124).
+   Recommendation: close BUG-1536 with the measurement (the patch in the developer's report says so).
 
 ## Testing strategy
 

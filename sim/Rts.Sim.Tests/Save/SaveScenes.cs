@@ -46,6 +46,27 @@ internal static class SaveScenes
         yield return ConstructionAndQueue();
         yield return FelledTreeAndRazedBuilding();
         yield return DefeatedSeat();
+        yield return DrawClock();
+    }
+
+    private static readonly Lazy<GameData> s_drawMinute = new(() => Draw.DrawScenes.DataWith(60));
+
+    /// <summary>
+    /// M6-S13: a staged spent match (<see cref="Draw.DrawScenes.Spent"/>, three seats, a Hall and three soldiers each, no gold, no
+    /// worker) on data whose draw wait is 60 s (1,200 ticks): saved at 1, 137 and 1,000 its clock is running (the DRAW part in the
+    /// save), and the follow runs past the draw at about 1,200. Soldiers of seats 0 and 1 are walked into each other at 300 so
+    /// deaths restart the clock once.
+    /// </summary>
+    internal static SaveScene DrawClock()
+    {
+        return new SaveScene("draw_clock", () => Draw.DrawScenes.Spent(s_drawMinute.Value, players: 3, soldiers: 3), (sim, commands) =>
+        {
+            if (sim.TickNumber != 300) return;
+            World w = sim.World;
+            for (int i = 0; i < w.Units.Capacity; i++)
+                if (w.Units.Alive[i] && w.Units.Owner[i] < 2)
+                    commands.Add(Command.AttackMove(w.Units.Owner[i], new EntityHandle(i, w.Units.Generation[i]), new System.Numerics.Vector2(64f, 64f)));
+        });
     }
 
     /// <summary>By name, for the theory rows.</summary>

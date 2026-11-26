@@ -28,14 +28,16 @@ public class D34QaTests
     [Fact]
     public void TheShippedData_IsD34s_QasQ2WithTheProposedText()
     {
-        Assert.Equal(D34Hash, TestSim.Data.ContentHash());
+        // M6-S13 (sim track, the hash move): the shipped data is D34's plus the draw block, so D34's hash is the shipped files
+        // with that block out (was TestSim.Data's), and D33's the D33 fixture on that copy (was a shipped copy).
+        Assert.Equal(D34Hash, Draw.DrawScenes.Off.ContentHash());
         JsonObject shipped = TeblorOpeningVariantsReportTests.Shipped(), d34 = TeblorOpeningFixtureTests.D34Fixture();
         Assert.True(JsonNode.DeepEquals(shipped, d34), "the shipped Teblor opening is not the D34 fixture");
         Assert.Equal(ProposedDescription, (string)shipped["description"]!);
         JsonObject q2 = D34OrderQaStressTests.AllVariants().Single(v => v.Name == "Q2").Opening;
         foreach (string field in new[] { "id", "displayName", "buildOrder", "compositions", "attack" })
             Assert.True(JsonNode.DeepEquals(q2[field], shipped[field]), $"{field}: the shipped opening is not QA's Q2");
-        Assert.Equal(D33QaTests.D33Hash, TeblorOpeningVariantsReportTests.DataWith(TeblorOpeningFixtureTests.D33Fixture()).ContentHash());
+        Assert.Equal(D33QaTests.D33Hash, Draw.DrawScenes.TeblorOpeningBeforeDraw(TeblorOpeningFixtureTests.D33Fixture()).ContentHash());
     }
 
     [Fact]
@@ -43,9 +45,10 @@ public class D34QaTests
     {
         // D34 fix round 1: reads D33's opening from its fixture (was the shipped file, which is D34's now).
         JsonObject o = TeblorOpeningFixtureTests.D33Fixture();
-        Assert.Equal(D33QaTests.D33Hash, TeblorOpeningVariantsReportTests.DataWith(o).ContentHash());
+        // M6-S13 (sim track, the hash move): on the shipped files with the draw block out (D33's data had none).
+        Assert.Equal(D33QaTests.D33Hash, Draw.DrawScenes.TeblorOpeningBeforeDraw(o).ContentHash());
         o["description"] = ProposedDescription;
-        Assert.NotEqual(D33QaTests.D33Hash, TeblorOpeningVariantsReportTests.DataWith(o).ContentHash());
+        Assert.NotEqual(D33QaTests.D33Hash, Draw.DrawScenes.TeblorOpeningBeforeDraw(o).ContentHash());
     }
 
     [Fact]

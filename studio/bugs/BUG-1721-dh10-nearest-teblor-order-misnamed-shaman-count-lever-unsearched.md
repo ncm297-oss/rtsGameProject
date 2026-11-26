@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S3 |
-| Status | open |
+| Status | fixed (D36, 2026-11-25-1437; QA verified) |
 | Found | 2026-11-25-0924, task D-H10 (QA) |
 | System | data (Teblor `standard` opening, BUG-1612's unit mix), docs/factions/teblor.md "The unit mix (BUG-1612, D-H10)" |
-| Fixed by | |
+| Fixed by | D36 (2026-11-25-1437): teblor.md corrected and the bounded search done (`Content/D36TeblorOrderSearchReportTests`) |
 
 ## Repro
 QA's report class `sim/Rts.Sim.Tests/QA/Content/DH10TeblorOrderQaStressTests.cs` (Stress), on the branch at 0f8f210:
@@ -48,3 +48,14 @@ QA's report `studio/qa/2026-11-25-0924-D-H10.md`; none meets the bar.
 - A Shaman count change is a step change: the brief allows steps "if needed"; the developer's report class restricts
   itself to "never re-counted" by its own choice.
 - The tooltip ("Shamans, Breakers, Destrier Riders ... may follow") stays true with one Shaman.
+
+## Fix (D36, 2026-11-25-1437)
+- teblor.md "The unit mix (BUG-1612, D-H10)": "the nearest candidate is A" now reads "the nearest of D-H10's own
+  eleven", with the correction (QA1 / QRD1 nearer); "No candidate brings Hard's Riders past 37" is limited to D-H10's
+  eleven (QRD1 42, QA1T 45); Question 1 carries the Producer's answer (not accepted as shown: its premise rested on the
+  two-Shaman search) and Question 2 its answer (A does not ship).
+- The search the bug asked for: `Content/D36TeblorOrderSearchReportTests` (Stress), every lever of the brief varied
+  (57 orders screened, the count 1 / 2, the Shaman's position, the switches on all three train steps, the Circle's,
+  Anointing's and Carver's time, the Anointing's position, `noReserve` on `armor_1`), six full rows (the shipped order,
+  re-measured equal to D-H10's, and five candidates). None meets the bar; the nearest is QRD1, re-measured equal to QA's
+  figures (4 figures missed, 16 seats short). New section teblor.md "The unit mix, second search (BUG-1612, BUG-1721, D36)".

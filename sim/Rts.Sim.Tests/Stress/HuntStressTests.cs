@@ -122,14 +122,18 @@ public class HuntStressTests
     /// buildings, 10 gold, 18,000-26,000 wood) and p2 one (21 workers, 20 gold), and neither can train one: the skipped
     /// <see cref="FourAiSeats_OnPaleHills_Seed1_KnownStall"/>'s shape (BUG-1068 / BUG-1116 / BUG-1536), not a fault of the
     /// new rules. The row moves to the next seed that ends, 2 (over at 59,951, p1, 4 hunts; seed 5 ends at 73,778, seeds 6
-    /// and 7 do not end), which is also <see cref="FourAiSeats_OnPaleHills_Seed2_KnownStall"/>'s match. The 2v2 row keeps
+    /// and 7 do not end), which is also <c>FourAiSeats_OnPaleHills_Seed2_KnownStall</c> (dropped in M6-S13)'s match. The 2v2 row keeps
     /// seed 1 (it ends). Was seed 1.
+    /// M6-S13 (the owner's draw rule; a pin that moved because the match became spent before its old end): the free-for-all
+    /// on seed 2 is spent from 26,442 (22:02, the map's gold gone), the clock restarts 114 times on deaths, and it ends in a
+    /// draw at 58,378 (48:38) with all four seats standing (<c>DrawStalledRowsReportTests</c>). Was: over at 59,951, p1, 4
+    /// hunts. The oracle checks every hunting think up to the draw as before; the row now pins the draw.
     /// </summary>
     [Theory]
     [Trait("Category", "Stress")]
-    [InlineData(2UL, false)]
-    [InlineData(1UL, true)]
-    public void FourAiSeats_OnPaleHills_EndWithTheOracleOnEveryHunt(ulong seed, bool teams) => FourSeatsRow(seed, teams);
+    [InlineData(2UL, false, 58_378)]
+    [InlineData(1UL, true, 0)]
+    public void FourAiSeats_OnPaleHills_EndWithTheOracleOnEveryHunt(ulong seed, bool teams, int drawAt) => FourSeatsRow(seed, teams, drawAt);
 
     /// <summary>
     /// Pale Hills free-for-all seed 1 (BUG-1153's family since M5-9a; BUG-1068 / BUG-1116): no result by 144,000 on the M5-9a
@@ -141,26 +145,20 @@ public class HuntStressTests
     /// M6-SH2: it ended (91,995, p2) and became the oracle row's seed. M6-S12 (BUG-1559): no result by 144,000 again, the same
     /// shape (gold gathered 8,820-8,890 a seat, all of it by 25:00; p3 out at 55,508, p0 at 107,906; p1 0 soldiers and p2 one
     /// from 70:00, 18,000-26,000 wood each), so the oracle row moved to seed 2 and this row stays skipped.
-    /// </summary>
-    [Theory(Skip = "BUG-1068 / BUG-1116 / BUG-1559 (open): no result by 144,000 (no free gold left on the map with four seats); measured in M5-9b and again in M6-S12")]
-    [Trait("Category", "Stress")]
-    [InlineData(1UL, false)]
-    public void FourAiSeats_OnPaleHills_Seed1_KnownStall(ulong seed, bool teams) => FourSeatsRow(seed, teams);
-
-    /// <summary>
-    /// Pale Hills free-for-all seed 2 (BUG-1116 / BUG-1068's remaining case, the Producer's ruling at the 2026-11-07-0236 ACCEPT):
-    /// green at 052c39e, no result by 144,000 since M5-4d slice 2 (the losing seats rebuild until every seat is out of gold by
-    /// 72,000). M5-H5 fixed the two hunt causes once named here (BUG-1119, a defeated seat's buildings kept as known, and the
-    /// lone-idle-worker hunt gap); the stall left was BUG-1068's gold starvation alone. M5-9a round 2 fix round 1 (BUG-1154:
-    /// the starved check judges the unit production would train) ends it: 80,278 (66:53), seat 3 the winner; un-skipped.
-    /// M5-9b (the far expansion): 97,140 (80:57), seat 3, still inside 144,000. M5-H6: 105,690 (88:04), seat 3; fix round 1 (BUG-1162): 75,382 (62:49), seat 3.
+    /// M6-S13 (the owner's draw rule, docs/02 "Game flow" 4): un-skipped. The match is spent from 35,541 (29:37: the map's gold
+    /// gone, no seat can train), the clock restarts 69 times on deaths, and it ends in a draw at 61,779 (51:28), p3 out and
+    /// p0, p1, p2 standing (<c>DrawStalledRowsReportTests</c>). Was: no result by 144,000 (skipped, BUG-1068 / 1116 / 1559).
     /// </summary>
     [Theory]
     [Trait("Category", "Stress")]
-    [InlineData(2UL, false)]
-    public void FourAiSeats_OnPaleHills_Seed2_KnownStall(ulong seed, bool teams) => FourSeatsRow(seed, teams);
+    [InlineData(1UL, false)]
+    public void FourAiSeats_OnPaleHills_Seed1_KnownStall(ulong seed, bool teams) => FourSeatsRow(seed, teams, drawAt: 61_779);
 
-    private void FourSeatsRow(ulong seed, bool teams)
+    // M6-S13: FourAiSeats_OnPaleHills_Seed2_KnownStall (Pale Hills free-for-all seed 2, BUG-1116 / BUG-1068's remaining case,
+    // un-skipped by M5-9a round 2) was the same match as the oracle row's seed 2 since M6-S12 (docs/01 2026-11-16; the handoff
+    // said to drop the twin at the next pin move); dropped here, when that match moved to a draw at 58,378 (was 59,951, p1).
+
+    private void FourSeatsRow(ulong seed, bool teams, int drawAt = 0)
     {
         var seats = new PlayerSeat[4];
         for (int p = 0; p < 4; p++) seats[p] = new PlayerSeat(p % 2, SeatController.Ai, AiDifficulty.Normal, teams ? 1 + p % 2 : 0);
@@ -210,6 +208,9 @@ public class HuntStressTests
         Assert.True(bad == null, bad);
         Assert.Equal(0, tally.Leaks);
         Assert.True(sim.MatchOver, $"seed {seed}: no result by 144,000 ticks");
+        // M6-S13: a row pinned to a draw ends in one at its tick; every other row ends with a winner.
+        Assert.True(w.MatchDrawn == (drawAt > 0), $"seed {seed}: drawn {w.MatchDrawn} at {sim.TickNumber}, expected {(drawAt > 0 ? $"a draw at {drawAt}" : "a winner")}");
+        if (drawAt > 0) Assert.Equal(drawAt, sim.TickNumber);
     }
 
     /// <summary>

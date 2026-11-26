@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S3 |
-| Status | open |
+| Status | fixed (D36, 2026-11-25-1437; QA verified, follow-up BUG-1760) |
 | Found | 2026-11-25-0924, task D-H10 (QA) |
 | System | content tests (`Content/UnitHitBonusText`, the D-H2 / D35 description reading) |
-| Fixed by | |
+| Fixed by | D36 (2026-11-25-1437): `Content/UnitHitBonusText` (ruling docs/01 2026-11-25 ACCEPT (5)) |
 
 ## Repro
 1. Remove the `Skip` from `QA_AnOnDeathSentenceWithOther_IsNotReadAsThePack` and
@@ -49,3 +49,19 @@ No shipped description has either shape today, so nothing is red; the next roste
 - The developer's pinned limit (a unit with the pack reads an "each" sentence's percentage as the per-mate bonus,
   `HitBonusPinTests` row "Each bite also adds 5%") is the same family; it is pinned as a failing row, so a later cure
   turns that row red on purpose.
+
+## Fix (D36, 2026-11-25-1437)
+- (a) `UnitHitBonusText.PackWords`: "other ... within" counts as the pack's words only in a sentence with no on-death word
+  (`\b(dies|death|dying)\b`, whole words: "Deathless" is not one); "each other" / "per other" / "for every other" still
+  counts in any sentence (a pack sentence that mentions a death is still read).
+- (b) The first-shot role needs first-shot words (`first shot / hit / strike / attack`, `from hiding / stealth`); a
+  stealth word alone ("hidden", "stealthed") gives it only on a unit with `attack.fromStealthBonus` and only for the
+  field's own number (that sentence then states the field). Any other percentage there is a status's (left to its pins),
+  and the field must still be stated somewhere.
+- Rows: `QA/Content/DH10TextPinQaTests`' two theories un-skipped (4 rows); new `Content/UnitHitBonusTextBug1720Tests`
+  (both halves in both directions, 21 rows). On the base 2336d58 the new and un-skipped rows fail 14 times (the "still
+  reads as the pack" rows pass on both: they guard the other direction); green after the fix. Every shipped description
+  still passes (`EveryShippedDescription_StillPasses`, `HitBonusPinTests`, `D35HitBonusTextQaTests`).
+- Taste call for the Producer (teblor.md "Questions for the Producer (D36)" 2): the ruling's "or when the unit has the
+  field" is read as "the field's own number"; read literally (every stealth-word percentage of a unit with the field is
+  the first shot) QA's own un-skipped row "While stealthed it moves 20% slower" on the forged Javelin Thrower would fail.

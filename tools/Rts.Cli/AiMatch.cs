@@ -116,7 +116,8 @@ internal static class AiMatch
         int hunts = 0;
         for (int p = 0; p < n; p++) hunts += sim.AiOf(p)?.Board.HuntsStarted ?? 0;
         string end = $"tick {sim.TickNumber.ToString(Inv)} ({Clock(sim.TickNumber)})";
-        string? winner = Winner(w);
+        // M6-S13: a drawn match is a draw whoever still stands (Winner would name the one side left of a later fight).
+        string? winner = w.MatchDrawn ? null : Winner(w);
         stdout.WriteLine(!sim.MatchOver ? $"result none by {end}" : winner == null ? $"result draw at {end}" : $"result winner {winner} at {end}");
         stdout.WriteLine($"end tick {sim.TickNumber.ToString(Inv)} hash {sim.StateHash().ToString("X16", Inv)} fold {fold.Value.ToString("X16", Inv)}");
         stdout.WriteLine($"waves {waves.ToString(Inv)} hunts {hunts.ToString(Inv)}");

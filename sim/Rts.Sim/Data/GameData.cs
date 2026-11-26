@@ -133,6 +133,12 @@ public sealed class GameData
             h.Add(1);
             h.Add(r.GatherOverlap);
         }
+        // M6-S13: the draw rule's wait only when the block is there (a marker, then the ticks), so data without it hashes as before.
+        if (r.DrawAfterTicks != 0)
+        {
+            h.Add(2);
+            h.Add(r.DrawAfterTicks);
+        }
 
         h.Add(Factions.Length);
         foreach (FactionDef f in Factions)

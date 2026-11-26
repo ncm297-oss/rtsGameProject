@@ -138,3 +138,8 @@ local points spliced into the leg) and be judged on that row plus QA's hide and 
   once the free starts and the house rule are in and was not shipped. `EndGameHardeningTests.ALoneIdleWorker_*` stays
   skipped under this id.
 - The four-seat Pale Hills seed-1 FFA still has no result by 144,000 (40 waves, 1 hunt): stays skipped.
+
+## M6-S13 (2026-11-25-1437)
+The four-seat Pale Hills seed-1 row ends in a draw at 61,779 since the owner's draw rule (see BUG-1068's table); its
+Stress row is un-skipped. `EndGameHardeningTests.ALoneIdleWorker_*` stays skipped (BUG-1116): that scene is never spent
+(p0 keeps its hall and 400 gold), so the rule cannot end it; the row is about the sweep's order.
