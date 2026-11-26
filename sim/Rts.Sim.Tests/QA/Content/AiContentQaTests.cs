@@ -335,6 +335,8 @@ public class AiContentQaTests
         {
             JsonNode only = JsonNode.Parse(AiScenes.Opening(root, k).ToJsonString())!;
             only["buildOrder"]!.AsArray().RemoveAt(forge);
+            // QA D38 (BUG-1771's family, rule 79): a buildOrders entry for the seat's difficulty would play an untouched list.
+            only.AsObject().Remove("buildOrders");
             root["openings"] = new JsonArray(only);
         });
         int at = research - 1; // the step after the removed one moved up

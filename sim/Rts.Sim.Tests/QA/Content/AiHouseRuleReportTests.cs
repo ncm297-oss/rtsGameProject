@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Text.Json.Nodes;
 using Rts.Sim.Ai;
 using Rts.Sim.Data;
 using Rts.Sim.Tests.Content;
@@ -140,13 +141,17 @@ public class AiHouseRuleReportTests
             if (MenuRuns.TryGetValue((faction, -1), out HouseRun? done)) return done;
             (int index, double pop) = TwelfthHouse(faction);
             string house = TestSim.Data.Buildings.First(b => b.Faction == TestSim.Data.FindFaction(faction) && b.Slot == BuildingSlot.House).Key;
-            Assert.Equal($"pop {pop.ToString(System.Globalization.CultureInfo.InvariantCulture)} | build | {house} | 1", AiContentTests.StepText(TestSim.Data.Ai[TestSim.Data.FindFaction(faction)].Openings[0].BuildOrder[index]));
-            // D38 (rule 79): the step is taken out of buildOrder, the Normal seat's list; buildOrders (Easy's and Hard's lists)
-            // is removed so no difficulty can play an untouched list.
+            Assert.Equal($"pop {pop.ToString(System.Globalization.CultureInfo.InvariantCulture)} | build | {house} | 1", AiContentTests.StepText(TestSim.Data.Ai[TestSim.Data.FindFaction(faction)].Openings[0].BuildOrderFor(AiDifficulty.Normal)[index]));
+            // D38 (rule 79): the step is taken out of the list the Normal seat plays; buildOrders (Easy's and Hard's lists)
+            // is removed so no difficulty can play an untouched list. QA D38: the Normal list is read by difficulty (a
+            // buildOrders.normal entry, when one exists, is that list; else buildOrder), never assumed to be buildOrder.
             GameData d = AiScenes.DataWithAi(faction, root =>
             {
-                AiScenes.Opening(root)["buildOrder"]!.AsArray().RemoveAt(index);
-                AiScenes.Opening(root).AsObject().Remove("buildOrders");
+                JsonObject o = AiScenes.Opening(root).AsObject();
+                JsonArray normal = (o["buildOrders"]?["normal"] ?? o["buildOrder"])!.DeepClone().AsArray();
+                normal.RemoveAt(index);
+                o["buildOrder"] = normal;
+                o.Remove("buildOrders");
             });
             ulong seed = AiOpeningSeeds.Smallest(faction, 0, AiDifficulty.Normal);
             HouseRun r = MenuRun(faction, 0, seed, d, ", the 12th house step taken out");
