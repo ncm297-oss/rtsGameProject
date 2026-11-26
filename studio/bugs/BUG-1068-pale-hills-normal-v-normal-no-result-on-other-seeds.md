@@ -3,7 +3,7 @@
 | Field | Value |
 | --- | --- |
 | Severity | S3 |
-| Status | open, narrowed to the four-seat Pale Hills FFA seed 1 (no free gold with four seats; `HuntStressTests.FourAiSeats_OnPaleHills_Seed1_KnownStall` skipped). **Every 1v1 Pale Hills seed ends since M5-H6 (2026-11-09-1336):** seed 2 at 49,565, seed 5 at 55,485, 3 / 4 / 6 at 33,484, seed 1 at 50,140; the generated seed 6 at 25,941 |
+| Status | open, narrowed further (M6-S13 2026-11-25-1437: the four-seat Pale Hills stalls end in a draw, seeds 1, 2, 4, 6, 7; the gold starvation underneath stays an AI-play item); before: narrowed to the four-seat Pale Hills FFA seed 1 (no free gold with four seats; `HuntStressTests.FourAiSeats_OnPaleHills_Seed1_KnownStall` skipped). **Every 1v1 Pale Hills seed ends since M5-H6 (2026-11-09-1336):** seed 2 at 49,565, seed 5 at 55,485, 3 / 4 / 6 at 33,484, seed 1 at 50,140; the generated seed 6 at 25,941 |
 | Found | 2026-11-06-0326, task M6-S8 (QA) |
 | System | Map data (`game/data/maps/pale_hills.json`) x AI waves (`MilitaryManager`: waves target buildings only) |
 | Fixed by | seeds 3-6 and generated 6: M5-4d (b7a3f83 + 6a3c83c + 1eccd06, the hunt); seed 2: not a hunt case, the sim's next hardening or M5-4d slice 2. **Candidate (b) is built on the M5-9a branch (2026-11-08-1556, `ai.starvedWaveAfter`): seed 2 ends there at 53,797 and its FFA at 80,278, both rows un-skipped; not on `main` yet. Candidate (a), the expansion reach, is the next sim task (M5-9b, same branch): see the Producer triage below** |
@@ -126,3 +126,19 @@ the other in an hour.
   free starts (BUG-1157): `MapSlice2StressTests.NormalVersusNormal_PaleHillsSeed2_Stalemate_EndsWithin72000` un-skipped.
   The four-seat Pale Hills seed-1 FFA (`HuntStressTests.FourAiSeats_OnPaleHills_Seed1_KnownStall`) still has no result by
   144,000: stays skipped. Status left to the Producer (seed 2's own row is green).
+
+## M6-S13 (2026-11-25-1437): the stalled four-seat Pale Hills seeds end in a draw
+| Seed | First spent | Clock restarts | End (was) |
+| --- | --- | --- | --- |
+| 1 | 35,541 (29:37) | 69 | draw at 61,779 (51:28); p3 out, p0 / p1 / p2 standing (was: no result by 144,000) |
+| 2 | 26,442 (22:02) | 114 | draw at 58,378 (48:38), all four standing (was: p1 at 59,951) |
+| 4 | 34,201 (28:30) | 87 | draw at 63,124 (52:36); p0 out (was: no result by 144,000) |
+| 6 | 44,145 (36:47) | 5 | draw at 51,216 (42:40); p0, p2 out (was: no result by 144,000) |
+| 7 | 27,141 (22:37) | 121 | draw at 80,167 (66:48); p0, p3 out (was: no result by 144,000) |
+
+Every draw's twin (the wait out of reach) is hash-equal up to the draw tick; QA re-measured every row.
+`HuntStressTests.FourAiSeats_OnPaleHills_Seed1_KnownStall` is un-skipped and pinned to the draw at 61,779; the oracle
+row's seed 2 is pinned to its draw at 58,378; its twin `..._Seed2_KnownStall` is dropped. The AI's economy underneath
+(every start's gold spent by about 25:00-37:00) is unchanged: the rule ends the match, it does not cure the play. Note
+seed 2: the draw falls 1,573 ticks (79 s) before the win the base reached (BUG-1731's sibling question: an AI that
+knows the clock is running; the AI-play session).

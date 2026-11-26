@@ -35,3 +35,7 @@ Seat 0 is defending (no wave, no hunt); its defender is sent to an enemy unit st
 - Likely fix: the same `MilitaryManager.SightingPoint` push for the defense's point (it already has the ally test and the
   members' side), or the defense aims at the enemy unit (`Attack`) rather than its position.
 - Harm is small (the defenders walk to the wall and fight the enemy that is there), so S3, as BUG-1120 was.
+
+## M6-S13 (2026-11-25-1437): measured, unchanged
+Never spent under the draw rule: team 1 (p0 + p2) wins at 42,081 (35:04), 3,100 gold left on the map. The row stays
+skipped (its fault is the defense's AttackMove onto an ally's building, not the end).

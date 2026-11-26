@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S3 (a four-seat AI match that never ends; the row was moved under the brief's own rule, so it no longer blocks) |
-| Status | open (row re-staged by criterion 8's rule; diagnosis corrected by QA re-check 1). **Owner decision 2026-11-25: a draw rule** (docs/01); cure planned as the sim's M6-S13 |
+| Status | closed (M6-S13, 2026-11-25-1437, by measurement): seed 3 is never spent and ends with a winner, p1 at 40,674, on the base and on the head tick for tick (QA); the owner's draw rule is built and ends the other stalled four-seat seeds |
 | Found | 2026-11-15-2136, task M6-SH2 (QA) |
 | System | AI end game (hunt), moved by the drop-off rule (BUG-1520) |
-| Fixed by | |
+| Fixed by | M6-S13 (the draw rule; `Stress/DrawStalledRowsReportTests`) |
 
 ## Repro
 1. `dotnet test sim/Rts.Sim.Tests --filter "FullyQualifiedName~HuntStressTests.FourAiSeats_OnPaleHills_EndWithTheOracleOnEveryHunt"`
@@ -58,3 +58,10 @@ match is spent when no undefeated seat can ever train another unit (nothing queu
 gold if it has a worker is below its faction's cheapest unit; or no producing building and no worker); spent for
 `rules.json` `draw.afterSeconds` (300) without a non-summoned unit dying or a seat being defeated = a draw, nobody
 defeated. This row is measured and reported by M6-S13 (criterion 10), expected to end.
+
+## M6-S13 (2026-11-25-1437, the draw rule built): closed
+On this tree the free-for-all on seed 3 is never spent and ends with a winner: p1 at 40,674 (33:53), p0, p2, p3 out, 4,133
+gold still in the map's mines (`Stress/DrawStalledRowsReportTests`; QA: the base 2336d58 ends the same way, tick for
+tick). The rule plays no part in that end, so the match stopped stalling between M6-SH2 and now (D33 / D34 / M6-S12 moved
+it). The owner's draw rule is built (docs/02 "Game flow" 4, docs/03 "Implementation (M6-S13)"): the other stalled
+four-seat seeds end in a draw (1, 2, 4, 6, 7; see BUG-1068).

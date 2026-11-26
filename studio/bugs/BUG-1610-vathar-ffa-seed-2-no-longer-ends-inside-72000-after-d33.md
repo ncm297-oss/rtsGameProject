@@ -30,3 +30,7 @@ The match ends inside the 60-minute bound, as it did before D33 (38,690 after M6
   filed as BUG-1661; the worker half (why seat 2 is only a Keep) is BUG-1660.
 - Recommended cure: BUG-1661 (a hunt that turned into a wave on a found building resumes its marks nearest-first from
   that building), measured alone; then BUG-1660 apart. Both wait for the AI-play session (docs/01 2026-11-24 (2)).
+## M6-S13 (2026-11-25-1437): measured, unchanged
+Never spent under the draw rule: won by p3 at 88,998 (74:09); p3 keeps 8,020 gold and 26 workers with 15,457 gold left
+on the map, so "can still train" holds throughout. The Stress row stays skipped with its ids (seat 2's silence and the
+hunt's length are AI-play items, BUG-1660 / BUG-1661).

@@ -835,7 +835,10 @@ open S1 / S2. Retro below; open S3 / S4 listed there.)_
       ticks), fitting 1280 × 720 with four seats; the pause menu's Stats and a watched replay's banner show the same screen; verified
       by `MatchOverViewTest`, `FreeForAllTest`, `ReplayPlaybackTest`, QA's `QaM6V11Test` (a per-tick oracle over a 17,600-tick 4-seat
       match) and the Producer's own 1280 × 720 screenshots; docs/03 "Implementation (M6-V11)". Ticked at the 2026-10-17-0554 ACCEPT.
-      Polish left: BUG-0890 (S4).)
+      Polish left: BUG-0890 (S4). **M6-S13, 2026-11-25-1437 (owner decision 2026-11-25): a spent match ends in a draw**
+      (`rules.json` `draw.afterSeconds` 300; `World.MatchDrawn` / `DrawTicksLeft`; no side can ever train another unit and
+      no unit dies for 5 game minutes; `Draw/` tests, QA's `DrawRuleQaTests` and oracle; docs/02 "Game flow" 4, docs/03
+      "Implementation (M6-S13)"). The banner and a countdown are the view's M6-V29.)
 - [x] Save/load and replay playback. (M6-V9, 2026-10-16: **replay playback**: every match started from the menu or `--skirmish` is
       recorded (checkpoints every 100 ticks) and written to `user://replays/<yyyyMMdd-HHmmss>-seed<seed>.replay` at the banner, at
       Quit to menu and on window close, the newest 20 kept; Main menu → Load Game lists them (date, seed, players, length) with
@@ -885,6 +888,9 @@ open S1 / S2. Retro below; open S3 / S4 listed there.)_
       **M6-VH9, 2026-11-24-1431 (the view's hardening):** a click follows what is drawn (a model's triangles, a box's
       drawn height), the Priest and the Zealot re-tinted so every player colour reads, the Sapper throws once a shot.
       Nothing ticked.
+      **M6-V28, 2026-11-25-1437:** four more Malazan building models (Billet, Quartermaster's Depot, Crossbow Range,
+      Watchtower; the Watchtower's bolt leaves from the drawn tower). 6 of 30 building types are models; 400 figures with
+      60 building models 6.3 ms a frame (the same as boxes). **Not ticked:** the other 24 building types and the six capsules.
 - [ ] Real SFX and placeholder music; alerts with sound. (M6-V12, 2026-10-17-2344: **real SFX and the alerts are in**: 16 clips cut from
       the owner's Sonniss GDC 2026 bundle (`tools/audio/trim-wav.ps1` + `sfx-manifest.json`, LFS, docs/04 licensing rows) for 12 events
       (`SfxEvent`); world sounds only for what the local player sees on screen, at most 4 per 100 ms; attack alerts (`ViewApi/AttackAlerts`
