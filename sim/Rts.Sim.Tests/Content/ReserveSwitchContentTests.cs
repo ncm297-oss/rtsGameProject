@@ -19,11 +19,15 @@ public class ReserveSwitchContentTests
         var problems = new List<string>();
         foreach (JsonNode? o in root["openings"]?.AsArray() ?? new JsonArray())
         {
-            JsonArray order = o!["buildOrder"]!.AsArray();
+            // D38: every list of the opening, buildOrder and each buildOrders entry (named "(easy)" etc.).
+            var lists = new List<(string Name, JsonArray Order)> { ("", o!["buildOrder"]!.AsArray()) };
+            if (o["buildOrders"] is JsonObject entries)
+                foreach (var (key, list) in entries) lists.Add(($" ({key})", list!.AsArray()));
+            foreach (var (name, order) in lists)
             for (int i = 0; i < order.Count; i++)
             {
                 JsonObject step = order[i]!.AsObject();
-                string what = $"{faction} opening '{(string?)o["id"]}' step {i + 1} ({(string?)step["do"]} {(string?)step["id"]})";
+                string what = $"{faction} opening '{(string?)o["id"]}'{name} step {i + 1} ({(string?)step["do"]} {(string?)step["id"]})";
                 if ((string?)step["do"] == "expand" && step.ContainsKey("noReserve"))
                     problems.Add($"{what}: noReserve on an expand step means never expand (BUG-1663)");
                 foreach (string s in Switches)
@@ -71,5 +75,18 @@ public class ReserveSwitchContentTests
         List<string> problems = Problems("teblor", root);
         string step = $"teblor opening 'standard' step {i + 1} ({what} {id})";
         Assert.Contains($"{step}: {want}" + (want.EndsWith("false", StringComparison.Ordinal) ? "; leave the switch out" : " (BUG-1663)"), problems);
+    }
+
+    /// <summary>D38: the check reads every list: a switch on Easy's or Hard's expand step fails naming the list.</summary>
+    [Theory]
+    [InlineData("easy")]
+    [InlineData("hard")]
+    public void ASwitchedExpandInAnEntry_FailsNamingTheList(string key)
+    {
+        JsonNode root = JsonNode.Parse(File.ReadAllText(Path.Combine(TestDataDir.Shipped, "factions", "teblor", "ai.json")))!;
+        JsonArray order = root["openings"]![0]!["buildOrders"]![key]!.AsArray();
+        int i = Enumerable.Range(0, order.Count).First(k => (string?)order[k]!["do"] == "expand");
+        order[i]!["noReserve"] = true;
+        Assert.Contains($"teblor opening 'standard' ({key}) step {i + 1} (expand ): noReserve on an expand step means never expand (BUG-1663)", Problems("teblor", root));
     }
 }

@@ -27,9 +27,9 @@ public class AiOpeningPairsVerdictTests
         AiPlayer ai = sim.AiOf(1)!;
         World w = sim.World;
         int step = -1;
-        for (int i = ai.Opening.BuildOrder.Length - 1; i >= 0 && step < 0; i--)
+        for (int i = ai.Steps.Length - 1; i >= 0 && step < 0; i--)
         {
-            AiStep s = ai.Opening.BuildOrder[i];
+            AiStep s = ai.Steps[i];
             if (s.Action == AiStepAction.Build && s.Target == ai.HouseType && !ai.Board.StepDone[i] && ai.Board.StepDueTick[i] < 0) step = i;
         }
         Assert.True(step >= 0, "no house step left undone and not due at 1:00");
@@ -39,7 +39,7 @@ public class AiOpeningPairsVerdictTests
         w.Ledger.Wood[1] = 5000;
         string label = $"step {step + 1} (";
 
-        Assert.Null(AiOpeningPairsReportTests.WhyWaiting(sim, ai, ai.Opening.BuildOrder[step], step, -1));
+        Assert.Null(AiOpeningPairsReportTests.WhyWaiting(sim, ai, ai.Steps[step], step, -1));
         var deadEnds = new List<string>();
         List<string> waiting = AiOpeningPairsReportTests.Waiting(sim, ai, -1, deadEnds, out _);
         Assert.Contains(waiting, x => x.StartsWith(label, StringComparison.Ordinal) && x.Contains("DEAD END", StringComparison.Ordinal));
@@ -55,7 +55,7 @@ public class AiOpeningPairsVerdictTests
             }
         Assert.True(razed > 0, "the seat had no town hall to raze");
         Assert.False(w.IsDefeated(1));
-        Assert.Equal(AiOpeningPairsReportTests.HallLost, AiOpeningPairsReportTests.WhyWaiting(sim, ai, ai.Opening.BuildOrder[step], step, -1));
+        Assert.Equal(AiOpeningPairsReportTests.HallLost, AiOpeningPairsReportTests.WhyWaiting(sim, ai, ai.Steps[step], step, -1));
         deadEnds.Clear();
         waiting = AiOpeningPairsReportTests.Waiting(sim, ai, -1, deadEnds, out _);
         Assert.Contains(waiting, x => x.StartsWith(label, StringComparison.Ordinal) && x.EndsWith(AiOpeningPairsReportTests.HallLost, StringComparison.Ordinal));

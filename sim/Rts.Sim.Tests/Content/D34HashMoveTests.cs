@@ -37,8 +37,11 @@ public class D34HashMoveTests
     public void TheShippedHash_IsD34s_AndNotD33s()
     {
         // M6-S13 (sim track, the hash move): D34's data is the shipped files with the draw block out (was TestSim.Data).
-        Assert.Equal(D34QaTests.D34Hash, Draw.DrawScenes.Off.ContentHash());
+        // D38 (data track, the hash move): the shipped Teblor opening is D37's three orders, so D34's data is the D34 fixture on
+        // the shipped files with the draw block out (was DrawScenes.Off), and the shipped hash is neither D33's nor D34's.
+        Assert.Equal(D34QaTests.D34Hash, Draw.DrawScenes.TeblorOpeningBeforeDraw(TeblorOpeningFixtureTests.D34Fixture()).ContentHash());
         Assert.NotEqual(D33QaTests.D33Hash, TestSim.Data.ContentHash());
+        Assert.NotEqual(D34QaTests.D34Hash, TestSim.Data.ContentHash());
     }
 
     [Fact]

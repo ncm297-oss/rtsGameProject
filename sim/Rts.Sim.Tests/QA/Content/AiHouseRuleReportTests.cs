@@ -141,7 +141,13 @@ public class AiHouseRuleReportTests
             (int index, double pop) = TwelfthHouse(faction);
             string house = TestSim.Data.Buildings.First(b => b.Faction == TestSim.Data.FindFaction(faction) && b.Slot == BuildingSlot.House).Key;
             Assert.Equal($"pop {pop.ToString(System.Globalization.CultureInfo.InvariantCulture)} | build | {house} | 1", AiContentTests.StepText(TestSim.Data.Ai[TestSim.Data.FindFaction(faction)].Openings[0].BuildOrder[index]));
-            GameData d = AiScenes.DataWithAi(faction, root => AiScenes.Opening(root)["buildOrder"]!.AsArray().RemoveAt(index));
+            // D38 (rule 79): the step is taken out of buildOrder, the Normal seat's list; buildOrders (Easy's and Hard's lists)
+            // is removed so no difficulty can play an untouched list.
+            GameData d = AiScenes.DataWithAi(faction, root =>
+            {
+                AiScenes.Opening(root)["buildOrder"]!.AsArray().RemoveAt(index);
+                AiScenes.Opening(root).AsObject().Remove("buildOrders");
+            });
             ulong seed = AiOpeningSeeds.Smallest(faction, 0, AiDifficulty.Normal);
             HouseRun r = MenuRun(faction, 0, seed, d, ", the 12th house step taken out");
             MenuRuns[(faction, -1)] = r;
@@ -219,7 +225,7 @@ public class AiHouseRuleReportTests
         BuildingDef houseDef = d.Buildings[house];
         Assert.True(houseDef.Faction == faction && houseDef.Slot == BuildingSlot.House, $"AiPlayer.HouseType {houseDef.Key} is not the House of {label}");
         int rulesCap = d.Rules.HalfPopCap;
-        var steps = ai.Opening.BuildOrder; // D21: the opening the seat picked (read from the AI, BUG-0641)
+        var steps = ai.Steps; // D21: the opening the seat picked (read from the AI, BUG-0641)
         int tree = d.FindResource("tree"), mine = d.FindResource("gold_mine");
         var houseSteps = Enumerable.Range(0, steps.Length)
             .Where(i => steps[i].Action == AiStepAction.Build && steps[i].Target == house).ToArray();

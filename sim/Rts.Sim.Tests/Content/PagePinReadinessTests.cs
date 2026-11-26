@@ -287,17 +287,37 @@ public class PagePinReadinessTests
             string[] body = lines[oh..oend];
             List<List<string>> ot = PageTables.TablesInSection(body, 0);
             string who = $"{page} opening {k + 1} `{o[1]}`";
-            if (ot.Count != 2) { problems.Add($"{who}: {ot.Count} tables, expected 2, steps and composition (AiContentTests A)"); continue; }
-            if (Header(PageTables.Cells(ot[0][0])) != Header(AiContentTests.StepColumns))
-                problems.Add($"{who} steps header: '{Header(PageTables.Cells(ot[0][0]))}' vs '{Header(AiContentTests.StepColumns)}'");
+            // D38: steps and composition, then up to two more step tables, one per buildOrders entry (M7-9), each under a bold
+            // line naming its key (AiContentTests.EntryLabel); at most three lists, one per difficulty.
+            if (ot.Count < 2 || ot.Count > 4) { problems.Add($"{who}: {ot.Count} tables, expected 2, steps and composition, then a step table per buildOrders entry (AiContentTests A)"); continue; }
             if (Header(PageTables.Cells(ot[1][0])) != Header(AiContentTests.CompositionColumns))
                 problems.Add($"{who} composition header: '{Header(PageTables.Cells(ot[1][0]))}' vs '{Header(AiContentTests.CompositionColumns)}'");
-            foreach (string[] step in ot[0].Skip(2).Select(r => PageTables.Cells(r, stripBackticks: true)))
+            // Where each table starts in the body (TablesInSection's order), for the label line above it.
+            var starts = new List<int>();
+            for (int i = 1; i < body.Length; i++)
+                if (body[i].StartsWith('|') && !body[i - 1].StartsWith('|')) starts.Add(i);
+            for (int t = 0; t < ot.Count; t++)
             {
-                if (step.Length != AiContentTests.StepColumns.Length) { problems.Add($"{who} step {step[0]}: {step.Length} cells"); continue; }
-                if (!Regex.IsMatch(step[1], @"^(?:time|pop|workers) \d+(?:\.\d+)?$", Opts)) problems.Add($"{who} step {step[0]} At: '{step[1]}' is not 'time|pop|workers <n>'");
-                if (!DataLimits.AiStepActionIds.Contains(step[2])) problems.Add($"{who} step {step[0]} Do: '{step[2]}' is not one of {string.Join(" / ", DataLimits.AiStepActionIds)}");
-                if (!IsInt(step[4])) problems.Add($"{who} step {step[0]} Count: '{step[4]}' is not a whole number");
+                if (t == 1) continue;
+                string list = t == 0 ? who : $"{who} step table {t + 1}";
+                if (t > 1)
+                {
+                    int j = starts[t] - 1;
+                    while (j > 0 && !body[j].StartsWith("**", StringComparison.Ordinal) && !body[j].StartsWith('|')) j--;
+                    if (j <= 0 || !AiContentTests.DifficultyKeys.Any(key => body[j].StartsWith("**", StringComparison.Ordinal) && body[j].Contains(AiContentTests.EntryLabel(key), StringComparison.Ordinal)))
+                        problems.Add($"{list}: no bold line naming its `buildOrders.<difficulty>` above it (AiContentTests A)");
+                }
+                if (Header(PageTables.Cells(ot[t][0])) != Header(AiContentTests.StepColumns))
+                    problems.Add($"{list} steps header: '{Header(PageTables.Cells(ot[t][0]))}' vs '{Header(AiContentTests.StepColumns)}'");
+                foreach (string[] step in ot[t].Skip(2).Select(r => PageTables.Cells(r, stripBackticks: true)))
+                {
+                    if (step.Length != AiContentTests.StepColumns.Length) { problems.Add($"{list} step {step[0]}: {step.Length} cells"); continue; }
+                    if (!Regex.IsMatch(step[1], @"^(?:time|pop|workers) \d+(?:\.\d+)?$", Opts)) problems.Add($"{list} step {step[0]} At: '{step[1]}' is not 'time|pop|workers <n>'");
+                    if (!DataLimits.AiStepActionIds.Contains(step[2])) problems.Add($"{list} step {step[0]} Do: '{step[2]}' is not one of {string.Join(" / ", DataLimits.AiStepActionIds)}");
+                    // D38: a whole number, then the step's reserve switch if it has one ("1 (through the reserve)").
+                    string count = step[4].Replace(" " + AiContentTests.ThroughReserveWords, "", StringComparison.Ordinal).Replace(" " + AiContentTests.NoReserveWords, "", StringComparison.Ordinal);
+                    if (!IsInt(count)) problems.Add($"{list} step {step[0]} Count: '{step[4]}' is not a whole number (with its switch, if any)");
+                }
             }
             List<string> bullets = BulletsAfter(body, 0, body.Length);
             if (!bullets.Any(b => b.StartsWith("Composition target (by pop):", StringComparison.Ordinal)))
@@ -391,6 +411,8 @@ public class PagePinReadinessTests
     [InlineData("(not pinned)", "(not yet)", "teblor.md High starting resources: no 'not pinned'")]
     [InlineData("`standard` at High", "the opening at High", "teblor.md High starting resources: names none of the page's openings")]
     [InlineData("Age II, at the Bloodwood Carver, 200 G / 150 W, 45 s.", "Age II at the Bloodwood Carver, 200 G / 150 W, 45 s.", "teblor.md '## Faction upgrade: Blood-oil Anointing': the line does not start")]
+    [InlineData("**Easy's build order (`buildOrders.easy`:", "**Easy's build order (easy:", "teblor.md opening 1 `standard` step table 3: no bold line naming its `buildOrders.<difficulty>`")] // D38
+    [InlineData("| 22 | time 540 | train | `teblor_shaman` | 1 (through the reserve) |", "| 22 | time 540 | train | `teblor_shaman` | one (through the reserve) |", "teblor.md opening 1 `standard` step table 3 step 22 Count:")] // D38
     public void AnEditedTeblorPage_FailsNamingTheSection(string find, string replace, string expected)
     {
         string[] lines = PageTables.FactionLines("teblor");

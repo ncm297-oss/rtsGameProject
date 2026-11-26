@@ -11,6 +11,8 @@ namespace Rts.Sim.Tests.Content;
 /// shipped opening's. A row loads it through the shipped loader on a copy of the shipped data (in place of the shipped
 /// opening), checks the loaded steps are the file's, and checks the tooltip (D34's description, unchanged) is still true of
 /// the order: the claims <c>QA/Content/D32DescriptionQaTests</c> reads on the shipped opening, read here on the fixture.
+/// D38 shipped them (Normal's as <c>buildOrder</c>, Easy's and Hard's in <c>buildOrders</c>), so each fixture is also the
+/// shipped list its difficulty plays, and the shipped opening has one field (<c>buildOrders</c>) more than a fixture.
 /// </summary>
 public class D37TeblorFixtureTests
 {
@@ -35,15 +37,19 @@ public class D37TeblorFixtureTests
     {
         JsonObject fixture = Fixture(difficulty);
         JsonObject measured = D37TeblorNormalOrderReportTests.AllVariants().Single(v => v.Name == OrderOf(difficulty)).Opening;
-        List<string> problems = Problems(fixture, measured);
+        List<string> problems = Problems(fixture, measured, difficulty);
         Assert.True(problems.Count == 0, $"{difficulty} ({OrderOf(difficulty)}): " + string.Join("; ", problems));
     }
 
-    /// <summary>The check can fail, by name: a step moved, a switch on the expand step, a <c>buildOrders</c> field, a new description, a kind's train step taken out.</summary>
+    /// <summary>
+    /// The check can fail, by name: a step moved, a switch on the expand step, a <c>buildOrders</c> field, a new description, a
+    /// kind's train step taken out, and (D38) the fixture not being the list its difficulty plays in the shipped file.
+    /// </summary>
     [Fact]
     public void TheCheck_NamesEachWayAFixtureCanBeWrong()
     {
         JsonObject measured = D37TeblorNormalOrderReportTests.AllVariants().Single(v => v.Name == OrderOf("hard")).Opening;
+        static List<string> Problems(JsonObject f, JsonObject m) => D37TeblorFixtureTests.Problems(f, m, "hard");
         JsonObject Mutant(Action<JsonObject> edit)
         {
             JsonObject c = Fixture("hard");
@@ -60,21 +66,31 @@ public class D37TeblorFixtureTests
         Assert.Contains("description differs from the shipped opening's", Problems(Mutant(c => c["description"] = "War Lodge first."), measured));
         Assert.Contains("the tooltip names Breakers but the order has no train step for teblor_breaker",
             Problems(Mutant(c => c["buildOrder"]!.AsArray().Remove(StepOf(c, "train", "teblor_breaker"))), measured));
+        // D38: a fixture is the list its own difficulty plays in the shipped file (Normal's is the shipped buildOrder).
+        Assert.Contains("buildOrder is not the shipped list a hard seat plays",
+            D37TeblorFixtureTests.Problems(Fixture("normal"), D37TeblorNormalOrderReportTests.AllVariants().Single(v => v.Name == OrderOf("normal")).Opening, "hard"));
     }
 
-    /// <summary>Every way <paramref name="fixture"/> is not a loadable, measured, truthfully described plain opening.</summary>
-    internal static List<string> Problems(JsonObject fixture, JsonObject measured)
+    /// <summary>
+    /// Every way <paramref name="fixture"/> is not a loadable, measured, truthfully described plain opening, and (D38) not the
+    /// list a <paramref name="difficulty"/> seat plays in the shipped file.
+    /// </summary>
+    internal static List<string> Problems(JsonObject fixture, JsonObject measured, string difficulty)
     {
         var problems = new List<string>();
         JsonObject shipped = TeblorOpeningVariantsReportTests.Shipped();
         JsonArray steps = fixture["buildOrder"]!.AsArray();
 
         // The measured order, step for step; every other field the shipped opening's (so a plain opening, no new field).
+        // D38: the shipped opening is Normal's fixture plus buildOrders (Easy's and Hard's), so it has one field more, and
+        // each fixture's order is the shipped list its difficulty plays.
         if (!JsonNode.DeepEquals(fixture["buildOrder"], measured["buildOrder"])) problems.Add("buildOrder differs from the measured order");
+        if (!JsonNode.DeepEquals(fixture["buildOrder"], D38TeblorOrders.ListOf(shipped, difficulty))) problems.Add($"buildOrder is not the shipped list a {difficulty} seat plays");
         foreach (string field in new[] { "id", "displayName", "description", "compositions", "attack" })
             if (!JsonNode.DeepEquals(fixture[field], shipped[field])) problems.Add($"{field} differs from the shipped opening's");
         if (fixture["buildOrders"] != null) problems.Add("a buildOrders field");
-        if (fixture.Count != shipped.Count) problems.Add($"{fixture.Count} fields, the shipped opening {shipped.Count}");
+        int shippedPlain = shipped.Count - (shipped["buildOrders"] != null ? 1 : 0);
+        if (fixture.Count != shippedPlain) problems.Add($"{fixture.Count} fields, the shipped opening {shippedPlain} besides buildOrders");
         if (steps.Any(s => (string)s!["do"]! == "expand" && s["noReserve"] != null)) problems.Add("noReserve on the expand step");
         if (steps.Any(s => s!["noReserve"] != null)) problems.Add("noReserve on a step (left out of Teblor orders: docs/01 2026-11-26 (4))");
 

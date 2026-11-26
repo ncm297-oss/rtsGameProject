@@ -74,20 +74,31 @@ public class TeblorOpeningFixtureTests
     /// description included), so a one-sided edit of either fails by name: a description, a step moved, a share or a wave.
     /// Was <c>TheShippedOpening_IsTheD33Fixture</c> (D33: the shipped opening was <c>Fixtures/teblor_standard_d33.json</c>),
     /// now <see cref="TheD33Fixture_IsTheMeasuredVariant_WithD33sDescription"/> on the record of what D33 shipped, D34's M.
+    /// D38 (BUG-1612; the row's name kept): the shipped opening is no longer the D34 fixture but D37's three fixtures
+    /// (<see cref="D38TeblorOrders.Problems"/>: <c>buildOrder</c> Normal's, <c>buildOrders</c> Easy's and Hard's, every other
+    /// field each fixture's); the D34 fixture stays as the record of what D34 shipped, the order the base played, and a
+    /// one-sided edit of the shipped opening still fails by name.
     /// </summary>
     [Fact]
     public void TheShippedOpening_IsTheD34Fixture()
     {
-        Assert.Empty(ShippedVersus(TeblorOpeningVariantsReportTests.Shipped(), D34Fixture(), "D34"));
+        Assert.Empty(D38TeblorOrders.Problems(TeblorOpeningVariantsReportTests.Shipped()));
         JsonObject words = TeblorOpeningVariantsReportTests.Shipped();
         words["description"] = (string)words["description"]! + " ";
-        Assert.Contains("description differs from the D34 fixture", ShippedVersus(words, D34Fixture(), "D34"));
+        Assert.Contains("description differs from the D37 easy fixture's", D38TeblorOrders.Problems(words));
         JsonObject moved = TeblorOpeningVariantsReportTests.Shipped();
         moved["buildOrder"]![16]!["at"] = new JsonObject { ["time"] = 420 };
-        Assert.Contains("buildOrder differs from the D34 fixture", ShippedVersus(moved, D34Fixture(), "D34"));
+        Assert.Contains("buildOrder differs from the D37 normal fixture", D38TeblorOrders.Problems(moved));
         JsonObject share = TeblorOpeningVariantsReportTests.Shipped();
         share["attack"]!["reserveArmyShare"] = 0.5;
-        Assert.Contains("attack differs from the D34 fixture", ShippedVersus(share, D34Fixture(), "D34"));
+        Assert.Contains("attack differs from the D37 hard fixture's", D38TeblorOrders.Problems(share));
+        // The D34 fixture (what the base shipped) differs from the shipped opening in buildOrder and buildOrders only.
+        Assert.Equal(new[] { "buildOrder differs from the D34 fixture", "the shipped opening has 7 fields, the D34 fixture 6" },
+            ShippedVersus(TeblorOpeningVariantsReportTests.Shipped(), D34Fixture(), "D34"));
+        JsonObject asBase = TeblorOpeningVariantsReportTests.Shipped();
+        asBase.Remove("buildOrders");
+        asBase["buildOrder"] = D34Fixture()["buildOrder"]!.DeepClone();
+        Assert.Empty(ShippedVersus(asBase, D34Fixture(), "D34"));
         Assert.NotEmpty(ShippedVersus(TeblorOpeningVariantsReportTests.Shipped(), D33Fixture(), "D33"));
     }
 

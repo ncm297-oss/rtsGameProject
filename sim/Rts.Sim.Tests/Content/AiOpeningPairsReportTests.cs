@@ -118,7 +118,7 @@ public class AiOpeningPairsReportTests
             string side = d.Factions[ai.Faction].Key;
             _out.WriteLine($"  {side}: waves started {ai.Board.WavesStarted} (first at {Sec(firstWave[p])}); Age II at {Sec(ageTwo[p])}; defeated {(defeated[p] < 0 ? "no" : "at " + Sec(defeated[p]))}; thinks defending {defendingThinks[p]}; pop {w.HalfPop[p] / 2.0} / cap {w.HalfPopCap[p] / 2.0}; gold {w.Gold[p]}, wood {w.Wood[p]}");
             List<string> waiting = Waiting(sim, ai, defeated[p], deadEnds, out int done);
-            _out.WriteLine($"  {side}: steps done {done} / {ai.Opening.BuildOrder.Length}; waiting: {(waiting.Count == 0 ? "none" : string.Join("; ", waiting))}");
+            _out.WriteLine($"  {side}: steps done {done} / {ai.Steps.Length}; waiting: {(waiting.Count == 0 ? "none" : string.Join("; ", waiting))}");
             int longWaits = waiting.Count(x => x.Contains(LongWaitFlag, StringComparison.Ordinal));
             if (longWaits > 0) _out.WriteLine($"  {side}: {longWaits} step(s) due over 5:00 and still short of gold or wood at 20:00 (BUG-0981's pattern, left by M5-4g's gated reserve; not a failure)");
             if (Array.IndexOf(AliveWithoutAWave, (malazan, whirlwind, seed, p)) >= 0)
@@ -148,10 +148,10 @@ public class AiOpeningPairsReportTests
         string side = sim.World.Data.Factions[ai.Faction].Key;
         var waiting = new List<string>();
         done = 0;
-        for (int i = 0; i < ai.Opening.BuildOrder.Length; i++)
+        for (int i = 0; i < ai.Steps.Length; i++)
         {
             if (ai.Board.StepDone[i]) { done++; continue; }
-            AiStep s = ai.Opening.BuildOrder[i];
+            AiStep s = ai.Steps[i];
             string? why = WhyWaiting(sim, ai, s, i, defeatedTick);
             string text = $"step {i + 1} ({AiContentTests.StepText(s)}): {why ?? "DEAD END (due at " + Sec(ai.Board.StepDueTick[i]) + ", not done)"}";
             waiting.Add(text);

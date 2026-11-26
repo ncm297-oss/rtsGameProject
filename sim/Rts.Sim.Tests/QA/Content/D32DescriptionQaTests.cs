@@ -12,6 +12,11 @@ namespace Rts.Sim.Tests.QA.Content;
 /// again: each now has its own train step, and on the 64-match Normal row they are fielded in 12, 22 and 39 matches
 /// (<c>Content/D33BalanceReportTests</c>), so the checks that kept them out became checks that each named kind has a
 /// trainer step and a train step. Measured play (how often each claim holds) is <see cref="D32OpeningQaStressTests"/>.
+/// D38 (BUG-1612): the opening carries a build order per difficulty (Normal's <c>buildOrder</c>, Easy's and Hard's in
+/// <c>buildOrders</c>) under the one description, so every step claim is read on each difficulty's list
+/// (<see cref="AiOpening.BuildOrderFor"/>), by position in the file; the Shaman step's claim is position only, not due time
+/// (docs/01, the second 2026-11-26 row, (3): the tooltip says "may follow"; Easy's K9KC10S has its Shaman step due at 9:00
+/// behind a Circle due at 10:00).
 /// </summary>
 public class D32DescriptionQaTests
 {
@@ -24,10 +29,17 @@ public class D32DescriptionQaTests
         return o;
     }
 
-    private static int StepIndex(AiOpening o, AiStepAction action, string key)
+    /// <summary>D38: the list each difficulty plays, Easy, Normal, Hard.</summary>
+    private static (AiDifficulty Diff, System.Collections.Immutable.ImmutableArray<AiStep> Steps)[] Lists()
     {
-        for (int i = 0; i < o.BuildOrder.Length; i++)
-            if (o.BuildOrder[i].Action == action && o.BuildOrder[i].TargetKey == key) return i;
+        AiOpening o = Standard();
+        return Enum.GetValues<AiDifficulty>().Select(x => (x, o.BuildOrderFor(x))).ToArray();
+    }
+
+    private static int StepIndex(System.Collections.Immutable.ImmutableArray<AiStep> steps, AiStepAction action, string key)
+    {
+        for (int i = 0; i < steps.Length; i++)
+            if (steps[i].Action == action && steps[i].TargetKey == key) return i;
         return -1;
     }
 
@@ -45,21 +57,23 @@ public class D32DescriptionQaTests
     [Fact]
     public void WarLodgeAndJavelinGroundFirst_ThenAgeII_IsTheStepOrder()
     {
-        AiOpening o = Standard();
-        int age = StepIndex(o, AiStepAction.Research, "age_ii");
-        Assert.True(age >= 0);
-        foreach (string b in new[] { "teblor_war_lodge", "teblor_javelin_ground" })
+        foreach (var (x, steps) in Lists())
         {
-            int i = StepIndex(o, AiStepAction.Build, b);
-            Assert.True(i >= 0 && i < age, $"{b} is step {i + 1}, Age II step {age + 1}");
-            Assert.Equal(AiStepTrigger.Pop, o.BuildOrder[i].Trigger); // a pop step: due long before Age II's 6:00
-        }
-        // No other non-house building is due before Age II.
-        for (int i = 0; i < age; i++)
-        {
-            AiStep s = o.BuildOrder[i];
-            if (s.Action != AiStepAction.Build) continue;
-            Assert.Contains(s.TargetKey, new[] { "teblor_hut", "teblor_war_lodge", "teblor_javelin_ground", "teblor_woodcutters_lodge" });
+            int age = StepIndex(steps, AiStepAction.Research, "age_ii");
+            Assert.True(age >= 0, $"{x}: no Age II step");
+            foreach (string b in new[] { "teblor_war_lodge", "teblor_javelin_ground" })
+            {
+                int i = StepIndex(steps, AiStepAction.Build, b);
+                Assert.True(i >= 0 && i < age, $"{x}: {b} is step {i + 1}, Age II step {age + 1}");
+                Assert.Equal(AiStepTrigger.Pop, steps[i].Trigger); // a pop step: due long before Age II's 6:00
+            }
+            // No other non-house building is due before Age II.
+            for (int i = 0; i < age; i++)
+            {
+                AiStep s = steps[i];
+                if (s.Action != AiStepAction.Build) continue;
+                Assert.Contains(s.TargetKey, new[] { "teblor_hut", "teblor_war_lodge", "teblor_javelin_ground", "teblor_woodcutters_lodge" });
+            }
         }
     }
 
@@ -88,28 +102,35 @@ public class D32DescriptionQaTests
         int u = D.FindUnit(unit);
         int k = ageTwo.Units.IndexOf(u);
         Assert.True(k >= 0 && ageTwo.Weights[k] > 0, $"{unit} not in the Age II mix");
-        Assert.True(StepIndex(o, AiStepAction.Build, trainer) >= 0, $"no build step for {trainer}");
+        foreach (var (x, steps) in Lists())
+            Assert.True(StepIndex(steps, AiStepAction.Build, trainer) >= 0, $"{x}: no build step for {trainer}");
     }
 
     [Fact]
     public void Shamans_HaveTheirOwnTrainStep_AfterTheCircleStep()
     {
-        AiOpening o = Standard();
-        int circle = StepIndex(o, AiStepAction.Build, "teblor_shamans_circle");
-        int train = StepIndex(o, AiStepAction.Train, "teblor_shaman");
-        Assert.True(circle >= 0 && train > circle, $"Circle step {circle + 1}, Shaman step {train + 1}");
-        Assert.True(o.BuildOrder[train].Count >= 1);
-        Assert.True(o.BuildOrder[train].At >= o.BuildOrder[circle].At, "the Shaman step is due before its Circle");
+        // D38: per list, by position in the file (docs/01, the second 2026-11-26 row, (3)); the due-time check (the Shaman
+        // step due no sooner than its Circle) is gone by that ruling: Easy's Shaman step is due at 9:00, its Circle at 10:00,
+        // and the step waits for the Circle.
+        foreach (var (x, steps) in Lists())
+        {
+            int circle = StepIndex(steps, AiStepAction.Build, "teblor_shamans_circle");
+            int train = StepIndex(steps, AiStepAction.Train, "teblor_shaman");
+            Assert.True(circle >= 0 && train > circle, $"{x}: Circle step {circle + 1}, Shaman step {train + 1}");
+            Assert.True(steps[train].Count >= 1, $"{x}: the Shaman step trains none");
+        }
     }
 
     [Fact]
     public void ASecondLonghouseGoesUp_IsAnExpandStep_AfterAgeII()
     {
-        AiOpening o = Standard();
         Assert.Contains("a second Longhouse may follow", Desc); // D34 fix round 1: was "a second Longhouse goes up" (D33's text)
-        int expand = -1;
-        for (int i = 0; i < o.BuildOrder.Length; i++) if (o.BuildOrder[i].Action == AiStepAction.Expand) expand = i;
-        Assert.True(expand > StepIndex(o, AiStepAction.Research, "age_ii"));
+        foreach (var (x, steps) in Lists())
+        {
+            int expand = -1;
+            for (int i = 0; i < steps.Length; i++) if (steps[i].Action == AiStepAction.Expand) expand = i;
+            Assert.True(expand > StepIndex(steps, AiStepAction.Research, "age_ii"), $"{x}: no expand step after Age II");
+        }
     }
 
     /// <summary>
@@ -122,11 +143,13 @@ public class D32DescriptionQaTests
     [InlineData("War-dogs", "teblor_war_dog", "teblor_stables")]
     public void TheKindsD33Names_HaveTheirOwnTrainStep(string words, string unit, string hall)
     {
-        AiOpening o = Standard();
         Assert.Contains(words, Desc);
-        int train = StepIndex(o, AiStepAction.Train, unit), build = StepIndex(o, AiStepAction.Build, hall);
-        Assert.True(train >= 0 && build >= 0, $"{unit}: train step {train + 1}, {hall} step {build + 1}");
-        Assert.True(o.BuildOrder[train].Count >= 1);
-        Assert.True(o.BuildOrder[train].At >= o.BuildOrder[build].At, $"the {unit} step is due before its {hall}");
+        foreach (var (x, steps) in Lists())
+        {
+            int train = StepIndex(steps, AiStepAction.Train, unit), build = StepIndex(steps, AiStepAction.Build, hall);
+            Assert.True(train >= 0 && build >= 0, $"{x}: {unit}: train step {train + 1}, {hall} step {build + 1}");
+            Assert.True(steps[train].Count >= 1, $"{x}: the {unit} step trains none");
+            Assert.True(steps[train].At >= steps[build].At, $"{x}: the {unit} step is due before its {hall}");
+        }
     }
 }

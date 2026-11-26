@@ -24,9 +24,9 @@ public class DR39ReStatementQaTests
         AiPlayer ai = sim.AiOf(1)!;
         World w = sim.World;
         int step = -1;
-        for (int i = ai.Opening.BuildOrder.Length - 1; i >= 0 && step < 0; i--)
+        for (int i = ai.Steps.Length - 1; i >= 0 && step < 0; i--)
         {
-            AiStep s = ai.Opening.BuildOrder[i];
+            AiStep s = ai.Steps[i];
             if (s.Action == AiStepAction.Build && s.Target == ai.HouseType && !ai.Board.StepDone[i] && ai.Board.StepDueTick[i] < 0) step = i;
         }
         Assert.True(step >= 0, "no house step left undone and not due at 1:00");
@@ -50,7 +50,7 @@ public class DR39ReStatementQaTests
         b.Damage(b.HandleOf(firstHall), int.MaxValue);
         Assert.False(b.Alive[firstHall]);
         Assert.False(w.IsDefeated(1));
-        string? why = AiOpeningPairsReportTests.WhyWaiting(sim, ai, ai.Opening.BuildOrder[step], step, -1);
+        string? why = AiOpeningPairsReportTests.WhyWaiting(sim, ai, ai.Steps[step], step, -1);
         Assert.NotEqual(AiOpeningPairsReportTests.HallLost, why);
         Assert.Null(why);
         var deadEnds = new List<string>();

@@ -56,7 +56,7 @@ public class D32OpeningQaStressTests(ITestOutputHelper output)
             kinds[k] = new SortedSet<int>();
             built[k] = new HashSet<int>();
             expandIx[k] = -1;
-            var steps = ais[k].Opening.BuildOrder;
+            var steps = ais[k].Steps;
             for (int i = 0; i < steps.Length; i++)
             {
                 if (steps[i].Action == AiStepAction.Build) kinds[k].Add(steps[i].Target);
@@ -125,6 +125,7 @@ public class D32OpeningQaStressTests(ITestOutputHelper output)
     [Theory]
     [InlineData("Easy", "raraku", "malazan", 1UL)]
     [InlineData("Normal", "pale_hills", "teblor", 1UL)]
+    [InlineData("Hard", "pale_hills", "teblor", 1UL)] // D38 (BUG-1421 item 1): each difficulty's own list, Hard's too
     public void ShamanStep_AfterTheCircle_ThinkByThink_Report(string difficulty, string map, string opponent, ulong seed)
     {
         GameData data = TestSim.Data;
@@ -135,7 +136,7 @@ public class D32OpeningQaStressTests(ITestOutputHelper output)
         Simulation sim = AiScenes.Generated(new[] { t, o }, seed, false, out _, data: data,
             configure: c => c with { MapId = map, Map = c.Map with { Width = size, Height = size } });
         AiPlayer ai = sim.AiOf(0)!;
-        var steps = ai.Opening.BuildOrder;
+        var steps = ai.Steps;
         int shamanStep = -1;
         for (int i = 0; i < steps.Length && shamanStep < 0; i++)
             if (steps[i].Action == AiStepAction.Train && steps[i].Target == data.FindUnit("teblor_shaman")) shamanStep = i;

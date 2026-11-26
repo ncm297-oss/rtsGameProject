@@ -41,7 +41,7 @@ namespace Rts.Sim.Tests.Content;
 /// </para>
 /// <para>
 /// Reads the AI through its own members (BUG-0641: read from the AI, not re-derived beside it; all <c>internal</c>, reached
-/// through <c>InternalsVisibleTo</c>): <c>Simulation.AiOf</c>, <c>AiPlayer.Faction</c>, <c>AiPlayer.Opening.BuildOrder</c>,
+/// through <c>InternalsVisibleTo</c>): <c>Simulation.AiOf</c>, <c>AiPlayer.Faction</c>, <c>AiPlayer.Steps</c> (the seat's list since D38, was <c>Opening.BuildOrder</c>),
 /// <c>AiPlayer.Board.WavesStarted</c> and <c>AiPlayer.Board.StepDone</c>.
 /// Everything else is world state (<c>World.Gold</c> / <c>Wood</c>, the unit and building stores, the queue counts) or
 /// <see cref="GameData"/>. A production building is any building type a unit of the faction is <c>trainedAt</c> (the hall too).
@@ -349,7 +349,7 @@ public class AiSpendingReportTests
                 bool live = idleDefeatedAt < 0;
                 if (live) counted++;
                 if (live && w.Wood[player] < WoodShort && w.Gold[player] >= GoldPiled) woodBound++;
-                marks.Add($"{sim.TickNumber / Tps / 60} min{(live ? "" : " (after the defeat: not counted)")} | {w.Gold[player]} | {w.Wood[player]} | {army / 2.0} | {workers / 2.0} | {w.HalfPop[player] / 2.0} / {w.HalfPopCap[player] / 2.0} | {ai.Board.WavesStarted} | {w.Age(player)} | {StepsDone(ai)} / {ai.Opening.BuildOrder.Length} | {Left(sim, "gold_mine", -1)} | {Left(sim, "tree", startCell)}");
+                marks.Add($"{sim.TickNumber / Tps / 60} min{(live ? "" : " (after the defeat: not counted)")} | {w.Gold[player]} | {w.Wood[player]} | {army / 2.0} | {workers / 2.0} | {w.HalfPop[player] / 2.0} / {w.HalfPopCap[player] / 2.0} | {ai.Board.WavesStarted} | {w.Age(player)} | {StepsDone(ai)} / {ai.Steps.Length} | {Left(sim, "gold_mine", -1)} | {Left(sim, "tree", startCell)}");
             }
         }
         Assert.Equal(Ticks, sim.TickNumber);
@@ -370,8 +370,8 @@ public class AiSpendingReportTests
         }
         write($"slot reused by another building: {reused}");
         var open = new List<string>();
-        for (int i = 0; i < ai.Opening.BuildOrder.Length; i++)
-            if (!ai.Board.StepDone[i]) open.Add($"{i + 1} {AiContentTests.StepText(ai.Opening.BuildOrder[i]).Split(" | ")[0]}");
+        for (int i = 0; i < ai.Steps.Length; i++)
+            if (!ai.Board.StepDone[i]) open.Add($"{i + 1} {AiContentTests.StepText(ai.Steps[i]).Split(" | ")[0]}");
         write("order steps not done at the end: " + (open.Count == 0 ? "none" : string.Join("; ", open)));
         return new ReportResult(woodBound, counted, marks.Count, idleDefeatedAt, golds.ToArray(), woods.ToArray(), firstWaveAt, ageTwoAt);
     }

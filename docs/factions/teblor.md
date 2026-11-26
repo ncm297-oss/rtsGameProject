@@ -149,11 +149,15 @@ and the "Faction upgrade" line above to the data.
 
 The AI opponent's `game/data/factions/teblor/ai.json` (docs/03 "For the data track (M5-1)" and "Implementation
 (M5-8a)") holds one **opening**, read the same way as malazan.md "AI build order (Normal)" (steps run side by side,
-one command per step per think, in this order; **Count** is the `train` commands the step queues over its life). Easy,
-Normal and Hard all play it, since there is one. The name and description below are what the player may read. The
+one command per step per think, in this order; **Count** is the `train` commands the step queues over its life; "(through
+the reserve)" after it is the step's `throughReserve` switch, docs/03 "For the data track (M7-8)"). Easy, Normal and Hard
+all play this one opening, but since D38 each plays its own build order in it (docs/03 "For the data track (M7-9)"): the
+step table under the opening is Normal's (`buildOrder`), and Easy's and Hard's (`buildOrders.easy`, `buildOrders.hard`,
+the same 29 steps in another order, with other times and switches) are the two step tables after its composition; the
+name, description, composition and wave are shared. The name and description below are what the player may read. The
 Teblor keep few workers (14 in Age I, 22 from 10:00): each Gatherer costs half as much again as a template worker. The AI
-starts with 5 Gatherers, 3 on gold and 2 on wood. `Content/AiContentTests` pins the openings table, the opening's step
-table, composition table and wave line, and the retreat line below to the file, both ways.
+starts with 5 Gatherers, 3 on gold and 2 on wood. `Content/AiContentTests` pins the openings table, the opening's three
+step tables (each to its own list), composition table and wave line, and the retreat line below to the file, both ways.
 
 | # | Id | Name (shown to the player) | Description (shown to the player) |
 | --- | --- | --- | --- |
@@ -230,9 +234,12 @@ proposal for a Teblor-only answer (War-dogs against Ranged) is under "Owner revi
 
 D34's order Q2 (BUG-1612, BUG-1641) on D33's measured variant F3 (BUG-1420), on D32's X7: a War Lodge and the Javelin
 Ground first, the two building kinds Age II needs, and Age II at 6:00; from 8:00 a second Longhouse, from 9:00 the
-Breakers Hall, the Shamans' Circle and two Shamans, from 10:00 the Stables, the Bloodwood Carver, the faction upgrade
+Breakers Hall, the Shamans' Circle and a Shaman, from 10:00 the Stables, the Bloodwood Carver, the faction upgrade
 (10:00 since D34; was 11:30) and eight more Gatherers, then Armor (12:00); and one Breaker, one Destrier Rider and one
-War-dog pack, each as soon as its hall stands. The sketch's Carver and Armor in Age I moved after Age II so the AI saves
+War-dog pack, each as soon as its hall stands. **Normal's order since D38 is D37's M1RS** (BUG-1612; docs/01, the second
+2026-11-26 row, (3)): D34's order with one Shaman instead of two, and the Destrier Rider's and the Shaman's train steps
+switched to spend through the reserve (`throughReserve`), so neither waits while the expansion, ahead of the Shaman step
+in the file, saves for its cost. Easy's and Hard's orders are after the composition below. The sketch's Carver and Armor in Age I moved after Age II so the AI saves
 for the age first; the 11 Gatherers at the start became 9. D32 put the expansion first among the Age II steps, since
 nothing else may be due beside it if the bank is ever to hold a Longhouse's cost, and added the Shaman step, since the
 mix's Shaman weight alone fielded a Shaman in 4 of 64 matches. D33 put the three train steps and the Breakers Hall ahead
@@ -264,13 +271,13 @@ here it is 28 ("Easy's Anointing (BUG-1612, D34)" at the end of this page).
 | 18 | time 600 | train | `teblor_breaker` | 1 | One Breaker once the Breakers Hall stands (D33): ahead of the expansion and of the Anointing in the file, so neither's reserve holds it back |
 | 19 | time 600 | build | `teblor_bloodwood_carver` | 1 | The Forge, at 10:00; after the Breaker's step and ahead of the Rider and War-dog steps (D34) |
 | 20 | time 600 | research | `teblor_blood_oil_anointing` | 1 | The faction upgrade, at the Bloodwood Carver, at 10:00 (D34; was 11:30, last but two) |
-| 21 | time 600 | train | `teblor_destrier_rider` | 1 | One Destrier Rider once the Stables stand (D33) |
-| 22 | time 600 | train | `teblor_war_dog` | 1 | One War-dog pack (3 dogs) once the Stables stand (D33) |
+| 21 | time 600 | train | `teblor_destrier_rider` | 1 (through the reserve) | One Destrier Rider once the Stables stand (D33), paid even while a step ahead of it saves (D38: Riders and Breakers rise, for three Anointings) |
+| 22 | time 600 | train | `teblor_war_dog` | 1 | One War-dog pack (3 dogs) once the Stables stand (D33); no switch: through the reserve it took Normal's Anointing (D37) |
 | 23 | time 540 | build | `teblor_breakers_hall` | 1 | Breakers, at 9:00, ahead of the expansion in the file (D33) |
 | 24 | time 480 | expand | — | 1 | 2nd Longhouse near the nearest free gold mine, at Normal's `expandAfter` (480 s); the first Age II building step after the Breakers Hall |
 | 25 | time 600 | build | `teblor_stables` | 1 | Destrier Riders and War-dogs (needs the War Lodge), at 10:00, first of the 10:00 buildings after the expansion (D33) |
 | 26 | time 540 | build | `teblor_shamans_circle` | 1 | Shamans, at 9:00 |
-| 27 | time 540 | train | `teblor_shaman` | 2 | Two Shamans once the Circle stands (the mix's weight alone fielded almost none) |
+| 27 | time 540 | train | `teblor_shaman` | 1 (through the reserve) | One Shaman once the Circle stands (D38; was two), paid while the expansion ahead of it saves (BUG-1421 item 1) |
 | 28 | time 720 | research | `armor_1` | 1 | The Carver's first upgrade, Armor |
 | 29 | time 600 | train | `teblor_gatherer` | 8 | Workers to 22 in Age II, at 10:00 |
 
@@ -295,14 +302,93 @@ against its share is the sim's (docs/03 "Implementation (M7-2)", BUG-1168).
   a due step once its army is a quarter of the wave, not the whole of it (`rules.json` `ai.reserveArmyShare` 1, which
   every other opening plays). D31 measured it on the files that ship (below).
 
-**The Age II army (D33, 2026-11-17, BUG-1420; D34, 2026-11-18, BUG-1612).** On the 64-match rows (the Teblor against the
-Malazan and the Whirlwind, four maps, seeds 1-8, to 15:00) the Normal AI fields Javelin Throwers in 55 matches, Breakers
-in 14, Destrier Riders in 22 and War-dogs in 37, a Shaman in 15 and a second Longhouse by 15:00 in 23, researches the
-Anointing in 17, and is defeated in 9 (D34's order Q2). D33's order (F3, `main` until D34) gave Breakers 12, Destrier
+**Easy's build order (`buildOrders.easy`: D36's K9KC10S, measured by D37, shipped by D38).** Normal's steps, with the
+Carver due at 9:00, the Shamans' Circle at 10:00, the Circle and Shaman steps moved just ahead of the Destrier Rider's,
+and the Shaman, Rider and War-dog steps through the reserve. An Easy seat acts on a step 30 s after it is due
+(`buildOrderSlack`) and never expands before 15:00 (`expandAfter` 900 s), so all its Age II spending falls in its last
+minutes: the Carver a minute sooner pays for the Anointing, and the switches field the three kinds before the bank runs
+dry. The Shaman step is due at 9:00, before its Circle (10:00); it waits for the Circle, which comes first in the file.
+
+| # | At | Do | Id | Count | Why |
+| --- | --- | --- | --- | --- | --- |
+| 1 | time 0 | train | `teblor_gatherer` | 9 | Workers to 14 in Age I (5 at the start + 9) |
+| 2 | pop 6 | build | `teblor_hut` | 1 | As Normal's steps 2-16 |
+| 3 | pop 7 | build | `teblor_war_lodge` | 1 | |
+| 4 | pop 9 | build | `teblor_woodcutters_lodge` | 1 | |
+| 5 | pop 9 | build | `teblor_javelin_ground` | 1 | |
+| 6 | pop 11 | build | `teblor_hut` | 1 | |
+| 7 | pop 16 | build | `teblor_hut` | 1 | |
+| 8 | pop 22 | build | `teblor_hut` | 1 | |
+| 9 | pop 28 | build | `teblor_hut` | 1 | |
+| 10 | pop 34 | build | `teblor_hut` | 1 | |
+| 11 | pop 40 | build | `teblor_hut` | 1 | |
+| 12 | pop 46 | build | `teblor_hut` | 1 | |
+| 13 | pop 52 | build | `teblor_hut` | 1 | |
+| 14 | pop 58 | build | `teblor_hut` | 1 | |
+| 15 | pop 64 | build | `teblor_hut` | 1 | |
+| 16 | pop 70 | build | `teblor_hut` | 1 | |
+| 17 | time 360 | research | `age_ii` | 1 | Age II at 6:00, as Normal's |
+| 18 | time 600 | train | `teblor_breaker` | 1 | One Breaker, first of the Age II steps in the file |
+| 19 | time 540 | build | `teblor_bloodwood_carver` | 1 | The Forge at 9:00 (Normal's 10:00): the Anointing's lever on Easy (D36) |
+| 20 | time 600 | research | `teblor_blood_oil_anointing` | 1 | The faction upgrade, at 10:00 |
+| 21 | time 600 | build | `teblor_shamans_circle` | 1 | Shamans, at 10:00 (Normal's 9:00), ahead of the Rider in the file |
+| 22 | time 540 | train | `teblor_shaman` | 1 (through the reserve) | One Shaman; due at 9:00, it waits for the Circle |
+| 23 | time 600 | train | `teblor_destrier_rider` | 1 (through the reserve) | One Destrier Rider once the Stables stand |
+| 24 | time 600 | train | `teblor_war_dog` | 1 (through the reserve) | One War-dog pack once the Stables stand |
+| 25 | time 540 | build | `teblor_breakers_hall` | 1 | Breakers, at 9:00 |
+| 26 | time 480 | expand | — | 1 | 2nd Longhouse: due at 8:00, but Easy's `expandAfter` (900 s) holds it to 15:00 |
+| 27 | time 600 | build | `teblor_stables` | 1 | Destrier Riders and War-dogs, at 10:00 |
+| 28 | time 720 | research | `armor_1` | 1 | Armor, at 12:00 |
+| 29 | time 600 | train | `teblor_gatherer` | 8 | Workers to 22 in Age II, at 10:00 |
+
+**Hard's build order (`buildOrders.hard`: QA's QRD1, measured by D36 and D37, shipped by D38).** D34's order with one
+Shaman instead of two, and the Destrier Rider's and the War-dog's train steps through the reserve: a Hard seat's 40%
+gather bonus pays for its expansion and its upgrade, so its Riders and War-dogs, held behind the expansion's saving, are
+what fell short (D-H10).
+
+| # | At | Do | Id | Count | Why |
+| --- | --- | --- | --- | --- | --- |
+| 1 | time 0 | train | `teblor_gatherer` | 9 | Workers to 14 in Age I (5 at the start + 9) |
+| 2 | pop 6 | build | `teblor_hut` | 1 | As Normal's steps 2-16 |
+| 3 | pop 7 | build | `teblor_war_lodge` | 1 | |
+| 4 | pop 9 | build | `teblor_woodcutters_lodge` | 1 | |
+| 5 | pop 9 | build | `teblor_javelin_ground` | 1 | |
+| 6 | pop 11 | build | `teblor_hut` | 1 | |
+| 7 | pop 16 | build | `teblor_hut` | 1 | |
+| 8 | pop 22 | build | `teblor_hut` | 1 | |
+| 9 | pop 28 | build | `teblor_hut` | 1 | |
+| 10 | pop 34 | build | `teblor_hut` | 1 | |
+| 11 | pop 40 | build | `teblor_hut` | 1 | |
+| 12 | pop 46 | build | `teblor_hut` | 1 | |
+| 13 | pop 52 | build | `teblor_hut` | 1 | |
+| 14 | pop 58 | build | `teblor_hut` | 1 | |
+| 15 | pop 64 | build | `teblor_hut` | 1 | |
+| 16 | pop 70 | build | `teblor_hut` | 1 | |
+| 17 | time 360 | research | `age_ii` | 1 | Age II at 6:00, as Normal's |
+| 18 | time 600 | train | `teblor_breaker` | 1 | One Breaker, first of the Age II steps in the file |
+| 19 | time 600 | build | `teblor_bloodwood_carver` | 1 | The Forge, at 10:00 |
+| 20 | time 600 | research | `teblor_blood_oil_anointing` | 1 | The faction upgrade, at 10:00 |
+| 21 | time 600 | train | `teblor_destrier_rider` | 1 (through the reserve) | One Destrier Rider once the Stables stand |
+| 22 | time 600 | train | `teblor_war_dog` | 1 (through the reserve) | One War-dog pack once the Stables stand |
+| 23 | time 540 | build | `teblor_breakers_hall` | 1 | Breakers, at 9:00 |
+| 24 | time 480 | expand | — | 1 | 2nd Longhouse, due at 8:00 (Hard's `expandAfter` is 300 s) |
+| 25 | time 600 | build | `teblor_stables` | 1 | Destrier Riders and War-dogs, at 10:00 |
+| 26 | time 540 | build | `teblor_shamans_circle` | 1 | Shamans, at 9:00 |
+| 27 | time 540 | train | `teblor_shaman` | 1 | One Shaman once the Circle stands; no switch |
+| 28 | time 720 | research | `armor_1` | 1 | Armor, at 12:00 |
+| 29 | time 600 | train | `teblor_gatherer` | 8 | Workers to 22 in Age II, at 10:00 |
+
+**The Age II army (D33, 2026-11-17, BUG-1420; D34, 2026-11-18, BUG-1612; D38, 2026-11-26).** Since D38 (Normal's order
+M1RS, measured on the shipped file: "The unit mix, shipped (BUG-1612, D38)" at the end of this page) the Normal AI fields
+Breakers in 18 of 64 matches, Destrier Riders in 30, War-dogs in 40 and a Shaman in 23, has a second Longhouse by 15:00 in
+23, researches the Anointing in 18 and is defeated in 9. Before D38, on the 64-match rows (the Teblor against the
+Malazan and the Whirlwind, four maps, seeds 1-8, to 15:00) the Normal AI fielded Javelin Throwers in 55 matches, Breakers
+in 14, Destrier Riders in 22 and War-dogs in 37, a Shaman in 15 and a second Longhouse by 15:00 in 23, researched the
+Anointing in 17, and was defeated in 9 (D34's order Q2). D33's order (F3, `main` until D34) gave Breakers 12, Destrier
 Riders 22, War-dogs 39, a Shaman 25, a second Longhouse 23, the Anointing 11 and 10 defeats; before D33 (QA's row `main`
-of D33, BUG-1613) they were 0, 4, 0, 26, 25, 8 and 12. The Easy and Hard rows are in the table under "Easy's Anointing
-(BUG-1612, D34)" at the end of this page; D33's measurement and its 31 variants are under "The Age II army (BUG-1420,
-D33)".
+of D33, BUG-1613) they were 0, 4, 0, 26, 25, 8 and 12. The Easy and Hard rows are in the table under "The unit mix,
+shipped (BUG-1612, D38)" (D34's under "Easy's Anointing (BUG-1612, D34)") at the end of this page; D33's measurement and
+its 31 variants are under "The Age II army (BUG-1420, D33)".
 
 **The reserve share, measured (D31, 2026-11-14, on the files that ship; `Content/TeblorLandedShareReportTests`).**
 Normal against Normal to 15:00, the Teblor on seat 0 against a Malazan and on seat 1 against a Whirlwind, on the
@@ -346,8 +432,10 @@ Where the step was sent before D32, on Raraku against the Whirlwind at 8:35, the
 **Houses at the cap (D32, 2026-11-14, measured on the shipped files;
 `QA/Content/AiHouseRuleReportTests.MenuMapNormal_HouseSources_Report` and `MenuMapNormal_TwelfthHouse_Report`).**
 Since M5-4f the executor skips a house step once the population cap is the hard cap (100): the step is done with no
-command sent and no Hut placed. On the menu's map (20 minutes, the other seat idle): Normal, seed 1: the cap reaches 100 at 1054 s; the last Hut step (step 16) is done at a cap of 100; skipped at the hard cap: step 16; 11 Huts stand at 20:00, 0 past the cap. As on the other pages, the 12th Hut step measured taken out: without the 12th Hut step (step 16) on the same seed, the cap reaches 100 at 1054 s, and 11 Huts stand at 20:00, 0 past the cap. The step stays: on this seed the
-Longhouses and 11 Huts bring the cap to 100, so the 12th Hut step (16) is skipped at the hard cap (re-measured 2026-11-18
+command sent and no Hut placed. On the menu's map (20 minutes, the other seat idle): Normal, seed 1: the cap reaches 100 at 1007 s; the last Hut step (step 16) is done at a cap of 100; skipped at the hard cap: steps 15, 16; 10 Huts stand at 20:00, 0 past the cap. As on the other pages, the 12th Hut step measured taken out: without the 12th Hut step (step 16) on the same seed, the cap reaches 100 at 1007 s, and 10 Huts stand at 20:00, 0 past the cap. The step stays: on this seed the
+Longhouses and 10 Huts bring the cap to 100, so the 11th and 12th Hut steps (15 and 16) are skipped at the hard cap
+(re-measured 2026-11-26 for D38's Normal order M1RS, the opening's `buildOrder`; on D34's order the cap reached 100 at
+1054 s with 11 Huts and only step 16 skipped; re-measured 2026-11-18
 for D34's order: on D33's the cap reached 100 at 1043 s with 10 Huts, the second Longhouse (+10 pop, D32's expansion)
 standing, and the 11th and 12th Hut steps (15 and 16) were skipped; re-measured 2026-11-17 for D33's opening: the cap was at 100 at 1059 s with 11 Huts, 1 past the cap, and only step 16 skipped; re-measured 2026-11-16 after the sim's M6-S12 AI rules; 2026-11-15, after the sim's M6-S10 gather change: the
 cap at 100 at 1000 s with 10 Huts, both the 11th and the 12th Hut steps (15 and 16) skipped; before it step 15 was skipped
@@ -770,7 +858,8 @@ another: Hard's margins on QRD1 (Rider 42, War-dog 47, defeated 11) are where ev
 
 ## The unit mix, per difficulty (BUG-1612, D37, 2026-11-26)
 
-**Three orders meet every Normal figure; nothing ships yet.** With a build order per difficulty decided (docs/01
+**Three orders meet every Normal figure; nothing ships yet** (D37's state: D38 shipped M1RS, K9KC10S and QRD1, "The unit
+mix, shipped" below). With a build order per difficulty decided (docs/01
 2026-11-26 (3); the sim's Request 59 adds the field), D37 searched Normal's order alone against Normal's figures of the
 bar (unchanged: docs/01 2026-11-24 ACCEPT (3)(c), "The unit mix" above) and re-measured Easy's and Hard's orders on their
 own difficulty. **M1SC, M1RS and RSCR each meet every Normal figure** on the full 64 seats; **M1RS is the one handed to
@@ -852,6 +941,67 @@ War-dog's step left without a switch gives both: the three orders that meet the 
 the margin: with it (M1RS, RSCR) Riders and Breakers rise well past the bar, without it (M1SC) Riders sit one seat above
 it, and with the Shaman through but no Rider switch (M1S) Riders fall to 19.
 
+## The unit mix, shipped (BUG-1612, D38, 2026-11-26)
+
+**BUG-1612 is closed: every difficulty fields its full unit mix.** D38 ships D37's three orders in the one `standard`
+opening, a build order per difficulty (docs/01, the second 2026-11-26 row, (3); docs/03 "For the data track (M7-9)"):
+`buildOrder` is Normal's **M1RS**, `buildOrders.easy` is **K9KC10S** and `buildOrders.hard` is **QRD1**, each the `buildOrder`
+of its D37 fixture step for step, switches included (`Fixtures/teblor_standard_d37_{easy,normal,hard}.json`, kept;
+`Content/D38ShippedOrdersTests` pins the file to them and checks that a seat of each difficulty plays its own list). The
+name, description, composition, wave and the difficulties block are unchanged. The step tables are under "Opening 1" above.
+
+Measured on the shipped file itself (`Content/D38ShippedOrdersReportTests`, Stress, 2026-11-26 on the task's base 7b05cd6
+with the file written: the data as loaded, each seat playing its difficulty's list; D34's row as in the tables above, four
+maps, the Teblor against the Malazan on seat 0 and the Whirlwind on seat 1, the same difficulty on both seats, seeds 1-8,
+to 15:00, 64 seats a difficulty; 192 matches in 318 s on six threads). Every figure equals D37's row cell for cell (the
+row reads D37's figures from the table above and fails on any difference) and meets the bar of docs/01 2026-11-24 ACCEPT
+(3)(c). Figures defeated / 2nd Longhouse / Shaman / Breaker / Destrier Rider / War-dog / Anointing, of 64:
+
+| difficulty | order | shipped (D38) | before (D34's order) | bar | figures missed |
+| --- | --- | --- | --- | --- | --- |
+| Easy | K9KC10S | 1 / 0 / 38 / 28 / 34 / 42 / 22 | 1 / 0 / 16 / 30 / 4 / 27 / 28 | <= 2 / — / >= 25 / >= 20 / >= 20 / >= 40 / >= 20 | 0 |
+| Normal | M1RS | 9 / 23 / 23 / 18 / 30 / 40 / 18 | 9 / 23 / 15 / 14 / 22 / 37 / 17 | <= 10 / >= 18 / >= 20 / >= 12 / >= 22 / >= 37 / >= 17 | 0 |
+| Hard | QRD1 | 11 / 23 / 23 / 40 / 42 / 47 / 25 | 11 / 23 / 22 / 39 / 33 / 46 / 23 | <= 12 / >= 18 / >= 22 / >= 35 / >= 40 / >= 46 / >= 20 | 0 |
+
+Per map (defeated / Shaman / Breaker / Rider / War-dog / Anointing, 16 seats a map): Easy Generated 1 / 6 / 4 / 2 / 10 / 6,
+Raraku 0 / 8 / 8 / 8 / 8 / 0, Pale Hills 0 / 16 / 0 / 16 / 16 / 8, Vathar Crossing 0 / 8 / 16 / 8 / 8 / 8; Normal as D37's
+per-map line above; Hard Generated 3 / 2 / 5 / 5 / 8 / 3, Raraku 8 / 3 / 4 / 7 / 9 / 4, Pale Hills 0 / 6 / 15 / 14 / 14 /
+10, Vathar Crossing 0 / 12 / 16 / 16 / 16 / 8.
+
+The trade, per difficulty: Easy gives up two Breaker seats and six Anointing seats for Shamans (16 -> 38), Destrier Riders
+(4 -> 34) and War-dogs (27 -> 42); Normal gains on every unit figure and the Anointing (17 -> 18), Hard likewise (the
+Anointing 23 -> 25); on both, the defeats and the second Longhouses are unchanged. The data hash moved once (one move for the three lists): saves and recordings made
+before D38 are refused. `Content/D38ShippedOrdersTests` proves the move is the lists alone: the shipped opening with
+D34's order as `buildOrder` and no `buildOrders` is D34's data.
+
+**BUG-1421 item 1 (the expansion's reserve starving the Shaman step), on the shipped orders: it no longer does, on any
+difficulty.** QA's think-by-think report (`QA/Content/D32OpeningQaStressTests.ShamanStep_AfterTheCircle_ThinkByThink_Report`,
+its two rows plus a Hard row D38 added; each seat reads its own list), from the Circle's completion to 15:00:
+- **Normal** (Pale Hills, the Teblor mirror, seed 1; M1RS, the Shaman step 27 through the reserve): the Circle stands at
+  10:34 and the Shaman step is queued at 10:35, the next think. Of the 266 thinks, the expansion holds the reserve in none
+  (the Breakers Hall in 169, the Anointing in 29, nothing in 68); on D32's opening the expansion held it in 239 of 303.
+- **Easy** (Raraku against the Malazan, seed 1; K9KC10S, the Shaman step 22 through the reserve): the Circle stands at
+  11:54, the step is queued at 12:06 (six thinks later) while the Anointing holds the reserve; Easy never expands before
+  15:00, so the expansion holds it in none of the 93 thinks (the Anointing 43, nothing 50). D32's row never queued it.
+- **Hard** (Pale Hills, the Teblor mirror, seed 1; QRD1, the Shaman step 27 without a switch): the Circle stands at 10:30
+  and the step is queued at 14:26; no step holds the reserve in 520 of the 539 thinks (the Anointing 19, the expansion
+  none), so the wait is the bank, not the reserve.
+
+So item 1, BUG-1421's last open item, is closed with these figures: on none of the three rows does the expansion hold
+the reserve after the Circle stands, and where another step holds it (Normal, Easy) the Shaman step's switch pays it.
+
+## Questions for the Producer (D38, 2026-11-26)
+
+Raised by D38 (BUG-1612, BUG-1421), each with the developer's recommendation.
+
+1. **`Content/D38ShippedOrdersReportTests` fails when Teblor play moves.** The Stress row compares the shipped file's 21
+   figures with D37's table on this page, so the sim's AI-play session (which changes Normal AI behaviour) will turn it
+   red by design. Recommendation: the AI-play brief names it as an allowance (rule 41), the row is left red there, and the
+   data task after it re-measures the three orders ("measure and report") and re-points the row at its own new table.
+2. **docs/03 "For the data track (M7-9)" still says "No shipped opening carries the field."** It is the sim track's page,
+   outside D38's files. Recommendation: the sim's next docs edit says that the Teblor `standard` carries `buildOrders`
+   since D38 (Easy and Hard entries).
+
 ## Questions for the Producer (D37, 2026-11-26)
 
 Raised by D37 (BUG-1612, BUG-1760), each with the developer's recommendation.
@@ -862,14 +1012,23 @@ Raised by D37 (BUG-1612, BUG-1760), each with the developer's recommendation.
    checks of `QA/Content/D32DescriptionQaTests` keep reading it as they do today. M1SC fields more Shamans and Anointings
    (27, 21) with no switch at all but sits on the bar's edge for War-dogs (37) and one seat over for Riders (23); RSCR
    sits on the edge for War-dogs. Say "teblor normal: M1SC" to hand M1SC over instead.
+   **Producer's answer (docs/01, the second 2026-11-26 row, (3)): M1RS**, the only one of the three that met every Normal
+   figure with a seat to spare on each. D38 shipped it as the opening's `buildOrder`.
 2. **Which order is the opening's own `buildOrder` once Request 59 lands?** Recommendation: Normal's (M1RS), with Easy and
    Hard named per difficulty, so the page's "AI build order (Normal)" table goes on describing the plain order. One check to
    carry into D38: K9KC10S trains its Shaman due at 9:00 behind a Circle due at 10:00 (it waits for the Circle), which
    `D32DescriptionQaTests.Shamans_HaveTheirOwnTrainStep_AfterTheCircleStep` would refuse if it read the Easy order; the
    tooltip says "may follow", a claim about a step, not a time.
+   **Producer's answer (docs/01, the second 2026-11-26 row, (3)): accepted.** `buildOrder` = M1RS (Normal), with
+   `buildOrders.easy` = K9KC10S and `buildOrders.hard` = QRD1, each exactly as measured; the check "Shamans have their own
+   train step after the Circle step" is read per list, by position in the file, not by due time (if a measured order failed
+   it by position, the check's wording would change, not the order). D38 shipped the three lists and reads the check that
+   way (`QA/Content/D32DescriptionQaTests`, every list; K9KC10S's Shaman step is after its Circle step in the file).
 3. **BUG-1760's neighbours.** QA named "opening shot" and "ambush" as possible first-shot words. Recommendation: leave them
    out until a description uses them (no shipped description or the Shadow page's sentences do); the ruling's words with
    any dash or spacing are read since D37.
+   **Producer's answer (docs/01, the second 2026-11-26 row, (3)): accepted;** "opening shot" and "ambush" are not added as
+   first-shot words until a description uses them.
 
 ## Questions for the Producer (D36, 2026-11-25)
 

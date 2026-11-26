@@ -47,7 +47,9 @@ public class D33QaTests(ITestOutputHelper output)
         // D33 fixture on a shipped copy, and must still hash to D33Hash.
         // M6-S13 (sim track, the hash move): the shipped data is D34's with the draw block added, so D34's hash is the shipped
         // files with that block out, and D33's the D33 fixture on that copy (was TestSim.Data and a shipped copy).
-        Assert.Equal(D34QaTests.D34Hash, Draw.DrawScenes.Off.ContentHash());
+        // D38 (data track, the hash move): the shipped Teblor opening is D37's three orders, so D34's data is the D34 fixture on
+        // the shipped files with the draw block out (was DrawScenes.Off).
+        Assert.Equal(D34QaTests.D34Hash, Draw.DrawScenes.TeblorOpeningBeforeDraw(TeblorOpeningFixtureTests.D34Fixture()).ContentHash());
         Assert.Equal(D33Hash, Draw.DrawScenes.TeblorOpeningBeforeDraw(TeblorOpeningFixtureTests.D33Fixture()).ContentHash());
         int t = Main.FindFaction("teblor");
         Assert.Equal(26, Main.Ai[t].Openings[0].BuildOrder.Length);
@@ -138,7 +140,9 @@ public class D33QaTests(ITestOutputHelper output)
         int start = page.IndexOf("### Opening 1: `standard` (War band)", StringComparison.Ordinal);
         Assert.True(start >= 0);
         string section = page[start..page.IndexOf("**Army composition", start, StringComparison.Ordinal)];
-        var rows = System.Text.RegularExpressions.Regex.Matches(section, @"^\| (\d+) \| (pop|time) (\d+) \| (\w+) \| (?:`(\w+)`|—) \| (\d+) \|", System.Text.RegularExpressions.RegexOptions.Multiline);
+        // D38: a step with throughReserve writes "(through the reserve)" after its count (the Normal list, the opening's
+        // buildOrder, is this table; Easy's and Hard's tables come after the composition).
+        var rows = System.Text.RegularExpressions.Regex.Matches(section, @"^\| (\d+) \| (pop|time) (\d+) \| (\w+) \| (?:`(\w+)`|—) \| (\d+)( \(through the reserve\))? \|", System.Text.RegularExpressions.RegexOptions.Multiline);
         JsonArray order = JsonNode.Parse(File.ReadAllText(Path.Combine(TestDataDir.Shipped, "factions", "teblor", "ai.json")))!["openings"]![0]!["buildOrder"]!.AsArray();
         Assert.Equal(order.Count, rows.Count);
         for (int i = 0; i < rows.Count; i++)
@@ -152,6 +156,7 @@ public class D33QaTests(ITestOutputHelper output)
             Assert.Equal((string)s["do"]!, g[4].Value);
             Assert.Equal((string?)s["id"] ?? "", g[5].Value);
             Assert.Equal(s["count"] is null ? 1 : (int)s["count"]!, int.Parse(g[6].Value));
+            Assert.Equal((bool?)s["throughReserve"] ?? false, g[7].Success);
         }
     }
 }

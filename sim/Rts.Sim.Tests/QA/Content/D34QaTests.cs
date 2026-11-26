@@ -30,13 +30,22 @@ public class D34QaTests
     {
         // M6-S13 (sim track, the hash move): the shipped data is D34's plus the draw block, so D34's hash is the shipped files
         // with that block out (was TestSim.Data's), and D33's the D33 fixture on that copy (was a shipped copy).
-        Assert.Equal(D34Hash, Draw.DrawScenes.Off.ContentHash());
+        // D38 (data track, the hash move): the shipped Teblor opening is D37's three orders (Normal's buildOrder, Easy's and
+        // Hard's in buildOrders), so D34's state is the D34 fixture on the shipped files with the draw block out (was
+        // DrawScenes.Off), and the shipped opening is the D34 fixture with buildOrder and buildOrders the only fields changed:
+        // D34's text still ships.
+        Assert.Equal(D34Hash, Draw.DrawScenes.TeblorOpeningBeforeDraw(TeblorOpeningFixtureTests.D34Fixture()).ContentHash());
         JsonObject shipped = TeblorOpeningVariantsReportTests.Shipped(), d34 = TeblorOpeningFixtureTests.D34Fixture();
-        Assert.True(JsonNode.DeepEquals(shipped, d34), "the shipped Teblor opening is not the D34 fixture");
+        Assert.False(JsonNode.DeepEquals(shipped, d34), "the shipped Teblor opening is still the D34 fixture");
+        JsonObject asD34 = JsonNode.Parse(shipped.ToJsonString())!.AsObject();
+        asD34.Remove("buildOrders");
+        asD34["buildOrder"] = d34["buildOrder"]!.DeepClone();
+        Assert.True(JsonNode.DeepEquals(asD34, d34), "the shipped Teblor opening differs from the D34 fixture outside its build orders");
         Assert.Equal(ProposedDescription, (string)shipped["description"]!);
         JsonObject q2 = D34OrderQaStressTests.AllVariants().Single(v => v.Name == "Q2").Opening;
         foreach (string field in new[] { "id", "displayName", "buildOrder", "compositions", "attack" })
-            Assert.True(JsonNode.DeepEquals(q2[field], shipped[field]), $"{field}: the shipped opening is not QA's Q2");
+            Assert.True(JsonNode.DeepEquals(q2[field], d34[field]), $"{field}: the D34 fixture is not QA's Q2");
+        Assert.False(JsonNode.DeepEquals(q2["buildOrder"], shipped["buildOrder"]), "the shipped buildOrder is still QA's Q2");
         Assert.Equal(D33QaTests.D33Hash, Draw.DrawScenes.TeblorOpeningBeforeDraw(TeblorOpeningFixtureTests.D33Fixture()).ContentHash());
     }
 

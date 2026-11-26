@@ -385,7 +385,8 @@ public class AiContentQaTests
             {
                 2 => Regex.Replace(v, @"\d+(\.\d+)?$", m => (double.Parse(m.Value, CultureInfo.InvariantCulture) + 0.5).ToString(CultureInfo.InvariantCulture)),
                 3 or 4 => "x" + v,
-                _ => (int.Parse(v, CultureInfo.InvariantCulture) + 1).ToString(CultureInfo.InvariantCulture),
+                // D38: the count's leading number; a reserve switch written after it ("1 (through the reserve)") stays.
+                _ => Regex.Replace(v, @"^\d+", m => (int.Parse(m.Value, CultureInfo.InvariantCulture) + 1).ToString(CultureInfo.InvariantCulture)),
             }) + " ";
             string[] edited = (string[])lines.Clone();
             edited[row] = string.Join("|", parts);

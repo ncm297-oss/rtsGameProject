@@ -55,7 +55,7 @@ public class D29OpeningQaStressTests(ITestOutputHelper output)
         Assert.Equal("standard", ai.Opening.Id);
 
         var kinds = new SortedSet<int>();
-        foreach (AiStep s in ai.Opening.BuildOrder) if (s.Action == AiStepAction.Build) kinds.Add(s.Target);
+        foreach (AiStep s in ai.Steps) if (s.Action == AiStepAction.Build) kinds.Add(s.Target);
         var built = new HashSet<int>();
         int hall = -1;
         for (int b = 0; b < data.Buildings.Length; b++) if (data.Buildings[b].Faction == teblor && data.Buildings[b].Slot == BuildingSlot.TownHall) hall = b;
@@ -162,7 +162,7 @@ public class D29OpeningQaStressTests(ITestOutputHelper output)
             configure: c => c with { MapId = "vathar_crossing", Map = c.Map with { Width = size, Height = size } });
         World w = sim.World;
         AiPlayer ai = sim.AiOf(0)!;
-        var steps = ai.Opening.BuildOrder;
+        var steps = ai.Steps;
         int gatherer = data.FindUnit("teblor_gatherer");
         int thinks = 0, open = 0, defending = 0;
         var reserved = new SortedDictionary<string, int>(StringComparer.Ordinal);

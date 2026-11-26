@@ -94,6 +94,12 @@ public class GatherWedgeQaTests
     // (RulesDef.DrawAfterTicks, hashed when the block is present). The golden's one human seat is never in a spent match (one
     // seat: fewer than two sides ever built), so the draw clock stays 0, its state hashes as before, and its k lines are byte
     // for byte as before (header data-hash and checksum only; checksum E7359ADD20818C67 -> 1708E5EC501A353D).
+    // D38 (data track, the session's one hash move; rule 51, BUG-0750's rule): regenerated once more, 3D93D45345A3B4EA ->
+    // B7947DC602B1E11B, because the Teblor standard opening ships a build order per difficulty (BUG-1612): its buildOrder is
+    // D37's Normal order M1RS (one Shaman, throughReserve on the Destrier Rider and Shaman steps) and the new buildOrders
+    // field holds Easy's K9KC10S and Hard's QRD1 (M7-9; the field and each step's switches are in GameData.ContentHash). The
+    // golden's one seat is a Malazan human seat, so its k lines are byte for byte as before (header data-hash and checksum
+    // only; checksum 1708E5EC501A353D -> C7D815619BB83C73).
 
     /// <summary>
     /// Ticks the replay must still match its recorded checkpoints: all of them (M4-H1, BUG-0211; before the re-recording

@@ -290,7 +290,7 @@ public class D32TeblorOpeningReportTests(ITestOutputHelper output)
         }
         World w = sim.World;
         AiPlayer ai = sim.AiOf(p)!;
-        var steps = ai.Opening.BuildOrder;
+        var steps = ai.Steps;
         int e = -1;
         for (int i = 0; i < steps.Length && e < 0; i++) if (steps[i].Action == AiStepAction.Expand) e = i;
         Assert.True(e >= 0);

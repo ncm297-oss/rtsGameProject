@@ -54,7 +54,11 @@ public class AiContentTests
     /// <summary>The heading of opening <paramref name="k"/> (0-based) on its faction page: "### Opening 1: `standard` (Combined arms)".</summary>
     public static string OpeningHeading(int k, AiOpening o) => $"### Opening {k + 1}: `{o.Id}` ({o.DisplayName})";
 
-    /// <summary>A step as the page's table writes it: "pop 6 | build | malazan_billet | 1".</summary>
+    /// <summary>
+    /// A step as the page's table writes it: "pop 6 | build | malazan_billet | 1". D38: a step's reserve switch (M7-8) is
+    /// written after its count, "1 (through the reserve)" or "1 (no reserve)", so a switch added or taken out on either side
+    /// fails by name; a step without one reads as before.
+    /// </summary>
     public static string StepText(AiStep s)
     {
         string at = s.Trigger switch
@@ -64,7 +68,62 @@ public class AiContentTests
             _ => "workers " + s.At.ToString(CultureInfo.InvariantCulture),
         };
         string id = s.Action == AiStepAction.Expand ? "—" : s.TargetKey;
-        return $"{at} | {DataLimits.AiStepActionIds[(int)s.Action]} | {id} | {s.Count.ToString(CultureInfo.InvariantCulture)}";
+        string count = s.Count.ToString(CultureInfo.InvariantCulture)
+            + (s.ThroughReserve ? " " + ThroughReserveWords : "") + (s.NoReserve ? " " + NoReserveWords : "");
+        return $"{at} | {DataLimits.AiStepActionIds[(int)s.Action]} | {id} | {count}";
+    }
+
+    /// <summary>D38: how a step table's Count cell writes <c>throughReserve</c>.</summary>
+    public const string ThroughReserveWords = "(through the reserve)";
+
+    /// <summary>D38: how a step table's Count cell writes <c>noReserve</c>.</summary>
+    public const string NoReserveWords = "(no reserve)";
+
+    /// <summary>The <c>buildOrders</c> keys, in <see cref="AiDifficulty"/> order.</summary>
+    public static readonly string[] DifficultyKeys = { "easy", "normal", "hard" };
+
+    /// <summary>
+    /// D38: an opening's build orders, each with its <c>buildOrders</c> key: <c>buildOrder</c> first (key null; every
+    /// difficulty without an entry plays it), then each entry in difficulty order. The page writes them in this order.
+    /// </summary>
+    public static List<(string? Key, System.Collections.Immutable.ImmutableArray<AiStep> Steps)> Lists(AiOpening o)
+    {
+        var lists = new List<(string?, System.Collections.Immutable.ImmutableArray<AiStep>)> { (null, o.BuildOrder) };
+        for (int k = 0; k < DifficultyKeys.Length; k++)
+            if (!o.BuildOrders.IsDefaultOrEmpty && k < o.BuildOrders.Length && !o.BuildOrders[k].IsDefaultOrEmpty)
+                lists.Add((DifficultyKeys[k], o.BuildOrders[k]));
+        return lists;
+    }
+
+    /// <summary>" (easy)" for an entry's key, "" for <c>buildOrder</c>: how a problem names the list.</summary>
+    private static string ListName(string? key) => key == null ? "" : $" ({key})";
+
+    /// <summary>D38: the label an entry's step table carries on the page, on the bold line above it.</summary>
+    public static string EntryLabel(string key) => $"`buildOrders.{key}`";
+
+    /// <summary>
+    /// The step table of list <paramref name="list"/> (an index into <see cref="Lists"/>) in an opening's lines: the first
+    /// table for <c>buildOrder</c>, the table after the composition table for each entry in turn.
+    /// </summary>
+    public static string[][] ListTableRows(string[] openingLines, int list)
+    {
+        List<List<string>> tables = PageTables.TablesInSection(openingLines, 0);
+        int t = list == 0 ? 0 : list + 1;
+        return t < tables.Count ? tables[t].Skip(2).Select(r => PageTables.Cells(r, stripBackticks: true)).ToArray() : Array.Empty<string[]>();
+    }
+
+    /// <summary>The nearest bold line ("**...") above each table of <paramref name="lines"/>, in table order ("" when none).</summary>
+    private static List<string> TableLabels(string[] lines)
+    {
+        var labels = new List<string>();
+        for (int i = 1; i < lines.Length; i++)
+        {
+            if (!lines[i].StartsWith('|') || lines[i - 1].StartsWith('|')) continue;
+            int j = i - 1;
+            while (j > 0 && !lines[j].StartsWith("**", StringComparison.Ordinal) && !lines[j].StartsWith('|')) j--;
+            labels.Add(lines[j].StartsWith("**", StringComparison.Ordinal) ? lines[j] : "");
+        }
+        return labels;
     }
 
     /// <summary>The section's lines, from its heading to the next <c>## </c> heading; fails naming the page if missing.</summary>
@@ -171,23 +230,35 @@ public class AiContentTests
     {
         string who = $"{faction} {o.Id}";
         List<List<string>> tables = PageTables.TablesInSection(lines, 0);
-        if (tables.Count != 2)
+        var lists = Lists(o);
+        // D38: one step table per build order: buildOrder's first, then the composition, then one per buildOrders entry in
+        // difficulty order, each under a bold line naming its key (`buildOrders.easy`).
+        if (tables.Count != 1 + lists.Count)
         {
-            problems.Add($"{who}: the opening has {tables.Count} tables, expected 2 (steps, composition)");
+            string entries = string.Concat(lists.Skip(1).Select(l => $", buildOrders.{l.Key}"));
+            problems.Add($"{who}: the opening has {tables.Count} tables, expected {1 + lists.Count} (steps, composition{entries})");
             return;
         }
+        List<string> labels = TableLabels(lines);
+        for (int list = 1; list < lists.Count; list++)
+            if (!labels[list + 1].Contains(EntryLabel(lists[list].Key!), StringComparison.Ordinal))
+                problems.Add($"{who}{ListName(lists[list].Key)}: the table after the composition's {list} is not labelled {EntryLabel(lists[list].Key!)} (page '{labels[list + 1]}')");
 
-        // Steps, row for row.
-        string[][] rows = tables[0].Skip(2).Select(r => PageTables.Cells(r, stripBackticks: true)).ToArray();
-        var steps = o.BuildOrder;
-        if (rows.Length != steps.Length) problems.Add($"{who} steps: page {rows.Length} vs data {steps.Length}");
-        for (int i = 0; i < Math.Max(rows.Length, steps.Length); i++)
+        // Steps, row for row, for each list.
+        for (int list = 0; list < lists.Count; list++)
         {
-            string page = i < rows.Length ? string.Join(" | ", rows[i].Skip(1).Take(4)) : "(none)";
-            string data = i < steps.Length ? StepText(steps[i]) : "(none)";
-            if (i < rows.Length && rows[i][0] != (i + 1).ToString(CultureInfo.InvariantCulture))
-                problems.Add($"{who} step {i + 1}: the page numbers it '{rows[i][0]}'");
-            if (page != data) problems.Add($"{who} step {i + 1}: page '{page}' vs data '{data}'");
+            string[][] rows = ListTableRows(lines, list);
+            var steps = lists[list].Steps;
+            string named = who + ListName(lists[list].Key);
+            if (rows.Length != steps.Length) problems.Add($"{named} steps: page {rows.Length} vs data {steps.Length}");
+            for (int i = 0; i < Math.Max(rows.Length, steps.Length); i++)
+            {
+                string page = i < rows.Length ? string.Join(" | ", rows[i].Skip(1).Take(4)) : "(none)";
+                string data = i < steps.Length ? StepText(steps[i]) : "(none)";
+                if (i < rows.Length && rows[i][0] != (i + 1).ToString(CultureInfo.InvariantCulture))
+                    problems.Add($"{named} step {i + 1}: the page numbers it '{rows[i][0]}'");
+                if (page != data) problems.Add($"{named} step {i + 1}: page '{page}' vs data '{data}'");
+            }
         }
 
         // Composition table: unit | Age I | Age II, "—" for none.
@@ -346,15 +417,16 @@ public class AiContentTests
         {
             int f = Data.FindFaction(faction);
             foreach ((int k, AiOpening o) in OpeningsOf(faction))
+            foreach (var (key, order) in Lists(o)) // D38: every build order of the opening
             {
-                var built = new HashSet<int>(o.BuildOrder.Where(s => s.Action == AiStepAction.Build).Select(s => s.Target));
+                var built = new HashSet<int>(order.Where(s => s.Action == AiStepAction.Build).Select(s => s.Target));
                 built.Add(Data.Buildings.Select((b, i) => (b, i)).Single(x => x.b.Faction == f && x.b.Slot == BuildingSlot.TownHall).i);
-                var researched = new HashSet<int>(o.BuildOrder.Where(s => s.Action == AiStepAction.Research).Select(s => s.Target));
+                var researched = new HashSet<int>(order.Where(s => s.Action == AiStepAction.Research).Select(s => s.Target));
                 var builtSlots = new HashSet<BuildingSlot>(built.Select(b => Data.Buildings[b].Slot));
-                for (int i = 0; i < o.BuildOrder.Length; i++)
+                for (int i = 0; i < order.Length; i++)
                 {
-                    AiStep s = o.BuildOrder[i];
-                    string where = $"{faction} {o.Id} step {i + 1} ({s.TargetKey})";
+                    AiStep s = order[i];
+                    string where = $"{faction} {o.Id}{ListName(key)} step {i + 1} ({s.TargetKey})";
                     switch (s.Action)
                     {
                         case AiStepAction.Train:
@@ -405,13 +477,14 @@ public class AiContentTests
             int f = Data.FindFaction(faction);
             int hall = Data.Buildings.Select((b, i) => (b, i)).Single(x => x.b.Faction == f && x.b.Slot == BuildingSlot.TownHall).i;
             foreach ((int k, AiOpening o) in OpeningsOf(faction))
+            foreach (var (key, order) in Lists(o)) // D38: every build order of the opening
             {
                 var built = new HashSet<int> { hall };
                 var researched = new HashSet<int>();
-                for (int i = 0; i < o.BuildOrder.Length; i++)
+                for (int i = 0; i < order.Length; i++)
                 {
-                    AiStep s = o.BuildOrder[i];
-                    string where = $"{faction} {o.Id} step {i + 1} ({s.TargetKey})";
+                    AiStep s = order[i];
+                    string where = $"{faction} {o.Id}{ListName(key)} step {i + 1} ({s.TargetKey})";
                     if (s.Action == AiStepAction.Build)
                     {
                         BuildingDef b = Data.Buildings[s.Target];
@@ -449,17 +522,18 @@ public class AiContentTests
         int age2 = Data.FindTech(DataLimits.AgeTechIds[0]);
         foreach (string faction in Factions)
             foreach ((int k, AiOpening o) in OpeningsOf(faction))
+            foreach (var (key, order) in Lists(o)) // D38: every build order of the opening
             {
-                AiStep ageStep = o.BuildOrder.Single(s => s.Action == AiStepAction.Research && s.Target == age2);
+                AiStep ageStep = order.Single(s => s.Action == AiStepAction.Research && s.Target == age2);
                 Assert.Equal(AiStepTrigger.Time, ageStep.Trigger);
-                var ageOne = new HashSet<int>(o.BuildOrder
+                var ageOne = new HashSet<int>(order
                     .Where(s => s.Action == AiStepAction.Build && (s.Trigger != AiStepTrigger.Time || s.At < ageStep.At))
                     .Select(s => s.Target));
                 AiComposition one = o.Compositions[0], two = o.Compositions[1];
                 foreach (int u in one.Units)
                 {
                     UnitDef unit = Data.Units[u];
-                    string where = $"{faction} {o.Id} Age I {unit.Key}";
+                    string where = $"{faction} {o.Id}{ListName(key)} Age I {unit.Key}";
                     Assert.False(unit.RequiresTechs.Contains(age2), $"{where}: needs Age II");
                     Assert.False(Data.Buildings[unit.TrainedAtTypeId].RequiresTechs.Contains(age2), $"{where}: its building needs Age II");
                     Assert.True(ageOne.Contains(unit.TrainedAtTypeId), $"{where}: no Age I step places {unit.TrainedAt}");
@@ -501,40 +575,47 @@ public class AiContentTests
                 Assert.True((int)Math.Floor(o.AttackMinHalfPop / 2.0 * perPop) == o.AttackMinCost,
                     $"{faction} {o.Id}: minArmyCost {o.AttackMinCost} vs {Num(o.AttackMinHalfPop / 2.0)} pop x {Num(perPop)} per pop");
 
-                string[][] rows = PageTables.FirstTableRows(OpeningLines(page, faction, k, o), 0, stripBackticks: true).ToArray();
-                int workers = Data.Rules.StartingWorkers;
-                for (int i = 0; i < o.BuildOrder.Length; i++)
+                var lists = Lists(o);
+                for (int list = 0; list < lists.Count; list++) // D38: every build order, each with its own page table's "Why"
                 {
-                    AiStep s = o.BuildOrder[i];
-                    string why = rows[i][5];
-                    if (s.Action == AiStepAction.Train && Data.Units[s.Target].Slot == UnitSlot.Worker)
+                    var order = lists[list].Steps;
+                    string named = $"{o.Id}{ListName(lists[list].Key)}";
+                    string[][] rows = ListTableRows(OpeningLines(page, faction, k, o), list);
+                    Assert.True(rows.Length == order.Length, $"{faction} {named}: the page's table has {rows.Length} rows, the list {order.Length} steps");
+                    int workers = Data.Rules.StartingWorkers;
+                    for (int i = 0; i < order.Length; i++)
                     {
-                        workers += s.Count;
-                        Match m = Regex.Match(why, @"^Workers to (\d+) in Age I+\b");
-                        Assert.True(m.Success, $"{faction} {o.Id} step {i + 1}: a worker step's 'Why' names no target: '{why}'");
-                        Assert.Equal(int.Parse(m.Groups[1].Value, CultureInfo.InvariantCulture), workers);
+                        AiStep s = order[i];
+                        string why = rows[i][5];
+                        if (s.Action == AiStepAction.Train && Data.Units[s.Target].Slot == UnitSlot.Worker)
+                        {
+                            workers += s.Count;
+                            Match m = Regex.Match(why, @"^Workers to (\d+) in Age I+\b");
+                            Assert.True(m.Success, $"{faction} {named} step {i + 1}: a worker step's 'Why' names no target: '{why}'");
+                            Assert.Equal(int.Parse(m.Groups[1].Value, CultureInfo.InvariantCulture), workers);
+                        }
+                        if (s.Action == AiStepAction.Research && s.TargetKey == DataLimits.AgeTechIds[0])
+                        {
+                            Match m = Regex.Match(why, @"^Age II at (\d+):(\d\d)");
+                            Assert.True(m.Success, $"{faction} {named} step {i + 1}: '{why}'");
+                            int seconds = int.Parse(m.Groups[1].Value, CultureInfo.InvariantCulture) * 60 + int.Parse(m.Groups[2].Value, CultureInfo.InvariantCulture);
+                            Assert.Equal(seconds * SimConstants.TicksPerSecond, s.At);
+                        }
+                        if (s.Action == AiStepAction.Expand)
+                        {
+                            Assert.Equal(AiStepTrigger.Time, s.Trigger);
+                            Assert.Equal(Data.Ai[f].Difficulty(AiDifficulty.Normal).ExpandAfterTicks, s.At);
+                        }
                     }
-                    if (s.Action == AiStepAction.Research && s.TargetKey == DataLimits.AgeTechIds[0])
-                    {
-                        Match m = Regex.Match(why, @"^Age II at (\d+):(\d\d)");
-                        Assert.True(m.Success, $"{faction} {o.Id} step {i + 1}: '{why}'");
-                        int seconds = int.Parse(m.Groups[1].Value, CultureInfo.InvariantCulture) * 60 + int.Parse(m.Groups[2].Value, CultureInfo.InvariantCulture);
-                        Assert.Equal(seconds * SimConstants.TicksPerSecond, s.At);
-                    }
-                    if (s.Action == AiStepAction.Expand)
-                    {
-                        Assert.Equal(AiStepTrigger.Time, s.Trigger);
-                        Assert.Equal(Data.Ai[f].Difficulty(AiDifficulty.Normal).ExpandAfterTicks, s.At);
-                    }
+                    int expands = order.Count(s => s.Action == AiStepAction.Expand);
+                    Assert.True(expands == 1, $"{faction} {named}: {expands} expand steps, the brief's one");
+    
+                    int hall = Data.Buildings.Single(b => b.Faction == f && b.Slot == BuildingSlot.TownHall).HalfPopProvided;
+                    int houses = order.Where(s => s.Action == AiStepAction.Build && Data.Buildings[s.Target].Slot == BuildingSlot.House)
+                        .Sum(s => Data.Buildings[s.Target].HalfPopProvided);
+                    Assert.True(hall + houses >= Data.Rules.HalfPopCap,
+                        $"{faction} {named}: the opening's hall and houses give {Num((hall + houses) / 2.0)} pop, below the cap");
                 }
-                int expands = o.BuildOrder.Count(s => s.Action == AiStepAction.Expand);
-                Assert.True(expands == 1, $"{faction} {o.Id}: {expands} expand steps, the brief's one");
-
-                int hall = Data.Buildings.Single(b => b.Faction == f && b.Slot == BuildingSlot.TownHall).HalfPopProvided;
-                int houses = o.BuildOrder.Where(s => s.Action == AiStepAction.Build && Data.Buildings[s.Target].Slot == BuildingSlot.House)
-                    .Sum(s => Data.Buildings[s.Target].HalfPopProvided);
-                Assert.True(hall + houses >= Data.Rules.HalfPopCap,
-                    $"{faction} {o.Id}: the opening's hall and houses give {Num((hall + houses) / 2.0)} pop, below the cap");
             }
         }
     }
@@ -545,7 +626,8 @@ public class AiContentTests
     {
         foreach (string faction in Factions)
             foreach ((int k, AiOpening o) in OpeningsOf(faction))
-                Assert.True(o.BuildOrder.Length <= 40, $"{faction} {o.Id}: {o.BuildOrder.Length} steps");
+                foreach (var (key, order) in Lists(o)) // D38: every build order of the opening
+                    Assert.True(order.Length <= 40, $"{faction} {o.Id}{ListName(key)}: {order.Length} steps");
     }
 
     // ---- D16: the difficulty blocks (rows J-K) ----

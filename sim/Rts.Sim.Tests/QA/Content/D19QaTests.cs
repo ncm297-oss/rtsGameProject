@@ -144,6 +144,8 @@ public class D19QaTests
                     for (int k = 0; k < root["openings"]!.AsArray().Count; k++)
                     {
                         AiScenes.Opening(root, k)["buildOrder"] = AiScenes.BuildOrder(("time", 3600, "train", worker, 1));
+                        // D38 (BUG-1771's family, rule 79): a shipped per-difficulty list would override the quiet one.
+                        AiScenes.Opening(root, k).AsObject().Remove("buildOrders");
                         AiScenes.Opening(root, k)["attack"] = new JsonObject { ["minArmyPop"] = 100, ["minArmyCost"] = 0 };
                     }
                 });

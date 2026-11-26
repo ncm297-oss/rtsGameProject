@@ -66,7 +66,7 @@ public class D30OpeningQaStressTests(ITestOutputHelper output)
         Assert.Equal(teblor, w.FactionOf(p));
         AiPlayer ai = sim.AiOf(p)!;
         var kinds = new SortedSet<int>();
-        foreach (AiStep s in ai.Opening.BuildOrder) if (s.Action == AiStepAction.Build) kinds.Add(s.Target);
+        foreach (AiStep s in ai.Steps) if (s.Action == AiStepAction.Build) kinds.Add(s.Target);
         var built = new HashSet<int>();
         int hall = data.FindBuilding("teblor_longhouse"), anoint = data.FindTech("teblor_blood_oil_anointing"), frenzy = data.FindStatus("teblor_frenzied");
         Assert.True(frenzy >= 0);

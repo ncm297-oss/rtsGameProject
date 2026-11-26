@@ -88,7 +88,13 @@ public class D36TeblorOrderQaStressTests(ITestOutputHelper output)
     public void QA_EveryOrder_Loads_KeepsTheSteps_AndNeverSwitchesTheExpand()
     {
         JsonObject m = TeblorOpeningFixtureTests.D34Fixture();
-        Assert.True(JsonNode.DeepEquals(m, TeblorOpeningVariantsReportTests.Shipped()), "M is not the shipped opening");
+        // D38 (BUG-1612): the shipped opening is D37's three orders now, so M (D34's order, the base's) is the shipped
+        // opening with buildOrder put back to D34's and buildOrders taken out (was: M equals the shipped opening).
+        JsonObject asBase = TeblorOpeningVariantsReportTests.Shipped();
+        asBase.Remove("buildOrders");
+        asBase["buildOrder"] = m["buildOrder"]!.DeepClone();
+        Assert.True(JsonNode.DeepEquals(m, asBase), "M is not the shipped opening with D34's order");
+        Assert.False(JsonNode.DeepEquals(m, TeblorOpeningVariantsReportTests.Shipped()), "M is still the shipped opening");
         static string Steps(JsonObject o) => string.Join(", ", Order(o).Select(s => $"{(string)s!["do"]!} {(string?)s["id"]}").OrderBy(k => k, StringComparer.Ordinal));
         foreach (var v in AllVariants())
         {

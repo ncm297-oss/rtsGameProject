@@ -416,7 +416,7 @@ public class D33BalanceReportTests(ITestOutputHelper output)
         AiPlayer ai = sim.AiOf(p)!;
         Assert.Equal("standard", ai.Opening.Id);
         var kinds = new SortedSet<int>();
-        foreach (AiStep s in ai.Opening.BuildOrder) if (s.Action == AiStepAction.Build) kinds.Add(s.Target);
+        foreach (AiStep s in ai.Steps) if (s.Action == AiStepAction.Build) kinds.Add(s.Target);
         var built = new bool[data.Buildings.Length];
         int hall = data.FindBuilding("teblor_longhouse");
         int[] ageTwo = AgeTwoUnits.Select(data.FindUnit).ToArray();
