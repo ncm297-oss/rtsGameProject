@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S3 |
-| Status | open |
+| Status | fixed (D37, verified by QA 2026-11-26-0207) |
 | Found | 2026-11-25-1437, task D36 (QA) |
 | System | content tests: `sim/Rts.Sim.Tests/Content/UnitHitBonusText.cs` (description vs `attack.fromStealthBonus`) |
-| Fixed by | |
+| Fixed by | D37 (2026-11-26-0207): `FirstShotWords` allows `[\s\p{Pd}]+` between "first" and shot / hit / strike / attack and between "from" and hiding / stealth. QA's `D36Bug1720QaTests.QA_HyphenatedFirstShot_*` un-skipped and green; `Content/UnitHitBonusTextBug1760Tests`; QA re-check `QA/Content/D37Bug1760QaTests` (21 rows: en / em / figure dash, U+2010, non-breaking hyphen, capitals, plurals, from-hiding / From-Stealth fail "data none"; "first" and "shot" far apart do not count; 12 dash rows red on the base regex, all green on D37). |
 
 ## Repro
 1. Un-skip `QA/Content/D36Bug1720QaTests.QA_HyphenatedFirstShot_OnAUnitWithoutTheField_Fails` (2 rows) and run

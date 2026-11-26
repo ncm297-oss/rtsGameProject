@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S4 |
-| Status | open |
+| Status | fixed (D37, verified by QA 2026-11-26-0207) |
 | Found | 2026-11-25-1437, task D36 (QA) |
 | System | docs: `docs/factions/teblor.md` |
-| Fixed by | |
+| Fixed by | D37 (2026-11-26-0207): "below" -> "above" in D-H10 Question 1's Producer's answer; QA checked every "<section>" above / below reference on the page against the heading order. |
 
 ## Repro
 1. Open `docs/factions/teblor.md`, "Questions for the Producer (D-H10, 2026-11-25)", Question 1's "Producer's answer"
