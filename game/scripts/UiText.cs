@@ -273,6 +273,10 @@ public sealed class UiText
         return string.Format(CultureInfo.InvariantCulture, MatchOver(MatchOverText.Clock), seconds / 60, seconds % 60);
     }
 
+    /// <summary>M6-V29: the draw countdown's text: <c>hud.draw_countdown</c> with <see cref="Clock"/> of <paramref name="seconds"/> whole seconds for its <c>{0}</c>.</summary>
+    public string DrawCountdown(int seconds) =>
+        string.Format(CultureInfo.InvariantCulture, Hud(HudText.DrawCountdown), Clock(seconds * Rts.Sim.SimConstants.TicksPerSecond));
+
     /// <summary>The stats screen's length line: <c>match_over.match_length</c> with <see cref="Clock"/> of <paramref name="ticks"/> for its <c>{0}</c>.</summary>
     public string MatchLength(int ticks) => string.Format(CultureInfo.InvariantCulture, MatchOver(MatchOverText.MatchLength), Clock(ticks));
 
@@ -375,6 +379,10 @@ public sealed class UiText
                 ui.OrderedAttackText = Text(states, OrderedAttackKey, $"states.{OrderedAttackKey}", errors);
             Section<HudText>(root, "hud", ui._hud, skipZero: false, forward: false, errors);
             TwoArgs(ui._hud[(int)HudText.ResourceLeft], $"hud.{Key(HudText.ResourceLeft)}", "the amount", "the resource", errors);
+            // M6-V29: the draw countdown names the time left.
+            string countdown = ui._hud[(int)HudText.DrawCountdown];
+            if (countdown.Length > 0 && !IsTextFormat(countdown))
+                errors.Add($"ui.json: hud.{Key(HudText.DrawCountdown)} must be a format with {{0}} (the time left) and no other placeholder: '{countdown}'");
             Section<MenuText>(root, "menu", ui._menu, skipZero: false, forward: false, errors);
             Section<SetupText>(root, "setup", ui._setup, skipZero: false, forward: false, errors);
             string sizeItem = ui._setup[(int)SetupText.MapSizeItem];

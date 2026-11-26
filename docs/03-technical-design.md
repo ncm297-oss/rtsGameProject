@@ -4983,8 +4983,76 @@ Tooling data, view code, view tests and docs; no sim, `ViewApi` or data file cha
      their `DrawnHeight` if the owner wants it.
   5. **Iron reads weakest** on the four (a slate roof on grey stone), as on the Keep (M6-V26 question 2). Recommendation:
      leave to the owner, as there.
+- **The Producer's answers (docs/01 2026-11-26, the ACCEPT row (2); written here by M6-V29, rule 67):**
+  1. Kept: Billet = the pack's second-age house, Depot = its storage shed, Crossbow Range = its archery range, Watchtower =
+     its watch tower.
+  2. Kept: the roof is the team-coloured part on all four.
+  3. Kept: the Depot stays low (1.9 m beside the 3.0 m Billet): it is how the two 2 x 2 buildings are told apart.
+  4. Kept: a tower drawn as a model shoots from 0.85 of its drawn top; a per-model height in the manifest only if a later
+     tower needs it. The Whirlwind and Teblor box towers keep 1.2 m until they are models.
+  5. Left to the owner: the slate-grey (Iron) player's roof reading weakest on grey stone ("roof: also the tower tops" is
+     already offered).
 
-## Vision, detection, fog
+### Implementation (M6-V29)
+
+The view half of the owner's draw rule (M6-S13, docs/02 "Game flow" 4): a drawn match reads **Draw** wherever a result
+shows, and a **countdown notice** is on screen while the draw clock runs. One `ui.json` key added (`hud.draw_countdown`);
+no sim, `ViewApi`, data hash or save changed.
+
+- **The result (`Match.ResultFor`).** It reads `World.MatchDrawn` before it looks for a winner (Producer ruling, docs/01
+  2026-11-26 (1)): in a drawn match the local player's **side** (it or an ally of it, M6-V16) gets **Draw** if it stands and
+  keeps **Defeat** if it is out; a drawn match is never Victory. Otherwise the rule is M6-V16's (Draw when the match is over
+  and nobody stands, Defeat the moment the side is out, Victory when the match is over and the side stands). The rule
+  reads the sim's state only, so `Match.OnTicked`'s latch gives the same answer live, after a load (the latch is set on the
+  first tick after it) and in replay playback (the drawn tick is the recording's last, so the banner keeps "Draw" when the
+  recording ends on it, M6-V9's rule). Live, a side that is out before the draw has its Defeat latched then and keeps it; a
+  side standing at the draw gets Draw that tick.
+- **Where a result shows.** The banner's title (`match_over.draw`, an existing key) is the only text that names a result.
+  The stats screen's title is "Match statistics" and its per-row cells are numbers and "Defeated at" (a standing seat's cell
+  stays `match_over.standing`); no row or team names a winner. The Load Game list shows date, type, seed, players and
+  length: no result. So no other screen changed.
+- **The notice (`DrawNotice`, a node `Match` adds beside `Alerts`).** Shown exactly while `World.DrawTicksLeft >= 0` (the
+  clock runs: from its first tick, Producer decision), hidden on every other tick: no rule (`DrawWaitTicks` 0), not spent,
+  the tick a death, a defeat or a seat able to train again sets the clock back (the next spent tick shows it again from the
+  whole wait), the draw itself and a win. Its text is `hud.draw_countdown` ("No player can train new units. Draw in {0}
+  unless a unit falls.") with `ceil(DrawTicksLeft / 20)` whole seconds in the match clock's format (`match_over.clock`,
+  `UiText.Clock`): the clock's first tick reads the whole wait (5:00 with the shipped 300 s), its last tick 0:01. It is read
+  after every tick the runner runs (`SimRunner.Ticked`, so a fast frame of several ticks skips none and playback shows it on
+  the same ticks) and once when wired (a save loaded mid-clock shows it before its first tick). It stores only the second it
+  shows; the label's text is written only when that second changes. A `Label` on the HUD layer at the top centre, 800 x 30
+  px from 86 px down (under the replay mark, 8-40, and the alert text, 46-80), 20 px pale gold with a black outline,
+  `MouseFilter.Ignore` (a click on it reaches the map). The English line is 594 px wide; at 1152 x 648 it spans 176-976 px
+  and at 1920 x 1080 560-1360 px, clear of the resource bar (top right, 8-34 px down), the minimap, the command card, the
+  queue strip and the selection panel (all at the bottom). The order notice (M6-V27) is a world-space line over a unit, not
+  a HUD rect: the two can cross on screen only where a unit stands under the top of the view. Without the HUD (`--no-hud`) or
+  `ui.json` there is no notice. No sound (none is asked for).
+- **`ui.json`.** `hud.draw_countdown`, read like every `hud` key (a missing one is a load error naming it) and checked as a
+  format naming `{0}` and nothing else (`Draw soon`, `{1}` or a cut `{0` is an error naming the key). No key changed.
+- **Tests.** New scene `game/tests/DrawViewTest` (headless, in the loop), dev matches through the shell on a data copy whose
+  `draw.afterSeconds` is 20 and whose `standard` preset starts with no gold, so a seat with a hall and no worker can never
+  train (a worker brings the mines' gold in reach); only commands, no store written (so `World.RecountDraw()` is never
+  needed). Every tick of every match is checked from `SimRunner.Ticked`: shown iff `DrawTicksLeft >= 0`, the text for
+  `ceil(DrawTicksLeft / 20)`, the label written once per change of the second. Rows: two seats live (first tick 0:20,
+  mid-way 0:10, the layout at 1152 x 648 and 1920 x 1080, a click on the notice selecting the unit under it, a save
+  mid-clock; the clock stopped by a seat that can train again, restarted by that worker's death, restarted again by a kill;
+  the last tick 0:01; the draw: banner "Draw", stats "Standing" for both, no "Victory" anywhere on the stats screen); the Load
+  Game list names no result; the save loads with the notice up before its first tick and draws ("Draw"); the recording
+  plays back with the notice's second equal to live's on every tick and ends on "Draw"; three seats, the local player out
+  first: Defeat, still Defeat (one banner) after the others draw, and a save after the draw loads to Defeat; teams (local and
+  an ally against one): the local player out, no banner while its ally stands, "Draw" at the draw; a win while the clock
+  runs: the notice goes on the win's tick, Victory; data without the draw block: a spent match never shows it. With the old
+  `ResultFor` the live, loaded, playback and team rows fail reading "Victory". Windowed with `-- --shots <dir>` it saves
+  `draw-notice.png` and `draw-banner.png` (zoom 40). The scene loop is 127 scenes.
+- **Questions for the Producer (rule 67), each with a recommendation:**
+  1. **A side that falls after the draw** (play goes on behind the result; the computer players stand down, but a human can
+     still finish a seat): live, its banner already read Draw and stays; a save made after that fall, or a recording watched
+     past it, has no record of the order of the two events, so it reads Defeat. Recommendation: keep (rare, and the sim
+     holds no defeat tick to tell them apart); if wanted, a sim request for the tick each seat was defeated.
+  2. **The notice's place and look:** top centre under the alert text, the replay mark's pale gold, 20 px. Recommendation:
+     keep; the owner judges `draw-notice.png`.
+  3. **No sound** when the clock starts. Recommendation: keep silent; the alert sound means "under attack", and the notice
+     shows for minutes.
+
 
 Fog of war and the high-ground rule are in since M4-3a (`sim/Rts.Sim/Vision/`); the last-known building ghosts, buildings
 that shoot and placement on explored ground since M4-3b (see "Implementation (M4-3b)"); zones that hide their contents

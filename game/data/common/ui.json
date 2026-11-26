@@ -73,7 +73,8 @@
     "cast_lost": "Cast lost",
     "resource_left": "{0} {1} left",
     "last_seen": "Last seen:",
-    "regenerating": "Regenerating"
+    "regenerating": "Regenerating",
+    "draw_countdown": "No player can train new units. Draw in {0} unless a unit falls."
   },
   "menu": {
     "title": "RtsGame",

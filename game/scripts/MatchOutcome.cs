@@ -5,10 +5,10 @@ public enum MatchOutcome
 {
     /// <summary>No result for the local player yet.</summary>
     None,
-    /// <summary>The match is over (<c>Simulation.MatchOver</c>) and the local player's side stands (M6-V16: the local player or an ally of it).</summary>
+    /// <summary>The match is over (<c>Simulation.MatchOver</c>), not drawn, and the local player's side stands (M6-V16: the local player or an ally of it).</summary>
     Victory,
-    /// <summary>The local player's side is out (it is defeated, <c>World.IsDefeated</c>, and so is every ally of it; M6-V16), whether or not the match is over.</summary>
+    /// <summary>The local player's side is out (it is defeated, <c>World.IsDefeated</c>, and so is every ally of it; M6-V16), whether or not the match is over; a drawn match keeps it (M6-V29: nobody who lost is un-defeated by a draw).</summary>
     Defeat,
-    /// <summary>The match is over and nobody stands (the last players fell on one tick).</summary>
+    /// <summary>The match is over and nobody stands (the last players fell on one tick), or (M6-V29) the match was drawn (<c>World.MatchDrawn</c>) and the local player's side stands.</summary>
     Draw,
 }
