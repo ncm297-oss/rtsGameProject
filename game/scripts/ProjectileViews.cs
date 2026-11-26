@@ -30,7 +30,8 @@ namespace Rts.Game;
 /// at a unit the screen still hides for up to 4 ticks (docs/03 "Vision, detection, fog", Known limits (1)), so the rule is
 /// the shot's own cell, not its target's. A hidden mark still counts as drawn, so it expires on time.</para>
 /// <para><b>Who shot at whom</b> (M7-VH1, BUG-1179): the tick a shot is first seen, its ends come from the read-only
-/// <see cref="ShotEnds"/> accessor: the launch height is its attacker type's (a tower's: <see cref="LaunchHeight"/>), exact
+/// <see cref="ShotEnds"/> accessor: the launch height is its attacker type's (a tower's: its type's
+/// <see cref="BuildingShotHeights"/> entry since M6-V28, the drawn tower's for a model, else <see cref="LaunchHeight"/>), exact
 /// even when the shooter died the tick it fired, and the strike height its victim's type (<see cref="ShotEnds.VictimUnitType"/>:
 /// the live unit or its corpse; a building or an unknowable victim: <see cref="LaunchHeight"/>). Each end's height is kept per
 /// slot, and a landing's flash takes the victim height of the dead slot whose last aim point it is (none: <see cref="LaunchHeight"/>).
@@ -91,6 +92,13 @@ public partial class ProjectileViews : Node3D
     private float[] _markHeight = Array.Empty<float>();
     private long _heightsTick = long.MinValue;
     private static readonly Transform3D Hidden = new(new Basis(Vector3.Zero, Vector3.Zero, Vector3.Zero), Vector3.Zero);
+
+    /// <summary>
+    /// Per building type, the height (m) above its ground an aimed shot a tower of that type fires leaves at (M6-V28:
+    /// <see cref="BuildingViews.ShotHeights"/>, so a tower drawn as a model shoots from the drawn tower); null, or a type past
+    /// its end, leaves at <see cref="LaunchHeight"/> as before. Read the tick a shot is first seen.
+    /// </summary>
+    public float[]? BuildingShotHeights { get; set; }
 
     /// <summary>The runner whose sim is shown each frame; null shows nothing (tests call <see cref="Sync"/> directly).</summary>
     public SimRunner? Runner
@@ -279,7 +287,7 @@ public partial class ProjectileViews : Node3D
                 _knownAttacker[i] = ends.Attacker;
                 _knownVictim[i] = ends.Victim;
                 int shooter = ends.ShooterUnitType, victim = ends.VictimUnitType(world.Units.Alive, world.Units.Generation, world.Units.TypeId);
-                _fromHeight[i] = shooter >= 0 ? HeightFor(ScaleOf(shooter)) : LaunchHeight;
+                _fromHeight[i] = shooter >= 0 ? HeightFor(ScaleOf(shooter)) : TowerHeight(ends);
                 _toHeight[i] = victim >= 0 ? HeightFor(ScaleOf(victim)) : LaunchHeight;
             }
             _knownAim[i] = target[i];
@@ -287,6 +295,11 @@ public partial class ProjectileViews : Node3D
     }
 
     private float ScaleOf(int type) => (uint)type < (uint)_scaleOf.Length ? _scaleOf[type] : 1f;
+
+    // A building's shot leaves at its type's drawn shot height (M6-V28); anything else unknown at LaunchHeight.
+    private float TowerHeight(ShotEnds ends) =>
+        ends.Live && ends.AttackerIsBuilding && BuildingShotHeights is float[] h && (uint)ends.AttackerType < (uint)h.Length
+            ? h[ends.AttackerType] : LaunchHeight;
 
     // A landing's flash sits at its shot's victim height: the dead slot of the same owner and type whose last aim point the
     // landing is (an aimed shot is not steered on its landing tick, so the two are equal); a landing no known slot matches

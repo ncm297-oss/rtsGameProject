@@ -329,6 +329,7 @@ public partial class QaM7V2Test : Node
         var lastLaunch = new System.Numerics.Vector2[p.Capacity];
         var lastVictim = new EntityHandle[p.Capacity];
         int reuses = 0;
+        float[] towerShotHeights = _match.GetNode<BuildingViews>("World3D/BuildingViews").ShotHeights;
         for (int t = 0; t < 900; t++)
         {
             _sim.Tick();
@@ -359,7 +360,9 @@ public partial class QaM7V2Test : Node
                 if (p.Alive[i]) { lastLaunch[i] = _shots.Tracker.Launch[i]; lastVictim[i] = victim[i]; }
                 if (!fresh || _shots.Tracker.IsLob[i]) continue;
                 seen++;
-                float wantFrom = attackerIsBuilding[i] ? ProjectileViews.LaunchHeight : ProjectileViews.HeightFor(_data.Units[attackerType[i]].Scale);
+                // M6-V28: a tower's shot leaves at its type's drawn shot height (the Watchtower's model, or LaunchHeight for a box).
+                float wantFrom = attackerIsBuilding[i] ? towerShotHeights[attackerType[i]]
+                    : ProjectileViews.HeightFor(_data.Units[attackerType[i]].Scale);
                 float wantTo = ProjectileViews.LaunchHeight;
                 EntityHandle v = victim[i];
                 // The victim was alive when the shot was fired (phase 10); one killed later this tick is its corpse (not

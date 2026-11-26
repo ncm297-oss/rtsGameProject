@@ -43,6 +43,9 @@ namespace Rts.Game.Tests;
 /// <item>Fallbacks (criterion 9): Git LFS pointer files in place of the models, missing files and models off each give
 /// boxes, a pointer one warning line a file and no <c>ERROR</c> line (the loop reads the log).</item>
 /// </list>
+/// M6-V28 (six types): a type that needs Age II (the Watchtower) is built by player 2 once it has researched it, seen
+/// through a player-0 Billet beside it (player 0's stock can't pay Age II and every site); the remembered row sends a scout
+/// to each enemy building and frees them once seen.
 /// Windowed with <c>-- --shots &lt;dir&gt;</c> it also saves the pictures of criterion 7 (default zoom and close up, two and
 /// four player colours, a Laborer and a Heavy Infantry beside each building, a site, and the remembered models under the fog).
 /// </remarks>
@@ -65,6 +68,11 @@ public partial class BuildingModelTest : Node
     {
         ["malazan_garrison_keep"] = new() { ["team"] = 420, ["Stone"] = 1026, ["Stone_Light"] = 2360, ["Walls"] = 52, ["Wood"] = 524, ["Wood_Light"] = 58, ["Gold"] = 200, ["Metal_Light"] = 162, ["White"] = 138 },
         ["malazan_barracks"] = new() { ["team"] = 908, ["Stone"] = 154, ["Stone_Light"] = 18, ["Walls"] = 52, ["Wood"] = 468, ["Wood_Light"] = 58, ["Gold"] = 200, ["Metal_Light"] = 162, ["White"] = 138 },
+        // M6-V28.
+        ["malazan_billet"] = new() { ["team"] = 806, ["Stone"] = 14, ["Walls"] = 6, ["Wood"] = 438, ["Wood_Light"] = 205 },
+        ["malazan_depot"] = new() { ["team"] = 699, ["Stone"] = 12, ["Stone_Light"] = 438, ["Walls"] = 12, ["Wood"] = 2222, ["Wood_Light"] = 958, ["Metal_Light"] = 623 },
+        ["malazan_crossbow_range"] = new() { ["team"] = 759, ["Stone"] = 422, ["Stone_Light"] = 816, ["Wood"] = 1001, ["Wood_Light"] = 311, ["White"] = 893, ["Red"] = 112 },
+        ["malazan_watchtower"] = new() { ["team"] = 594, ["Stone"] = 557, ["Stone_Light"] = 723, ["Wood"] = 336, ["Wood_Light"] = 211 },
     };
 
     private readonly List<string> _failures = new();
@@ -293,7 +301,14 @@ public partial class BuildingModelTest : Node
                 $"{data.Buildings[boxType].Key} (no model file): not its box");
 
         // Criterion 4: a site of each model type rises as the box and is the model from the frame after the tick it finishes.
-        foreach (int type in types) SiteRow(data, type, west + new NVector2(0f, 26f + 12f * Array.IndexOf(types, type)));
+        // M6-V28: a type that needs Age II (the Watchtower) is built by player 2, which researches it first: player 0's stock
+        // can't pay Age II and every site of the six (a player-0 Laborer beside the site sees it for the view).
+        foreach (int type in types)
+        {
+            int pl = Aged(data, type) ? 2 : 0;
+            if (pl != 0) AgeTwo(data, pl, west + new NVector2(-30f, 110f));
+            SiteRow(data, type, west + new NVector2(0f, 26f + 12f * Array.IndexOf(types, type)), pl);
+        }
 
         // A hurt model's hit-point bar over its top (criterion 5), and a destroyed one leaves nothing drawn (criterion 4).
         await HurtAndDestroy(data, finished);
@@ -302,6 +317,37 @@ public partial class BuildingModelTest : Node
         // row runs inside it, while the remembered models are drawn.
         await Remembered(data, types, west);
         await EndMatch();
+    }
+
+    // M6-V28: player 0 sees another player's site through a building of its own east of it (a building's sight, and no
+    // unit to start a fight with the builders).
+    private void Watch(GameData data, BuildingDef def, NVector2 c) =>
+        Check(Spawn(0, data.FindBuilding("malazan_billet"), c + new NVector2(def.FootprintWidth * MapConstants.CellSize / 2f + 4f, 0f)) >= 0,
+            $"{def.Key}: no watcher Billet beside {c}");
+
+    private static bool Aged(GameData data, int type) => data.Buildings[type].RequiresTechs.Contains(data.FindTech("age_ii"));
+
+    // M6-V28: player `player` gets a Garrison Keep, a Barracks and a Crossbow Range near `near` (spawned) and researches Age II
+    // at the Keep, ticking until it has it (Age II needs two kinds of hall).
+    private void AgeTwo(GameData data, int player, NVector2 near)
+    {
+        int age = data.FindTech("age_ii");
+        if (age < 0 || W.HasTech(player, age)) return;
+        int hall = Spawn(player, data.FindBuilding("malazan_garrison_keep"), near);
+        Check(Spawn(player, data.FindBuilding("malazan_barracks"), near + new NVector2(14f, 0f)) >= 0, "Age II: no Barracks");
+        Check(Spawn(player, data.FindBuilding("malazan_crossbow_range"), near + new NVector2(26f, 0f)) >= 0, "Age II: no Crossbow Range");
+        if (!Check(hall >= 0, "Age II: no Keep to research it at")) return;
+        _sim.Enqueue(Command.Research(player, Centre(hall), age));
+        for (int t = 0; t < 4000 && !W.HasTech(player, age); t++) _sim.Tick();
+        Check(W.HasTech(player, age), $"Age II not researched by player {player} (gold {W.Gold[player]}, wood {W.Wood[player]})");
+    }
+
+    private int OwnUnitsNear(int player, NVector2 at, float r)
+    {
+        int n = 0;
+        for (int i = 0; i < W.Units.Capacity; i++)
+            if (W.Units.Alive[i] && W.Units.Owner[i] == player && NVector2.Distance(W.Units.Position[i], at) < r) n++;
+        return n;
     }
 
     private int CountShownModels()
@@ -359,30 +405,34 @@ public partial class BuildingModelTest : Node
         _sel.ClearBuilding();
     }
 
-    private void SiteRow(GameData data, int type, NVector2 near)
+    private void SiteRow(GameData data, int type, NVector2 near, int pl)
     {
         BuildingDef def = data.Buildings[type];
         int laborer = data.FindUnit("malazan_laborer");
         int anchor = OpenAnchor(def, near);
         if (!Check(anchor >= 0, $"{def.Key} site: no open anchor")) return;
         NVector2 c = StartBase.FootprintCenter(W.NavGrid, def, anchor);
+        if (pl != 0) Watch(data, def, c);
         var workers = new List<int>();
-        for (int k = 0; k < 4; k++) _sim.Enqueue(Command.SpawnUnit(0, laborer, c + new NVector2(-3f + 2f * k, def.FootprintHeight * MapConstants.CellSize / 2f + 0.8f)));
+        for (int k = 0; k < 4; k++) _sim.Enqueue(Command.SpawnUnit(pl, laborer, c + new NVector2(-3f + 2f * k, def.FootprintHeight * MapConstants.CellSize / 2f + 0.8f)));
         _sim.Tick();
         _sim.Tick();
         for (int i = 0; i < W.Units.Capacity; i++)
-            if (W.Units.Alive[i] && W.Units.Owner[i] == 0 && W.Units.TypeId[i] == laborer && W.Units.State[i] == UnitState.Idle
+            if (W.Units.Alive[i] && W.Units.Owner[i] == pl && W.Units.TypeId[i] == laborer && W.Units.State[i] == UnitState.Idle
                 && NVector2.Distance(W.Units.Position[i], c) < def.FootprintHeight * MapConstants.CellSize) workers.Add(i);
         if (!Check(workers.Count > 0, $"{def.Key} site: no laborer")) return;
+        // M6-V28: the Laborers' sight explores the footprint first (a Build needs explored ground; player 2 has none here).
+        for (int t = 0; t < 10; t++) _sim.Tick();
         NVector2 at = PlacementGhost.AnchorPoint(W.NavGrid, anchor);
-        foreach (int u in workers) _sim.Enqueue(Command.Build(0, new EntityHandle(u, W.Units.Generation[u]), type, at));
+        foreach (int u in workers) _sim.Enqueue(Command.Build(pl, new EntityHandle(u, W.Units.Generation[u]), type, at));
         int site = -1;
         for (int t = 0; t < 200 && site < 0; t++)
         {
             _sim.Tick();
             site = B.SlotAt(anchor % W.NavGrid.Width, anchor / W.NavGrid.Width);
         }
-        if (!Check(site >= 0 && B.UnderConstruction[site], $"{def.Key} site: none at anchor {anchor} (gold {W.Gold[0]})")) return;
+        W.CanPlace(pl, type, anchor, out PlacementError placeWhy);
+        if (!Check(site >= 0 && B.UnderConstruction[site], $"{def.Key} site: none at anchor {anchor} (gold {W.Gold[pl]}, wood {W.Wood[pl]}, placement {placeWhy}, {workers.Count} workers)")) return;
         int gen = B.Generation[site], frames = 0, bad = 0, switchedAfter = -1;
         _views.Sync(W);
         for (int t = 0; t < 6000 && B.Alive[site] && B.Generation[site] == gen; t++)
@@ -412,22 +462,23 @@ public partial class BuildingModelTest : Node
         int anchor2 = OpenAnchor(def, c + new NVector2(0f, def.FootprintHeight * MapConstants.CellSize + 6f));
         if (!Check(anchor2 >= 0, $"{def.Key} cancel: no open anchor")) return;
         NVector2 at2 = PlacementGhost.AnchorPoint(W.NavGrid, anchor2);
+        if (pl != 0) Watch(data, def, StartBase.FootprintCenter(W.NavGrid, def, anchor2));
         // A Laborer beside it explores the ground (a Build needs every footprint cell explored).
-        _sim.Enqueue(Command.SpawnUnit(0, laborer, StartBase.FootprintCenter(W.NavGrid, def, anchor2) + new NVector2(0f, def.FootprintHeight * MapConstants.CellSize / 2f + 0.8f)));
-        _sim.Tick();
-        _sim.Tick();
-        W.CanPlace(0, type, anchor2, out PlacementError why);
-        _sim.Enqueue(Command.Build(0, new EntityHandle(workers[0], W.Units.Generation[workers[0]]), type, at2));
+        _sim.Enqueue(Command.SpawnUnit(pl, laborer, StartBase.FootprintCenter(W.NavGrid, def, anchor2) + new NVector2(0f, def.FootprintHeight * MapConstants.CellSize / 2f + 0.8f)));
+        // Through a fog update (every 4th tick): a Build onto unexplored ground is refused at once.
+        for (int t = 0; t < 6; t++) _sim.Tick();
+        W.CanPlace(pl, type, anchor2, out PlacementError why);
+        _sim.Enqueue(Command.Build(pl, new EntityHandle(workers[0], W.Units.Generation[workers[0]]), type, at2));
         int site2 = -1;
         for (int t = 0; t < 400 && site2 < 0; t++)
         {
             _sim.Tick();
             site2 = B.SlotAt(anchor2 % W.NavGrid.Width, anchor2 / W.NavGrid.Width);
         }
-        if (!Check(site2 >= 0, $"{def.Key} cancel: no second site (placement {why}, gold {W.Gold[0]}, wood {W.Wood[0]})")) return;
+        if (!Check(site2 >= 0, $"{def.Key} cancel: no second site (placement {why}, gold {W.Gold[pl]}, wood {W.Wood[pl]})")) return;
         _views.Sync(W);
         Check(_views.IsShown(site2) && _views.ShownAsSite(site2), $"{def.Key} cancel: the second site not drawn");
-        _sim.Enqueue(Command.Cancel(0, StartBase.FootprintCenter(W.NavGrid, def, anchor2)));
+        _sim.Enqueue(Command.Cancel(pl, StartBase.FootprintCenter(W.NavGrid, def, anchor2)));
         for (int t = 0; t < 4 && B.Alive[site2]; t++) _sim.Tick();
         _views.Sync(W);
         Check(!B.Alive[site2] && !_views.IsShown(site2) && !_views.ViewOf(site2)!.Visible, $"{def.Key} cancel: the cancelled site still drawn (alive {B.Alive[site2]})");
@@ -490,19 +541,24 @@ public partial class BuildingModelTest : Node
             if (Check(slot >= 0, $"{data.Buildings[type].Key}: enemy not spawned")) enemy.Add(slot);
         }
         if (enemy.Count == 0) return;
-        NVector2 between = (Centre(enemy[0]) + Centre(enemy[^1])) / 2f + new NVector2(0f, 9f);
+        // M6-V28: one scout in front of each (the row of six is wider than one Laborer's sight; the enemy Watchtower may shoot
+        // its scout, whose death leaves the spot out of sight just as walking away does).
         int laborer = data.FindUnit("malazan_laborer");
-        _sim.Enqueue(Command.SpawnUnit(0, laborer, between));
+        var aliveBefore = new bool[W.Units.Capacity];
+        for (int i = 0; i < aliveBefore.Length; i++) aliveBefore[i] = W.Units.Alive[i];
+        foreach (int s in enemy) _sim.Enqueue(Command.SpawnUnit(0, laborer, Centre(s) + new NVector2(0f, W.Data.Buildings[B.TypeId[s]].FootprintHeight * MapConstants.CellSize / 2f + 5f)));
         _sim.Tick();
         _sim.Tick();
-        int scout = -1;
+        var scouts = new List<int>();
         for (int i = 0; i < W.Units.Capacity; i++)
-            if (W.Units.Alive[i] && W.Units.Owner[i] == 0 && NVector2.Distance(W.Units.Position[i], between) < 1.5f) scout = i;
-        if (!Check(scout >= 0, "remembered: no scout")) return;
+            if (W.Units.Alive[i] && !aliveBefore[i] && W.Units.Owner[i] == 0 && W.Units.TypeId[i] == laborer) scouts.Add(i);
+        if (!Check(scouts.Count == enemy.Count, $"remembered: {scouts.Count} scouts for {enemy.Count} buildings")) return;
         for (int t = 0; t < 100 && !enemy.TrueForAll(s => W.Fog.CanSeeBuilding(0, s)); t++) _sim.Tick();
         _views.Sync(W);
         foreach (int s in enemy) Check(_views.ShownAsModel(s), $"{W.Data.Buildings[B.TypeId[s]].Key}: the scouted enemy building not drawn as its model");
-        _sim.Enqueue(Command.Move(0, new EntityHandle(scout, W.Units.Generation[scout]), west + new NVector2(0f, -12f)));
+        // Staging between ticks: the scouts go, the spot falls out of sight (QaM6V26Test's way; walking six away took long).
+        foreach (int scout in scouts)
+            if (W.Units.Alive[scout]) W.Units.Free(new EntityHandle(scout, W.Units.Generation[scout]));
         for (int t = 0; t < 1500 && !enemy.TrueForAll(s => _views.IsGhostShown(s)); t++)
         {
             _sim.Tick();
@@ -513,7 +569,8 @@ public partial class BuildingModelTest : Node
             BuildingDef def = W.Data.Buildings[B.TypeId[s]];
             MeshInstance3D? g = _views.GhostModelOf(s);
             if (!Check(_views.GhostShownAsModel(s) && g != null && g.Visible && !_views.GhostBoxOf(s)!.Visible && !_views.IsShown(s),
-                    $"{def.Key}: not remembered as its model alone (ghost {_views.IsGhostShown(s)}, as model {_views.GhostShownAsModel(s)})")) continue;
+                    $"{def.Key}: not remembered as its model alone (ghost {_views.IsGhostShown(s)}, as model {_views.GhostShownAsModel(s)}, "
+                    + $"seen now {W.Fog.CanSeeBuilding(0, s)}, own units within 20 m {OwnUnitsNear(0, Centre(s), 20f)})")) continue;
             Check(g!.MaterialOverride == _views.Models!.GhostMaterial(B.TypeId[s], 1), $"{def.Key}: the remembered model not in the darkened material");
             Aabb box = g.GlobalTransform * g.Mesh.GetAabb();
             (float x0, float x1, float z0, float z1) = Footprint(B.TypeId[s], B.Cell[s]);
@@ -694,6 +751,7 @@ public partial class BuildingModelTest : Node
         _camera.SetFocus(mid.X, mid.Y);
         await Shot("buildings-60m");
         // A site of each type to the right of the rows (player 1's, a Laborer at each, part-way up), beside a finished one.
+        // M6-V28: the Watchtower's site needs Age II, which player 0's stock can't pay beside every site: player 2 builds it.
         var sites = new List<NVector2>();
         float sz = 0f;
         foreach (int type in types)
@@ -702,18 +760,20 @@ public partial class BuildingModelTest : Node
             int anchor = OpenAnchor(def, o + new NVector2(32f, sz));
             sz += def.FootprintHeight * MapConstants.CellSize + 7f;
             if (anchor < 0) continue;
+            int pl = Aged(data, type) ? 2 : 0;
+            if (pl != 0) AgeTwo(data, pl, o + new NVector2(70f, 0f));
             NVector2 c = StartBase.FootprintCenter(W.NavGrid, def, anchor), at = c + new NVector2(0f, def.FootprintHeight * MapConstants.CellSize / 2f + 0.8f);
-            _sim.Enqueue(Command.SpawnUnit(0, laborer, at));
+            _sim.Enqueue(Command.SpawnUnit(pl, laborer, at));
             _sim.Tick();
             _sim.Tick();
             int builder = -1;
             for (int i = 0; i < W.Units.Capacity; i++)
-                if (W.Units.Alive[i] && W.Units.Owner[i] == 0 && W.Units.TypeId[i] == laborer && W.Units.State[i] == UnitState.Idle
+                if (W.Units.Alive[i] && W.Units.Owner[i] == pl && W.Units.TypeId[i] == laborer && W.Units.State[i] == UnitState.Idle
                     && NVector2.Distance(W.Units.Position[i], at) < 3f) builder = i;
-            if (builder >= 0) _sim.Enqueue(Command.Build(0, new EntityHandle(builder, W.Units.Generation[builder]), type, PlacementGhost.AnchorPoint(W.NavGrid, anchor)));
+            if (builder >= 0) _sim.Enqueue(Command.Build(pl, new EntityHandle(builder, W.Units.Generation[builder]), type, PlacementGhost.AnchorPoint(W.NavGrid, anchor)));
             // M6-VH9 (BUG-1632 item 2): the Laborer walks to the 8 x 8 Keep's edge before the site exists; 40 ticks were too few.
             for (int t = 0; t < 400 && B.SlotAt(anchor % W.NavGrid.Width, anchor / W.NavGrid.Width) < 0; t++) _sim.Tick();
-            W.CanPlace(0, type, anchor, out PlacementError why);
+            W.CanPlace(pl, type, anchor, out PlacementError why);
             int site = B.SlotAt(anchor % W.NavGrid.Width, anchor / W.NavGrid.Width);
             GD.Print($"picture site {def.Key}: builder {builder}, site {site} (placement now {why}){(site < 0 ? " - skipped, no site in the picture" : "")}");
             Check(site >= 0, $"picture: no {def.Key} site was placed");

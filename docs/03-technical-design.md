@@ -4904,6 +4904,82 @@ click, and M6-VH9's answers above. One `ui.json` key added (`orders.queue_full`)
      each would need its own `orders.*` text.
   4. **The lost-cast cue (M5-V1) still plays and shows in replay playback**, while the order notices do not (this brief's
      rule). Recommendation: make the lost-cast cue follow the same rule in the next view hardening (BUG-1710).
+- **The Producer's answers (docs/01 2026-11-25, the ACCEPT row (3); written here by M6-V28, rule 67):**
+  1. Kept: a line lasts 2.5 s on the view's clock and holds while the game is paused.
+  2. Kept: no words with the HUD off (`--no-hud`); the sound still plays.
+  3. Kept: the other dropped kinds (a move to nowhere, a gather whose node is gone, ...) stay silent until play shows one
+     confuses; the owner can ask for one.
+  4. The lost-cast cue follows the same no-replay rule in the view's next hardening (BUG-1710). The line's timer class
+     (`NoticeLines`) sits in `ViewApi` beside the accessor (it holds no game state): accepted.
+
+### Implementation (M6-V28)
+
+Four more Malazan buildings are models: the **Billet**, the **Quartermaster's Depot**, the **Crossbow Range** and the
+**Watchtower**, through M6-V26's import path with no change to the builder or the import script (docs/04 "Building
+models, as built (M6-V28)"). Six of 30 building types are models now. The Watchtower's shot leaves from the drawn tower.
+Tooling data, view code, view tests and docs; no sim, `ViewApi` or data file changed.
+
+- **The files:** four entries in `tools/asset-manifest.json` `buildings`, built by `tools/art/build_building.py` into
+  `game/assets/models/malazan/<id>/<id>.glb` with `<id>_atlas.png`: Billet 1,469 triangles, Depot 4,964 (its roof decimated
+  1,213 -> 699), Crossbow Range 4,314, Watchtower 2,421; one surface, one `team` material, one 128 x 128 atlas each. Found by
+  id (`BuildingModels.PathFor`) as the Keep and the Barracks: `BuildingModels` and `BuildingViews` needed no change for the
+  four to be drawn, fitted, remembered, picked and barred. A full re-import (`tools/import-assets.ps1`) rewrote all 107
+  model, atlas, library and `.import` files byte for byte (SHA-256 of each before and after).
+- **The fit** (unchanged rule, `BuildingModels.FitMargin` 0.25 m): Billet 3.5 x 3.4 x 3.03 m and Depot 3.5 x 2.66 x 1.88 m
+  on 4 x 4 m, Crossbow Range 5.5 x 3.99 x 4.97 m on 6 x 6 m, Watchtower 3.5 x 2.95 x 4.89 m on 4 x 4 m (width x depth x
+  height). Bars: 3.63, 2.48, 5.57 and 5.49 m (0.6 m over each top).
+- **The Watchtower's shot (criterion 6).** An aimed shot a tower fires left at `ProjectileViews.LaunchHeight` (1.2 m, a
+  unit's chest; M7-VH1), so the bolt came out of the drawn tower's foot. New `BuildingViews.ShotHeights` (per building type,
+  made in `Bind`): for a model type `BuildingModels.Top x BuildingViews.ModelShotShare` (0.85), the top of the Watchtower's
+  wall just under its roof (4.16 m on its 4.89 m; the roof's lowest point is 4.32 m, 0.88 of the top), and for a box type
+  `LaunchHeight` as before. `Match` hands it to `ProjectileViews.BuildingShotHeights`, read the tick a shot is first seen
+  (`ShotEnds.AttackerIsBuilding`, `AttackerType`); null or a type past its end is `LaunchHeight`. The shot flies from that
+  height over the ground at its launch point to its victim's height (M7-V2's interpolation), so on a terrace the bolt leaves
+  4.16 m over the terrace. A site never shoots (the sim's rule; the view only draws what it fires). With `--placeholder-art`
+  the tower is its box and shoots from 1.2 m as before (the Teblor and Whirlwind towers are boxes and unchanged).
+- **Tests.** New `game/tests/MalazanBuildingsTest` (headless, in the loop): (T) each of the four at a terrace's foot and on
+  its edge (an anchor whose surroundings hold another level): 0.25 m inside its footprint, its base on the ground, the ground
+  under its plan flat; (P) an own Laborer standing in front of each is what a click on it selects at zoom 20, 40 and 60,
+  every 12th model pixel at zoom 40 selects the building, the bar's both ends on screen at the closest zoom; (S) the
+  Watchtower's shot height is `ModelShotShare` of the model's top and within 0.5 m of the roof's lowest point, a shot fired
+  on flat ground and from a terrace at a target 5.6 m below leaves at it as kept and as drawn on its first frame (8.16 m =
+  4 m ground + 4.16 m; 12.16 m on the terrace), and a Watchtower site with an enemy held 10 m away fires nothing in 200
+  ticks. Windowed with `-- --shots <dir>` it saves `m6v28-<id>-40m` / `-20m`, `m6v28-base-40m` / `-60m` / `-40m-gray`,
+  `m6v28-billet-depot-40m`, `m6v28-range-barracks-40m`, `m6v28-four-colours-40m`, `m6v28-sites-40m` (a Billet and a Depot
+  site rising in front of the finished base) and `m6v28-tower-shot-20m`.
+  `BuildingModelTest` (every manifest entry: files, mask, team colour in all eight colours, fit, sites, razing, remembered
+  models, fallbacks) pins the four's triangles per atlas tile; its rows were adapted for six types: a type that needs Age II
+  (the Watchtower) is built by player 2 after it researches Age II (player 0's high stock can't pay Age II and every site),
+  seen through a player-0 Billet beside it; the remembered row sends one scout per enemy building (six in a row are wider
+  than one Laborer's sight) and frees them, as `QaM6V26Test` does; a Build waits through a fog update (every fourth tick)
+  before it is sent. `QaM6V26Test`'s razed-site row builds the Watchtower as player 1 after Age II, with a player-0 Laborer
+  watching, and its ghost-allocation row one scout per building. `QaM7V2Test`'s tower rows read the tower's start height
+  from `BuildingViews.ShotHeights` (they pinned 1.2 m). `ViewHardenVh9Test`'s (P3) measures all six model types in two rows
+  of three (one column 26 m a type ran off the open ground past the second). The scene loop is 125 scenes.
+- **Cost** (docs/04 "Building models, as built (M6-V28)" has the table and the window): 400 figures with 60 building models
+  of the six types 13.07 ms while 90 %+ alive, the same with boxes 12.79 ms (models +0.28 ms, 848 against 847 draw calls);
+  400 capsules 1.76 ms (the window about twice M6-V26's), 1,000 figures 33.80 ms, 1,000 capsules 3.43 ms. Three of the other
+  tracks' test hosts ran throughout. The view adds nothing per frame: the shot height is read once per shot, the first tick
+  it is seen.
+- **Fix in passing (BUG-1750, S3, a test row):** `ReplayPlaybackTest`'s live right click looked for open ground round the
+  worker with the sim's pickers only, and today's worker spot put the chosen pixel on the HUD's command card, which took
+  the click ("the live control right click sent nothing", red on the base code too, three runs of three). The search now
+  skips pixels inside the card's rectangle; the scene passes.
+- **Questions for the Producer (rule 67), each with a recommendation:**
+  1. **The picks** (docs/04): Billet = `Houses_SecondAge_1_Level1` (a gabled cottage, the roof facing the camera), Depot =
+     `Storage_SecondAge_Level2` (a long shed among crates and barrels), Crossbow Range = `Archery_SecondAge_Level1` (a stone
+     tower with a target over an open shooting shed), Watchtower = `WatchTower_SecondAge_Level1` (a stone tower under a
+     pyramid roof). Recommendation: accept; the owner judges `m6v28-base-40m.png`.
+  2. **The Watchtower's roof is the team part**, as on every building so far; its Level 2 / 3 towers carry banners only
+     (32 and 88 team triangles), a few pixels at 40 m. Recommendation: accept.
+  3. **The Depot is low** (1.88 m, a shed among crates) beside the 3.03 m Billet: the two 2 x 2 buildings read apart by
+     height and roof shape. Recommendation: accept; Level 1 (1.06 m) would be lost among figures, Level 3 is a two-roof yard.
+  4. **The shot leaves at 0.85 of the drawn top**, one constant for every tower model (only the Malazan Watchtower is one).
+     Recommendation: accept; a per-model height in the manifest (a "muzzle" in the file's extras) when a second tower model
+     needs another share. Box towers keep 1.2 m (out of scope here; their box is 3 m tall): a one-line change to give them
+     their `DrawnHeight` if the owner wants it.
+  5. **Iron reads weakest** on the four (a slate roof on grey stone), as on the Keep (M6-V26 question 2). Recommendation:
+     leave to the owner, as there.
 
 ## Vision, detection, fog
 

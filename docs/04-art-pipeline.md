@@ -59,7 +59,8 @@ Breaker's jerkin and pauldron, the Javelin Thrower's jerkin (the Ranger body; no
 M6-V25 (developer's pick, owner may revisit): the Cadre Mage's and the Priest's jerkin and hood (their robes are their own
 colour), the Sapper's jerkin, the Zealot's tunic (the Peasant body).
 M6-V26 (developer's pick, owner may revisit): a building's team part is its tiled roof (the pack's `Main` material) on the
-Garrison Keep and the Barracks; "Building models, as built" below.
+Garrison Keep and the Barracks; "Building models, as built" below. M6-V28 (developer's pick, owner may revisit): the roof
+on the Billet, the Depot, the Crossbow Range and the Watchtower too.
 **One material per model since M6-V24.** A unit model is one surface with one material, still named `team`, drawing one
 atlas: a 512² tile per role texture (the team part's brightness, outfit, skin, head, hair) and a tile of the props' flat
 colours; the atlas **alpha is the team mask** (0.5 on the team tile, 0.75 on the props' tile, 1 elsewhere). The same
@@ -510,6 +511,72 @@ the Ultimate Fantasy RTS pack (CC0, already on disk); every other building type 
 - **The view:** `BuildingViews` draws a finished building whose type's file loads as its model, any other (and every site)
   as its box (docs/03 "Implementation (M6-V26)").
 
+**Building models, as built (M6-V28).** Four more Malazan buildings from the same pack and the same path (no builder or
+import-script change): the **Billet**, the **Quartermaster's Depot**, the **Crossbow Range** and the **Watchtower**. Six of
+30 building types are models; the Wickan Corral, Armory, Cadre Tower and Engineers' Yard have no plain match in the pack and
+stay boxes, as does every Whirlwind and Teblor building and every site.
+
+- **The picks** (developer's, owner may revisit), by M6-V26's reasoning: a large team part that faces the camera, the
+  Second Age's grey stone and tiled roofs (the First Age is bare wood with a few banner pixels of team colour), and each
+  building told apart from the others at the default zoom.
+  - **Billet = `Houses_SecondAge_1_Level1`**: a timber-framed cottage under a steep gabled roof whose ridge runs toward the
+    camera, a chimney, two crates by the door. A home for a squad, smaller and plainer than the Barracks' hall. The other
+    houses were a flat-roofed block (`_3_`, it reads as a shed), a lean-to (`_2_`) or a two-storey house too tall for 2 x 2.
+  - **Depot = `Storage_SecondAge_Level2`**: a long, low shed (1.9 m as fitted) among crates and barrels: a store, and the
+    only 2 x 2 model that is wider than it is tall. Level 1 is 1.06 m as fitted (lost among figures); Level 3 is a two-roof
+    yard. 5,478 triangles after the hidden faces, so its roof (`Main`, the team part) is decimated 1,213 -> 699, as the
+    Keep's was; the crates keep their shape.
+  - **Crossbow Range = `Archery_SecondAge_Level1`**: a crenellated stone tower with an archery target on top beside an
+    open shooting shed with three targets inside. Its tower and targets set it apart from the Barracks' closed hall at 40 m.
+    Level 2 / 3 are 5,211 / 6,970 triangles and add a second roofed hall (closer to the Barracks).
+  - **Watchtower = `WatchTower_SecondAge_Level1`**: a tall, narrow stone tower (4.9 m as fitted) under a pyramid roof. Its
+    Level 2 / 3 replace the roof with crenellations and banners: 32 and 88 team triangles, a few pixels at 40 m.
+- **The team parts:** the roof (`Main`) on all four. **The tint:** the M6-V26 palette, every source material mapped the same
+  (`Stone` `#6e7176`, `Stone_Light` `#8f9195`, `Walls` `#7e8084`, `Wood` `#4d3a30`, `Wood_Light` `#5c4334`, `White`
+  `#9a9da1`); new: the Depot's barrel hoops and fittings (`Metal_Light`) dull bronze `#7a6440` (the Keep's `Gold`), the
+  Range's target rings (`Red`) oxblood `#5e2420`.
+
+  | Building | Source | Triangles (source, after the hidden faces, built) | Size as built (pack units; w x d x h) | Fitted (footprint) |
+  | --- | --- | --- | --- | --- |
+  | Billet | `glTF/Houses_SecondAge_1_Level1.gltf` | 2,336, 1,469, **1,469** | 0.890 x 0.865 x 0.770 | 3.5 x 3.4 x 3.0 m (4 x 4 m) |
+  | Quartermaster's Depot | `glTF/Storage_SecondAge_Level2.gltf` | 8,744, 5,478, **4,964** (the roof's 1,213 decimated to 699) | 1.649 x 1.252 x 0.887 | 3.5 x 2.7 x 1.9 m (4 x 4 m) |
+  | Crossbow Range | `glTF/Archery_SecondAge_Level1.gltf` | 5,984, 4,314, **4,314** | 1.380 x 1.001 x 1.247 | 5.5 x 4.0 x 5.0 m (6 x 6 m) |
+  | Watchtower | `glTF/WatchTower_SecondAge_Level1.gltf` | 3,564, 2,421, **2,421** | 0.857 x 0.723 x 1.198 | 3.5 x 3.0 x 4.9 m (4 x 4 m) |
+
+  Each has one 128 x 128 atlas (4 x 4 tiles of 32: team and its colours, the rest black).
+- **Told apart** (`m6v28-billet-depot-40m.png`, `m6v28-range-barracks-40m.png`, `m6v28-base-40m.png`): the Billet's tall
+  gable against the Depot's low flat shed and crates; the Range's tower and target against the Barracks' gabled hall; the
+  Watchtower is the only tall narrow building. In grey (`m6v28-base-40m-gray.png`) they read apart by shape; the closest
+  pair is the Billet and the Barracks (both gabled), told apart by size (4 m against 6 m) and the Barracks' front stairs. In four player
+  colours (`m6v28-four-colours-40m.png`: Bone, Crimson, Iron, Jade) the roof takes each colour; Iron (a slate roof on grey
+  stone) is the quietest pair, as on the Keep.
+- **The Watchtower's shot** leaves from the top of its wall, just under the roof (docs/03 "Implementation (M6-V28)").
+- **Sizes (Git LFS):** the four `.glb` 120,320 (Billet) + 391,624 (Depot) + 308,560 (Range) + 184,196 (Watchtower) bytes and
+  the four atlases 924 + 905 + 907 + 923: **1,008,359 bytes (0.96 MB)**. The art pass's generated binaries (every unit and
+  building model, atlas and the animation library, as `tools/import-assets.ps1` sums them): **39,864,445 bytes (38.0 MB),
+  was 38,856,086 (37.1 MB)** on the base.
+- **Cost** (rules 61 / 77; 2026-11-25 16:21-16:26, 1600 x 900, `ModelShots --bench 30 --vsync off`, the fifteen figure types
+  mixed, the six runs back to back in one window after 30 s idle, the developer's last runs; **not a quiet window**: three of
+  the other tracks' `testhost`s and a Godot not the developer's were running throughout, and the 400-capsule figure, 1.76 ms
+  against M6-V26's 0.86 alone, says it was about twice as busy, as M6-VH9's was). The building rows as M6-V26's: 60
+  finished buildings packed round the two crowds at zoom 60, the six model types in turn (`--bench-buildings 60
+  --bench-zoom 60`); 57 stand at the first measured frame (three were gone before it, in both runs; not traced) and 35 at
+  the end: the ten Watchtowers shoot from the first frame in both runs.
+
+  | Run | Average | While 90 %+ alive | Worst 1 % (90 %+ alive) | Draw calls |
+  | --- | --- | --- | --- | --- |
+  | 400 figures + 60 building models, six types (60 m) | 13.07 ms | **13.07 ms** (at most 16.7) | 21.65 ms | 848 |
+  | 400 figures + 60 building boxes (`--building-boxes`, 60 m) | 12.79 ms | 12.79 ms | 20.86 ms | 847 |
+  | 400 figures, fifteen types (40 m) | 11.50 ms | 13.17 ms | 24.04 ms | 955 |
+  | 400 capsules | 1.69 ms | 1.76 ms | 6.62 ms | 176 |
+  | 1,000 figures, fifteen types | 32.59 ms | 33.80 ms | 49.76 ms | 2,593 |
+  | 1,000 capsules | 3.27 ms | 3.43 ms | 13.11 ms | 243 |
+
+  The models cost 0.28 ms a frame over the boxes in the same window (13.07 against 12.79, 2 %; one draw call more), the
+  same as M6-V26's two types: each model is one surface, one draw call and one shadow draw call, as its box. The 400 + 60 row
+  is under 16.7 ms on this busy window; the quiet-window figure is the Producer's re-run at the ACCEPT (rule 77). The
+  1,000-figure row is reported, not gated (M6-VH9: 32.78 ms in a window as busy).
+
 **Audio (SFX, M6-V12).** Sources are long, mostly 96 kHz / 24-bit stereo files; only short cuts enter the repo.
 
 1. The pack is already extracted under `asset-sources/` (the Sonniss bundle: `asset-sources/sonniss-gdc-2026/part1-5/`).
@@ -670,7 +737,7 @@ Every third-party asset in the repo gets a row, added in the same commit that im
 | Quaternius – Universal Base Characters (Standard) | Quaternius | <https://quaternius.com/packs/universalbasecharacters.html> | CC0 1.0 (pack's `License_Standard.txt`) | Standard (free) edition, no version number; downloaded 2026-10-08 | Look test (M6-V10): `Superhero_Male_FullBody.gltf` + `.bin` + 7 textures in `game/assets/models/looktest/`, from `asset-sources/Universal Base Characters[Standard]/Universal Base Characters[Standard]/Base Characters/Godot - UE/`. **M6-V20:** the head of `SuperHero_Male` (the vertices weighted to `Head` / `neck_01`, decimated) and its base colour texture cut to 512² (`<id>_head.png`), inside `malazan_laborer.glb` and `malazan_crossbowman.glb` (`tools/asset-manifest.json`; the licence file is read at each import). **M6-V21:** the same head and texture inside `malazan_heavy_infantry.glb`, `whirlwind_camp_follower.glb`, `whirlwind_raider.glb` and `whirlwind_desert_archer.glb` (no new source file). **M7-V5:** the same head inside the five `game/assets/models/teblor/<id>/<id>.glb`, and a new file from the same pack and licence: `Hairstyles/Rigged to Head Bone/glTF (Godot -Unreal)/Hair_Long.gltf` (+ `.bin`, `T_Hair_2_BaseColor.png`), decimated, moved onto the male `Head`, its texture cut to 512² and darkened (`<id>_hair.png`) |
 | Quaternius – Universal Animation Library 1 and 2 (Standard) | Quaternius | <https://quaternius.com/packs/universalanimationlibrary.html> | CC0 1.0 (each pack's `License.txt`) | UAL1 Standard and UAL2 Standard, no version numbers; downloaded 2026-10-08 | Look test (M6-V10): `UAL1_Standard.glb` (no root motion), from `asset-sources/Universal Animation Library[Standard]/Universal Animation Library[Standard]/Unreal-Godot/`. **M6-V20:** six clips re-exported into `game/assets/animations/universal_humanoid.glb`: `Idle_Loop`, `Walk_Loop`, `Pistol_Shoot`, `Fixing_Kneeling` from `UAL1_Standard.glb`, `Farm_Harvest`, `TreeChopping_Loop` from `asset-sources/Universal Animation Library 2[Standard]/Universal Animation Library 2[Standard]/Unreal-Godot/UAL2_Standard.glb`; the `Pistol_Shoot` pose also places the crossbow (licence files read at each import). **M6-V21:** `Sword_Attack` from the same `UAL1_Standard.glb` added to the library as `attack_melee` (seven clips); its first frame places the Heavy Infantry's sword and the Raider's blade, `Idle_Loop`'s the shield and helmet, `Pistol_Shoot`'s the bow (no new source file). **M7-V5:** `Spell_Simple_Shoot` from `UAL1_Standard.glb` as `attack_cast` and `OverhandThrow` from `UAL2_Standard.glb` as `attack_throw` (nine clips); `TreeChopping_Loop`, `Sword_Attack`, `OverhandThrow` and `Idle_Loop` poses place the Teblor props (no new source file) |
 | Quaternius – Modular Character Outfits – Fantasy (Standard) | Quaternius | <https://quaternius.com/packs/modularcharacteroutfitsfantasy.html> | CC0 1.0 (pack's `License_Standard.txt`, read at each import by `tools/import-assets.ps1`) | Standard (free) edition, no version number; downloaded 2026-10-08 | M6-V20: from `asset-sources/Modular Character Outfits - Fantasy[Standard]/Modular Character Outfits - Fantasy[Standard]/Exports/glTF (Godot-Unreal)/Outfits/`: `Male_Peasant.gltf` (body, arms, legs, feet) in `game/assets/models/malazan/malazan_laborer/malazan_laborer.glb`; `Male_Ranger.gltf` (body, hood, pauldron, arms, legs, boots; not the bracers or belts) in `.../malazan_crossbowman/malazan_crossbowman.glb`; **M6-V21:** from the same two files (no new source file), `Male_Ranger.gltf` (body, pauldron, arms, **bracers**, legs, boots) in `.../malazan_heavy_infantry/malazan_heavy_infantry.glb`, (body, hood, arms, legs, boots) in `game/assets/models/whirlwind/whirlwind_raider/whirlwind_raider.glb`, (body, hood, pauldron, arms, legs, boots) in `.../whirlwind_desert_archer/whirlwind_desert_archer.glb`, and `Male_Peasant.gltf` (body, arms, legs, feet) in `.../whirlwind_camp_follower/whirlwind_camp_follower.glb`; **M7-V5:** from the same two files (no new source file), `Male_Peasant.gltf` (body, arms, legs, feet) in `game/assets/models/teblor/teblor_gatherer/` and `.../teblor_shaman/`, `Male_Ranger.gltf` (body, pauldron, arms, legs, boots) in `.../teblor_warrior/`, (body, arms, legs, boots) in `.../teblor_javelin_thrower/`, (body, pauldron, arms, bracers, legs, boots) in `.../teblor_breaker/`; decimated, textures (`T_Peasant_BaseColor`, `T_Ranger_BaseColor`, `T_Regular_Male_Dark_BaseColor`) cut from 4096² / 2048² to 512², tinted, and a grey team copy; the extracted `<id>_<role>.png` beside each model |
-| Quaternius – Ultimate Fantasy RTS | Quaternius | <https://quaternius.com/packs/ultimatefantasyrts.html> | CC0 1.0 (pack's `License.txt`; its header says "Ultimate Platformer Pack", a slip in the pack) | Aug 2022 (folder `quaternius-ultimate-fantasy-rts-2022-08`) | Look test (M6-V10): `Barracks_FirstAge_Level1.fbx`, from `asset-sources/quaternius-ultimate-fantasy-rts-2022-08/Ultimate Fantasy RTS - Aug 2022/FBX/`. **M6-V26:** from `asset-sources/quaternius-ultimate-fantasy-rts-2022-08/Ultimate Fantasy RTS - Aug 2022/glTF/`, `Barracks_SecondAge_Level3.gltf` in `game/assets/models/malazan/malazan_garrison_keep/malazan_garrison_keep.glb` and `Barracks_SecondAge_Level1.gltf` in `game/assets/models/malazan/malazan_barracks/malazan_barracks.glb` (hidden faces dropped, the Keep's roof decimated, the pack's flat colours replaced by the Malazan palette and a team grey in one 128² atlas, `<id>_atlas.png` beside each; `tools/asset-manifest.json` `buildings`); the pack's `License.txt` is read at each import (`licences`) |
+| Quaternius – Ultimate Fantasy RTS | Quaternius | <https://quaternius.com/packs/ultimatefantasyrts.html> | CC0 1.0 (pack's `License.txt`; its header says "Ultimate Platformer Pack", a slip in the pack) | Aug 2022 (folder `quaternius-ultimate-fantasy-rts-2022-08`) | Look test (M6-V10): `Barracks_FirstAge_Level1.fbx`, from `asset-sources/quaternius-ultimate-fantasy-rts-2022-08/Ultimate Fantasy RTS - Aug 2022/FBX/`. **M6-V26:** from `asset-sources/quaternius-ultimate-fantasy-rts-2022-08/Ultimate Fantasy RTS - Aug 2022/glTF/`, `Barracks_SecondAge_Level3.gltf` in `game/assets/models/malazan/malazan_garrison_keep/malazan_garrison_keep.glb` and `Barracks_SecondAge_Level1.gltf` in `game/assets/models/malazan/malazan_barracks/malazan_barracks.glb` (hidden faces dropped, the Keep's roof decimated, the pack's flat colours replaced by the Malazan palette and a team grey in one 128² atlas, `<id>_atlas.png` beside each; `tools/asset-manifest.json` `buildings`); the pack's `License.txt` is read at each import (`licences`). **M6-V28:** from the same `glTF/` folder, `Houses_SecondAge_1_Level1.gltf` in `game/assets/models/malazan/malazan_billet/malazan_billet.glb`, `Storage_SecondAge_Level2.gltf` in `.../malazan_depot/malazan_depot.glb` (its roof decimated), `Archery_SecondAge_Level1.gltf` in `.../malazan_crossbow_range/malazan_crossbow_range.glb` and `WatchTower_SecondAge_Level1.gltf` in `.../malazan_watchtower/malazan_watchtower.glb`, built the same way (`<id>_atlas.png` beside each) |
 | Epic Stock Media – Board Game: Sound Set Kit for Tabletop and Digital Games (Sonniss GDC 2026) | Epic Stock Media | <https://sonniss.com/gameaudiogdc> | Sonniss GDC Game Audio Bundle licence: royalty-free, commercial use, no attribution; raw files not redistributed or resold (bundle's `License - GDC Game Audio.pdf`, `Readme.txt`) | GDC 2026 bundle, downloaded 2026-10-08 (`asset-sources/sonniss-gdc-2026/`) | SFX (M6-V12): `ui/select_1.wav` from `UIClick_UI Button Analog Vintage Double Click Neutral Dry Press 11_ESM_BG.wav`; `building/building_done_1.wav` from `GAMEBoard_Event Board Reset Organic Multiple Pieces Wood Small 02_ESM_BG.wav` |
 | Cinematic Sound Design – UI Interaction Elements (Sonniss GDC 2026) | Cinematic Sound Design | <https://sonniss.com/gameaudiogdc> | Sonniss GDC Game Audio Bundle licence: royalty-free, commercial use, no attribution; raw files not redistributed or resold (bundle's `License - GDC Game Audio.pdf`, `Readme.txt`) | GDC 2026 bundle, downloaded 2026-10-08 (`asset-sources/sonniss-gdc-2026/`) | SFX (M6-V12): `ui/command_1.wav` from `Accept Boing Crunch.wav`; `ui/refused_1.wav` from `Deny Muted.wav`; `ui/ready_2.wav` from `Ting Coins.wav` |
 | CB_Sounddesign – Applicable Sounds: Organic UI and Building Games SFX (Sonniss GDC 2026) | CB_Sounddesign | <https://sonniss.com/gameaudiogdc> | Sonniss GDC Game Audio Bundle licence: royalty-free, commercial use, no attribution; raw files not redistributed or resold (bundle's `License - GDC Game Audio.pdf`, `Readme.txt`) | GDC 2026 bundle, downloaded 2026-10-08 (`asset-sources/sonniss-gdc-2026/`) | SFX (M6-V12): `ui/ready_1.wav` from `UIMisc_Kalimba 3 Up_CB Sounddesign_APPlicable Sounds.wav` |

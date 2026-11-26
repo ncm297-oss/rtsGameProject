@@ -97,6 +97,20 @@ public partial class BuildingViews : Node3D
     public float[] SiteHeights { get; private set; } = Array.Empty<float>();
 
     /// <summary>
+    /// The share of a model's fitted top a tower's shot leaves at (M6-V28): the top of the Watchtower's wall, just under its
+    /// roof (the roof's lowest point stands at 0.88 of its 4.89 m), not the 1.2 m a unit's chest is.
+    /// </summary>
+    public const float ModelShotShare = 0.85f;
+
+    /// <summary>
+    /// Per building type, the height in meters over its ground an aimed shot a finished tower of the type leaves at (M6-V28,
+    /// <see cref="ProjectileViews.BuildingShotHeights"/>): <see cref="ModelShotShare"/> of the model's fitted top for a model
+    /// type, <see cref="ProjectileViews.LaunchHeight"/> (as before) for a box type. Made in <see cref="Bind"/>. A site never
+    /// shoots (the sim's rule), so only the finished look counts.
+    /// </summary>
+    public float[] ShotHeights { get; private set; } = Array.Empty<float>();
+
+    /// <summary>
     /// The camera whose zoom keeps a tall building's bar on screen (M6-VH9, BUG-1631): the bar never sits higher over its
     /// ground than the top edge shows for a building at the screen's centre (<see cref="BarCeiling"/>). Null: no ceiling.
     /// </summary>
@@ -253,10 +267,13 @@ public partial class BuildingViews : Node3D
         _ghostRoot = new Vector3[capacity];
         PickTops = new float[data.Buildings.Length];
         SiteHeights = new float[data.Buildings.Length];
+        ShotHeights = new float[data.Buildings.Length];
         for (int t = 0; t < PickTops.Length; t++)
         {
             SiteHeights[t] = DrawnHeight(data.Buildings[t]);
-            PickTops[t] = Models != null && Models.Has(t) ? Models.Top(t) : SiteHeights[t];
+            bool model = Models != null && Models.Has(t);
+            PickTops[t] = model ? Models!.Top(t) : SiteHeights[t];
+            ShotHeights[t] = model ? Models!.Top(t) * ModelShotShare : ProjectileViews.LaunchHeight;
         }
         _ceilingZoom = _ceilingFov = float.NaN;
     }

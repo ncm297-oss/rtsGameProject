@@ -264,12 +264,14 @@ public partial class ViewHardenVh9Test : Node
             }
         }
 
-        // (P3) every model type's pick box against its model (measured).
+        // (P3) every model type's pick box against its model (measured). M6-V28: six model types, two rows of three east of
+        // the P1 column (one column 26 m a type ran off the open ground past the second).
+        int p3 = 0;
         for (int type = 0; type < _data.Buildings.Length; type++)
         {
             if (!_views.Models!.Has(type)) continue;
-            int slot = Spawn(0, type, near);
-            near += new NVector2(0f, 26f);
+            int slot = Spawn(0, type, near + new NVector2(26f * (p3 % 3), 26f * (p3 / 3)));
+            p3++;
             if (!Check(slot >= 0, $"(P3) {_data.Buildings[type].Key} not spawned")) continue;
             _views.Sync(W);
             await ShareRow(slot);

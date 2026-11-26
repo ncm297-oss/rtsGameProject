@@ -370,12 +370,15 @@ public partial class ReplayPlaybackTest : Node
         {
             // Open ground beside the worker: M6-VH9 picks the hall at its drawn height (the Keep's model, 8.1 m), so the pixel
             // 60 px to the right can be the hall now; take the first offset whose right click means the ground.
+            // BUG-1750: and not under the command card (a HUD control takes the click; the worker can stand just above it).
             Vector2 ground = at + new Vector2(60f, 0f);
             bool open = false;
+            Rect2 card = sel.Card is CommandCard c && c.IsVisibleInTree() ? c.GetGlobalRect() : new Rect2();
             for (int k = 0; k < 16 && !open; k++)
             {
                 float a = k * Mathf.Pi / 8f, d = k < 8 ? 60f : 120f;
                 Vector2 p = at + new Vector2(Mathf.Cos(a), Mathf.Sin(a)) * d;
+                if (card.HasPoint(p)) continue;
                 if (sel.ContextTarget(p, out _, out int building) && building < 0 && sel.PickResource(p) < 0 && sel.EnemyAt(p, out _, out _) == false)
                     (ground, open) = (p, true);
             }
