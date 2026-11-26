@@ -15,7 +15,8 @@ namespace Rts.Sim.Tests.Content;
 /// </summary>
 public class D34HashMoveTests
 {
-    private static readonly Lazy<GameData> s_d33 = new(() => TeblorOpeningVariantsReportTests.DataWith(TeblorOpeningFixtureTests.D33Fixture()));
+    // M6-S13 (sim track, the hash move): D33's data is the D33 fixture on the shipped files with the draw block out.
+    private static readonly Lazy<GameData> s_d33 = new(() => Draw.DrawScenes.TeblorOpeningBeforeDraw(TeblorOpeningFixtureTests.D33Fixture()));
 
     private static Simulation D33AiMatch(int ticks, bool record, out ReplayRecorder? rec)
     {
@@ -35,7 +36,8 @@ public class D34HashMoveTests
     [Fact]
     public void TheShippedHash_IsD34s_AndNotD33s()
     {
-        Assert.Equal(D34QaTests.D34Hash, TestSim.Data.ContentHash());
+        // M6-S13 (sim track, the hash move): D34's data is the shipped files with the draw block out (was TestSim.Data).
+        Assert.Equal(D34QaTests.D34Hash, Draw.DrawScenes.Off.ContentHash());
         Assert.NotEqual(D33QaTests.D33Hash, TestSim.Data.ContentHash());
     }
 

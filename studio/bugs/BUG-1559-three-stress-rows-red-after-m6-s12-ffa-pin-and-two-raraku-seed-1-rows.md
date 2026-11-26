@@ -74,3 +74,8 @@ The Stress category on a fresh clone of efa7b31 (`dotnet test sim/Rts.Sim.Tests 
    `FourAiSeats_OnPaleHills_Seed2_KnownStall`'s match: the twin row is dropped at the next pin move (Producer, Q9).
 2. `M6Sh2DeterminismStressTests` re-staged to Raraku seed 3 (seat 0 retrains for 24,261); green.
 3. `M6Sh2QaStressTests`' save sweep re-staged to Raraku seed 2 (78 saves, bound 60 unchanged); green.
+
+## M6-S13 (2026-11-25-1437)
+The four-seat Pale Hills seed-1 row ends in a draw at 61,779 since the owner's draw rule (see BUG-1068's table); its
+Stress row is un-skipped. `EndGameHardeningTests.ALoneIdleWorker_*` stays skipped (BUG-1116): that scene is never spent
+(p0 keeps its hall and 400 gold), so the rule cannot end it; the row is about the sweep's order.

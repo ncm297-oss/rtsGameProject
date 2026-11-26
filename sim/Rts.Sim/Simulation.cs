@@ -375,6 +375,8 @@ public sealed partial class Simulation : ICommandSink
         // Phase 11b (M5-4b): the defeat rule, after every phase that can take a building away (a cancel in phase 1, an
         // ability in phase 6, hits and landings in phase 11). A defeated player's commands are dropped from the next tick on.
         World.UpdateDefeats();
+        // Phase 11c (M6-S13): the draw rule, after the defeat check so a win on this tick stands (World.Draw.cs).
+        World.UpdateDraw();
 
         // Phase 12: fog of war (M4-3a), every 4 ticks (1, 5, 9, ...) for every player.
         VisionSystem.Run(World);
@@ -389,7 +391,8 @@ public sealed partial class Simulation : ICommandSink
 
     /// <summary>
     /// True once the match has a result (M5-4b): at most one player that ever built is undefeated while at least two ever
-    /// built (<see cref="World.MatchOver"/>), and stays true after (BUG-0672). Reads sim state only; the ticks go on after it (units still fight).
+    /// built (<see cref="World.MatchOver"/>), or (M6-S13) the match was drawn (<see cref="World.MatchDrawn"/>), and stays true
+    /// after (BUG-0672). Reads sim state only; the ticks go on after it (units still fight).
     /// </summary>
     public bool MatchOver => World.MatchOver;
 
@@ -527,8 +530,11 @@ public sealed partial class Simulation : ICommandSink
             // match without a defeat hashes as before), bit 35 a defeated player, bit 36 (every player's word) the match
             // result latched (BUG-0672: it outlives the flags that set it).
             bool builtNone = World.EverBuilt(p) && World.Ledger.LiveBuildings[p] == 0;
+            // M6-S13: bit 37 (every player's word) the draw state set (a clock running or a draw); its words follow the
+            // players, so a match whose clock is 0 and that is not drawn hashes as before the rule.
             h.Add((ulong)(uint)World.Gold[p] | (techs ? 1UL << 32 : 0UL) | (deaths ? 1UL << 33 : 0UL)
-                | (builtNone ? 1UL << 34 : 0UL) | (World.IsDefeated(p) ? 1UL << 35 : 0UL) | (World.MatchOverLatched ? 1UL << 36 : 0UL));
+                | (builtNone ? 1UL << 34 : 0UL) | (World.IsDefeated(p) ? 1UL << 35 : 0UL) | (World.MatchOverLatched ? 1UL << 36 : 0UL)
+                | (World.DrawStateSet ? 1UL << 37 : 0UL));
             h.Add(World.Wood[p]);
             if (techs) World.Techs.AddToHash(ref h, p);
             if (deaths)
@@ -536,6 +542,11 @@ public sealed partial class Simulation : ICommandSink
                 h.Add(World.Kills[p]);
                 h.Add(World.Losses[p]);
             }
+        }
+        if (World.DrawStateSet)
+        {
+            h.Add(World.DrawClock);
+            h.Add(World.MatchDrawn);
         }
 
         for (int p = 0; p < _nextSequence.Length; p++)

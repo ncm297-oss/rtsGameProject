@@ -237,6 +237,12 @@ public sealed partial class UnitStore
     /// </summary>
     internal int SummonedUnits;
 
+    /// <summary>
+    /// M6-S13: how many non-summoned units <see cref="Free"/> has freed since the draw check last read it (it reads and
+    /// zeroes it once a tick, <c>World.UpdateDraw</c>), so it is 0 between ticks. Not hashed, not saved.
+    /// </summary>
+    internal int PermanentFrees;
+
     // M4-4b-3b: the owners' hp techs, for a unit's hit points at its spawn; null for a store outside a world (tests).
     private readonly Economy.TechState? _techs;
 
@@ -432,7 +438,7 @@ public sealed partial class UnitStore
         if (_ledger != null && _ledger.Has(owner))
         {
             _countedLive[i] = true;
-            _ledger.AddLiveUnit(owner, 1);
+            _ledger.AddLiveUnit(owner, typeId, 1);
         }
         // BUG-0421: a unit starts at its maximum, its owner's hp techs included (World.MaxHpOf; at least 1).
         Hp[i] = _techs == null ? def.Hp : Math.Max(1, def.Hp + Combat.DamageCalc.Points(_techs.Bonus(owner, typeId, TechStat.Hp)));
@@ -494,8 +500,13 @@ public sealed partial class UnitStore
         if (_countedLive[handle.Index])
         {
             _countedLive[handle.Index] = false;
-            _ledger!.AddLiveUnit(Owner[handle.Index], -1);
+            _ledger!.AddLiveUnit(Owner[handle.Index], TypeId[handle.Index], -1);
+            // M6-S13: a load of gold goes with its carrier.
+            if (CargoKind[handle.Index] == Data.ResourceKind.Gold && Cargo[handle.Index] != 0) _ledger.AddCarriedGold(Owner[handle.Index], -Cargo[handle.Index]);
         }
+        // M6-S13: the draw rule's "a unit died this tick" (a summon's death or expiry is not counted). Not state: only its
+        // change within a tick is read (World.Draw.cs), and a load starts it again at 0 with the world's copy.
+        if (ExpiresAtTick[handle.Index] == 0) PermanentFrees++;
         if (_belowHp[handle.Index])
         {
             _belowHp[handle.Index] = false;

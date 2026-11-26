@@ -770,6 +770,27 @@ public class DataValidationTests
         Assert.Contains(message, e.Message);
     }
 
+    /// <summary>
+    /// M6-S13: <c>rules.json</c> <c>draw</c>: the shipped block loads (a positive wait); a block that is not an object is one
+    /// error at its path (the parser's); a bad <c>afterSeconds</c> is one error at <c>draw.afterSeconds</c> (more rows in
+    /// <c>DrawRulesLoaderTests</c>, the <c>null</c> rows in <c>DataNullPolicyTests</c>).
+    /// </summary>
+    [Theory]
+    [InlineData("5", "$.draw", "")]
+    [InlineData("[]", "$.draw", "")]
+    [InlineData("{ \"afterSeconds\": -1 }", "draw.afterSeconds", "must be positive")]
+    [InlineData("{ \"afterSeconds\": 100000 }", "draw.afterSeconds", "above the maximum")]
+    public void DrawBlock_Bad_IsOneError(string raw, string path, string message)
+    {
+        Assert.True(TestSim.Data.Rules.DrawAfterTicks > 0, "the shipped rules carry a draw wait");
+        using TestDataDir dir = TestDataDir.CopyOfShipped();
+        dir.EditJson("common/rules.json", r => r["draw"] = JsonNode.Parse(raw));
+        DataError e = Assert.Single(DataLoader.LoadAll(dir.Path).Errors);
+        Assert.Equal("common/rules.json", e.File);
+        Assert.Equal(path, e.Path);
+        Assert.Contains(message, e.Message);
+    }
+
     /// <summary>M5-9a: the shipped table is docs/02's "Countered by" column, and every list emptied still loads (a table that shifts nothing).</summary>
     [Fact]
     public void AiCounters_Shipped_IsTheTemplateTable_AndEmptyListsLoad()

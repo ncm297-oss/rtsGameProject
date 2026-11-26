@@ -236,6 +236,7 @@ public partial class Match : Node3D
         combat.Camera = camera;
         var shots = GetNode<ProjectileViews>("World3D/ProjectileViews");
         shots.Bind(data, sim.World.Projectiles.Capacity, playerRgb);
+        shots.BuildingShotHeights = buildings.ShotHeights; // M6-V28: a tower drawn as a model shoots from the drawn tower
         shots.Runner = _runner;
         shots.Fog = fog;
 

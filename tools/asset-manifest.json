@@ -690,6 +690,79 @@
         "Metal_Light": "#4a4d52",
         "White": "#9a9da1"
       }
+    },
+    {
+      "id": "malazan_billet",
+      "destination": "game/assets/models/malazan/malazan_billet/malazan_billet.glb",
+      "source": "quaternius-ultimate-fantasy-rts-2022-08/Ultimate Fantasy RTS - Aug 2022/glTF/Houses_SecondAge_1_Level1.gltf",
+      "maxTriangles": 5000,
+      "tileSize": 32,
+      "yawDegrees": 0,
+      "viewElevationDegrees": 15,
+      "team": ["Main"],
+      "teamShade": 0.8,
+      "colours": {
+        "Stone": "#6e7176",
+        "Walls": "#7e8084",
+        "Wood": "#4d3a30",
+        "Wood_Light": "#5c4334"
+      }
+    },
+    {
+      "id": "malazan_depot",
+      "destination": "game/assets/models/malazan/malazan_depot/malazan_depot.glb",
+      "source": "quaternius-ultimate-fantasy-rts-2022-08/Ultimate Fantasy RTS - Aug 2022/glTF/Storage_SecondAge_Level2.gltf",
+      "maxTriangles": 5000,
+      "tileSize": 32,
+      "yawDegrees": 0,
+      "viewElevationDegrees": 15,
+      "decimate": { "Main": 700 },
+      "team": ["Main"],
+      "teamShade": 0.8,
+      "colours": {
+        "Stone": "#6e7176",
+        "Stone_Light": "#8f9195",
+        "Walls": "#7e8084",
+        "Wood": "#4d3a30",
+        "Wood_Light": "#5c4334",
+        "Metal_Light": "#7a6440"
+      }
+    },
+    {
+      "id": "malazan_crossbow_range",
+      "destination": "game/assets/models/malazan/malazan_crossbow_range/malazan_crossbow_range.glb",
+      "source": "quaternius-ultimate-fantasy-rts-2022-08/Ultimate Fantasy RTS - Aug 2022/glTF/Archery_SecondAge_Level1.gltf",
+      "maxTriangles": 5000,
+      "tileSize": 32,
+      "yawDegrees": 0,
+      "viewElevationDegrees": 15,
+      "team": ["Main"],
+      "teamShade": 0.8,
+      "colours": {
+        "Stone": "#6e7176",
+        "Stone_Light": "#8f9195",
+        "Wood": "#4d3a30",
+        "Wood_Light": "#5c4334",
+        "White": "#9a9da1",
+        "Red": "#5e2420"
+      }
+    },
+    {
+      "id": "malazan_watchtower",
+      "destination": "game/assets/models/malazan/malazan_watchtower/malazan_watchtower.glb",
+      "source": "quaternius-ultimate-fantasy-rts-2022-08/Ultimate Fantasy RTS - Aug 2022/glTF/WatchTower_SecondAge_Level1.gltf",
+      "maxTriangles": 5000,
+      "tileSize": 32,
+      "yawDegrees": 0,
+      "viewElevationDegrees": 15,
+      "team": ["Main"],
+      "teamShade": 0.8,
+      "colours": {
+        "Stone": "#6e7176",
+        "Stone_Light": "#8f9195",
+        "Wood": "#4d3a30",
+        "Wood_Light": "#5c4334"
+      }
     }
   ]
 }

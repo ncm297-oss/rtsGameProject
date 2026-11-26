@@ -40,3 +40,7 @@ Seat 2 (and seat 3 by 1,139) goes silent for 6,780 ticks (30,781-37,561); the ma
 - The row is now `FarExpandProbeQaStressTests.VatharCrossingSeed2_FourSeats_FarFogOracleAndExtraOracles`, skipped with
   this id and BUG-1610's (rule 57 satisfied: the Stress category has no red row from it). Un-skip with BUG-1661's cure.
 - docs/03 "Implementation (M7-8)" has the table, the cause and the recommended cures.
+## M6-S13 (2026-11-25-1437): measured, unchanged
+Never spent under the draw rule: won by p3 at 88,998 (74:09); p3 keeps 8,020 gold and 26 workers with 15,457 gold left
+on the map, so "can still train" holds throughout. The Stress row stays skipped with its ids (seat 2's silence and the
+hunt's length are AI-play items, BUG-1660 / BUG-1661).

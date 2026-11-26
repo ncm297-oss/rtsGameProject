@@ -477,6 +477,35 @@ public sealed class CliTests : IDisposable
         Assert.Contains("ok: 6 checkpoints matched over 600 ticks", back.Out);
     }
 
+    /// <summary>
+    /// M6-S13 criterion 9: a <c>match</c> that ends in a draw prints <c>result draw at tick N (m:ss)</c> and exits 0, as a win
+    /// does. A data copy where nothing can ever be trained (no gold banked, one gold in each mine, a 1 s wait): both AI seats
+    /// stand, nobody can train or fight, and the match draws one second after it is spent; the progress lines are not printed
+    /// before 6,000 ticks.
+    /// </summary>
+    [Fact]
+    public void Match_ADrawnMatch_PrintsResultDraw_Exit0()
+    {
+        using TestDataDir dir = TestDataDir.CopyOfShipped();
+        dir.EditJson("common/rules.json", r =>
+        {
+            r["draw"] = new System.Text.Json.Nodes.JsonObject { ["afterSeconds"] = 1 };
+            foreach (System.Text.Json.Nodes.JsonNode? p in r["startingResources"]!.AsArray())
+                if ((string?)p!["id"] == "standard") p["gold"] = 0;
+            r["startMines"]!["gold"] = 1;
+            r["expansionMines"]!["gold"] = 1;
+        });
+        CliResult r = Cli("match", "--map", "generated", "--seed", "1", "--ticks", "6000", "--data", dir.Path);
+        Assert.True(r.Exit == CliRunner.ExitOk, $"exit {r.Exit}: {r.Out} {r.Err}");
+        string[] lines = Lines(r.Out);
+        string result = Assert.Single(lines, l => l.StartsWith("result ", StringComparison.Ordinal));
+        Assert.Matches(new Regex(@"^result draw at tick (\d+) \(\d+:\d{2}\)$"), result);
+        int tick = int.Parse(Regex.Match(result, @"tick (\d+)").Groups[1].Value, System.Globalization.CultureInfo.InvariantCulture);
+        Assert.InRange(tick, 20, 200); // the wait (20 ticks) after the first spent tick, which follows the start's spawns
+        Assert.DoesNotContain(lines, l => l.StartsWith("tick ", StringComparison.Ordinal));
+        Assert.Contains(lines, l => l.StartsWith($"end tick {tick} hash ", StringComparison.Ordinal));
+    }
+
     private readonly record struct CliResult(int Exit, string Out, string Err);
 
     private static CliResult Cli(params string[] args)

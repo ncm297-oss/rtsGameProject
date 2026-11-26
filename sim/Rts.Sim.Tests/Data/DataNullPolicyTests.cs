@@ -30,6 +30,7 @@ public class DataNullPolicyTests
         new object[] { "factions/malazan/units.json", "units[id=malazan_heavy_infantry]", "stillStealth" },
         new object[] { "common/statuses.json", "statuses[id=burning]", "onEnd" },
         new object[] { "factions/malazan/buildings.json", "buildings[id=malazan_barracks]", "attack" },
+        new object[] { "common/rules.json", "", "draw" }, // M6-S13: the draw block written null is no draw rule
         // Optional numbers.
         new object[] { "factions/malazan/units.json", "units[id=malazan_heavy_infantry]", "scale" },
         new object[] { "factions/malazan/units.json", "units[id=malazan_heavy_infantry]", "spawnCount" },
@@ -52,6 +53,8 @@ public class DataNullPolicyTests
         new object[] { "common/rules.json", "", "gatherOverlap", "gatherOverlap" },
         new object[] { "factions/teblor/units.json", "units[id=teblor_gatherer]", "carry", "units[{0}].carry" },
         new object[] { "factions/malazan/ai.json", "openings[id=standard].attack", "reserveArmyShare", "openings[{0}].attack.reserveArmyShare" },
+        // M6-S13: inside the draw block the wait is required; null is an error, not "no rule" (leave the block out for that).
+        new object[] { "common/rules.json", "draw", "afterSeconds", "draw.afterSeconds" },
     };
 
     [Theory]

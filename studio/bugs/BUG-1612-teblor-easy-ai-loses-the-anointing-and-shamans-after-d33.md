@@ -49,3 +49,13 @@ The new train steps should not cost Easy and Hard the faction's one upgrade.
   figures on every map of every difficulty. "None meets the bar" confirmed for QA's own orders too (seven on full rows,
   four more screened). The nearest is not A: one-Shaman orders miss 4 figures (QRD1 16 seats short, every Hard figure
   met); see BUG-1721. Stays open.
+
+## D36 (2026-11-25-1437): the second search, around the one-Shaman orders; none meets the bar, nothing ships
+- `Content/D36TeblorOrderSearchReportTests` (Stress), D34's row. Baseline re-measured: the shipped order's full rows equal
+  D-H10's (Easy 1/0/16/30/4/27/28, Normal 9/23/15/14/22/37/17, Hard 11/23/22/39/33/46/23).
+- Five candidates on full rows: QRD1 (QA's; 4 misses, 16 short: Easy Shaman 17, Anointing 18; Normal Shaman 19,
+  Anointing 12), RSC (5, 23), RSX (6, 21), K9KC10S (7, 47; meets every Easy figure), K9KC930 (8, 38). 57 orders screened.
+  Nearest: QRD1. No fixture; `git diff -- game/` empty.
+- For the Producer (teblor.md "Questions for the Producer (D36)" 1): one order meets every Easy figure (K9KC10S), one
+  every Hard figure (QRD1), one every Normal figure but the Anointing (RSC). Recommendation: an opening per difficulty
+  (sim schema request). Status stays open.
