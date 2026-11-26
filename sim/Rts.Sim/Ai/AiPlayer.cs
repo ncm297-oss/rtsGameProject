@@ -43,8 +43,9 @@ internal sealed partial class AiPlayer
         ThinkTicks = Math.Max(1, Knobs.ThinkTicks);
         OpeningIndex = PickOpening(def.Openings.Length, difficulty, ref _rng);
         Opening = def.Openings[OpeningIndex];
+        Steps = def.Openings[OpeningIndex].BuildOrderFor(difficulty); // M7-9: resolved once; every step reader uses it
         int cols = ScoutManager.GridLines(view.MapWidth, Rules.ScoutGrid), rows = ScoutManager.GridLines(view.MapHeight, Rules.ScoutGrid);
-        Board = new Blackboard(Opening.BuildOrder.Length, view.UnitSlots, view.BuildingSlots, view.ResourceSlots, cols * rows,
+        Board = new Blackboard(Steps.Length, view.UnitSlots, view.BuildingSlots, view.ResourceSlots, cols * rows,
             MilitaryManager.HuntPoints(cols, rows));
         Live = new int[data.Units.Length];
         Queued = new int[data.Units.Length];
@@ -106,6 +107,13 @@ internal sealed partial class AiPlayer
 
     /// <summary>M5-8a: the opening it plays (build order, compositions, attack thresholds); the managers read it, never <see cref="Def"/>'s list.</summary>
     internal AiOpening Opening { get; }
+
+    /// <summary>
+    /// M7-9 (Request 59): the build order it plays, its difficulty's own entry in the opening's <c>buildOrders</c> else the
+    /// opening's <c>buildOrder</c> (the opening's <c>BuildOrderFor</c>), resolved at construction. The executor, the
+    /// rebuild rule, the reserved step and the <see cref="Blackboard"/>'s step arrays all index this list.
+    /// </summary>
+    internal System.Collections.Immutable.ImmutableArray<AiStep> Steps { get; }
 
     /// <summary>
     /// M5-8a: the opening an AI at <paramref name="difficulty"/> plays among <paramref name="count"/>: Easy always the first

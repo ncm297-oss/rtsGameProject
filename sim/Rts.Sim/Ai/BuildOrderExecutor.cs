@@ -43,7 +43,7 @@ internal static class BuildOrderExecutor
     internal static void Run(AiPlayer ai)
     {
         Blackboard board = ai.Board;
-        var steps = ai.Opening.BuildOrder; // M5-8a: the picked opening's
+        var steps = ai.Steps; // M5-8a: the picked opening's; M7-9: its difficulty's list
         int slack = ai.Knobs.BuildOrderSlackTicks;
         if (Retrain(ai)) ai.ExecutorSent = true; // M6-SH2 (BUG-1465 (a))
         ReopenLost(ai); // M5-4d slice 2
@@ -135,7 +135,7 @@ internal static class BuildOrderExecutor
     internal static void ReopenLost(AiPlayer ai)
     {
         Blackboard board = ai.Board;
-        var steps = ai.Opening.BuildOrder;
+        var steps = ai.Steps; // M7-9
         int[] done = ai.DoneOfType, newest = ai.NewestDoneStep, held = ai.HeldOfType;
         int types = ai.Data.Buildings.Length;
         Array.Clear(done);

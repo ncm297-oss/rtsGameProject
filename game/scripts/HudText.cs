@@ -37,4 +37,6 @@ public enum HudText
     LastSeen,
     /// <summary>The selection panel's cue under one unit's state while it heals by regeneration (M7-V3a, <c>RegenCue</c>).</summary>
     Regenerating,
+    /// <summary>M6-V29: the notice while the draw clock runs (<see cref="DrawNotice"/>): a format whose <c>{0}</c> is the time left before the draw in the match clock's format ("No player can train new units. Draw in 5:00 unless a unit falls.").</summary>
+    DrawCountdown,
 }

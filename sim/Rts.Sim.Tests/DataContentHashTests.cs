@@ -202,6 +202,13 @@ public class DataContentHashTests
         if (t == typeof(ImmutableArray<StartingResourcesDef>)) return ((ImmutableArray<StartingResourcesDef>)value!).Add(((ImmutableArray<StartingResourcesDef>)value!)[0]);
         // M5-8a: one more opening (a copy of the first; each opening field: EveryAiStructField_ChangesTheHash).
         if (t == typeof(ImmutableArray<AiOpening>)) return ((ImmutableArray<AiOpening>)value!).Add(((ImmutableArray<AiOpening>)value!)[0]);
+        if (t == typeof(ImmutableArray<ImmutableArray<AiStep>>)) // M7-9: an opening's per-difficulty build orders (absent -> a Hard entry; else one more step)
+        {
+            var a = (ImmutableArray<ImmutableArray<AiStep>>)value!;
+            var one = ImmutableArray.Create(new AiStep { Action = AiStepAction.Train, TargetKey = "x", Count = 1 });
+            if (a.IsDefaultOrEmpty) return ImmutableArray.Create(ImmutableArray<AiStep>.Empty, ImmutableArray<AiStep>.Empty, one);
+            return a.SetItem(2, a[2].IsDefaultOrEmpty ? one : a[2].Add(a[2][0]));
+        }
         if (t == typeof(ImmutableArray<UnitPassive>)) // M4-4b-3a (each field: EveryPassiveField_AndTheirCount_ChangeTheHash)
         {
             var a = (ImmutableArray<UnitPassive>)value!;
@@ -596,7 +603,8 @@ public class DataContentHashTests
             Check(ai.Openings[0], o => With(d, ai: WithOpenings(ai, ai.Openings.SetItem(0, o)), aiSlot: slot));
         }
         foreach (string f in new[] { "Id", "DisplayName", "Description", "BuildOrder", "Compositions", "AttackMinHalfPop", "AttackMinCost",
-            "ReserveArmyShare" }) // M7-6
+            "ReserveArmyShare", // M7-6
+            "BuildOrders" }) // M7-9
             Assert.Contains($"AiOpening.{f}", checkedFields);
         Assert.True(checkedFields.Count >= 60, $"only {checkedFields.Count} fields checked");
     }

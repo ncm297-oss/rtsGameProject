@@ -491,7 +491,8 @@ show text, a minimap ping, and a sound. An alert is raised when one of your buil
 units ("Your units are under attack") loses hit points, at most one per 30 m per 10 s; off screen it shows its text for
 4 s at the top centre, on screen only the ping (3 s) and the sound. Space jumps the camera to the last one. Combat sounds
 (blows, shots, deaths, razing, spells) play only for what you see on screen, at most four starting in any 100 ms; your
-own cues (select, order, refused, building placed or finished, unit or tech ready, alert) always play.
+own cues (select, order, refused, building placed or finished, unit or tech ready, alert) always play. While a spent
+match's draw clock runs, its countdown line sits at the top centre under the alert text ("Game flow" 4; M6-V29).
 
 ## AI opponent
 
@@ -616,6 +617,11 @@ own cues (select, order, refused, building placed or finished, unit or tech read
   two matches against the same faction can open differently while a replay or a save still reproduces the pick
   (built in M5-8a; since D21, 2026-10-18, each faction ships three, listed on its page under "AI build order (Normal)":
   the Malazans Combined arms, Crossbow push and Fast Age II, the Whirlwind Swarm, Raider rush and Holy war).
+- An opening may give a difficulty its own build order (`buildOrders` in `ai.json`, beside the opening's `buildOrder`): a
+  computer player of that difficulty follows its own list, every other difficulty the opening's `buildOrder`, and the
+  army mix and attack thresholds stay the opening's for all of them. So one faction's Easy and Hard players can open
+  differently where one order cannot serve both (built in M7-9, Request 59, for the Teblor, docs/01 2026-11-26 (3);
+  [03 Implementation (M7-9)](03-technical-design.md#implementation-m7-9)). No shipped opening uses it yet.
 - The AI adapts its army to what it has seen. It remembers, per unit slot, how many enemy combat units of that slot it saw
   at once (workers never count, nor an ally's units; only what its own fog-of-war view shows, a teammate's shared sight
   included), and that memory fades linearly to nothing over `rules.json` `ai.counterMemory` (180 s) unless a sighting at
@@ -677,7 +683,7 @@ own cues (select, order, refused, building placed or finished, unit or tech read
    team, or a player with no team) and at least two sides ever built (M6-S4). (Owner decision 2026-10-14; until then: no
    buildings left.) The end-of-match banner is about the local player's **side**: it reads Victory when the match is over
    and the local player's team still stands (even if the local player itself was knocked out earlier and its ally won),
-   Defeat once the local player's whole side is out, and Draw when nobody stands; the stats screen groups its rows by
+   Defeat once the local player's whole side is out, and Draw when nobody stands or the match is drawn (below); the stats screen groups its rows by
    team, the players with no team last under their own "No team" label (Producer default 2026-10-27, M6-V16). A
    player that is out loses its remaining buildings on that tick: they collapse like razed ones (rubble, the ground opens,
    queued research and training go with them), and a collapse is **neither a kill nor a loss** in the stats, which count
@@ -695,9 +701,12 @@ own cues (select, order, refused, building placed or finished, unit or tech read
    The 5 minutes start again from zero whenever a unit dies (a summoned unit's death or expiry does not count), whenever a
    player is knocked out, and whenever the match stops being spent (a cancelled order that refunds enough gold, say). So
    a side that is still finishing the others off with what it has is never cut short, while a stand-off in which nobody
-   loses anything ends; a win on the same tick as the draw would fall is a win. Until the view's next task (M6-V29) the
-   end-of-match banner reads the old rule, so a drawn match shows Victory to a player who still stands; the command-line
-   `match` already prints `result draw`.
+   loses anything ends; a win on the same tick as the draw would fall is a win. A drawn match shows **Draw** on the
+   end-of-match banner to a player whose side still stands, and **Defeat** to one whose whole side was knocked out before
+   it; it never shows Victory, and no screen names a winner (M6-V29; the command-line `match` prints `result draw`).
+   While the 5 minutes run, a line at the top of the screen says so, from the first second: "No player can train new
+   units. Draw in 5:00 unless a unit falls.", counting down; it starts again with the clock and goes when the clock stops
+   or the match ends (in replays and loaded games too).
 5. **Post-match stats:** resources gathered, units trained/lost/killed, buildings built/lost,
    army value over time (graph), time to Age II, and for each AI seat the opening it played ("Malazan Empire opened with
    Combined arms", the opening's description on hover; a human seat shows none; a watched replay shows the same line; built in

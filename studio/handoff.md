@@ -1,420 +1,142 @@
 # Handoff: brief for the next session
 
-Written by the Producer at the ACCEPT of session **2026-11-25-1437** (session 2 / 8 of 2026-11-25, started 14:37,
-ended past midnight: about 9.5 h; the sim builder 5 h 11 m, sim QA 3 h 53 m). Sim **M6-S13** ACCEPT (feature, 0 fix
-rounds, QA full PASS_WITH_ISSUES), view **M6-V28** ACCEPT (feature, 0, QA standard PASS_WITH_ISSUES), data **D36**
-ACCEPT (feature, 0, QA standard PASS_WITH_ISSUES; nothing shipped). **M5 8 / 9 (criterion 6 owner-only), M6 5 / 10,
-M7 3 / 4, M8 0 / 3.** Counters: **sim 1 / 4, view 2 / 4, data 1 / 4**. Bug ids next session: **sim 1770-1789, view
-1790-1799, data 1800-1809**. Open S1 / S2: none. The next session is **1 / 8 of 2026-11-26**.
+Written by the Producer at the ACCEPT of session **2026-11-26-0207** (session 1 / 8 of 2026-11-26, started 02:07).
+Sim **M7-9** ACCEPT (feature, 0 fix rounds, QA full PASS_WITH_ISSUES), view **M6-V29** ACCEPT (feature, 0, QA
+standard PASS_WITH_ISSUES), data **D37** ACCEPT (feature, 0, QA standard PASS; nothing shipped). **M5 8 / 9
+(criterion 6 owner-only), M6 5 / 10, M7 3 / 4, M8 0 / 3.** Counters: **sim 2 / 4, view 3 / 4, data 2 / 4**. Bug ids
+next session: **sim 1810-1829, view 1830-1839, data 1840-1849** (1772-1789, 1793-1799, 1800-1809 unused). Open
+S1 / S2: none. The next session is **2 / 8 of 2026-11-26**.
 
-**Next session in one line (proposal):** sim **M7-9, Request 59: a build order per difficulty inside an opening**
-(feature, QA full; schema + executor on test data, **no hash move, no pin move**: left out = today) · view **M6-V29,
-the draw banner and the countdown notice** (feature, QA standard) · data **D37, the Normal order searched alone, the
-Easy and Hard orders re-measured on the draw rule's `main`, BUG-1760 / 1761** (feature, QA standard; **measured and
-reported, no game data byte**: the three orders ship in D38, the session after Request 59 is on `main`).
+**Next session in one line (proposal):** sim **M8-4: BUG-1771's shared test helper first (D38 needs it), then
+Request 56 G4, the Hounds' 7-alive limit, on test data** (feature, QA full; no AI-play change, no hash move, no pin
+move) · view **M6-V30, the next building models (Whirlwind or Teblor, the same pack)** (feature, QA standard; the
+view's clean-up follows at 4 / 4 with BUG-1790 / 1792) · data **D38, ship the three Teblor orders through
+`buildOrders`** (feature, QA standard; **the session's one hash move**; the owner's review table).
 
-**The default loop on `main` is green.** Expect **0 failed / 21 skipped** (10,447 passed / 0 failed / 21 skipped of 10,468 in 22 m 12 s on the Producer's scratch
-clone `prod1437-accept` of sim f4e0553 + view 4aa99ca + data 995eba7). The skips: the standing ones, minus the two
-BUG-1720 rows (un-skipped), plus QA's BUG-1730 row and BUG-1760 row. Scene loop **126 of 126** (QA, the view branch;
-124 of 124 on the sim branch). Any red row is a finding. Stress ran as a whole category on the sim branch this
-session (979 / 0 / 9 of 988 in 2 h 51 m); Perf alone 214 / 0 / 3.
+**The default loop on `main` is green.** Expect **0 failed / 20 skipped** (10,569 passed / 0 failed / 20 skipped of 10,589 in 22 m 1 s on the Producer's scratch clone
+`prod0207-accept` of sim e2193da + view 3c4cd4f + data a206dd0). The skips: last session's 21 less the BUG-1760
+row (un-skipped by D37). Scene loop **128 of 128, first pass**. Any red row is a finding. Stress did not run as a category this
+session (rule 53: no tick change); sim QA ran the eight pin classes (125 / 0 / 2, no value moved) and Perf alone
+(214 / 0 / 3).
 
 **At the PLAN, first:** (1) the inbox (waiting, none blocking: D33's and D34's tables, "buildings ok", "whirlwind
-colours ok", and now the draw rule and the four buildings; tweaks come before roadmap work); (2) the default loop on
-`main`; (3) the bug index: `studio/bugs/README.md` must hold one row each for BUG-1730, 1731 (open, S4), BUG-1750
-(fixed), BUG-1760 (open, S3), BUG-1761 (open, S4), with BUG-1720 / 1721 "fixed (D36)" and BUG-1536 "closed": three
-branches edited the file's last lines, so check for a lost or doubled row after the conductor's merge; (4)
-`CLAUDE.md`'s "Current milestone" line is still stale (on "Waiting on you"); (5) **the data hash is
-3D93D45345A3B4EA** since the draw rule (`rules.json` `draw`); content classes that rebuild D33's / D34's data take
-the block back out through `Draw.DrawScenes.TakeOutDraw` / `Off` / `TeblorOpeningBeforeDraw` (sim-owned helpers the
-data track may call, not edit); (6) Request 59's shape is the PLAN's to fix (sketch below), with rule 54's
-rehearsal on a scratch clone if it adds a default every test reads; (7) M6-V29 needs a text for the countdown: check
-at the PLAN which `ui.json` key the banner's "Draw" uses and who may add a key (M6-V27 added `orders.queue_full`
-from the view track; if that file is in the data hash, the text is a hash move and must be named as the session's
-one).
+colours ok", the draw rule, the four buildings, and now the draw notice's look; tweaks come before roadmap work);
+(2) the default loop on `main`; (3) **the bug index:** `studio/bugs/README.md` must hold exactly one row each for
+BUG-1760 and BUG-1761, both "fixed (D37...)" (the merge doubled them: an "open" row and a "fixed" row; drop the
+"open" one if the conductor did not), and one row each for BUG-1770, 1771, 1790, 1791, 1792; (4) **BUG-1791: restore
+the heading yourself** (docs drift, one line): in `docs/03-technical-design.md`, put `## Vision, detection, fog` and
+a blank line back before the paragraph that starts "Fog of war and the high-ground rule are in since M4-3a" (it now
+runs on at the end of "Implementation (M6-V29)"), check `grep -n "^## Vision, detection, fog"`, and set the bug
+fixed; (5) `CLAUDE.md`'s "Current milestone" line is still stale (on "Waiting on you"); (6) **rule 54 / 55's
+rehearsal for D38, because it is the first shipped file to carry `buildOrders` and the first to carry
+`throughReserve`:** on a scratch clone write the Teblor `standard` exactly as D38 will (`buildOrder` = the Normal
+fixture's steps, `buildOrders.easy` = the Easy fixture's, `buildOrders.hard` = the Hard fixture's; the fixtures are
+`sim/Rts.Sim.Tests/Content/Fixtures/teblor_standard_d37_<difficulty>.json`), run the default loop and the Stress
+classes that forge or read the Teblor `standard` (`Stress/ReserveSwitchReportTests`, QA's
+`M78ReserveSwitchQaStressTests`, the M7-9 rehearsal row
+`M79PerDifficultyAiQaTests.TheDataTracksRehearsal_*`, `FarExpandProbeQaStressTests`), and sort the red list into
+"D38 re-pins" (data-owned or handed by name), "the sim's helper fix (BUG-1771)" and "other" before writing the two
+briefs. Sim QA's rehearsal this session had `buildOrder` unchanged and no shipped switch, so its list of 8 is a
+floor, not the list.
 
-## Current session plan (2026-11-26-0207, session 1 / 8 of 2026-11-26; written at the PLAN)
+## Proposed briefs
 
-All three tracks GO, all feature sessions (counters before: sim 1 / 4, view 2 / 4, data 1 / 4). Bug ids: sim
-1770-1789, view 1790-1799, data 1800-1809. **No hash move this session:** the sim and the data track ship no byte
-under `game/data/`; the view adds text keys to `game/data/common/ui.json` only (view data: the sim never loads it,
-so it is not in the data hash; handed to the view track by name this session, the sim does not touch it). Inbox New
-was empty. Rule 54's rehearsal is not needed (Request 59 adds an optional field with no shipped entry; no default
-any test reads).
+### Sim: M8-4, BUG-1771 first, then Request 56 G4 (feature, QA full)
+(0) **BUG-1771 (S3; first, and D38 depends on it):** one shared helper (for example in `AiScenes`) that sets an
+opening's build order on a JSON copy **and removes `buildOrders`**, used by every test site that writes
+`o["buildOrder"] = ...` (about 100; grep `\["buildOrder"\]\s*=`), `WorkerCarryTests.s_teblorQuiet` among them; and
+the helpers that forge the Teblor `standard` (`Ai/TeblorSwitchOrders`, `Ai/PerDifficultyOrders`,
+`Stress/ReserveSwitchReportTests`) tolerate a shipped file that already carries `buildOrders` and `throughReserve`
+(rule 58). Prove it as rule 59 asks: run the touched classes on a copy of the shipped data written as D38 will
+write it (the three D37 fixtures), not only on today's data. No expected value changes. (1) **BUG-1770 (S4, a few
+lines in the same loader):** a `null` or `[]` entry does not count toward ruling (a). (2) **Request 56 G4:** the
+Hounds' 7-alive limit as a generic data hook, on test data only (docs/factions/shadow.md, docs/03 "For the data
+track (M8-3)" for the shape of G2 / G3). Out: any AI-play change (the AI-play session is the one after, so D38's
+orders ship on the `main` they were measured on), any byte under `game/data/**`, existing classes under `Content/`
+and `QA/Content/`. The data developer edits the hash pins and fixture pins of D38's list; the sim developer does not
+touch those rows.
 
-PLAN checks on scratch clone `prod0207-plan` at base 1e8652c: build `--no-incremental` 0 errors / 0 warnings; the
-default loop **10,447 passed / 0 failed / 21 skipped of 10,468 in 23 m 12 s**; smoke **PASS**. Verified claims:
-`match --map pale_hills --players 4 --seed 4` ends `result draw at tick 63124 (52:36)` (the session log's pin);
-six Malazan building model folders exist of 30 building types (M6-V28). The bug index holds one row each for
-BUG-1730, 1731, 1750, 1760, 1761, with 1720 / 1721 fixed and 1536 closed (no lost or doubled row).
+### View: M6-V30, the next building models (feature, QA standard)
+The Whirlwind's or the Teblor's buildings from the same pack, through M6-V26 / V28's import path (the data `scale`
+on a model's height when a Teblor building follows); pictures at zoom 40 and 20; the bench alone (rules 61 / 77).
+`tools/asset-manifest.json`, `tools/import-assets.ps1`, `tools/art/**` are the view's. Out: `Match.ResultFor`,
+`DrawNotice` (BUG-1790's two-sided fix, BUG-1792 and the wrong sentence in docs/03 "Implementation (M6-V29)"
+Question 1 are the first items of the view's clean-up, the session after: counter 4 / 4). Write the Producer's
+answers to M6-V29's Questions 1-3 (docs/01, the second 2026-11-26 row, (2)) into docs/03 "Implementation (M6-V29)"
+(rule 67).
 
-### Sim: M7-9, Request 59: a build order per difficulty inside an opening (feature, QA full)
-
-Goal: Let an `ai.json` opening carry its own build order for a difficulty, so the data track can give the Teblor's
-Easy and Hard computer players the orders that were measured to work for them (D38, next session). Schema, loader,
-validation, content hash and the executor, on test data only. An opening that leaves the field out plays, hashes,
-saves and loads exactly as today.
-
-Scope:
-- **Schema.** An opening gains an optional object `buildOrders` whose keys are difficulty ids
-  (`DataLimits.AiDifficultyIds`: `easy`, `normal`, `hard`) and whose values are step lists under exactly
-  `buildOrder`'s rules (the same `BuildAiSteps`, errors at `openings[i].buildOrders.<difficulty>[k]...`, the same
-  step limit, the two M7-8 switches, the expand rules). `buildOrder` stays required: it is the list of every
-  difficulty without an entry. Example: `"buildOrder": [ ... ], "buildOrders": { "easy": [ ... ], "hard": [ ... ] }`.
-- **Producer rulings (write them into docs/03):** (a) entries for all three difficulties are one error at
-  `openings[i].buildOrders` (then `buildOrder` could never be played: "write one of them as buildOrder"); (b)
-  `"buildOrders": null`, `{}`, an entry that is `null` and an entry that is `[]` are each one error (leaving the field
-  or the key out is how a file says "no entry"); (c) an unknown key is an error under the loader's existing
-  unknown-property policy; (d) an entry equal to `buildOrder` step for step is allowed; (e) `description`,
-  `compositions` and `attack` stay one per opening.
-- **Data type.** `AiOpening` gets the per-difficulty lists and one accessor, `BuildOrderFor(AiDifficulty)` (the
-  entry, else `BuildOrder`).
-- **The AI.** `AiPlayer` resolves its list once at construction (a cached field, e.g. `Steps`) and every reader uses
-  it: the `Blackboard`'s step-array size (`AiPlayer.cs` line 47), `BuildOrderExecutor.Run` and `ReopenLost`, and
-  anything else indexed by step (the reserve step, the rebuild counters). Nothing under `sim/Rts.Sim/Ai/` reads
-  `Opening.BuildOrder` afterwards.
-- **Content hash.** `GameData.AddOpening` hashes the lists only when the field is present (a marker, then each
-  present difficulty's id and steps, in difficulty order), so today's data hashes as today and the golden's header
-  holds.
-- **Saves and replays.** No format change. A seat's saved step arrays are as long as its own list; check what a
-  save whose step-array lengths differ from the seat's list does today (refused) and that it still does.
-- **Docs.** docs/02 "AI opponent" (one paragraph); docs/03 "Implementation (M7-9)" with a **"For the data track"**
-  row (the JSON shape, rulings (a)-(e), which list a seat plays, that file order is behaviour inside each list) and
-  the `ai.json` schema lines; a "Questions for the Producer" list with recommendations (rule 67). Also write the
-  Producer's answers to M6-S13's Questions 1-5 (docs/01, the 2026-11-26 row, (1)) into docs/03 "Implementation
-  (M6-S13)".
-- **Test data only.** Forge the openings on copies of the shipped data; a helper that forges `buildOrders` must
-  tolerate the shipped file already carrying it (look the opening up, then add or edit: rule 58, D38 lands next
-  session).
-- OUT of scope: any byte under `game/data/**` (factions and common; `game/data/common/ui.json` is the view's this
-  session); any other change to how the computer player plays (BUG-1661, 1660, 1555, 1554 / 1556, 1490, 1558 are
-  the next sim session); per-difficulty compositions, attack thresholds or time offsets (a Question if you think one
-  is needed); BUG-1730, BUG-1731; existing classes under `sim/Rts.Sim.Tests/Content/` and `QA/Content/` (the data
-  track's; one exception in criterion 5).
-
-Acceptance criteria:
-1. Loader: a file with one or two entries loads; each of rulings (a), (b) (four cases) and (c) has a row with its
-   path and message; the step errors of `buildOrder` reproduce under a `buildOrders.<difficulty>` path (at least:
-   unknown id, another faction's id, a switch on the wrong action, a duplicate step, an expand step with an id, a
-   count out of range, more steps than the limit); several errors in one file are all reported.
-2. `BuildOrderFor`: for each of the three difficulties, with and without an entry, the right list.
-3. **Twin proof, each difficulty:** a seat of difficulty D on data {`buildOrder` A, `buildOrders.D` B} issues the
-   same command stream and reaches the same unit and building census as a seat of difficulty D on data
-   {`buildOrder` B}, tick for tick, for at least 12,000 ticks on one two-seat match per difficulty (compare the
-   state hash every tick if it does not fold the data hash; else the commands and the census); and a seat of another
-   difficulty on the first data plays A (same twin against {`buildOrder` A}). A and B must differ in a step that
-   comes due before tick 2,000, in a rebuilt building, in a `throughReserve` train step and in the expand step's
-   position, so the rebuild rule, the reserve and both switches run on a per-difficulty list.
-4. **Off is identical:** `git diff <base> -- game/` is empty; the golden replay and its header are unchanged; the
-   shipped content hash equals the golden header's (the existing rows; never a literal: rule 73); the default loop
-   is green with no existing expected value edited.
-5. The only existing tests edited are shape pins that count `AiOpening`'s / the JSON type's members
-   (`DataContentHashTests` and `DataNullPolicyTests` gain rows). If a class under `Content/` or `QA/Content/` goes
-   red only because `AiOpening` gained a member, make the smallest fix there and name the file in the first lines of
-   your report (the data developer edits only `UnitHitBonusText*`, `D36Bug1720QaTests` and new `D37*` files).
-6. Hash: data with the field differs from data without; two files differing in one step of `buildOrders.hard` hash
-   differently; the key order inside the JSON object does not change the hash.
-7. Save: a save taken mid-order (steps done, one command pending) by an Easy and a Hard seat on per-difficulty data
-   loads and stays tick-identical to the unsaved twin for 6,000 ticks; a save with a wrong step-array length is
-   refused.
-8. Determinism: a four-seat match (easy, normal, hard, hard seats of the forged faction) twice in one process and
-   once across two processes: equal hashes at every checkpoint.
-9. No new allocation in a think (the list is a cached field); the existing AI cost and allocation rows are green.
-10. A source row: no file under `sim/Rts.Sim/Ai/` contains `Opening.BuildOrder`.
-11. Docs as scoped; `DataValidationTests` green on the shipped data.
-12. Green: `dotnet build RtsGame.sln --no-incremental` 0 errors / 0 warnings after the last edit; the default loop
-    (`--filter "Category!=Perf&Category!=Stress&Category!=Soak"`) 0 failed, 21 skipped, run in full after the last
-    edit (rule 62). Do **not** run the whole Stress category (rule 53: no tick changes with the field absent); run
-    your own new Stress rows only.
-
-Design references: `studio/STATE.md` "Requests for the sim track", Request 59; docs/01 2026-11-26 row (3); docs/03
-"Implementation (M5-8a)" (openings), "(M5-2)" (the executor's semantics), "(M5-4g)" (the reserve), "(M7-6)"
-(`reserveArmyShare`: the model for an optional field hashed only when present and its `null` policy), "(M7-8)" (the
-two switches); `sim/Rts.Sim/Data/DataLoader.Ai.cs`, `AiOpening.cs`, `GameData.cs` `AddOpening`,
-`Ai/BuildOrderExecutor.cs`, `Ai/Blackboard.Save.cs`.
-
-Tests required: loader rows (criterion 1), accessor rows, the three twins, hash rows, the save rows, the
-determinism rows (the two-process one may be Stress), the source row.
-
-Constraints: no stat or order in C#; no allocation per think; no `Dictionary` iteration where order matters (the
-JSON object's keys are read in difficulty order); no Godot in `Rts.Sim`; docs in the same commit. Process: record
-the PID of every `dotnet test` you start and end only those (rules 52 / 69); scratch folders named `m79-...` (rule
-63); bug-file updates as a patch in your scratch folder (you cannot write `studio/**`).
-
-QA focus (full): attack the loader (every ruling, mixed valid and invalid entries, a 10,000-step entry, an entry
-naming another faction's units, the same step in `buildOrder` and an entry, keys in odd case such as `Easy`);
-prove "off is identical" yourself: per-tick hashes of three shipped-data AI matches (one per map, one with a Teblor
-seat) against the base commit; apply the "For the data track" row to the shipped Teblor `ai.json` on a scratch
-clone (K9KC10S as `easy`, QRD1 as `hard`, from `Content/D36TeblorOrderSearchReportTests.AllVariants`) and check it
-loads, that the Easy seat's first 15 minutes equal the K9KC10S-as-`buildOrder` run, and which sim-owned tests go
-red on that copy (rule 58: a list for D38's brief, not a finding unless a helper breaks); saves across the
-difference (a save made on per-difficulty data refused on data without it, by the hash); an opening picked by a
-Normal / Hard seat's seeded draw with entries in only one of two openings. Suites: the default loop on the commit
-with your files, then these Stress pin classes once (any moved value is S2): `AiDeterminismTests`,
-`HuntStressTests`, `M6Sh2DeterminismStressTests`, `M6Sh2QaStressTests`, `StarvedSaveTwoProcessQaStressTests`,
-`ReservePairingsStressTests`, `FarExpandProbeQaStressTests`, `DrawStalledRowsReportTests`; not the whole Stress
-category; Perf alone under rule 42 last. End with the `--no-incremental` build (rule 65).
-
-### View: M6-V29, the draw on screen: the banner, the stats screen and a countdown (feature, QA standard)
-
-Goal: The owner's draw rule is in the sim (M6-S13), but a drawn match still shows "Victory" to a player who is
-standing, and nothing tells the player the draw clock is running. Show "Draw" wherever a result is shown, and a
-countdown while the clock runs, so the player knows the match is about to end and that a kill restarts the clock.
-
-Scope:
-- **The result.** `Match.ResultFor` reads `World.MatchDrawn` before it looks for a winner. Producer ruling: in a
-  drawn match the local player's side gets **Draw** if it stands at the draw, and keeps **Defeat** if the whole
-  side was out before it (nobody is defeated by a draw, and nobody who lost is un-defeated by one); the same answer
-  whether the result is latched live, read after loading a save, or reached in replay playback.
-- **Every place a result or a winner is shown:** the banner, the stats screen (title, any per-row or per-team
-  result; a standing seat's "Defeated at" cell stays "Standing"), the Load Game list if it names a result. Find them;
-  a drawn match names no winner anywhere.
-- **The countdown notice.** Shown exactly while `World.DrawTicksLeft >= 0` (the clock runs), from its first tick
-  (Producer decision: the state is rare and the player should learn at once why the match will end and what stops
-  it; the alternative, only the last 60 seconds, is one inbox line away). Text from `game/data/common/ui.json`, a
-  new key (proposed English: "No player can train new units. Draw in {0} unless a unit falls."), the time as the
-  remaining game time rounded up to a second in the existing clock format. It restarts with the clock, disappears
-  the tick the clock stops or the match ends, shows in replay playback and after loading a save taken mid-clock,
-  never takes a click, and sits clear of the resource bar, the alert text, the order notice, the minimap and the
-  command card at 1152 x 648 and 1920 x 1080. Its label text is rewritten only when the shown second changes.
-- **Scenes.** A new scene (e.g. `DrawViewTest`) on a data copy with a short `draw.afterSeconds`: a spent two-seat
-  match shows the notice, it counts down, a kill restarts it, the draw shows "Draw" (not "Victory") and the stats
-  screen agrees; a local player out before the draw reads "Defeat"; a team match (local out, ally standing at the
-  draw) reads "Draw"; a recorded drawn match in playback and a save taken mid-clock show the same. A scene that
-  writes store arrays directly calls `World.RecountDraw()`. Pictures at zoom 40 of the notice and of the banner
-  into your scratch folder (the Producer copies them for the owner).
-- **Docs.** docs/02 "Game flow" 4: replace the sentence "Until the view's next task (M6-V29) the end-of-match banner
-  reads the old rule..." with what is built; docs/03 "Implementation (M6-V29)" with Questions for the Producer
-  (rule 67); write the Producer's answers to M6-V28's Questions 1-5 (docs/01, the 2026-11-26 row, (2)) into docs/03
-  "Implementation (M6-V28)".
-- Files: `game/**` outside `game/data/**`, plus `game/data/common/ui.json` (new keys only; handed to you this
-  session). No ViewApi change is expected (`MatchDrawn`, `DrawTicksLeft`, `DrawWaitTicks` are public on `World`).
-- OUT of scope: any file under `sim/` (a need goes to "Requests for the sim track" in your report); any other data
-  file; an alert sound for the countdown unless it is one line reusing an existing clip; building models; BUG-1710.
-
-Acceptance criteria:
-1. A drawn match with the local side standing shows "Draw" on the banner and the stats screen, live, in replay
-   playback and after a load; never "Victory" (scene rows for each).
-2. A local side out before the draw shows "Defeat"; a local player out with an ally standing at the draw shows
-   "Draw" (scene rows).
-3. No screen names a winner of a drawn match (the stats screen, the Load Game list if it shows results).
-4. The notice is visible on every tick with `DrawTicksLeft >= 0` and on no other tick, across: the clock starting,
-   a restart by a death, the clock stopping without a draw (a seat can train again), the draw, a win while it
-   runs (scene rows; a row that steps the sim through `SimRunner.Ticked`).
-5. The shown time equals `ceil(DrawTicksLeft / 20)` seconds in the clock format, on the first tick, mid-way and on
-   the last tick; with `DrawWaitTicks == 0` (no rule in the data) the notice never shows.
-6. The notice takes no click (a click through it selects what is under it) and overlaps none of the listed HUD
-   parts at both sizes (rect rows and the pictures).
-7. Every text is read from `ui.json`; the diff adds no player-facing C# literal; `ui.json` gains keys and changes
-   none; no other file under `game/data/` changes; `git diff <base> -- sim/` is empty.
-8. The existing scenes that play to a result are green unchanged in what they assert, or changed with the reason
-   stated: `MatchOverViewTest`, `QaM6V4Test`, `FreeForAllTest`, `TeamsTest`, `AiSeatTest`, `QaM6V5Test`,
-   `QaM6V11Test`, `QaM6V14Test`, `QaM6V15Test`, `QaM6V16Test`, `ShellTest`, `StatsScreenCheck`,
-   `ReplayPlaybackTest`.
-9. Green: build `--no-incremental` 0 / 0; `powershell -File tools/qa/smoke.ps1` PASS; the scene loop all green
-   (126 on the base plus yours); the default loop (`--filter "Category!=Perf&Category!=Stress&Category!=Soak"`)
-   0 failed, 21 skipped, run in full after the last edit (rule 62).
-10. Docs as scoped; you looked at the two pictures before reporting and say what they show.
-
-Design references: docs/02 "Game flow" 4 (the draw paragraph); docs/01 2026-11-26 row (1) (a draw is final) and
-(2); docs/03 "Implementation (M6-S13)" (the accessors), "(M6-V4)" and "(M6-V16)" (the banner's rule and sides),
-"(M6-V27)" (the order notice: the model for a small data-text notice); `game/scripts/Match.cs` `ResultFor` /
-`OnTicked`, `MatchOutcome.cs`, `MatchOverBanner.cs`, `MatchStats.cs`, `AlertHud.cs`, `OrderNoticeView.cs`.
-
-Tests required: the new scene with the rows above; any ViewApi-free unit rows you find useful.
-
-Constraints: views hold no gameplay state (the notice reads the sim each frame or tick, stores nothing but what it
-shows); player-facing text only in data; C# only; no sim change. Process: PIDs recorded, end only your own Godot /
-test hosts (rules 52 / 69); scratch folders named `m6v29-...` (rule 63); a smoke that fails once on stale import
-state is re-run once.
-
-QA focus (standard): the edges of the notice (the tick the clock starts, each restart, the last tick, a win and a
-draw on neighbouring ticks, game speed 2x / 4x with several ticks a frame, pause, the pause menu open, a load
-mid-clock, replay playback and a seek if playback has one); four-seat and team matches (which seats read Draw,
-which Defeat); a long faction or text at 1152 x 648; the banner and stats screen on a drawn match where one seat
-fell after the draw (the sim says a draw is final: the view must too). Suites: the default loop, the scene loop,
-smoke; no Stress, no Perf.
-
-### Data: D37, the Teblor orders per difficulty, measured (feature, QA standard; no byte under `game/data/`)
-
-Goal: Have the three Teblor build orders ready to ship the moment the sim's Request 59 is on `main` (D38, next
-session): find Normal's order now that it no longer has to serve Easy and Hard, confirm Easy's (K9KC10S) and
-Hard's (QRD1) on the draw rule's `main`, and close two small check bugs. **Measured and reported only: no byte
-under `game/data/` this session.**
-
-Scope:
-- (0) Nothing from the owner is waiting (inbox New is empty).
-- (1) **Normal alone.** A bounded search for an order that meets every Normal figure of the bar. Start from the
-  shipped order M (Normal: defeated 9, second Longhouse 23, Shaman 15, Breaker 14, Rider 22, War-dog 37, Anointing
-  17: only the Shaman short) and RSC (9 / 23 / 31 / 12 / 26 / 38 / 13: only the Anointing short), with QA's QSH and
-  QSR. **The levers (rule 78), each varied or said not to be:** the Shaman step's count (1 or 2) and position; the
-  Shamans' Circle's time; the Anointing step's time and position; the Carver's time; which train steps carry
-  `throughReserve`. Not `noReserve` on `armor_1` (inert before 15:00) and never `noReserve` on the expand step.
-  **At most eight orders measured on the full 64 Normal seats to 15:00**; reduced screens to choose candidates are
-  free but are not evidence. Write them in a **new** report class named `D37...` (Stress category). At most 6
-  threads.
-- (2) **Easy and Hard re-measured on this `main`:** K9KC10S on Easy's 64 seats and QRD1 on Hard's 64. A 15-minute
-  match is never spent, so the draw rule cannot have moved them: they must equal D36's (K9KC10S Easy 1 / 0 / 38 /
-  28 / 34 / 42 / 22; QRD1 Hard 11 / 23 / 23 / 40 / 42 / 47 / 25). If one differs, stop and say so in the first
-  lines of your report.
-- (3) **The bar** (docs/01 2026-11-24 ACCEPT (3)(c), unchanged): Normal: Anointing at least 17, Rider 22, War-dog
-  37, Shaman 20, Breaker 12, second Longhouse 18, defeated at most 10. (Easy and Hard as in teblor.md.)
-- (4) **Fixtures.** `sim/Rts.Sim.Tests/Content/Fixtures/teblor_standard_d37_easy.json`, `..._normal.json`,
-  `..._hard.json`: each the whole `standard` opening as a plain opening (its order as `buildOrder`; today's schema,
-  no `buildOrders` field), with a default-loop row per fixture that loads it through the shipped loader on a copy
-  of the shipped data and checks its steps are the measured order's and the opening's tooltip is still true. The
-  Normal fixture is the order that meets the bar, or, if none does, the nearest (by figures missed, then seats
-  short), named as such.
-- (5) `docs/factions/teblor.md`: a "The unit mix, per difficulty (D37)" section with the table (order | defeated /
-  second Longhouse / Shaman / Breaker / Rider / War-dog / Anointing | figures missed | seats short) for every
-  Normal order measured and the two re-measured rows; the lever table; the Producer's answers to D36's Questions
-  1-3 written in (docs/01, the 2026-11-26 row, (3) and (4); rule 67); BUG-1761 ("below" -> "above"); new Questions
-  with your recommendation.
-- (6) **BUG-1760:** in `Content/UnitHitBonusText`, "first-shot" with a hyphen (and with any dash or several
-  spaces) counts as first-shot words; QA's skipped row in `QA/Content/D36Bug1720QaTests` is un-skipped and green,
-  with rows failing first.
-- Files you may change: `docs/factions/teblor.md`; under `sim/Rts.Sim.Tests/Content/` and `QA/Content/`: new files
-  named `D37*`, the three fixtures, `UnitHitBonusText*` and its tests, `D36Bug1720QaTests`. **No other existing
-  content class** (the sim developer may make a one-line shape fix in one if `AiOpening` gaining a member turns it
-  red).
-- OUT of scope: any file under `game/data/`; C# outside the two content folders; the `buildOrders` schema (the
-  sim builds it beside you; do not use it); shipping an order (D38); the other factions; the Shadow roster;
-  closing BUG-1612 (D38).
-
-Acceptance criteria:
-1. The report lists every lever of (1) as varied (with the values tried) or not varied (with the reason), and at
-   most eight orders on the full Normal row, each with its steps or its difference from M / RSC.
-2. The Normal table, with M's and RSC's rows re-measured first (they must equal 9 / 23 / 15 / 14 / 22 / 37 / 17
-   and 9 / 23 / 31 / 12 / 26 / 38 / 13; if not, stop and say so). Measure and report: either "order X meets every
-   Normal figure" backed by its row, or "none of these meets the bar" with the nearest by the stated rule. Neither
-   outcome fails the task; a wrong "nearest" or a claim its row does not back does.
-3. The two re-measured rows of (2) equal D36's, or the report's first lines say which cell moved.
-4. Three fixtures, each with a green load row, each carrying no `noReserve` on its expand step and no
-   `buildOrders` field; the fixture's steps equal the order the table measured.
-5. `git diff <base> -- game/` is empty; the shipped data hash still equals the golden header's (the existing rows).
-6. teblor.md says what (5) asks, its prose pins are green, and no sentence on the page contradicts the tables.
-7. BUG-1760: the QA row un-skipped and green; new rows in both directions (a description claiming a first-shot
-   bonus with "first-shot" on a unit without the field fails the check; a true one passes); every shipped
-   description of the three factions and the Shadow page's still passes.
-8. Green: build `--no-incremental` 0 / 0 after the last edit; the default loop
-   (`--filter "Category!=Perf&Category!=Stress&Category!=Soak"`) 0 failed, 20 skipped (21 on the base less the
-   BUG-1760 row), run in full after the last edit (rule 62); the `D37` report class is Stress and not in it.
-
-Design references: docs/01 2026-11-24 ACCEPT (1)(e) and (3)(c), the 2026-11-26 row (3) and (4);
-`docs/factions/teblor.md` "The unit mix, second search" (the order names, the lever table) and "Questions for the
-Producer (D36)"; docs/03 "Implementation (M7-8)" (file order is behaviour); `Content/D36TeblorOrderSearchReportTests`
-(`AllVariants`, the row player), `QA/Content/D36TeblorOrderQaStressTests` (QSH, QSR, QSRS);
-`studio/bugs/BUG-1760-*.md`, `BUG-1761-*.md`, `BUG-1612-*.md`.
-
-Tests required: the `D37` report class (Stress); the three fixture load rows; BUG-1760's rows (failing first).
-
-Constraints: player-facing text only in data (none changes); no C# outside the two content folders; no data byte.
-Process: PIDs recorded, end only your own test hosts (rules 52 / 69); scratch folders named `d37-...` (rule 63);
-bug-file updates as a patch in your scratch folder.
-
-QA focus (standard): rule 75: before agreeing with the Normal result, try up to three Normal-row orders of your
-own on levers the report says were not varied, and re-run the developer's best Normal row and both re-measured
-rows; check each fixture is the order the table measured (load it, diff its steps against the report class's
-order); check "nearest" by the stated rule; read teblor.md against the tables line by line. BUG-1760: en dash, em
-dash, non-breaking hyphen, "first  shot" with two spaces, "First-Shot" in capitals, "first-shots", and a sentence
-with "first" and "shot" far apart (must not count). Suites: the task's filters, the default loop with criterion
-8's filter, and only the `D37` / `D36` Stress rows you re-run (rule 53); at most 6 threads.
-
-## Proposed briefs (superseded by the plan above; kept for the record)
-
-### Sim: M7-9, Request 59, a build order per difficulty (feature, QA full)
-Why: docs/01 2026-11-26 ACCEPT (3). Two searches (28 full-row Teblor orders) found no single order that meets the
-bar on Easy, Normal and Hard; one meets every Easy figure (K9KC10S), one every Hard figure (QRD1).
-Sketch (the PLAN decides the exact names): an opening in `ai.json` may carry, beside `buildOrder`, an optional
-per-difficulty list (for example `"buildOrders": { "easy": [...], "hard": [...] }`); a seat of a difficulty with an
-entry plays that list from its first think, any other plays `buildOrder`; each list is validated exactly as
-`buildOrder` is (ids, the two switches, the expand step); left out = today's behaviour, today's content hash and
-today's saves (hashed only when present); a JSON `null` policy row; the executor's saved step state is per seat, so
-check a save taken mid-order loads on the same list. Schema, loader, `DataValidationTests`, the executor, test data
-only plus the minimum entries the tests need (**no byte in `game/data/factions/**`**: the data track ships the
-content in D38). "Off is identical": every pinned AI match unchanged (no pin class may move; rules 43 / 71 / 74).
-docs/02 "AI opponent", docs/03 "Implementation (M7-9)" with a "For the data track" row. Out: any other AI-play
-change (BUG-1661, 1660, 1555, 1554 / 1556, 1558 stay the session after), BUG-1730, BUG-1731.
-
-### View: M6-V29, the draw on screen (feature, QA standard)
-The sim's rule is on `main`: `World.MatchDrawn` (read it **before** looking for a winner: a draw is final even if a
-side falls later, docs/01 2026-11-26 (1)), `World.DrawTicksLeft` (-1 = not running; else the ticks to the draw),
-`World.DrawWaitTicks`. Today a drawn match shows "Victory" to a seat still standing. Build: the banner and the
-stats screen read "Draw" for every seat of a drawn match (replays and loaded saves too); a countdown notice while
-the clock runs (for example "No side can train: draw in 4:59", shown from the first spent tick or from the last
-N seconds, the developer proposes, pictures at zoom 40); it disappears the tick the clock restarts. Scenes that play
-to a result (rule 50's list) checked. Text from data. Out: any sim change; an alert sound unless it is one line.
-
-### Data: D37, the Teblor orders per difficulty, measured (QA standard; no byte under `game/data/`)
-(0) The owner's answers, if any. (1) **Normal alone:** a bounded search (rule 78's levers named again; at most eight
-full rows of 64 Normal seats) for an order that meets every Normal figure of the bar (RSC misses only the
-Anointing, 13 of 17; QSH and QSR are QA's nearest); (2) **re-measure K9KC10S on Easy and QRD1 on Hard** on this
-`main` (the draw rule moved the hash; a 15-minute match is never spent, so the figures must be D36's exactly: if not,
-stop and say so); (3) the three orders as fixtures (`Content/Fixtures/teblor_standard_d37_<difficulty>.json`, each
-loading as a plain opening on a copy of the shipped data) and teblor.md's table; (4) BUG-1760 (hyphenated
-"first-shot" reads as first-shot words; QA's row un-skipped) and BUG-1761 ("below" -> "above"); the Producer's
-answers to D36's Questions 1-3 written into teblor.md (docs/01 2026-11-26 (3) (4); rule 67). Files: teblor.md, new
-`D37*` classes, the fixtures, `UnitHitBonusText*`, `D36Bug1720QaTests`. The sim builds Request 59 beside it and
-touches no content class. D38 (the session after): ship the three orders through Request 59's schema, one hash
-move, the owner's review table.
+### Data: D38, ship the three Teblor orders (feature, QA standard; the session's one hash move)
+`game/data/factions/teblor/ai.json`, the `standard` opening only: `buildOrder` = M1RS (the Normal fixture),
+`buildOrders` = `{ "easy": K9KC10S, "hard": QRD1 }` (the Easy and Hard fixtures), each step for step as measured;
+description, compositions and attack unchanged. docs/03 "For the data track (M7-9)" is the schema's page. **Measure
+on the shipped file, all three difficulties' 64 seats (rule 75): the rows must equal D37's** (Easy 1 / 0 / 38 / 28 /
+34 / 42 / 22, Normal 9 / 23 / 23 / 18 / 30 / 40 / 18, Hard 11 / 23 / 23 / 40 / 42 / 47 / 25); if a cell differs, stop
+and say so. Pins handed by name (rule 51; the PLAN's rehearsal completes the list): the golden's header and the two
+golden-hash rows (`FactionOrderTests.TheShippedContentHash_IsTheGoldenHeaders`,
+`QA/PackQaTests.TheShippedDataHash_IsTheGoldenHeaders`),
+`StillStealthLoaderTests.TheHash_IsUnchangedWithoutTheField_MovesWithIt_AndWithEachField`,
+`Content/D34HashMoveTests`, `QA/Content/D33QaTests`, `QA/Content/D34QaTests`,
+`Content/TeblorOpeningFixtureTests.TheShippedOpening_IsTheD34Fixture`; **not** `WorkerCarryTests` (the sim fixes
+its helper beside you: that one row, named, may be red on your branch and must be green on the merged tree: rule
+68). `QA/Content/D32DescriptionQaTests.Shamans_HaveTheirOwnTrainStep_AfterTheCircleStep` reads every list by
+position in the file, not by due time (docs/01, the second 2026-11-26 row, (3)). teblor.md: "AI build order
+(Normal)" = M1RS, a short "Easy" and "Hard" note, BUG-1612 closed with the three rows, the Producer's answers to
+D37's Questions 1-3 written in (rule 67). The owner's review table: per difficulty, before (D34's order) and after,
+the seven figures, in plain words. Older saves and recordings stop loading: say so. Then BUG-1421 item 1.
 
 ## Where things stand
 
-- **`main` after this session = sim f4e0553 + view 4aa99ca + data 995eba7** (plus this ACCEPT's studio and docs
-  files). Scratch clone `prod1437-accept` (code merged clean; only `studio/bugs/README.md` conflicted): build
-  `--no-incremental` 0 / 0, default loop **10,447 passed / 0 failed / 21 skipped of 10,468 in 22 m 12 s**, smoke **PASS**, scene loop **126 of 126, first pass**. The Producer also
-  played `match --map pale_hills --players 4 --seed 6` on the merged tree: `result draw at tick 51216 (42:40)`.
-- **The data hash moved: A732F387C2BB7E4D -> 3D93D45345A3B4EA** (`rules.json` `"draw": { "afterSeconds": 300 }`).
-  Saves and recordings from before this session no longer load. Save format 10 kept; a `DRAW` part sits inside
-  `WRLD` after the result flag only when the clock runs or the match is drawn.
-- **The draw rule (M6-S13):** `sim/Rts.Sim/World.Draw.cs` (phase 11c, after the defeat check): `CanStillTrain`,
-  `MatchSpent`, `DrawClock`, `MatchDrawn`, `DrawTicksLeft`, `DrawWaitTicks`; counters in
-  `Economy/PlayerLedger.Draw.cs` (`LiveWorkers`, `QueuedUnits`, `CarriedGold`) and `ResourceStore.GoldLeft`, derived,
-  not hashed or saved, recounted at a load; **a test that writes store arrays directly must call
-  `World.RecountDraw()`**. Hash bit 37 of every player's word plus two words, only when the state is set ("zero is
-  free": QA compared every tick of three never-spent matches with the base). Test helpers: `Draw/DrawScenes`
-  (`Off` = shipped data without the block, `TakeOutDraw(dir)`, `TeblorOpeningBeforeDraw(opening)`), QA's
-  `QA/DrawQaOracle` (a scan-based second opinion).
-- **Stalled rows now:** Pale Hills four-seat seed 1 draw 61,779; seed 2 draw 58,378 (was p1 at 59,951); seed 3 never
-  spent, p1 at 40,674; seed 4 draw 63,124; seed 6 draw 51,216; seed 7 draw 80,167. Still skipped: the Vathar
-  four-seat seed 2 row (BUG-1621 / 1610, never spent), `ALoneIdleWorker_*` (BUG-1116), the Pale Hills 2v2 seed 2 row
-  (BUG-1149). Hard v Normal tally unchanged, printed as hard / normal / draw / none: **34 / 5 / 0 / 3** (one Pale
-  Hills match is spent from 71,281 and not drawn by the 72,000 bound: a longer bound would turn one "none" into a
-  draw). No M5 criterion row is ever spent.
-- **Known limits of the rule (docs/01 2026-11-26 (1)):** BUG-1731 (a paid queue item at the pop cap keeps a seat
-  "able to train" for ever); a draw can fall shortly before a slow win (seed 2 above); BUG-1730 (S4: a forged `DRAW`
-  part with a running clock on a won match loads; one skipped QA row).
-- **Building models (M6-V28):** 6 of 30 types (Keep, Barracks, Billet, Depot, Crossbow Range, Watchtower), all
-  Malazan. `BuildingViews.ShotHeights` / `ModelShotShare` 0.85; `ProjectileViews.BuildingShotHeights`; box towers
-  shoot from 1.2 m. **126 scenes** (`MalazanBuildingsTest`, QA's `QaM6V28Test`). Art binaries 39,864,445 bytes.
-  Quiet bench: 400 figures + 60 models 6.34 ms (boxes 6.34); the bench's 60 buildings are fought over from frame 1
-  (the "3 of 60 gone" is the bench's own fight, not the view). Left as boxes for the Malazan: Wickan Corral, Armory,
-  Cadre Tower, Engineers' Yard (no plain match in the pack).
-- **The Teblor `standard` (unchanged since D34; BUG-1612 open):** shipped M 5 figures missed / 50 seats short; QRD1
-  4 / 16 (every Hard figure met); K9KC10S 7 / 47 (every Easy figure met); RSC 5 / 23 (Normal: only the Anointing
-  short, 13 of 17); QA's QSH 5 / 18, QSR 6 / 20, QSRS 6 / 24. Orders live in
-  `Content/D36TeblorOrderSearchReportTests.AllVariants` (58) and `QA/Content/D36TeblorOrderQaStressTests`.
-  `noReserve` on `armor_1` is inert before 15:00: leave it out.
-- **Description checks (D36):** `UnitHitBonusText`: "other ... within" is pack words only outside an on-death
-  sentence ("dies", "death", "dying"); the first-shot role needs first-shot words, or the unit's field with the
-  field's own number. Open: BUG-1760 (hyphenated "first-shot").
-- **Requests:** 55, 58 done; 56: G1-G3 built, G4-G8 open; **59 new** (a build order per difficulty).
+- **`main` after this session = sim e2193da + view 3c4cd4f + data a206dd0** (plus this ACCEPT's studio and docs
+  files). Scratch clone `prod0207-accept` (code merged clean; only `studio/bugs/README.md` conflicted): build
+  `--no-incremental` 0 / 0, default loop **10,569 passed / 0 failed / 20 skipped of 10,589 in 22 m 1 s**, smoke **PASS**, scene loop **128 of 128, first pass**.
+- **No hash move: the data hash is still 3D93D45345A3B4EA.** Saves and recordings made since 2026-11-26 load.
+  `game/data/common/ui.json` gained `hud.draw_countdown` (view data, not in the hash).
+- **A build order per difficulty (M7-9):** `AiOpening.BuildOrders` (indexed by `AiDifficulty`; empty array = the
+  field left out; an empty entry = no entry) and `BuildOrderFor(difficulty)`; `AiPlayer.Steps` is the seat's list,
+  resolved once; nothing under `sim/Rts.Sim/Ai/` reads `Opening.BuildOrder` (a source row pins it). Loader:
+  `DataLoader.BuildAiBuildOrders`, rulings (a)-(e) in docs/03 "Implementation (M7-9)". Hash: marker 2 + mask + each
+  entry, only when present. **No shipped opening carries it.** Easy always plays opening 0, so an `easy` entry on
+  another opening is never played (allowed). Test orders: `Ai/PerDifficultyOrders` (A, B, C).
+- **A test that replaces an opening's `buildOrder` must remove `buildOrders` too** (BUG-1771, open until the sim's
+  next task): harmless today, wrong the moment D38 lands.
+- **The draw on screen (M6-V29):** `Match.ResultFor` reads `World.MatchDrawn` first; `DrawNotice` (a node `Match`
+  adds beside `Alerts`; label at top centre, 800 x 30 px from 86 px down; `Sync(World)`; `ShownSeconds`,
+  `TextWrites` for tests). **128 scenes.** `DrawViewTest` runs dev matches on a data copy with `draw.afterSeconds`
+  20 and no starting gold; `QaM6V29Test` prints `KNOWN BUG-1790` and stays green. Known: BUG-1790 (a save taken
+  after a side fell past the draw loads to "Defeat"), BUG-1792 (long text), BUG-1791 (the docs heading).
+- **The Teblor orders (D37; nothing shipped, BUG-1612 open until D38):** Normal **M1RS** 9 / 23 / 23 / 18 / 30 /
+  40 / 18 (also meeting the bar: M1SC 9 / 23 / 27 / 14 / 23 / 37 / 21, RSCR 9 / 23 / 26 / 18 / 30 / 37 / 18); Easy
+  K9KC10S 1 / 0 / 38 / 28 / 34 / 42 / 22; Hard QRD1 11 / 23 / 23 / 40 / 42 / 47 / 25. Orders in
+  `Content/D37TeblorNormalOrderReportTests.AllVariants` (39) and D36's class; fixtures
+  `Content/Fixtures/teblor_standard_d37_{easy,normal,hard}.json` with `Content/D37TeblorFixtureTests`. QA's three
+  own Normal orders (QR1-QR3) miss the bar. The War-dog step's `throughReserve` is what costs Normal its Anointing.
+- **Description checks (D37):** "first-shot" with a hyphen, any Unicode dash or several spaces reads as first-shot
+  words (BUG-1760 fixed); U+2212 and a soft hyphen do not (not named by the ruling).
+- **Requests:** 55, 58, **59 done**; 56: G1-G3 built, G4-G8 open; **60 new** (which seats stood at the draw, for
+  BUG-1790 with three or more sides; small, with the sim's next save-format change).
+- **Stalled rows, pinned matches, building models:** unchanged from 2026-11-25-1437 (Pale Hills four-seat seeds
+  1 / 2 / 4 / 6 / 7 draw at 61,779 / 58,378 / 63,124 / 51,216 / 80,167; seed 3 p1 at 40,674; Hard v Normal
+  34 / 5 / 0 / 3; 6 of 30 building types are models; still skipped: the Vathar four-seat seed 2 row (BUG-1621 /
+  1610), `ALoneIdleWorker_*` (BUG-1116), the Pale Hills 2v2 seed 2 row (BUG-1149)). Draw test helpers:
+  `Draw/DrawScenes` (`Off`, `TakeOutDraw`, `TeblorOpeningBeforeDraw`), QA's `QA/DrawQaOracle`; a test that writes
+  store arrays directly calls `World.RecountDraw()`.
 - **Queues after the proposals above.** Sim: the AI-play session (BUG-1661 first and alone, then BUG-1660
-  `ai.minWorkers` from 4, 1555, 1554 / 1556 with 1490, 1558; one pin move; un-skip the Vathar four-seat row with the
-  cure; candidate: the computer player presses its attack while the draw clock runs), then Request 56 G4-G8.
-  View: more building models (Whirlwind, Teblor; the four Malazan left need another source), the mounted units and
-  machines once packs are on disk. Data: D38 ships the three Teblor orders; then the Shadow roster as its rules
-  land; owner tweaks first whenever the inbox has them.
-- **Session length:** 9.5 h, most of it the sim's two long suites (the whole Stress category twice: developer and
-  QA). For a task with no tick change (Request 59 is "off is identical"), rule 53 applies: no whole-category Stress
-  run unless a pin class is touched.
-- **Scratch clones left in the session's scratchpad** (harmless; the owner's housekeeping list): `prod1437-plan`,
-  `prod1437-accept` (the Producer's), `m6s13-*`, `m6v28-*`, `d36-*`. The stray empty
-  `C:\Dev\rtsGameProject\ModelShots.cs` and a file named with a yellow-circle emoji are untracked in the owner's
-  main checkout.
-- **Usage at the ACCEPT:** weekly 20 % / 21 % at 20:15 (stop at 95 %).
+  `ai.minWorkers` from 4, 1555, 1554 / 1556 with 1490 and Request 60 (one save-format change), 1558; one pin move;
+  un-skip the Vathar four-seat row with the cure; candidate: press the attack while the draw clock runs; **the data
+  track then re-measures the three Teblor orders, "measure and report": rule 41**), then Request 56 G5-G8, the sim's
+  clean-up at 4 / 4 (BUG-1730, 1731's decision). View: its clean-up at 4 / 4 (BUG-1790's two-sided fix,
+  BUG-1792, BUG-1710, the docs sentence), then more models, the mounted units and machines once packs are on disk.
+  Data: after D38, the hour-long Teblor Stress report classes, then the Shadow roster as its rules land; owner
+  tweaks first whenever the inbox has them.
+- **Session length:** the sim's QA full without the whole Stress category (rule 53) kept the suites short: default
+  loops of 30-43 m beside each other.
+- **Scratch folders left** (harmless; the owner's housekeeping list): in this session's scratchpad `prod0207-plan`,
+  `prod0207-accept`, `m79-*`, `m6v29*`, `d37-*`; outside it `C:\Users\Nick\AppData\Local\Temp\claude\m79-scratch`
+  (one test log; deletion denied). The stray empty `C:\Dev\rtsGameProject\ModelShots.cs` and a file named with a
+  yellow-circle emoji are still untracked in the owner's main checkout.
+- **Usage at the ACCEPT:** weekly 24 % / 25 % (stop at 95 %).
 
-## Standing rules (1-78)
+## Standing rules (1-79)
 
 
 Unchanged 1-51 (38: the Producer runs every suite on a scratch `git archive` / clone, never in a worktree; 39: generated map content
@@ -551,8 +273,19 @@ varied; "none meets the bar" is read as "none of these" until then (D-H10: all e
 count of 2; QA's one-Shaman orders halved the shortfall: BUG-1721). And a ruling about how existing code behaves is
 checked against that code at PLAN when the brief forbids changing it (M7-H3 item 10: the `null` switches).
 
+**79 (new, 2026-11-26-0207):** a ruling of the form "the same answer live, after a load and in playback" is checked
+at PLAN against what a save actually keeps (M6-V29: the view latches its result live, a save keeps no order of "draw"
+and "defeat", and the brief forbade the sim change that would: BUG-1790; rule 66's family). And rule 58 widened: a
+helper that *replaces* a data field also removes every field that can override it (`buildOrder` and `buildOrders`:
+BUG-1771), and sim QA's rehearsal of "what the data track will ship" uses the data track's real fixture when one
+exists, whole (D37's Normal fixture carries `throughReserve`; the M7-9 rehearsal kept the shipped `buildOrder`).
+
 
 ## Watch-outs (all tracks)
+- **New this session (0207): an opening may carry `buildOrders`** (no shipped opening does until D38). A test
+  that sets an opening's `buildOrder` on a JSON copy must remove `buildOrders` (BUG-1771); a seat's list is
+  `AiPlayer.Steps`, never `Opening.BuildOrder`. A scene that plays to a draw reads the notice through
+  `SimRunner.Ticked` (`DrawViewTest` is the model); `QaM6V29Test` prints `KNOWN BUG-1790` on purpose.
 - **New this session: a two-process row's limit is processor time.** `MapFileTests.RunChild(..., seconds)` ends its child when
   the child and its test host have used `seconds` of processor time (wall ceiling 3x). A child on several cores can
   use more than one second a second: read "used more than N s of processor time" on a small limit as that before
@@ -747,21 +480,22 @@ checked against that code at PLAN when the brief forbids changing it (M7-H3 item
 ## Sim track
 
 ### Where we are
-M6-S13 (the owner's draw rule) on `main`. Counter **1 / 4.** Closed: BUG-1536 (by measurement). New debt: BUG-1730
-(S4; a forged `DRAW` part on a won match loads), BUG-1731 (S4; a paid queue item at the pop cap). Carried:
-BUG-1700 (S4), BUG-1660, 1661 (S3; behind BUG-1621 / BUG-1610, whose Stress row stays skipped), 1555, 1554 / 1556,
-1557 (S3), 1558 (S4), 1463, 1537, 1490, 1434, 1433, 1161, 1149, 1152, 1150, 1068 (narrowed: the stalls end in a
-draw), 1116 (the lone-idle-worker row), 1010. The answers to M6-S13's Questions 1-5 are in docs/01 (2026-11-26,
-the ACCEPT row (1)): keep all five.
+M7-9 (Request 59, a build order per difficulty) on `main`; no hash, pin or format moved. Counter **2 / 4.** New
+debt: BUG-1771 (S3; test helpers and `buildOrders`: **first item of the next task**), BUG-1770 (S4; a second
+misleading loader error). Carried: BUG-1730, 1731, 1700 (S4), BUG-1660, 1661 (S3; behind BUG-1621 / BUG-1610, whose
+Stress row stays skipped), 1555, 1554 / 1556, 1557 (S3), 1558 (S4), 1463, 1537, 1490, 1434, 1433, 1161, 1149, 1152,
+1150, 1068, 1116, 1010. The answers to M7-9's Questions 1-4 are in docs/01 (the second 2026-11-26 row, (1)): keep
+all four.
 
 ### Next task candidates
-1. **M7-9, Request 59: a build order per difficulty** ("Proposed briefs" above; feature, QA full, no hash move, no
-   pin move; 20 bug ids 1770-1789). Write M6-S13's answers into docs/03 "Implementation (M6-S13)" (rule 67).
-2. **The AI-play session (feature, QA full, one pin move; the data track measures no opening beside it):**
-   BUG-1661, then BUG-1660, BUG-1555, BUG-1554 / 1556 with BUG-1490 (a save format change: rule 50), BUG-1558. Each
-   cure measured apart (rule 70). BUG-1700's comment with it. Candidate to design there: a seat with an army presses
-   its attack while the draw clock runs (it would have won Pale Hills four-seat seed 2).
-3. **M8-4:** Request 56 G4 (the Hounds' 7-alive limit) and the next of G5-G8, on test data only.
+1. **M8-4: BUG-1771 first, BUG-1770, then Request 56 G4** ("Proposed briefs" above; feature, QA full; no AI-play
+   change, no hash move, no pin move; 20 bug ids 1810-1829). Write M7-9's answers into docs/03 "Implementation
+   (M7-9)" (rule 67).
+2. **The AI-play session (feature, QA full, one pin move; the data track ships no opening beside it and re-measures
+   the Teblor orders after it):** BUG-1661, then BUG-1660, BUG-1555, BUG-1554 / 1556 with BUG-1490 and Request 60 (a
+   save format change: rule 50), BUG-1558. Each cure measured apart (rule 70). BUG-1700's comment with it.
+   Candidate: a seat with an army presses its attack while the draw clock runs.
+3. Request 56 G5-G8, on test data only.
 4. The sim's hardening (at 4 / 4): BUG-1730, BUG-1731's decision, older S3 / S4.
 5. Requests 54, 53 part two. A movement task for BUG-1463 only with a design first.
 
@@ -770,36 +504,38 @@ the ACCEPT row (1)): keep all five.
 ## View track
 
 ### Where we are
-M6-V28 on `main`. Counter **2 / 4.** 126 scenes. BUG-1750 (S3, a test row) found and fixed in the task. Debt:
-BUG-1710 (S4). The Producer's answers to M6-V28's Questions 1-5 are in docs/01 (2026-11-26, the ACCEPT row (2)):
-accept the four picks, the roof as the team part, the low Depot, the 0.85 shot share (box towers stay 1.2 m); Iron's
-weak roof is the owner's.
+M6-V29 (the draw on screen) on `main`. Counter **3 / 4.** 128 scenes. New debt: BUG-1790 (S3; a save taken after a
+side fell past the draw loads to "Defeat"), BUG-1791 (S3; a docs/03 heading deleted: the Producer restores it at
+the next PLAN), BUG-1792 (S4; the notice's long text). Carried: BUG-1710 (S4). The Producer's answers to M6-V29's
+Questions 1-3 are in docs/01 (the second 2026-11-26 row, (2)): the notice's look and silence kept; Question 1 is a
+bug to fix, not a limit to keep.
 
 ### Next task candidates
-1. **M6-V29, the draw on screen** ("Proposed briefs" above; feature, QA standard). Write M6-V28's answers into
-   docs/03 "Implementation (M6-V28)" (rule 67).
-2. More building models: the Whirlwind's or the Teblor's from the same pack (the data `scale` on a model's height
-   when a Teblor building follows); the four Malazan left need another source.
+1. **M6-V30, the next building models** ("Proposed briefs" above; feature, QA standard). Write M6-V29's answers
+   into docs/03 (rule 67).
+2. **The view's clean-up (at 4 / 4, the session after):** BUG-1790's two-sided fix in `Match.ResultFor` (a drawn
+   match with exactly two sides reads Draw for both, whoever is out now), the wrong sentence in docs/03
+   "Implementation (M6-V29)" Question 1, BUG-1792 (grow both ways or wrap; the stale 640 px comment), BUG-1710,
+   older S3 / S4.
 3. The two cavalry, the Destrier Rider, the War-dog, the Catapult and the Ram once packs are on disk (owner).
 4. An owner item (".NET 10 installed", templates, music, the sound notes, "models: ...", "priest veil: ...",
    "buildings ok", "roof: also the tower tops", "depot: taller", "box towers: shoot from the top", "whirlwind
-   colours ok" / "priest: white robe", "outline hidden units", "order notice: ...", "announce every dropped order").
+   colours ok" / "priest: white robe", "outline hidden units", "order notice: ...", "announce every dropped order",
+   "draw notice: ...").
 
 ---
 
 ## Data track
 
 ### Where we are
-D36 on `main`; no game data changed (the hash moved by the sim's `rules.json` only). Counter **1 / 4.** Closed:
-BUG-1720, BUG-1721. New debt: BUG-1760 (S3; hyphenated "first-shot", one QA row skipped), BUG-1761 (S4; "below" for
-a section above). Open: BUG-1612 (the unit mix; the cure is Request 59 + D38), BUG-1421 item 1, BUG-1611 (S4). The
-Producer's answers to D36's Questions 1-3 are in docs/01 (2026-11-26, the ACCEPT row (3), (4)): an opening per
-difficulty; keep "the field's own number"; drop `noReserve` on `armor_1` from searches.
+D37 on `main`; no game data changed. Counter **2 / 4.** Closed: BUG-1760 (S3), BUG-1761 (S4). Open: BUG-1612 (the
+unit mix; the cure is D38, measured and waiting in three fixtures), BUG-1421 item 1, BUG-1611 (S4). The Producer's
+answers to D37's Questions 1-3 are in docs/01 (the second 2026-11-26 row, (3)): Normal = M1RS; `buildOrder` is
+Normal's, Easy and Hard are entries; the Shaman / Circle check reads position, per list; no new first-shot words.
 
 ### Next task candidates
-1. **D37** ("Proposed briefs" above; QA standard; no byte under `game/data/`).
-2. **D38:** ship the three Teblor orders through Request 59's schema once it is on `main` (one hash move; the pin
-   list of D-H10's brief; the owner's review table with the Easy / Normal / Hard rows before and after).
-3. The hour-long Teblor Stress report classes D34 did not re-run, malazan.md's "Age II against the Whirlwind"
-   paragraph.
+1. **D38** ("Proposed briefs" above; QA standard; the session's one hash move; the owner's review table).
+2. The hour-long Teblor Stress report classes D34 did not re-run, malazan.md's "Age II against the Whirlwind"
+   paragraph, BUG-1421 item 1.
+3. After the sim's AI-play session: the three Teblor orders re-measured on that `main` (measure and report).
 4. The Shadow roster as Request 56's schemas reach `main` (G1-G3 are there; G4-G8 are not).

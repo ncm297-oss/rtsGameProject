@@ -27,6 +27,9 @@ public partial class Match : Node3D
     /// <summary>The local player's result, latched the first tick it holds (M6-V4, <see cref="Outcome"/>'s rule); presentation state.</summary>
     public MatchOutcome Outcome { get; private set; }
 
+    /// <summary>M6-V29: the draw countdown notice; null before the match is wired.</summary>
+    public DrawNotice? DrawNotice { get; private set; }
+
     /// <summary>Raised once per match, after the tick that gave <see cref="Outcome"/> its value; the shell opens the banner on it.</summary>
     public event Action<MatchOutcome>? Ended;
 
@@ -334,6 +337,10 @@ public partial class Match : Node3D
         var sfx = GetNode<Sfx>("Sfx");
         GetNode<SoundCues>("SoundCues").Init(_runner, sfx, camera, fog, units, SelectionController.LocalPlayer);
         GetNode<AlertHud>("Alerts").Init(_runner, camera, sfx, minimap, options.NoHud ? null : hud, UiText.Shared, SelectionController.LocalPlayer);
+        // M6-V29: the draw countdown under the alert text while the sim's draw clock runs (live, loaded and replayed alike).
+        DrawNotice = new DrawNotice { Name = "DrawNotice" };
+        AddChild(DrawNotice);
+        DrawNotice.Init(_runner, options.NoHud ? null : hud, UiText.Shared);
 
         GetNode<DebugOverlay>("DebugOverlay").Init(_runner, selection, camera,
             GetNode<NavOverlayView>("World3D/NavOverlay"), GetNode<FlowArrowsView>("World3D/FlowArrows"), options.DebugOverlay);
@@ -451,8 +458,8 @@ public partial class Match : Node3D
     }
 
     // M6-V4: after every tick (several a frame at speed), read-only. Each DefeatEvent prints the dev line and stamps the stats'
-    // defeat time; then the local result, latched (ResultFor): Draw when the match is over and nobody stands (the last ones fell
-    // on one tick), else Defeat the moment the local player's side is out (others may stand on), else Victory when the match is
+    // defeat time; then the local result, latched (ResultFor): Draw when the match was drawn (M6-V29) or is over with nobody
+    // standing, else Defeat the moment the local player's side is out (others may stand on), else Victory when the match is
     // over. M6-V16: the side is the local player and its allies, so a local player out while an ally fights on gets no banner yet.
     private void OnTicked(Simulation sim)
     {
@@ -476,12 +483,17 @@ public partial class Match : Node3D
     /// stands; Defeat once the local player is defeated and no ally of it stands (in a free-for-all: the moment it is defeated,
     /// as before); Victory when the match is over and its side stands, even if the local player itself fell earlier; else None
     /// (the local player out while an ally fights on: no banner yet).
+    /// M6-V29 (docs/02 "Game flow" 4, Producer ruling 2026-11-26): <c>World.MatchDrawn</c> is read before any winner: a drawn
+    /// match is Draw for a side that stands (the local player or an ally of it) and stays Defeat for a side that is out; it is
+    /// never Victory. Read from the sim's state only, so a live, a loaded and a replayed match give the same answer.
     /// </summary>
     public static MatchOutcome ResultFor(World w, int local)
     {
+        bool sideOut = w.IsDefeated(local) && !AllyStands(w, local);
+        if (w.MatchDrawn) return sideOut ? MatchOutcome.Defeat : MatchOutcome.Draw;
         bool over = w.MatchOver;
         if (over && Standing(w) == 0) return MatchOutcome.Draw;
-        if (w.IsDefeated(local) && !AllyStands(w, local)) return MatchOutcome.Defeat;
+        if (sideOut) return MatchOutcome.Defeat;
         return over ? MatchOutcome.Victory : MatchOutcome.None;
     }
 

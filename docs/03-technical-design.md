@@ -4983,8 +4983,76 @@ Tooling data, view code, view tests and docs; no sim, `ViewApi` or data file cha
      their `DrawnHeight` if the owner wants it.
   5. **Iron reads weakest** on the four (a slate roof on grey stone), as on the Keep (M6-V26 question 2). Recommendation:
      leave to the owner, as there.
+- **The Producer's answers (docs/01 2026-11-26, the ACCEPT row (2); written here by M6-V29, rule 67):**
+  1. Kept: Billet = the pack's second-age house, Depot = its storage shed, Crossbow Range = its archery range, Watchtower =
+     its watch tower.
+  2. Kept: the roof is the team-coloured part on all four.
+  3. Kept: the Depot stays low (1.9 m beside the 3.0 m Billet): it is how the two 2 x 2 buildings are told apart.
+  4. Kept: a tower drawn as a model shoots from 0.85 of its drawn top; a per-model height in the manifest only if a later
+     tower needs it. The Whirlwind and Teblor box towers keep 1.2 m until they are models.
+  5. Left to the owner: the slate-grey (Iron) player's roof reading weakest on grey stone ("roof: also the tower tops" is
+     already offered).
 
-## Vision, detection, fog
+### Implementation (M6-V29)
+
+The view half of the owner's draw rule (M6-S13, docs/02 "Game flow" 4): a drawn match reads **Draw** wherever a result
+shows, and a **countdown notice** is on screen while the draw clock runs. One `ui.json` key added (`hud.draw_countdown`);
+no sim, `ViewApi`, data hash or save changed.
+
+- **The result (`Match.ResultFor`).** It reads `World.MatchDrawn` before it looks for a winner (Producer ruling, docs/01
+  2026-11-26 (1)): in a drawn match the local player's **side** (it or an ally of it, M6-V16) gets **Draw** if it stands and
+  keeps **Defeat** if it is out; a drawn match is never Victory. Otherwise the rule is M6-V16's (Draw when the match is over
+  and nobody stands, Defeat the moment the side is out, Victory when the match is over and the side stands). The rule
+  reads the sim's state only, so `Match.OnTicked`'s latch gives the same answer live, after a load (the latch is set on the
+  first tick after it) and in replay playback (the drawn tick is the recording's last, so the banner keeps "Draw" when the
+  recording ends on it, M6-V9's rule). Live, a side that is out before the draw has its Defeat latched then and keeps it; a
+  side standing at the draw gets Draw that tick.
+- **Where a result shows.** The banner's title (`match_over.draw`, an existing key) is the only text that names a result.
+  The stats screen's title is "Match statistics" and its per-row cells are numbers and "Defeated at" (a standing seat's cell
+  stays `match_over.standing`); no row or team names a winner. The Load Game list shows date, type, seed, players and
+  length: no result. So no other screen changed.
+- **The notice (`DrawNotice`, a node `Match` adds beside `Alerts`).** Shown exactly while `World.DrawTicksLeft >= 0` (the
+  clock runs: from its first tick, Producer decision), hidden on every other tick: no rule (`DrawWaitTicks` 0), not spent,
+  the tick a death, a defeat or a seat able to train again sets the clock back (the next spent tick shows it again from the
+  whole wait), the draw itself and a win. Its text is `hud.draw_countdown` ("No player can train new units. Draw in {0}
+  unless a unit falls.") with `ceil(DrawTicksLeft / 20)` whole seconds in the match clock's format (`match_over.clock`,
+  `UiText.Clock`): the clock's first tick reads the whole wait (5:00 with the shipped 300 s), its last tick 0:01. It is read
+  after every tick the runner runs (`SimRunner.Ticked`, so a fast frame of several ticks skips none and playback shows it on
+  the same ticks) and once when wired (a save loaded mid-clock shows it before its first tick). It stores only the second it
+  shows; the label's text is written only when that second changes. A `Label` on the HUD layer at the top centre, 800 x 30
+  px from 86 px down (under the replay mark, 8-40, and the alert text, 46-80), 20 px pale gold with a black outline,
+  `MouseFilter.Ignore` (a click on it reaches the map). The English line is 594 px wide; at 1152 x 648 it spans 176-976 px
+  and at 1920 x 1080 560-1360 px, clear of the resource bar (top right, 8-34 px down), the minimap, the command card, the
+  queue strip and the selection panel (all at the bottom). The order notice (M6-V27) is a world-space line over a unit, not
+  a HUD rect: the two can cross on screen only where a unit stands under the top of the view. Without the HUD (`--no-hud`) or
+  `ui.json` there is no notice. No sound (none is asked for).
+- **`ui.json`.** `hud.draw_countdown`, read like every `hud` key (a missing one is a load error naming it) and checked as a
+  format naming `{0}` and nothing else (`Draw soon`, `{1}` or a cut `{0` is an error naming the key). No key changed.
+- **Tests.** New scene `game/tests/DrawViewTest` (headless, in the loop), dev matches through the shell on a data copy whose
+  `draw.afterSeconds` is 20 and whose `standard` preset starts with no gold, so a seat with a hall and no worker can never
+  train (a worker brings the mines' gold in reach); only commands, no store written (so `World.RecountDraw()` is never
+  needed). Every tick of every match is checked from `SimRunner.Ticked`: shown iff `DrawTicksLeft >= 0`, the text for
+  `ceil(DrawTicksLeft / 20)`, the label written once per change of the second. Rows: two seats live (first tick 0:20,
+  mid-way 0:10, the layout at 1152 x 648 and 1920 x 1080, a click on the notice selecting the unit under it, a save
+  mid-clock; the clock stopped by a seat that can train again, restarted by that worker's death, restarted again by a kill;
+  the last tick 0:01; the draw: banner "Draw", stats "Standing" for both, no "Victory" anywhere on the stats screen); the Load
+  Game list names no result; the save loads with the notice up before its first tick and draws ("Draw"); the recording
+  plays back with the notice's second equal to live's on every tick and ends on "Draw"; three seats, the local player out
+  first: Defeat, still Defeat (one banner) after the others draw, and a save after the draw loads to Defeat; teams (local and
+  an ally against one): the local player out, no banner while its ally stands, "Draw" at the draw; a win while the clock
+  runs: the notice goes on the win's tick, Victory; data without the draw block: a spent match never shows it. With the old
+  `ResultFor` the live, loaded, playback and team rows fail reading "Victory". Windowed with `-- --shots <dir>` it saves
+  `draw-notice.png` and `draw-banner.png` (zoom 40). The scene loop is 127 scenes.
+- **Questions for the Producer (rule 67), each with a recommendation:**
+  1. **A side that falls after the draw** (play goes on behind the result; the computer players stand down, but a human can
+     still finish a seat): live, its banner already read Draw and stays; a save made after that fall, or a recording watched
+     past it, has no record of the order of the two events, so it reads Defeat. Recommendation: keep (rare, and the sim
+     holds no defeat tick to tell them apart); if wanted, a sim request for the tick each seat was defeated.
+  2. **The notice's place and look:** top centre under the alert text, the replay mark's pale gold, 20 px. Recommendation:
+     keep; the owner judges `draw-notice.png`.
+  3. **No sound** when the clock starts. Recommendation: keep silent; the alert sound means "under attack", and the notice
+     shows for minutes.
+
 
 Fog of war and the high-ground rule are in since M4-3a (`sim/Rts.Sim/Vision/`); the last-known building ghosts, buildings
 that shoot and placement on explored ground since M4-3b (see "Implementation (M4-3b)"); zones that hide their contents
@@ -5790,6 +5858,94 @@ but `Orders/DroppedOrder.cs`'s doc comment; no game rule, state hash, pin, fixtu
   re-read on this tree; the "Implementation (M7-8)" questions carry the Producer's answers; "A JSON `null`" under
   "Data format" writes down the `null` policy.
 
+### Implementation (M7-9)
+
+Request 59 (docs/01 2026-11-26 (3)): an `ai.json` opening may carry its own build order per difficulty, so the data track
+can give the Teblor's Easy and Hard computer players the orders measured to work for them (D38). Schema, loader,
+validation, content hash and the executor; no shipped file, data hash, pin, golden, save format (10) or replay format (9)
+moved. Code: `AiOpening.BuildOrders` / `BuildOrderFor`, `AiOpeningJson.BuildOrders` and `AiBuildOrdersJson`
+(`DataJson.cs`), `DataLoader.BuildAiBuildOrders`, `GameData.AddOpening` / `AddSteps`, `AiPlayer.Steps`,
+`BuildOrderExecutor.Run` / `ReopenLost`. Tests: `Data/PerDifficultyBuildOrderLoaderTests` (loader, accessor, hash),
+`Ai/PerDifficultyOrders` (the forged orders A, B, C), `Ai/PerDifficultyTwinTests` (the twins, the rebuild rule, the source
+row, the allocation row), `Ai/PerDifficultySaveTests` (saves, determinism; the two-process row is Stress),
+`DataContentHashTests` (the new `AiOpening` field), `Data/DataNullPolicyTests` (`buildOrders: null` is an error).
+
+- **Schema.** An opening gains an optional object `buildOrders` whose keys are difficulty ids (`DataLimits.AiDifficultyIds`:
+  `easy`, `normal`, `hard`) and whose values are step lists under exactly `buildOrder`'s rules ("Implementation (M5-1)",
+  "(M5-8a)", the two switches of "(M7-8)", the expand rules, `DataLimits.MaxAiBuildOrderSteps`), reported at
+  `openings[i].buildOrders.<difficulty>[k]...` (a step error names the opening and the step as `buildOrder`'s do).
+  `buildOrder` stays required: it is the list of every difficulty without an entry.
+- **The Producer's rulings (a)-(e).** (a) Entries for all three difficulties are one error at `openings[i].buildOrders`
+  ("an entry for every difficulty: buildOrder could never be played (write one of them as buildOrder)"). (b)
+  `"buildOrders": null`, `{}`, an entry that is `null` and an entry that is `[]` are one error each (at
+  `openings[i].buildOrders`, `openings[i].buildOrders.<difficulty>`): leaving the field or the key out is how a file says
+  "no entry". (c) An unknown key (`medium`, `Hard`, a stray `buildOrder`) is an error under the loader's unknown-property
+  policy (the file does not load; one error naming the key). (d) An entry equal to `buildOrder` step for step is allowed
+  (it still moves the data hash: the field is there). (e) `description`, `compositions` and `attack` stay one per opening.
+- **Which list a seat plays.** `AiOpening.BuildOrderFor(difficulty)`: the difficulty's own entry, else `BuildOrder`. A seat
+  resolves it once, at construction, into `AiPlayer.Steps` (after the opening pick, which is unchanged: Easy plays
+  opening 0, Normal and Hard draw one). Every reader indexes `Steps`: the `Blackboard`'s step arrays are sized by it, and
+  `BuildOrderExecutor.Run` (the due steps, the reserved step `ReserveStep`, the M7-8 switches) and `ReopenLost` (the
+  rebuild counters, the newest done step of a type) walk it. Nothing under `sim/Rts.Sim/Ai/` reads the opening's
+  `BuildOrder` any more (a source row pins it). No allocation per think: `Steps` is a field.
+- **Off is identical.** An opening without the field loads `BuildOrders` empty (with the field: one list per difficulty,
+  empty where the file has no entry; a written entry always has steps) and `BuildOrderFor` returns `BuildOrder` for every
+  difficulty, so every shipped opening plays, hashes, saves and loads exactly as before.
+- **Content hash.** `GameData.AddOpening` adds, only when the field is present, a marker 2, a bit mask of the difficulties
+  with an entry, then each present difficulty's id and its steps (the same step fields as `buildOrder`, M7-8's switch
+  marker included), in difficulty order. So data without the field hashes as before (the golden's header holds), the
+  JSON key order never matters, and one step changed in one entry moves the hash.
+- **Saves and replays.** No format change. A seat's saved step arrays are as long as its own list; the load builds the
+  seat from the data, so its arrays are sized from the loading data's list for that difficulty, and a save whose array
+  lengths differ is refused `Malformed` (`SaveReader.ReadArray`'s length check, as before). In practice a save made with
+  other data is refused earlier, `DataMismatch`, by the header's data hash; the length check is what a forged header
+  meets (`PerDifficultySaveTests.ASaveWhoseStepArrays_DoNotMatchTheSeatsList_IsRefused`). A replay holds the AI's
+  commands, not its lists, and is tied to the data hash as before.
+- **Proof.** The twins (`PerDifficultyTwinTests.ASeat_PlaysItsDifficultysEntry_*`, one row per difficulty D): on Pale Hills
+  (seed 1, the Teblor seat against a Normal Malazan AI), a seat of D on {`buildOrder` A, `buildOrders.D` B} equals a seat
+  of D on {`buildOrder` B} in the state hash at every tick for 12,000 ticks (the state hash does not fold the data hash),
+  in its command log and its census; the D seat on A parts from it before tick 2,000 (Easy 601, Normal 101, Hard 11); and
+  a seat of the next difficulty on the first data equals a seat on {`buildOrder` A}, 12,000 ticks. B differs from A in
+  the opening worker step (tick 0), the War Lodge moved to the front, `throughReserve` on three train steps and `noReserve`
+  on the Breakers' Hall step, and the expand step moved after Age II. The rebuild rule on a per-difficulty list:
+  `ARazedBuilding_ReopensTheStepOfItsDifficultysList` (a razed Barracks reopens step 0 for Easy and Normal, step 1 for
+  Hard's entry, and is built again). Saves: a save mid-order of the Easy seat and one of the Hard seat (Easy B, Hard C, one
+  step longer) load field for field equal and stay tick-identical for 6,000 ticks. Determinism: a four-seat Teblor match
+  (Easy, Normal, Hard, Hard) twice in one process (24 checkpoints to 12,000) and across two processes (Stress) give the
+  same hashes.
+
+**For the data track (M7-9).** No shipped opening carries the field. To give a difficulty its own build order, write it
+inside the opening beside `buildOrder`:
+
+```json
+{ "id": "standard", "displayName": "...", "description": "...",
+  "buildOrder": [ ... the Normal order ... ],
+  "buildOrders": { "easy": [ ... K9KC10S ... ], "hard": [ ... QRD1 ... ] },
+  "compositions": [ ... ], "attack": { ... } }
+```
+
+| Rule | What it means for the file |
+| --- | --- |
+| Which list a seat plays | A seat of difficulty D plays `buildOrders.D` when the opening has that key, else `buildOrder`. Easy seats always play the first opening (unchanged), so an `easy` entry on any other opening is never played. |
+| `buildOrder` stays required | It is the list of every difficulty without an entry. Entries for all three difficulties are an error: write one of them as `buildOrder`. |
+| No entry | Leave the key (or the whole field) out. `"buildOrders": null`, `{}`, `"easy": null` and `"easy": []` are load errors. |
+| Keys | Only `easy`, `normal`, `hard` (lower case); any other key is a load error. |
+| Steps | Exactly `buildOrder`'s rules: `at`, `do`, `id`, `count`, the switches `throughReserve` (train steps) and `noReserve` (build, research, expand steps), no step twice, at most 256 steps; errors at `openings[i].buildOrders.<difficulty>[k]...`. |
+| File order is behaviour | Inside each list, as in `buildOrder`: steps are worked in file order, the first reservable step holds the reserve, and a lost building reopens its newest done step. The key order inside `buildOrders` does not matter. |
+| One per opening | `description`, `compositions` and `attack` (its thresholds and `reserveArmyShare`) are shared by every difficulty. |
+| Hash | The field moves the data hash once when it lands (even an entry equal to `buildOrder`); land the entries in one change. |
+
+**Questions for the Producer (M7-9, rule 67), each with the developer's recommendation.**
+
+1. An `easy` entry on any opening but the first is never played (Easy always plays opening 0). Make it a load error?
+   Recommendation: no; document it (the table above), so a later pick rule for Easy needs no schema change.
+2. The unknown-key error is the deserializer's own message ("malformed JSON at line L, byte B: The JSON property 'medium'
+   could not be mapped ..."), as for every other object in the data. Recommendation: keep (one policy for every file).
+3. Per-difficulty `compositions`, `attack` thresholds or a time offset were not built (ruling (e)). Recommendation: none
+   needed until D38's rows show a difficulty's army mix, not its order, is what misses a target.
+4. An entry equal to `buildOrder` loads and moves the hash (ruling (d)). Recommendation: keep; a data-track content test
+   may flag it as dead weight if the Producer wants files lean.
+
 ## Data format
 
 All definitions are JSON under `game/data/`, loaded by both the game and the tests (tests find the
@@ -5867,6 +6023,9 @@ inside the block `afterSeconds` is required and read raw, so `"afterSeconds": nu
 `draw.afterSeconds` ("null is not a number (leave the whole draw block out for no draw rule)"), as is a missing field, a
 non-number, zero or a negative, a value over `DataLimits.MaxDrawSeconds` (86,400 s, a game day) and a value that rounds to 0
 ticks. Both rows are in `DataNullPolicyTests`.
+**M7-9 adds one error row:** an opening's `buildOrders` written `null` is one load error at `openings[i].buildOrders`
+("null is not a set of build orders (leave the field out ...)"), and so is an entry written `null` at
+`openings[i].buildOrders.<difficulty>` ("Implementation (M7-9)", ruling (b)).
 
 **Questions for the Producer (M7-H3, rule 67).**
 
@@ -5911,7 +6070,7 @@ consumes it.
 | `statuses.json` | `{ "statuses": [ ... ] }` (M4-4a), each `{id, displayName, description, kind, damageType?, sight?, reach?, damageBonus?, onEnd?}`: `kind` `damageOverTime`, `slow`, (M4-4b-2) `blind`, (M4-4b-3a) `frenzied`, (M4-5) `stealthed` / `revealed` (at most one `revealed`), or (M7-1) `regenerating` (`DataLimits.StatusKindIds`; its magnitude is HP per second, above 0, at most 100 and at least 0.05); `damageType` (a damage table type) required on `damageOverTime`, an error on any other kind; `sight` and `reach` (m, above 0, at most 64) required on `blind`, errors on any other kind; (M7-4) `damageBonus` (above 0, at most 4) on `frenzied` only, and `onEnd {status, magnitude, duration}` on any row (see "Implementation (M7-4)"). The magnitude and duration come from the effect applying it (a blind, stealthed or revealed status takes no magnitude). Ids unique; shipped `burning` (magic damage over time), `slowed`, `blinded` (2 / 3, M4-4b-2) and `frenzied` (M4-4b-3a; its magnitude, the attack-speed increase, any fraction above 0, is the applying effect's or passive's), `stealthed` and `revealed` (M4-5, "Implementation (M4-5)"), `regenerating` (M7-1: nothing applies it in shipped data yet; the hook M9's Darkness zone and later abilities use) |
 | `abilities.json` | `{ "abilities": [ ... ] }` (M4-4a, per faction, optional), each `{id, displayName, description, kind, range, radius, castTime, cooldown, duration?, affects, autocast?, effects}`: `kind` `targetGround` or (M4-4b-3a) `selfAura` (`targetUnit`, `summon`: "not supported yet"); `range` m above 0 and at most `DataLimits.MaxSight` (64), required on `targetGround` and an error on `selfAura` (0 included); `radius` m above 0 and at most `DataLimits.MaxAbilityRadius` (16); `castTime` s, 0 or more, to ticks; `cooldown` s above 0, to ticks (at least 1); `duration` s, optional (0), to ticks (required with a `createZone` effect, M4-4b-2); `affects` `enemy_units`, `own_units` or `all_units`; `autocast` only `false` ("not supported yet"); `effects` at least one, each `{kind: damage, type, amount, buildings?, friendlyFire?}` (a whole amount, at least 1; M4-4b-1: `buildings` true also hits other players' buildings as structure, not with `own_units`; `friendlyFire` 0-1, the fraction own units take, above 0 only with `enemy_units`) or `{kind: applyStatus, status, magnitude, duration}` (a `statuses.json` id; magnitude whole and at least 1 for damage over time, above 0 and below 1 for a slow; duration s, at least a tick, and for damage over time a whole number of seconds, at least 1, M4-4b-1); M4-4b-2: `{kind: createZone, blocksVision?, statuses: [{status, magnitude, duration}]}` (at least one status, each by the `applyStatus` rules, a blind status without a magnitude; the ability's `duration`, at least a tick, is then required: the zone's lifetime; at most one per ability); `teleport`, `spawn`: "not supported yet"; a field the effect kind doesn't use is an error. Ids unique across factions, numbered faction by faction in `common/factions.json` order, ordinal within a faction (M7-3b), so a new faction's abilities move no shipped id. Shipped: Malazan `telas_fire`, `cusser` (M4-4b-1); Whirlwind `sandstorm` (M4-4b-2) |
 | `maps/<file>.json` | (M6-S7, optional folder, one file a hand-made map, loaded in the files' names' ordinal order into `GameData.Maps`) `{id, displayName, description, players, size, terrain, ramps?, starts, mines, forests}`: see "Implementation (M6-S7)" for every field and check |
-| `ai.json` | (M5-1, per faction, required) `{difficulties {easy, normal, hard}, buildOrder, compositions, attack, retreat}`: the shape and every refusal in "AI architecture", "For the data track (M5-1)". Not in `ContentHash` yet (M5-2 adds it) |
+| `ai.json` | (M5-1, per faction, required) `{difficulties {easy, normal, hard}, openings, retreat}` (M5-8a: each opening `{id, displayName, description?, buildOrder, buildOrders?, compositions, attack}`): the shape and every refusal in "AI architecture", "For the data track (M5-1)", "Implementation (M5-8a)". M7-9: `buildOrders` (optional) `{easy?, normal?, hard?}`, each a step list under `buildOrder`'s rules, at least one key and at most two; a seat of a difficulty with an entry plays it, every other seat `buildOrder` ("Implementation (M7-9)"). In `ContentHash` since M5-3 (`buildOrders` only when present) |
 
 Validation rules: ids are `snake_case` and unique (a unit id is unique across all factions);
 `slot` is one of the seven template slots; `armorClass`, `attack.type`, and `bonusVs` keys exist in
@@ -11846,7 +12005,7 @@ M5 criterion 8, the sim half: named AI openings (D14 b). Code: `Data/AiOpening.c
   `id` snake_case, unique within the file (a repeat: "duplicate id 'x' (also openings[k])" at the second); `displayName`
   required, 1-40 characters; `description` optional (absent loads as ""), at most 200. Both are player-facing (a stats line
   may name the opening), so they live in data only. `buildOrder`, `compositions` and `attack` keep the M5-1 rules unchanged,
-  reported at `openings[i].buildOrder[j].id`, `openings[i].compositions[k]...`, `openings[i].attack.minArmyPop`. No list, an
+  reported at `openings[i].buildOrder[j].id`, `openings[i].compositions[k]...`, `openings[i].attack.minArmyPop`. Since M7-9 an opening may also carry `buildOrders`, a build order per difficulty ("Implementation (M7-9)"). No list, an
   empty one, or more than 8 is one error at `openings`. The pre-M5-8a top-level `buildOrder`, `compositions` and `attack`
   are each one error ("moved into openings[]"), so a stale file can't half-load (set to `null` too since M5-H4, BUG-0940: they read as a presence marker). Age-agnostic: no new age-keyed field (the
   compositions keep their per-age form). The shipped files hold one opening, `standard` (`Standard` / "The faction's standard
@@ -14610,6 +14769,16 @@ line unchanged; the reason in `QA/GatherWedgeQaTests`' comment).
 5. **BUG-1536's match (seed 3) is not one of the draws**: on this tree it ends with a winner at 40,674 without being spent;
    the handoff's "known stalls" line for seeds 3 / 4 was half stale (seed 4 did stall; it now draws at 63,124).
    Recommendation: close BUG-1536 with the measurement (the patch in the developer's report says so).
+
+**The Producer's answers (docs/01 2026-11-26, the row's (1), written in by M7-9 under rule 67; all five the developer's
+recommendation, "keep").** (1) The counts the draw check reads are kept by the stores, not scanned: a test that writes a
+store's arrays directly calls `World.RecountDraw()` afterwards. (2) The command line's draw line stays
+`result draw at tick N (m:ss)`, the format of the other result lines. (3) A seat that never built but is not defeated
+counts as able to train (it matters only in sandboxes). (4) A draw is final: the computer players stand down and the
+match stays drawn even if a side falls afterwards, so the view reads `MatchDrawn` before it looks for a winner (M6-V29).
+(5) BUG-1536 is closed by measurement (its match is never spent and ends with a winner at 40,674). Two known limits are
+kept for now: a paid unit waiting in a queue at the population cap counts as "can still train" (BUG-1731), and a draw can
+fall shortly before a slow win (the cure, if wanted, is a computer player that presses its attack while the clock runs).
 
 ## Testing strategy
 

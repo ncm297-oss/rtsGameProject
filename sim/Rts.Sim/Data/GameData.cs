@@ -516,24 +516,7 @@ public sealed class GameData
         h.Add(o.Id ?? "");
         h.Add(o.DisplayName ?? "");
         h.Add(o.Description ?? "");
-        h.Add(o.BuildOrder.IsDefault ? -1 : o.BuildOrder.Length);
-        if (!o.BuildOrder.IsDefault)
-            foreach (AiStep s in o.BuildOrder)
-            {
-                h.Add((int)s.Trigger);
-                h.Add(s.At);
-                h.Add((int)s.Action);
-                h.Add(s.Target);
-                h.Add(s.TargetKey ?? "");
-                h.Add(s.Count);
-                // M7-8 (Request 55): only when one is true (a marker, then both as bits), so a build order without them,
-                // or with them written false, hashes as before (the golden's header holds).
-                if (s.ThroughReserve || s.NoReserve)
-                {
-                    h.Add(5);
-                    h.Add((s.ThroughReserve ? 1 : 0) | (s.NoReserve ? 2 : 0));
-                }
-            }
+        AddSteps(ref h, o.BuildOrder);
         h.Add(o.Compositions.IsDefault ? -1 : o.Compositions.Length);
         if (!o.Compositions.IsDefault)
             foreach (AiComposition c in o.Compositions)
@@ -550,6 +533,46 @@ public sealed class GameData
         {
             h.Add(1);
             h.Add(share);
+        }
+        // M7-9 (Request 59): only when the file carries buildOrders (a marker 2, a bit per difficulty with an entry, then each
+        // entry's id and steps in difficulty order), so data without the field hashes as before (the golden's header holds)
+        // and the JSON key order never matters.
+        int mask = 0;
+        for (int k = 0; k < DataLimits.AiDifficultyIds.Length; k++)
+            if (AiOpening.HasEntry(o.BuildOrders, k)) mask |= 1 << k;
+        if (mask != 0)
+        {
+            h.Add(2);
+            h.Add(mask);
+            for (int k = 0; k < DataLimits.AiDifficultyIds.Length; k++)
+            {
+                if ((mask & (1 << k)) == 0) continue;
+                h.Add(DataLimits.AiDifficultyIds[k]);
+                AddSteps(ref h, o.BuildOrders[k]);
+            }
+        }
+    }
+
+    /// <summary>A build order's count, then every step's fields in file order (the order is behaviour, so it is content too).</summary>
+    private static void AddSteps(ref StateHasher h, ImmutableArray<AiStep> steps)
+    {
+        h.Add(steps.IsDefault ? -1 : steps.Length);
+        if (steps.IsDefault) return;
+        foreach (AiStep s in steps)
+        {
+            h.Add((int)s.Trigger);
+            h.Add(s.At);
+            h.Add((int)s.Action);
+            h.Add(s.Target);
+            h.Add(s.TargetKey ?? "");
+            h.Add(s.Count);
+            // M7-8 (Request 55): only when one is true (a marker, then both as bits), so a build order without them,
+            // or with them written false, hashes as before (the golden's header holds).
+            if (s.ThroughReserve || s.NoReserve)
+            {
+                h.Add(5);
+                h.Add((s.ThroughReserve ? 1 : 0) | (s.NoReserve ? 2 : 0));
+            }
         }
     }
 
