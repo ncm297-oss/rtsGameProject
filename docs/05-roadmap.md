@@ -838,7 +838,10 @@ open S1 / S2. Retro below; open S3 / S4 listed there.)_
       Polish left: BUG-0890 (S4). **M6-S13, 2026-11-25-1437 (owner decision 2026-11-25): a spent match ends in a draw**
       (`rules.json` `draw.afterSeconds` 300; `World.MatchDrawn` / `DrawTicksLeft`; no side can ever train another unit and
       no unit dies for 5 game minutes; `Draw/` tests, QA's `DrawRuleQaTests` and oracle; docs/02 "Game flow" 4, docs/03
-      "Implementation (M6-S13)"). The banner and a countdown are the view's M6-V29.)
+      "Implementation (M6-S13)"). The banner and a countdown are the view's M6-V29. **M6-V29, 2026-11-26-0207:** a
+      drawn match reads "Draw" (never "Victory") on the banner, live, loaded and in playback, and a countdown line shows
+      while the draw clock runs (`DrawNotice`, `ui.json` `hud.draw_countdown`; scenes `DrawViewTest`, QA's
+      `QaM6V29Test`; docs/03 "Implementation (M6-V29)"). Polish left: BUG-1790 (S3), BUG-1792 (S4).)
 - [x] Save/load and replay playback. (M6-V9, 2026-10-16: **replay playback**: every match started from the menu or `--skirmish` is
       recorded (checkpoints every 100 ticks) and written to `user://replays/<yyyyMMdd-HHmmss>-seed<seed>.replay` at the banner, at
       Quit to menu and on window close, the newest 20 kept; Main menu → Load Game lists them (date, seed, players, length) with
@@ -1009,6 +1012,10 @@ open S1 / S2. Retro below; open S3 / S4 listed there.)_
       spends through an earlier step's savings) or `noReserve` (a building, research or expansion step is never saved
       for); off unless written, no shipped opening carries one yet. **Not ticked:** the Teblor opening with the
       switches (the data track's next task, BUG-1612's open half), the rest of the balance pass, the two models.
+      **M7-9 and D37, 2026-11-26-0207: a build order per difficulty.** An opening may carry `buildOrders` (`easy` /
+      `normal` / `hard`; Request 59; left out = as before, no shipped opening carries it yet), and the three Teblor
+      orders are measured and waiting as fixtures (Easy K9KC10S, Normal M1RS, Hard QRD1: each meets every figure of its
+      difficulty's bar on 64 seats). **Not ticked:** shipping them (D38, one hash move), the two models.
 
 ## M8 — Shadow
 

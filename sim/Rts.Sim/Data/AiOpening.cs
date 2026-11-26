@@ -22,8 +22,28 @@ public sealed class AiOpening
     /// <summary>Player-facing description (optional in the file: "" when absent; at most 200 characters).</summary>
     public required string Description { get; init; }
 
-    /// <summary>The build order, in file order (at least one step).</summary>
+    /// <summary>The build order, in file order (at least one step): the one every difficulty without its own entry in <see cref="BuildOrders"/> plays.</summary>
     public required ImmutableArray<AiStep> BuildOrder { get; init; }
+
+    /// <summary>
+    /// M7-9 (Request 59): the opening's own build order per difficulty (<c>buildOrders</c>), indexed by <see cref="AiDifficulty"/>
+    /// (one entry per difficulty); an empty entry where the file has none (a written entry has at least one step), and the
+    /// whole array empty when the file leaves the field out. Read it through <see cref="BuildOrderFor"/>.
+    /// </summary>
+    public ImmutableArray<ImmutableArray<AiStep>> BuildOrders { get; init; } = ImmutableArray<ImmutableArray<AiStep>>.Empty;
+
+    /// <summary>M7-9: the build order a seat of <paramref name="difficulty"/> plays: its own entry in <see cref="BuildOrders"/>, else <see cref="BuildOrder"/>.</summary>
+    public ImmutableArray<AiStep> BuildOrderFor(AiDifficulty difficulty)
+    {
+        int k = (int)difficulty;
+        return HasEntry(BuildOrders, k) ? BuildOrders[k] : BuildOrder;
+    }
+
+    /// <summary>M7-9: whether <paramref name="lists"/> (an opening's <see cref="BuildOrders"/>) holds an entry, a list with steps, for difficulty index <paramref name="k"/>.</summary>
+    internal static bool HasEntry(ImmutableArray<ImmutableArray<AiStep>> lists, int k)
+    {
+        return !lists.IsDefault && (uint)k < (uint)lists.Length && !lists[k].IsDefaultOrEmpty;
+    }
 
     /// <summary>The army mix per age, indexed by age - 1 (one per age: Age I and Age II).</summary>
     public required ImmutableArray<AiComposition> Compositions { get; init; }

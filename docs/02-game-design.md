@@ -617,6 +617,11 @@ match's draw clock runs, its countdown line sits at the top centre under the ale
   two matches against the same faction can open differently while a replay or a save still reproduces the pick
   (built in M5-8a; since D21, 2026-10-18, each faction ships three, listed on its page under "AI build order (Normal)":
   the Malazans Combined arms, Crossbow push and Fast Age II, the Whirlwind Swarm, Raider rush and Holy war).
+- An opening may give a difficulty its own build order (`buildOrders` in `ai.json`, beside the opening's `buildOrder`): a
+  computer player of that difficulty follows its own list, every other difficulty the opening's `buildOrder`, and the
+  army mix and attack thresholds stay the opening's for all of them. So one faction's Easy and Hard players can open
+  differently where one order cannot serve both (built in M7-9, Request 59, for the Teblor, docs/01 2026-11-26 (3);
+  [03 Implementation (M7-9)](03-technical-design.md#implementation-m7-9)). No shipped opening uses it yet.
 - The AI adapts its army to what it has seen. It remembers, per unit slot, how many enemy combat units of that slot it saw
   at once (workers never count, nor an ally's units; only what its own fog-of-war view shows, a teammate's shared sight
   included), and that memory fades linearly to nothing over `rules.json` `ai.counterMemory` (180 s) unless a sighting at
