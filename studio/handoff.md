@@ -39,7 +39,43 @@ classes that forge or read the Teblor `standard` (`Stress/ReserveSwitchReportTes
 briefs. Sim QA's rehearsal this session had `buildOrder` unchanged and no shipped switch, so its list of 8 is a
 floor, not the list.
 
-## Proposed briefs
+## Current session plan (2026-11-26-0717, session 2 / 8 of 2026-11-26; written at the PLAN)
+
+All three tracks GO, all feature (counters before: sim 2 / 4, view 3 / 4, data 2 / 4). Base 9ed0b19. The full
+briefs are under each track's "Current session plan" at the end of this file. In one line each:
+
+- **Sim M8-4 (QA full):** BUG-1771's shared test helper first, BUG-1770, then `maxAlive` (Request 56 G4) on test
+  data. One row added to `game/data/common/ui.json` `train` (the view's text loader demands a text for every
+  `TrainError` value; `ui.json` is not in the data hash). No hash, pin or format move. Bug ids 1810-1829.
+- **View M6-V30 (QA standard):** the Teblor buildings as models (the pack's First Age timber set), the data
+  `scale` drawn on a model's height. Bug ids 1830-1839.
+- **Data D38 (QA standard):** ship the three Teblor orders; the session's one hash move. Bug ids 1840-1849.
+
+**PLAN checks (the Producer, scratch clones `prod0717-plan` and `prod0717-d38`, rule 38):** `main` 9ed0b19 build
+`--no-incremental` 0 / 0, default loop **10,569 / 0 / 20 of 10,589 in 28 m 21 s** (beside the rehearsal), smoke
+**PASS**. BUG-1791 fixed by the Producer (the docs/03 heading). The bug index holds one row each for BUG-1760 /
+1761 / 1770 / 1771 / 1790 / 1791 / 1792.
+
+**D38 rehearsal (rules 54 / 55; the Teblor `standard` written from the three D37 fixtures, `buildOrders` after
+`buildOrder`):** default loop **21 red of 10,589**, sorted (rule 68):
+- *D38 re-pins, sim-owned, handed by name (3):* `FactionOrderTests.TheShippedContentHash_IsTheGoldenHeaders`,
+  `QA/PackQaTests.TheShippedDataHash_IsTheGoldenHeaders`,
+  `StillStealthLoaderTests.TheHash_IsUnchangedWithoutTheField_MovesWithIt_AndWithEachField` (with the golden's header).
+- *D38's own, data folders (17):* `Content/AiContentTests.A_EachPage_IsItsAiFile_BothWays`,
+  `Content/D34HashMoveTests.TheShippedHash_IsD34s_AndNotD33s`, `Content/D37TeblorFixtureTests` (4 rows: "6 fields,
+  the shipped opening 7"), `Content/TeblorOpeningFixtureTests.TheShippedOpening_IsTheD34Fixture`,
+  `Content/TeblorRosterPinTests.AnAiCellChanged_IsCaught` (6 rows), `QA/Content/D20PinQaTests.HouseNote_SaysWhatTheMenuMapRunsShow(teblor)`,
+  `QA/Content/D33QaTests` (2 rows), `QA/Content/D34QaTests.TheShippedData_IsD34s_QasQ2WithTheProposedText`.
+- *The sim's helper (BUG-1771), 1:* `WorkerCarryTests.TheAisFullLoadTest_ReadsTheWorkersOwnCarry(ownFullLoad: False)`.
+- *Other:* none.
+- *Stress on the same copy* (`ReserveSwitchReportTests`, `M78ReserveSwitchQaStressTests`,
+  `QA/M79PerDifficultyAiQaTests`, `FarExpandProbeQaStressTests`): **29 passed / 0 failed / 2 skipped in 22 m 18 s**:
+  the forging helpers already tolerate shipped `buildOrders` and `throughReserve`. The other sim-owned Stress
+  classes that name the Teblor were not run at the PLAN: the sim developer runs them on its D38 copy (criterion 3).
+- *Smoke and the scene loop on the same copy:* smoke PASS, **128 of 128 scenes, first pass**: no view scene pins
+  the Teblor opening.
+
+## Proposed briefs (the last ACCEPT's; superseded by the plan above)
 
 ### Sim: M8-4, BUG-1771 first, then Request 56 G4 (feature, QA full)
 (0) **BUG-1771 (S3; first, and D38 depends on it):** one shared helper (for example in `AiScenes`) that sets an
@@ -487,7 +523,138 @@ Stress row stays skipped), 1555, 1554 / 1556, 1557 (S3), 1558 (S4), 1463, 1537, 
 1150, 1068, 1116, 1010. The answers to M7-9's Questions 1-4 are in docs/01 (the second 2026-11-26 row, (1)): keep
 all four.
 
-### Next task candidates
+### Current session plan (2026-11-26-0717): M8-4, feature, QA full
+
+**Goal.** Make the sim's test helpers safe for the Teblor build orders the data track ships this same session
+(BUG-1771), fix a misleading loader error (BUG-1770), then build the Shadow Hounds' "at most 7 alive" rule as a
+generic unit field, `maxAlive`, on test data only (Request 56 G4). Nothing in a shipped match changes.
+
+**Scope.**
+- **A. BUG-1771 (first, in its own commit).** One shared helper (for example `AiScenes.SetBuildOrder(opening,
+  steps)`) that sets an opening's `buildOrder` on a JSON copy **and removes `buildOrders`**. Every site under the
+  sim's test folders that writes `["buildOrder"] =` uses it (105 sites in 67 files on the base; grep
+  `\["buildOrder"\]\s*=`), `WorkerCarryTests.s_teblorQuiet` among them. Not `QA/Content/D19QaTests.cs` (the data
+  track's; D38 fixes it). The helpers that forge or read the Teblor `standard` (`Ai/TeblorSwitchOrders`,
+  `Ai/PerDifficultyOrders`, `Stress/ReserveSwitchReportTests`, `Stress/M78ReserveSwitchQaStressTests`,
+  `QA/M79PerDifficultyAiQaTests`, and any other the rehearsal shows) tolerate a shipped opening that already carries
+  `buildOrders` and `throughReserve` steps (rule 58). A helper whose pinned figures were measured on D34's order
+  takes that order from `Content/Fixtures/teblor_standard_d34.json` (read only), not from the shipped file, so its
+  figures do not move when D38 lands. No expected value changes in part A.
+- **Rehearsal (rule 59), scratch clone `m84-d38copy` (create it new, rule 63):** write the `standard` opening of
+  `game/data/factions/teblor/ai.json` as D38 will: `buildOrder` = the `buildOrder` of
+  `sim/Rts.Sim.Tests/Content/Fixtures/teblor_standard_d37_normal.json`; `buildOrders` = `{ "easy": <that of
+  ..._d37_easy.json>, "hard": <that of ..._d37_hard.json> }`, placed after `buildOrder`; everything else as shipped.
+  Run the default loop and the Stress classes of criterion 3 on it.
+- **B. BUG-1770 (a few lines, the same loader):** a `null` or `[]` entry in `buildOrders` gets its own error and
+  does not count toward "an entry for every difficulty".
+- **C. `maxAlive` (Request 56 G4; docs/factions/shadow.md "Unit notes", Schema gaps G4, "Decisions (D-R38)").**
+  - *Data:* `units.json` optional `maxAlive`, a whole number from 1 to a `DataLimits` constant you name, not below
+    the type's `spawnCount`. Left out = no limit, today's behaviour, today's hash.
+  - *Rule:* per player and unit type. Counted: the player's live units of the type plus the units its queued items
+    of the type will spawn (items x `spawnCount`), over all its buildings. A Train is refused when counted +
+    `spawnCount` > `maxAlive`, with a new `TrainError` value (append it last so no existing value moves; check it
+    after `LockedByRequirement` and before `QueueFull` / `CannotAfford`, and say so in `CanTrain`'s summary). It is
+    judged when the Train applies, as every train rule; a refused Train charges nothing. Cancelling an item or a
+    death frees a place the same tick. An item already queued always completes. A unit made any other way (an
+    ability's `spawn` effect, the dev `SpawnUnit`) counts as alive but is never refused: the limit gates training
+    only (Producer ruling).
+  - *Reading it:* `World.CanTrain` gives the reason (the command card already shows it); a public read-only `World`
+    accessor returns the count and the limit for a player and a type (the view will draw "5 / 7" with the roster).
+  - *The one data byte:* `game/data/common/ui.json` `train` gains the new value's key with the text **"Limit
+    reached"** (the view's `UiText.Section<TrainError>` demands a text for every value, or the game does not boot;
+    `ui.json` is not in the data hash). Nothing else under `game/` changes.
+  - *AI (reachable only with the field, so no shipped match moves):* the production manager skips a type at its
+    limit and trains the next type by share (`CanTrainSomewhere` already asks `CanTrain`); a build-order `train`
+    step whose type is at its limit is done unsent (D15 C's house-at-the-cap precedent), so no step is due for ever.
+  - *State:* no save or replay format change. If you keep a count instead of deriving it, it is rebuilt at load
+    (as `World.RecountDraw`), never saved, never hashed; `Check` must not walk the unit store per call (the command
+    card asks every frame for every button).
+- **Out of scope:** any byte under `game/data/factions/**`; anything under `game/` except the one `ui.json` row; any
+  AI-play change on shipped data, any pin, golden or hash move (the AI-play session is next; D38's orders must land
+  on the `main` they were measured on); existing classes under `Content/` and `QA/Content/` (the data track's);
+  `docs/factions/**`; the hash-pin rows D38 re-pins (criterion 2's list); G5-G8; Request 60.
+
+**Acceptance criteria.**
+1. A source row proves no `.cs` under `sim/Rts.Sim.Tests` outside `Content/`, `QA/Content/` and the helper itself
+   writes `["buildOrder"] =`; `git diff` for part A shows helper calls and helper code only, no expected value.
+2. On `m84-d38copy` the default loop's red list is exactly these 20 rows and `WorkerCarryTests` is green (the
+   Producer's rehearsal on the base had these 20 plus `WorkerCarryTests.TheAisFullLoadTest_ReadsTheWorkersOwnCarry(ownFullLoad: False)`):
+   `FactionOrderTests.TheShippedContentHash_IsTheGoldenHeaders`, `QA/PackQaTests.TheShippedDataHash_IsTheGoldenHeaders`,
+   `StillStealthLoaderTests.TheHash_IsUnchangedWithoutTheField_MovesWithIt_AndWithEachField` (D38 re-pins these
+   three: do not touch them); `Content/AiContentTests.A_EachPage_IsItsAiFile_BothWays`, `Content/D34HashMoveTests` (1),
+   `Content/D37TeblorFixtureTests` (4), `Content/TeblorOpeningFixtureTests` (1), `Content/TeblorRosterPinTests.AnAiCellChanged_IsCaught` (6),
+   `QA/Content/D20PinQaTests.HouseNote_SaysWhatTheMenuMapRunsShow(teblor)`, `QA/Content/D33QaTests` (2),
+   `QA/Content/D34QaTests` (1) (the data track's). Any other red row is yours to fix or to name.
+3. On `m84-d38copy`, **measure and report** (rule 48; one line a class, rule 71's form: "green" / "was red, helper
+   fixed" / "pins shipped Teblor play: row ..., for D38's re-pin"): `QA/M79PerDifficultyAiQaTests` and the Stress
+   classes that name the Teblor outside the content folders: `ForestStealthFuzzQaStressTests`,
+   `FrenzyAftermathFuzzStressTests`, `FrenzyCastReportQaStressTests`, `FrenzyCastReportTests`,
+   `GatherQueueQaStressTests`, `HitBonusScaleQaStressTests`, `KeepCornerCureQaStressTests`,
+   `M78ReserveSwitchQaStressTests`, `M78ShippedDigestQaStressTests`, `M7H2FrenzyReportQaStressTests`,
+   `ReserveSwitchReportTests`, `StillStealthScaleQaStressTests`, `WideCrowdStressTests`,
+   `WorkerCarryQaStressTests`, and `FarExpandProbeQaStressTests`. A row that is red because a helper forged the
+   wrong opening is fixed; a row that truly pins a match played on the shipped Teblor opening is named, not edited.
+4. On the branch's own data the default loop is 0 failed (20 skipped, the same 20).
+5. BUG-1770: a regression row that fails first; `"easy": null` and `"easy": []` beside two real entries give one
+   error each, at the entry's path, and no "every difficulty" error.
+6. Loader: `maxAlive` 0, negative, a fraction, a string, `null`, over the limit and below `spawnCount` are each
+   refused by path and name; left out loads with no limit. `DataNullPolicyTests` and `DataContentHashTests` know
+   the field.
+7. Hash: without the field the shipped data hashes as on the base (a differential row against the base, never a
+   literal: rule 73); with the field the hash moves, and moves again with its value.
+8. The rule, on test data: the boundary (limit 7: the seventh accepted, the eighth refused with the new reason); a
+   pack (`spawnCount` 3, limit 7: two items accepted, the third refused); per player (two players each reach their
+   own limit); cancel frees a place; a death frees a place; several Trains in one tick at different buildings
+   apply in order and only the surplus is refused; a queued item completes after an ability spawn took the count
+   past the limit; a refused Train leaves gold, wood and the queue untouched.
+9. The view's needs: `CanTrain` returns the reason; the accessor returns count and limit; `ui.json` has the text;
+   `powershell -File tools/qa/smoke.ps1` prints PASS.
+10. AI, on test data, Easy, Normal and Hard: with a capped type in the composition the seat reaches the limit and
+    goes on training other types (it never sits on its gold for the capped type); a `train` step of 9 on a type
+    limited to 7 is done unsent at the limit and the steps behind it run; over 12,000 ticks the seat sends no Train
+    that is refused for the limit (`Simulation.RefusedForTests`).
+11. Nothing shipped moves: `git diff <base> -- game/` is the one `ui.json` row; the golden replay and every pin are
+    untouched; three shipped-data matches of 12,000 ticks hash as on the base, tick for tick (M7-9's twin form).
+12. Save and replay: no format change; a save taken with capped units alive and in queues loads and runs
+    hash-equal to its unsaved twin for 2,000 ticks, and the limit holds after the load; a replay of a match with a
+    capped type plays back to the same hashes.
+13. Determinism: a match with a capped type twice in one process and once in a second process: equal hashes.
+14. Cost: `Check` allocates nothing; a type without the field costs nothing extra (Perf alone, rule 42: no row
+    moves); with the field, report the cost of 1,000 checks beside 6,000 live units.
+15. Fuzz, 20 seeds of random Train / CancelTrain / kills on a capped type (packs included): trained-and-alive plus
+    queued never exceeds the limit.
+16. Docs in the same commit: docs/02 (a unit type may carry a limit; what is counted); docs/03 "Implementation
+    (M8-4)" with "For the data track (M8-4)" (the Hound's row) and "Questions for the Producer" (rule 67); the
+    Producer's answers to M7-9's Questions 1-4 (docs/01, the second 2026-11-26 row, (1)) written into docs/03
+    "Implementation (M7-9)".
+17. The report: `dotnet build RtsGame.sln --no-incremental` 0 / 0 after the last edit (rule 64); the full default
+    loop after the last edit (rule 62); the rule 71 list of criterion 3; every test process you started ended by
+    its recorded PID (rules 52 / 69).
+
+**Design references.** docs/factions/shadow.md "Unit notes" (Hound of Shadow), "Schema gaps" G4, "Decisions
+(D-R38)" (alive plus queued); docs/03 "Implementation (M7-9)" and "For the data track (M8-3)" (the shape of a
+data-track table); docs/02 "AI opponent"; `studio/bugs/BUG-1771-*.md`, `BUG-1770-*.md`.
+
+**Tests required.** Unit rows for criteria 5-9; AI scene rows (10); the twin / save / replay / two-process rows
+(11-13, the two-process row under Stress); an allocation row and a Perf report row (14); the fuzz (15, Stress);
+the source row (1).
+
+**Constraints.** No stat in C# (the limit is data; the text is `ui.json`). No allocation in `Check` or a think.
+No `Dictionary` iteration in the count. Rule 58: your test data forges `maxAlive` on a copy and tolerates a
+shipped row that already has it. Rule 73: no literal data hash. You cannot write `studio/**`: bug-file patches go
+in your scratchpad. Scratch folders start with `m84-`.
+
+**QA focus.** (1) Part A on the D38 copy: re-run criterion 2 and 3 independently, and try a second D38 shape (a
+`normal` entry too, with `buildOrder` = the Easy order) to find a helper that is right only by luck. (2) The
+count's edges: a pack that straddles the limit, Trains in one tick from two buildings, cancel and re-queue in one
+tick, a death and a Train in one tick, a unit that changes owner if anything can, a defeated player, 8 players at
+the limit at once, `maxAlive` = `spawnCount`. (3) A kept count against a recount after every tick of a 20-seed
+fuzz, and after load. (4) The AI: a composition of only the capped type (does the seat stall, attack, bank gold?),
+a `train` step reopened after the unit dies. (5) Nothing shipped moves: the base-against-head twin on three
+shipped matches, the golden. (6) Because of the `ui.json` row: smoke and the scene loop once. Full tier: the
+default loop with Stress, then Perf alone under rule 42.
+
+### Next task candidates (after this session)
 1. **M8-4: BUG-1771 first, BUG-1770, then Request 56 G4** ("Proposed briefs" above; feature, QA full; no AI-play
    change, no hash move, no pin move; 20 bug ids 1810-1829). Write M7-9's answers into docs/03 "Implementation
    (M7-9)" (rule 67).
@@ -510,7 +677,107 @@ the next PLAN), BUG-1792 (S4; the notice's long text). Carried: BUG-1710 (S4). T
 Questions 1-3 are in docs/01 (the second 2026-11-26 row, (2)): the notice's look and silence kept; Question 1 is a
 bug to fix, not a limit to keep.
 
-### Next task candidates
+### Current session plan (2026-11-26-0717): M6-V30, feature, QA standard
+
+**Goal.** The Teblor's buildings become models, from the timber "First Age" set of the building pack already on
+disk (Quaternius Ultimate Fantasy RTS), through M6-V26 / V28's import path. A Teblor base stops being boxes and
+reads apart from the Malazan's grey stone at a glance. The data's building `scale` (1.25 on every Teblor
+building) is drawn on a model for the first time.
+
+**Why the Teblor and not the Whirlwind (Producer decision, owner may revisit):** the pack's First Age halls are
+bare timber, which suits a mountain clan; it has no tent or desert camp. Write one paragraph in docs/04 on what the
+Whirlwind's buildings could be made from (a Question for the Producer, with your recommendation).
+
+**Scope.**
+- **At least six of the ten Teblor building types**, each from one pack glTF, as entries in
+  `tools/asset-manifest.json` `buildings`, built by `tools/art/build_building.py` to
+  `game/assets/models/teblor/<id>/<id>.glb` with its atlas: the Longhouse (a `TownCenter_FirstAge_*`), the Hut (a
+  `Houses_FirstAge_*`), the Woodcutters' Lodge (a `Storage_FirstAge_*`), the War Lodge (a `Barracks_FirstAge_*`),
+  the Javelin Ground (an `Archery_FirstAge_*`) and the Stone Cairn (a `WatchTower_FirstAge_*`, tinted as piled
+  stone). The other four (Stables & Kennels, Bloodwood Carver, Shaman's Circle, Breaker's Hall) only where the
+  pack has a plain match (`Farm_*`, `Market_*`, `Temple_FirstAge_*`); a type without one stays its box and is named
+  in docs/04. The picks are yours (docs/04 says why each); the owner may revisit.
+- **The `scale` rule for a model (Producer decision, owner may revisit):** a model is fitted to its footprint as
+  today (`BuildingModels.FitMargin`), then its **height** is multiplied by the data `scale`, exactly as a box's is
+  since M7-V4: a quarter taller, never wider than its footprint. The bar, the pick shape, the remembered (ghost)
+  model, the site and a tower's shot height follow the drawn shape. A Malazan model (`scale` 1) does not change by
+  one pixel. Save one picture pair of the same base with the stretch and without it for the owner.
+- **Team colour:** the pack's First Age has only a few banner pixels of team colour. Each new model needs a team
+  part that reads at zoom 40 in all eight player colours (a roof or thatch material in the entry's `team` list, as
+  on the Malazan buildings; your choice per model).
+- **The Stone Cairn shoots:** its shot leaves from `ModelShotShare` of its drawn top (after the `scale`), as the
+  Watchtower's does.
+- **Tooling is yours:** `tools/asset-manifest.json`, `tools/import-assets.ps1`, `tools/art/**`. The import needs
+  Blender 5.2 and the main checkout's `asset-sources/` (both on this PC). A full re-import must leave every
+  existing model, atlas and `.import` file byte for byte.
+- **Rule 67:** write the Producer's answers to M6-V29's Questions 1-3 (docs/01, the second 2026-11-26 row, (2))
+  into docs/03 "Implementation (M6-V29)"; leave the wrong sentence under its Question 1 and BUG-1790 / 1792 for the
+  clean-up.
+- **Out of scope:** `Match.ResultFor`, `DrawNotice` (BUG-1790, 1792: the next session's clean-up); anything under
+  `game/data/**` (the sim adds a row to `ui.json` this session; the data track edits the Teblor `ai.json`); sim
+  code and `ViewApi`; the Whirlwind's buildings; the remaining Malazan four; how a site is drawn; a `model` field
+  in the data (a model is found by its id).
+
+**Acceptance criteria.**
+1. At least six Teblor building types have a manifest entry, a `.glb` and an atlas under
+   `game/assets/models/teblor/<id>/`, each at most 5,000 triangles, one surface, one `team` material (docs/04's
+   building budget); the binaries are Git LFS files.
+2. `tools/import-assets.ps1` run in full rewrites every pre-existing model, atlas, library and `.import` file byte
+   for byte (SHA-256 before and after, in the report) and the new ones identically on a second run.
+3. `BuildingModelTest`'s rows pass for every manifest entry (files, mask, team colour in all eight colours, fit,
+   sites, razing, remembered models, fallbacks), its counts read from the manifest, never a literal.
+4. The `scale`: for each new model the drawn height is the fitted height x the data `scale` within 1 cm, its
+   width and depth stay 0.25 m inside the footprint, and its base is on the ground at a terrace's foot and on its
+   edge; each Malazan model's drawn size is what it was on the base (a row that compares, not a literal).
+5. Picking, on a new scene (`TeblorBuildingsTest`, headless, in the loop): an own unit standing in front of each
+   new model is what a click on it selects at zoom 20, 40 and 60; every 12th model pixel at zoom 40 selects the
+   building; the bar's both ends are on screen at the closest zoom and sit over the drawn top.
+6. The Stone Cairn's shot leaves at `ModelShotShare` of its drawn top on flat ground and from a terrace; a Cairn
+   site fires nothing. (If the Cairn gets no model, say so and this criterion is dropped by name.)
+7. `--placeholder-art` and a missing file still give the box at the box's `scale` height, with one warning and no
+   `ERROR`.
+8. Pictures (windowed, looked at before you report; saved under `m6v30-shots/` in your scratchpad, the Producer
+   copies them): each new model at 40 m and 20 m; a Teblor base at 40 m and 60 m with Warriors beside the
+   buildings (the giants are 3.75 m tall: say how the Hut reads beside one); the four-colour picture; a Teblor base
+   beside a Malazan base at 40 m; the stretch pair.
+9. Cost, measured alone (rules 42 / 61 / 77: after the other tracks' suites have ended when you can; say what else
+   ran): 400 figures with 60 building models that include the new types, the same with boxes, 400 capsules and the
+   1,000-figure rows from the same window. **Measure and report** against 16.7 ms and M6-V28's +0.28 ms for
+   models over boxes; a model type that costs more than 1 ms over its box is a finding.
+10. The scene loop is green (128 scenes plus yours; the count read, not assumed); `ModelViewTest` and every scene
+    that pins a Teblor building's box (`BuildingScaleViewTest`, `QaM7V4Test`, `TeblorModelTest`, the M7-V3c scenes)
+    is adapted by `BuildingViews.UseModels = false` or by reading `ModelOf` / `BarY`, never by deleting a row.
+11. `powershell -File tools/qa/smoke.ps1` prints PASS; `dotnet build RtsGame.sln --no-incremental` 0 / 0; the
+    default loop 0 failed.
+12. Docs in the same commit: docs/04 "Building models, as built (M6-V30)" (the picks table with triangles and
+    fitted sizes, the palette, which types stay boxes and why, the Whirlwind paragraph); docs/03 "Implementation
+    (M6-V30)" with "Questions for the Producer"; the M6-V29 answers (rule 67). The pack is already in the
+    licensing log: add nothing unless a new source file family needs a line.
+
+**Design references.** docs/04 "Building models, as built (M6-V26)" and "(M6-V28)" (the path, the budget, the
+palette rule); docs/03 "Implementation (M6-V28)" (the shot height, the tests), "Implementation (M7-V4)" (the
+`scale` rule on boxes); docs/factions/teblor.md "Buildings" ("1.25x scale visually") and its building
+descriptions (a Hut is "a low hut of hide and timber", the Cairn "a lookout of piled stone");
+`game/data/factions/teblor/buildings.json` (read only).
+
+**Tests required.** `BuildingModelTest` for the new entries; the new `TeblorBuildingsTest` (criteria 4-6); the
+adapted scenes of criterion 10; the bench.
+
+**Constraints.** Views hold no gameplay state; no per-frame allocation (the drawn height and bar height are
+written once per building, as M7-V4's). No player-facing text in C#. Never commit a raw pack file; only built
+outputs. Record the PID of every Godot and `dotnet test` you start and end only those (rules 52 / 69). Scratch
+folders start with `m6v30-` (rule 63). You cannot write `studio/**`.
+
+**QA focus.** (1) The stretch: a model on every terrace level and at a map edge, a ghost of a razed Teblor model
+in fog, a site that finishes under the camera (does the model pop to the right height?), a save loaded with Teblor
+models standing. (2) Picking beside the tall models: a Gatherer wholly behind a Longhouse, a Warrior in front of a
+Hut at zoom 60, the Cairn's top. (3) Malazan models unchanged: compare the six on base and head by drawn size and
+by a screenshot. (4) Team colour of each new model in all eight colours on the picture, not only in the test.
+(5) Three factions in one match: models for two, boxes for the Whirlwind, no `ERROR`. (6) The byte-for-byte
+re-import on a fresh clone. (7) Run the bench last and alone (rule 77). Standard tier: the default loop, the scene
+loop, smoke.
+
+### Next task candidates (after this session)
 1. **M6-V30, the next building models** ("Proposed briefs" above; feature, QA standard). Write M6-V29's answers
    into docs/03 (rule 67).
 2. **The view's clean-up (at 4 / 4, the session after):** BUG-1790's two-sided fix in `Match.ResultFor` (a drawn
@@ -533,7 +800,112 @@ unit mix; the cure is D38, measured and waiting in three fixtures), BUG-1421 ite
 answers to D37's Questions 1-3 are in docs/01 (the second 2026-11-26 row, (3)): Normal = M1RS; `buildOrder` is
 Normal's, Easy and Hard are entries; the Shaman / Circle check reads position, per list; no new first-shot words.
 
-### Next task candidates
+### Current session plan (2026-11-26-0717): D38, feature, QA standard
+
+**Goal.** Ship the three Teblor build orders D37 measured, one per difficulty, through the `buildOrders` field
+M7-9 built, so the Easy, Normal and Hard Teblor computer players each field their full unit mix. This closes
+BUG-1612. It is the session's one data-hash move: saves and recordings from before stop loading.
+
+**Scope.**
+- **The one game-data file: `game/data/factions/teblor/ai.json`, the `standard` opening only.** `buildOrder` = M1RS
+  (the `buildOrder` of `sim/Rts.Sim.Tests/Content/Fixtures/teblor_standard_d37_normal.json`); `buildOrders` =
+  `{ "easy": K9KC10S, "hard": QRD1 }` (the `buildOrder` of `..._d37_easy.json` and `..._d37_hard.json`), placed
+  after `buildOrder`; every step as measured, `throughReserve` switches included. `displayName`, `description`,
+  `compositions`, `attack`, the difficulties block and `retreat` unchanged. docs/03 "For the data track (M7-9)" is
+  the schema's page.
+- **Measure on the shipped file (rule 75), all three difficulties' 64 seats: the rows must equal D37's.** Easy
+  1 / 0 / 38 / 28 / 34 / 42 / 22, Normal 9 / 23 / 23 / 18 / 30 / 40 / 18, Hard 11 / 23 / 23 / 40 / 42 / 47 / 25 (the
+  seven figures in D37's column order). If one cell differs, stop, ship nothing and say which.
+- **Pins you move (the Producer's rehearsal at this PLAN: 21 red rows in the default loop with the file written
+  as above and nothing else changed).**
+  - Sim-owned, handed to you by name (rule 51; edit the expected value or regenerate the header only): the golden
+    replay's header and checksum; `FactionOrderTests.TheShippedContentHash_IsTheGoldenHeaders`;
+    `QA/PackQaTests.TheShippedDataHash_IsTheGoldenHeaders`;
+    `StillStealthLoaderTests.TheHash_IsUnchangedWithoutTheField_MovesWithIt_AndWithEachField`. The reason for the
+    header's regeneration goes in the `GatherWedgeQaTests` comment (BUG-0750's rule). No new literal hash anywhere
+    (rules 49 / 73).
+  - Yours: `Content/AiContentTests.A_EachPage_IsItsAiFile_BothWays`; `Content/D34HashMoveTests.TheShippedHash_IsD34s_AndNotD33s`;
+    `Content/D37TeblorFixtureTests` (4 rows: "6 fields, the shipped opening 7": the shipped opening is now the
+    Normal fixture plus `buildOrders`; each fixture is compared with the list its difficulty plays);
+    `Content/TeblorOpeningFixtureTests.TheShippedOpening_IsTheD34Fixture`; `Content/TeblorRosterPinTests.AnAiCellChanged_IsCaught`
+    (6 rows: their find / replace cells follow the new page); `QA/Content/D20PinQaTests.HouseNote_SaysWhatTheMenuMapRunsShow(teblor)`
+    (re-measure the page's "Houses at the cap" sentence from its report); `QA/Content/D33QaTests` (2 rows);
+    `QA/Content/D34QaTests.TheShippedData_IsD34s_QasQ2WithTheProposedText`.
+  - **Not yours:** `WorkerCarryTests.TheAisFullLoadTest_ReadsTheWorkersOwnCarry(ownFullLoad: False)` (BUG-1771: the
+    sim fixes its helper beside you). It is the one row that may be red on your branch and must be green on the
+    merged tree (rule 68).
+- **BUG-1771's family in your folders:** `QA/Content/D19QaTests.cs` writes `["buildOrder"] =` on a copy: remove
+  `buildOrders` there too. Any content helper that replaces or reads "the opening's build order" (the fixture
+  writers of `TeblorLandingWriteTests`, the report classes' `AllVariants` appliers) must replace all three lists or
+  remove `buildOrders` (rule 79), and read a seat's list by its difficulty.
+  `QA/Content/D32DescriptionQaTests.Shamans_HaveTheirOwnTrainStep_AfterTheCircleStep` reads every list, by position
+  in the file (docs/01, the second 2026-11-26 row, (3)).
+- **Stress rows (rules 51 / 53 / 76).** Run every Stress class in `Content/` and `QA/Content/` that plays a match
+  on the shipped Teblor `standard` (grep the folders for `teblor`; about two dozen classes name it) and list each
+  as "re-measured: unchanged / moved to ... / forges its own order, cannot move / hour-long report with no bound,
+  left for the next task (named)". Classes that seat only Malazan and Whirlwind cannot move and are not run. The
+  sim developer runs the sim-owned Stress classes on a D38-shaped copy this session and names any row that pins
+  shipped Teblor play; those are re-pinned at the merge or first in your next task, by the Producer's ruling.
+- **The page, `docs/factions/teblor.md`:** "AI build order (Normal)" = M1RS, step for step; a step table for Easy
+  (K9KC10S) and one for Hard (QRD1), each pinned to its list both ways by `AiContentTests` (extend it: a page table
+  per `buildOrders` entry); BUG-1612's section closed with the three measured rows; "Houses at the cap"
+  re-measured; the Producer's answers to D37's Questions 1-3 written in (rule 67; docs/01, the second 2026-11-26
+  row, (3)). New "Questions for the Producer" if you have any.
+- **BUG-1421 item 1** (the expansion's reserve starving the Shaman step): re-run its think-by-think report on the
+  shipped orders and say, per difficulty, whether the Shaman step still waits behind the reserve; close it with
+  the figures or leave it open with them.
+- **The owner's review table** (in your report, plain words, no code names): per difficulty, the plan before
+  (D34's order) and after, in one sentence each, and the seven figures before -> after of 64 test matches; that
+  no name or description changed; that saves and recordings from before stop loading.
+- **Out of scope:** every other file under `game/data/**` (the sim adds a row to `common/ui.json` this session);
+  any C# outside `sim/Rts.Sim.Tests/Content/` and `QA/Content/` except the four sim-owned pin edits named above;
+  the opening's description, compositions and attack numbers; a new search (the three orders are decided: docs/01,
+  the second 2026-11-26 row, (3)); the Shadow page.
+
+**Acceptance criteria.**
+1. `git diff <base> -- game/` is `game/data/factions/teblor/ai.json` only, and in it only the `standard`
+   opening's `buildOrder` and the new `buildOrders`; the three lists equal the three D37 fixtures' step for step
+   (a content row proves it; the three fixtures stay).
+2. The shipped file loads; `DataValidationTests` green; an Easy, a Normal and a Hard Teblor seat each resolve the
+   list of their difficulty (a row reads `AiOpening.BuildOrderFor`).
+3. The three 64-seat rows measured on the shipped file equal D37's, cell for cell (the report carries all 21
+   figures; the measuring rows are in the repo).
+4. The default loop on your branch: 0 failed except, at most, the one named `WorkerCarryTests` row; 20 skipped.
+   Every one of the 20 other rows of the rehearsal list is green by a re-pin or a page edit, none by a skip or a
+   deletion.
+5. The data hash moved once; the golden's header carries the new hash and no test holds it as a literal; a row
+   proves the data without `buildOrders` and with D34's `buildOrder` still hashes as the base did (the
+   differential form of `D34HashMoveTests`).
+6. teblor.md's three step tables are their lists both ways (change a cell on either side and a row names it);
+   the description's tooltip checks hold for each difficulty's list.
+7. The Stress list of the scope, one line a class, in the report (rule 71).
+8. BUG-1612's file: a patch in your scratchpad setting it fixed with the three rows; BUG-1421 item 1 answered.
+9. The owner's review table, and the sentence about saves, in the report.
+10. `dotnet build RtsGame.sln --no-incremental` 0 / 0 after the last edit; the full default loop after the last
+    edit (rule 62); every test process you started ended by its recorded PID (rules 52 / 69).
+
+**Design references.** docs/factions/teblor.md "AI build order (Normal)", "The unit mix" sections and D37's
+"Questions for the Producer"; docs/01, the second 2026-11-26 row, (3) (Normal = M1RS; `buildOrder` is Normal's,
+Easy and Hard are entries; position, per list) and the bar of 2026-11-24 ACCEPT (3)(c); docs/03 "For the data
+track (M7-9)"; docs/02 "AI opponent".
+
+**Tests required.** The fixture-equality row (1), the per-difficulty resolve row (2), the three measuring rows
+(3), the hash rows (5), the page rows (6); the re-pinned rows of the list.
+
+**Constraints.** Numbers come from the fixtures, never retyped by hand. File order is behaviour: do not reorder a
+step. No literal data hash in a test. You cannot write `studio/**`: bug patches go in your scratchpad. Scratch
+folders start with `d38-` (rule 63).
+
+**QA focus.** (1) Is the shipped file the three fixtures, byte-comparable step for step, switches included, and
+does each difficulty's seat really play its own list in a match (read `AiPlayer.Steps` on a seat of each)?
+(2) Re-measure one difficulty's 64 seats independently. (3) The page: change one cell in each of the three tables
+and in each list; is each caught? (4) Hunt for a content helper that still replaces `buildOrder` and leaves
+`buildOrders` (the BUG-1771 family) by forging a `normal` entry too. (5) Easy plays opening 0 only: the Easy entry
+is on `standard`, which is opening 0: prove it. (6) The hash: one move, the golden header, no literal. Standard
+tier: the default loop (say the filter: `Category!=Perf&Category!=Stress&Category!=Soak`), the Stress rows the
+task touches, no Perf.
+
+### Next task candidates (after this session)
 1. **D38** ("Proposed briefs" above; QA standard; the session's one hash move; the owner's review table).
 2. The hour-long Teblor Stress report classes D34 did not re-run, malazan.md's "Age II against the Whirlwind"
    paragraph, BUG-1421 item 1.

@@ -5053,6 +5053,7 @@ no sim, `ViewApi`, data hash or save changed.
   3. **No sound** when the clock starts. Recommendation: keep silent; the alert sound means "under attack", and the notice
      shows for minutes.
 
+## Vision, detection, fog
 
 Fog of war and the high-ground rule are in since M4-3a (`sim/Rts.Sim/Vision/`); the last-known building ghosts, buildings
 that shoot and placement on explored ground since M4-3b (see "Implementation (M4-3b)"); zones that hide their contents

@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S3 |
-| Status | open |
+| Status | fixed |
 | Found | 2026-11-26-0207, task M6-V29 (QA) |
 | System | docs: `docs/03-technical-design.md` |
-| Fixed by | |
+| Fixed by | The Producer at the 2026-11-26-0717 PLAN: `## Vision, detection, fog` restored before "Fog of war and the high-ground rule are in since M4-3a"; `grep -n "^## Vision, detection, fog" docs/03-technical-design.md` finds one line |
 
 ## Repro
 1. `git diff 6f9975a...45e0e0d -- docs/03-technical-design.md`: the last hunk ends with `-## Vision, detection, fog`
