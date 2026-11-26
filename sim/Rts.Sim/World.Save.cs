@@ -68,6 +68,7 @@ public sealed partial class World
         w.Write(SurroundRuleOn);
         w.Write(FlankRuleOn);
         w.Write(_matchOverLatched);
+        WriteDraw(w); // M6-S13: World.Draw.cs (present only with a draw rule and a clock or a draw)
 
         w.Tag(SaveFormat.TagRng);
         w.Write(_rngs.Length);
@@ -156,6 +157,7 @@ public sealed partial class World
         SurroundRuleOn = r.ReadBool();
         FlankRuleOn = r.ReadBool();
         _matchOverLatched = r.ReadBool();
+        ReadDraw(r); // M6-S13
 
         if (!r.Expect(SaveFormat.TagRng) || !r.ExpectLength(_rngs.Length)) return;
         for (int s = 0; s < _rngs.Length; s++)
@@ -185,6 +187,7 @@ public sealed partial class World
         Spatial.ReadFrom(r);
         FlowFields.ReadFrom(r);
         if (r.Failed) return;
+        RecountDraw(); // M6-S13: the draw check's counts, derived from the stores just read
 
         if (!r.Expect(SaveFormat.TagSurround)) return;
         r.ReadArray(SurroundClaim);

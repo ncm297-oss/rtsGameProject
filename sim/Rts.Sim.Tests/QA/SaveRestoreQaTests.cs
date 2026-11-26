@@ -398,6 +398,11 @@ public class SaveRestoreQaTests
     [InlineData("construction_and_queue", 1000)]
     [InlineData("surround_brawl", 137)]
     [InlineData("defeated_seat", 137)]
+    // M6-S13: a spent match with its draw clock running at the save (World._drawClock / _drawn are saved, the DRAW part); the
+    // counts the draw check reads (the ledger's LiveWorkers / QueuedUnits / CarriedGold, ResourceStore.GoldLeft) are derived and
+    // recounted at a load, and UnitStore.PermanentFrees is 0 between ticks, so none of them is in the scratch list.
+    [InlineData("draw_clock", 137)]
+    [InlineData("draw_clock", 1000)]
     public void TheWholeObjectGraph_OfALoad_MatchesTheSavedSim_OutsideScratch(string name, int saveAt)
     {
         SaveScene scene = SaveScenes.Named(name);

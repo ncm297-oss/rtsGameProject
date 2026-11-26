@@ -357,7 +357,35 @@ public static partial class DataLoader
             StealthProximity = stealth == null ? 0f : (float)c.Sight(stealth.Proximity, "stealth.proximity", "rules", "proximity"),
             RevealTicks = stealth == null ? 0 : c.Ticks(stealth.RevealSeconds, "stealth.revealSeconds", 1),
             GatherOverlap = GatherOverlap(c, j.GatherOverlap), // M6-S9
+            DrawAfterTicks = DrawAfter(c, j.Draw), // M6-S13
         };
+    }
+
+    /// <summary>
+    /// M6-S13: <c>draw.afterSeconds</c> in ticks. The block left out (or written <c>null</c>) is no draw rule (0). In the block
+    /// the field is required: missing, a JSON null, a value that isn't a number, zero or a negative, a value over
+    /// <see cref="DataLimits.MaxDrawSeconds"/> and a value that rounds to 0 ticks are one error each, and read as 0.
+    /// </summary>
+    private static int DrawAfter(Checker c, DrawJson? j)
+    {
+        const string p = "draw.afterSeconds";
+        if (j == null) return 0;
+        NumberJson? s = j.AfterSeconds;
+        if (s == null)
+            c.Error(p, "missing required field (leave the whole draw block out for no draw rule)");
+        else if (s.Token == JsonTokenType.Null)
+            c.Error(p, "null is not a number (leave the whole draw block out for no draw rule)");
+        else if (s.Token != JsonTokenType.Number)
+            c.Error(p, "wrong type of value: expected a number");
+        else if (!(s.Value > 0))
+            c.Error(p, $"{s.Value} must be positive");
+        else if (!(s.Value <= DataLimits.MaxDrawSeconds))
+            c.Error(p, $"{s.Value} s is above the maximum {DataLimits.MaxDrawSeconds} s");
+        else if (SecondsToTicks(s.Value) < 1)
+            c.Error(p, $"{s.Value} s rounds to 0 ticks");
+        else
+            return SecondsToTicks(s.Value);
+        return 0;
     }
 
     /// <summary>

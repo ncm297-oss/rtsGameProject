@@ -74,6 +74,12 @@ public sealed partial class ResourceStore
     /// <summary>Amount left in each live slot (wood or gold, by its type's <see cref="ResourceDef.Resource"/>); always at least 1 while alive.</summary>
     public ReadOnlySpan<int> Remaining => _remaining;
 
+    /// <summary>
+    /// M6-S13: the gold left in every live gold node (the draw rule's "gold left on the map"), kept by every spawn and every
+    /// take. Derived from the nodes: not hashed, not saved (a load recounts it).
+    /// </summary>
+    public long GoldLeft { get; private set; }
+
     /// <summary>Total number of slots.</summary>
     public int Capacity => _alive.Length;
 
@@ -136,6 +142,7 @@ public sealed partial class ResourceStore
         ResourceDef def = _defs[typeId];
         _grid.SetResource(cell % _grid.Width, cell / _grid.Width, def.FootprintWidth, def.FootprintHeight);
         if (_woodCells != null && def.Resource == ResourceKind.Wood) MarkWood(cell, def, true);
+        if (def.Resource == ResourceKind.Gold) GoldLeft += amount;
         handle = new EntityHandle(index, _generation[index]);
         return true;
     }
@@ -191,6 +198,7 @@ public sealed partial class ResourceStore
         int i = handle.Index;
         int taken = Math.Min(amount, _remaining[i]);
         _remaining[i] -= taken;
+        if (_defs[_typeId[i]].Resource == ResourceKind.Gold) GoldLeft -= taken;
         if (_remaining[i] == 0) Free(i);
         return taken;
     }

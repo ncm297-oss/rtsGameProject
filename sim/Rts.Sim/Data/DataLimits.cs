@@ -53,6 +53,13 @@ public static class DataLimits
     public const double MaxGatherOverlap = 0.75;
 
     /// <summary>
+    /// M6-S13: the longest <c>rules.json</c> <c>draw.afterSeconds</c> (one game day). A rule of the format, not a design number
+    /// (docs/01 2026-11-25-1437: 300 s ships): far past any match, so a test can put the wait out of reach, and it still fits
+    /// an int in ticks.
+    /// </summary>
+    public const double MaxDrawSeconds = 86_400;
+
+    /// <summary>
     /// M7-3: the most factions <c>common/factions.json</c> may list (and so the most <c>factions/</c> folders). A rule of the
     /// format, not a design number: the setup screen lists every faction in one list and a load bounds its tables.
     /// </summary>

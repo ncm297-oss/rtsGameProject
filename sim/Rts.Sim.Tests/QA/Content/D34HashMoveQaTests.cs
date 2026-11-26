@@ -18,7 +18,8 @@ public class D34HashMoveQaTests
 {
     private const string MainChecksum = "807C173DF2B5F439";
 
-    private static readonly Lazy<GameData> s_d33 = new(() => TeblorOpeningVariantsReportTests.DataWith(TeblorOpeningFixtureTests.D33Fixture()));
+    // M6-S13 (sim track, the hash move): D33's data is the D33 fixture on the shipped files with the draw block out.
+    private static readonly Lazy<GameData> s_d33 = new(() => Draw.DrawScenes.TeblorOpeningBeforeDraw(TeblorOpeningFixtureTests.D33Fixture()));
 
     private static byte[] MainGolden()
     {

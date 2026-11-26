@@ -32,6 +32,7 @@ public class D33QaTests(ITestOutputHelper output)
     {
         dir.EditJson("factions/teblor/ai.json", root => root["openings"]![0] = D32TeblorOpeningReportTests.D32());
         D33BalanceReportTests.PutBackTheWaves(dir);
+        Draw.DrawScenes.TakeOutDraw(dir); // M6-S13 (sim track, the hash move): the diff base had no draw block
     }));
 
     /// <summary><c>main</c>'s data (the diff base), rebuilt from the shipped files.</summary>
@@ -44,8 +45,10 @@ public class D33QaTests(ITestOutputHelper output)
         Assert.Equal(MainHash, Main.ContentHash());
         // D34 fix round 1 (BUG-1641): the shipped data is D34's since the Teblor opening moved (was D33Hash); D33's data is the
         // D33 fixture on a shipped copy, and must still hash to D33Hash.
-        Assert.Equal(D34QaTests.D34Hash, TestSim.Data.ContentHash());
-        Assert.Equal(D33Hash, TeblorOpeningVariantsReportTests.DataWith(TeblorOpeningFixtureTests.D33Fixture()).ContentHash());
+        // M6-S13 (sim track, the hash move): the shipped data is D34's with the draw block added, so D34's hash is the shipped
+        // files with that block out, and D33's the D33 fixture on that copy (was TestSim.Data and a shipped copy).
+        Assert.Equal(D34QaTests.D34Hash, Draw.DrawScenes.Off.ContentHash());
+        Assert.Equal(D33Hash, Draw.DrawScenes.TeblorOpeningBeforeDraw(TeblorOpeningFixtureTests.D33Fixture()).ContentHash());
         int t = Main.FindFaction("teblor");
         Assert.Equal(26, Main.Ai[t].Openings[0].BuildOrder.Length);
         Assert.Equal(29, TestSim.Data.Ai[TestSim.Data.FindFaction("teblor")].Openings[0].BuildOrder.Length);

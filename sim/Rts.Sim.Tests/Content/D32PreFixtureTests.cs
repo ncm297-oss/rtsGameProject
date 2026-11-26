@@ -135,6 +135,7 @@ public class D32PreFixtureTests(ITestOutputHelper output)
             // D33 (the data track's balance pass): its two wave changes put back too (cadre_rush 16 -> 18, holy_war 14 -> 20,
             // with the words that quote them); the Teblor opening above already replaces D33's.
             D33BalanceReportTests.PutBackTheWaves(dir);
+            Draw.DrawScenes.TakeOutDraw(dir); // M6-S13 (sim track, the hash move): the diff base had no draw block either
         });
         Assert.Equal(PreHash, before.ContentHash());
         byte[] bytes = Convert.FromBase64String(File.ReadAllText(Fixture("save_teblor_frenzy.b64")));

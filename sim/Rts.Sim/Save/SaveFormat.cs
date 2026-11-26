@@ -69,6 +69,7 @@ public static class SaveFormat
     // Section tags, four ASCII letters each, in file order (docs/03 has the table).
     internal const uint TagHeightmap = 0x50414D48; // "HMAP"
     internal const uint TagWorld = 0x444C5257;     // "WRLD"
+    internal const uint TagDraw = 0x57415244;      // "DRAW" (M6-S13, format 10: inside WRLD after the result flag, exactly when the data has draw and the clock or the drawn flag is not 0)
     internal const uint TagRng = 0x53474E52;       // "RNGS"
     internal const uint TagGrid = 0x44495247;      // "GRID"
     internal const uint TagResources = 0x43535352; // "RSSC"

@@ -43,6 +43,13 @@ internal sealed class RulesJson
     public StealthJson? Stealth { get; set; }
     public AiRulesJson? Ai { get; set; }
     public NumberJson? GatherOverlap { get; set; } // M6-S9, optional: absent = 0; a JSON null is an error, so it is read as NumberJson
+    public DrawJson? Draw { get; set; } // M6-S13, optional: absent (or a JSON null) = no draw rule
+}
+
+// M6-S13: rules.json "draw", the spent-match draw rule. afterSeconds is read raw so that a JSON null is one error.
+internal sealed class DrawJson
+{
+    public NumberJson? AfterSeconds { get; set; }
 }
 
 /// <summary>

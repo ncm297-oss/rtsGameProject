@@ -328,6 +328,10 @@ public class EndGameHardeningTests
     /// the first defeat (so a survivor's census forgets a defeated seat's ghosts in the run): this process and a fresh child
     /// <c>dotnet test</c> of this row fold the same per-tick hashes. In this process only: a save taken at the first think a
     /// seat hunts after a defeat (else the first hunt) loads and follows the run hash for hash for 1,000 ticks.
+    /// M6-S13 (rule 68, re-staged): under the draw rule this match is spent from 26,442 (22:02) and drawn at 58,378 (48:38), before any seat
+    /// is defeated (the AI stands down once the match is over), so there is no hunt past a defeat to save in. The row is about
+    /// the hunt and determinism past a defeat, not the result, so it plays on the shipped data with the draw block taken out
+    /// (<c>DrawScenes.Off</c>): the match it played before, tick for tick.
     /// </summary>
     [Fact]
     [Trait("Category", "Stress")]
@@ -335,7 +339,8 @@ public class EndGameHardeningTests
     {
         var seats = new PlayerSeat[4];
         for (int p = 0; p < 4; p++) seats[p] = new PlayerSeat(p % 2, SeatController.Ai, AiDifficulty.Normal);
-        Simulation sim = Stress.HuntStressTests.Match("pale_hills", seats, 2, units: 1024);
+        GameData data = Draw.DrawScenes.Off;
+        Simulation sim = Stress.DrawStalledRowsReportTests.Build("pale_hills", 2, 4, null, data);
         World w = sim.World;
         bool child = Environment.GetEnvironmentVariable(FourSeatChild) == "1";
         var h = new Determinism.StateHasher();
@@ -354,7 +359,7 @@ public class EndGameHardeningTests
                 if (hunting && defeated)
                 {
                     byte[] bytes = SaveTestRun.Save(sim);
-                    load = SaveTestRun.Load(TestSim.Data, bytes);
+                    load = SaveTestRun.Load(data, bytes);
                     Assert.Equal(bytes, SaveTestRun.Save(load));
                     savedAt = sim.TickNumber;
                 }

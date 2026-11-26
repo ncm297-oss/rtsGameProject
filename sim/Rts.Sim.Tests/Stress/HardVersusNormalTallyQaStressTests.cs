@@ -33,7 +33,7 @@ public class HardVersusNormalTallyQaStressTests
     {
         bool off = Environment.GetEnvironmentVariable("RTS_QA_TALLY_KNOB0") != null;
         GameData data = off ? KnobOff.Value : TestSim.Data;
-        int hard = 0, normal = 0, none = 0;
+        int hard = 0, normal = 0, draws = 0, none = 0;
         foreach (ulong seed in Seeds)
         {
             AiDifficulty a = hardSeat == 0 ? AiDifficulty.Hard : AiDifficulty.Normal, b = hardSeat == 0 ? AiDifficulty.Normal : AiDifficulty.Hard;
@@ -45,10 +45,11 @@ public class HardVersusNormalTallyQaStressTests
             while (sim.TickNumber < 72_000 && !sim.MatchOver) sim.Tick();
             string result;
             if (!sim.MatchOver) { none++; result = "none"; }
+            else if (sim.World.MatchDrawn) { draws++; result = "draw"; } // M6-S13: a drawn match is nobody's win (it read "normal")
             else if (sim.World.IsDefeated(1 - hardSeat)) { hard++; result = "hard"; }
             else { normal++; result = "normal"; }
             _out.WriteLine($"TALLY {(off ? "knob0" : "shipped")} {map} seed {seed} hard seat {hardSeat}: {result} at {sim.TickNumber}");
         }
-        _out.WriteLine($"TALLY-SUM {(off ? "knob0" : "shipped")} {map} hard seat {hardSeat}: {hard} / {normal} / {none}");
+        _out.WriteLine($"TALLY-SUM {(off ? "knob0" : "shipped")} {map} hard seat {hardSeat}: {hard} / {normal} / {draws} / {none} (hard / normal / draw / none)");
     }
 }

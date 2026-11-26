@@ -43,6 +43,7 @@ public sealed partial class World
     /// a named team, or a team-0 player alone, <see cref="AreAllied"/>; in a free-for-all: at most one player that ever built
     /// stands while at least two built): the match has a winning side (or, when the last ones fell on the same tick, none).
     /// Never true while fewer than two sides have built; once true, true for good (latched by the defeat check every tick).
+    /// M6-S13: also true for good once the match is drawn (<see cref="MatchDrawn"/>: the draw check latches it too).
     /// </summary>
     public bool MatchOver => _matchOverLatched || HasResult();
 

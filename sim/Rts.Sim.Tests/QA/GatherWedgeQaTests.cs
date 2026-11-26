@@ -89,6 +89,11 @@ public class GatherWedgeQaTests
     // Carver and the Blood-oil Anointing (due 10:00, was 11:30) moved to just after the Breaker's train step, and a softened
     // description (BUG-1612, BUG-1613). The golden's one seat is a Malazan human seat, so its k lines are byte for byte as
     // before (header data-hash and checksum only; checksum 807C173DF2B5F439 -> E7359ADD20818C67).
+    // M6-S13 (sim track, the session's one hash move; BUG-0750's rule): regenerated once more, A732F387C2BB7E4D ->
+    // 3D93D45345A3B4EA, because the owner's draw rule shipped: common/rules.json gains "draw": { "afterSeconds": 300 }
+    // (RulesDef.DrawAfterTicks, hashed when the block is present). The golden's one human seat is never in a spent match (one
+    // seat: fewer than two sides ever built), so the draw clock stays 0, its state hashes as before, and its k lines are byte
+    // for byte as before (header data-hash and checksum only; checksum E7359ADD20818C67 -> 1708E5EC501A353D).
 
     /// <summary>
     /// Ticks the replay must still match its recorded checkpoints: all of them (M4-H1, BUG-0211; before the re-recording

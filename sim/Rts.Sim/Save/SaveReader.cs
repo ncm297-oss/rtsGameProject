@@ -124,6 +124,17 @@ internal sealed class SaveReader
         return Encoding.ASCII.GetString(_data, at, n);
     }
 
+    /// <summary>
+    /// M6-S13: true, and the word consumed, when the next word is section tag <paramref name="tag"/>; false with nothing
+    /// consumed otherwise (an optional part: <c>DRAW</c>). Never fails the read.
+    /// </summary>
+    public bool TryTag(uint tag)
+    {
+        if (Failed || _end - _pos < 4 || BinaryPrimitives.ReadUInt32LittleEndian(_data.AsSpan(_pos, 4)) != tag) return false;
+        _pos += 4;
+        return true;
+    }
+
     /// <summary>Fails unless the next word is section tag <paramref name="tag"/>.</summary>
     public bool Expect(uint tag) => Check(ReadUInt32() == tag);
 

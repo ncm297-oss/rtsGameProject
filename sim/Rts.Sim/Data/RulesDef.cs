@@ -67,4 +67,11 @@ public sealed class RulesDef
     /// "Implementation (M6-S9)"). 0 to <see cref="DataLimits.MaxGatherOverlap"/>. In <see cref="GameData.ContentHash"/> only when non-zero.
     /// </summary>
     public float GatherOverlap { get; init; }
+
+    /// <summary>
+    /// M6-S13 (<c>draw.afterSeconds</c>, in ticks; the block left out = 0 = no draw rule): how long a match must stay spent (no
+    /// standing seat can ever train another unit) before it ends in a draw (docs/02 "Game flow" 4, docs/03 "Implementation
+    /// (M6-S13)"). 1 to <see cref="DataLimits.MaxDrawSeconds"/> s when present. In <see cref="GameData.ContentHash"/> only when non-zero.
+    /// </summary>
+    public int DrawAfterTicks { get; init; }
 }

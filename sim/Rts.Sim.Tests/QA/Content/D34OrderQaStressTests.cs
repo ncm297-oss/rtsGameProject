@@ -157,7 +157,9 @@ public class D34OrderQaStressTests(ITestOutputHelper output)
         foreach (var (name, o) in variants)
         {
             // D34 fix round 1 (BUG-1641): M is D33's opening on a shipped copy (was TestSim.Data, which is D34's Q2 now).
-            GameData d = name == "S" ? TestSim.Data : TeblorOpeningVariantsReportTests.DataWith(o);
+            // M6-S13 (sim track, the hash move): S and M are D34's and D33's records, so both on the shipped files with the draw
+            // block out (S was TestSim.Data, which carries the block now).
+            GameData d = name == "S" ? Draw.DrawScenes.Off : name == "M" ? Draw.DrawScenes.TeblorOpeningBeforeDraw(o) : TeblorOpeningVariantsReportTests.DataWith(o);
             if (name == "M") Assert.Equal(D33QaTests.D33Hash, d.ContentHash());
             if (name == "S") Assert.Equal(D34QaTests.D34Hash, d.ContentHash());
             foreach (AiDifficulty x in diffs)
