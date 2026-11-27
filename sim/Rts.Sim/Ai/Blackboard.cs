@@ -383,6 +383,17 @@ internal sealed partial class Blackboard
     /// <summary>See <see cref="Rally"/>.</summary>
     internal int RallyVersion;
 
+    /// <summary>
+    /// M6-S14 (BUG-1558 items 2 and 3): the last rally point that was acceptable when it was chosen or kept (its cell open
+    /// and no one-cell passage within <c>ai.rallyReach</c>, <c>MilitaryManager.Acceptable</c>), valid while
+    /// <see cref="HasRallyKept"/>: when no point on the line is acceptable the rally point falls back to it rather than to the
+    /// nominal one. Saved at the end of <c>AIST</c> (format 11).
+    /// </summary>
+    internal Vector2 RallyKept;
+
+    /// <summary>See <see cref="RallyKept"/>.</summary>
+    internal bool HasRallyKept;
+
     /// <summary>Per unit slot, the rally version the unit (of <see cref="UnitGeneration"/>) was last sent to: it isn't sent again to the same point.</summary>
     internal int[] RalliedVersion { get; }
 

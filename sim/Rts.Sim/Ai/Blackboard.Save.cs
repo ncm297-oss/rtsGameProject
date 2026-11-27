@@ -118,6 +118,9 @@ internal sealed partial class Blackboard
         // M6-S14, format 11: new values at the part's end. The blind re-scouts (BUG-1554 / 1556).
         w.Write(BlindScoutOut);
         w.Write(BlindScoutsLost);
+        // The rally point's memory (BUG-1558).
+        w.Write(RallyKept);
+        w.Write(HasRallyKept);
     }
 
     /// <summary>Reads what <see cref="WriteTo"/> wrote over this board, built for the same match and opening.</summary>
@@ -226,6 +229,9 @@ internal sealed partial class Blackboard
         BlindScoutOut = r.ReadBool();
         r.Check(!BlindScoutOut || ScoutPhase == 1);
         BlindScoutsLost = r.ReadInt32In(0, int.MaxValue);
+        RallyKept = r.ReadVector2();
+        HasRallyKept = r.ReadBool();
+        r.Check(HasRallyKept || RallyKept == System.Numerics.Vector2.Zero); // none kept: never a stray point
     }
 
     /// <summary>

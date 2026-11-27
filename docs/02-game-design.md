@@ -561,9 +561,12 @@ match's draw clock runs, its countdown line sits at the top centre under the ale
   enemy building it knows (toward the map's centre while it knows none). A point in or at the mouth of a one-cell passage
   (a lane one cell wide between cliffs, buildings or trees, as far as the AI knows them) moves to the nearest point on the
   same line within `ai.rallyReach` (6 m) that stands on open ground with no such lane that near, stepping back toward the
-  Town Hall first and then out past the first point; with none it stays where it was. So a parked army no longer stands in
-  the one lane its own workers walk through to their mine (built in M6-S12, BUG-1461, Producer decision 2026-11-16;
-  [03 Implementation (M6-S12)](03-technical-design.md#implementation-m6-s12)).
+  Town Hall first and then out past the first point; with none it keeps the last such point it had (the first point if it
+  never had one). So a parked army no longer stands in the one lane its own workers walk through to their mine (built in
+  M6-S12, BUG-1461, Producer decision 2026-11-16; [03 Implementation (M6-S12)](03-technical-design.md#implementation-m6-s12)).
+  The point it parks at is kept while it is still such a point and within `ai.rallyReach` of the first point, so an enemy
+  building glimpsed one moment and gone the next no longer moves the army back and forth; a target elsewhere still moves
+  it (M6-S14, BUG-1558; [03 Implementation (M6-S14)](03-technical-design.md#implementation-m6-s14)).
 - The AI keeps about `rules.json` `ai.goldShare` (0.6) of its gatherers on gold, leaning toward what its build order is
   saving for. An idle worker goes to the known gold mine or forest nearest it. When no worker is idle and the split is off,
   one gatherer a think moves to the other resource, and it goes to the known node of that resource nearest the drop-off it

@@ -14,7 +14,9 @@ namespace Rts.Sim.Ai;
 /// hall (the map centre with none known). An idle army unit not in a wave, farther than <c>ai.rallyReach</c> from it, gets one
 /// Move there, never again to the same point (it got as close as it could), nor while a command to it is pending. M6-S12
 /// (BUG-1461): a point in or at the mouth of a one-cell passage moves to the nearest acceptable point on the same line within
-/// <c>ai.rallyReach</c>, back toward the hall first (<see cref="OffThePassage"/>).</item>
+/// <c>ai.rallyReach</c>, back toward the hall first (<see cref="OffThePassage"/>). M6-S14 (BUG-1558): the point in use is kept
+/// while it is acceptable and within <c>ai.rallyReach</c> of the nominal one, and with none acceptable the last acceptable
+/// one is kept (<see cref="RallyPoint"/>).</item>
 /// <item><b>Wave start.</b> No wave in progress, the cooldown over, and the army free to go (not casting, no command pending)
 /// at least <c>attack.minArmyPop</c> half-pop and <c>attack.minArmyCost</c> gold + wood, each times the difficulty's
 /// <c>waveSizeMultiplier</c>, with an enemy building known: every such unit becomes a member and is sent
@@ -105,6 +107,15 @@ internal static class MilitaryManager
         Orders(ai);
     }
 
+    /// <summary>
+    /// The rally point (see the type's summary). M6-S14 (BUG-1558 items 2 and 3): the point in use is kept while it is still
+    /// acceptable (<see cref="Acceptable"/>) and within <c>ai.rallyReach</c> of the nominal point, so a target that flickers
+    /// between two buildings (seen one think, gone the next) no longer moves the point and re-sends the parked army every
+    /// think; a nominal point that moved farther (a new target elsewhere) moves it as before. When no point on the line is
+    /// acceptable, the point falls back to the last acceptable one (<see cref="Blackboard.RallyKept"/>) rather than to the
+    /// nominal one (which stood on a building cell in QA's survey). Why "within reach": the ring an army already counts as at
+    /// the rally point, so keeping the old point moves no unit the new one would not.
+    /// </summary>
     private static void RallyPoint(AiPlayer ai, Vector2 hall)
     {
         Blackboard board = ai.Board;
@@ -112,10 +123,26 @@ internal static class MilitaryManager
         Vector2 d = toward - hall;
         float length = d.Length();
         Vector2 p = ai.ClampToMap(length > 0.001f ? hall + d * (ai.Rules.RallyDistance / length) : hall);
-        if (length > 0.001f && NarrowWithin(ai, p)) p = OffThePassage(ai, hall, d, length, p); // M6-S12 (BUG-1461)
+        float reach = ai.Rules.RallyReach;
+        if (board.RallyVersion > 0 && board.Rally != p && Vector2.DistanceSquared(board.Rally, p) <= reach * reach && Acceptable(ai, board.Rally))
+        {
+            Keep(board, board.Rally); // M6-S14: still acceptable and in reach of the nominal point: no move
+            return;
+        }
+        bool acceptable;
+        if (length > 0.001f && NarrowWithin(ai, p)) p = OffThePassage(ai, hall, d, length, p, out acceptable); // M6-S12 (BUG-1461)
+        else acceptable = !ai.View.IsKnownClosed((int)(p.X / MapConstants.CellSize), (int)(p.Y / MapConstants.CellSize));
+        if (acceptable) Keep(board, p);
         if (p == board.Rally && board.RallyVersion > 0) return;
         board.Rally = p;
         board.RallyVersion++; // units already rallied go again to the new point
+    }
+
+    /// <summary>M6-S14 (BUG-1558): <paramref name="p"/> is the last acceptable rally point (<see cref="Blackboard.RallyKept"/>).</summary>
+    private static void Keep(Blackboard board, Vector2 p)
+    {
+        board.RallyKept = p;
+        board.HasRallyKept = true;
     }
 
     /// <summary>
@@ -127,10 +154,13 @@ internal static class MilitaryManager
     /// on Raraku seed 1 the line back to the hall crosses the seat's own barracks, so no point behind the passage is open
     /// ground. The answer reads only the seat's knowledge (<see cref="PlayerView.IsKnownClosed"/>), which changes between
     /// thinks only when a building or node does (or the target, as the nominal point itself), so the point does not flap.
-    /// At most 2 x <c>rallyReach</c> / cell size points; allocates nothing.
+    /// At most 2 x <c>rallyReach</c> / cell size points; allocates nothing. M6-S14 (BUG-1558 item 2): with none acceptable,
+    /// the last acceptable point (<see cref="Blackboard.RallyKept"/>), the nominal one only when there has never been one;
+    /// <paramref name="acceptable"/> says whether a point of the line was found.
     /// </summary>
-    private static Vector2 OffThePassage(AiPlayer ai, Vector2 hall, Vector2 d, float length, Vector2 nominal)
+    private static Vector2 OffThePassage(AiPlayer ai, Vector2 hall, Vector2 d, float length, Vector2 nominal, out bool acceptable)
     {
+        acceptable = true;
         float far = ai.Rules.RallyDistance;
         int steps = (int)(ai.Rules.RallyReach / MapConstants.CellSize);
         for (int k = 1; k <= steps; k++)
@@ -145,7 +175,8 @@ internal static class MilitaryManager
             Vector2 q = ai.ClampToMap(hall + d * ((far + k * MapConstants.CellSize) / length));
             if (Acceptable(ai, q)) return q;
         }
-        return nominal;
+        acceptable = false;
+        return ai.Board.HasRallyKept ? ai.Board.RallyKept : nominal;
     }
 
     /// <summary>
