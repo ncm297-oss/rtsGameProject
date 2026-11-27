@@ -12,6 +12,11 @@ namespace Rts.Sim.Tests.Stress;
 /// M6-SH2 re-staging (BUG-1462's row; old: Pale Hills seed 1, <c>PaleHillsSeed1_*</c>): since M6-S10 Pale Hills seed 1 ends at
 /// 42,384 before any seat is stamped starved, so the row proved nothing; Raraku seed 1 (the same map sizing, <c>MapMatch</c>)
 /// has its winner starved of wood from about 22,500 and waving on the stamp, which is the row's subject.
+/// M6-S14 re-staging (the AI-play session; the checks unchanged, the name kept): on Raraku seed 1 seat 0 is stamped half a
+/// window at 23,180 but its stamp lapses (the worker floor puts gatherers back on wood) and no seat waves starved, so the row
+/// proved nothing ("seat 0 at -1"). It plays Pale Hills seed 5 (<c>MapMatch</c>): seat 1 stamped half a window at 26,360,
+/// its first starved wave at 38,460, over at 47,547; the only seed of the three maps' 1-8 with a starved wave inside a match
+/// that ends (Pale Hills 7 / 8 wave starved at 69,240 but do not end by 72,000).
 /// </summary>
 [Trait("Category", "Stress")]
 public class StarvedSaveTwoProcessQaStressTests
@@ -60,7 +65,7 @@ public class StarvedSaveTwoProcessQaStressTests
             _out.WriteLine(Marker + Follow(child));
             return;
         }
-        Simulation sim = MapFileTests.MapMatch("raraku", 1, false, out _);
+        Simulation sim = MapFileTests.MapMatch(MapFileTests.PaleHills, 5, false, out _); // M6-S14: was ("raraku", 1)
         int window = sim.AiOf(0)!.Rules.StarvedWaveAfterTicks, savedAt = -1, seat = -1, stamp = -1;
         while (sim.TickNumber < 72_000 && !sim.MatchOver)
         {

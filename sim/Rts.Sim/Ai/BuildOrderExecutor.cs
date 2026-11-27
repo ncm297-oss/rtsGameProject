@@ -46,7 +46,7 @@ internal static class BuildOrderExecutor
         Blackboard board = ai.Board;
         var steps = ai.Steps; // M5-8a: the picked opening's; M7-9: its difficulty's list
         int slack = ai.Knobs.BuildOrderSlackTicks;
-        if (Retrain(ai)) ai.ExecutorSent = true; // M6-SH2 (BUG-1465 (a))
+        if (Retrain(ai)) ai.ExecutorSent = true; // M6-SH2 (BUG-1465 (a)); M6-S14: the worker floor (BUG-1660)
         ReopenLost(ai); // M5-4d slice 2
         if (HallFirst(ai)) return;
         bool mayReserve = ai.MayReserve(); // BUG-1021 / BUG-1025: a wave-sized army, the base not defended
@@ -110,22 +110,35 @@ internal static class BuildOrderExecutor
     }
 
     /// <summary>
-    /// M6-SH2 (BUG-1465 (a), docs/02 "AI opponent"): a seat with no live worker and none in a queue sends a Train of a worker
-    /// type at a finished own building that trains it now (population, cost and requires as the view's <c>CanTrain</c> reads
-    /// them; the reserve aside: with no worker nothing else can be bought for long), whatever its opening's steps say and
-    /// whether or not it defends. Worker types in data order. Its command rides <see cref="Blackboard.ProductionPending"/>,
-    /// which nothing judges (no new saved state); the next think sees it in the queue. True when one was sent.
-    /// Workers were trained only by the build order's <c>train</c> steps, so a seat whose workers all died after those
-    /// were done sat on its gold for good (Raraku seed 1: 4,058 gold and a finished Keep, 42,000 ticks).
+    /// M6-SH2 (BUG-1465 (a), docs/02 "AI opponent"), since M6-S14 a floor (BUG-1660): a seat whose live workers and workers in
+    /// a queue together are fewer than <c>ai.minWorkers</c> sends a Train of a worker type at a finished own building that
+    /// trains it now (cost and requires as the view's <c>CanTrain</c> reads them; paid from the whole bank, the reserve aside:
+    /// with too few workers nothing else can be bought for long), whatever its opening's steps say and whether or not it
+    /// defends; one a think, so the queued ones count toward the floor at the next. With a worker alive or queued it also
+    /// needs population room now (a Train at the cap would wait paid in the queue); with none, M6-SH2's rule had no such test
+    /// and has none. Worker types in data order. Its
+    /// command rides <see cref="Blackboard.ProductionPending"/>, which nothing judges (no new saved state); the next think sees
+    /// it in the queue. True when one was sent. With <c>minWorkers</c> 1 it is the M6-SH2 rule exactly (a worker only once
+    /// none is alive or queued). Why: workers were trained only by the build order's <c>train</c> steps, so a seat whose workers
+    /// all died after those were done sat on its gold for good (Raraku seed 1: 4,058 gold and a finished Keep, 42,000 ticks);
+    /// and one cut down to a single worker never trained another while it lived (the Vathar Crossing four-seat trace: seat 2,
+    /// one worker from 30,000 to the end, 876 gold at 60,000).
     /// </summary>
     internal static bool Retrain(AiPlayer ai)
     {
-        if (ai.WorkerCount > 0) return false;
         bool[] worker = ai.IsWorkerType;
+        int workers = ai.WorkerCount;
         for (int t = 0; t < worker.Length; t++)
-            if (worker[t] && ai.Queued[t] > 0) return false;
+            if (worker[t]) workers += ai.Queued[t];
+        if (workers >= ai.Rules.MinWorkers) return false;
         for (int t = 0; t < worker.Length; t++)
-            if (worker[t] && ai.TryTrain(t, emptyQueueOnly: false, ref ai.Board.ProductionPending)) return true;
+        {
+            if (!worker[t]) continue;
+            // Above zero workers, only with room now: a Train accepted at the cap waits paid in the queue (BUG-1731), which
+            // helps no seat that still has a worker. At zero it is M6-SH2's rule as it was (the only way back).
+            if (workers > 0 && ai.View.HalfPop + ai.Data.Units[t].ItemHalfPop > ai.View.HalfPopCap) continue;
+            if (ai.TryTrain(t, emptyQueueOnly: false, ref ai.Board.ProductionPending)) return true;
+        }
         return false;
     }
 

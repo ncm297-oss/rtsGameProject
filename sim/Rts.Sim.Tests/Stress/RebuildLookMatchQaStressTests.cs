@@ -124,6 +124,9 @@ public class RebuildLookMatchQaStressTests
     /// (was 600 s), as the other four-seat Pale Hills twins': beside a long loop (every core busy with other Stress rows) the
     /// child's 42,000 ticks plus its own test discovery ran past 600 s, so the row failed on the clock, not on a hash. A
     /// longer limit and not an in-process twin, so the row still proves two processes agree.
+    /// M6-S14 (the AI-play session; a re-stage, the checks unchanged, the name kept): seed 2 loses no hall by 42,000 any more
+    /// ("not a rebuilding match"), so the row plays seed 3 (a seat loses its hall at 22,560; 54 steps reopened by 42,000;
+    /// the match ends at 86,931, seat 1 the winner). Was seed 2.
     /// </summary>
     [Fact]
     [Trait("Category", "Stress")]
@@ -131,7 +134,7 @@ public class RebuildLookMatchQaStressTests
     {
         var seats = new PlayerSeat[4];
         for (int p = 0; p < 4; p++) seats[p] = new PlayerSeat(p % 2, SeatController.Ai, AiDifficulty.Normal);
-        Simulation sim = HuntStressTests.Match("pale_hills", seats, 2, units: 1024);
+        Simulation sim = HuntStressTests.Match("pale_hills", seats, 3, units: 1024); // M6-S14: was seed 2
         int reopens = 0;
         bool hallLost = false;
         for (int p = 0; p < 4; p++)

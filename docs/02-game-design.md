@@ -522,7 +522,9 @@ match's draw clock runs, its countdown line sits at the top centre under the ale
   once it reaches the map's edge it walks the whole border round once), and turns at once toward any enemy unit it sees.
   From its second hunt of the match on, it first looks at the start locations no player holds (or a defeated player's),
   nearest first, where a beaten side's last depot and workers often stand, then an enemy's own start (M5-H6, BUG-1157 /
-  BUG-1162). In a team match a
+  BUG-1162). A hunt that begins within `ai.huntMemory` (120 s) of the last hunt's find going (a building it found and razed)
+  keeps the places the last hunt already looked at and looks round where that building stood first, not at the start
+  locations (M6-S14, BUG-1661: a remnant beside the find used to wait for a whole new lap of the map). In a team match a
   sighting on or right beside an ally's building is aimed just off that building, on the army's side. A hunt ends like a wave (heavy losses, nobody busy for a while,
   a raid at home), and becomes a wave again on the first enemy building it finds. So a beaten side's last unit hiding in
   the woods is found, and AI-against-AI matches end (built in M5-4d, BUG-1068; hardened in M5-H5, BUG-1119 / BUG-1120;
@@ -535,8 +537,8 @@ match's draw clock runs, its countdown line sits at the top centre under the ale
   every free combat unit in a wave whatever the wave threshold (or hunts, if it knows no enemy building), again after each
   wave's cooldown, at every difficulty; a raid on its base resets the clock, and 0 turns the rule off (built in M5-9a
   round 2, BUG-1153; [03 Implementation (M5-9a)](03-technical-design.md#implementation-m5-9a)). Waiting for that unit
-  never stops the worker retrain below: a starved side with no worker left still trains one, since a worker is its only
-  way back to the resource it lacks (M6-SH2, BUG-1534, the Producer's ruling).
+  never stops the worker floor below: a starved side short of workers still trains them, since a worker is its only
+  way back to the resource it lacks (M6-SH2, BUG-1534, the Producer's ruling; a floor since M6-S14).
 - When its own gold is spent the AI expands to the far mines with a depot: short of gold for the unit it would train next,
   with no worker on gold and no gold mine it knows, it sends a worker to look at the start locations no player took, and
   once it has seen a free mine within `rules.json` `ai.farExpandReach` (384 m) of its Town Hall with no enemy drop-off by
@@ -552,18 +554,23 @@ match's draw clock runs, its countdown line sits at the top centre under the ale
   new one by, and never at the hard cap (M5-H6, BUG-1116: a beaten side no longer rebuilds houses it doesn't need). With no Town Hall left and a worker alive, the Town Hall comes
   before every other step: on its old spot when that is free, else as near it as a site is, banking for it when it can't
   pay yet (army production spends only what is above its cost). A lost expansion is not rebuilt yet (built in M5-4d
-  slice 2; [03 Implementation (M5-4d slice 2)](03-technical-design.md#implementation-m5-4d-slice-2)). A side left with no
-  worker (none alive and none in training) trains one first thing at a finished building that trains workers, when it
-  has the population room and the gold for one, whatever its build order says and even while its base is under attack;
-  with no gold for one it sends nothing (M6-SH2, BUG-1465: a beaten side used to sit on its gold with a finished Town Hall
-  for good; [03 Implementation (M6-SH2)](03-technical-design.md#implementation-m6-sh2)).
+  slice 2; [03 Implementation (M5-4d slice 2)](03-technical-design.md#implementation-m5-4d-slice-2)). A side left with
+  fewer workers (alive and in training) than `rules.json` `ai.minWorkers` (4) trains one a think at a finished building
+  that trains workers, when it has the gold for one and, with any worker left, the population room, whatever its build
+  order says and even while its base is under attack; with no gold for one it sends nothing (M6-SH2, BUG-1465: a beaten
+  side used to sit on its gold with a finished Town Hall for good; [03 Implementation (M6-SH2)](03-technical-design.md#implementation-m6-sh2);
+  the floor since M6-S14, BUG-1660: a side cut down to one worker never trained another while it lived;
+  [03 Implementation (M6-S14)](03-technical-design.md#implementation-m6-s14)).
 - The AI parks its army at a rally point `rules.json` `ai.rallyDistance` (12 m) from its Town Hall toward the nearest
   enemy building it knows (toward the map's centre while it knows none). A point in or at the mouth of a one-cell passage
   (a lane one cell wide between cliffs, buildings or trees, as far as the AI knows them) moves to the nearest point on the
   same line within `ai.rallyReach` (6 m) that stands on open ground with no such lane that near, stepping back toward the
-  Town Hall first and then out past the first point; with none it stays where it was. So a parked army no longer stands in
-  the one lane its own workers walk through to their mine (built in M6-S12, BUG-1461, Producer decision 2026-11-16;
-  [03 Implementation (M6-S12)](03-technical-design.md#implementation-m6-s12)).
+  Town Hall first and then out past the first point; with none it keeps the last such point it had (the first point if it
+  never had one). So a parked army no longer stands in the one lane its own workers walk through to their mine (built in
+  M6-S12, BUG-1461, Producer decision 2026-11-16; [03 Implementation (M6-S12)](03-technical-design.md#implementation-m6-s12)).
+  The point it parks at is kept while it is still such a point and within `ai.rallyReach` of the first point, so an enemy
+  building glimpsed one moment and gone the next no longer moves the army back and forth; a target elsewhere still moves
+  it (M6-S14, BUG-1558; [03 Implementation (M6-S14)](03-technical-design.md#implementation-m6-s14)).
 - The AI keeps about `rules.json` `ai.goldShare` (0.6) of its gatherers on gold, leaning toward what its build order is
   saving for. An idle worker goes to the known gold mine or forest nearest it. When no worker is idle and the split is off,
   one gatherer a think moves to the other resource, and it goes to the known node of that resource nearest the drop-off it
@@ -606,10 +613,12 @@ match's draw clock runs, its countdown line sits at the top centre under the ale
   scout role's, BUG-1055), and a scout sent again stops looking, and gathers, as soon as the AI knows an enemy building, a
   gold mine and a forest anywhere that is not at an enemy's door: it stands at the far forest it found, so the first wood
   comes home a walk sooner (BUG-1056). A side whose scouting is over, that is short of a resource the next unit of its
-  army mix needs, knows no gold mine or forest of it at all and has a worker with nothing to gather, sends that worker on
-  the scout's sweep again, past the `ai.scoutReplacements` cap: one at a time, at most one every `ai.scoutAfter` (15 s),
-  walking only to ground it has never seen (M6-S12, BUG-1460, Producer decision 2026-11-16; a worker at work is never taken
-  for it, so an enemy camped at the door does not drain the economy). A seat with no finished drop-off may take any node. Built in M6-S5 (BUG-1045), the head ring
+  army mix needs and knows no gold mine or forest of it at all, sends a worker on the scout's sweep again, past the
+  `ai.scoutReplacements` cap on its scout: a worker with nothing to gather if it has one, else one gathering the resource
+  it does know; one at a time, at most one every `ai.scoutAfter` (15 s), walking only to ground it has never seen. It counts
+  the workers it loses on these searches, and once it has lost `ai.scoutReplacements` (2) of them it sends no more, so an
+  enemy camped at the door costs it at most that many workers (M6-S12, BUG-1460, Producer decision 2026-11-16; the gatherer
+  and the count since M6-S14, BUG-1554 / 1556, Producer decision 2026-11-17). A seat with no finished drop-off may take any node. Built in M6-S5 (BUG-1045), the head ring
   and the replacement in M6-S7 (BUG-1047, BUG-1048; [03 Implementation (M6-S7)](03-technical-design.md#implementation-m6-s7);
   the fallback for a kind with no node in reach was built, measured and dropped: Producer decision, [01 change log](01-vision.md) 2026-11-05).
 - Build orders, army compositions, and attack thresholds are per-faction data (`ai.json`), not code.
@@ -704,7 +713,10 @@ match's draw clock runs, its countdown line sits at the top centre under the ale
    a side that is still finishing the others off with what it has is never cut short, while a stand-off in which nobody
    loses anything ends; a win on the same tick as the draw would fall is a win. A drawn match shows **Draw** on the
    end-of-match banner to a player whose side still stands, and **Defeat** to one whose whole side was knocked out before
-   it; it never shows Victory, and no screen names a winner (M6-V29; the command-line `match` prints `result draw`).
+   it; it never shows Victory, and no screen names a winner (M6-V29; the command-line `match` prints `result draw`). A
+   draw is final: a side knocked out after it still reads Draw, live, in a watched replay and (for a two-sided match,
+   M6-VH10) after loading a save made after that fall; with three or more sides a loaded save cannot yet tell a fall after
+   the draw from one before it and reads Defeat (Request 60, the sim's next save-format change).
    While the 5 minutes run, a line at the top of the screen says so, from the first second: "No player can train new
    units. Draw in 5:00 unless a unit falls.", counting down; it starts again with the clock and goes when the clock stops
    or the match ends (in replays and loaded games too).

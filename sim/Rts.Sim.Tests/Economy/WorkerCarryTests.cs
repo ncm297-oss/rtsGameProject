@@ -211,7 +211,7 @@ public class WorkerCarryTests(ITestOutputHelper output)
     [Fact]
     public void AMidMatchSave_WithACarry_LoadsAndContinuesHashIdentical()
     {
-        Assert.Equal(10, SaveFormat.CurrentVersion);
+        Assert.Equal(11, SaveFormat.CurrentVersion); // M6-S14: format 11 (was 10)
         SaveScene scene = AiSaveScenes.AiMatch(5, 2, AiDifficulty.Normal, data: s_fifteen.Value);
         int peak = 0;
         SaveTestRun.Result r = SaveTestRun.RoundTrip(scene, new[] { 137, 1000 }, after: 2000, observe: sim =>

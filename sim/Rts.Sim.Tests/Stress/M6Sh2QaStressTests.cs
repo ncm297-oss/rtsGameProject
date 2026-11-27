@@ -12,12 +12,14 @@ namespace Rts.Sim.Tests.Stress;
 /// Under M6-S12 seed 1 ends at 24,354, so only 48 saves fit before the end, under the row's 60. It plays
 /// <see cref="SweepSeed"/> 2 (over at 39,262, seat 1: 78 saves), the lowest Raraku seed long enough. No seat retrains there;
 /// the retrain's save is <see cref="M6Sh2DeterminismStressTests"/>' row (Raraku seed 3). Was seed 1.
+/// M6-S14 (rule 45, the bound and checks unchanged): seed 2 now ends at 27,400 (54 saves, under 60); the lowest Raraku seed
+/// long enough is seed 1 again (over at 34,444, seat 0: 68 saves). Was seed 2.
 /// </summary>
 [Trait("Category", "Stress")]
 public class M6Sh2QaStressTests(ITestOutputHelper output)
 {
     private const int Limit = 40_000, Every = 500, Follow = 300;
-    private const ulong SweepSeed = 2;
+    private const ulong SweepSeed = 1; // M6-S14: seed 2 ends at 27,400 (54 saves); seed 1 at 34,444 (68). Was 2.
 
     [Fact]
     public void Raraku_ASaveEvery500Ticks_FollowsTheRun()

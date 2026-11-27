@@ -93,13 +93,15 @@ public class AiOpeningPairsVerdictTests
         if (!fails.Value) Assert.Contains("before its first wave was due (reported, not failed)", text, StringComparison.Ordinal);
     }
 
-    /// <summary>The named list holds the one measured case (one seed of nine, <c>Content/HolyWarFirstWaveReportTests</c>) and nothing else.</summary>
+    /// <summary>The named list holds the one measured case (M6-S14: <c>standard</c> v <c>raider_rush</c> seed 2, BUG-1856) and nothing else.</summary>
     [Fact]
     public void DefeatedBeforeDue_HoldsOnlyTheMeasuredCase()
     {
-        // M6-SH2: the measured case is gone (Content/HolyWarFirstWaveReportTests: 0 of 9 runs since the sim's drop-off rule and
-        // retrain; the row asked for the entry to be taken out), so the list holds nothing. Was { (0, 2, 3, 1) }.
-        Assert.Empty(AiOpeningPairsReportTests.DefeatedBeforeDue);
+        // M6-S14 (the pin move, BUG-1856): the one measured case is standard v raider_rush seed 2's Malazan side, defeated at
+        // 16:27 with its first wave never due (AiOpeningPairsReportTests' row (0, 1)). Was empty since M6-SH2, when the
+        // earlier case went (Content/HolyWarFirstWaveReportTests: 0 of 9 runs; was { (0, 2, 3, 1) }).
+        Assert.Equal(new[] { (0, 1, 2UL, 0) }, AiOpeningPairsReportTests.DefeatedBeforeDue);
+        Assert.Equal(2UL, AiOpeningSeeds.SmallestPair(0, 1));
         Assert.Equal(3UL, AiOpeningSeeds.SmallestPair(0, 2));
     }
 

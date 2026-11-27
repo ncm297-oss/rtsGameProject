@@ -29,7 +29,7 @@ public class ReserveSwitchDeterminismTests
     [InlineData(2UL)]
     public void SwitchedOrder_TwinsAndASaveChain_AreHashEqual(ulong seed)
     {
-        Assert.Equal(10, SaveFormat.CurrentVersion);
+        Assert.Equal(11, SaveFormat.CurrentVersion); // M6-S14: format 11 (was 10)
         GameData d = s_b.Value;
         var steps = d.Ai[d.FindFaction("teblor")].Openings[0].BuildOrder;
         Assert.Contains(steps, s => s.ThroughReserve);

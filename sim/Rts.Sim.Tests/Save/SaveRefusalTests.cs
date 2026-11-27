@@ -72,7 +72,8 @@ public class SaveRefusalTests
     [InlineData(1)] // M6-S3: slice 1's format (no AI section) has no reader
     [InlineData(2)] // M6-S4: M6-S3's format (no team byte) has no reader
     [InlineData(9)] // M7-1: format 10 is current for every save, every older one refused
-    [InlineData(11)]
+    [InlineData(10)] // M6-S14: format 11 is current (the row read 11 as the next format until then)
+    [InlineData(12)]
     [InlineData(-1)]
     public void AnotherFormatVersion_IsFormatVersionMismatch(int version)
     {
@@ -675,8 +676,9 @@ public class SaveRefusalTests
     public void AForgedLeg_OnAPointBelowTheRing_IsMalformed()
     {
         byte[] good = SaveBytes.SmallAi();
-        int end = PreMapFixtures.CountersAt(good, 1); // M5-9a: HUNT ends where CTRM starts
-        Assert.Equal("CTRM"u8.ToArray(), good[end..(end + 4)]);
+        int part = PreMapFixtures.CountersAt(good, 1); // M5-9a: HUNT ends where CTRM starts
+        Assert.Equal("CTRM"u8.ToArray(), good[part..(part + 4)]);
+        int end = part - Format11SaveBytesTests.HuntTail; // M6-S14: the hunt's find (13 bytes) follows the count
         Rts.Sim.Ai.AiPlayer ai = SaveTestRun.Load(TestSim.Data, good).AiOf(0)!;
         int cols = Rts.Sim.Ai.ScoutManager.GridLines(ai.View.MapWidth, ai.Rules.ScoutGrid), rows = Rts.Sim.Ai.ScoutManager.GridLines(ai.View.MapHeight, ai.Rules.ScoutGrid);
         int ring = Rts.Sim.Ai.MilitaryManager.RingStart(cols, rows);
@@ -702,7 +704,7 @@ public class SaveRefusalTests
     public void AForgedHuntCountOrSightingTick_OutOfRange_IsMalformed()
     {
         byte[] good = SaveBytes.SmallAi();
-        int end = PreMapFixtures.CountersAt(good, 1);
+        int end = PreMapFixtures.CountersAt(good, 1) - Format11SaveBytesTests.HuntTail; // M6-S14: the find after the count
         Rts.Sim.Ai.AiPlayer ai = SaveTestRun.Load(TestSim.Data, good).AiOf(0)!;
         int points = ai.Board.HuntVisited.Length;
         // The seat's HUNT fields backwards from the end: the count, pass, ring left, ring (16), the marks and their length,
@@ -720,5 +722,14 @@ public class SaveRefusalTests
         Assert.Equal(SaveError.None, Forged(end - 4, 0));
         Assert.Equal(SaveError.Malformed, Forged(hunt + 8, -2));
         Assert.Equal(SaveError.None, Forged(hunt + 8, -1));
+        // M6-S14 (BUG-1661): the find's tick -1 or a tick no later than the seat's last think; a hunt's find only on a
+        // building wave in progress (the small AI sim has no wave).
+        Assert.Equal(-1, BinaryPrimitives.ReadInt32LittleEndian(good.AsSpan(end + 1)));
+        Assert.Equal(SaveError.Malformed, Forged(end + 1, -2));
+        Assert.Equal(SaveError.Malformed, Forged(end + 1, ai.Now + 1));
+        Assert.Equal(SaveError.None, Forged(end + 1, ai.Now));
+        byte[] wave = (byte[])good.Clone();
+        wave[end] = 1;
+        Assert.Equal(SaveError.Malformed, SaveTestRun.TryLoad(TestSim.Data, SaveBytes.Rechecksum(wave)));
     }
 }

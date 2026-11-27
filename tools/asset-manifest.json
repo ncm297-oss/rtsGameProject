@@ -840,7 +840,7 @@
       "team": ["Main"],
       "teamFaces": [{ "materials": ["Wood"], "minUp": 0.5, "above": 0.7 }],
       "teamShade": 0.8,
-      "colours": { "Wood": "#77736a", "Wood_Light": "#8b877c" }
+      "colours": { "Wood": "#938e83", "Wood_Light": "#aca79a" }
     },
     {
       "id": "teblor_bloodwood_carver",

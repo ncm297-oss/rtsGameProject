@@ -271,6 +271,12 @@ tools/
   5.2\blender.exe`; missing, the script prints one `FAIL: Blender not found at ...` line and exits 2. Sources: `-SourceRoot`,
   else `<repo>/asset-sources`, else (in a git worktree) the main checkout's. Every licence file the manifest lists is read at
   each run and must still say CC0, or the run stops.
+- **The Godot import** (`$env:GODOT`, process then user; skipped with `-NoGodot` or without it) fails the run, exit 1 and no
+  `IMPORT ASSETS PASS` line, on an `ERROR` line in its log, and since M6-VH10 (BUG-1831) also when it exits non-zero
+  (Godot's own failure, or the process or its `cmd` killed) or leaves an empty `*.tmp` written during that import in
+  `game/.godot/imported` (a texture compression cut off). `powershell -File tools/art/test-import-exit.ps1` proves it in a
+  few seconds with stand-in exes (exit 1, an `ERROR` line with exit 0, killed by `taskkill /T /F`; and one that passes),
+  without Blender, the packs or a real Godot.
 - **The manifest** (`tools/asset-manifest.json`) per model: `id`, `destination` (`game/assets/models/<data model>/<id>.glb`),
   `maxTriangles`, `textureSize`, `yawDegrees` (the rotation fix), `materials` (source material -> role: `outfit`, `skin`,
   `head`), `tints` (per role: a palette colour and how far toward it), `parts` (source glTF, mesh name, triangle share,
@@ -618,8 +624,10 @@ building, the four Malazan box types of M6-V28 (Wickan Corral, Armory, Cadre Tow
   - **Javelin Ground = `Archery_FirstAge_Level1`**: a timber tower with a target on top and a striped awning over two
     targets. Level 2 / 3 replace the awning with a closed shed.
   - **Stone Cairn = `WatchTower_FirstAge_Level1`, tinted as stone**: a tall, narrow tower (7.05 m drawn) under a plank top
-    with a banner; its timber (`Wood`, `Wood_Light`) tinted lichen grey `#77736a` / `#8b877c`, so it reads as piled stone
-    against the brown halls. Level 2 / 3 are 1.46 / 1.64 units tall (12-14 m drawn on 2 x 2). The pack has no stone cairn;
+    with a banner; its timber (`Wood`, `Wood_Light`) tinted a pale stone grey `#938e83` / `#aca79a`, so it reads as piled
+    stone against the brown halls (M6-VH10, BUG-1830: the lichen grey of M6-V30, `#77736a` / `#8b877c`, lit to luminance 136
+    at zoom 40, only 25 levels above the Iron player's slate team top, 111; the paler wall lifts the gap past 40, see docs/03
+    "Implementation (M6-VH10)"). Level 2 / 3 are 1.46 / 1.64 units tall (12-14 m drawn on 2 x 2). The pack has no stone cairn;
     the grey timber is the stand-in (docs/03 "Implementation (M6-V30)" question 2).
   - **Bloodwood Carver = `Market_FirstAge_Level1`**: two stalls under cloth awnings among crates: a carver's work yard.
     Low (2.33 m) and open: a click on the open ground inside the footprint still selects it (the pick box), but a unit

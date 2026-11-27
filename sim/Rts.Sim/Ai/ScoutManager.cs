@@ -31,7 +31,8 @@ namespace Rts.Sim.Ai;
 /// its saved waypoints (<see cref="SentAgain"/>) and released to gather once the reach has lifted and the player knows an
 /// enemy building and a node of every kind, its nearest forest clear of the enemy's buildings (BUG-1056). M6-S12 (BUG-1460):
 /// once the sweep has ended, a seat blind to a resource its army needs sends a worker left idle on it again, past the cap
-/// (<see cref="Rescout"/>, run after the economy).
+/// (<see cref="Rescout"/>, run after the economy); M6-S14 (BUG-1554 / 1556): or a gatherer of the kind it knows, while the
+/// blind re-scouts it has lost are fewer than <c>ai.scoutReplacements</c>, and none once they reach it.
 /// <para>
 /// M6-S5 (BUG-1042), a player with an ally: a head waypoint within <c>ai.scoutRadius</c> of an ally's building is dropped
 /// (the base there is the ally's: with teams the hall's mirror may be the ally's start), and past the head the next grid
@@ -84,21 +85,26 @@ internal static class ScoutManager
     /// (<see cref="BlindRescoutDue"/>) sends one worker on the sweep again, past <c>ai.scoutReplacements</c>: a worker the
     /// economy left idle this think (it runs after <see cref="EconomyManager"/>: a worker idle then has no node it could be sent
     /// to, so the seat gives up no income), the nearest the hall. Phase 1 again, so at most one scout is out at a time, and it
-    /// sweeps and is released as a scout sent again does. Why idle only: taking a gatherer each window fed a seat's workers to
-    /// an enemy camped at its door (QA's <c>EveryScoutKilledAtOnce_*</c> seed 1: 16 scouts lost by tick 6,000 against its bound
-    /// of 4).
+    /// sweeps and is released as a scout sent again does. M6-S14 (BUG-1554 / 1556, docs/01 2026-11-17 (3)): the seat counts
+    /// the blind re-scouts it has lost (<see cref="Blackboard.BlindScoutsLost"/>); while that count is below
+    /// <c>ai.scoutReplacements</c>, a seat with no idle worker sends a gatherer of the kind it knows a node of
+    /// (<see cref="AiPlayer.PickGatherer"/>; none when it knows neither kind), and at the count it sends no blind re-scout again.
+    /// Why the count: idle-only never fired for a seat that knows one kind (every worker on it, BUG-1554), and with no cap a
+    /// seat camped at its door fed every worker and its whole bank to the role (BUG-1556: 25 lost in 20 minutes).
     /// </summary>
     internal static void Rescout(AiPlayer ai)
     {
         Blackboard board = ai.Board;
-        if (board.ScoutPhase != 2 || !BlindRescoutDue(ai, out Vector2 home)) return;
+        if (board.ScoutPhase != 2 || board.BlindScoutsLost >= ai.Rules.ScoutReplacements || !BlindRescoutDue(ai, out Vector2 home, out byte known)) return;
         int scout = ai.PickBuilder(home, out int generation, idleOnly: true);
+        if (scout < 0 && known != 0) scout = ai.PickGatherer(home, known, out generation);
         if (scout < 0) return;
         Waypoints(ai, home, blind: true);
         board.ScoutSlot = scout;
         board.ScoutGeneration = generation;
         board.ScoutTarget = -1;
         board.ScoutPhase = 1;
+        board.BlindScoutOut = true;
         Sweep(ai);
     }
 
@@ -106,16 +112,31 @@ internal static class ScoutManager
     /// M6-S12 (BUG-1460): whether a seat whose sweep has ended (phase 2) sends a worker on it again this think: on the first
     /// think of each <c>ai.scoutAfter</c> window of the match clock (the scout's own timing knob, so a scout lost at once is
     /// followed at most once a window, never every think), with a hall and the match not over, when it is blind to a resource
-    /// (<see cref="BlindTo"/>) of either kind. Whatever <c>ai.scoutReplacements</c> says: the cap keeps a seat from feeding
-    /// workers to a role it has filled, while a blind seat has no other way to find the resource. Cheap tests first; the
-    /// node walks stop at the first live node of the kind. Allocates nothing.
+    /// (<see cref="BlindTo"/>) of either kind. Its cap is the count of blind re-scouts lost (M6-S14, <see cref="Rescout"/>), not
+    /// the scout's own (<c>ai.scoutReplacements</c> on every own loss, which keeps a seat from feeding workers to a role it has
+    /// filled). Cheap tests first; the node walks stop at the first live node of the kind. Allocates nothing.
     /// </summary>
-    internal static bool BlindRescoutDue(AiPlayer ai, out Vector2 hall)
+    internal static bool BlindRescoutDue(AiPlayer ai, out Vector2 hall) => BlindRescoutDue(ai, out hall, out _);
+
+    /// <summary>
+    /// <see cref="BlindRescoutDue(AiPlayer, out Vector2)"/>, and M6-S14: <paramref name="known"/>, the kind the seat knows a
+    /// live node of while blind to the other (<see cref="EconomyManager.Gold"/> or <see cref="EconomyManager.Wood"/>), 0 when
+    /// it is blind to both: the kind a gatherer may be taken from.
+    /// </summary>
+    internal static bool BlindRescoutDue(AiPlayer ai, out Vector2 hall, out byte known)
     {
         hall = default;
+        known = 0;
         int every = Math.Max(ai.Rules.ScoutAfterTicks, ai.ThinkTicks);
         if (ai.Now % every >= ai.ThinkTicks || ai.View.MatchOver || !ai.TryHallPoint(out hall)) return false;
-        return BlindTo(ai, ResourceKind.Wood) || BlindTo(ai, ResourceKind.Gold);
+        if (BlindTo(ai, ResourceKind.Wood))
+        {
+            if (KnowsLiveNode(ai, ResourceKind.Gold)) known = EconomyManager.Gold;
+            return true;
+        }
+        if (!BlindTo(ai, ResourceKind.Gold)) return false;
+        if (KnowsLiveNode(ai, ResourceKind.Wood)) known = EconomyManager.Wood;
+        return true;
     }
 
     /// <summary>
@@ -159,6 +180,8 @@ internal static class ScoutManager
             bool again = !capped && (!ai.ReachLifted() || !KnowsEveryKind(ai));
             board.ScoutPhase = again ? (byte)0 : (byte)2;
             board.ScoutSlot = -1;
+            if (board.BlindScoutOut) board.BlindScoutsLost++; // M6-S14 (BUG-1554 / 1556): a blind re-scout lost
+            board.BlindScoutOut = false;
             return;
         }
         if (ai.OrderedNotApplied(slot, u.Handle.Generation)) return;
@@ -277,6 +300,7 @@ internal static class ScoutManager
         }
         board.ScoutPhase = 2;
         board.ScoutSlot = -1;
+        board.BlindScoutOut = false; // M6-S14: released alive, not lost
     }
 
     /// <summary>

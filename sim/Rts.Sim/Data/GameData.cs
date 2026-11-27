@@ -418,6 +418,9 @@ public sealed class GameData
     /// M5-3: every field of <c>rules.json</c> <c>ai</c> and of every faction's <c>ai.json</c> (a replay with an AI seat was
     /// played by that data; playback runs no AI, but the recording is tied to it like any other data).
     /// </summary>
+    /// <summary>M6-S14: the hash's marker before <see cref="AiRulesDef.MinWorkers"/> (written only when it is not 1): negative, so it is never a counter-table length (-1 or more).</summary>
+    private const int MinWorkersMarker = -14;
+
     private void AddAi(ref StateHasher h)
     {
         AiRulesDef r = AiRules;
@@ -451,6 +454,14 @@ public sealed class GameData
         h.Add(r.StarvedWaveAfterTicks); // M5-9a round 2
         h.Add(r.StarvedMinArmy);
         h.Add(r.FarExpandReach); // M5-9b
+        // M6-S14 (BUG-1660): the worker floor, only when it is not 1 (a marker no counter-table length can be, then the
+        // value): 1 is the M6-SH2 rule exactly, so data with the floor at 1 hashes as the data before M6-S14 did and plays
+        // the same; the shipped 4 moves the hash once.
+        if (r.MinWorkers != 1)
+        {
+            h.Add(MinWorkersMarker);
+            h.Add(r.MinWorkers);
+        }
         h.Add(r.CounterMasks.IsDefault ? -1 : r.CounterMasks.Length);
         if (!r.CounterMasks.IsDefault)
             foreach (byte mask in r.CounterMasks) h.Add((int)mask);

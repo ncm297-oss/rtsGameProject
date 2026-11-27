@@ -14,7 +14,9 @@ namespace Rts.Sim.Ai;
 /// hall (the map centre with none known). An idle army unit not in a wave, farther than <c>ai.rallyReach</c> from it, gets one
 /// Move there, never again to the same point (it got as close as it could), nor while a command to it is pending. M6-S12
 /// (BUG-1461): a point in or at the mouth of a one-cell passage moves to the nearest acceptable point on the same line within
-/// <c>ai.rallyReach</c>, back toward the hall first (<see cref="OffThePassage"/>).</item>
+/// <c>ai.rallyReach</c>, back toward the hall first (<see cref="OffThePassage"/>). M6-S14 (BUG-1558): the point in use is kept
+/// while it is acceptable and within <c>ai.rallyReach</c> of the nominal one, and with none acceptable the last acceptable
+/// one is kept (<see cref="RallyPoint"/>).</item>
 /// <item><b>Wave start.</b> No wave in progress, the cooldown over, and the army free to go (not casting, no command pending)
 /// at least <c>attack.minArmyPop</c> half-pop and <c>attack.minArmyCost</c> gold + wood, each times the difficulty's
 /// <c>waveSizeMultiplier</c>, with an enemy building known: every such unit becomes a member and is sent
@@ -105,6 +107,15 @@ internal static class MilitaryManager
         Orders(ai);
     }
 
+    /// <summary>
+    /// The rally point (see the type's summary). M6-S14 (BUG-1558 items 2 and 3): the point in use is kept while it is still
+    /// acceptable (<see cref="Acceptable"/>) and within <c>ai.rallyReach</c> of the nominal point, so a target that flickers
+    /// between two buildings (seen one think, gone the next) no longer moves the point and re-sends the parked army every
+    /// think; a nominal point that moved farther (a new target elsewhere) moves it as before. When no point on the line is
+    /// acceptable, the point falls back to the last acceptable one (<see cref="Blackboard.RallyKept"/>) rather than to the
+    /// nominal one (which stood on a building cell in QA's survey). Why "within reach": the ring an army already counts as at
+    /// the rally point, so keeping the old point moves no unit the new one would not.
+    /// </summary>
     private static void RallyPoint(AiPlayer ai, Vector2 hall)
     {
         Blackboard board = ai.Board;
@@ -112,10 +123,26 @@ internal static class MilitaryManager
         Vector2 d = toward - hall;
         float length = d.Length();
         Vector2 p = ai.ClampToMap(length > 0.001f ? hall + d * (ai.Rules.RallyDistance / length) : hall);
-        if (length > 0.001f && NarrowWithin(ai, p)) p = OffThePassage(ai, hall, d, length, p); // M6-S12 (BUG-1461)
+        float reach = ai.Rules.RallyReach;
+        if (board.RallyVersion > 0 && board.Rally != p && Vector2.DistanceSquared(board.Rally, p) <= reach * reach && Acceptable(ai, board.Rally))
+        {
+            Keep(board, board.Rally); // M6-S14: still acceptable and in reach of the nominal point: no move
+            return;
+        }
+        bool acceptable;
+        if (length > 0.001f && NarrowWithin(ai, p)) p = OffThePassage(ai, hall, d, length, p, out acceptable); // M6-S12 (BUG-1461)
+        else acceptable = !ai.View.IsKnownClosed((int)(p.X / MapConstants.CellSize), (int)(p.Y / MapConstants.CellSize));
+        if (acceptable) Keep(board, p);
         if (p == board.Rally && board.RallyVersion > 0) return;
         board.Rally = p;
         board.RallyVersion++; // units already rallied go again to the new point
+    }
+
+    /// <summary>M6-S14 (BUG-1558): <paramref name="p"/> is the last acceptable rally point (<see cref="Blackboard.RallyKept"/>).</summary>
+    private static void Keep(Blackboard board, Vector2 p)
+    {
+        board.RallyKept = p;
+        board.HasRallyKept = true;
     }
 
     /// <summary>
@@ -127,10 +154,13 @@ internal static class MilitaryManager
     /// on Raraku seed 1 the line back to the hall crosses the seat's own barracks, so no point behind the passage is open
     /// ground. The answer reads only the seat's knowledge (<see cref="PlayerView.IsKnownClosed"/>), which changes between
     /// thinks only when a building or node does (or the target, as the nominal point itself), so the point does not flap.
-    /// At most 2 x <c>rallyReach</c> / cell size points; allocates nothing.
+    /// At most 2 x <c>rallyReach</c> / cell size points; allocates nothing. M6-S14 (BUG-1558 item 2): with none acceptable,
+    /// the last acceptable point (<see cref="Blackboard.RallyKept"/>), the nominal one only when there has never been one;
+    /// <paramref name="acceptable"/> says whether a point of the line was found.
     /// </summary>
-    private static Vector2 OffThePassage(AiPlayer ai, Vector2 hall, Vector2 d, float length, Vector2 nominal)
+    private static Vector2 OffThePassage(AiPlayer ai, Vector2 hall, Vector2 d, float length, Vector2 nominal, out bool acceptable)
     {
+        acceptable = true;
         float far = ai.Rules.RallyDistance;
         int steps = (int)(ai.Rules.RallyReach / MapConstants.CellSize);
         for (int k = 1; k <= steps; k++)
@@ -145,7 +175,8 @@ internal static class MilitaryManager
             Vector2 q = ai.ClampToMap(hall + d * ((far + k * MapConstants.CellSize) / length));
             if (Acceptable(ai, q)) return q;
         }
-        return nominal;
+        acceptable = false;
+        return ai.Board.HasRallyKept ? ai.Board.RallyKept : nominal;
     }
 
     /// <summary>
@@ -162,21 +193,25 @@ internal static class MilitaryManager
     /// and open on both sides along the other (a lane one cell wide: a gap in a cliff, between two buildings, or between a
     /// building and a tree line). A dead end (closed on three sides) is not a passage. An army parked there blocks the lane
     /// for its own workers, and a shove cannot move a soldier along it (BUG-0033's rule): Raraku seed 1's worker held from
-    /// tick 5,131. At most (2 x reach / cell + 3)^2 cells, five reads each; allocates nothing.
+    /// tick 5,131. At most (2 x reach / cell + 3)^2 cells, read once as a block (M6-S14, <see cref="PlayerView.KnownClosedWindow"/>:
+    /// the seat's memory walked once, BUG-1555) into a stack buffer of at most 21 x 21 (<c>ai.rallyReach</c> at its 16 m
+    /// bound); allocates nothing.
     /// </summary>
     internal static bool NarrowWithin(AiPlayer ai, Vector2 p)
     {
-        PlayerView v = ai.View;
         float reach = ai.Rules.RallyReach, cell = MapConstants.CellSize;
         int r = (int)MathF.Ceiling(reach / cell) + 1;
         int cx = (int)(p.X / cell), cy = (int)(p.Y / cell);
+        int x0 = cx - r - 1, y0 = cy - r - 1, side = 2 * r + 3;
+        Span<bool> closed = stackalloc bool[side * side];
+        ai.View.KnownClosedWindow(x0, y0, side, side, closed);
         for (int y = cy - r; y <= cy + r; y++)
             for (int x = cx - r; x <= cx + r; x++)
             {
                 Vector2 centre = new((x + 0.5f) * cell, (y + 0.5f) * cell);
-                if (Vector2.DistanceSquared(centre, p) > reach * reach || v.IsKnownClosed(x, y)) continue;
-                bool west = v.IsKnownClosed(x - 1, y), east = v.IsKnownClosed(x + 1, y);
-                bool north = v.IsKnownClosed(x, y - 1), south = v.IsKnownClosed(x, y + 1);
+                int i = (y - y0) * side + (x - x0);
+                if (Vector2.DistanceSquared(centre, p) > reach * reach || closed[i]) continue;
+                bool west = closed[i - 1], east = closed[i + 1], north = closed[i - side], south = closed[i + side];
                 if (west && east && !north && !south || north && south && !west && !east) return true;
             }
         return false;
@@ -220,6 +255,7 @@ internal static class MilitaryManager
         board.WaveBusyTick = ai.Now;
         board.WaveCooldownUntil = ai.Now + ai.Rules.WaveCooldownTicks;
         board.WavesStarted++;
+        board.WaveFromHunt = false; // M6-S14 (BUG-1661): a wave of its own, not a hunt's find
         return true;
     }
 
@@ -263,21 +299,39 @@ internal static class MilitaryManager
     /// <summary>
     /// M5-4d: makes the wave in progress a hunt from the army at <paramref name="army"/>: no building target, no start
     /// threshold (the defense may pull any member), a fresh sweep, and the first target (every member owed an AttackMove).
+    /// M6-S14 (BUG-1661): a hunt that begins within <c>ai.huntMemory</c> of a hunt's find going (<see cref="Resumes"/>) keeps
+    /// the last hunt's marks and pass and sweeps nearest-first from where that building stood, the free starts not first:
+    /// a remnant is most likely near what the last hunt found (the Vathar Crossing four-seat trace: a Keep 40 m from a razed
+    /// depot waited 21,000 ticks for a whole new lap that began at the free starts across the map).
     /// </summary>
     private static void BeginHunt(AiPlayer ai, Vector2 army)
     {
         Blackboard board = ai.Board;
         board.Hunting = true;
+        board.WaveFromHunt = false;
         board.WaveTarget = default;
         board.WaveTargetType = board.WaveTargetCell = -1;
         board.WaveMinHalfPop = board.WaveMinCost = 0f;
-        Array.Clear(board.HuntVisited);
+        bool resume = board.HuntFindTick >= 0 && ai.Now - board.HuntFindTick <= ai.Rules.HuntMemoryTicks;
+        if (!resume)
+        {
+            board.HuntFindTick = -1; // too old: forgotten, so this hunt sweeps as before (the free starts first from the second)
+            Array.Clear(board.HuntVisited);
+            board.HuntPass = 0;
+        }
         board.HuntRing = -1;
-        board.HuntRingLeft = board.HuntPass = 0;
+        board.HuntRingLeft = 0;
         board.HuntsStarted++;
         if (Fresh(ai)) HuntTarget(ai, board.EnemyUnitPoint, -1, army);
-        else StartSweep(ai, army);
+        else StartSweep(ai, resume ? board.HuntFindPoint : army);
     }
+
+    /// <summary>
+    /// M6-S14 (BUG-1661): whether the hunt in progress resumes the last hunt's sweep: it began within <c>ai.huntMemory</c> of
+    /// a building a hunt found going (<see cref="Blackboard.HuntFindTick"/>, kept for the whole hunt), so it looks round
+    /// where that building stood first and never at the free starts first (<see cref="NextSweep"/>).
+    /// </summary>
+    internal static bool Resumes(AiPlayer ai) => ai.Board.HuntFindTick >= 0;
 
     /// <summary>
     /// M5-4d: the sweep (re)starts from the army at <paramref name="army"/>: its origin, and the point nearest it (BUG-1107
@@ -382,7 +436,7 @@ internal static class MilitaryManager
     internal static int NextSweep(AiPlayer ai, Vector2 from, int skip)
     {
         bool[] visited = ai.Board.HuntVisited;
-        if (ai.Board.HuntsStarted > 1)
+        if (ai.Board.HuntsStarted > 1 && !Resumes(ai)) // M6-S14 (BUG-1661): a resumed hunt goes nearest-first from its find
         {
             int start = NextHuntStart(ai, from, skip); // M5-H6 (BUG-1157): from the match's second hunt on, the free starts first
             if (start >= 0) return start;
@@ -505,6 +559,7 @@ internal static class MilitaryManager
         {
             // Back to the wave rule: the hunt's members attack the building (no start threshold to keep: the defense may still pull any).
             board.Hunting = false;
+            board.WaveFromHunt = true; // M6-S14 (BUG-1661): the hunt's find; its going is remembered (Wave)
             board.HuntSweep = board.HuntRing = -1;
             board.HuntRingLeft = 0;
             SetTarget(ai, target, type, cell);
@@ -728,6 +783,13 @@ internal static class MilitaryManager
             if (Looking(ai)) Look(ai); // M5-4d slice 2
             return;
         }
+        if (board.WaveFromHunt)
+        {
+            // M6-S14 (BUG-1661): a building a hunt found is gone (razed by the wave, or seen gone): where it stood and when,
+            // so a hunt that begins within ai.huntMemory resumes the sweep from there (BeginHunt).
+            board.HuntFindTick = ai.Now;
+            board.HuntFindPoint = ai.BuildingCentre(board.WaveTargetType, board.WaveTargetCell);
+        }
         // The target is gone (razed, or seen gone): the nearest known enemy building to the members; with none, M5-4d, a hunt
         // (the base not defended, the match not over), else home.
         if (!ai.NearestEnemyBuilding(sum / live, out EntityHandle target, out int type, out int cell))
@@ -749,6 +811,7 @@ internal static class MilitaryManager
             if (Member(ai, ai.ArmySlots[k], out _)) board.WaveFlag[ai.ArmySlots[k]] = ToRally;
         board.WaveActive = false;
         board.Hunting = false;
+        board.WaveFromHunt = false;
         board.HuntSweep = board.HuntRing = -1;
         board.HuntRingLeft = 0;
     }

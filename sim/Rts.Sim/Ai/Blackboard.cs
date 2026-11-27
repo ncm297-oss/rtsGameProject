@@ -224,6 +224,20 @@ internal sealed partial class Blackboard
     /// <summary>Per waypoint, whether it is visited.</summary>
     internal bool[] ScoutVisited { get; }
 
+    /// <summary>
+    /// M6-S14 (BUG-1554 / 1556): the scout out now (<see cref="ScoutPhase"/> 1) is a blind re-scout
+    /// (<c>ScoutManager.Rescout</c>); its death counts in <see cref="BlindScoutsLost"/>, its release does not. Saved at the
+    /// end of <c>AIST</c> (format 11).
+    /// </summary>
+    internal bool BlindScoutOut;
+
+    /// <summary>
+    /// M6-S14 (BUG-1554 / 1556, docs/01 2026-11-17 (3)): the blind re-scouts the seat has lost (died while out). While it is
+    /// below <c>ai.scoutReplacements</c> a blind seat with no idle worker may send a gatherer of the kind it knows; at it, the
+    /// seat sends no blind re-scout again. Saved at the end of <c>AIST</c> (format 11).
+    /// </summary>
+    internal int BlindScoutsLost;
+
     // ---------- M5-3: the enemy memory (from the view only, rebuilt each think) ----------
 
     /// <summary>How many enemy buildings the AI knows this think: those it sees plus its ghosts (the fog's memory, no copy).</summary>
@@ -284,6 +298,24 @@ internal sealed partial class Blackboard
 
     /// <summary>Hunts started (tests and tooling; a wave that turns into a hunt counts).</summary>
     internal int HuntsStarted;
+
+    /// <summary>
+    /// M6-S14 (BUG-1661): the wave in progress is a hunt's find (a hunt that came on an enemy building and turned into a wave
+    /// on it, <c>MilitaryManager.Hunt</c>), so the building's going is remembered (<see cref="HuntFindTick"/>). False for a
+    /// wave of its own and with no wave. Saved at the end of <c>HUNT</c> (format 11).
+    /// </summary>
+    internal bool WaveFromHunt;
+
+    /// <summary>
+    /// M6-S14 (BUG-1661): the think a building a hunt found was seen gone from its wave (-1: none, or forgotten by a hunt
+    /// that began more than <c>ai.huntMemory</c> after it), and where it stood (<see cref="HuntFindPoint"/>, its footprint's
+    /// centre). A hunt that begins within <c>ai.huntMemory</c> of it keeps the last hunt's marks and sweeps nearest-first from
+    /// that point (<c>MilitaryManager.BeginHunt</c> / <c>Resumes</c>). Saved at the end of <c>HUNT</c> (format 11).
+    /// </summary>
+    internal int HuntFindTick = -1;
+
+    /// <summary>See <see cref="HuntFindTick"/>.</summary>
+    internal Vector2 HuntFindPoint;
 
     // ---------- M5-9a: the counter memory (AiPlayer's census, ProductionManager) ----------
 
@@ -350,6 +382,17 @@ internal sealed partial class Blackboard
 
     /// <summary>See <see cref="Rally"/>.</summary>
     internal int RallyVersion;
+
+    /// <summary>
+    /// M6-S14 (BUG-1558 items 2 and 3): the last rally point that was acceptable when it was chosen or kept (its cell open
+    /// and no one-cell passage within <c>ai.rallyReach</c>, <c>MilitaryManager.Acceptable</c>), valid while
+    /// <see cref="HasRallyKept"/>: when no point on the line is acceptable the rally point falls back to it rather than to the
+    /// nominal one. Saved at the end of <c>AIST</c> (format 11).
+    /// </summary>
+    internal Vector2 RallyKept;
+
+    /// <summary>See <see cref="RallyKept"/>.</summary>
+    internal bool HasRallyKept;
 
     /// <summary>Per unit slot, the rally version the unit (of <see cref="UnitGeneration"/>) was last sent to: it isn't sent again to the same point.</summary>
     internal int[] RalliedVersion { get; }

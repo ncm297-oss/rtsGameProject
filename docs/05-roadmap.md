@@ -716,6 +716,11 @@ open S1 / S2. Retro below; open S3 / S4 listed there.)_
       files seeds 3 / 4 / 6 are one match (the seed only picks the openings); Pale Hills seed 2 never ends (BUG-1068); the
       losing seat can go silent for minutes with one worker on gold (BUG-1152 S3); the rebalance re-sends a Gather to a gone
       mine (BUG-1151 S3, generated seed 4). No AI rule changed; no pin moved.)
+      **M6-S14, 2026-11-26-1847 (the pins as they stand now; docs/03 "Implementation (M6-S14)" F):** the literal row
+      ends at 22,840 (19:02); Raraku is pinned on seed 2 (27,400), Pale Hills on seed 1 (26,594), the generated map on
+      seed 3 (23,806), the four-seat FFA on Vathar seed 1 (56,664), the 2v2 on Vathar seed 1 (42,301). Known: Pale Hills
+      seeds 7 / 8 (one match) do not end inside 72,000 (BUG-1855), nor the four-seat Pale Hills seeds 2 and 4 inside
+      144,000 (BUG-1854 / 1860): the sim's next task.
 - [ ] Playable: the owner can win on Easy and lose to a Whirlwind AI on Hard.
 - [x] Owner request 2026-10-14 (D14 a): **proportional defense**: a raid pulls home only what it is worth (home army first, then part of the
       wave, the whole wave only for a real threat or a dying hall); a lone raider never recalls a wave. (M5-4f, 2026-10-16: `Ai/DefenseManager`

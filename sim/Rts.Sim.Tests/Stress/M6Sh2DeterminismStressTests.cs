@@ -1,4 +1,4 @@
-﻿using Rts.Sim.Ai;
+using Rts.Sim.Ai;
 using Rts.Sim.Commands;
 using Rts.Sim.Replays;
 using Rts.Sim.Tests.Save;
@@ -21,6 +21,9 @@ namespace Rts.Sim.Tests.Stress;
 /// the row proved nothing ("no seat retrained a worker"). It plays seed 5, the lowest Raraku seed whose loser retrains
 /// (seat 0 sends a worker Train for 22,761; over at 27,212; seeds 1, 2, 4, 6, 7 and 8 retrain nowhere:
 /// <c>Content/D33BalanceReportTests.RarakuRetrainSeeds_Report</c>). Was seed 3.
+/// M6-S14 (BUG-1660, the worker floor): the retrain path is the floor's (<c>ai.minWorkers</c>), so the row watches for the first
+/// worker Train sent with fewer live workers than the floor (with the floor at 4 no seat on seed 5 fell to zero workers:
+/// "no seat retrained a worker"); seed and checks unchanged.
 /// </summary>
 [Trait("Category", "Stress")]
 public class M6Sh2DeterminismStressTests(ITestOutputHelper output)
@@ -39,7 +42,9 @@ public class M6Sh2DeterminismStressTests(ITestOutputHelper output)
             AiPlayer ai = a.AiOf(p)!;
             ai.SentForTests = c =>
             {
-                if (retrainAt < 0 && c.Kind == CommandKind.Train && ai.WorkerCount == 0 && ai.IsWorkerType[c.TypeId]) retrainAt = c.Tick;
+                // M6-S14 (BUG-1660): the retrain is a floor, so its first Train is one sent with fewer live workers than
+                // ai.minWorkers (was: with none; a seat now rarely reaches none, it trains back up before).
+                if (retrainAt < 0 && c.Kind == CommandKind.Train && ai.WorkerCount < ai.Rules.MinWorkers && ai.IsWorkerType[c.TypeId]) retrainAt = c.Tick;
             };
         }
         byte[]? save = null;

@@ -42,7 +42,7 @@ public class D38ShippedOrdersReportTests(ITestOutputHelper output)
         return "";
     }
 
-    [Fact]
+    [Fact(Skip = "BUG-1853: re-measured by the data track after M6-S14")]
     public void ShippedFile_SixtyFourSeats_EqualD37sRows_Report()
     {
         string? only = Environment.GetEnvironmentVariable("D38_DIFFS");

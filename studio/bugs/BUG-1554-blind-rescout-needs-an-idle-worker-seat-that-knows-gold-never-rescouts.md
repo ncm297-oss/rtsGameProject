@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S3 |
-| Status | open (Producer ruling 2026-11-16-2036, docs/01 2026-11-17: idle-only stands for now; cured together with BUG-1556 by a saved count of blind re-scouts lost, capped by `ai.scoutReplacements`, in the sim's next AI task (a save-format change and a pin move)) |
+| Status | fixed (M6-S14 item D, session 2026-11-26-1847; QA verified, accepted 2026-11-26-1847) |
 | Found | 2026-11-16-2036, task M6-12 (M6-S12), QA full |
 | System | AI scouting (`ScoutManager.Rescout` / `BlindRescoutDue`, `AiPlayer.PickBuilder(idleOnly)`) |
-| Fixed by | |
+| Fixed by | M6-S14 (D) |
 
 ## Repro
 1. `dotnet test sim/Rts.Sim.Tests --filter "FullyQualifiedName~M6S12AiRulesQaTests.KnowsGold_NeverSawATree_ShortOfWood_NoIdleWorker_NeverRescouts_Bug1554"`.
@@ -35,3 +35,6 @@ the rule moves no criterion row.
 - docs/02's sentence says "has a worker with nothing to gather", which is accurate but does not say that this means "knows no
   node of either kind".
 - The row pins today's behaviour (`Assert.Equal(0, rescouts)`); it flips when the Producer rules the decided rule in.
+
+## Fix (M6-S14)
+A blind seat with no idle worker may send a gatherer of the kind it knows while its blind re-scouts lost are below `ai.scoutReplacements`. The QA row flipped and re-staged (`KnowsGold_NeverSawATree_ShortOfWood_NoIdleWorker_Rescouts_Bug1554`: a worker at work on gold re-scouts; 0 on the base).

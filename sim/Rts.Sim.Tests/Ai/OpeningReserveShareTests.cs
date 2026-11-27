@@ -191,7 +191,7 @@ public class OpeningReserveShareTests
     [Fact]
     public void AMidMatchSave_OfSeatsWithAPerOpeningShare_LoadsAndContinuesHashIdentical()
     {
-        Assert.Equal(10, SaveFormat.CurrentVersion);
+        Assert.Equal(11, SaveFormat.CurrentVersion); // M6-S14: format 11 (was 10)
         GameData d = s_saveHalf.Value;
         SaveScene scene = AiSaveScenes.AiMatch(5, 2, AiDifficulty.Normal, data: d);
         int reserved = 0;

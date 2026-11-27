@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S4 |
-| Status | open |
+| Status | fixed |
 | Found | 2026-11-26-0207, task M6-V29 (QA) |
 | System | HUD: `DrawNotice` |
-| Fixed by | |
+| Fixed by | M6-VH10 (2026-11-26-1847, view track) |
 
 ## Repro
 1. `& $env:GODOT --headless --path game res://tests/QaM6V29Test.tscn`: the scene adds a second `DrawNotice` on the match's
@@ -24,3 +24,12 @@ The label keeps its left edge at 176 px and grows to the right only (Godot's def
 
 ## Notes
 Out of the documented range today (one English line), hence S4. Fix the stale 640 px in the same edit.
+
+## Fix (M6-VH10)
+The label wraps (`AutowrapMode.WordSmart`: a word wider than the line is split) inside its 800 px, grows down from 86 px
+and both ways if ever wider (`GrowHorizontal.Both`). The `Width` comment now gives the measured 594 px. New scene
+`ViewHardenVh10Test` (N): at 1152 x 648 and 1920 x 1080 the shipped line is drawn where it was (800 x 30 from 86 px down,
+centred: (176, 86) and (560, 86)); a 120-character sentence (800 x 59, two lines) and 120 letters with no space (800 x 90)
+are centred within 0 px and wholly on screen. On the base the two long texts grew right from the left edge (1154 and 2233
+px wide, 177 and 716.5 px off centre, off screen at 1152 x 648). `QaM6V29Test`'s 200-character note now reads on screen
+True (800 x 152).

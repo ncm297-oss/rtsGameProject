@@ -200,8 +200,10 @@ public class FarExpandProbeQaStressTests
     /// M7-8 (rule 57): the Vathar Crossing four-seat FFA on seed 2, split out of <see cref="AProbedMatch_FarFogOracleAndExtraOracles"/>
     /// and skipped while BUG-1621 / BUG-1610 are open (red since D33: seat 2 silent 30,781-37,561, the match over only at
     /// 88,998). The cause, from <see cref="VatharStallTraceTests"/>, is in docs/03 "Implementation (M7-8)"; un-skip it with the cure.
+    /// M6-S14 (the cures: the hunt's resume, BUG-1661, and the worker floor, BUG-1660): un-skipped; the match ends at 47,412
+    /// (seat 3) with every oracle clean.
     /// </summary>
-    [Fact(Skip = "BUG-1621 / BUG-1610 (open): seat 2 is left with one worker, no army and no producer and nothing trains a second worker while one lives (silent 30,781-37,561); seat 3's hunts restart at the free starts after each find and reach seat 2's last Keep only at 88,441")]
+    [Fact]
     public void VatharCrossingSeed2_FourSeats_FarFogOracleAndExtraOracles() =>
         Row("vathar_crossing", 2UL, AiDifficulty.Normal, 4, null, 144_000, oracles: true);
 

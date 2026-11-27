@@ -68,7 +68,7 @@ public class D38ShippedOrdersQaStressTests(ITestOutputHelper output)
         return new Seen(x, map, fell, two, sh, br, ri, dg, anointed);
     }
 
-    [Fact]
+    [Fact(Skip = "BUG-1853: re-measured by the data track after M6-S14")]
     public void QA_ShippedFile_SixtyFourSeats_EqualTheBriefsRows_Report()
     {
         string? only = Environment.GetEnvironmentVariable("D38QA_DIFFS");

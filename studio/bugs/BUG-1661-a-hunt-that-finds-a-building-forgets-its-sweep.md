@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S3 (an AI match that is decided runs on for tens of thousands of ticks; BUG-1610's length) |
-| Status | open (traced in M7-8; the cure waits for the AI-play session, docs/01 2026-11-24 (2)) |
+| Status | fixed (M6-S14 item A, session 2026-11-26-1847; QA verified, accepted 2026-11-26-1847) |
 | Found | 2026-11-24-1431, task M7-8 (the developer's trace of BUG-1610 / BUG-1621; QA re-ran the trace and filed it) |
 | System | AI end game (`MilitaryManager.BeginHunt` / `NextSweep` / `NextHuntStart`) |
-| Fixed by | |
+| Fixed by | M6-S14 (A) |
 
 ## Repro
 1. `dotnet test sim/Rts.Sim.Tests --filter "FullyQualifiedName~VatharStallTraceTests"`; read the timeline from 30,000.
@@ -26,3 +26,6 @@ whatever the last hunt found; each find near the remnant costs a whole lap of th
   keeps the marks and resumes nearest-first from the building; the free starts first only for a hunt with no find within
   `ai.huntMemory`. Small (`MilitaryManager`), no format change if the resume is derived from the wave's last target.
   Moves every AI match with two or more hunts (docs/03 "Implementation (M7-8)" lists the pin classes).
+
+## Fix (M6-S14)
+A hunt within `ai.huntMemory` of a hunt's find going keeps the last hunt's marks and sweeps nearest-first from where the building stood (`MilitaryManager.BeginHunt` / `Resumes`; `HUNT` gains three values, format 11). Test: `Ai/HuntResumeTests` (red on the base). The Vathar four-seat seed 2 match ends at 45,217 after A alone (was 88,998), 47,412 with every M6-S14 item.

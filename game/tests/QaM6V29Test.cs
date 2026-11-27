@@ -22,14 +22,17 @@ namespace Rts.Game.Tests;
 /// <item>Two seats at 2 ticks a frame: the notice shows iff <c>DrawTicksLeft &gt;= 0</c> with the right second on every tick;
 /// the pause menu open mid-clock holds the tick and the notice; a 200-character <c>hud.draw_countdown</c> at 1152 x 648 stays
 /// on screen (note only); the draw reads Draw; then (Continue watching) the local player is knocked out after the draw: the
-/// live result stays Draw with one banner; a save after that fall, loaded, and the recording beside it, played back, are
-/// compared with live (BUG-1790: the loaded save reads Defeat).</item>
+/// live result stays Draw with one banner; a save after that fall, loaded, and the recording beside it, played back to its
+/// end, read Draw for both sides as live does (BUG-1790's two-sided half, fixed in M6-VH10).</item>
+/// <item>Three seats, free-for-all, drawn, then the local player knocked out after the draw: live stays Draw (latched); the
+/// result now and a save after the fall, loaded, print <c>KNOWN BUG-1790</c> while they read Defeat (Request 60: the sim
+/// does not record who stood at the draw); <c>-- --strict</c> fails the scene on them.</item>
 /// <item>Four seats, teams 1 1 2 2: the local player out, its ally standing at the draw: <c>ResultFor</c> is Draw for every
 /// seat, and the banner Draw.</item>
 /// <item>Four seats, free-for-all: the local player out first: Defeat for seat 0, Draw for seats 1-3; one banner.</item>
 /// </list>
 /// Headless: <c>&amp; $env:GODOT --headless --path game res://tests/QaM6V29Test.tscn</c>; prints "QA M6-V29 TEST PASS" or FAIL
-/// lines; "KNOWN" lines report an open bug's behaviour without failing the scene.
+/// lines; "QA M6-V29 KNOWN" lines report an open bug's behaviour without failing the scene unless run with <c>-- --strict</c>.
 /// </summary>
 public partial class QaM6V29Test : Node
 {
@@ -46,10 +49,12 @@ public partial class QaM6V29Test : Node
     private Main _main = null!;
     private int _ended, _misses, _shownTicks;
     private double _delta = 0.1;
+    private bool _strict;
 
     public override async void _Ready()
     {
         ProcessMode = ProcessModeEnum.Always;
+        _strict = Array.IndexOf(OS.GetCmdlineUserArgs(), "--strict") >= 0;
         _root = Path.GetFullPath(ProjectSettings.GlobalizePath($"user://qam6v29-{OS.GetProcessId()}"));
         try
         {
@@ -62,6 +67,7 @@ public partial class QaM6V29Test : Node
             AddChild(_main);
             await Frames(2);
             await FallAfterDraw();
+            await ThreeSidesFallAfterDraw();
             _delta = 0.25;
             await FourSeatTeams();
             await FourSeatFreeForAll();
@@ -138,6 +144,9 @@ public partial class QaM6V29Test : Node
         _notes.Add($"fall after draw: drawn at tick {drawTick}, player 0 out at tick {sim.TickNumber}; latched {match.Outcome}, ResultFor now {now}, banners {_ended}");
         Check(_ended == 1 && !_main.BannerUp && match.Outcome == MatchOutcome.Draw,
             $"fall after draw, live: ended {_ended}, banner up {_main.BannerUp}, outcome {match.Outcome} (want one Draw banner)");
+        // M6-VH10 (BUG-1790, two sides): the side out after the draw and the side standing both read Draw now, not only latched.
+        Check(Match.SidesThatBuilt(w) == 2 && now == MatchOutcome.Draw && Match.ResultFor(w, 1) == MatchOutcome.Draw,
+            $"fall after draw, live: sides {Match.SidesThatBuilt(w)}, ResultFor 0 {now}, 1 {Match.ResultFor(w, 1)} (want Draw for both)");
         Check(!notice.Shown, "fall after draw: the notice is back");
 
         _main.PauseMatch();
@@ -163,13 +172,16 @@ public partial class QaM6V29Test : Node
         Match loaded = Watch(_main.CurrentMatch);
         await UntilBanner(loaded.Simulation!, "fall after draw, loaded");
         string loadedTitle = _main.Banner!.Title.Text;
-        if (loaded.Outcome != MatchOutcome.Draw)
-            _notes.Add($"KNOWN BUG-1790: a save taken after the local player fell after the draw loads to {loaded.Outcome} ('{loadedTitle}'); live read Draw");
-        Check(loaded.Outcome != MatchOutcome.Victory, $"fall after draw, loaded: Victory");
+        // M6-VH10: BUG-1790's two-sided half is fixed, so this row passes (it printed "KNOWN BUG-1790 ... loads to Defeat" before).
+        World lw = loaded.Simulation!.World;
+        Check(loaded.Outcome == MatchOutcome.Draw && loadedTitle == _ui.MatchOver(MatchOverText.Draw) && lw.IsDefeated(0)
+            && Match.ResultFor(lw, 0) == MatchOutcome.Draw && Match.ResultFor(lw, 1) == MatchOutcome.Draw,
+            $"fall after draw, loaded: outcome {loaded.Outcome} ('{loadedTitle}'), player 0 out {lw.IsDefeated(0)}, ResultFor 0 {Match.ResultFor(lw, 0)}, 1 {Match.ResultFor(lw, 1)} (want Draw, as live: BUG-1790)");
         _main.QuitToMenu();
         await Frames(2);
 
-        // The recording beside the save, played back from the start: the draw latches first.
+        // The recording beside the save, played back from the start: the draw latches first; played to its end (past the fall),
+        // both sides still read Draw.
         if (Check(File.Exists(beside), $"fall after draw: no recording beside the save ({beside})"))
         {
             Check(_main.WatchReplay(beside), "fall after draw: the recording did not play");
@@ -177,9 +189,62 @@ public partial class QaM6V29Test : Node
             await UntilBanner(played.Simulation!, "fall after draw, playback");
             Check(played.Outcome == MatchOutcome.Draw && _main.Banner!.Title.Text == _ui.MatchOver(MatchOverText.Draw),
                 $"fall after draw, playback: outcome {played.Outcome}, banner '{_main.Banner!.Title.Text}' (want Draw, as live)");
+            SimRunner runner = played.GetNode<SimRunner>("SimRunner");
+            _main.ContinueWatching();
+            World pw = played.Simulation!.World;
+            await Until(played.Simulation!, () => runner.PlaybackState != PlaybackState.Playing, "fall after draw, playback: the recording's end");
+            Check(pw.IsDefeated(0) && Match.ResultFor(pw, 0) == MatchOutcome.Draw && Match.ResultFor(pw, 1) == MatchOutcome.Draw && _ended == 1,
+                $"fall after draw, playback at its end (tick {pw.TickNumber}): player 0 out {pw.IsDefeated(0)}, ResultFor 0 {Match.ResultFor(pw, 0)}, 1 {Match.ResultFor(pw, 1)}, banners {_ended} (want Draw for both)");
             _main.QuitToMenu();
             await Frames(2);
         }
+    }
+
+    // ---- three seats, free-for-all: drawn, then a side falls after the draw (Request 60's case, still open) ----
+
+    private async Task ThreeSidesFallAfterDraw()
+    {
+        _main.BeforeStart = m => { Setup(m); m.GetNode<SimRunner>("SimRunner").PlayerCount = 3; };
+        _main.StartSkirmish(Args.Concat(new[] { "--players", "3" }).ToArray());
+        _main.BeforeStart = Setup;
+        Match match = Watch(_main.CurrentMatch);
+        Simulation sim = match.Simulation!;
+        World w = sim.World;
+        NavGrid g = w.NavGrid;
+        await Halls(sim, (0, g.Width / 4, g.Height / 3), (1, g.Width * 3 / 4, g.Height / 3), (2, g.Width / 2, g.Height * 3 / 4));
+        await UntilBanner(sim, "three seats draw");
+        Check(w.MatchDrawn && match.Outcome == MatchOutcome.Draw && Match.SidesThatBuilt(w) == 3,
+            $"three seats draw: drawn {w.MatchDrawn}, outcome {match.Outcome}, sides {Match.SidesThatBuilt(w)}");
+        _main.ContinueWatching();
+        await Frames(2);
+        await KnockOut(sim, killer: 1, victim: 0);
+        await Until(sim, () => w.IsDefeated(0), "three seats: player 0 out after the draw");
+        await Frames(3);
+        Check(_ended == 1 && match.Outcome == MatchOutcome.Draw, $"three seats, live: ended {_ended}, latched {match.Outcome} (want one Draw banner)");
+        if (Match.ResultFor(w, 0) != MatchOutcome.Draw)
+            Known("BUG-1790", $"three sides: the side out after the draw reads {Match.ResultFor(w, 0)} now (latched Draw live; Request 60)");
+        _main.PauseMatch();
+        await Frames(2);
+        Check(_main.SaveGame() && _main.LastSavePath != null, "three seats: save not written");
+        string save = _main.LastSavePath ?? "";
+        _main.QuitToMenu();
+        await Frames(2);
+        Check(_main.LoadSavedGame(save), "three seats: the save did not load");
+        Match loaded = Watch(_main.CurrentMatch);
+        await UntilBanner(loaded.Simulation!, "three seats, loaded");
+        Check(loaded.Outcome != MatchOutcome.Victory, "three seats, loaded: Victory");
+        if (loaded.Outcome != MatchOutcome.Draw)
+            Known("BUG-1790", $"three sides: a save taken after the local player fell after the draw loads to {loaded.Outcome} ('{_main.Banner!.Title.Text}'); live read Draw (Request 60)");
+        else _notes.Add("BUG-1790 three sides: the loaded save reads Draw (now passes: make it a plain check)");
+        _main.QuitToMenu();
+        await Frames(2);
+    }
+
+    // A row for an open bug: printed as KNOWN, failing only with -- --strict (the QaV2Test convention).
+    private void Known(string bug, string message)
+    {
+        GD.Print($"QA M6-V29 KNOWN {bug}: {message}");
+        if (_strict) _failures.Add($"{bug}: {message}");
     }
 
     // ---- four seats, teams 1 1 2 2: the local player out, its ally standing at the draw ----

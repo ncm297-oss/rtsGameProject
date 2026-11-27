@@ -146,7 +146,8 @@ public class ScoutCapQaTests
         Row calm = Play(seed, 6000);
         _out.WriteLine($"ROW door seed {seed}: sent {r.Sent}; losses {r.Losses}; capped at {r.CappedAt}; workers {r.Workers} (calm {calm.Workers}); farthest {r.Farthest:F1} m (after the cap {r.FarthestAfterCap:F1}; calm {calm.Farthest:F1}); wood {r.Wood} (first {r.FirstWood}; calm {calm.Wood}); forest known {r.KnowsWood}");
         Assert.True(r.CappedAt > 0, "the sweep never ended on a death");
-        Assert.True(r.Sent <= TestSim.Data.AiRules.ScoutReplacements + 1, $"{r.Sent} scouts sent");
+        // M6-S14 (BUG-1556, docs/01 2026-11-17 (3)): plus the blind re-scouts a seat may now lose, up to the same cap.
+        Assert.True(r.Sent <= 2 * TestSim.Data.AiRules.ScoutReplacements + 1, $"{r.Sent} scouts sent");
         Assert.True(r.Workers >= 15, $"{r.Workers} workers");
         Assert.True(r.Farthest <= FarthestAllowed, $"a gatherer sent {r.Farthest:F1} m from the hall");
         Assert.True(r.Wood > 0 || !r.KnowsWood, "a forest known and no wood by 6,000");

@@ -66,7 +66,12 @@ public class MatchCriterionTests
     /// Seeds 1-8: 24,354 / 39,262 / 27,394 / 27,394 / 27,212 / 27,394 / 28,753 / 28,753 (seed 1 ends again: BUG-1460's re-scout
     /// and the rally rule; whether the row goes back to seed 1 is the Producer's call).
     /// D33 (the data track's waves: <c>cadre_rush</c> 16 army pop, <c>holy_war</c> 14): seed 3 ends at <b>28,915 (24:05), seat 1</b>
-    /// (was 27,394), inside the bound, so the row stays.</summary>
+    /// (was 27,394), inside the bound, so the row stays.
+    /// M6-S14 (the AI-play session): <b>seed 3 no longer ends inside the bound</b> (39,630, seat 1, and with every check on it
+    /// stops at 34,181 on check (e): BUG-1852, a finding, not a new bound), so by rule 45 the row moves to the nearest seed that
+    /// ends inside it: <b>seed 2, 27,400 (22:50), seat 0</b> (seed 4 is seed 3's match; <c>M6Sh2QaStressTests</c> played seed 2
+    /// until this session and now plays seed 1). Seeds 1-8: 34,444 / 27,400 / 39,630 / 39,630 / 24,859 / 39,630 / 25,235 /
+    /// 25,235.</summary>
     internal const int RarakuBound = 36_000;
 
     /// <summary>
@@ -78,6 +83,10 @@ public class MatchCriterionTests
     /// the row moves to the lowest of seeds 1-6 under 24,000: <b>seed 1, 21,876 (18:13), seat 0</b>. Seeds 1-6: 21,876 / 27,690 /
     /// 30,704 / 22,789 / 29,994 / 44,747. Seed 2 passes every sweep oracle (it ends, later), so it is not added to
     /// <c>MatchCriterionSweepQaStressTests.Known</c>.
+    /// M6-S14 (the AI-play session): <b>seed 1 no longer ends inside the bound</b> (a finding, not a new bound), so by rule 45
+    /// the row moves to the nearest seed that ends inside it: <b>seed 3, 23,806 (19:50), seat 0</b> (seed 2 ends at 42,446,
+    /// past it; seed 3 is the nearest above 1 that ends inside, 194 ticks under the bound; seeds 4 and 8 end at 22,782 and
+    /// 19,476, seed 7 at 27,306; the session's probe and the sweep, every check on).
     /// </summary>
     internal const int GeneratedBound = 24_000;
 
@@ -90,15 +99,15 @@ public class MatchCriterionTests
     /// The bound did not move.</summary>
     internal const int FourSeatBound = 72_000;
 
-    /// <summary>The tick the literal row is saved at: half its end (M6-S12: seed 1's 23,244 / 2; M6-SH2: seed 7's 19,912 / 2; was 11,706 (M6-S10: 23,412 / 2), and 11,397, half of seed 1's 22,794 before M5-9a; any mid-match tick serves).</summary>
-    internal const int HalfWay = 11_622; // M6-S12: half of seed 1's 23,244 (was 9,956)
+    /// <summary>The tick the literal row is saved at: half its end (M6-S14: seed 1's 22,840 / 2; M6-S12: seed 1's 23,244 / 2; M6-SH2: seed 7's 19,912 / 2; was 11,706 (M6-S10: 23,412 / 2), and 11,397, half of seed 1's 22,794 before M5-9a; any mid-match tick serves).</summary>
+    internal const int HalfWay = 11_420; // M6-S14: half of seed 1's 22,840 (was 11,622; M6-S12: half of 23,244, was 9,956)
 
     internal static readonly Row[] Rows =
     {
         new("vathar_crossing", "vathar_crossing", 1, 2, null, VatharBound), // M6-S12: seed 1 again (23,244; seed 7 ends at 30,482); M6-S10: seed 7 (seed 1 ended at 24,497)
-        new("raraku", "raraku", 3, 2, null, RarakuBound), // M6-SH2: seed 3 (seed 2 ends at 56,940: BUG-1521); M6-S10: seed 2 (seed 1 no longer ends inside 72,000: BUG-1460)
+        new("raraku", "raraku", 2, 2, null, RarakuBound), // M6-S14 (rule 45): seed 2 (seed 3 ends at 39,630, past the bound, and fails check (e): BUG-1852); M6-SH2: seed 3 (seed 2 ends at 56,940: BUG-1521); M6-S10: seed 2 (seed 1 no longer ends inside 72,000: BUG-1460)
         new("pale_hills", "pale_hills", 1, 2, null, PaleHillsBound),
-        new("generated", "generated", 1, 2, null, GeneratedBound), // M6-S12: seed 1 again (21,876; seed 2 ends at 27,690); M5-9a round 2: seed 2 (seed 1 ended at 25,968)
+        new("generated", "generated", 3, 2, null, GeneratedBound), // M6-S14 (rule 45): seed 3 (seed 1 no longer ends inside 24,000); M6-S12: seed 1 again (21,876; seed 2 ends at 27,690); M5-9a round 2: seed 2 (seed 1 ended at 25,968)
         new("ffa", "vathar_crossing", 1, 4, null, FourSeatBound), // D33 (rule 45): seed 1 (seed 2 no longer ends inside 72,000; seeds 1 and 3 are as near, the lower taken)
         new("2v2", "vathar_crossing", 1, 4, new[] { 1, 2, 1, 2 }, FourSeatBound),
     };

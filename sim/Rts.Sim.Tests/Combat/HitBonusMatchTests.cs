@@ -211,7 +211,7 @@ public class HitBonusMatchTests
             Assert.True(chained.StateHash() == reference.StateHash(), $"the chained run differs after tick {t}");
         }
         Assert.Equal(39, saves);
-        Assert.Equal(10, SaveFormat.CurrentVersion);
+        Assert.Equal(11, SaveFormat.CurrentVersion); // M6-S14: format 11 (was 10)
     }
 
     /// <summary>
@@ -232,7 +232,7 @@ public class HitBonusMatchTests
         for (int k = 0; k < 3; k++) Assert.Equal(1.5f * 1.1f, HitFactor.Of(sim.World, a.Index));
         Assert.Equal(h0, sim.StateHash());
         Assert.True(s0.AsSpan().SequenceEqual(SaveTestRun.Save(sim)));
-        Assert.Equal(10, SaveFormat.CurrentVersion);
+        Assert.Equal(11, SaveFormat.CurrentVersion); // M6-S14: format 11 (was 10)
         Assert.Equal(9, Replays.Replay.CurrentFormatVersion);
     }
 }

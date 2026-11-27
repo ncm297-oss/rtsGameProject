@@ -71,6 +71,7 @@ internal sealed partial class AiPlayer
         Board.ReadHuntFrom(r);
         int cols = ScoutManager.GridLines(View.MapWidth, Rules.ScoutGrid), rows = ScoutManager.GridLines(View.MapHeight, Rules.ScoutGrid);
         r.Check(Board.HuntRing < 0 || Board.HuntRing >= MilitaryManager.RingStart(cols, rows));
+        r.Check(Board.HuntFindTick <= Now); // M6-S14: no find after the seat's last think
     }
 
     /// <summary>M5-9a: writes the seat's counter memory for the save's <c>CTRM</c> section (<see cref="Blackboard.WriteCountersTo"/>).</summary>
@@ -131,5 +132,6 @@ internal sealed partial class AiPlayer
         _mineCount = r.ReadInt32In(0, MineScratch);
 
         Board.ReadFrom(r);
+        r.Check(Board.BlindScoutsLost <= Rules.ScoutReplacements); // M6-S14: the count stops at the cap
     }
 }

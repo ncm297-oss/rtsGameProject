@@ -141,7 +141,7 @@ public class HardKnobsMatchTests
     [Fact]
     public void ASaveMidWave_WithAFocusAndAPulledBackMember_FollowsTheRunFor1000Ticks()
     {
-        Assert.Equal((10, 10), (SaveFormat.CurrentVersion, SaveFormat.HuntMaplessVersion)); // M7-1: every save is 10 (M5-9a: 9 / 8 with CTRM, were 7 / 6)
+        Assert.Equal((11, 11), (SaveFormat.CurrentVersion, SaveFormat.HuntMaplessVersion)); // M6-S14: every save is 11 (M7-1: 10; M5-9a: 9 / 8 with CTRM, were 7 / 6)
         Assert.Equal(9, Replay.CurrentFormatVersion);
         (Simulation sim, List<EntityHandle> members, _) = Focus(AiDifficulty.Hard, raiderX: RaiderX);
         AiPlayer ai = sim.AiOf(0)!;

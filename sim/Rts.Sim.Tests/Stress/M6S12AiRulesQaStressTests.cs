@@ -26,7 +26,10 @@ public class M6S12AiRulesQaStressTests(ITestOutputHelper output)
     /// The drain: the blind scene (no node of either kind known, so every worker is idle), each scout killed the tick it is
     /// sent (an enemy camped at the door, as <c>ReachRuleQaTests.EveryScoutKilledAtOnce_*</c> stages it), for 20 minutes
     /// (24,000 ticks): re-scouts sent, workers lost, workers trained, gold left, printed. Asserted: at most one re-scout per
-    /// <c>ai.scoutAfter</c> window. Whether the loss itself is bounded is reported (BUG-1557 if it is not).
+    /// <c>ai.scoutAfter</c> window. Whether the loss itself is bounded is reported (BUG-1557 if it is not). M6-S14 (BUG-1554 /
+    /// 1556, docs/01 2026-11-17 (3)): the seat counts the blind re-scouts it loses and stops at <c>ai.scoutReplacements</c>;
+    /// asserted: exactly that many lost, and the seat ends the 20 minutes with workers alive and gold above 0 (before: 25 lost,
+    /// no worker from about 6 minutes on, gold 1,000 -> 0).
     /// </summary>
     [Fact]
     public void EveryScoutKilledAtOnce_TheBlindSeatsDrain_20Minutes_Report()
@@ -64,6 +67,10 @@ public class M6S12AiRulesQaStressTests(ITestOutputHelper output)
         output.WriteLine($"20 min: re-scouts {rescouts}, scouts killed {killed}, own units lost {w.UnitLosses[0] - losses0}, trained {w.UnitsTrained[0] - trained0}, "
             + $"workers alive {Workers(w)} (none from tick {firstNoWorker}), gold {gold0} -> {w.Gold[0]}, most re-scouts in one window {most}; {at5Min}");
         Assert.True(most <= 1, $"{most} re-scouts in one ai.scoutAfter window");
+        Assert.Equal(ai.Rules.ScoutReplacements, ai.Board.BlindScoutsLost);
+        Assert.Equal(ai.Rules.ScoutReplacements, killed);
+        Assert.True(Workers(w) > 0, "no worker left at 20 minutes");
+        Assert.True(w.Gold[0] > 0, "no gold left at 20 minutes");
     }
 
     private static int Workers(World w)
