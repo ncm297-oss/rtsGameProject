@@ -15325,6 +15325,40 @@ Added by rule 74 (classes in the Producer's grep, or found by the runs, that a w
    to a gone node** on Raraku seed 3 (BUG-1852). Recommendation: the sim's next AI or hardening task traces them (not in
    this task's scope, rule 48).
 
+### Implementation (M6-SH3)
+
+The sim's hardening after M6-S14 (docs/01 2026-11-27, both rows; the brief in `studio/handoff.md`, session 2026-11-27-0817):
+the matches that stopped ending, the draw rule's exact "can still train", three small AI cures and one pin re-measure. Items
+in commit order (A-D), each its own commit and each measured apart from the others (rule 70); the pin move after C.
+
+**A. Pale Hills Normal v Normal seed 7 (BUG-1855), traced, not cured.** `Stress/PaleHillsStallTraceTests` (Category Stress,
+by name: `--filter FullyQualifiedName~PaleHillsStallTraceTests`; the match as `MapFileTests.MapMatch` builds it, seed 8 is the
+same match) prints every 6,000 ticks from 48,000 each seat's bank, workers, army, population, queued units, wave and starved
+state, hunts begun, enemy buildings known and the map's gold left; at the end `MatchSpent` and each seat's terms of "can still
+train" (`Draw/DrawReachScan`), each seat's buildings with what the other seat knows of them, and a timeline of every change
+of a seat's wave / hunt state. Measured on the base 0159c425 (it reads only what the base has; 22 s):
+
+| Tick | Seat 0 (Malazan, `cadre_rush`) | Seat 1 (Whirlwind, `raider_rush`) | Map gold |
+| --- | --- | --- | --- |
+| 48,000 | 1,398 g / 6,295 w, 30 workers, army 52 (70 pop), pop 100 / 100, 6 units queued, defending, hunts 2, knows 0 enemy buildings | 2,443 g / 21 w, 25 workers, army 11, waves 9, knows 7 | 6,001 |
+| 60,000 | 2,630 g / 7,550 w, army 47, pop 100 / 100, 6 queued, defending, knows 0 | 51 g / 307 w, army 21, waves 13 | 1,371 |
+| 72,000 | 1,784 g / 10,575 w, army 52, pop 100 / 100, 6 queued, hunting, knows 0 | 75 g / 2,755 w, 24 workers, no army, waves 17, starved from 65,340 | 0 |
+
+Why seat 0 does not finish: it hunts from before 48,000 to the end, but it never knows a seat-1 building (0 known for the
+whole span): every seat-1 building stands on ground seat 0 explored before it was built and never saw again, so it has no
+ghost of any. Seat 1 sends a wave at seat 0's base about every 2,900 ticks (waves 9 to 17); each one makes seat 0 defend,
+the army goes home, and the hunt's leg to its first sweep point (point 200, on the map's east edge at (511, 179) m, about 370 m
+from seat 0's base) is given up before it is reached and sent again after the defense, to the same point (the timeline: 14
+entries at "sweep 200" between 49,701 and 70,341). Seat 1's base lies the other way, about (322, 398) m. Only once seat 1's army
+is gone (its starved wave at 69,240 dies) does the sweep move on (points 202, 204, 206 by 71,941); it would reach seat 1
+later. Why the match is not spent: both seats can pay for units in gold and wood at 72,000 (seat 0 any Malazan unit; seat 1 a
+Camp Follower, a Raider, a Desert Archer, a Horse Raider or a Zealot), by the old rule and by B's, so the draw rule rightly
+does not start; this is a match an AI should win. **No cure:** the cause is how a hunt resumes after a defense (resume the leg,
+or sweep from where the army stands, or keep the hunt's marks of the points it passed), a choice inside
+`MilitaryManager`'s hunt that is more than about 30 lines and new behaviour; BUG-1855 is re-stated with this trace for the
+next AI task (the patch in the session's scratch folder `m6sh3-bugs`). Seat 0 also keeps 6 paid units waiting at its
+population cap for the whole span (BUG-1731's case; B's rule no longer counts them, the bank does).
+
 ## Testing strategy
 
 | Test kind | What it proves | Runs |
