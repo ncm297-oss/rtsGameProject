@@ -5182,8 +5182,9 @@ tests, the import tooling, the Cairn's two model files and docs; no sim, `ViewAp
   timber is now a paler stone grey, `Wood` `#938e83` / `Wood_Light` `#aca79a` (was `#77736a` / `#8b877c`, each channel
   x 1.24); the team part (the banner and the top's `teamFaces`) is unchanged, so its area is today's. The tint was chosen
   over a larger team part because the Iron player's colour is a dark slate (`#4B4F55`): only luminance sets it apart from
-  a grey wall, and a paler wall moves every other colour's contrast the right way or keeps it (all eight are saturated or,
-  for Bone, far lighter). Measured on `ViewHardenVh10Test`'s pictures (windowed, `-- --shots`; the four Cairns of colours
+  a grey wall. A paler wall does not help every colour (corrected by M6-V31, BUG-1870): in the table below Iron, Violet,
+  Rose, Crimson and Cobalt gain luminance contrast, while Jade (31 -> 0), Ochre (43 -> 12) and Bone (97 -> 67) lose it.
+  Measured on `ViewHardenVh10Test`'s pictures (windowed, `-- --shots`; the four Cairns of colours
   1-4 and 5-8 on the same spots, team pixels told from wall pixels by the difference between the two pictures and an empty
   one), Rec. 709 luminance of the most common lit wall and team colour at zoom 40 (zoom 60 within 1 level):
 
