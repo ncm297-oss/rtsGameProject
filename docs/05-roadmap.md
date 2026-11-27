@@ -894,6 +894,11 @@ open S1 / S2. Retro below; open S3 / S4 listed there.)_
       **M6-V28, 2026-11-25-1437:** four more Malazan building models (Billet, Quartermaster's Depot, Crossbow Range,
       Watchtower; the Watchtower's bolt leaves from the drawn tower). 6 of 30 building types are models; 400 figures with
       60 building models 6.3 ms a frame (the same as boxes). **Not ticked:** the other 24 building types and the six capsules.
+      **M6-V30, 2026-11-26-0717:** eight Teblor building models from the pack's timber First Age set (Longhouse, Hut,
+      Woodcutters' Lodge, War Lodge, Javelin Ground, Stone Cairn, Bloodwood Carver, Shaman's Circle), the data `scale`
+      drawn on a model's height. 14 of 30 building types are models; 400 figures with 60 building models 6.4 ms a
+      frame alone (the same as boxes). **Not ticked:** the other 16 building types (every
+      Whirlwind building, four Malazan, two Teblor) and the six capsules.
 - [ ] Real SFX and placeholder music; alerts with sound. (M6-V12, 2026-10-17-2344: **real SFX and the alerts are in**: 16 clips cut from
       the owner's Sonniss GDC 2026 bundle (`tools/audio/trim-wav.ps1` + `sfx-manifest.json`, LFS, docs/04 licensing rows) for 12 events
       (`SfxEvent`); world sounds only for what the local player sees on screen, at most 4 per 100 ms; attack alerts (`ViewApi/AttackAlerts`
@@ -1016,6 +1021,11 @@ open S1 / S2. Retro below; open S3 / S4 listed there.)_
       `normal` / `hard`; Request 59; left out = as before, no shipped opening carries it yet), and the three Teblor
       orders are measured and waiting as fixtures (Easy K9KC10S, Normal M1RS, Hard QRD1: each meets every figure of its
       difficulty's bar on 64 seats). **Not ticked:** shipping them (D38, one hash move), the two models.
+      **D38, 2026-11-26-0717: the three orders ship** (the Teblor `standard`: `buildOrder` = M1RS, `buildOrders` easy
+      K9KC10S, hard QRD1; one hash move). Measured on the shipped file, 64 seats a difficulty, every figure of the bar
+      is met on Easy, Normal and Hard (BUG-1612 fixed). **M6-V30, the same session:** eight of the ten Teblor
+      buildings are models. **Not ticked:** the Rider and War-dog models (the owner's packs), the two box buildings,
+      the balance pass's remaining steps (a re-measure after the sim's AI-play session).
 
 ## M8 — Shadow
 
@@ -1039,6 +1049,11 @@ open S1 / S2. Retro below; open S3 / S4 listed there.)_
       damageBonus, maxStacks }`, counted through the spatial grid at each hit; docs/03 "Implementation (M8-3)". **Not
       ticked:** the 7-alive limit, teleport, the Wraith row and ability `requires` (Request 56 G4-G8) are not built, and
       no shipped unit carries the passive.)
+      **M8-4, 2026-11-26-0717: the 7-alive limit is built as a generic unit field, on test data only**: `units.json`
+      `maxAlive` (live units of the type plus those in queues; gates training only; `TrainError.LimitReached`, the
+      button text "Limit reached"; the computer player trains other types at the limit); docs/03 "Implementation
+      (M8-4)". **Not ticked:** teleport, the Wraith row and ability `requires` (Request 56 G5-G8) are not built, and no
+      shipped unit carries the limit or the passive.
 - [ ] Shadow AI with ambush behavior; models; balance pass (watch early-game stealth, see faction page).
 
 ## M9 — Tiste Andii

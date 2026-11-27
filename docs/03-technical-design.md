@@ -5739,7 +5739,7 @@ preallocated, not hashed, not saved. An entry is `(Unit, Owner, Kind, Placement,
   tick. Nothing reads the list inside the sim; a match's state hashes are unchanged (criterion 7's digests). 100 ticks that
   each drop an order allocate nothing (`DroppedOrderTests.ATickThatDropsAnOrder_AllocatesNothing`).
 
-**For the data track (M7-8).** No shipped opening carries a switch. To cure the Teblor unit mix (BUG-1612, BUG-1421
+**For the data track (M7-8).** Since D38 (2026-11-26) the Teblor `standard`'s three lists carry `throughReserve` on some train steps; no other shipped opening carries a switch. To cure the Teblor unit mix (BUG-1612, BUG-1421
 item 1) in the Teblor's own file, write the switch on the step itself in `factions/teblor/ai.json` `standard`:
 
 ```json
@@ -5915,7 +5915,7 @@ row, the allocation row), `Ai/PerDifficultySaveTests` (saves, determinism; the t
   (Easy, Normal, Hard, Hard) twice in one process (24 checkpoints to 12,000) and across two processes (Stress) give the
   same hashes.
 
-**For the data track (M7-9).** No shipped opening carries the field. To give a difficulty its own build order, write it
+**For the data track (M7-9).** Since D38 (2026-11-26) one shipped opening carries the field: the Teblor `standard` (`buildOrder` is Normal's list, `buildOrders` holds `easy` and `hard`); no other does. To give a difficulty its own build order, write it
 inside the opening beside `buildOrder`:
 
 ```json
@@ -6017,8 +6017,10 @@ the data hash).
   copy with `spawnCount` 3), each stripping every shipped `maxAlive` first (rule 58).
 - **Known limits.** (1) The draw rule's "can still train" (M6-S13, `World.CanStillTrain`) does not read the limit: it
   compares the seat's gold with its cheapest unit, so a seat whose every trainable type were at its limit would still count
-  as able to train while it holds that gold (BUG-1731's family; no designed faction has only limited types). (2) A seat whose composition is only the capped type banks its gold at the limit (production has
-  nothing else to pick); a designed opening lists other units beside the Hound.
+  as able to train while it holds that gold (BUG-1731's family; no designed faction has only limited types). (2) A seat whose composition is only the capped type has nothing else to pick at the limit, but it does not sit on its gold
+  (BUG-1810, measured by QA's `Stress/UnitLimitAiQaStressTests.OnlyTheCappedTypeInTheComposition_Report`: over 12,000 ticks the
+  most gold in hand was 418-522 on Easy / Normal / Hard; the seat attacks, loses units and retrains as places free). A
+  designed opening still lists other units beside the Hound, so the army is more than seven.
 
 **For the data track (M8-4).** The Hound's row, when the Shadow roster lands (docs/factions/shadow.md, the Hound of
 Shadow), beside its other fields:
@@ -6032,7 +6034,7 @@ Shadow), beside its other fields:
 | Value | A whole number from the unit's `spawnCount` (1 when left out) to 1,000. `null`, a string, 0, a fraction: load errors. Leave the field out for no limit |
 | What counts | The player's live units of the type, however made (a summon included), plus those its queued items will spawn; a pack item counts its whole pack |
 | What it stops | Training only: a Train that would pass it is refused (nothing paid; the button reads "Limit reached"). A summon is never stopped |
-| The computer player | Trains other composition units at the limit; a `train` step of the type counts as done at the limit (so a step's `count` above the limit is harmless). List other units beside a limited one in each age's composition, or the seat banks its gold at the limit |
+| The computer player | Trains other composition units at the limit; a `train` step of the type counts as done at the limit (so a step's `count` above the limit is harmless). List other units beside a limited one in each age's composition, or the army is only the limited type (the seat still attacks and retrains as places free; it does not bank its gold: BUG-1810) |
 | Hash | The field moves the data hash once when it lands; land it with the Shadow roster |
 | Descriptions | "At most 7" in a `description` is the data track's text; no content check reads it yet |
 

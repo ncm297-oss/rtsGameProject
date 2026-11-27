@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S3 |
-| Status | open |
+| Status | fixed (M8-4 part A, 2026-11-26-0717; QA verified on the real D38 file, on a second D38 shape and on the merged tree: `WorkerCarryTests` green, no sim-owned helper red) |
 | Found | 2026-11-26-0207, task M7-9 |
 | System | sim tests (AI scene helpers), rule 58 |
-| Fixed by | |
+| Fixed by | M8-4 part A (6352a58): `AiScenes.SetBuildOrder`; `Ai/BuildOrderHelperSourceTests.OnlyTheHelper_WritesBuildOrder`, `NoTest_ReadsASeatsStepsAsTheOpeningsBuildOrder`. The data folders' sites: D38 (`D19QaTests`, `AiHouseRuleReportTests`, 14 files read `ai.Steps`); what is left there is BUG-1840 |
 
 ## Repro
 1. Scratch clone of 756bc1e. In `game/data/factions/teblor/ai.json`, add to the `standard` opening what docs/03
@@ -42,3 +42,15 @@ those scenes use Normal or Malazan seats. Any of them can break silently once a 
 the difficulty the scene uses. Suggested fix (sim track, before or with D38): one shared helper (for example in
 `AiScenes`) that sets an opening's build order and removes `buildOrders`, used by these sites; or at the least fix
 `WorkerCarryTests.s_teblorQuiet` and add this list to D38's brief.
+
+## Fix (M8-4 part A, 2026-11-26-0717)
+- `AiScenes.SetBuildOrder(opening, steps)` writes `buildOrder` and removes `buildOrders`; all 104 sim-owned sites that
+  wrote `["buildOrder"] =` use it. Source rows: `Ai/BuildOrderHelperSourceTests.OnlyTheHelper_WritesBuildOrder` (one hit:
+  the helper's line) and `NoTest_ReadsASeatsStepsAsTheOpeningsBuildOrder` (11 files read `ai.Opening.BuildOrder` for a
+  seat's steps; now `ai.Steps`).
+- `TeblorSwitchOrders` none / A / B and `PerDifficultyOrders` A-C are built on D34's order
+  (`Content/Fixtures/teblor_standard_d34.json`, read only), written through the helper, so their figures did not move
+  when D38 landed.
+- Proof (rule 59): the developer's copy `m84-d38copy`, QA on the real D38 `ai.json` (21 red = the brief's 20 + the new
+  golden-header row `MaxAliveLoaderTests.TheHash_*`), QA's second shape (`buildOrder` = Easy's, entries for normal and
+  hard: no sim-owned helper red), and the Producer's merged tree at the ACCEPT (default loop 0 failed).

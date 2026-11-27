@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S4 |
-| Status | open |
+| Status | fixed (the Producer at the 2026-11-26-0717 ACCEPT: docs drift, both sentences corrected with QA's figures) |
 | Found | 2026-11-26-0717, task M8-4 |
 | System | docs (docs/03 "Implementation (M8-4)", the data track's table) |
-| Fixed by | |
+| Fixed by | docs/03 "Implementation (M8-4)" Known limits (2) and the "For the data track (M8-4)" table's computer-player row; the measurement stays in `Stress/UnitLimitAiQaStressTests.OnlyTheCappedTypeInTheComposition_Report` |
 
 ## Repro
 1. `dotnet test sim/Rts.Sim.Tests --filter "FullyQualifiedName~UnitLimitAiQaStressTests.OnlyTheCappedTypeInTheComposition_Report"`
