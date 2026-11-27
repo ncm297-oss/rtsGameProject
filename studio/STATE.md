@@ -22,18 +22,18 @@ _Last updated: 2026-11-27 (session 2026-11-26-1847; sim + view + data, all accep
 | Field | Value |
 | --- | --- |
 | Sim: milestone | **M5 8 / 9** (left: your play); **M6 5 / 10**; **M7 3 / 4**; **M8 0 / 3**. Last: **M6-S14** (ACCEPT, 1 fix round, QA full): five cures to how the computer player plays; the stuck four-player Vathar match ends (74 -> 40 game minutes) |
-| Sim: next task | **The sim's clean-up (counter 4 / 4; QA full, one re-measure):** the three matches that stopped ending (BUG-1855 traced first; BUG-1854 / 1860 with BUG-1731: the draw clock counts gold a seat cannot use), BUG-1857, BUG-1852, the rally point after a hall moves; then the save riders (BUG-1490, Request 60, BUG-1730) if they fit |
+| Sim: next task | **The sim's clean-up (counter 4 / 4; QA full, one re-measure):** the three matches that stopped ending (BUG-1855 traced first; BUG-1854 / 1860 with BUG-1731: the draw clock counts gold a seat cannot use), BUG-1857, BUG-1852, the rally point after a hall moves, BUG-1730. **Running in session 2026-11-27-0817.** The save riders (BUG-1490, Request 60) wait for the next save-format step |
 | Sim: gate | **GO** |
 | View: milestone | **M6 5 / 10; M7 3 / 4.** Last: **M6-VH10** (ACCEPT, 0 fix rounds, QA standard): Draw after a load for two sides, the long draw notice, no lost-cast cue in replays, the import tool's exit check, the paler Cairn; 133 screen tests |
-| View: next task | **The Whirlwind's buildings as tents built in the import tool (feature, QA standard)**, with the wrong Cairn sentence in docs/03 (BUG-1870). Then the Cairn as stacked rocks; mounted units and machines once packs are on disk |
+| View: next task | **The Whirlwind's buildings as tents built in the import tool (feature, QA standard)**, with the wrong Cairn sentence in docs/03 (BUG-1870). **Running in session 2026-11-27-0817.** Then the Cairn as stacked rocks; mounted units and machines once packs are on disk |
 | View: gate | **GO** |
 | Data: milestone | M3 Done; D1-D39 on `main`. Last: **D39** (ACCEPT, 0 fix rounds, QA light): the Shadow page lists the Hounds' limit as built, a check reads the number, the opening checks read every difficulty's list. No game data |
-| Data: next task | **The data's clean-up (counter 4 / 4; QA light, nothing measured):** BUG-1880, BUG-1840's last file, the limit pin in the readiness check. After the sim's clean-up: the Teblor plans and the Malazan "keep 18" rule re-measured (BUG-1851 / 1853 / 1856; five rows wait skipped) |
+| Data: next task | **The data's clean-up (counter 4 / 4; QA light, nothing measured):** BUG-1880, the limit pin in the readiness check. **Running in session 2026-11-27-0817.** After the sim's clean-up (with BUG-1840's last file): the Teblor plans and the Malazan "keep 18" rule re-measured (BUG-1851 / 1853 / 1856; five rows wait skipped) |
 | Data: gate | **GO** |
 | Build / tests | Producer, scratch clone of the three-way tree (sim c13c5fcb + view ac83a4dd + data 458ac8cf): build `--no-incremental` **0 errors / 0 warnings**; everyday run **11,017 passed / 0 failed / 24 skipped of 11,041 in 23 m 19 s**; smoke **PASS**; screen tests **133 of 133, first pass**; frame time 6.54 ms a frame on a quiet PC (last session 6.43; 400 placeholder capsules 0.82, 1,000 figures 16.53). Long suite (QA, sim branch): 996 passed / 2 failed / 11 skipped before the fix round; both red rows cured or skipped with a bug id, re-run by name green |
 | Open bugs | **S1 / S2: none.** S3 35, S4 34 (`studio/bugs/README.md`). Closed this session: 16 (one by ruling). New open: BUG-1851, 1852, 1854, 1855, 1857, 1860 (S3), 1853, 1856, 1862, 1870, 1880 (S4) |
 | Data hash / saves | Data hash **3BB926FD74795B9E** (was B7947DC602B1E11B: `ai.minWorkers`); save format **11** (was 10). Older saves and recordings are refused |
-| Sessions today | **2026-11-27: 0 / 8** (2026-11-26 ran 3: 0207, 0717, 1847). Counters: **sim 4 / 4 (clean-up next), view 0 / 4, data 4 / 4 (clean-up next)**. Usage 38 % of the week (stop at 95 %) |
+| Sessions today | **2026-11-27: 1 / 8, running (0817)** (2026-11-26 ran 3: 0207, 0717, 1847). Counters: **sim 4 / 4 (clean-up next), view 0 / 4, data 4 / 4 (clean-up next)**. Usage 38 % of the week (stop at 95 %) |
 | Last session | **2026-11-26-1847** (18:47 to about 07:00 the next day): log `studio/sessions/2026-11-26-1847.md` |
 | Tools on this PC | Godot 4.7.2 .NET, .NET SDK 8.0.425, Git 2.53 + LFS 3.7, Blender 5.2.2; `GODOT` user variable set |
 
