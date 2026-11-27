@@ -9,15 +9,16 @@ namespace Rts.Sim.Save;
 public static class SaveFormat
 {
     /// <summary>
-    /// The format version this build writes and reads: 10 since M7-1, for every save (the unit store gained the regeneration
-    /// part, <c>REGN</c>, which every save holds). Format 10 is format 9's layout (M5-9a) with three changes: the header always
-    /// holds the map id after the preset (<c>""</c> for a generated map), the <c>HUNT</c> and <c>CTRM</c> sections are written
-    /// exactly when the match seats an AI (the header's seats say so), and the unit store ends with <c>REGN</c>. Every older
-    /// format is refused <see cref="SaveError.FormatVersionMismatch"/> (their unit stores lack <c>REGN</c>).
-    /// Before: 9 since M5-9a (7 plus the AI seats' counter memory, <c>CTRM</c>), 7 since M5-4d (5 plus <c>HUNT</c>), 5 since
-    /// M6-S7 (the map id), 4 since M6-S6 (the preset), 3 since M6-S4 (team bytes), 2 since M6-S3 (the AI seats' section).
+    /// The format version this build writes and reads: 11 since M6-S14, for every save. Format 11 is format 10's layout byte
+    /// for byte but for new values at the end of the AI parts: <c>HUNT</c> ends with the hunt's find (BUG-1661). A save
+    /// without an AI seat differs from format 10 only in this number. Every older format is refused
+    /// <see cref="SaveError.FormatVersionMismatch"/>.
+    /// Before: 10 since M7-1 (9's layout, the header always holding the map id after the preset, <c>HUNT</c> and <c>CTRM</c>
+    /// written exactly when the match seats an AI, the unit store ending with <c>REGN</c>), 9 since M5-9a (7 plus the AI
+    /// seats' counter memory, <c>CTRM</c>), 7 since M5-4d (5 plus <c>HUNT</c>), 5 since M6-S7 (the map id), 4 since M6-S6 (the
+    /// preset), 3 since M6-S4 (team bytes), 2 since M6-S3 (the AI seats' section).
     /// </summary>
-    public const int CurrentVersion = 10;
+    public const int CurrentVersion = 11;
 
     /// <summary>The version a match with an AI seat on a generated map is saved in: <see cref="CurrentVersion"/> since M7-1 (8 in M5-9a). Kept for the callers that name it.</summary>
     public const int HuntMaplessVersion = CurrentVersion;
@@ -91,8 +92,8 @@ public static class SaveFormat
     internal const uint TagEvents = 0x544E5645;    // "EVNT"
     internal const uint TagCommands = 0x53444D43;  // "CMDS"
     internal const uint TagAi = 0x54534941;        // "AIST" (M6-S3, format 2)
-    internal const uint TagHunt = 0x544E5548;      // "HUNT" (M5-4d, formats 6 to 10, with an AI seat)
-    internal const uint TagCounters = 0x4D525443;  // "CTRM" (M5-9a, formats 8 to 10, with an AI seat)
+    internal const uint TagHunt = 0x544E5548;      // "HUNT" (M5-4d, formats 6 to 11, with an AI seat)
+    internal const uint TagCounters = 0x4D525443;  // "CTRM" (M5-9a, formats 8 to 11, with an AI seat)
     internal const uint TagEnd = 0x21444E45;       // "END!"
 
     /// <summary>FNV-1a 64 over raw bytes, the replay file's checksum.</summary>

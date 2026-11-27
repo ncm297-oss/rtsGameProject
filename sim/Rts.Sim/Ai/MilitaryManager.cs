@@ -220,6 +220,7 @@ internal static class MilitaryManager
         board.WaveBusyTick = ai.Now;
         board.WaveCooldownUntil = ai.Now + ai.Rules.WaveCooldownTicks;
         board.WavesStarted++;
+        board.WaveFromHunt = false; // M6-S14 (BUG-1661): a wave of its own, not a hunt's find
         return true;
     }
 
@@ -263,21 +264,39 @@ internal static class MilitaryManager
     /// <summary>
     /// M5-4d: makes the wave in progress a hunt from the army at <paramref name="army"/>: no building target, no start
     /// threshold (the defense may pull any member), a fresh sweep, and the first target (every member owed an AttackMove).
+    /// M6-S14 (BUG-1661): a hunt that begins within <c>ai.huntMemory</c> of a hunt's find going (<see cref="Resumes"/>) keeps
+    /// the last hunt's marks and pass and sweeps nearest-first from where that building stood, the free starts not first:
+    /// a remnant is most likely near what the last hunt found (the Vathar Crossing four-seat trace: a Keep 40 m from a razed
+    /// depot waited 21,000 ticks for a whole new lap that began at the free starts across the map).
     /// </summary>
     private static void BeginHunt(AiPlayer ai, Vector2 army)
     {
         Blackboard board = ai.Board;
         board.Hunting = true;
+        board.WaveFromHunt = false;
         board.WaveTarget = default;
         board.WaveTargetType = board.WaveTargetCell = -1;
         board.WaveMinHalfPop = board.WaveMinCost = 0f;
-        Array.Clear(board.HuntVisited);
+        bool resume = board.HuntFindTick >= 0 && ai.Now - board.HuntFindTick <= ai.Rules.HuntMemoryTicks;
+        if (!resume)
+        {
+            board.HuntFindTick = -1; // too old: forgotten, so this hunt sweeps as before (the free starts first from the second)
+            Array.Clear(board.HuntVisited);
+            board.HuntPass = 0;
+        }
         board.HuntRing = -1;
-        board.HuntRingLeft = board.HuntPass = 0;
+        board.HuntRingLeft = 0;
         board.HuntsStarted++;
         if (Fresh(ai)) HuntTarget(ai, board.EnemyUnitPoint, -1, army);
-        else StartSweep(ai, army);
+        else StartSweep(ai, resume ? board.HuntFindPoint : army);
     }
+
+    /// <summary>
+    /// M6-S14 (BUG-1661): whether the hunt in progress resumes the last hunt's sweep: it began within <c>ai.huntMemory</c> of
+    /// a building a hunt found going (<see cref="Blackboard.HuntFindTick"/>, kept for the whole hunt), so it looks round
+    /// where that building stood first and never at the free starts first (<see cref="NextSweep"/>).
+    /// </summary>
+    internal static bool Resumes(AiPlayer ai) => ai.Board.HuntFindTick >= 0;
 
     /// <summary>
     /// M5-4d: the sweep (re)starts from the army at <paramref name="army"/>: its origin, and the point nearest it (BUG-1107
@@ -382,7 +401,7 @@ internal static class MilitaryManager
     internal static int NextSweep(AiPlayer ai, Vector2 from, int skip)
     {
         bool[] visited = ai.Board.HuntVisited;
-        if (ai.Board.HuntsStarted > 1)
+        if (ai.Board.HuntsStarted > 1 && !Resumes(ai)) // M6-S14 (BUG-1661): a resumed hunt goes nearest-first from its find
         {
             int start = NextHuntStart(ai, from, skip); // M5-H6 (BUG-1157): from the match's second hunt on, the free starts first
             if (start >= 0) return start;
@@ -505,6 +524,7 @@ internal static class MilitaryManager
         {
             // Back to the wave rule: the hunt's members attack the building (no start threshold to keep: the defense may still pull any).
             board.Hunting = false;
+            board.WaveFromHunt = true; // M6-S14 (BUG-1661): the hunt's find; its going is remembered (Wave)
             board.HuntSweep = board.HuntRing = -1;
             board.HuntRingLeft = 0;
             SetTarget(ai, target, type, cell);
@@ -728,6 +748,13 @@ internal static class MilitaryManager
             if (Looking(ai)) Look(ai); // M5-4d slice 2
             return;
         }
+        if (board.WaveFromHunt)
+        {
+            // M6-S14 (BUG-1661): a building a hunt found is gone (razed by the wave, or seen gone): where it stood and when,
+            // so a hunt that begins within ai.huntMemory resumes the sweep from there (BeginHunt).
+            board.HuntFindTick = ai.Now;
+            board.HuntFindPoint = ai.BuildingCentre(board.WaveTargetType, board.WaveTargetCell);
+        }
         // The target is gone (razed, or seen gone): the nearest known enemy building to the members; with none, M5-4d, a hunt
         // (the base not defended, the match not over), else home.
         if (!ai.NearestEnemyBuilding(sum / live, out EntityHandle target, out int type, out int cell))
@@ -749,6 +776,7 @@ internal static class MilitaryManager
             if (Member(ai, ai.ArmySlots[k], out _)) board.WaveFlag[ai.ArmySlots[k]] = ToRally;
         board.WaveActive = false;
         board.Hunting = false;
+        board.WaveFromHunt = false;
         board.HuntSweep = board.HuntRing = -1;
         board.HuntRingLeft = 0;
     }

@@ -236,9 +236,13 @@ internal sealed partial class Blackboard
         w.Write(HuntRingLeft);
         w.Write(HuntPass);
         w.Write(HuntsStarted);
+        // M6-S14 (BUG-1661), format 11: the hunt's find, after the count.
+        w.Write(WaveFromHunt);
+        w.Write(HuntFindTick);
+        w.Write(HuntFindPoint);
     }
 
-    /// <summary>Reads what <see cref="WriteHuntTo"/> wrote over this board (the sweep index range-checked, a hunt only while a wave is in progress; M5-H6: the sighting's tick -1 or a tick, the hunt count not negative).</summary>
+    /// <summary>Reads what <see cref="WriteHuntTo"/> wrote over this board (the sweep index range-checked, a hunt only while a wave is in progress; M5-H6: the sighting's tick -1 or a tick, the hunt count not negative; M6-S14: the hunt's find).</summary>
     internal void ReadHuntFrom(SaveReader r)
     {
         EnemyUnitPoint = r.ReadVector2();
@@ -253,6 +257,11 @@ internal sealed partial class Blackboard
         HuntPass = r.ReadInt32In(0, int.MaxValue);
         HuntsStarted = r.ReadInt32In(0, int.MaxValue); // M5-H6: the sweep reads it (the free starts from the second hunt)
         r.Check(!Hunting || WaveActive);
+        // M6-S14 (BUG-1661): a hunt's find only on a building wave in progress; the find's tick -1 or a tick.
+        WaveFromHunt = r.ReadBool();
+        r.Check(!WaveFromHunt || WaveActive && !Hunting);
+        HuntFindTick = r.ReadInt32In(-1, int.MaxValue);
+        HuntFindPoint = r.ReadVector2();
     }
 
     /// <summary>

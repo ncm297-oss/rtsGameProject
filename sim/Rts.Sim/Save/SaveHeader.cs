@@ -18,7 +18,7 @@ internal static class SaveHeader
         SimConfig c = sim.World.Config;
         GameData data = c.Data;
         foreach (byte b in SaveFormat.Magic) w.Write(b);
-        // M7-1: every save is format 10 (before, the oldest format that held the match: 4, 5, 8 or 9).
+        // M7-1: every save is one format (10; 11 since M6-S14; before M7-1, the oldest format that held the match: 4, 5, 8 or 9).
         w.Write(SaveFormat.CurrentVersion);
         w.Write(0L); // total length, patched at the end
         w.WriteString(SimInfo.Version);

@@ -174,7 +174,7 @@ public sealed partial class Simulation : ICommandSink
         int prefix = Math.Min(bytes.Length, magic.Length);
         if (!bytes.AsSpan(0, prefix).SequenceEqual(magic[..prefix])) return SaveError.BadMagic;
         if (bytes.Length < SaveFormat.FixedPrefix) return SaveError.Truncated;
-        // M7-1: format 10 only (every older format's unit store lacks the regeneration part).
+        // M7-1: the current format only (format 10 since M7-1, every older one lacking the regeneration part; 11 since M6-S14).
         int version = System.Buffers.Binary.BinaryPrimitives.ReadInt32LittleEndian(bytes.AsSpan(SaveFormat.MagicLength));
         if (version < SaveFormat.OldestReadVersion || version > SaveFormat.CurrentVersion) return SaveError.FormatVersionMismatch;
         long declared = System.Buffers.Binary.BinaryPrimitives.ReadInt64LittleEndian(bytes.AsSpan(SaveFormat.LengthOffset));

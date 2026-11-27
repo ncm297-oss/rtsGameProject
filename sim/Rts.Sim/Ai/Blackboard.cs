@@ -285,6 +285,24 @@ internal sealed partial class Blackboard
     /// <summary>Hunts started (tests and tooling; a wave that turns into a hunt counts).</summary>
     internal int HuntsStarted;
 
+    /// <summary>
+    /// M6-S14 (BUG-1661): the wave in progress is a hunt's find (a hunt that came on an enemy building and turned into a wave
+    /// on it, <c>MilitaryManager.Hunt</c>), so the building's going is remembered (<see cref="HuntFindTick"/>). False for a
+    /// wave of its own and with no wave. Saved at the end of <c>HUNT</c> (format 11).
+    /// </summary>
+    internal bool WaveFromHunt;
+
+    /// <summary>
+    /// M6-S14 (BUG-1661): the think a building a hunt found was seen gone from its wave (-1: none, or forgotten by a hunt
+    /// that began more than <c>ai.huntMemory</c> after it), and where it stood (<see cref="HuntFindPoint"/>, its footprint's
+    /// centre). A hunt that begins within <c>ai.huntMemory</c> of it keeps the last hunt's marks and sweeps nearest-first from
+    /// that point (<c>MilitaryManager.BeginHunt</c> / <c>Resumes</c>). Saved at the end of <c>HUNT</c> (format 11).
+    /// </summary>
+    internal int HuntFindTick = -1;
+
+    /// <summary>See <see cref="HuntFindTick"/>.</summary>
+    internal Vector2 HuntFindPoint;
+
     // ---------- M5-9a: the counter memory (AiPlayer's census, ProductionManager) ----------
 
     /// <summary>
