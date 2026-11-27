@@ -157,7 +157,7 @@ public class PerDifficultyTwinTests
         foreach (System.Text.Json.Nodes.JsonNode? o in root["openings"]!.AsArray())
         {
             o!.AsObject().Remove("buildOrders");
-            o["buildOrder"] = AiScenes.BuildOrder(("time", 0, "build", "malazan_barracks", 0), ("time", 3600, "train", "malazan_laborer", 1));
+            AiScenes.SetBuildOrder(o, AiScenes.BuildOrder(("time", 0, "build", "malazan_barracks", 0), ("time", 3600, "train", "malazan_laborer", 1)));
             o["buildOrders"] = new System.Text.Json.Nodes.JsonObject
             {
                 ["hard"] = AiScenes.BuildOrder(("time", 3600, "train", "malazan_laborer", 1), ("time", 0, "build", "malazan_barracks", 0)),

@@ -96,7 +96,7 @@ public class StartingResourcesAiQaTests
                 {
                     bank5[p] = w.Gold[p] + w.Wood[p];
                     AiPlayer ai = sim.AiOf(p)!;
-                    for (int i = 0; i < ai.Opening.BuildOrder.Length; i++) if (ai.Board.StepDone[i]) steps5[p]++;
+                    for (int i = 0; i < ai.Steps.Length; i++) if (ai.Board.StepDone[i]) steps5[p]++;
                 }
         }
         var names = new string[2];

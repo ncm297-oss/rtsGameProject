@@ -31,21 +31,21 @@ public class RebuildTests
     private static readonly Lazy<GameData> s_barracks = new(() => AiScenes.DataWith(dir =>
         dir.EditJson("factions/malazan/ai.json", root =>
         {
-            AiScenes.Opening(root)["buildOrder"] = AiScenes.BuildOrder(("time", 0, "build", "malazan_barracks", 0), ("time", 3600, "train", "malazan_laborer", 1));
+            AiScenes.SetBuildOrder(AiScenes.Opening(root), AiScenes.BuildOrder(("time", 0, "build", "malazan_barracks", 0), ("time", 3600, "train", "malazan_laborer", 1)));
             AiScenes.Opening(root)["attack"] = new JsonObject { ["minArmyPop"] = 1, ["minArmyCost"] = 0 };
         })));
 
     /// <summary>Two Billets at time 0 and a hard cap of the Keep's 10 pop plus one Billet's 8: the second Billet reaches it.</summary>
     private static readonly Lazy<GameData> s_cap = new(() => AiScenes.DataWith(dir =>
     {
-        dir.EditJson("factions/malazan/ai.json", root => AiScenes.Opening(root)["buildOrder"] =
-            AiScenes.BuildOrder(("time", 0, "build", "malazan_billet", 0), ("time", 1, "build", "malazan_billet", 0)));
+        dir.EditJson("factions/malazan/ai.json", root => AiScenes.SetBuildOrder(AiScenes.Opening(root),
+            AiScenes.BuildOrder(("time", 0, "build", "malazan_billet", 0), ("time", 1, "build", "malazan_billet", 0))));
         dir.EditJson("common/rules.json", r => r["popCap"] = 18);
     }));
 
     /// <summary>Workers trained at time 0 (the hall-first rule holds them back while the hall is gone).</summary>
     private static readonly Lazy<GameData> s_workers = new(() => AiScenes.DataWithAi("malazan", root =>
-        AiScenes.Opening(root)["buildOrder"] = AiScenes.BuildOrder(("time", 0, "train", "malazan_laborer", 20))));
+        AiScenes.SetBuildOrder(AiScenes.Opening(root), AiScenes.BuildOrder(("time", 0, "train", "malazan_laborer", 20)))));
 
     private static Simulation Scene(GameData data)
     {
@@ -478,7 +478,7 @@ public class RebuildTests
         {
             int player = p;
             AiPlayer seat = sim.AiOf(p)!;
-            var was = new bool[seat.Opening.BuildOrder.Length];
+            var was = new bool[seat.Steps.Length];
             seat.ThoughtForTests = a =>
             {
                 for (int i = 0; i < was.Length; i++)

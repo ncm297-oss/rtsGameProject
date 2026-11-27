@@ -20,7 +20,7 @@ public class BlindRescoutTests(ITestOutputHelper output)
 {
     /// <summary>The quiet order (one Laborer an hour in), so the scout rule alone moves a worker.</summary>
     private static readonly Lazy<GameData> s_quiet = new(() => AiScenes.DataWithAi("malazan", root =>
-        AiScenes.Opening(root)["buildOrder"] = AiScenes.BuildOrder(("time", 3600, "train", "malazan_laborer", 1))));
+        AiScenes.SetBuildOrder(AiScenes.Opening(root), AiScenes.BuildOrder(("time", 3600, "train", "malazan_laborer", 1)))));
 
     /// <summary>The quiet data the scene plays (a save of it loads with this).</summary>
     internal static GameData Quiet => s_quiet.Value;

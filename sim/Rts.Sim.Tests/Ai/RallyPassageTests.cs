@@ -20,7 +20,7 @@ public class RallyPassageTests(ITestOutputHelper output)
 {
     /// <summary>The quiet order (one Laborer an hour in) so nothing is built and the base stays as it is.</summary>
     private static readonly Lazy<GameData> s_quiet = new(() => AiScenes.DataWithAi("malazan", root =>
-        AiScenes.Opening(root)["buildOrder"] = AiScenes.BuildOrder(("time", 3600, "train", "malazan_laborer", 1))));
+        AiScenes.SetBuildOrder(AiScenes.Opening(root), AiScenes.BuildOrder(("time", 3600, "train", "malazan_laborer", 1)))));
 
     private const int WallX0 = 17, WallX1 = 19, PassageRow = 32;
 

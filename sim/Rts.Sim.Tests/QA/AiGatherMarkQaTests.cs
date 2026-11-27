@@ -21,7 +21,7 @@ public class AiGatherMarkQaTests
 
     /// <summary>An ai.json for malazan whose only step can't fire for an hour, so a scene's commands are the economy's.</summary>
     private static readonly Lazy<GameData> s_quietOrder = new(() => AiScenes.DataWithAi("malazan", root =>
-        AiScenes.Opening(root)["buildOrder"] = AiScenes.BuildOrder(("time", 3600, "train", "malazan_laborer", 1))));
+        AiScenes.SetBuildOrder(AiScenes.Opening(root), AiScenes.BuildOrder(("time", 3600, "train", "malazan_laborer", 1)))));
 
     /// <summary>
     /// The quiet order with <c>ai.gatherReach</c> at its 512 m maximum (M6-S5, BUG-1045): most of the remembered nodes lie
@@ -31,7 +31,7 @@ public class AiGatherMarkQaTests
     private static readonly Lazy<GameData> s_quietOrderAnyReach = new(() => AiScenes.DataWith(dir =>
     {
         dir.EditJson("factions/malazan/ai.json", root =>
-            AiScenes.Opening(root)["buildOrder"] = AiScenes.BuildOrder(("time", 3600, "train", "malazan_laborer", 1)));
+            AiScenes.SetBuildOrder(AiScenes.Opening(root), AiScenes.BuildOrder(("time", 3600, "train", "malazan_laborer", 1))));
         dir.EditJson("common/rules.json", r => r["ai"]!["gatherReach"] = 512);
     }));
 

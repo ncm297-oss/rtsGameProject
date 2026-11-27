@@ -162,7 +162,7 @@ public class DrawStalledRowsReportTests
         {
             foreach (System.Text.Json.Nodes.JsonNode? o in root["openings"]!.AsArray())
             {
-                o!["buildOrder"] = AiScenes.BuildOrder(("time", 3600, "train", "malazan_laborer", 1));
+                AiScenes.SetBuildOrder(o, AiScenes.BuildOrder(("time", 3600, "train", "malazan_laborer", 1)));
                 o["attack"] = new System.Text.Json.Nodes.JsonObject { ["minArmyPop"] = 2, ["minArmyCost"] = 0 };
             }
         }));

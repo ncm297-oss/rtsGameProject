@@ -28,7 +28,7 @@ public class SimHardeningM5H5QaTests
 
     /// <summary>Workers trained at time 0 (RebuildTests' scene data).</summary>
     private static readonly Lazy<GameData> s_workers = new(() => AiScenes.DataWithAi("malazan", root =>
-        AiScenes.Opening(root)["buildOrder"] = AiScenes.BuildOrder(("time", 0, "train", "malazan_laborer", 20))));
+        AiScenes.SetBuildOrder(AiScenes.Opening(root), AiScenes.BuildOrder(("time", 0, "train", "malazan_laborer", 20)))));
 
     /// <summary>A quiet order (EndGameHardeningTests' data): nothing but one worker at 3,600 s.</summary>
     private static readonly Lazy<GameData> s_quiet = new(() => AiScenes.DataWith(dir =>
@@ -36,7 +36,7 @@ public class SimHardeningM5H5QaTests
         {
             foreach (JsonNode? o in root["openings"]!.AsArray())
             {
-                o!["buildOrder"] = AiScenes.BuildOrder(("time", 3600, "train", "malazan_laborer", 1));
+                AiScenes.SetBuildOrder(o, AiScenes.BuildOrder(("time", 3600, "train", "malazan_laborer", 1)));
                 o["attack"] = new JsonObject { ["minArmyPop"] = 2, ["minArmyCost"] = 0 };
             }
         })));

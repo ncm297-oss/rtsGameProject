@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S4 |
-| Status | open, item 1 only (Producer, 2026-11-18-0926 ACCEPT: item 1, the expansion's reserve starving the Shaman step, waits for Request 55 with BUG-1612; item 2 fixed by D34's softened tooltip; item 5 wontfix, the reason is on teblor.md). Before: (items 1, 2, 5: D33; items 3-4 fixed by D-R39, session 2026-11-15-1536: the measured figures pinned or labelled as dated, the long lines wrapped, the fixture renamed `save_teblor_frenzy.b64`) |
+| Status | fixed (D38, 2026-11-26-0717: item 1 closed with figures; on the shipped per-difficulty orders the expansion holds the reserve in none of the thinks after the Circle stands, on Easy, Normal and Hard). Before: open, item 1 only (Producer, 2026-11-18-0926 ACCEPT: item 1 waited for Request 55 with BUG-1612; item 2 fixed by D34's softened tooltip; item 5 wontfix, the reason is on teblor.md; items 3-4 fixed by D-R39, session 2026-11-15-1536) |
 | Found | 2026-11-14-1246, task D32 (QA) |
 | System | data (`game/data/factions/teblor/ai.json` `standard`), docs (`docs/factions/teblor.md`), tests (`Content/Fixtures/pre_d32/`) |
-| Fixed by | |
+| Fixed by | items 3-4 D-R39; item 2 D34; item 1 D38 (the M7-8 switches in the shipped orders: `throughReserve` on the Shaman step of Normal's M1RS and Easy's K9KC10S) |
 
 ## Repro
 1. **The expansion's reserve gates the Shamans.** `dotnet test sim/Rts.Sim.Tests --filter "FullyQualifiedName~D32OpeningQaStressTests.ShamanStep_AfterTheCircle_ThinkByThink_Report" --logger "console;verbosity=detailed"`.
@@ -45,3 +45,16 @@ As above. Nothing crashes, and D32's four Normal figures are met.
   before the Carver) were measured too. A sim-side option is a train step that may spend through the reserve. That
   would be a new rule, so it is a Request for the sim track, not data.
 - Item 2 is the Producer's / owner's taste call ("opening text: ..." inbox note).
+
+## D38 (2026-11-26-0717): item 1 re-run on the shipped orders; closed
+`QA/Content/D32OpeningQaStressTests.ShamanStep_AfterTheCircle_ThinkByThink_Report` (its two rows plus a Hard row D38
+added; each seat reads its own list, `AiPlayer.Steps`), from the Circle's completion to 15:00:
+- Normal, Pale Hills, the Teblor mirror, seed 1 (M1RS, Shaman step 27 `throughReserve`): Circle up 10:34, the Shaman step
+  first queued 10:35; 266 thinks: the reserve held by the Breakers Hall (step 23) in 169, the Anointing (step 20) in 29,
+  nothing in 68, **the expansion in none** (D32's opening: the expand step in 239 of 303, never queued).
+- Easy, Raraku against the Malazan, seed 1 (K9KC10S, Shaman step 22 `throughReserve`): Circle up 11:54, queued 12:06;
+  93 thinks: the Anointing in 43, nothing in 50, the expansion in none (Easy never expands before 15:00).
+- Hard, Pale Hills, the Teblor mirror, seed 1 (QRD1, Shaman step 27, no switch): Circle up 10:30, queued 14:26; 539
+  thinks: nothing in 520, the Anointing in 19, the expansion in none: the wait is the bank, not the reserve.
+- The Shaman step no longer waits behind the expansion's reserve on any difficulty. teblor.md "The unit mix, shipped
+  (BUG-1612, D38)".

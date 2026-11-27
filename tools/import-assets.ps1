@@ -4,7 +4,8 @@
 # builds and runs; this script only regenerates them.
 #
 # M6-V26: and every static building model in the manifest's "buildings" (tools/art/build_building.py), imported like a unit
-# model (no animations, its atlas extracted beside it with the same texture settings).
+# model (no animations, its atlas extracted beside it with the same texture settings). M6-V30: an entry's "teamFaces" rules
+# (roof faces to the team tile) are the builder's; this script only prints how many faces they moved.
 #
 # Usage: powershell -File tools/import-assets.ps1 [-SourceRoot <dir>] [-Blender <blender.exe>] [-Only <model or building id>|library] [-NoGodot]
 #   Blender: -Blender, else $env:BLENDER (process, then user), else C:\Program Files\Blender Foundation\Blender 5.2\blender.exe.
@@ -194,6 +195,8 @@ foreach ($r in @($results) + @($buildingResults)) {
         # built (width x depth x height in the pack's units; the view fits it to the footprint).
         Write-Host ("{0}: {1} triangles (source {2}, {3} after the hidden faces), {4} x {5} x {6} as built, materials [{7}]" -f $r.id, $r.triangles, $r.sourceTriangles, $r.afterHiddenFaces, $r.size[0], $r.size[1], $r.size[2], ($r.materials -join ' '))
         foreach ($d in $r.decimated.PSObject.Properties) { Write-Host ("    decimated {0}: {1} -> {2} triangles" -f $d.Name, $d.Value[0], $d.Value[1]) }
+        # M6-V30: the faces the entry's teamFaces rules moved to the team tile (its roofs).
+        if ($r.teamFaces) { Write-Host ("    teamFaces: {0} faces moved to the team tile" -f $r.teamFaces) }
     } else {
         Write-Host ("{0}: {1} triangles, {2:0.00} m tall, feet at {3} m, materials [{4}]" -f $r.id, $r.triangles, $r.height, $r.feet, ($r.materials -join ' '))
     }

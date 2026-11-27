@@ -50,7 +50,7 @@ public class RebuildLookMatchQaStressTests
         {
             int player = p;
             AiPlayer seat = sim.AiOf(p)!;
-            var probe = probes[p] = new SeatProbe { Done = new bool[seat.Opening.BuildOrder.Length] };
+            var probe = probes[p] = new SeatProbe { Done = new bool[seat.Steps.Length] };
             seat.SentForTests = c =>
             {
                 if (bad != null || c.Kind != CommandKind.Build || c.TypeId != seat.TownHallType || seat.TownHallCell >= 0) return;
@@ -137,7 +137,7 @@ public class RebuildLookMatchQaStressTests
         for (int p = 0; p < 4; p++)
         {
             AiPlayer seat = sim.AiOf(p)!;
-            var done = new bool[seat.Opening.BuildOrder.Length];
+            var done = new bool[seat.Steps.Length];
             seat.ThoughtForTests = a =>
             {
                 for (int i = 0; i < done.Length; i++) { if (done[i] && !a.Board.StepDone[i]) reopens++; done[i] = a.Board.StepDone[i]; }
@@ -178,7 +178,7 @@ public class RebuildLookMatchQaStressTests
         {
             int player = p;
             AiPlayer seat = sim.AiOf(p)!;
-            everDone[p] = new bool[seat.Opening.BuildOrder.Length];
+            everDone[p] = new bool[seat.Steps.Length];
             seat.ThoughtForTests = a =>
             {
                 for (int i = 0; i < everDone[player].Length; i++)

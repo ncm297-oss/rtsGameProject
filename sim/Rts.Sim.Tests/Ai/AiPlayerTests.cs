@@ -63,7 +63,7 @@ public class AiPlayerTests
 
     /// <summary>An ai.json for malazan whose only step can't fire for an hour, so a scene's commands are the managers' alone (BUG-0571: not the shipped order's).</summary>
     private static readonly Lazy<GameData> s_quietOrder = new(() => AiScenes.DataWithAi("malazan", root =>
-        AiScenes.Opening(root)["buildOrder"] = AiScenes.BuildOrder(("time", 3600, "train", "malazan_laborer", 1))));
+        AiScenes.SetBuildOrder(AiScenes.Opening(root), AiScenes.BuildOrder(("time", 3600, "train", "malazan_laborer", 1)))));
 
     /// <summary>
     /// The composition tests' own ai.json for malazan (BUG-0571): one worker Train due at once (so the first think is the
@@ -71,7 +71,7 @@ public class AiPlayerTests
     /// </summary>
     private static readonly Lazy<GameData> s_compositionOrder = new(() => AiScenes.DataWithAi("malazan", root =>
     {
-        AiScenes.Opening(root)["buildOrder"] = AiScenes.BuildOrder(("time", 0, "train", "malazan_laborer", 1));
+        AiScenes.SetBuildOrder(AiScenes.Opening(root), AiScenes.BuildOrder(("time", 0, "train", "malazan_laborer", 1)));
         AiScenes.Opening(root)["compositions"]![0]!["units"] = new JsonObject { ["malazan_heavy_infantry"] = 2, ["malazan_crossbowman"] = 1 };
     }));
 
@@ -85,7 +85,7 @@ public class AiPlayerTests
 
     private static void TenSteps(JsonNode root)
     {
-        AiScenes.Opening(root)["buildOrder"] = AiScenes.BuildOrder(
+        AiScenes.SetBuildOrder(AiScenes.Opening(root), AiScenes.BuildOrder(
             ("time", 0, "train", "malazan_laborer", 3),          // 0: due at once, three Trains over three thinks
             ("time", 2, "build", "malazan_depot", 0),            // 1: a camp, by the forest
             ("workers", 7, "build", "malazan_barracks", 0),      // 2: due once two laborers are out
@@ -95,7 +95,7 @@ public class AiPlayerTests
             ("time", 1, "train", "malazan_heavy_infantry", 2),   // 6: waits for the barracks
             ("pop", 9, "train", "malazan_crossbowman", 1),       // 7: waits for the range
             ("time", 20, "research", "melee_weapons_1", 0),      // 8: waits for the armory (and step 5's queue)
-            ("time", 30, "expand", null, 0));                    // 9: the middle mine
+            ("time", 30, "expand", null, 0)));                    // 9: the middle mine
         // Production would train the composition's line and ranged units, which steps 6 and 7 train: give it a unit no
         // step trains and nothing here unlocks (the corral is never built), so every Train below is a step's.
         AiScenes.Opening(root)["compositions"] = JsonNode.Parse("""[{ "age": 1, "units": { "malazan_wickan_lancer": 1 } }, { "age": 2, "units": { "malazan_wickan_lancer": 1 } }]""");
@@ -231,7 +231,7 @@ public class AiPlayerTests
     public void ABuildWithoutWood_WaitsThenIsSentAtTheNextThink_Once()
     {
         GameData data = AiScenes.DataWithAi("malazan", root =>
-            AiScenes.Opening(root)["buildOrder"] = AiScenes.BuildOrder(("time", 0, "build", "malazan_barracks", 0)));
+            AiScenes.SetBuildOrder(AiScenes.Opening(root), AiScenes.BuildOrder(("time", 0, "build", "malazan_barracks", 0))));
         Simulation sim = AiScenes.Flat(AiScenes.Seats(AiDifficulty.Hard, SeatController.Ai, SeatController.Human), data);
         BuildMaps.SetTotals(sim, 0, 0, 0);
         List<Command> rec = AiScenes.Log(sim, 0);
@@ -260,7 +260,7 @@ public class AiPlayerTests
         GameData data = AiScenes.DataWith(dir =>
         {
             dir.EditJson("factions/malazan/ai.json", root =>
-                AiScenes.Opening(root)["buildOrder"] = AiScenes.BuildOrder(("time", 0, "build", "malazan_barracks", 0)));
+                AiScenes.SetBuildOrder(AiScenes.Opening(root), AiScenes.BuildOrder(("time", 0, "build", "malazan_barracks", 0))));
             dir.EditJson("common/rules.json", r => r["ai"]!["placementSearchRadius"] = 2);
         });
         Simulation sim = AiScenes.Flat(AiScenes.Seats(AiDifficulty.Hard, SeatController.Ai, SeatController.Human), data);
@@ -288,7 +288,7 @@ public class AiPlayerTests
     public void ABuildStepWithNoWorkerToSend_SearchesForNoSite()
     {
         GameData data = AiScenes.DataWithAi("malazan", root =>
-            AiScenes.Opening(root)["buildOrder"] = AiScenes.BuildOrder(("time", 0, "build", "malazan_barracks", 0)));
+            AiScenes.SetBuildOrder(AiScenes.Opening(root), AiScenes.BuildOrder(("time", 0, "build", "malazan_barracks", 0))));
         Simulation sim = AiScenes.Flat(AiScenes.Seats(AiDifficulty.Hard, SeatController.Ai, SeatController.Human), data);
         BuildMaps.SetTotals(sim, 0, 5000, 5000);
         TestSim.KeepIn(sim, 0);
@@ -319,7 +319,7 @@ public class AiPlayerTests
         GameData data = AiScenes.DataWith(dir =>
         {
             dir.EditJson("factions/malazan/ai.json", root =>
-                AiScenes.Opening(root)["buildOrder"] = AiScenes.BuildOrder(("time", 0, "build", "malazan_billet", 0)));
+                AiScenes.SetBuildOrder(AiScenes.Opening(root), AiScenes.BuildOrder(("time", 0, "build", "malazan_billet", 0))));
             dir.EditJson("common/rules.json", r => r["popCap"] = popCap);
         });
         Simulation sim = AiScenes.Flat(AiScenes.Seats(AiDifficulty.Hard, SeatController.Ai, SeatController.Human), data);
@@ -344,7 +344,7 @@ public class AiPlayerTests
     public void ARefusedBuild_IsRetriedAtTheNextThink_AtAnotherAnchor_NotSpammed()
     {
         GameData data = AiScenes.DataWithAi("malazan", root =>
-            AiScenes.Opening(root)["buildOrder"] = AiScenes.BuildOrder(("time", 0, "build", "malazan_barracks", 0)));
+            AiScenes.SetBuildOrder(AiScenes.Opening(root), AiScenes.BuildOrder(("time", 0, "build", "malazan_barracks", 0))));
         PlayerSeat[] seats = AiScenes.Seats(AiDifficulty.Hard, SeatController.Ai, SeatController.Human);
         int barracks = Building("malazan_barracks");
 
@@ -520,7 +520,7 @@ public class AiPlayerTests
         dir.SetUnitField("malazan", "malazan_heavy_infantry", "pop", "3");
         dir.EditJson("factions/malazan/ai.json", root =>
         {
-            AiScenes.Opening(root)["buildOrder"] = AiScenes.BuildOrder(("time", 0, "train", "malazan_laborer", 1));
+            AiScenes.SetBuildOrder(AiScenes.Opening(root), AiScenes.BuildOrder(("time", 0, "train", "malazan_laborer", 1)));
             AiScenes.Opening(root)["compositions"]![0]!["units"] = new JsonObject { ["malazan_heavy_infantry"] = 1, ["malazan_crossbowman"] = 1 };
         });
     }));

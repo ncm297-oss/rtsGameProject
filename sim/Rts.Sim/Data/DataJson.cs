@@ -249,6 +249,7 @@ internal sealed class UnitJson
     public double? SpawnCount { get; set; } // M7-2, optional; read as a number so 1.5 is refused by name, not as a parse error
     public RawValue? Carry { get; set; } // M7-7 (Request 48): optional, a worker's own load; a JSON null is an error, not "absent"
     public StillStealthJson? StillStealth { get; set; } // M8-2, optional; JSON null reads as absent
+    public RawValue? MaxAlive { get; set; } // M8-4 (Request 56 G4): optional, read raw so null and a string are errors by name
 }
 
 // M8-2: units.json "stillStealth", the Shadow Archer's stand-still stealth as a generic unit field: status and delay both

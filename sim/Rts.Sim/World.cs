@@ -357,11 +357,32 @@ public sealed partial class World
     /// Since M3-6 <see cref="TrainError.LockedByRequirement"/> means the unit's <c>requires</c> is not met now (a tech not
     /// researched, no own finished building of a required type); it is checked when the Train applies, not at completion.
     /// </summary>
+    /// <remarks>
+    /// M8-4 (Request 56 G4): <see cref="TrainError.LimitReached"/> when the unit type's <c>maxAlive</c> would be passed (see
+    /// <see cref="UnitLimit"/>); it is appended last to the enum but checked after <see cref="TrainError.LockedByRequirement"/>
+    /// and before <see cref="TrainError.QueueFull"/> and <see cref="TrainError.CannotAfford"/>.
+    /// </remarks>
     public bool CanTrain(int player, int buildingSlot, int unitTypeId, out TrainError reason)
     {
         reason = ProductionSystem.Check(this, player, buildingSlot, unitTypeId);
         return reason == TrainError.None;
     }
+
+    /// <summary>
+    /// M8-4 (Request 56 G4): whether <paramref name="unitTypeId"/> has a limit (<c>units.json</c> <c>maxAlive</c>), and
+    /// <paramref name="player"/>'s count against it: its live units of the type (made any way) plus those its queued items of
+    /// the type will spawn; <paramref name="limit"/> is the type's <c>maxAlive</c>. False, both 0, for a type without one or
+    /// out-of-range ids. Read-only, allocation-free, one read (a kept count): the view draws "5 / 7" from it.
+    /// </summary>
+    public bool UnitLimit(int player, int unitTypeId, out int count, out int limit)
+    {
+        limit = (uint)unitTypeId < (uint)Data.Units.Length && _ledger.Has(player) ? Data.Units[unitTypeId].MaxAlive : 0;
+        count = limit > 0 ? _ledger.LimitedCount(player, unitTypeId) : 0;
+        return limit > 0;
+    }
+
+    /// <summary>M8-4: <paramref name="player"/>'s count of <paramref name="unitType"/> against its limit (0 for a type without one); see <see cref="UnitLimit"/>.</summary>
+    internal int LimitedCount(int player, int unitType) => _ledger.LimitedCount(player, unitType);
 
     /// <summary>
     /// Whether <paramref name="player"/> may queue tech <paramref name="techId"/> at building slot <paramref name="buildingSlot"/>

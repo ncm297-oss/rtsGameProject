@@ -70,7 +70,7 @@ public class RebuildThinkCostQaTests
         BuildingStore b = sim.World.Buildings;
         foreach (AiPlayer ai in ais)
         {
-            var steps = ai.Opening.BuildOrder;
+            var steps = ai.Steps;
             for (int k = 0; k < b.Capacity; k++)
             {
                 if (!b.Alive[k] || b.Owner[k] != ai.Player) continue;

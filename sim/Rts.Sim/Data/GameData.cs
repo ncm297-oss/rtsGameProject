@@ -246,6 +246,13 @@ public sealed class GameData
                 h.Add(3);
                 h.Add(u.NearbyPassive);
             }
+            // M8-4 (Request 56 G4): the limit only when set (a marker of its own, then the value), so data without it hashes
+            // as before.
+            if (u.MaxAlive != 0)
+            {
+                h.Add(4);
+                h.Add(u.MaxAlive);
+            }
         }
 
         h.Add(Resources.Length);

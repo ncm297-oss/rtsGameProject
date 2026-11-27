@@ -134,7 +134,8 @@ public static partial class DataLoader
     /// <c>buildOrders.&lt;difficulty&gt;</c> (an empty list for a difficulty without one). Left out: empty (every difficulty
     /// plays <c>buildOrder</c>). The field
     /// <c>null</c> or <c>{}</c>, an entry <c>null</c> or <c>[]</c>, and an entry for every difficulty (then <c>buildOrder</c>
-    /// could never be played) are one error each. The keys are read in difficulty order, never in the file's.
+    /// could never be played) are one error each; a <c>null</c> / <c>[]</c> entry does not count as an entry (BUG-1770). The
+    /// keys are read in difficulty order, never in the file's.
     /// </summary>
     private static ImmutableArray<ImmutableArray<AiStep>> BuildAiBuildOrders(Checker c, AiOpeningJson o, int faction, AiIds? ids, string path, string opening)
     {
@@ -148,7 +149,9 @@ public static partial class DataLoader
         }
         int n = DataLimits.AiDifficultyIds.Length;
         var lists = new ImmutableArray<AiStep>[n]; // load time only; an empty entry is "no entry"
-        int entries = 0;
+        // M8-4 (BUG-1770): keys written and entries that hold steps are counted apart, so a null / [] entry is its own error
+        // only: "no entries" is a field with no key, and ruling (a) counts only entries that hold steps.
+        int keys = 0, entries = 0;
         for (int k = 0; k < n; k++)
         {
             (bool has, List<AiStepJson?>? list) = (AiDifficulty)k switch
@@ -158,7 +161,7 @@ public static partial class DataLoader
                 _ => (j.HasHard, j.Hard),
             };
             if (!has) continue;
-            entries++;
+            keys++;
             string id = DataLimits.AiDifficultyIds[k];
             string p = path + "." + id;
             if (list == null)
@@ -166,9 +169,12 @@ public static partial class DataLoader
             else if (list.Count == 0)
                 c.Error(p, $"the build order has no steps (at least one; leave the key out for a {id} seat to play buildOrder)");
             else
+            {
+                entries++;
                 lists[k] = BuildAiSteps(c, list, faction, ids, p, opening);
+            }
         }
-        if (entries == 0)
+        if (keys == 0)
             c.Error(path, "no entries (at least one difficulty; leave the field out for every difficulty to play buildOrder)");
         else if (entries == n)
             c.Error(path, "an entry for every difficulty: buildOrder could never be played (write one of them as buildOrder)");

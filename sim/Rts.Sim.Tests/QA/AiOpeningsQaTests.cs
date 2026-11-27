@@ -81,7 +81,7 @@ public class AiOpeningsQaTests
         DataLoadResult r = LoadWith(root =>
         {
             JsonNode o = root["openings"]![0]!;
-            root["buildOrder"] = o["buildOrder"]!.DeepClone();
+            AiScenes.SetBuildOrder(root, o["buildOrder"]!.DeepClone());
             root["compositions"] = o["compositions"]!.DeepClone();
             root["attack"] = o["attack"]!.DeepClone();
             root.Remove("openings");
@@ -223,7 +223,7 @@ public class AiOpeningsQaTests
         GameData ab = AiScenes.DataWithAi("malazan", root =>
         {
             JsonNode b = CopyOf(root.AsObject(), "rush");
-            b["buildOrder"] = AiScenes.BuildOrder(("time", 0, "build", "malazan_billet", 0));
+            AiScenes.SetBuildOrder(b, AiScenes.BuildOrder(("time", 0, "build", "malazan_billet", 0)));
             FirstOnly(root.AsObject()).Add(b);
         });
         GameData ba = AiScenes.DataWithAi("malazan", root =>
@@ -231,7 +231,7 @@ public class AiOpeningsQaTests
             JsonArray openings = root["openings"]!.AsArray();
             JsonNode a = openings[0]!.DeepClone();
             JsonNode b = CopyOf(root.AsObject(), "rush");
-            b["buildOrder"] = AiScenes.BuildOrder(("time", 0, "build", "malazan_billet", 0));
+            AiScenes.SetBuildOrder(b, AiScenes.BuildOrder(("time", 0, "build", "malazan_billet", 0)));
             openings.Clear();
             openings.Add(b);
             openings.Add(a);
@@ -303,7 +303,7 @@ public class AiOpeningsQaTests
                 string worker = AiScenes.UnitKey(f, UnitSlot.Worker);
                 string barracks = AiScenes.BuildingKey(f, BuildingSlot.InfantryHall);
                 JsonNode rush = CopyOf(root, "rush");
-                rush["buildOrder"] = AiScenes.BuildOrder(("time", 0, "build", barracks, 0));
+                AiScenes.SetBuildOrder(rush, AiScenes.BuildOrder(("time", 0, "build", barracks, 0)));
                 rush["attack"] = new JsonObject { ["minArmyPop"] = 1, ["minArmyCost"] = 0 };
                 JsonNode longest = CopyOf(root, "longest");
                 JsonArray steps = longest["buildOrder"]!.AsArray();
@@ -359,10 +359,10 @@ public class AiOpeningsQaTests
             Assert.Equal(StreamPick(seed, p, 3), picks[p]);
             Assert.Equal(picks[p], b.AiOpening(p));
             AiPlayer ai = a.AiOf(p)!;
-            Assert.Equal(ai.Opening.BuildOrder.Length, ai.Board.StepDone.Length);
-            Assert.Equal(ai.Opening.BuildOrder.Length, ai.Board.StepNoSiteUntil.Length);
+            Assert.Equal(ai.Steps.Length, ai.Board.StepDone.Length);
+            Assert.Equal(ai.Steps.Length, ai.Board.StepNoSiteUntil.Length);
         }
-        _out.WriteLine($"seed {seed}: picks {string.Join(", ", picks)} (steps {string.Join(", ", Enumerable.Range(0, 4).Select(p => a.AiOf(p)!.Opening.BuildOrder.Length))})");
+        _out.WriteLine($"seed {seed}: picks {string.Join(", ", picks)} (steps {string.Join(", ", Enumerable.Range(0, 4).Select(p => a.AiOf(p)!.Steps.Length))})");
         Assert.Equal(3, picks.Distinct().Count());
         for (int t = 1; t <= 3000; t++)
         {
@@ -394,7 +394,7 @@ public class AiOpeningsQaTests
             Assert.Equal(index, sim.AiOpening(0));
             BuildMaps.SetTotals(sim, 0, 20000, 20000);
             for (int t = 0; t < 1500; t++) sim.Tick();
-            int steps = ai.Opening.BuildOrder.Length;
+            int steps = ai.Steps.Length;
             Assert.Equal(steps, ai.Board.StepDone.Length);
             Assert.Equal(steps, ai.Board.StepDueTick.Length);
             int due = ai.Board.StepDueTick.Count(d => d >= 0);
@@ -418,7 +418,7 @@ public class AiOpeningsQaTests
     public void ARequirementBlockedBuild_GetsNoWait_AndGoesOutWithin2Thinks_OnEveryDifficulty(AiDifficulty difficulty)
     {
         GameData data = AiScenes.DataWithAi("malazan", root =>
-            AiScenes.Opening(root)["buildOrder"] = AiScenes.BuildOrder(("time", 0, "build", "malazan_wickan_corral", 0)));
+            AiScenes.SetBuildOrder(AiScenes.Opening(root), AiScenes.BuildOrder(("time", 0, "build", "malazan_wickan_corral", 0))));
         int corral = data.FindBuilding("malazan_wickan_corral");
         var lags = new List<int>();
         for (int wait = 2; wait <= 6; wait++)
@@ -464,7 +464,7 @@ public class AiOpeningsQaTests
         GameData data = AiScenes.DataWith(dir =>
         {
             dir.EditJson(MalazanAi, root =>
-                AiScenes.Opening(root)["buildOrder"] = AiScenes.BuildOrder(("time", 0, "build", "malazan_barracks", 0)));
+                AiScenes.SetBuildOrder(AiScenes.Opening(root), AiScenes.BuildOrder(("time", 0, "build", "malazan_barracks", 0))));
             dir.EditJson("common/rules.json", r => r["ai"]!["placementSearchRadius"] = 2);
         });
         Simulation sim = AiScenes.Flat(AiScenes.Seats(difficulty, SeatController.Ai, SeatController.Human), data);

@@ -60,7 +60,9 @@ M6-V25 (developer's pick, owner may revisit): the Cadre Mage's and the Priest's 
 colour), the Sapper's jerkin, the Zealot's tunic (the Peasant body).
 M6-V26 (developer's pick, owner may revisit): a building's team part is its tiled roof (the pack's `Main` material) on the
 Garrison Keep and the Barracks; "Building models, as built" below. M6-V28 (developer's pick, owner may revisit): the roof
-on the Billet, the Depot, the Crossbow Range and the Watchtower too.
+on the Billet, the Depot, the Crossbow Range and the Watchtower too. M6-V30 (developer's pick, owner may revisit): on the
+Teblor buildings the timber roofs and tower tops (picked by the manifest's `teamFaces` rule: the First Age draws its roofs
+in the walls' material), the banners and the Javelin Ground's awning, and the Bloodwood Carver's two stall awnings.
 **One material per model since M6-V24.** A unit model is one surface with one material, still named `team`, drawing one
 atlas: a 512² tile per role texture (the team part's brightness, outfit, skin, head, hair) and a tile of the props' flat
 colours; the atlas **alpha is the team mask** (0.5 on the team tile, 0.75 on the props' tile, 1 elsewhere). The same
@@ -504,7 +506,7 @@ the Ultimate Fantasy RTS pack (CC0, already on disk); every other building type 
   model's **height only**, as it does to a box since M7-V4: the fit's uniform scale for the plan, times `scale` on the
   vertical axis, so a scaled model stays inside its footprint and stands taller. No building with a model has a `scale`
   other than 1 yet, so `BuildingModels` does not apply it today; the first scaled building model (a Teblor one) brings
-  the code with it. The drawn top (`BuildingModels.Top`) is what picking and the bar read either way (docs/03
+  the code with it (M6-V30 did: "Building models, as built (M6-V30)"). The drawn top (`BuildingModels.Top`) is what picking and the bar read either way (docs/03
   "Implementation (M6-VH9)").
 - **Sizes (Git LFS):** the two `.glb` 348,712 + 164,296 bytes and the two atlases 918 + 918: **514,844 bytes (0.49 MB)**
   for the building art; all the art pass's generated binaries **38,957,228 bytes (37.2 MB), was 38,442,384 (36.7 MB)**.
@@ -576,6 +578,110 @@ stay boxes, as does every Whirlwind and Teblor building and every site.
   same as M6-V26's two types: each model is one surface, one draw call and one shadow draw call, as its box. The 400 + 60 row
   is under 16.7 ms on this busy window; the quiet-window figure is the Producer's re-run at the ACCEPT (rule 77). The
   1,000-figure row is reported, not gated (M6-VH9: 32.78 ms in a window as busy).
+
+**Building models, as built (M6-V30).** Eight of the ten Teblor buildings are models from the pack's timber **First Age**
+set, through the same path (one builder option added, below). A Teblor base is brown timber under player-coloured roofs, the
+Malazan base grey stone under tiled ones (`m6v30-teblor-beside-malazan-40m.png`). Fourteen of 30 building types are models;
+the Teblor **Stables & Kennels** and **Breaker's Hall** stay boxes (the pack has no stable, kennel or forge-hall in the First
+Age: its `Farm_*` are flat dirt plots 0.06 units high, and no other family is a plain match), as does every Whirlwind
+building, the four Malazan box types of M6-V28 (Wickan Corral, Armory, Cadre Tower, Engineers' Yard) and every site.
+
+- **The picks** (developer's, owner may revisit), each one source glTF:
+
+  | Building | Source | Triangles (source, after the hidden faces, built; team) | Fitted (w x d x h, before the scale) | Drawn (x 1.25 height) | Footprint |
+  | --- | --- | --- | --- | --- | --- |
+  | Longhouse | `Houses_FirstAge_2_Level3` | 1,724, 1,083, **1,083**; 158 | 7.5 x 6.02 x 3.94 m | 4.92 m | 8 x 8 m |
+  | Hut | `Houses_FirstAge_1_Level1` | 404, 368, **368**; 76 | 3.5 x 3.07 x 3.08 m | 3.85 m | 4 x 4 m |
+  | Woodcutters' Lodge | `Storage_FirstAge_Level1` | 4,088, 2,210, **2,210**; 65 | 3.37 x 3.5 x 1.82 m | 2.27 m | 4 x 4 m |
+  | War Lodge | `Barracks_FirstAge_Level2` | 2,632, 1,879, **1,879**; 272 | 5.5 x 4.81 x 2.74 m | 3.43 m | 6 x 6 m |
+  | Javelin Ground | `Archery_FirstAge_Level1` | 3,740, 2,677, **2,677**; 286 | 5.5 x 4.49 x 5.13 m | 6.41 m | 6 x 6 m |
+  | Stone Cairn | `WatchTower_FirstAge_Level1` | 588, 432, **432**; 59 | 3.19 x 3.5 x 5.64 m | 7.05 m | 4 x 4 m |
+  | Bloodwood Carver | `Market_FirstAge_Level1` | 3,896, 2,555, **2,555**; 528 | 5.5 x 4.13 x 1.87 m | 2.33 m | 6 x 6 m |
+  | Shaman's Circle | `Temple_FirstAge_Level1` | 4,828, 2,836, **2,836**; 536 | 5.5 x 5.5 x 5.51 m | 6.89 m | 6 x 6 m |
+
+  No decimation was needed (every one is under the 5,000 cap after the hidden faces). Each atlas is 64 x 64 (2 x 2 tiles of
+  32) or 128 x 128 (4 x 4: the War Lodge, the Javelin Ground, the Carver).
+  - **Longhouse: a long house, not the `TownCenter_FirstAge_*` the brief named.** The pack's First Age town centres are a fence
+    round an empty square, a fenced yard with an antler shrine, and a plank deck under a stag statue (1.25 units high, mostly
+    the statue): plazas, as M6-V26 found the Second Age's (a fountain and a statue). `Houses_FirstAge_2_Level3` is a timber
+    hall under two gabled roofs, an L of 7.5 x 6 m: literally a long house, the heart of a hold, and twice the Hut's size.
+    docs/03 "Implementation (M6-V30)" question 1.
+  - **Hut = `Houses_FirstAge_1_Level1`**: the plainest gabled hut (one room, a stone footing): "a low hut of hide and timber".
+    Drawn 3.85 m tall. A Teblor giant's model is about 2.8 m (the 1.84 m figure x the data's 1.5; the brief's 3.75 m is the
+    giant's capsule, `--placeholder-art`): the ridge stands a metre over the giant's head and the eaves at its shoulder, a hut
+    a giant stoops into; beside the 3.75 m capsule the ridge is at its head (`m6v30-teblor_hut-20m.png`, `m6v30-base-40m.png`). The other houses are a flat-roofed shed on posts (`_3_`) and the
+    two-roof house kept for the Longhouse (`_2_`).
+  - **Woodcutters' Lodge = `Storage_FirstAge_Level1`**: a plank yard with a small timber store and crates: a drop-off, low
+    (2.27 m) as the Malazan Depot is. Level 2 / 3 are the same yard with more crates (5,236 / 7,488 source triangles).
+  - **War Lodge = `Barracks_FirstAge_Level2`**: a timber hall on a stone footing with crossed swords over the door and two
+    side wings; the wings set it apart from the Hut's single gable. Level 1 has no wings; Level 3 adds two tall corner towers.
+  - **Javelin Ground = `Archery_FirstAge_Level1`**: a timber tower with a target on top and a striped awning over two
+    targets. Level 2 / 3 replace the awning with a closed shed.
+  - **Stone Cairn = `WatchTower_FirstAge_Level1`, tinted as stone**: a tall, narrow tower (7.05 m drawn) under a plank top
+    with a banner; its timber (`Wood`, `Wood_Light`) tinted lichen grey `#77736a` / `#8b877c`, so it reads as piled stone
+    against the brown halls. Level 2 / 3 are 1.46 / 1.64 units tall (12-14 m drawn on 2 x 2). The pack has no stone cairn;
+    the grey timber is the stand-in (docs/03 "Implementation (M6-V30)" question 2).
+  - **Bloodwood Carver = `Market_FirstAge_Level1`**: two stalls under cloth awnings among crates: a carver's work yard.
+    Low (2.33 m) and open: a click on the open ground inside the footprint still selects it (the pick box), but a unit
+    standing between the stalls is picked first, as beside any building.
+  - **Shaman's Circle = `Temple_FirstAge_Level1`**: a cross-shaped timber hall under steep roofs: the tallest hall (6.89 m).
+- **Team colour: the roofs (`teamFaces`, new).** The First Age has almost no team material of its own (`Main`: 4-48 banner
+  triangles, a few pixels at 40 m), and its roofs are the same `Wood` material as the walls. So a building entry may carry
+  **`teamFaces`**: a list of rules, each `{ "materials": [...], "minUp": 0.5, "above": 0.4 }`; after the hidden-face pass the
+  builder moves to the team tile every face of those materials whose normal points up by at least `minUp` (a roof slope,
+  a plank top) and whose centre stands at least `above` of the model's height over its lowest point (not a deck or a step).
+  The roofs on the Longhouse, Hut and War Lodge, the shed roof on the Woodcutters' Lodge (`above` 0.6, over its deck), the
+  tower tops of the Javelin Ground and the Cairn (`above` 0.6 / 0.7) and the Shaman's Circle; plus `Main` (banners, the
+  Javelin Ground's awning stripes) where the source has it, and the Carver's two awnings (`Green`, `Red`) whole. A building
+  without `teamFaces` takes no new code path: every M6-V26 / V28 file is byte for byte the same.
+  In all eight setup colours (`m6v30-colours-1-4-40m.png` / `-60m.png`, `m6v30-colours-5-8-40m.png` / `-60m.png`) each roof
+  takes the colour; Iron (slate) is the quietest on the brown timber, as on the grey stone, and still reads apart from it.
+- **The palette** (toward docs/04's Teblor palette: earth brown, bloodwood red-brown, bone white): `Wood` dark earth-brown
+  `#5b4632`, `Wood_Light` bloodwood red-brown `#6e3f2c`, `Stone` warm earth stone `#6f665a`, `Stone_Light` `#857b6c`, `White`
+  bone `#c9bfa5`, `Gold` (the sword hilts) `#8a6a3a`, `Metal_Light` (blades) `#55514b`, `Red` (target rings) `#6e2a22`,
+  `Yellow` (the Carver's goods: fresh-cut wood) `#b59a62`; the Cairn's two timbers grey as above.
+- **The data `scale` on a model** (docs/01 2026-11-26 (3)): the fit as before (the plan `FitMargin` inside the footprint),
+  then the height x the data `scale`; never wider. Every Teblor model stands a quarter taller than it would at scale 1
+  (`m6v30-stretch-on-40m.png` against `m6v30-stretch-off-40m.png`, the same base on a scratch copy of the data with every
+  Teblor `scale` 1: the boxes and the bars move with it). A Malazan model (scale 1) is drawn exactly as before.
+- **The Cairn's shot** leaves at `ModelShotShare` (0.85) of its drawn top: 6.00 m (the Teblor box tower shot from 1.2 m).
+- **Sizes (Git LFS):** the eight `.glb` 94,112 (Longhouse) + 32,124 (Hut) + 173,712 (Lodge) + 142,660 (War Lodge) + 196,740
+  (Javelin Ground) + 40,368 (Cairn) + 201,620 (Carver) + 258,040 (Shaman's Circle) and the eight atlases 4,649 in all:
+  **1,144,025 bytes (1.09 MB)**. The art pass's generated binaries: **41,008,470 bytes (39.1 MB), was 39,864,445 (38.0 MB)**.
+- **Cost** (rules 42 / 61 / 77; 2026-11-26 10:46-10:50, 1600 x 900, `ModelShots --bench 30 --vsync off`, the fifteen figure
+  types mixed, the eight runs back to back in one window, the developer's own scene and test runs ended first; **no other
+  `testhost` or Godot was running** in that window, checked every 10 s; the 400-capsule figure, 0.82 ms against M6-V26's
+  0.86 alone, says it was quiet). The building rows as M6-V26's (`--bench-buildings 60 --bench-zoom 60`), the fourteen model
+  types in turn, and the eight Teblor types alone (`--bench-building-types`, new):
+
+  | Run | Average | While 90 %+ alive | Worst 1 % (90 %+ alive) | Draw calls |
+  | --- | --- | --- | --- | --- |
+  | 400 figures + 60 building models, fourteen types (60 m) | 6.42 ms | **6.42 ms** (at most 16.7) | 9.84 ms | 888 |
+  | 400 figures + 60 building boxes, the same types (`--building-boxes`) | 6.49 ms | 6.49 ms | 9.94 ms | 876 |
+  | 400 figures + 60 Teblor building models, eight types | 6.41 ms | 6.49 ms | 9.97 ms | 853 |
+  | 400 figures + 60 Teblor building boxes | 6.45 ms | 6.52 ms | 10.07 ms | 853 |
+  | 400 figures, fifteen types (40 m) | 5.64 ms | 6.34 ms | 10.70 ms | 960 |
+  | 400 capsules | 0.80 ms | 0.82 ms | 2.74 ms | 171 |
+  | 1,000 figures, fifteen types | 15.85 ms | 16.52 ms | 23.79 ms | 2,593 |
+  | 1,000 capsules | 1.33 ms | 1.38 ms | 5.60 ms | 243 |
+
+  The models cost what their boxes do (6.42 against 6.49, and 6.49 against 6.52 for the Teblor eight: inside the window's
+  noise; M6-V28's +0.28 ms was a busy window). Each Teblor type alone against its own boxes (60 of the type, the same window
+  a few minutes earlier, three of the other tracks' `testhost`s ending during it): Longhouse 6.35 / 6.57, Hut 6.37 / 6.31,
+  Woodcutters' Lodge 6.39 / 6.49, War Lodge 6.60 / 6.40, Javelin Ground 6.57 / 6.46, Stone Cairn 6.20 / 6.16, Bloodwood
+  Carver 6.40 / 6.42, Shaman's Circle 6.39 / 6.45 ms (models / boxes, while 90 %+ alive): at most +0.20 ms, no type near the
+  1 ms finding bar. The first pass of the 400 + 60 pair, with those three `testhost`s running, read 7.13 against 6.60
+  (+0.53); a second pair right after it +0.04 and +0.04: window noise. The 1,000-figure row is
+  reported, not gated.
+- **The Whirlwind's buildings (docs/03 "Implementation (M6-V30)" question 3, the Producer's to decide).** The pack has no tent, pavilion or desert camp; its
+  cloth is the market stalls' awnings (`Market_FirstAge_*`, `Market_SecondAge_*`) and the archery range's striped awning.
+  Three ways: (a) **the Second Age set again, tinted sand and ochre** (plastered walls, pale stone; the roofs team-coloured
+  as the Malazan's): ready today, but it reads as a second Malazan base in other colours, the opposite of what the Teblor
+  set gives; (b) **kit-bashed tents** in the builder (a box-and-prism "props" path like the units' props, cloth in the team
+  colour): one builder feature, low-poly tents that read as a camp; (c) **a tent pack** (the owner's download, or an
+  AI-generated set, docs/04 "AI-generated models"), imported through this path unchanged. Recommendation: (c) if the owner
+  has or picks a CC0 tent / desert camp pack, else (b) for the Tent, Holy Camp and the four camps, with the Market stalls for
+  the Supply Cache and the Second Age's tower for the Lookout Tower; not (a).
 
 **Audio (SFX, M6-V12).** Sources are long, mostly 96 kHz / 24-bit stereo files; only short cuts enter the repo.
 

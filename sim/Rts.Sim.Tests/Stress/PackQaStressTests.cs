@@ -71,9 +71,9 @@ public class PackQaStressTests(ITestOutputHelper output)
         for (int p = 0; p < 2; p++)
         {
             AiPlayer ai = sim.AiOf(p)!;
-            for (int i = 0; i < ai.Opening.BuildOrder.Length; i++)
+            for (int i = 0; i < ai.Steps.Length; i++)
             {
-                if (ai.Opening.BuildOrder[i].Trigger != AiStepTrigger.Pop) continue;
+                if (ai.Steps[i].Trigger != AiStepTrigger.Pop) continue;
                 steps[p]++;
                 if (ai.Board.StepDone[i]) done[p]++;
             }

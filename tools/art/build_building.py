@@ -25,6 +25,8 @@ from mathutils.bvhtree import BVHTree
 # The unit builder's atlas alpha codes (build_unit.py ALPHA_*; team_colour.gdshader reads them back). build_unit.py runs
 # its main() when imported, so the few helpers shared with it are repeated here.
 ALPHA_PLAIN, ALPHA_TEAM = 1.0, 0.5
+# M6-V30: the material the `teamFaces` rules move their faces to; a team part, so it lands on the team tile.
+TEAM_FACES = "team_faces"
 
 
 def fail(why):
@@ -122,6 +124,27 @@ def hidden_faces(bm, min_elevation):
     return dead
 
 
+def mark_team_faces(b, bm, me, names):
+    """M6-V30: the faces each `teamFaces` rule picks move to one new material, TEAM_FACES, drawn on the team tile. A rule
+    picks the faces of its `materials` that face the sky (the normal's vertical part at least `minUp`) and stand high
+    (the face's centre at least `above` of the model's height over its lowest point): a timber roof, when the pack drew the
+    roof in the same material as the walls (the First Age buildings, whose only own team material is a few banner
+    triangles). Returns the faces moved. A building without `teamFaces` never comes here, so its file is unchanged."""
+    slot = len(me.materials)
+    me.materials.append(bpy.data.materials.new(TEAM_FACES))
+    z0 = min(v.co.z for v in bm.verts)
+    z1 = max(v.co.z for v in bm.verts)
+    moved = 0
+    for rule in b["teamFaces"]:
+        wanted = {i for i, n in enumerate(names) if n in rule["materials"]}
+        up, floor = float(rule["minUp"]), z0 + float(rule["above"]) * (z1 - z0)
+        for f in bm.faces:
+            if f.material_index in wanted and f.normal.z >= up and f.calc_center_median().z >= floor:
+                f.material_index = slot
+                moved += 1
+    return moved
+
+
 def decimate_material(obj, material_name, target):
     """Decimates (collapse) the faces of one source material to `target` triangles: separated, decimated, joined back."""
     me = obj.data
@@ -172,9 +195,11 @@ def build_building(manifest, b, src_root, repo, work):
     for name in names:
         if name not in colours and name not in team:
             fail(f"{b['id']}: source material {name} has no colour and is not a team part")
-    for name in list(colours) + list(team):
+    for name in list(colours) + list(team) + [n for rule in b.get("teamFaces", []) for n in rule["materials"]]:
         if name not in names:
             fail(f"{b['id']}: manifest names material {name}, not in the source")
+    if b.get("teamFaces"):
+        team.add(TEAM_FACES)
 
     # Merge the flat-shaded source's split corners (so a decimation can collapse edges), triangulate, drop what no camera
     # sees.
@@ -187,6 +212,7 @@ def build_building(manifest, b, src_root, repo, work):
     bmesh.ops.delete(bm, geom=dead, context='FACES_ONLY')
     loose = [v for v in bm.verts if not v.link_faces]
     bmesh.ops.delete(bm, geom=loose, context='VERTS')
+    team_face_count = mark_team_faces(b, bm, me, names) if b.get("teamFaces") else 0
     bm.to_mesh(me)
     bm.free()
     after_hidden = triangles(obj)
@@ -251,6 +277,7 @@ def build_building(manifest, b, src_root, repo, work):
     # Blender's x / y / z are glTF's x / -z / y: width (x) and depth (y here) of the ground plan, the height.
     return {"id": b["id"], "destination": b["destination"], "triangles": tris, "sourceTriangles": source_triangles,
             "afterHiddenFaces": after_hidden, "decimated": decimated, "perMaterial": per_material,
+            "teamFaces": team_face_count,
             "size": [round(float(hi[0] - lo[0]), 4), round(float(hi[1] - lo[1]), 4), round(float(hi[2] - lo[2]), 4)],
             "feet": round(float(lo[2]), 4), "materials": sorted(m.name for m in me.materials),
             "textures": {atlas.name: list(atlas.size)}, "atlas": layout}

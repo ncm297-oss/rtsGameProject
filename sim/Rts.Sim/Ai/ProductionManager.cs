@@ -55,7 +55,9 @@ internal static class ProductionManager
             float weight = mix.Weights[k] * (1f + ai.Knobs.CounterStrength * ai.CounterShare[(int)def.Slot]);
             // Weights are population shares (Requests 36 a): a 3-pop unit fills three times what a 1-pop one does.
             float share = (ai.Live[type] + ai.Queued[type]) * def.HalfPop / weight;
-            if (share >= pickShare || !CanTrainSomewhere(ai, type)) continue;
+            // M8-4 (Request 56 G4): a type at its maxAlive (this think's Trains counted) is skipped, so the next by share is
+            // trained rather than the seat waiting on it.
+            if (share >= pickShare || ai.AtUnitLimit(type) || !CanTrainSomewhere(ai, type)) continue;
             pick = type;
             pickShare = share;
         }

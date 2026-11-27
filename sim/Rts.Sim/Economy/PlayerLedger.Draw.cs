@@ -30,10 +30,15 @@ internal sealed partial class PlayerLedger
         CarriedGold = new long[players];
     }
 
-    /// <summary>A unit item joins (+1) or leaves (-1: trained, cancelled, or its building freed) one of <paramref name="player"/>'s queues.</summary>
-    public void AddQueuedUnit(int player, int delta)
+    /// <summary>
+    /// A unit item of <paramref name="unitType"/> joins (+1) or leaves (-1: trained, cancelled, or its building freed) one of
+    /// <paramref name="player"/>'s queues; M8-4: a limited type's count moves by the item's spawnCount.
+    /// </summary>
+    public void AddQueuedUnit(int player, int unitType, int delta)
     {
-        if (Has(player)) QueuedUnits[player] += delta;
+        if (!Has(player)) return;
+        QueuedUnits[player] += delta;
+        if (_limited.Length != 0 && (uint)unitType < (uint)_unitTypes) AddLimited(player, unitType, delta * _spawnCount[unitType]);
     }
 
     /// <summary>Gold enters (positive: taken from a node) or leaves (negative: delivered, dropped, or its carrier freed) <paramref name="player"/>'s units' cargo.</summary>
@@ -65,5 +70,6 @@ internal sealed partial class PlayerLedger
             for (int q = 0; q < buildings.QueueCount[k]; q++)
                 if (!buildings.QueueIsTechAt(k, q)) QueuedUnits[buildings.Owner[k]]++;
         }
+        RecountLimits(units, buildings); // M8-4: the limit counts are derived from the same stores
     }
 }

@@ -22,7 +22,7 @@ public class PackWorthTests
         {
             foreach (JsonNode? o in root["openings"]!.AsArray())
             {
-                o!["buildOrder"] = AiScenes.BuildOrder(step);
+                AiScenes.SetBuildOrder(o, AiScenes.BuildOrder(step));
                 o["attack"] = new JsonObject { ["minArmyPop"] = 1, ["minArmyCost"] = minArmyCost };
                 // As AiPlayerTests' ten steps: production trains a unit nothing here unlocks (no corral), so every Train is a step's.
                 o["compositions"] = JsonNode.Parse("""[{ "age": 1, "units": { "malazan_wickan_lancer": 1 } }, { "age": 2, "units": { "malazan_wickan_lancer": 1 } }]""");

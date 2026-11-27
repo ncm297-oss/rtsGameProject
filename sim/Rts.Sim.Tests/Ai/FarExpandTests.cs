@@ -40,7 +40,7 @@ public class FarExpandTests
             dir.EditJson($"factions/{f}/ai.json", root =>
             {
                 foreach (JsonNode? o in root["openings"]!.AsArray())
-                    o!["buildOrder"] = AiScenes.BuildOrder(("time", 3600, "build", AiScenes.BuildingKey(f, BuildingSlot.House), 0));
+                    AiScenes.SetBuildOrder(o, AiScenes.BuildOrder(("time", 3600, "build", AiScenes.BuildingKey(f, BuildingSlot.House), 0)));
             });
         dir.EditJson("common/rules.json", r =>
         {

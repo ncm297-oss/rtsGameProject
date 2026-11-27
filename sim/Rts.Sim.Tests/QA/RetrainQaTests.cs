@@ -23,7 +23,7 @@ public class RetrainQaTests
     private static int Keep => TestSim.Data.FindBuilding("malazan_garrison_keep");
 
     private static readonly Lazy<GameData> s_oneWorker = new(() => AiScenes.DataWithAi("malazan", root =>
-        AiScenes.Opening(root)["buildOrder"] = AiScenes.BuildOrder(("time", 0, "train", "malazan_laborer", 1))));
+        AiScenes.SetBuildOrder(AiScenes.Opening(root), AiScenes.BuildOrder(("time", 0, "train", "malazan_laborer", 1)))));
 
     private static Simulation Scene(bool combat = true)
     {

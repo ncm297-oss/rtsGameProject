@@ -22,7 +22,7 @@ public class RebalanceDroppedGatherQaTests(ITestOutputHelper output)
     private static readonly Lazy<GameData> s_quiet = new(() => AiScenes.DataWith(dir =>
     {
         dir.EditJson("factions/malazan/ai.json", root =>
-            AiScenes.Opening(root)["buildOrder"] = AiScenes.BuildOrder(("time", 3600, "train", "malazan_laborer", 1)));
+            AiScenes.SetBuildOrder(AiScenes.Opening(root), AiScenes.BuildOrder(("time", 3600, "train", "malazan_laborer", 1))));
         dir.EditJson("common/rules.json", r => r["ai"]!["gatherReach"] = 512);
     }));
 

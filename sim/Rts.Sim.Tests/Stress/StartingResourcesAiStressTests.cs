@@ -107,12 +107,12 @@ public class StartingResourcesAiStressTests
                     (int busy, int halls) = Producers(sim, p);
                     AiPlayer ai = sim.AiOf(p)!;
                     int due = 0, done = 0;
-                    for (int i = 0; i < ai.Opening.BuildOrder.Length; i++)
+                    for (int i = 0; i < ai.Steps.Length; i++)
                     {
                         if (ai.Board.StepDone[i]) done++;
                         else if (ai.Board.StepDueTick[i] >= 0) due++;
                     }
-                    row.Add($"gold {w.Gold[p]} wood {w.Wood[p]} army {army / 2.0} workers {workers / 2.0} waves {ai.Board.WavesStarted} producers busy {busy}/{halls} pop {w.HalfPop[p] / 2.0}/{w.HalfPopCap[p] / 2.0} steps done {done} due {due}/{ai.Opening.BuildOrder.Length}");
+                    row.Add($"gold {w.Gold[p]} wood {w.Wood[p]} army {army / 2.0} workers {workers / 2.0} waves {ai.Board.WavesStarted} producers busy {busy}/{halls} pop {w.HalfPop[p] / 2.0}/{w.HalfPopCap[p] / 2.0} steps done {done} due {due}/{ai.Steps.Length}");
                 }
                 timeline.Add($"    {Sec(sim.TickNumber)} | {string.Join(" | ", row)}");
             }

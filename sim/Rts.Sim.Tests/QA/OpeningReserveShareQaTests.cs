@@ -42,7 +42,7 @@ public class OpeningReserveShareQaTests
                     if (share(f, i) is double s) o["attack"]!["reserveArmyShare"] = s;
                     if (ageTwoOnly && f == "malazan")
                     {
-                        o["buildOrder"] = AiScenes.BuildOrder(("time", 0, "research", "age_ii", 0));
+                        AiScenes.SetBuildOrder(o, AiScenes.BuildOrder(("time", 0, "research", "age_ii", 0)));
                         o["compositions"] = JsonNode.Parse("""[{ "age": 1, "units": { "malazan_heavy_infantry": 1 } }, { "age": 2, "units": { "malazan_heavy_infantry": 1 } }]""");
                     }
                 }

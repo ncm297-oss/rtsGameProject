@@ -223,7 +223,7 @@ public class VatharStallTraceTests(ITestOutputHelper output)
             while (ai.View.NextResource(ref r, out SeenResource n))
                 if (d.Resources[n.TypeId].Resource == ResourceKind.Gold && ai.Board.NodeDropped[r] != n.Handle.Generation && w.Resources.IsAlive(n.Handle)) known++;
             string reserve = t.HallReserved ? $"hall rebuild ({t.ReserveGold} / {t.ReserveWood})"
-                : t.ReserveStep >= 0 ? $"#{t.ReserveStep} {Name(ai.Opening.BuildOrder[t.ReserveStep])} ({t.ReserveGold} / {t.ReserveWood})" : "none";
+                : t.ReserveStep >= 0 ? $"#{t.ReserveStep} {Name(ai.Steps[t.ReserveStep])} ({t.ReserveGold} / {t.ReserveWood})" : "none";
             Blackboard bb = ai.Board;
             string military = bb.Defending ? "defend" : bb.WaveActive && bb.Hunting ? "hunt" : bb.WaveActive ? "out" : "wave gathering";
             output.WriteLine($"| {sim.TickNumber} | {p} | {w.Gold[p]} / {w.Wood[p]} | {w.GatheredGold[p]} | {onGold + onWood + other} ({onGold} / {onWood} / {other}) | {army}, {armyHalf / 2.0} | {halls} | {producers} | "

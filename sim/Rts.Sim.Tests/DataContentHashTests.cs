@@ -545,6 +545,7 @@ public class DataContentHashTests
         foreach (string f in new[] { "Requires", "RequiresTechs", "RequiresBuildings", "TrainedAtTypeId" }) // M3-6: the resolved requires
             Assert.Contains($"UnitDef.{f}", checkedFields);
         Assert.Contains("UnitDef.Carry", checkedFields); // M7-7: 0 (absent) -> set must differ
+        Assert.Contains("UnitDef.MaxAlive", checkedFields); // M8-4: 0 (absent) -> set must differ
         Assert.Contains("AttackDef.Projectile", checkedFields); // nullable: null and "x" must differ
         Assert.Contains("RulesDef.BuildingSight", checkedFields); // M4-3a
         Assert.Contains("RulesDef.StartingResources", checkedFields); // M6-S6

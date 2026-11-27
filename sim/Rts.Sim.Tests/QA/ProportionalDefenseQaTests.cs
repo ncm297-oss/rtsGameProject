@@ -29,7 +29,7 @@ public class ProportionalDefenseQaTests
     {
         dir.EditJson("factions/malazan/ai.json", root =>
         {
-            AiScenes.Opening(root)["buildOrder"] = AiScenes.BuildOrder(("time", 3600, "train", "malazan_laborer", 1));
+            AiScenes.SetBuildOrder(AiScenes.Opening(root), AiScenes.BuildOrder(("time", 3600, "train", "malazan_laborer", 1)));
             AiScenes.Opening(root)["attack"] = new JsonObject { ["minArmyPop"] = 6, ["minArmyCost"] = 0 };
             root["difficulties"]!["normal"]!["waveSizeMultiplier"] = 1;
         });

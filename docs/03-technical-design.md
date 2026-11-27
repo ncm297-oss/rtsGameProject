@@ -3729,7 +3729,8 @@ file changed.
   about 437 pixels of air), and where a unit or another building stands behind that air a click picks the short building
   instead (units pick first, so only a building behind). No shipped building is below scale 1; if one ships, `PickRay`
   can take the drawn height. **Changed by M6-VH9 (BUG-1630, BUG-1381 item 2):** the hit test now follows each type's drawn
-  height both ways (a box type's `DrawnHeight`, a model's fitted top); see "Implementation (M6-VH9)".
+  height both ways (a box type's `DrawnHeight`, a model's fitted top); see "Implementation (M6-VH9)". **M6-V30:** a
+  building model takes the data `scale` on its height by the same rule (see "Implementation (M6-V30)").
 - **Scale-1 buildings draw exactly as before:** `EconomyViewTest`'s six `--placeholder-art` pictures (the Malazan bases of
   seeds 1, 6 and 31, hauling, the site, cargo at 60 m), taken at 43ab896 and with this change in one tree, are
   byte-identical for three (seeds 1 and 6, hauling); the other three differ only in the HUD's frames-per-second number, a
@@ -5052,6 +5053,87 @@ no sim, `ViewApi`, data hash or save changed.
      keep; the owner judges `draw-notice.png`.
   3. **No sound** when the clock starts. Recommendation: keep silent; the alert sound means "under attack", and the notice
      shows for minutes.
+- **The Producer's answers (docs/01 2026-11-26, the 0207 ACCEPT row (2); written here by M6-V30, rule 67):**
+  1. **Not kept:** a side that falls after the draw must go on reading Draw after a save is loaded, as it does live and in
+     playback (a draw is final; nobody is defeated by it). BUG-1790 (S3) is cured in two steps: the view reads a drawn
+     two-sided match as Draw for both sides, in the view's next clean-up; matches of three or more sides need the sim to
+     remember which seats stood at the draw (Request 60, with the sim's next save-format change). The sentence in
+     Question 1 about a recording watched past the fall is wrong (measured: Draw) and is corrected with that fix.
+  2. Kept: the notice's place and look (top centre under the alert line, pale gold, from the clock's first second); the
+     owner judges `draw-notice.png`. BUG-1792 (S4, a longer text runs off centre) waits for the clean-up.
+  3. Kept: no sound when the clock starts.
+
+### Implementation (M6-V30)
+
+The Teblor buildings as models, and the data `scale` drawn on a model for the first time. Eight of the ten Teblor types are
+models from the building pack's timber First Age set (docs/04 "Building models, as built (M6-V30)": the picks, triangles,
+sizes, palette); the Stables & Kennels and the Breaker's Hall stay boxes. Tooling, view code, view tests and docs; no sim,
+`ViewApi` or data file changed.
+
+- **The files:** eight entries in `tools/asset-manifest.json` `buildings`, built by `tools/art/build_building.py` into
+  `game/assets/models/teblor/<id>/<id>.glb` with `<id>_atlas.png` (368 to 2,836 triangles, one surface, one `team` material,
+  a 64 x 64 or 128 x 128 atlas). Found by id as every building model (`BuildingModels.PathFor`).
+- **The builder's one new option, `teamFaces`** (the First Age draws its roofs in the walls' material): after the hidden-face
+  pass, the faces of a rule's source materials whose normal's vertical part is at least `minUp` and whose centre stands at
+  least `above` of the model's height move to a new material `team_faces`, a team part, so they land on the team tile.
+  An entry without it runs no new line: a full re-import (`tools/import-assets.ps1`, two runs) left all 107 pre-existing
+  model, atlas, library and `.import` files byte for byte (SHA-256 before and after each run) and the 32 new files the same
+  on both runs.
+- **The scale (`BuildingModels.FitTo`, docs/01 2026-11-26 (3)):** the fit as M6-V26's (the largest uniform scale `s` keeping
+  the plan `FitMargin` inside the footprint, plan centred, lowest point on the ground), then the vertical axis `s x scale`
+  (`Basis.FromScale(s, s x scale, s)`, the ground offset scaled the same). At scale 1 the product is exactly `s`, so every
+  Malazan model's transform is the same float for float. Everything read from the fit follows the drawn shape with no
+  other change: `Top` (so `PickTops`, the bar's height `Top + 0.6`, `ShotHeights` = `Top x ModelShotShare`), `FittedBounds`
+  (the lowered bar's front), `FittedFaces` (a click's ray against the model, `HiddenByBuilding`), and the remembered model's
+  node (`Fit`). A site is still its box at `DrawnHeight` (3 m x 1.25), switched to the model on the first frame it reads
+  finished; nothing is computed per frame (the fit is per type at `Bind`).
+- **The Stone Cairn shoots from its drawn top:** `ShotHeights[cairn]` = 7.054 x 0.85 = 5.996 m (the box tower's 1.2 m before).
+- **Tests.** New `game/tests/TeblorBuildingsTest` (headless, in the loop; the Teblor model types read from the manifest):
+  (H) every manifest building against M6-V26's fit recomputed from its file: a scale-1 model (the six Malazan) drawn exactly
+  that size (1e-4 m), a Teblor one that plan and that height x 1.25 within 1 cm, 0.25 m inside its footprint; (T) each Teblor
+  model at a terrace's foot and on its edge: inside its footprint, base on the ground, the drawn height the fitted height x
+  `scale` within 1 cm, the bar over it; (P) a Gatherer in front of each selected by a click at zoom 20, 40 and 60, every 12th
+  model pixel at zoom 40 selects the building (23 to 147 pixels a type), the bar's ends on screen at the closest zoom over
+  the drawn top; (S) the Cairn's shot height `ModelShotShare` of its scaled top, a shot on flat ground and from a terrace
+  leaving and drawn there, a Cairn site with an enemy held 10 m away firing nothing in 200 ticks and drawn as its box with
+  its bar over the box; (F) with models off and with the files missing every Teblor model type is its box, 3.75 m tall with
+  its bar at 4.35 m, and an LFS pointer for one type gives that box and exactly one warning; (3) a Malazan, a Whirlwind and
+  a Teblor seat in one match with every building type of each: drawn as its model exactly when its file is there (14
+  models, the Whirlwind's 10 and the four Malazan and two Teblor box types as boxes), each model at its fitted height x its
+  faction's `scale`. Windowed with
+  `-- --shots <dir>` it saves the M6-V30 pictures (docs/04). `BuildingModelTest` now runs its match rows once per faction the
+  manifest's buildings belong to, with that faction's worker, line unit, house and halls found by slot (it named Malazan
+  ids), and pins the eight new types' triangles per tile; its builders stand clear of the footprint by the worker's radius
+  (a Teblor Gatherer at the Laborer's 0.8 m stood in it) and a site's anchor is chosen clear of standing units.
+  `ModelShots` gains `--bench-building-types <id,id>` (one type's models against its boxes). Scenes adapted, no row deleted:
+  `QaM6V26Test` runs its rows once per faction with building models (its worker, line unit, town hall and halls by slot; the
+  Keep's hidden-unit row in the Malazan pass only; rows of more than six types wrap after the sixth, the six Malazan spots
+  unchanged); `ViewHardenVh9Test`'s (P3) puts the seventh model type on east of the first six and (K) runs rows of seven
+  (fourteen types in one row ran off the map), and (P2), which needs a Teblor type drawn as a box at scale 1.25, takes the
+  Stables & Kennels (the Longhouse is a model now) after a Longhouse of the same player. The scenes the brief named as
+  pinning a Teblor building's box pass unchanged: `BuildingScaleViewTest` and `QaM7V4Test` already set
+  `BuildingViews.UseModels = false`, `TeblorModelTest`, `QaM7V3cTest` and `ModelViewTest` read unit models only. The scene
+  loop is 129 scenes.
+- **Cost** (docs/04 "Building models, as built (M6-V30)" has the tables and the window): in a quiet window (no other track's
+  `testhost` or Godot) 400 figures with 60 building models of the fourteen types 6.42 ms while 90 %+ alive, the same with
+  boxes 6.49 ms; the eight Teblor types 6.49 against 6.52 ms; each Teblor type alone within +0.20 ms of its boxes; 400
+  capsules 0.82 ms, 1,000 figures 16.52 ms, 1,000 capsules 1.38 ms. Nothing is computed per frame for the scale.
+- **Questions for the Producer (rule 67), each with a recommendation:**
+  1. **The Longhouse is a long house (`Houses_FirstAge_2_Level3`), not a `TownCenter_FirstAge_*`** as the brief named. The
+     First Age town centres are a fence round an empty square, a fenced yard with an antler shrine, and a plank deck under a
+     stag statue: plazas, the reason M6-V26 did not use the Second Age's either. Recommendation: keep the two-roofed timber
+     hall (8 m footprint, 4.9 m drawn); `TownCenter_FirstAge_Level3` (the stag deck) is a one-line `source` change if the
+     owner prefers a totem square.
+  2. **The Stone Cairn is a timber watchtower tinted grey,** the pack having no stone cairn: it reads as a tall grey tower
+     beside the brown halls, not as piled stones. Recommendation: accept for now; a real cairn (stacked rocks: the Stylized
+     Nature MegaKit's rocks are on disk) is a kit-bash for a later look task.
+  3. **The Whirlwind's buildings** (docs/04, the M6-V30 paragraph): the pack has no tent or desert camp. Recommendation: a
+     CC0 tent / desert-camp pack if the owner has one (imported through this path unchanged), else a small builder feature
+     for kit-bashed box-and-prism tents with team-coloured cloth; not the Second Age set recoloured (a second Malazan base).
+  4. **The Hut is 3.85 m drawn** (3.08 m fitted x 1.25), a metre over a Teblor figure's head (2.8 m). Recommendation: accept
+     (a giant's hut); a lower Hut is a `FitMargin`-style height cap, not wanted while the Malazan Billet is 3.03 m.
+  5. **Two types stay boxes** (Stables & Kennels, Breaker's Hall): the First Age's `Farm_*` are flat dirt plots, and nothing
+     else is a plain match. Recommendation: wait for a stable / kennel source with the Rider's and War-dog's packs.
 
 ## Vision, detection, fog
 
@@ -5739,7 +5821,7 @@ preallocated, not hashed, not saved. An entry is `(Unit, Owner, Kind, Placement,
   tick. Nothing reads the list inside the sim; a match's state hashes are unchanged (criterion 7's digests). 100 ticks that
   each drop an order allocate nothing (`DroppedOrderTests.ATickThatDropsAnOrder_AllocatesNothing`).
 
-**For the data track (M7-8).** No shipped opening carries a switch. To cure the Teblor unit mix (BUG-1612, BUG-1421
+**For the data track (M7-8).** Since D38 (2026-11-26) the Teblor `standard`'s three lists carry `throughReserve` on some train steps; no other shipped opening carries a switch. To cure the Teblor unit mix (BUG-1612, BUG-1421
 item 1) in the Teblor's own file, write the switch on the step itself in `factions/teblor/ai.json` `standard`:
 
 ```json
@@ -5915,7 +5997,7 @@ row, the allocation row), `Ai/PerDifficultySaveTests` (saves, determinism; the t
   (Easy, Normal, Hard, Hard) twice in one process (24 checkpoints to 12,000) and across two processes (Stress) give the
   same hashes.
 
-**For the data track (M7-9).** No shipped opening carries the field. To give a difficulty its own build order, write it
+**For the data track (M7-9).** Since D38 (2026-11-26) one shipped opening carries the field: the Teblor `standard` (`buildOrder` is Normal's list, `buildOrders` holds `easy` and `hard`); no other does. To give a difficulty its own build order, write it
 inside the opening beside `buildOrder`:
 
 ```json
@@ -5946,6 +6028,108 @@ inside the opening beside `buildOrder`:
    needed until D38's rows show a difficulty's army mix, not its order, is what misses a target.
 4. An entry equal to `buildOrder` loads and moves the hash (ruling (d)). Recommendation: keep; a data-track content test
    may flag it as dead weight if the Producer wants files lean.
+
+**The Producer's answers (docs/01, the second 2026-11-26 row, (1); written in by M8-4 under rule 67; all four "keep").**
+(1) An `easy` entry on an opening other than the first loads and is never played (Easy always plays the first opening);
+documented in the table above, not an error, so a later pick rule for Easy needs no schema change. (2) An unknown key under
+`buildOrders` gets the loader's ordinary unknown-property error: one policy for every file. (3) `compositions`, `attack` and
+`description` stay one per opening; a per-difficulty army mix is built only if D38's rows show the mix, not the order,
+misses a target. (4) An entry equal to `buildOrder` is allowed and moves the hash. **Since M8-4 (BUG-1770):** a `null` or
+`[]` entry is its own error only: it no longer counts toward ruling (a) ("an entry for every difficulty"), and a field
+whose keys are all `null` / `[]` no longer also reports "no entries" (that error is for `{}`). **And BUG-1771:** a sim test
+that replaces an opening's `buildOrder` goes through `AiScenes.SetBuildOrder`, which takes `buildOrders` out too (a source
+row, `BuildOrderHelperSourceTests`, pins it); the Teblor test orders (`TeblorSwitchOrders` none / A / B,
+`PerDifficultyOrders` A-C) are built on D34's order read from `Content/Fixtures/teblor_standard_d34.json`, not on the
+shipped file's, so they do not move when the data track ships another order; a test that reads a seat's steps reads
+`AiPlayer.Steps`, never `Opening.BuildOrder`.
+
+### Implementation (M8-4)
+
+Request 56 G4 (docs/factions/shadow.md "Unit notes", the Hound of Shadow's "at most 7 alive"; Schema gaps G4; "Decisions
+(D-R38)": alive plus queued; docs/01, the third 2026-11-26 row, (1)) as a generic unit field, built and tested on test data
+only: no shipped unit carries it, so no shipped match, data hash, pin, golden, save format (10) or replay format (9) moved.
+Before it, BUG-1771 (the test helpers and `buildOrders`, its own commit) and BUG-1770 (above, "Implementation (M7-9)").
+Code: `UnitDef.MaxAlive`, `UnitJson.MaxAlive` (`DataJson.cs`), `DataLoader.OptionalMaxAlive`, `DataLimits.MaxUnitMaxAlive`,
+`GameData.ContentHash`; `TrainError.LimitReached`, `ProductionSystem.Check`; `PlayerLedger.Limits.cs` (the kept count),
+its hooks `PlayerLedger.AddLiveUnit` / `AddQueuedUnit` (`BuildingStore.Enqueue` / `Shift` now pass the item's type);
+`World.UnitLimit` (public) and `World.LimitedCount`, `PlayerView.UnitLimit`; the AI's `AiPlayer.AtUnitLimit`, read by
+`AiPlayer.TryTrain`, `ProductionManager.Pick` and `BuildOrderExecutor.Run`. The one view-data row: `game/data/common/ui.json`
+`train.limit_reached` "Limit reached" (the view's text loader demands a text for every `TrainError`; `ui.json` is not in
+the data hash).
+
+- **Schema.** `units.json` optional `maxAlive`: a whole number from 1 to `DataLimits.MaxUnitMaxAlive` (1,000), not below
+  the type's `spawnCount` (a pack bigger than its limit could never be trained). Read raw, so a JSON `null`, a string, a
+  bool or a list is one error by name, as zero, a negative, a fraction, a value above 1,000 or below `spawnCount` are; each
+  is one error at `units[i].maxAlive` naming the unit. Left out: no limit (`UnitDef.MaxAlive` 0), today's behaviour.
+- **The count.** Per player and type: the player's live units of the type, made any way (trained, an ability's `spawn`,
+  the dev `SpawnUnit`; a summon counts while it lives), plus the units its queued items of the type will spawn (items x
+  `spawnCount`, the head in training included), over all its buildings. Kept in the ledger beside the M6-S13 draw counts:
+  +1 / -1 where a unit is counted live at its spawn and released at its free, +/- `spawnCount` where a unit item joins or
+  leaves a queue (trained, cancelled, or its building freed). A pack's spawn moves it by 0 (+3 units, -3 queued). Kept only
+  for types with a limit, and only when the data has one (otherwise the array is empty: one length test per spawn, free and
+  queue change). Derived from the stores: never saved, never hashed; a load rebuilds it (`PlayerLedger.RecountLimits`,
+  called by `RecountDraw`, which a test that writes store arrays directly calls too). No `Dictionary`, no walk per check.
+- **The rule.** A Train is refused, `TrainError.LimitReached`, when count + the item's `spawnCount` &gt; `maxAlive`. The
+  value is appended last to the enum (no value moves; saves and replays hold none) but checked after
+  `LockedByRequirement` and before `QueueFull` and `CannotAfford`, so the button reads "Limit reached" rather than "Can't
+  afford". It is judged when the Train applies, as every train rule: several Trains in one tick apply in order and only the
+  surplus is refused; a refused Train charges nothing and leaves every queue as it was. A CancelTrain or a death frees a
+  place at once (a Cancel before a Train in the same tick lets the Train in; after it, not). An item already queued always
+  completes, even when an ability's spawn took the count past the limit meanwhile; a unit made another way is never
+  refused (the limit gates training only, the Producer's ruling).
+- **Reading it.** `World.CanTrain` gives the reason (the command card shows `ui.json` `train.limit_reached`).
+  `World.UnitLimit(player, type, out count, out limit)`: true with the count and the limit for a type with one; false,
+  (0, 0), for a type without one or a bad id. One read, allocation-free: the view can draw "5 / 7" every frame.
+- **The computer player.** `AiPlayer.AtUnitLimit(type)`: the view's count plus this think's Trains of the type not yet
+  applied (a per-type scratch keyed by the think's tick: a Train applies the next tick and a seat thinks again later, so
+  only this think's sends are missing; never saved) plus one item's `spawnCount` passes the limit. Production skips such a
+  type and trains the next by share (it never waits on the capped type); `TryTrain` refuses it, so a spend-down think with
+  several producers sends no Train the limit would refuse; a build-order `train` step of a type at its limit is done
+  unsent (D15 C's house-at-the-cap precedent), so a step of 9 on a type limited to 7 ends at the limit and is never due
+  for ever. A `train` step is not reopened when its units die (no step is; unchanged). Reachable only with the field.
+- **Tests.** `Data/MaxAliveLoaderTests` (criteria 6-7: the values that load, each refusal by path and name, the hash
+  absent / present / per value / per unit), `Data/DataNullPolicyTests` and `DataContentHashTests` (the field),
+  `Economy/UnitLimitTests` (criteria 8-9: the boundary, a pack, per player, cancel, death, several Trains in one tick, a
+  queued item after a summon, nothing charged, the check order, the accessor, a destroyed building),
+  `UnitLimitAllocationTests` (the check allocates nothing), `Ai/UnitLimitAiTests` (criterion 10, Easy / Normal / Hard and a
+  spend-down variant), `Economy/UnitLimitMatchTests` (criteria 12-13: a save at the limit with an item queued, a replay, the
+  match twice; the two-process row is Stress), `Stress/UnitLimitFuzzStressTests` (criterion 15: 20 seeds of random Trains,
+  cancels and kills, packs on the odd seeds, a save midway), `Economy/UnitLimitPerfTests` (Perf, a report: 1,000 checks
+  beside 6,000 live units). Test data: `UnitLimitTests.s_capped` / `s_pack` (Malazan Heavy Infantry limited to 7, the pack
+  copy with `spawnCount` 3), each stripping every shipped `maxAlive` first (rule 58).
+- **Known limits.** (1) The draw rule's "can still train" (M6-S13, `World.CanStillTrain`) does not read the limit: it
+  compares the seat's gold with its cheapest unit, so a seat whose every trainable type were at its limit would still count
+  as able to train while it holds that gold (BUG-1731's family; no designed faction has only limited types). (2) A seat whose composition is only the capped type has nothing else to pick at the limit, but it does not sit on its gold
+  (BUG-1810, measured by QA's `Stress/UnitLimitAiQaStressTests.OnlyTheCappedTypeInTheComposition_Report`: over 12,000 ticks the
+  most gold in hand was 418-522 on Easy / Normal / Hard; the seat attacks, loses units and retrains as places free). A
+  designed opening still lists other units beside the Hound, so the army is more than seven.
+
+**For the data track (M8-4).** The Hound's row, when the Shadow roster lands (docs/factions/shadow.md, the Hound of
+Shadow), beside its other fields:
+
+```json
+{ "id": "shadow_hound", "...": "...", "maxAlive": 7 }
+```
+
+| Rule | What it means for the file |
+| --- | --- |
+| Value | A whole number from the unit's `spawnCount` (1 when left out) to 1,000. `null`, a string, 0, a fraction: load errors. Leave the field out for no limit |
+| What counts | The player's live units of the type, however made (a summon included), plus those its queued items will spawn; a pack item counts its whole pack |
+| What it stops | Training only: a Train that would pass it is refused (nothing paid; the button reads "Limit reached"). A summon is never stopped |
+| The computer player | Trains other composition units at the limit; a `train` step of the type counts as done at the limit (so a step's `count` above the limit is harmless). List other units beside a limited one in each age's composition, or the army is only the limited type (the seat still attacks and retrains as places free; it does not bank its gold: BUG-1810) |
+| Hash | The field moves the data hash once when it lands; land it with the Shadow roster |
+| Descriptions | "At most 7" in a `description` is the data track's text; no content check reads it yet |
+
+**Questions for the Producer (M8-4, rule 67), each with the developer's recommendation.**
+
+1. A summoned unit of a limited type counts toward the limit (the ruling: "counts as alive"), so a summon can hold
+   training shut for its lifetime. No designed summon makes a limited type (the Wraith is not a Hound). Recommendation: keep.
+2. The draw rule's "can still train" ignores the limit (Known limits (1)), so a seat with only limited types, all at
+   their limits, and gold in the bank keeps a passive match from drawing. Recommendation: keep; only an all-limited
+   faction meets it, and the draw rule's own "can still train" decision (BUG-1731) is the sim's next hardening.
+3. `DataLimits.MaxUnitMaxAlive` is 1,000 (a format bound, far above any design). Recommendation: keep.
+4. The refusal text is one line, "Limit reached", with no count; the count is for the roster's "5 / 7" (the view's next
+   step, `World.UnitLimit`). Recommendation: keep the button short and show the count beside the portrait.
 
 ## Data format
 
