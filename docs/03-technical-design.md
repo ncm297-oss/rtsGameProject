@@ -5007,7 +5007,8 @@ no sim, `ViewApi`, data hash or save changed.
   reads the sim's state only, so `Match.OnTicked`'s latch gives the same answer live, after a load (the latch is set on the
   first tick after it) and in replay playback (the drawn tick is the recording's last, so the banner keeps "Draw" when the
   recording ends on it, M6-V9's rule). Live, a side that is out before the draw has its Defeat latched then and keeps it; a
-  side standing at the draw gets Draw that tick.
+  side standing at the draw gets Draw that tick. (M6-VH10: a drawn match with exactly two sides now reads Draw for both
+  whoever is out, BUG-1790's two-sided half; see "Implementation (M6-VH10)".)
 - **Where a result shows.** The banner's title (`match_over.draw`, an existing key) is the only text that names a result.
   The stats screen's title is "Match statistics" and its per-row cells are numbers and "Defeated at" (a standing seat's cell
   stays `match_over.standing`); no row or team names a winner. The Load Game list shows date, type, seed, players and
@@ -5022,7 +5023,8 @@ no sim, `ViewApi`, data hash or save changed.
   the same ticks) and once when wired (a save loaded mid-clock shows it before its first tick). It stores only the second it
   shows; the label's text is written only when that second changes. A `Label` on the HUD layer at the top centre, 800 x 30
   px from 86 px down (under the replay mark, 8-40, and the alert text, 46-80), 20 px pale gold with a black outline,
-  `MouseFilter.Ignore` (a click on it reaches the map). The English line is 594 px wide; at 1152 x 648 it spans 176-976 px
+  `MouseFilter.Ignore` (a click on it reaches the map; M6-VH10: a longer text wraps inside the 800 px and the label grows
+  down, BUG-1792). The English line is 594 px wide; at 1152 x 648 it spans 176-976 px
   and at 1920 x 1080 560-1360 px, clear of the resource bar (top right, 8-34 px down), the minimap, the command card, the
   queue strip and the selection panel (all at the bottom). The order notice (M6-V27) is a world-space line over a unit, not
   a HUD rect: the two can cross on screen only where a unit stands under the top of the view. Without the HUD (`--no-hud`) or
@@ -5046,9 +5048,11 @@ no sim, `ViewApi`, data hash or save changed.
   `draw-notice.png` and `draw-banner.png` (zoom 40). The scene loop is 127 scenes.
 - **Questions for the Producer (rule 67), each with a recommendation:**
   1. **A side that falls after the draw** (play goes on behind the result; the computer players stand down, but a human can
-     still finish a seat): live, its banner already read Draw and stays; a save made after that fall, or a recording watched
-     past it, has no record of the order of the two events, so it reads Defeat. Recommendation: keep (rare, and the sim
-     holds no defeat tick to tell them apart); if wanted, a sim request for the tick each seat was defeated.
+     still finish a seat): live, its banner already read Draw and stays; a save made after that fall has no record of the
+     order of the two events, so it reads Defeat. A recording watched past the fall reads **Draw** (corrected by M6-VH10:
+     this sentence said Defeat; measured by QA, `QaM6V29Test`: playback latches the result on the draw tick, before the
+     fall, as live does). Recommendation: keep (rare, and the sim holds no defeat tick to tell them apart); if wanted, a
+     sim request for the tick each seat was defeated.
   2. **The notice's place and look:** top centre under the alert text, the replay mark's pale gold, 20 px. Recommendation:
      keep; the owner judges `draw-notice.png`.
   3. **No sound** when the clock starts. Recommendation: keep silent; the alert sound means "under attack", and the notice
@@ -5134,6 +5138,95 @@ sizes, palette); the Stables & Kennels and the Breaker's Hall stay boxes. Toolin
      (a giant's hut); a lower Hut is a `FitMargin`-style height cap, not wanted while the Malazan Billet is 3.03 m.
   5. **Two types stay boxes** (Stables & Kennels, Breaker's Hall): the First Age's `Farm_*` are flat dirt plots, and nothing
      else is a plain match. Recommendation: wait for a stable / kennel source with the Rider's and War-dog's packs.
+- **The Producer's answers (docs/01 2026-11-26, the 0717 ACCEPT row (2); written here by M6-VH10, rule 67):**
+  1. Kept: the Longhouse is the pack's two-roofed timber hall, not a town-centre plaza; a totem square
+     (`TownCenter_FirstAge_Level3`) stays a one-line `source` change if the owner prefers it.
+  2. Kept **for now**: the Stone Cairn is the timber watchtower tinted grey; it becomes stacked rocks (the Stylized Nature
+     MegaKit's rocks) in a later look task. BUG-1830 (the Iron player's weak colour on it) was taken first, in M6-VH10: the
+     tint is now a paler stone grey (see "Implementation (M6-VH10)").
+  3. The Whirlwind's buildings: **kit-bashed tents built in the import tool** (box-and-prism tents with team-coloured
+     cloth, the pack's market stalls for the Supply Cache and its tower for the Lookout Tower) unless the owner supplies a
+     CC0 tent or desert-camp pack first (a download is the owner's); never the Malazan stone set recoloured.
+  4. Kept: the Hut stays 3.85 m drawn (a giant's hut).
+  5. Kept: the Stables & Kennels and the Breaker's Hall stay boxes until a stable / kennel source arrives with the Rider's
+     and War-dog's packs.
+
+### Implementation (M6-VH10)
+
+The view's hardening after M6-V27 to M6-V30: the draw result of a two-sided match after a load, the draw notice's long
+text, the lost-cast cue in playback, the import script's exit check and the Stone Cairn's Iron colour. View code, view
+tests, the import tooling, the Cairn's two model files and docs; no sim, `ViewApi`, data, save or replay format changed.
+
+- **BUG-1790, the two-sided half (`Match.ResultFor`).** A drawn match with exactly two sides reads **Draw** for both
+  sides, whoever is out now (`Match.SidesThatBuilt`: the sides among the players that ever built, a side being a team or a
+  team-0 player alone, as the sim's `MatchOver` and draw rule count them). The sim draws only while two sides stand, so
+  with two sides a side that is out fell after the draw, and a draw is final (docs/01 2026-11-26, the 0207 ACCEPT row
+  (2)). The rule still reads only the sim's state (no view latch a load could lose), so live, a loaded save and playback
+  agree. With three or more sides nothing changed: a side out in a drawn match may have fallen before the draw (Defeat,
+  M6-V29) or after it, which the state does not tell; that half waits for the sim to record who stood at the draw
+  (Request 60). Teams 2v2 count as two sides.
+- **BUG-1792 (`DrawNotice`).** The label wraps (`AutowrapMode.WordSmart`, which also splits a word wider than the line)
+  inside its 800 px, grows down from 86 px and both ways if ever wider, so a longer text (a translation, the rename pass)
+  stays centred and on screen. The shipped line (594 px) is drawn exactly where it was: 800 x 30 px at (176, 86) at
+  1152 x 648 and (560, 86) at 1920 x 1080. A 120-character sentence wraps to two lines (800 x 59), 120 letters with no
+  space to three (800 x 90). The `Width` comment's stale 640 px is now the measured 594.
+- **BUG-1710 (`AbilityViews.CuesEnabled`).** A lost cast adds no cue (no red disc, no `hud.cast_lost` words, no Refused
+  sound: the sound is played per new cue) while it is off; `Match.Wire` sets it to `live`, as for the order notices
+  (M6-V27: nobody gives orders while watching a replay). The resolve flashes still show in playback.
+- **BUG-1831 (`tools/import-assets.ps1`).** After the Godot import the script reads its exit code: non-zero (Godot failing,
+  or the process or its `cmd` killed; `taskkill /F` leaves 1) prints the log's last lines and `FAIL: Godot import exited
+  N`, exit 1, no `IMPORT ASSETS PASS`. An empty `*.tmp` written during that import in `game/.godot/imported` (a compression
+  cut off) fails it too. `tools/art/test-import-exit.ps1` proves it in about 8 s with stand-in Godot `.cmd`s, a stand-in
+  Blender file and a stand-in source folder, `-Only` matching nothing (docs/04 "Unit models, as built (M6-V20)").
+- **BUG-1830 (the Cairn's wall tint, the brief's choice between "a larger team part" and "a wall tint").** The Cairn's
+  timber is now a paler stone grey, `Wood` `#938e83` / `Wood_Light` `#aca79a` (was `#77736a` / `#8b877c`, each channel
+  x 1.24); the team part (the banner and the top's `teamFaces`) is unchanged, so its area is today's. The tint was chosen
+  over a larger team part because the Iron player's colour is a dark slate (`#4B4F55`): only luminance sets it apart from
+  a grey wall, and a paler wall moves every other colour's contrast the right way or keeps it (all eight are saturated or,
+  for Bone, far lighter). Measured on `ViewHardenVh10Test`'s pictures (windowed, `-- --shots`; the four Cairns of colours
+  1-4 and 5-8 on the same spots, team pixels told from wall pixels by the difference between the two pictures and an empty
+  one), Rec. 709 luminance of the most common lit wall and team colour at zoom 40 (zoom 60 within 1 level):
+
+  | Colour | Team top | Wall before | Wall after | Gap before | Gap after |
+  | --- | --- | --- | --- | --- | --- |
+  | Iron | 111 | 136 | 167 | 25 | **56** |
+  | Ochre | 179 | 136 | 166 | 43 | 12 |
+  | Crimson | 100 | 136 | 166 | 36 | 66 |
+  | Cobalt | 94 | 136 | 166 | 41 | 72 |
+  | Jade | 167 | 136 | 167 | 31 | 0 |
+  | Violet | 111 | 136 | 166 | 25 | 55 |
+  | Rose | 140 | 136 | 166 | 4 | 27 |
+  | Bone | 233 | 136 | 166 | 97 | 67 |
+
+  Jade and Ochre now sit near the wall's luminance and read by hue (saturated green and orange on neutral grey), as Rose
+  did before at a gap of 4. The model files are the Cairn's `.glb` and atlas only: a full re-import, two runs, left every
+  other model, atlas, library and `.import` file byte for byte (SHA-256 of all 152 before and after each run; the second
+  run equal to the first). The Cairn's `.glb` is 40,372 bytes (was 40,368), its atlas 470 (was 468); the art pass's generated
+  binaries 41,008,476 bytes (was 41,008,470).
+- **Tests.** New scene `game/tests/ViewHardenVh10Test` (headless, in the loop): (N) the notice's rects above at both
+  sizes (on the base the two long texts grew right from the left edge, 1,154 and 2,233 px wide, 177 and 716.5 px off
+  centre); (C) a Cadre Mage ringed in by eight holding Raiders loses its cast live (one cue, one Refused, one disc, one
+  label) and in the playback of that recording at speed 4 on the same tick with none of them (base: one of each).
+  Windowed with `-- --shots <dir>` it saves the Cairn pictures. `QaM6V29Test` (QA's): the two-seat "fall after the draw"
+  row now checks Draw for both players live, after loading the save taken after the fall, and in playback played to the
+  recording's end past the fall (all three fail on the base: Defeat for player 0); a new three-seat row (drawn, then the
+  local player knocked out) prints `QA M6-V29 KNOWN BUG-1790` for the result now and the loaded save, and `-- --strict`
+  fails it. `tools/art/test-import-exit.ps1` (above; on the base script the `exit1` and `killed` stand-ins ended
+  `IMPORT ASSETS PASS`, exit 0). The scene loop is 131 scenes.
+- **Cost** (rules 61 / 77, the Cairn's model changed; only its atlas colours did, not its triangles or surfaces). Measured
+  2026-11-26 21:00-21:05, 1600 x 900, `ModelShots --bench 30 --vsync off`, **not a quiet window: five other tracks'
+  `testhost`s ran throughout** (the developer could not wait them out; the 400-capsule figure, 1.78 / 1.75 ms against
+  M6-V30's 0.82, puts the window at about x 2.1). While 90 %+ alive: 400 figures + 60 building models (fourteen types, 60 m)
+  **13.64 ms** (M6-V30: 6.43), 400 capsules 1.78 ms (0.82), 1,000 figures 33.89 ms (16.57); each about x 2.1, the
+  window's factor. The Cairn alone in the same window, 60 of it: models 13.07 against boxes 12.84 ms (+0.23, the noise
+  M6-V30 measured per type). Nothing over 16.7 ms at 400; the quiet-window figure is the Producer's at the ACCEPT (rule 77).
+- **Questions for the Producer (rule 67), each with a recommendation:**
+  1. **The paler Cairn** reads as pale stone beside the brown halls, and Jade and Ochre now meet the wall's luminance
+     (they read by hue). Recommendation: keep; the owner judges `m6vh10-cairn-colours-*-40m.png` (and the "before" pair)
+     until the Cairn becomes stacked rocks.
+  2. **`tools/art/test-import-exit.ps1` is in no loop** (it is a PowerShell script, not a scene or an xUnit row, and it runs
+     the import script itself). Recommendation: a brief that changes `tools/import-assets.ps1` names it, as smoke is named
+     for `game/`.
 
 ## Vision, detection, fog
 

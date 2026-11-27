@@ -704,7 +704,10 @@ match's draw clock runs, its countdown line sits at the top centre under the ale
    a side that is still finishing the others off with what it has is never cut short, while a stand-off in which nobody
    loses anything ends; a win on the same tick as the draw would fall is a win. A drawn match shows **Draw** on the
    end-of-match banner to a player whose side still stands, and **Defeat** to one whose whole side was knocked out before
-   it; it never shows Victory, and no screen names a winner (M6-V29; the command-line `match` prints `result draw`).
+   it; it never shows Victory, and no screen names a winner (M6-V29; the command-line `match` prints `result draw`). A
+   draw is final: a side knocked out after it still reads Draw, live, in a watched replay and (for a two-sided match,
+   M6-VH10) after loading a save made after that fall; with three or more sides a loaded save cannot yet tell a fall after
+   the draw from one before it and reads Defeat (Request 60, the sim's next save-format change).
    While the 5 minutes run, a line at the top of the screen says so, from the first second: "No player can train new
    units. Draw in 5:00 unless a unit falls.", counting down; it starts again with the clock and goes when the clock stops
    or the match ends (in replays and loaded games too).

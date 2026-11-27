@@ -438,11 +438,18 @@ public partial class AbilityViews : Node3D
     // Each tick the runner runs: take its resolves and drops while they are still in World.AbilityEvents.
     private void OnTicked(Simulation sim) => CollectTick(sim.World);
 
-    /// <summary>Adds the flashes of the last tick's resolves and the cues of its own dropped casts (once per tick; a later call for the same tick does nothing).</summary>
+    /// <summary>
+    /// Whether a lost cast adds a cue (disc, words and the Refused sound); true by default. M6-VH10 (BUG-1710): <c>Match</c>
+    /// sets it false for replay playback, as the order notices (M6-V27): a cue tells the player its order was lost, and nobody
+    /// gives orders while watching. The resolve flashes still show.
+    /// </summary>
+    public bool CuesEnabled { get; set; } = true;
+
+    /// <summary>Adds the flashes of the last tick's resolves and the cues of its own dropped casts (once per tick; a later call for the same tick does nothing); no cue with <see cref="CuesEnabled"/> off.</summary>
     public void CollectTick(World world)
     {
         Flashes?.Collect(world.AbilityEvents, world.TickNumber);
-        LostCasts?.Collect(world.AbilityEvents, world.TickNumber, SelectionController.LocalPlayer);
+        if (CuesEnabled) LostCasts?.Collect(world.AbilityEvents, world.TickNumber, SelectionController.LocalPlayer);
     }
 
     public override void _Process(double delta)

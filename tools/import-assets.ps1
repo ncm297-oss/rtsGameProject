@@ -17,7 +17,8 @@
 #   an extracted texture: VRAM compressed with mipmaps (docs/04 "Look test (M6-V10)"), alpha border fix off (M6-V24: the
 #   atlas alpha is the team mask); a texture of an earlier build that the model no longer holds is deleted;
 #   the library .glb: imported as an AnimationLibrary, every clip looping (root motion is off: in-place sources).
-# Exit 0 on success; 1 when a build or import fails; 2 when Blender, the manifest or the sources are missing.
+# Exit 0 on success; 1 when a build or import fails (M6-VH10: a Godot import that exits non-zero or is killed fails too;
+# tools/art/test-import-exit.ps1 proves it with stand-in exes); 2 when Blender, the manifest or the sources are missing.
 param(
     [string]$SourceRoot = '',
     [string]$Blender = '',
@@ -150,11 +151,30 @@ if (-not $Only -or $Only -eq 'library') {
 
 $godot = $env:GODOT
 if (-not $godot) { $godot = [Environment]::GetEnvironmentVariable('GODOT', 'User') }
+# M6-VH10 (BUG-1831): an import that did not finish fails the run as an ERROR line does: a non-zero exit (Godot's own, or
+# the process or its cmd killed: taskkill /F leaves exit code 1), or a size-0 *.tmp written during this import left in
+# .godot/imported (a texture compression cut off). Before, only the log was read, so a killed import still ended
+# IMPORT ASSETS PASS.
 function Invoke-GodotImport {
     $log = Join-Path $work 'godot-import.log'
+    $started = (Get-Date).AddSeconds(-2)
     cmd /c "`"$godot`" --headless --path `"$(Join-Path $root 'game')`" --import > `"$log`" 2>&1"
-    $bad = @(Get-Content -LiteralPath $log | Where-Object { $_ -cmatch 'ERROR' -and $_ -notmatch '^\s+\[\d+\]' })
+    $code = $LASTEXITCODE
+    $lines = @(if (Test-Path -LiteralPath $log) { Get-Content -LiteralPath $log })
+    $bad = @($lines | Where-Object { $_ -cmatch 'ERROR' -and $_ -notmatch '^\s+\[\d+\]' })
     if ($bad.Count -gt 0) { $bad | Select-Object -First 10 | ForEach-Object { Write-Host "    | $_" }; Write-Host "FAIL: Godot import"; exit 1 }
+    if ($code -ne 0) {
+        $lines | Select-Object -Last 5 | ForEach-Object { Write-Host "    | $_" }
+        Write-Host "FAIL: Godot import exited $code (killed, crashed or failed; log: $log)"
+        exit 1
+    }
+    $imported = Join-Path $root 'game\.godot\imported'
+    $cut = @(if (Test-Path -LiteralPath $imported) { Get-ChildItem -LiteralPath $imported -Filter '*.tmp' -File | Where-Object { $_.Length -eq 0 -and $_.LastWriteTime -ge $started } })
+    if ($cut.Count -gt 0) {
+        $cut | Select-Object -First 5 | ForEach-Object { Write-Host "    | $($_.Name)" }
+        Write-Host "FAIL: Godot import left $($cut.Count) empty .tmp file(s) in game/.godot/imported (an import cut off)"
+        exit 1
+    }
 }
 if ($NoGodot -or -not $godot -or -not (Test-Path -LiteralPath $godot)) {
     Write-Host "note: Godot import skipped; run: & `$env:GODOT --headless --path game --import, then this script again"

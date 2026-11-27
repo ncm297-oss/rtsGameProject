@@ -266,6 +266,7 @@ public partial class Match : Node3D
         abilityViews.OverlayLines = units.OverlayLines; // M6-VH8: as the hp bars
         abilityViews.Bind(data, sim.World.Units.Capacity, _runner, selection, playerRgb: playerRgb, zoneCapacity: sim.World.Zones.Capacity);
         abilityViews.Sound = GetNode<Sfx>("Sfx"); // M5-V1: the lost-cast sound
+        abilityViews.CuesEnabled = live; // M6-VH10 (BUG-1710): no lost-cast cue in a replay, as the order notices below
         // M6-V27 (Request 58): the local player's dropped queued orders, the Refused sound and a line over the unit; words as
         // the lost cast's (none without the HUD or ui.json); nothing in a replay.
         var notices = GetNode<OrderNoticeView>("World3D/OrderNotices");
@@ -486,11 +487,15 @@ public partial class Match : Node3D
     /// M6-V29 (docs/02 "Game flow" 4, Producer ruling 2026-11-26): <c>World.MatchDrawn</c> is read before any winner: a drawn
     /// match is Draw for a side that stands (the local player or an ally of it) and stays Defeat for a side that is out; it is
     /// never Victory. Read from the sim's state only, so a live, a loaded and a replayed match give the same answer.
+    /// M6-VH10 (BUG-1790, docs/01 2026-11-26 0207 ACCEPT (2)): a drawn match with exactly two sides is Draw for both, whoever
+    /// is out now: the sim draws only while two sides stand, so with two sides a side that is out fell after the draw (a
+    /// draw is final). With three or more sides a side that is out may have fallen before the draw, which the sim's state
+    /// does not tell (Request 60), so it keeps Defeat.
     /// </summary>
     public static MatchOutcome ResultFor(World w, int local)
     {
         bool sideOut = w.IsDefeated(local) && !AllyStands(w, local);
-        if (w.MatchDrawn) return sideOut ? MatchOutcome.Defeat : MatchOutcome.Draw;
+        if (w.MatchDrawn) return sideOut && SidesThatBuilt(w) != 2 ? MatchOutcome.Defeat : MatchOutcome.Draw;
         bool over = w.MatchOver;
         if (over && Standing(w) == 0) return MatchOutcome.Draw;
         if (sideOut) return MatchOutcome.Defeat;
@@ -503,6 +508,23 @@ public partial class Match : Node3D
         for (int p = 0; p < w.Config.PlayerCount; p++)
             if (p != local && w.AreAllied(local, p) && w.EverBuilt(p) && !w.IsDefeated(p)) return true;
         return false;
+    }
+
+    /// <summary>
+    /// M6-VH10: the sides among the players that ever built (a side is a team, or a team-0 player alone, as the sim's
+    /// <c>MatchOver</c> and draw rule count them: two players on one side are allied); defeated players count.
+    /// </summary>
+    public static int SidesThatBuilt(World w)
+    {
+        int sides = 0;
+        for (int p = 0; p < w.Config.PlayerCount; p++)
+        {
+            if (!w.EverBuilt(p)) continue;
+            bool seen = false;
+            for (int q = 0; q < p && !seen; q++) seen = w.EverBuilt(q) && w.AreAllied(p, q);
+            if (!seen) sides++;
+        }
+        return sides;
     }
 
     // Players that ever built and still stand (the sim's MatchOver counts the same ones).

@@ -23,7 +23,11 @@ public partial class DrawNotice : Node
     /// <summary>The label's height in pixels.</summary>
     public const float Height = 30f;
 
-    /// <summary>The label's width in pixels, centred: the English line at its font size is about 640 px; 1152 px leaves 176 px each side.</summary>
+    /// <summary>
+    /// The label's width in pixels, centred: the English line at its font size is 594 px wide (measured, M6-V29); 1152 px
+    /// leaves 176 px each side. M6-VH10 (BUG-1792): a longer text (a translation, a rename) wraps inside this width and the
+    /// label grows downward, so it stays centred and on screen.
+    /// </summary>
     public const float Width = 800f;
 
     private SimRunner? _runner;
@@ -82,7 +86,13 @@ public partial class DrawNotice : Node
 
     private static Label MakeLabel()
     {
-        var label = new Label { Name = "DrawNotice", Visible = false, HorizontalAlignment = HorizontalAlignment.Center, MouseFilter = Control.MouseFilterEnum.Ignore };
+        // BUG-1792: wrapped (a word wider than the line is split), growing down from Top and both ways if ever wider, so a
+        // long text keeps its centre instead of growing right from the left edge.
+        var label = new Label
+        {
+            Name = "DrawNotice", Visible = false, HorizontalAlignment = HorizontalAlignment.Center, MouseFilter = Control.MouseFilterEnum.Ignore,
+            AutowrapMode = TextServer.AutowrapMode.WordSmart, GrowHorizontal = Control.GrowDirection.Both, GrowVertical = Control.GrowDirection.End,
+        };
         label.AddThemeFontSizeOverride("font_size", 20);
         label.AddThemeColorOverride("font_color", new Color(1f, 0.93f, 0.75f));
         label.AddThemeColorOverride("font_outline_color", Colors.Black);
