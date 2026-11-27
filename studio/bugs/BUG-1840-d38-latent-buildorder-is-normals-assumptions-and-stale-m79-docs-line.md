@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S4 |
-| Status | open (items 1-2 fixed by QA in the D38 inspection; item 4, the stale docs/03 sentence, fixed by the Producer at the 2026-11-26-0717 ACCEPT and checked at the 1847 PLAN; item 3 open: `AiContentQaTests` in D39, `D21OpeningsQaTests` in the data task after it) |
+| Status | open (items 1-2 fixed by QA in the D38 inspection; item 4, the stale docs/03 sentence, fixed by the Producer at the 2026-11-26-0717 ACCEPT and checked at the 1847 PLAN; item 3: `AiContentQaTests` fixed by D39 (2026-11-26-1847), `D21OpeningsQaTests` still open, in the data task after D39) |
 | Found | 2026-11-26-0717, task D38 (QA) |
 | System | content tests (`sim/Rts.Sim.Tests/QA/Content/`), docs/03 "For the data track (M7-9)" |
-| Fixed by | items 1-2: QA D38 inspection (`QA/Content/AiContentQaTests.cs`, `QA/Content/AiHouseRuleReportTests.cs`) |
+| Fixed by | items 1-2: QA D38 inspection (`QA/Content/AiContentQaTests.cs`, `QA/Content/AiHouseRuleReportTests.cs`); item 3, `AiContentQaTests` half: D39 (`QA/Content/AiContentQaTests.cs`) |
 
 ## Repro
 QA focus (4), the BUG-1771 family. In a scratch clone of D38's head 5c03915d, write the Teblor `standard` opening so that
@@ -52,3 +52,15 @@ The forge run on 5c03915d: 29 failed / 10,557 passed / 20 skipped. 27 of the fai
 BUG-1771's `WorkerCarryTests`. The other two are items 1-2. With QA's edits, both pass on the forged data (10 / 10) and on
 the shipped data. BUG-1771's ~100 sim-owned sites outside the content folders (S3, sim track) turned no row red under the
 forge.
+
+## Fix (D39, item 3, the `AiContentQaTests` half)
+`QA/Content/AiContentQaTests` (a)-(d) and (g), and the oracles of `Shipped_PassesEveryOracle`, now run over every list a
+seat can play: `buildOrder` and each `buildOrders` entry (`ListsOf`, theory data `Lists`; a problem in an entry names it,
+"teblor standard buildOrders.hard step 3 ..."). `Lists_AreEveryListOfEveryShippedOpening` proves the theory data holds
+every seat's list (`BuildOrderFor` of each difficulty), counted from the loaded data. Forged rows on every shipped
+opening with entries for one difficulty (`hard`) and two (`normal,hard`, `easy,hard`; any shipped `buildOrders` replaced
+whole, rule 79): `AnEntryForOneOrTwoDifficulties_LoadsAndEveryListPassesTheOracles`, `..._ItsHardEntryNamingTheOtherFactionsId_IsRefusedNamingTheEntry`
+(check (a), refused at `openings[k].buildOrders.hard[i].id`), `..._ItsHardEntryWithAStepTwiceOrAnOffGridPop_IsRefusedNamingTheEntry`
+((c), (d)) and `..._ItsHardEntryPlacingNoAgeIBuilding_FailsTheAgeIOracleNamingTheEntry` ((b) / (g)'s oracle). Three
+entries are refused by the loader (ruling (a)), so not rehearsed (rule 80). (e), (f), (h)-(j) are unchanged (not in the
+brief). Left open: `QA/Content/D21OpeningsQaTests` (the sim track held it this session, rule 68).

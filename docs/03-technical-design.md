@@ -6118,7 +6118,7 @@ Shadow), beside its other fields:
 | What it stops | Training only: a Train that would pass it is refused (nothing paid; the button reads "Limit reached"). A summon is never stopped |
 | The computer player | Trains other composition units at the limit; a `train` step of the type counts as done at the limit (so a step's `count` above the limit is harmless). List other units beside a limited one in each age's composition, or the army is only the limited type (the seat still attacks and retrains as places free; it does not bank its gold: BUG-1810) |
 | Hash | The field moves the data hash once when it lands; land it with the Shadow roster |
-| Descriptions | "At most 7" in a `description` is the data track's text; no content check reads it yet |
+| Descriptions | "At most 7" in a `description` is the data track's text; `Content/UnitLimitText` (D39) reads it: a stated limit must be the field's number, and a unit with the field must state it |
 
 **Questions for the Producer (M8-4, rule 67), each with the developer's recommendation.**
 
@@ -12978,7 +12978,9 @@ late. Then the far expansion's own two bugs (BUG-1158, BUG-1159). Code: `Militar
 - **Data hash:** `GameData.ContentHash()` is FNV-1a (`StateHasher`) over every field of every def
   in id order, strings char by char (never `string.GetHashCode`). Display text is included, so any
   data edit, a balance change or a rename, refuses old replays. A test changes every field of every
-  def type in turn, so a new field that isn't hashed fails it.
+  def type in turn, so a new field that isn't hashed fails it. Optional fields added later enter the
+  hash only when set (a marker, then the value), so data without them hashes as before: `maxAlive`,
+  `buildOrders`, and since M6-S14 `ai.minWorkers` when it is not 1 (the old rule; marker -14).
 - **Save file:** a versioned binary snapshot of the full `World` (stores, RNG states, pending
   commands, AI blackboards) plus the replay log so far. Loading restores the snapshot directly. M6-S2 (slice 1) built it
   for human seats, M6-S3 (slice 2) added the AI seats; the format, the entry points and the refusals are in "Save format
