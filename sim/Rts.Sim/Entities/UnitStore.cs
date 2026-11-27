@@ -501,8 +501,8 @@ public sealed partial class UnitStore
         {
             _countedLive[handle.Index] = false;
             _ledger!.AddLiveUnit(Owner[handle.Index], TypeId[handle.Index], -1);
-            // M6-S13: a load of gold goes with its carrier.
-            if (CargoKind[handle.Index] == Data.ResourceKind.Gold && Cargo[handle.Index] != 0) _ledger.AddCarriedGold(Owner[handle.Index], -Cargo[handle.Index]);
+            // M6-S13: a load goes with its carrier (M6-SH3: wood too).
+            if (Cargo[handle.Index] != 0) _ledger.AddCarried(Owner[handle.Index], CargoKind[handle.Index], -Cargo[handle.Index]);
         }
         // M6-S13: the draw rule's "a unit died this tick" (a summon's death or expiry is not counted). Not state: only its
         // change within a tick is read (World.Draw.cs), and a load starts it again at 0 with the world's copy.

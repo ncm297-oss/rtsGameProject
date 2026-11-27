@@ -5,7 +5,7 @@ namespace Rts.Sim;
 
 // M6-S13: the owner's draw rule (docs/02 "Game flow" 4, docs/03 "Implementation (M6-S13)", docs/01 2026-11-25-1437). A match
 // is spent on a tick when it is not over, at least two sides that ever built still stand, and no undefeated seat can still
-// train a unit. The clock counts the spent ticks in a row; a tick that is not spent, on which a non-summoned unit died or on
+// train a unit (M6-SH3 made "can still train" exact: CanStillTrain). The clock counts the spent ticks in a row; a tick that is not spent, on which a non-summoned unit died or on
 // which a seat was defeated sets it back to 0. When it reaches rules.json's draw.afterSeconds the match is drawn: over for
 // good, nobody defeated. Data without the draw block has no rule: the clock stays 0.
 public sealed partial class World
@@ -14,8 +14,10 @@ public sealed partial class World
     // saved only when not 0 (with _drawn), so a match that is never spent hashes and saves as before the rule.
     private int _drawClock;
     private bool _drawn;
-    // Per seat, the gold cost of its faction's cheapest unit (any unit of the faction); int.MaxValue for a faction with none.
-    private int[] _drawCheapest = System.Array.Empty<int>();
+    // M6-SH3: per seat, the unit types "can still train" looks at (its faction's; every type for a seat with no faction, test
+    // data) and whether one of them costs nothing (gold and wood 0: the seat always can). Derived from the data and the seats.
+    private int[][] _drawUnits = System.Array.Empty<int[]>();
+    private bool[] _drawFree = System.Array.Empty<bool>();
 
     /// <summary>M6-S13: the wait in ticks the match must stay spent before it is drawn (<c>rules.json</c> <c>draw.afterSeconds</c>); 0 = the data has no draw rule.</summary>
     public int DrawWaitTicks => Data.Rules.DrawAfterTicks;
@@ -38,44 +40,67 @@ public sealed partial class World
     /// <summary>Whether the draw state is away from its start (a clock running or a draw): the state hash and the save carry it only then.</summary>
     internal bool DrawStateSet => _drawClock != 0 || _drawn;
 
-    /// <summary>Fills the per-seat cheapest-unit table from the data and the seats (derived: in every save and replay header).</summary>
+    /// <summary>Fills the per-seat unit lists and free flags from the data and the seats (derived: in every save and replay header).</summary>
     private void InitDraw(SimConfig config)
     {
-        _drawCheapest = new int[config.PlayerCount];
+        _drawUnits = new int[config.PlayerCount][];
+        _drawFree = new bool[config.PlayerCount];
         for (int p = 0; p < config.PlayerCount; p++)
         {
-            int faction = FactionOf(p), cheapest = int.MaxValue;
-            if (faction >= 0)
-            {
-                foreach (int t in Data.Factions[faction].Units)
-                    if (Data.Units[t].CostGold < cheapest) cheapest = Data.Units[t].CostGold;
-            }
+            int faction = FactionOf(p);
+            int[] units;
+            if (faction >= 0) units = System.Linq.ImmutableArrayExtensions.ToArray(Data.Factions[faction].Units);
             else
             {
                 // Test data without factions: every unit type is the seat's.
-                foreach (Data.UnitDef u in Data.Units)
-                    if (u.CostGold < cheapest) cheapest = u.CostGold;
+                units = new int[Data.Units.Length];
+                for (int t = 0; t < units.Length; t++) units[t] = t;
             }
-            _drawCheapest[p] = cheapest;
+            _drawUnits[p] = units;
+            foreach (int t in units)
+                if (Data.Units[t].CostGold == 0 && Data.Units[t].CostWood == 0) _drawFree[p] = true;
         }
     }
 
     /// <summary>
-    /// M6-S13: whether <paramref name="player"/> can still train a unit (docs/03 "Implementation (M6-S13)"): it has a unit in a
-    /// production queue, or it can produce (a finished unit-producing building or a live worker) and its banked gold, plus the
-    /// gold its units carry, plus (with a live worker) the gold left in every gold node, is at least its faction's cheapest
-    /// unit's gold cost. A faction with a 0-gold unit always can. Wood is not looked at. Reads counters only.
+    /// M6-SH3 (docs/02 "Game flow" 4, docs/03 "Implementation (M6-SH3)" B, docs/01 2026-11-27 second row): whether
+    /// <paramref name="player"/> can still train a unit. (a) A unit item of its is being trained, or one waits in a queue with
+    /// population room for it now; or (b) it can produce (a finished unit-producing building or a live worker) and, for at least
+    /// one unit type of its faction not at its <c>maxAlive</c> limit, its gold reach is at least the type's gold cost and its
+    /// wood reach at least its wood cost. A resource's reach is the bank, plus, only with a live worker and a finished drop-off
+    /// of its own, what its units carry and what is left on the map. Population room is not asked in (b). A faction with a
+    /// unit that costs nothing always can. Reads counters only; allocates nothing.
     /// </summary>
     public bool CanStillTrain(int player)
     {
         if (!_ledger.Has(player)) return false;
-        int cheapest = _drawCheapest[player];
-        if (cheapest == 0 || _ledger.QueuedUnits[player] > 0) return true;
+        if (_drawFree[player] || _ledger.TrainingUnits[player] > 0) return true;
+        int[] units = _drawUnits[player];
+        Data.GameData data = Data;
+        // (a) a waiting item with room now: any waiting unit type whose item fits under the cap.
+        if (_ledger.QueuedUnits[player] > _ledger.TrainingUnits[player])
+        {
+            int room = _ledger.HalfPopCap[player] - _ledger.HalfPop[player];
+            for (int t = 0; t < data.Units.Length; t++)
+                if (_ledger.WaitingUnits(player, t) > 0 && data.Units[t].ItemHalfPop <= room) return true;
+        }
+        // (b) can produce and can pay for a type not at its limit.
         bool worker = _ledger.LiveWorkers[player] > 0;
         if (!worker && _ledger.ProductionBuildings[player] == 0) return false;
-        long gold = (long)_ledger.Gold[player] + _ledger.CarriedGold[player];
-        if (worker) gold += Resources.GoldLeft;
-        return gold >= cheapest;
+        long gold = _ledger.Gold[player], wood = _ledger.Wood[player];
+        if (worker && _ledger.FinishedDropOffs[player] > 0)
+        {
+            gold += _ledger.CarriedGold[player] + Resources.GoldLeft;
+            wood += _ledger.CarriedWood[player] + Resources.WoodLeft;
+        }
+        for (int k = 0; k < units.Length; k++)
+        {
+            Data.UnitDef def = data.Units[units[k]];
+            if (gold < def.CostGold || wood < def.CostWood) continue;
+            if (def.MaxAlive > 0 && _ledger.LimitedCount(player, units[k]) + def.SpawnCount > def.MaxAlive) continue;
+            return true;
+        }
+        return false;
     }
 
     /// <summary>

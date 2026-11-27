@@ -15359,6 +15359,109 @@ or sweep from where the army stands, or keep the hunt's marks of the points it p
 next AI task (the patch in the session's scratch folder `m6sh3-bugs`). Seat 0 also keeps 6 paid units waiting at its
 population cap for the whole span (BUG-1731's case; B's rule no longer counts them, the bank does).
 
+**B. The draw clock's "can still train", exact (BUG-1854, BUG-1860, BUG-1731; docs/01 2026-11-27 second row (1); docs/02
+"Game flow" 4 rewritten).** `World.CanStillTrain(p)` (`World.Draw.cs`) is now:
+- a unit type of the seat's faction that costs nothing (gold and wood 0): true, always (per-seat flag at construction; with a
+  0-gold unit that needs wood the seat is judged by its wood);
+- **(a)** a unit item of the seat's being trained (`PlayerLedger.TrainingUnits`: a queue head that has started, its
+  population reserved, a finished one waiting for a free cell included), or one waiting in a queue (not started) whose
+  item's half-pop fits under the cap now (`HalfPop + ItemHalfPop <= HalfPopCap`, read per unit type from
+  `PlayerLedger.WaitingUnits`); a paid item waiting with no room does not count by itself;
+- **(b)** the seat can produce (a finished unit-producing building or a live worker, as before) **and** for at least one
+  unit type of its faction (every type for a seat with no faction, test data) not at its `maxAlive` limit (the train
+  check's own test: `LimitedCount + SpawnCount > MaxAlive` skips it), its gold reach is at least the type's gold cost and its
+  wood reach at least its wood cost. A resource's reach is the bank, plus, only with a live worker **and** a finished drop-off
+  of its own (`PlayerLedger.FinishedDropOffs`; a site is none), the seat's carried amount of it plus what is left of it on the
+  map (`ResourceStore.GoldLeft` / `WoodLeft`). Population room is not asked in (b): a rich seat at its cap is not spent.
+- **An ally's drop-off does not count:** deliveries go only to the worker's own finished drop-off
+  (`EconomySystem.NearestDropOff` skips every building whose owner is not the worker's), so the rule follows it.
+- No AI code reads the rule (unchanged: `grep CanStillTrain sim/Rts.Sim/Ai` finds nothing).
+
+One known looseness, on the safe side (a later draw, never an earlier one): (a) reads the waiting items per type, so a small
+item waiting behind a larger head that is stuck at the cap counts as "with room" although the head blocks it. Telling them
+apart needs the queue order per building (a walk of the store, or a counter per queue); a human can cancel the head, and the
+AI's floor no longer queues a worker it has no room for (C).
+
+**The counters (nothing allocated per tick, nothing saved, all recounted on load by `PlayerLedger.RecountDraw`).**
+`PlayerLedger.Draw.cs`: `TrainingUnits` (moves in `BuildingStore.StartHead`, which `ProductionSystem.TryStart` now calls to
+set progress 1, and in `ReleaseHead`), `WaitingUnits(p, type)` (`Enqueue` +1, `StartHead` -1, `Shift` -1 for an item that
+never started; `RemoveQueued` and `PopTrained` tell `Shift` whether the head had started), `CarriedWood` (with
+`CarriedGold`, one call `AddCarried(player, kind, delta)` at every cargo change: `EconomySystem.Work`, `Deposit`,
+`StartGather`, `UnitStore.Free`), `FinishedDropOffs` (in `PlayerLedger.AddFinished`, from `BuildingDef.DropOff`);
+`ResourceStore.WoodLeft` (in `Spawn` and `Take`, recounted in `ReadFrom` as `GoldLeft` is). The state hash and the save are
+unchanged (derived counts only): **no save-format step (11 kept), no data hash move, no golden replay change.** The check
+reads per-seat counters and loops over the seat's unit types (at most a faction's seven, or every type for (a)'s waiting
+items when some wait): `Draw/DrawCostTests` 0 bytes over 10,000 checks on every path, the two new ones included (an item
+waiting at the cap with wood carried and a drop-off site; the reach read through a finished drop-off); 0.53 us a check with
+8 units and 0.55 us with 2,000 (four seats).
+
+**Tests.** `Draw/DrawReachTests` (criterion 2; each failed on the base 0159c425 but the two guards): wood counted (gold for
+the cheapest unit by gold, no wood: spent), the map's and carried resources ignored without a finished drop-off, ignored
+without a live worker (a forged load on a soldier), a drop-off site is none and the clock stops on the tick it is finished,
+a paid item at the cap does not hold the clock / with room it does / in training it does, a type at its `maxAlive` is
+skipped (forged: the Heavy Infantry at 7, the Laborer's gold raised so the bank pays for the Heavy alone), a rich seat at its
+cap is not spent (guard), a 0-cost unit never spent and a 0-gold unit judged by its wood (the first half a guard).
+`Draw/DrawReachPropertyTests` (criteria 3 and 4): over 200 seeds of QA's draw fuzz, every tick for 600 ticks (about 77,000
+states, 2-4 seats with halls, soldiers, workers, sites, nodes, banks near the cheapest unit, random trains, cancels, gathers,
+research and kills), "new can train" implies "old can train" seat by seat (both scanned, `DrawReachScan`), so every state the
+old rule called spent is spent; the sim's counter answer equals the scan on every state; the new rule called about 1.6 times
+as many states spent (old 7,990, new 13,131 of the four batches' states). The same through two AI matches every 25th tick. A
+save at clock 40 of a scene that uses every new count loads to the same hash, clock and counts and draws on the same tick;
+the scene twice draws alike (the twin). Updated for the rule: `Draw/DrawRuleTests` (four rows: the bank's wood, the Town Hall
+a drop-off for the carried and map gold, the 0-cost forge costs no wood either), QA's oracle (`QA/DrawQaOracle.CanTrain`
+reads `DrawReachScan.NewCan`; `CountersAgree` checks the new counts; the fuzz banks hold wood; two edge rows give the seat
+the cheapest unit's wood).
+
+**First, before the rule: the pre-trace (`Stress/DrawReachPreTraceTests`, Pale Hills four-seat FFA seeds 2 and 4 at 72,000,
+run on the base; identical after B).** Each seat's terms, scanned:
+
+| Seed | Seat | Bank (gold / wood) | Workers | Finished drop-offs | Map left (gold) | Pays for | Old rule | New rule | Trains from 48,000 |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 2 | p0 Malazan | 40 / 13,580 | 28 | 3 | 0 | Crossbowman | can | (b) can | 0 |
+| 2 | p1 Whirlwind | 6 / 4,917 | 6 | 1 | 0 | none | cannot | cannot | 0 |
+| 2 | p2 Malazan | 50 / 15,735 | 28 | 3 | 0 | Crossbowman, Laborer | can | (b) can | 0 |
+| 2 | p3 Whirlwind | 14 / 14,178 | 26 | 3 | 0 | none | cannot | cannot | 0 |
+| 4 | p0 Malazan | 52 / 11,155 | 26 | 4 | 726 | every Malazan unit (the map's 726 gold in reach) | can | (b) can | 0 |
+| 4 | p1 Whirlwind | 21 / 75, carries 10 gold | 1 | 0 | 726 | none | can (the map's gold with a worker) | cannot (no drop-off) | 0 |
+| 4 | p2 Malazan | out | | | | | | | |
+| 4 | p3 Whirlwind | 40 / 740, carries 30 gold | 6 | 2 | 726 | every Whirlwind unit | can | (b) can | 2 (last 60,641) |
+
+**So the AI, not the rule, holds both matches** (the brief's case: a seat that can pay for a unit in gold and wood never
+sends the Train). On seed 2 the two Malazan seats can each pay for a Crossbowman (36 gold, 45 wood) and p2 for a Laborer
+(50 gold) and send no Train from 48,000 to 72,000: production waits for its pick (the most under-weighted composition unit,
+"it doesn't spend on a cheaper unit instead", `ProductionManager`), which they cannot pay for, and the worker floor is met
+(28 workers). On seed 4 p0 has the bank for a Crossbowman or a Laborer and 726 gold left on the map within reach of its 26
+workers and four drop-offs, and neither trains nor mines it; p3's six workers carry 30 gold they never deliver. Not a few
+lines inside an existing rule (buying a cheaper unit when starved is new production behaviour; the unmined gold is the
+economy's reach), so not cured: **BUG-1890** (production never buys a unit it can pay for once its pick is out of reach)
+and **BUG-1891** (seed 4: gold left on the map and carried gold never gathered or delivered), patches in `m6sh3-bugs`. B
+cures p1's half of BUG-1860 (a worker with no drop-off no longer counts the map's gold), BUG-1731 (a paid item at the cap) and
+BUG-1854's reading (wood counted); the matches stay open because some seat can truly still train.
+
+**Measured, before and after B alone (criterion 5; base 0159c425, after-B tree = this commit's sim; Release, every end hash
+equal before and after).** `Stress/M6S14FourSeatQaStressTests` (by name, the Pale Hills rows) and
+`Stress/DrawStalledRowsReportTests`:
+
+| Pale Hills, four Normal seats | Base | After B |
+| --- | --- | --- |
+| FFA seed 1 | draw at 58,257 (spent from 26,961) | the same (hash 389EEF5C876A9CB9) |
+| FFA seed 2 | no end by 144,000 (never spent) | the same (BUG-1890) |
+| FFA seed 3 | p1 at 86,931 | the same |
+| FFA seed 4 | no end by 144,000 (never spent) | the same (BUG-1890 / 1891) |
+| FFA seed 5 | draw at 44,326 (spent from 29,221) | the same |
+| FFA seed 6 | p1 at 81,444 | the same |
+| FFA seed 7 | draw at 56,660 (spent from 26,101) | the same |
+| FFA seed 8 | draw at 67,743 (spent from 32,361) | the same |
+| 0/1/0/1 seeds 1-8 (QA's table: seats 0 and 2 have no team, so 1v1v2) | seed 1 draw at 52,377; 2 p1 at 55,423; 3 p2 at 47,439; 4 p1+p3 at 42,141; 5 p1+p3 at 36,805; 6 p2 at 63,736; 7 p1+p3 at 36,359; 8 p1+p3 at 36,885 | the same, every row |
+| 2v2 (1/2/1/2) seed 2 | team p0+p2 at 36,390 | the same |
+| Vathar Crossing FFA seed 2 | p3 at 47,412 | the same |
+| Hard v Normal tally's no-Hard-win rows (8) | as M6-S14 | the same |
+
+No row that ended on the base stops ending. **Which rows B can move (criterion 11):** only a match that is drawn or comes
+within five quiet minutes of one (the `Draw/*` rows, the four-seat rows, any match with five starved, death-free minutes);
+it never changes how a seat plays before that (no AI code reads the rule). On these trees it moved none: in every drawing
+match above the new rule found the match spent on the same ticks as the old.
+
 ## Testing strategy
 
 | Test kind | What it proves | Runs |

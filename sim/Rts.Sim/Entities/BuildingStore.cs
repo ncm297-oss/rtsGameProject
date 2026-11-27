@@ -240,7 +240,22 @@ public sealed partial class BuildingStore
         _queueTypeId[slot * EconomyConstants.ProductionQueueCapacity + n] = type;
         _queueIsTech[slot * EconomyConstants.ProductionQueueCapacity + n] = tech;
         _queueCount[slot] = n + 1;
-        if (!tech) _ledger?.AddQueuedUnit(_owner[slot], type, 1); // M6-S13: the draw rule's count; M8-4: a limited type's
+        if (tech) return;
+        _ledger?.AddQueuedUnit(_owner[slot], type, 1); // M6-S13: the draw rule's count; M8-4: a limited type's
+        _ledger?.AddWaitingUnit(_owner[slot], type, 1); // M6-SH3: not started until StartHead
+    }
+
+    /// <summary>
+    /// Starts slot <paramref name="slot"/>'s head item: its progress becomes 1 (the production system checked the population and,
+    /// for a unit, took the reservation). M6-SH3: a unit item moves from the draw rule's waiting count to its training count.
+    /// </summary>
+    internal void StartHead(int slot)
+    {
+        _progress[slot] = 1;
+        int head = slot * EconomyConstants.ProductionQueueCapacity;
+        if (_queueCount[slot] == 0 || _queueIsTech[head]) return;
+        _ledger?.AddWaitingUnit(_owner[slot], _queueTypeId[head], -1);
+        _ledger?.AddTrainingUnit(_owner[slot], 1);
     }
 
     /// <summary>
@@ -261,15 +276,17 @@ public sealed partial class BuildingStore
             UnitDef def = _units[_queueTypeId[e]];
             _ledger?.Refund(_owner[slot], def.CostGold, def.CostWood);
         }
+        bool started = item == 0 && _progress[slot] > 0;
         if (item == 0) ReleaseHead(slot);
-        Shift(slot, item);
+        Shift(slot, item, started);
     }
 
     /// <summary>The head item is done (a unit spawned, whose own population count takes over the reservation, or a tech researched): progress 0, reservation released, the rest shift down.</summary>
     internal void PopTrained(int slot)
     {
+        bool started = _progress[slot] > 0;
         ReleaseHead(slot);
-        Shift(slot, 0);
+        Shift(slot, 0, started);
     }
 
     /// <summary>The head item's training ends: progress 0, its reservation released.</summary>
@@ -277,14 +294,20 @@ public sealed partial class BuildingStore
     {
         if (_progress[slot] == 0) return;
         _ledger?.AddHalfPop(_owner[slot], -ReservedHalfPop(slot));
+        if (_queueCount[slot] > 0 && !_queueIsTech[slot * EconomyConstants.ProductionQueueCapacity]) _ledger?.AddTrainingUnit(_owner[slot], -1); // M6-SH3
         _progress[slot] = 0;
     }
 
-    /// <summary>Drops entry <paramref name="item"/>: later entries move down one, the freed last entry goes back to default.</summary>
-    private void Shift(int slot, int item)
+    /// <summary>Drops entry <paramref name="item"/> (<paramref name="started"/>: a head that had started): later entries move down one, the freed last entry goes back to default.</summary>
+    private void Shift(int slot, int item, bool started)
     {
         int head = slot * EconomyConstants.ProductionQueueCapacity, n = _queueCount[slot];
-        if (!_queueIsTech[head + item]) _ledger?.AddQueuedUnit(_owner[slot], _queueTypeId[head + item], -1); // M6-S13: the draw rule's count; M8-4: a limited type's
+        if (!_queueIsTech[head + item])
+        {
+            _ledger?.AddQueuedUnit(_owner[slot], _queueTypeId[head + item], -1); // M6-S13: the draw rule's count; M8-4: a limited type's
+            // M6-SH3: a started item left the training count in ReleaseHead; one that never started leaves the waiting count.
+            if (!started) _ledger?.AddWaitingUnit(_owner[slot], _queueTypeId[head + item], -1);
+        }
         for (int k = item + 1; k < n; k++)
         {
             _queueTypeId[head + k - 1] = _queueTypeId[head + k];

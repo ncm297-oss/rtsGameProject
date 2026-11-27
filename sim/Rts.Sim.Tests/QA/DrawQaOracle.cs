@@ -4,14 +4,13 @@ using Rts.Sim.Entities;
 namespace Rts.Sim.Tests.QA;
 
 /// <summary>
-/// QA (M6-S13): an independent reading of the draw rule (docs/02 "Game flow" 4, docs/01 2026-11-25-1437 PLAN row) written
+/// QA (M6-S13; M6-SH3: the exact "can still train"): an independent reading of the draw rule (docs/02 "Game flow" 4, docs/01 2026-11-25-1437 PLAN row) written
 /// from the design, not from <c>World.Draw.cs</c>: every quantity is scanned from the stores each time (no counter), so a
 /// counter the stores' paths forget to move shows up as a disagreement. <see cref="Step"/> follows the clock one tick.
 /// </summary>
 internal sealed class DrawQaOracle
 {
     private readonly Simulation _sim;
-    private readonly int[] _cheapest;
     private readonly List<long> _liveBefore = new();
 
     /// <summary>The clock this oracle expects (0 to the wait).</summary>
@@ -27,50 +26,15 @@ internal sealed class DrawQaOracle
     {
         _sim = sim;
         World w = sim.World;
-        _cheapest = new int[w.Config.PlayerCount];
-        for (int p = 0; p < _cheapest.Length; p++)
-        {
-            int f = w.FactionOf(p), best = int.MaxValue;
-            if (f >= 0) foreach (int t in w.Data.Factions[f].Units) best = Math.Min(best, w.Data.Units[t].CostGold);
-            else foreach (UnitDef u in w.Data.Units) best = Math.Min(best, u.CostGold);
-            _cheapest[p] = best;
-        }
         Clock = w.DrawClock;
         Drawn = w.MatchDrawn;
     }
 
-    /// <summary>The design's "can still train", every term scanned from the stores.</summary>
-    public bool CanTrain(int p)
-    {
-        World w = _sim.World;
-        if (_cheapest[p] == 0) return true;
-        BuildingStore b = w.Buildings;
-        bool producer = false;
-        for (int k = 0; k < b.Capacity; k++)
-        {
-            if (!b.Alive[k] || b.Owner[k] != p) continue;
-            for (int q = 0; q < b.QueueCount[k]; q++)
-                if (!b.QueueIsTechAt(k, q)) return true;
-            if (!b.UnderConstruction[k] && w.Data.UnitsTrainedAt(b.TypeId[k]).Length > 0) producer = true;
-        }
-        UnitStore u = w.Units;
-        bool worker = false;
-        long gold = w.Gold[p];
-        for (int i = 0; i < u.Capacity; i++)
-        {
-            if (!u.Alive[i] || u.Owner[i] != p) continue;
-            if (w.Data.Units[u.TypeId[i]].IsWorker) worker = true;
-            if (u.CargoKind[i] == ResourceKind.Gold) gold += u.Cargo[i];
-        }
-        if (!worker && !producer) return false;
-        if (worker)
-        {
-            ResourceStore r = w.Resources;
-            for (int n = 0; n < r.Capacity; n++)
-                if (r.Alive[n] && w.Data.Resources[r.TypeId[n]].Resource == ResourceKind.Gold) gold += r.Remaining[n];
-        }
-        return gold >= _cheapest[p];
-    }
+    /// <summary>
+    /// The design's "can still train", every term scanned from the stores. M6-SH3: the exact rule of docs/01 2026-11-27 (second
+    /// row) replaced M6-S13's gold-only reading; the scan is <see cref="Draw.DrawReachScan"/> (no counter is read).
+    /// </summary>
+    public bool CanTrain(int p) => Draw.DrawReachScan.NewCan(_sim.World, p);
 
     /// <summary>The design's "spent", given whether the match has a result (a win, not the draw) now.</summary>
     public bool Spent(bool hasWinResult)

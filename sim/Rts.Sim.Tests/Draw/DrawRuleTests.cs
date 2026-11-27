@@ -55,17 +55,19 @@ public class DrawRuleTests
         Assert.False(w.CanStillTrain(0));
     }
 
+    /// <summary>M6-SH3: the bank at the cheapest unit's gold and wood can train, one gold below cannot (M6-S13 read the gold alone; wood is now counted: <see cref="DrawReachTests"/>).</summary>
     [Fact]
-    public void TheBank_AtTheCheapestUnitsGold_CanTrain_OneBelowCannot()
+    public void TheBank_AtTheCheapestUnitsCost_CanTrain_OneBelowCannot()
     {
         Simulation sim = Base();
         int cheapest = DrawScenes.Cheapest(sim, 0);
         Assert.True(cheapest > 0);
         sim.World.Ledger.Gold[0] = cheapest;
+        sim.World.Ledger.Wood[0] = DrawReachTests.CheapestByGold(sim.World, 0).CostWood;
         Assert.True(sim.World.CanStillTrain(0));
         sim.World.Ledger.Gold[0] = cheapest - 1;
         Assert.False(sim.World.CanStillTrain(0));
-        // Wood is not looked at.
+        // Wood alone buys nothing.
         sim.World.Ledger.Wood[0] = 100_000;
         Assert.False(sim.World.CanStillTrain(0));
     }
@@ -77,6 +79,8 @@ public class DrawRuleTests
         World w = sim.World;
         int cheapest = DrawScenes.Cheapest(sim, 0);
         w.Ledger.Gold[0] = cheapest - 3;
+        w.Ledger.Wood[0] = DrawReachTests.CheapestByGold(w, 0).CostWood;
+        DrawScenes.Building(sim, 0, 30, 8, BuildingSlot.TownHall); // M6-SH3: a load counts only with a finished drop-off
         EntityHandle worker = DrawScenes.Unit(sim, 0, 20, 20, UnitSlot.Worker);
         Assert.False(w.CanStillTrain(0), "a worker with no gold anywhere");
         w.Units.CargoKind[worker.Index] = ResourceKind.Gold;
@@ -98,6 +102,8 @@ public class DrawRuleTests
         Simulation sim = Base();
         World w = sim.World;
         int cheapest = DrawScenes.Cheapest(sim, 0);
+        w.Ledger.Wood[0] = DrawReachTests.CheapestByGold(w, 0).CostWood;
+        DrawScenes.Building(sim, 0, 30, 8, BuildingSlot.TownHall); // M6-SH3: the map counts only with a finished drop-off
         DrawScenes.GoldNode(sim, 30, 30, cheapest);
         Assert.Equal(cheapest, w.Resources.GoldLeft);
         Assert.False(w.CanStillTrain(0), "the hall alone cannot mine");
@@ -156,14 +162,18 @@ public class DrawRuleTests
         Assert.True(w.MatchSpent, "a defeated seat is not looked at");
     }
 
-    /// <summary>A forged faction whose cheapest unit costs no gold (rule 58: the unit is found by id and edited) is never spent, even with nothing to produce from.</summary>
+    /// <summary>A forged faction with a unit that costs nothing (rule 58: the unit is found by id and edited) is never spent, even with nothing to produce from. M6-SH3: nothing = no gold and no wood (a unit of 0 gold that needs wood is judged by its wood: <see cref="DrawReachTests"/>).</summary>
     [Fact]
-    public void AForgedFactionWithAZeroGoldUnit_IsNeverSpent()
+    public void AForgedFactionWithAZeroCostUnit_IsNeverSpent()
     {
         GameData data = DrawScenes.DataWith(DrawScenes.ShortSeconds, dir => dir.EditJson("factions/malazan/units.json", root =>
         {
             foreach (JsonNode? u in root["units"]!.AsArray())
-                if ((string)u!["id"]! == "malazan_crossbowman") u["cost"]!["gold"] = 0;
+                if ((string)u!["id"]! == "malazan_crossbowman")
+                {
+                    u["cost"]!["gold"] = 0;
+                    u["cost"]!["wood"] = 0;
+                }
         }));
         Simulation sim = DrawScenes.Spent(data);
         World w = sim.World;

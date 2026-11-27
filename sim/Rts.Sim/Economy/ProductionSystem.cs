@@ -232,7 +232,7 @@ public static class ProductionSystem
             if (world.HalfPop[owner] + def.ItemHalfPop > world.HalfPopCap[owner]) return false;
             world.Ledger.AddHalfPop(owner, def.ItemHalfPop);
         }
-        b.ProgressOf(k) = 1;
+        b.StartHead(k); // progress 1; M6-SH3: the draw rule's training count
         return true;
     }
 

@@ -80,6 +80,9 @@ public sealed partial class ResourceStore
     /// </summary>
     public long GoldLeft { get; private set; }
 
+    /// <summary>M6-SH3: the wood left in every live wood node (the draw rule's "wood left on the map"), kept as <see cref="GoldLeft"/> is. Derived: not hashed, not saved.</summary>
+    public long WoodLeft { get; private set; }
+
     /// <summary>Total number of slots.</summary>
     public int Capacity => _alive.Length;
 
@@ -143,6 +146,7 @@ public sealed partial class ResourceStore
         _grid.SetResource(cell % _grid.Width, cell / _grid.Width, def.FootprintWidth, def.FootprintHeight);
         if (_woodCells != null && def.Resource == ResourceKind.Wood) MarkWood(cell, def, true);
         if (def.Resource == ResourceKind.Gold) GoldLeft += amount;
+        else WoodLeft += amount; // M6-SH3
         handle = new EntityHandle(index, _generation[index]);
         return true;
     }
@@ -199,6 +203,7 @@ public sealed partial class ResourceStore
         int taken = Math.Min(amount, _remaining[i]);
         _remaining[i] -= taken;
         if (_defs[_typeId[i]].Resource == ResourceKind.Gold) GoldLeft -= taken;
+        else WoodLeft -= taken; // M6-SH3
         if (_remaining[i] == 0) Free(i);
         return taken;
     }
