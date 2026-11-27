@@ -298,8 +298,8 @@ Smithy waits for pop 24 and Age II for 8:00.
 | 25 | time 600 | research | `dryjhnas_prophecy` | 1 | The faction upgrade, at the Smithy |
 
 **Houses at the cap (D21, 2026-10-18; `QA/Content/AiHouseRuleReportTests.MenuMapNormal_HouseSources_Report`).** On the
-menu's map (20 minutes, the other seat idle): Normal, seed 2: the cap reaches 100 at 723 s; the last Tent step (step 19) is done at a cap of 100; skipped at the hard cap: steps 18, 19; 10 Tents stand at 20:00, 0 past the cap (the expansion's Holy
-Camp stands on this seed). Re-printed 2026-11-16 for the sim's M6-S12: 827 s. Re-printed 2026-10-26 for M5-4g: before it the cap reached 100 at 928 s and step 19 was done
+menu's map (20 minutes, the other seat idle): Normal, seed 2: the cap reaches 100 at 820 s; the last Tent step (step 19) is done at a cap of 100; skipped at the hard cap: step 19; 11 Tents stand at 20:00, 0 past the cap. Re-printed 2026-11-26 for the sim's M6-S14: the cap reached 100 at 723 s, steps 18 and 19 were skipped and 10 Tents stood (the expansion's Holy
+Camp stood on this seed). Re-printed 2026-11-16 for the sim's M6-S12: 827 s. Re-printed 2026-10-26 for M5-4g: before it the cap reached 100 at 928 s and step 19 was done
 at a cap of 90.
 
 **Spending on the menu's map (D21, 2026-10-18, gathering gold 0.85 / wood 0.75 a second; `Content/AiSpendingReportTests.GeneratedNormal_Spending_Report`).**
@@ -359,7 +359,7 @@ measured seed, BUG-1553; "The holy war's first wave" at the end of this page).
 | 25 | time 570 | build | `whirlwind_ram_yard` | 1 | Battering Rams |
 
 **Houses at the cap (D21, 2026-10-18; `QA/Content/AiHouseRuleReportTests.MenuMapNormal_HouseSources_Report`).** On the
-menu's map (20 minutes, the other seat idle): Normal, seed 3: the cap reaches 100 at 750 s; the last Tent step (step 18) is done at a cap of 100; skipped at the hard cap: steps 17, 18; 10 Tents stand at 20:00, 0 past the cap (re-printed 2026-11-17 for D33's 14-pop wave: 767 s; re-printed 2026-11-16 for the sim's M6-S12: 783 s, step 18 skipped, 11 Tents, 1 past the cap; re-printed 2026-11-15 for the sim's M6-SH2: 0 past the cap). Re-printed 2026-10-26
+menu's map (20 minutes, the other seat idle): Normal, seed 3: the cap reaches 100 at 857 s; the last Tent step (step 18) is done at a cap of 84; skipped at the hard cap: none; 12 Tents stand at 20:00, 0 past the cap (re-printed 2026-11-26 for the sim's M6-S14: 750 s, step 18 done at a cap of 100, steps 17 and 18 skipped, 10 Tents; re-printed 2026-11-17 for D33's 14-pop wave: 767 s; re-printed 2026-11-16 for the sim's M6-S12: 783 s, step 18 skipped, 11 Tents, 1 past the cap; re-printed 2026-11-15 for the sim's M6-SH2: 0 past the cap). Re-printed 2026-10-26
 for M5-4g: before it the cap reached 100 at 1184 s, step 18 was done at a cap of 90 and 1 Tent stood past the cap.
 
 **Spending on the menu's map (D21, 2026-10-18, gathering gold 0.85 / wood 0.75 a second; `Content/AiSpendingReportTests.GeneratedNormal_Spending_Report`).**
