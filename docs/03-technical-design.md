@@ -15165,7 +15165,7 @@ Stress:
 - `MatchCriterionSweepQaStressTests`: re-measured: Raraku seeds 3, 4, 6 in `Known` (BUG-1852); the rest clean.
 - `FarExpandProbeQaStressTests`: the Vathar Crossing seed 2 four-seat row un-skipped (the match ends at 47,412, seat 3, 19 waves and 10 hunts, every oracle clean; the longest silence 1,479 ticks).
 - `HardVersusNormalTallyQaStressTests`: re-measured: yes (report, above).
-- `TeamAiSoakStressTests`, `DefeatAiStressTests`, `MapSlice2StressTests`: SOAKPLACEHOLDER.
+- `TeamAiSoakStressTests`, `DefeatAiStressTests`, `MapSlice2StressTests`: run on the M6-S14 tree, all green: the soak 8 of 8 (every seat waves, no ally targeted), the weak-hall defeat rows 2 of 2, MapSlice2 71 of 71. MapSlice2's door row (`EveryScoutKilledAtTheDoor_OnANewMap_*`) had its bound raised by the cap with BUG-1556 (2 x `ai.scoutReplacements` + 1; all 20 rows measured 5 a seat: 2 scouts replaced, the first, 2 blind re-scouts); nothing else moved.
 - `DrawStalledRowsReportTests`: re-measured: yes (report: the four-seat rows above).
 - `EndGameHardeningTests` (Stress rows): the past-a-defeat row moved to Pale Hills seed 3 (seed 2 defeats no seat by 100,000).
 - `M78ReserveSwitchQaStressTests`, `M78ShippedDigestQaStressTests`, `ShippedDigestReportTests`, `ReserveSwitchReportTests`: unchanged (green: their twins compare in-session runs, not pins).
