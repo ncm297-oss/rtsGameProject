@@ -144,6 +144,14 @@ public sealed class AiRulesDef
     public float FarExpandReach { get; init; }
 
     /// <summary>
+    /// M6-S14 (BUG-1660, docs/03 "Implementation (M6-S14)"): the worker floor. A seat whose live and queued workers are fewer
+    /// than this trains one worker a think at a finished own building that trains it now, paid from the whole bank, whatever
+    /// its build order says (<c>minWorkers</c>, a whole number 1-<see cref="DataLimits.MaxAiMinWorkers"/>; 1 is the M6-SH2
+    /// rule: a worker only once none is left).
+    /// </summary>
+    public int MinWorkers { get; init; }
+
+    /// <summary>
     /// M5-9a: <c>ai.counters</c> as bit masks, indexed by the enemy's <see cref="UnitSlot"/>: bit <c>s</c> is set when own slot
     /// <c>s</c> counters it (docs/02 "Faction template", the "Countered by" column). Default (no <c>ai</c>) or all 0: no shift.
     /// </summary>

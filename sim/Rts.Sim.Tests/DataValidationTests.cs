@@ -728,6 +728,12 @@ public class DataValidationTests
     [InlineData("starvedMinArmy", "51", "ai.starvedMinArmy", "not a whole number in 1-50")]
     [InlineData("starvedMinArmy", "1.5", "ai.starvedMinArmy", "not a whole number in 1-50")]
     [InlineData("counters", "[]", "$.ai.counters", "")]
+    [InlineData("minWorkers", null, "ai.minWorkers", "missing required field")] // M6-S14, BUG-1660
+    [InlineData("minWorkers", "0", "ai.minWorkers", "not a whole number in 1-50")]
+    [InlineData("minWorkers", "-4", "ai.minWorkers", "not a whole number in 1-50")]
+    [InlineData("minWorkers", "51", "ai.minWorkers", "not a whole number in 1-50")]
+    [InlineData("minWorkers", "4.5", "ai.minWorkers", "not a whole number in 1-50")]
+    [InlineData("minWorkers", "\"4\"", "$.ai.minWorkers", "")]
     public void AiRulesBlock_MissingOrOutOfRange_IsOneError(string? field, string? value, string path, string message)
     {
         using TestDataDir dir = TestDataDir.CopyOfShipped();
@@ -956,6 +962,7 @@ public class DataValidationTests
         Assert.Equal((2, 2), (a.ScoutReplacements, a.SpendDownQueue)); // M6-SH1 (BUG-1052, BUG-1051)
         Assert.Equal(2400, a.HuntMemoryTicks); // M5-4d: 120 s
         Assert.Equal(14f, a.FocusReach); // M5-4c slice 2: meters
+        Assert.Equal(4, a.MinWorkers); // M6-S14 (BUG-1660): the Producer's value
     }
 
     /// <summary>M5-4c slice 2: <c>ai.focusReach</c> written as NaN is not JSON: one parse error in rules.json, nothing thrown.</summary>
@@ -1008,6 +1015,8 @@ public class DataValidationTests
     [InlineData("starvedMinArmy", 50, 50)]
     [InlineData("farExpandReach", 0, 0)] // M5-9b: 0 turns the far expansion off
     [InlineData("farExpandReach", 512, 512)]
+    [InlineData("minWorkers", 1, 1)] // M6-S14, BUG-1660: 1 is the M6-SH2 rule
+    [InlineData("minWorkers", 50, 50)]
     public void AiDefenseKnobs_AtTheirEdges_Load(string knob, double value, double loaded)
     {
         using TestDataDir dir = TestDataDir.CopyOfShipped();
@@ -1020,7 +1029,8 @@ public class DataValidationTests
             "defendFor" => a.DefendForTicks, "defendRadius" => a.DefendRadius, "castMinTargets" => a.CastMinTargets,
             "defendRatio" => a.DefendRatio, "defendMinValue" => a.DefendMinValue, "recallHallHp" => a.RecallHallHp, "reserveShift" => a.ReserveShift, "reserveArmyShare" => a.ReserveArmyShare, "gatherReach" => a.GatherReach,
             "scoutReplacements" => a.ScoutReplacements, "spendDownQueue" => a.SpendDownQueue, "huntMemory" => a.HuntMemoryTicks, "focusReach" => a.FocusReach,
-            "starvedWaveAfter" => a.StarvedWaveAfterTicks, "starvedMinArmy" => a.StarvedMinArmy, "farExpandReach" => a.FarExpandReach, _ => a.WorkerFleeRadius,
+            "starvedWaveAfter" => a.StarvedWaveAfterTicks, "starvedMinArmy" => a.StarvedMinArmy, "farExpandReach" => a.FarExpandReach,
+            "minWorkers" => a.MinWorkers, _ => a.WorkerFleeRadius,
         }, 5);
     }
 

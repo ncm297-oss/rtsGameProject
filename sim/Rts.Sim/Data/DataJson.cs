@@ -137,6 +137,7 @@ internal sealed class AiRulesJson
     public double? StarvedWaveAfter { get; set; } // M5-9a round 2 (BUG-1153)
     public double? StarvedMinArmy { get; set; } // M5-9a round 2
     public double? FarExpandReach { get; set; } // M5-9b (BUG-1068 (a))
+    public double? MinWorkers { get; set; } // M6-S14 (BUG-1660)
     public Dictionary<string, List<string?>?>? Counters { get; set; } // M5-9a: enemy slot -> own slots that counter it
 }
 
