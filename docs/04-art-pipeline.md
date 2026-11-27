@@ -788,7 +788,9 @@ types are models; the boxes left are the Malazan Wickan Corral, Armory, Cadre To
   12,392 (Horse Lines) + 15,428 (Ram Yard) + 17,396 (Smithy) + 12,428 (Shrine) + 58,644 (Supply Cache) + 83,884 (Lookout
   Tower) and the ten atlases 8,195 in all: **265,523 bytes (0.25 MB)**. The art pass's generated binaries: **41,273,999 bytes
   (39.4 MB), was 41,008,476 (39.1 MB)**.
-- **Cost:** see docs/03 "Implementation (M6-V31)".
+- **Cost** (the table and the window in docs/03 "Implementation (M6-V31)"): 400 figures with 60 building models of the 24
+  types 6.64 ms while 90 %+ alive (the same as boxes 6.76), 400 capsules 0.86, 1,000 figures 16.77 ms; each Whirlwind type
+  alone within +0.26 ms of its boxes on a repeatable pass.
 
 **Audio (SFX, M6-V12).** Sources are long, mostly 96 kHz / 24-bit stereo files; only short cuts enter the repo.
 

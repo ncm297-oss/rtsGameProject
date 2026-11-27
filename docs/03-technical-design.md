@@ -5280,7 +5280,28 @@ they are. 24 of 30 building types are models.
   `QaGhostViewTest` pin a remembered building's box (`GhostBoxOf`) and the hall they remember is a Whirlwind Holy Camp, now a
   model: they set `BuildingViews.UseModels = false` (remembered models are `BuildingModelTest`'s rows). `TeblorBuildingsTest`
   (3) already read the files (its "the Whirlwind's are boxes" comment now says they are models); its (H) row now fits 24
-  manifest types. The scene loop is 134 scenes.
+  manifest types. The scene loop is 134 scenes, 134 of 134 on the first pass (the sim track's `testhost`s ran beside it).
+- **Cost** (rules 61 / 77; 2026-11-27 12:00-12:15, 1600 x 900, `ModelShots --bench 30 --vsync off`, the fifteen figure
+  types mixed, the developer's own scenes and tests ended first; **not a quiet window: two of the sim track's `testhost`s
+  ran throughout**, but the 400-capsule figure, 0.86 ms against `main`'s 0.82, puts the window at about x 1.05). The building
+  rows as M6-V26's (`--bench-buildings 60 --bench-zoom 60`), while 90 %+ alive:
+
+  | Run | While 90 %+ alive | Worst 1 % (90 %+ alive) | Draw calls | `main` |
+  | --- | --- | --- | --- | --- |
+  | 400 figures + 60 building models, the 24 model types (60 m) | **6.64 ms** | 10.86 ms | 892 | 6.54 (14 types) |
+  | 400 figures + 60 building boxes, the same types | 6.76 ms | 11.03 ms | 894 | |
+  | 400 figures + 60 Whirlwind models, the ten types | 6.60 ms | 10.76 ms | 878 | |
+  | 400 figures + 60 Whirlwind boxes | 6.61 ms | 10.55 ms | 876 | |
+  | 400 capsules | 0.86 ms | 2.88 ms | 171 | 0.82 |
+  | 1,000 figures | 16.77 ms | 26.80 ms | 2,592 | 16.53 |
+
+  Each Whirlwind type alone, 60 of it (`--bench-building-types <id>`), models / boxes: Holy Camp 6.57 / 6.46, Tent 6.53 /
+  6.59, Raider Camp 6.66 / 6.40, Archer Camp 6.47 / 6.50, Horse Lines 6.46 / 6.46, Ram Yard 6.51 / 6.46, Smithy 6.52 / 6.51,
+  Shrine 7.80 / 6.51 on the first pass (worst 1 % 19.18 against 10.36: a blip in the window) and 6.37 / 6.39 and 6.70 / 6.65 on
+  two repeats right after, Supply Cache 6.48 / 6.35, Lookout Tower 6.26 / 6.22 ms: at most +0.26 ms on a repeatable pass, no
+  type near the 1 ms finding bar (the kit models are 55-297 triangles, one surface and one draw call each, as a box). A second
+  pass of the pinned rows at 12:16-12:22, with a third `testhost` starting during it, read 7.12 / 7.79 (models / boxes),
+  capsules 1.00, 1,000 figures 20.06 ms: about x 1.2 the first window, every row alike. Nothing is computed per frame.
 - **Questions for the Producer (rule 67), each with a recommendation:**
   1. **The Lookout Tower is `WatchTower_FirstAge_Level3` with a cloth canopy, not "the Second Age's tower"** (docs/04, the
      M6-V30 paragraph's proposal): every Second Age tower is the Malazan Watchtower's grey stone. It is 8.80 m tall on 2 x 2
