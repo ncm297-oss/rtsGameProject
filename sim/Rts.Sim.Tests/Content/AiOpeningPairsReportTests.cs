@@ -23,7 +23,8 @@ namespace Rts.Sim.Tests.Content;
 /// <para>
 /// D-R39 (2026-11-15, after the sim's M6-S10 gather change) re-states "both sides started a wave" for one named case
 /// (<see cref="DefeatedBeforeDue"/>): a side defeated before its first wave was ever due (<see cref="NoWave"/>) is
-/// reported, not failed, when it is named there. The list is empty: its one entry, (0, 2) seed 3's <c>holy_war</c> side
+/// reported, not failed, when it is named there. Since M6-S14 the list holds (0, 1) seed 2's Malazan side (BUG-1856). Its
+/// earlier entry, (0, 2) seed 3's <c>holy_war</c> side
 /// (defeated at 12:29 under the sim's M6-S10), was taken out by M6-SH2, when that side survived and waved. M6-S12 named
 /// the same side again in <see cref="AliveWithoutAWave"/> (alive at 20:00 with no wave, its army never at its 20-pop
 /// threshold; BUG-1553), and D33 (2026-11-17) took it out: <c>holy_war</c> waves at 14 army pop since then and the side
