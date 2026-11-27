@@ -98,7 +98,11 @@ public class D32PreFixtureTests(ITestOutputHelper output)
         ulong saved = BitConverter.ToUInt64(bytes, SaveBytes.HeaderOffsets(bytes).DataHash);
         Assert.Equal(PreHash, saved);
         Assert.NotEqual(saved, TestSim.Data.ContentHash());
-        Assert.Equal(SaveError.DataMismatch, SaveTestRun.TryLoad(TestSim.Data, bytes));
+        Assert.Equal(SaveError.FormatVersionMismatch, SaveTestRun.TryLoad(TestSim.Data, bytes)); // M6-S14: format 10, refused first by the format
+        // BUG-1859: the relabel is valid because the fixture seats only humans, and format 11 differs from 10 only in the number for such saves.
+        byte[] relabelled = (byte[])bytes.Clone();
+        System.Buffers.Binary.BinaryPrimitives.WriteInt32LittleEndian(relabelled.AsSpan(SaveFormat.MagicLength), SaveFormat.CurrentVersion);
+        Assert.Equal(SaveError.DataMismatch, SaveTestRun.TryLoad(TestSim.Data, SaveBytes.Rechecksum(relabelled)));
         string text = UiText("save", "data_mismatch");
         output.WriteLine($"save refused: {SaveError.DataMismatch} -> \"{text}\"");
         Assert.Contains("different game data", text, StringComparison.Ordinal);
@@ -139,7 +143,9 @@ public class D32PreFixtureTests(ITestOutputHelper output)
         });
         Assert.Equal(PreHash, before.ContentHash());
         byte[] bytes = Convert.FromBase64String(File.ReadAllText(Fixture("save_teblor_frenzy.b64")));
-        Assert.Equal(SaveError.None, SaveTestRun.TryLoad(before, bytes));
+        // BUG-1859: the relabel is valid because the fixture seats only humans, and format 11 differs from 10 only in the number for such saves.
+        System.Buffers.Binary.BinaryPrimitives.WriteInt32LittleEndian(bytes.AsSpan(SaveFormat.MagicLength), SaveFormat.CurrentVersion);
+        Assert.Equal(SaveError.None, SaveTestRun.TryLoad(before, SaveBytes.Rechecksum(bytes)));
         Assert.Equal(ReplayError.None, ReplayFormat.TryReadFile(Fixture("replay_teblor_train.replay"), out Replay? replay));
         ReplayResult result = ReplayPlayer.Run(replay!, before);
         Assert.True(result.Ok, $"{result.Error} at {result.Tick}");

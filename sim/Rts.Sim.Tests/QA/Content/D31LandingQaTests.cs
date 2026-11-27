@@ -300,7 +300,11 @@ public class D31LandingQaTests(ITestOutputHelper output)
         ulong saved = BitConverter.ToUInt64(bytes, SaveBytes.HeaderOffsets(bytes).DataHash);
         Assert.Equal(0x67269D955D18D885UL, saved);
         Assert.NotEqual(saved, D.ContentHash());
-        Assert.Equal(SaveError.DataMismatch, SaveTestRun.TryLoad(D, bytes));
+        Assert.Equal(SaveError.FormatVersionMismatch, SaveTestRun.TryLoad(D, bytes)); // M6-S14: format 10, refused first by the format
+        // BUG-1859: the relabel is valid because the fixture seats only humans, and format 11 differs from 10 only in the number for such saves.
+        byte[] relabelled = (byte[])bytes.Clone();
+        System.Buffers.Binary.BinaryPrimitives.WriteInt32LittleEndian(relabelled.AsSpan(SaveFormat.MagicLength), SaveFormat.CurrentVersion);
+        Assert.Equal(SaveError.DataMismatch, SaveTestRun.TryLoad(D, SaveBytes.Rechecksum(relabelled)));
         string text = UiText("save", "data_mismatch");
         output.WriteLine($"save refused: {SaveError.DataMismatch} -> \"{text}\"");
         Assert.Contains("different game data", text, StringComparison.Ordinal);
