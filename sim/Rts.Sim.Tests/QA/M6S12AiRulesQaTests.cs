@@ -234,30 +234,61 @@ public class M6S12AiRulesQaTests(ITestOutputHelper output)
     }
 
     /// <summary>
-    /// BUG-1554 (pins what is built, docs/03 M6-S12 Q4): a seat short of wood that has never seen a tree but knows gold puts every
-    /// worker on gold, so none is idle and the re-scout never goes, though docs/01 2026-11-16 (3) says such a side "sends a worker
-    /// scouting again". No tree stands anywhere (so a scout at the start cannot end the blindness); from tick 1,200 on (every
-    /// worker at work on gold) over 5 minutes: blind on every window, zero re-scouts. When the Producer rules the decided rule in,
-    /// this row flips (re-scouts &gt; 0 while blind).
+    /// BUG-1554 (M6-S14, flipped; docs/01 2026-11-17 (3)): a seat short of wood that has never seen a tree but knows gold puts
+    /// every worker on gold; before M6-S14 the re-scout took only a worker left idle, so such a seat re-scouted only on the
+    /// odd think a worker happened to stand idle, though docs/01 2026-11-16 (3) says such a side "sends a worker scouting
+    /// again". No tree stands anywhere; its home mines are seen before the first think. The seat holds 1,000 wood (not short,
+    /// so not blind) until tick 1,200, by when every worker is at work on gold; then its wood is taken. (With no wood from tick
+    /// 0 its workers are still idle at the first think, an idle re-scout sweeps the whole small map and nothing is left to look
+    /// at: the row as first written read 0 re-scouts for that reason as much as for BUG-1554.) From tick 1,200 over 5 minutes: blind
+    /// on the windows, and a re-scout that takes a worker at work on gold (not Idle the tick before it went: the base never
+    /// does), while its blind re-scouts lost are below <c>ai.scoutReplacements</c> (none dies here).
     /// </summary>
     [Fact]
-    public void KnowsGold_NeverSawATree_ShortOfWood_NoIdleWorker_NeverRescouts_Bug1554()
+    public void KnowsGold_NeverSawATree_ShortOfWood_NoIdleWorker_Rescouts_Bug1554()
     {
         Simulation sim = BlindScene(keepMines: true, noTreeAnywhere: true);
         AiPlayer ai = sim.AiOf(0)!;
-        (int rescouts, int blind) = Watch(sim, 7200, from: 1200);
+        World w = sim.World;
+        UnitStore u = w.Units;
+        w.Ledger.Wood[0] = 1000;
+        // Its home mines seen before the first think (three eyes over them for one fog update), so the economy puts every
+        // worker on gold from the start instead of leaving them idle until a scout finds the mines.
+        (int hx, int hy) = AiScenes.HallAt(0);
+        var eyes = new List<EntityHandle>();
+        for (int k = 0; k < 3; k++) eyes.Add(CombatScenes.Place(sim, 0, w.Data.FindUnit("malazan_laborer"), w.NavGrid.CellCenter(hx + 2 + 3 * k, hy - 3)));
+        w.Fog.Update();
+        foreach (EntityHandle e in eyes) u.Free(e);
+        while (sim.TickNumber < 1200) sim.Tick();
+        Assert.Equal(2, ai.Board.ScoutPhase); // no re-scout while it was not short of wood
+        w.Ledger.Wood[0] = 0;
+        int window = Math.Max(ai.Rules.ScoutAfterTicks, ai.ThinkTicks), rescouts = 0, fromWork = 0, blind = 0;
+        var before = new UnitState[u.Capacity];
+        byte phase = ai.Board.ScoutPhase;
+        while (sim.TickNumber < 7200)
+        {
+            if (sim.TickNumber % window == 0 && ai.Board.ScoutPhase == 2 && ScoutManager.BlindTo(ai, ResourceKind.Wood)) blind++;
+            for (int i = 0; i < u.Capacity; i++) before[i] = u.State[i];
+            sim.Tick();
+            if (phase == 2 && ai.Board.ScoutPhase == 1)
+            {
+                rescouts++;
+                if (before[ai.Board.ScoutSlot] != UnitState.Idle) fromWork++;
+            }
+            phase = ai.Board.ScoutPhase;
+        }
         int onGold = 0, workers = 0;
-        UnitStore u = sim.World.Units;
         for (int i = 0; i < u.Capacity; i++)
         {
-            if (!u.Alive[i] || u.Owner[i] != 0 || !sim.World.Data.Units[u.TypeId[i]].IsWorker) continue;
+            if (!u.Alive[i] || u.Owner[i] != 0 || !w.Data.Units[u.TypeId[i]].IsWorker) continue;
             workers++;
             if (u.GatherNode[i].Generation != 0) onGold++;
         }
-        output.WriteLine($"from tick 1,200: blind to wood on {blind} windows of {6000 / Math.Max(ai.Rules.ScoutAfterTicks, ai.ThinkTicks)}; re-scouts {rescouts}; workers {workers}, on a gather loop {onGold}; wood {sim.World.Wood[0]}");
+        output.WriteLine($"from tick 1,200: blind to wood on {blind} windows of {6000 / window}; re-scouts {rescouts}, of them a worker at work {fromWork}; workers {workers}, on a gather loop {onGold}; wood {w.Wood[0]}");
         Assert.True(blind >= 10, $"precondition: the seat is blind to wood on the windows ({blind})");
-        Assert.Equal(0, rescouts); // BUG-1554: today's rule (idle only); flips when the decided rule is built
-        Assert.Equal(0, sim.World.Wood[0]);
+        Assert.True(fromWork > 0, "no re-scout took a worker at work on gold (BUG-1554: before M6-S14, idle workers only)");
+        Assert.Equal(0, ai.Board.BlindScoutsLost);
+        Assert.Equal(0, w.Wood[0]);
     }
 
     /// <summary>

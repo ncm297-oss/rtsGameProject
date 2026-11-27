@@ -224,6 +224,20 @@ internal sealed partial class Blackboard
     /// <summary>Per waypoint, whether it is visited.</summary>
     internal bool[] ScoutVisited { get; }
 
+    /// <summary>
+    /// M6-S14 (BUG-1554 / 1556): the scout out now (<see cref="ScoutPhase"/> 1) is a blind re-scout
+    /// (<c>ScoutManager.Rescout</c>); its death counts in <see cref="BlindScoutsLost"/>, its release does not. Saved at the
+    /// end of <c>AIST</c> (format 11).
+    /// </summary>
+    internal bool BlindScoutOut;
+
+    /// <summary>
+    /// M6-S14 (BUG-1554 / 1556, docs/01 2026-11-17 (3)): the blind re-scouts the seat has lost (died while out). While it is
+    /// below <c>ai.scoutReplacements</c> a blind seat with no idle worker may send a gatherer of the kind it knows; at it, the
+    /// seat sends no blind re-scout again. Saved at the end of <c>AIST</c> (format 11).
+    /// </summary>
+    internal int BlindScoutsLost;
+
     // ---------- M5-3: the enemy memory (from the view only, rebuilt each think) ----------
 
     /// <summary>How many enemy buildings the AI knows this think: those it sees plus its ghosts (the fog's memory, no copy).</summary>

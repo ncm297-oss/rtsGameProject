@@ -132,5 +132,6 @@ internal sealed partial class AiPlayer
         _mineCount = r.ReadInt32In(0, MineScratch);
 
         Board.ReadFrom(r);
+        r.Check(Board.BlindScoutsLost <= Rules.ScoutReplacements); // M6-S14: the count stops at the cap
     }
 }

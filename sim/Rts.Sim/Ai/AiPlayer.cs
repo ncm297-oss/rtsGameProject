@@ -1324,6 +1324,34 @@ internal sealed partial class AiPlayer
         return best;
     }
 
+    /// <summary>
+    /// M6-S14 (BUG-1554 / 1556): the worker a blind seat with no idle one sends on its re-scout: of the workers the economy
+    /// set gathering <paramref name="kind"/> (<see cref="EconomyManager.Gold"/> or <see cref="EconomyManager.Wood"/>, the kind
+    /// the seat knows a node of: <see cref="Blackboard.GatherKind"/> for this unit) and on the loop now (walking, at the node or
+    /// waiting with a load: a gatherer spends most of its time walking, so <see cref="PickBuilder"/>'s gathering-or-returning
+    /// rank alone would rarely find one on a window's think), with no AI command pending, not the scout nor fleeing, the one
+    /// nearest <paramref name="at"/> (slot order on ties); -1 for none. Allocates nothing.
+    /// </summary>
+    internal int PickGatherer(Vector2 at, byte kind, out int generation)
+    {
+        int best = -1;
+        float bestDistance = float.MaxValue;
+        generation = 0;
+        for (int k = 0; k < WorkerCount; k++)
+        {
+            int slot = WorkerSlots[k];
+            if (!View.TryGetUnit(slot, out SeenUnit u) || u.State is not (UnitState.Moving or UnitState.Gathering or UnitState.Returning)
+                || Board.UnitGeneration[slot] != u.Handle.Generation || (Board.GatherKind[slot] & (EconomyManager.Gold | EconomyManager.Wood)) != kind
+                || OrderedNotApplied(slot, u.Handle.Generation) || IsScout(slot, u.Handle.Generation) || IsFleeing(slot, u.Handle.Generation)) continue;
+            float d = Vector2.DistanceSquared(u.Position, at);
+            if (d >= bestDistance) continue;
+            best = slot;
+            bestDistance = d;
+            generation = u.Handle.Generation;
+        }
+        return best;
+    }
+
     /// <summary>M5-9b: whether unit slot <paramref name="slot"/> holds the player's live worker of <paramref name="generation"/> with no AI command pending.</summary>
     private bool OwnFreeWorker(int slot, int generation) =>
         OwnUnit(slot, generation, out SeenUnit u) && IsWorkerType[u.TypeId] && !OrderedNotApplied(slot, generation);

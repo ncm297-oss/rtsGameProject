@@ -606,10 +606,12 @@ match's draw clock runs, its countdown line sits at the top centre under the ale
   scout role's, BUG-1055), and a scout sent again stops looking, and gathers, as soon as the AI knows an enemy building, a
   gold mine and a forest anywhere that is not at an enemy's door: it stands at the far forest it found, so the first wood
   comes home a walk sooner (BUG-1056). A side whose scouting is over, that is short of a resource the next unit of its
-  army mix needs, knows no gold mine or forest of it at all and has a worker with nothing to gather, sends that worker on
-  the scout's sweep again, past the `ai.scoutReplacements` cap: one at a time, at most one every `ai.scoutAfter` (15 s),
-  walking only to ground it has never seen (M6-S12, BUG-1460, Producer decision 2026-11-16; a worker at work is never taken
-  for it, so an enemy camped at the door does not drain the economy). A seat with no finished drop-off may take any node. Built in M6-S5 (BUG-1045), the head ring
+  army mix needs and knows no gold mine or forest of it at all, sends a worker on the scout's sweep again, past the
+  `ai.scoutReplacements` cap on its scout: a worker with nothing to gather if it has one, else one gathering the resource
+  it does know; one at a time, at most one every `ai.scoutAfter` (15 s), walking only to ground it has never seen. It counts
+  the workers it loses on these searches, and once it has lost `ai.scoutReplacements` (2) of them it sends no more, so an
+  enemy camped at the door costs it at most that many workers (M6-S12, BUG-1460, Producer decision 2026-11-16; the gatherer
+  and the count since M6-S14, BUG-1554 / 1556, Producer decision 2026-11-17). A seat with no finished drop-off may take any node. Built in M6-S5 (BUG-1045), the head ring
   and the replacement in M6-S7 (BUG-1047, BUG-1048; [03 Implementation (M6-S7)](03-technical-design.md#implementation-m6-s7);
   the fallback for a kind with no node in reach was built, measured and dropped: Producer decision, [01 change log](01-vision.md) 2026-11-05).
 - Build orders, army compositions, and attack thresholds are per-faction data (`ai.json`), not code.

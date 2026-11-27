@@ -114,6 +114,10 @@ internal sealed partial class Blackboard
         w.WriteArray(RecentCastIndex);
         w.WriteArray(RecentCastReadyAt);
         w.Write(RecentCastCount);
+
+        // M6-S14, format 11: new values at the part's end. The blind re-scouts (BUG-1554 / 1556).
+        w.Write(BlindScoutOut);
+        w.Write(BlindScoutsLost);
     }
 
     /// <summary>Reads what <see cref="WriteTo"/> wrote over this board, built for the same match and opening.</summary>
@@ -217,6 +221,11 @@ internal sealed partial class Blackboard
         r.ReadArray(RecentCastIndex);
         r.ReadArray(RecentCastReadyAt);
         RecentCastCount = r.ReadInt32In(0, AbilityManager.MaxRecentCasts);
+
+        // M6-S14: a blind re-scout only while a scout is out; the count range-checked by the seat (it knows the cap).
+        BlindScoutOut = r.ReadBool();
+        r.Check(!BlindScoutOut || ScoutPhase == 1);
+        BlindScoutsLost = r.ReadInt32In(0, int.MaxValue);
     }
 
     /// <summary>

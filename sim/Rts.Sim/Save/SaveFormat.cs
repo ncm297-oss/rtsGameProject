@@ -10,8 +10,8 @@ public static class SaveFormat
 {
     /// <summary>
     /// The format version this build writes and reads: 11 since M6-S14, for every save. Format 11 is format 10's layout byte
-    /// for byte but for new values at the end of the AI parts: <c>HUNT</c> ends with the hunt's find (BUG-1661). A save
-    /// without an AI seat differs from format 10 only in this number. Every older format is refused
+    /// for byte but for new values at the end of the AI parts: <c>HUNT</c> ends with the hunt's find (BUG-1661), <c>AIST</c>
+    /// with the blind re-scouts' count (BUG-1554 / 1556). A save without an AI seat differs from format 10 only in this number. Every older format is refused
     /// <see cref="SaveError.FormatVersionMismatch"/>.
     /// Before: 10 since M7-1 (9's layout, the header always holding the map id after the preset, <c>HUNT</c> and <c>CTRM</c>
     /// written exactly when the match seats an AI, the unit store ending with <c>REGN</c>), 9 since M5-9a (7 plus the AI
