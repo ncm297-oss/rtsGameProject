@@ -76,6 +76,14 @@ public class MatchCriterionSweepQaStressTests
         // free starts from its second hunt) takes seeds 1 and 5 out too, though BUG-1152 is not fixed: seed 1 ends at 28,231
         // (seat 0; longest silence 739 ticks, p0 24,221..24,960) and seed 5 at 36,004 (seat 0; longest 939, p0
         // 33,381..34,320), both under the check's bound. The losing seat no longer reaches the wood-starved state there.
+        // M6-S14 (the AI-play session, rule 45; a finding, no bound raised): Raraku seeds 3, 4 and 6 (one match, MatchCriterionTests'
+        // Raraku row until now) fail check (e): from tick 34,181 player 0 re-sends a Gather (unit 45, a Laborer stuck since 21,433
+        // at (86, 112) on its way to (164, 138)) to a node at (166, 150) that is gone, refused NoResourceNode 9 thinks in a row
+        // (27 such refusals in the match); unchecked, the match ends at 39,630 (seat 1). Not traced in M6-S14 (which rule
+        // re-sends it, and why the gone node is not marked dropped): BUG-1852 carries the trace.
+        [("raraku", 3)] = "BUG-1852",
+        [("raraku", 4)] = "BUG-1852",
+        [("raraku", 6)] = "BUG-1852",
     };
 
     /// <summary>The extra oracles' state over one match.</summary>

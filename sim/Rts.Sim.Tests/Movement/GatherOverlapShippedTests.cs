@@ -37,7 +37,7 @@ public class GatherOverlapShippedTests
     [Fact]
     public void TheFormatNumbers_AreUnchanged()
     {
-        Assert.Equal(10, SaveFormat.CurrentVersion);
+        Assert.Equal(11, SaveFormat.CurrentVersion); // M6-S14: format 11 (was 10)
         Assert.Equal(9, Replay.CurrentFormatVersion);
         Assert.Equal(6, Replay.TeamlessFormatVersion);
     }

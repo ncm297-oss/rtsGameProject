@@ -28,8 +28,13 @@ public class PreM73bRefusalTests
     public void ASaveMadeBeforeM73b_WithATechAndACooldown_IsRefusedDataMismatch()
     {
         byte[] bytes = MainSave();
-        // The fixture is a whole, valid save of its own build: only the data hash refuses it (a flipped hash byte, re-checksummed, stays refused the same way).
-        Assert.Equal(SaveError.DataMismatch, SaveTestRun.TryLoad(TestSim.Data, bytes));
+        // The fixture is a whole, valid save of its own build: only the data hash refused it (a flipped hash byte, re-checksummed,
+        // stays refused the same way). M6-S14: it is a format-10 save, and the format check comes first now (format 11), so it
+        // is refused FormatVersionMismatch; relabelled 11, the data hash still refuses it.
+        Assert.Equal(SaveError.FormatVersionMismatch, SaveTestRun.TryLoad(TestSim.Data, bytes));
+        byte[] relabelled = (byte[])bytes.Clone();
+        System.Buffers.Binary.BinaryPrimitives.WriteInt32LittleEndian(relabelled.AsSpan(Rts.Sim.Save.SaveFormat.MagicLength), Rts.Sim.Save.SaveFormat.CurrentVersion);
+        Assert.Equal(SaveError.DataMismatch, SaveTestRun.TryLoad(TestSim.Data, SaveBytes.Rechecksum(relabelled)));
         SaveBytes.Offsets at = SaveBytes.HeaderOffsets(bytes);
         ulong saved = BitConverter.ToUInt64(bytes, at.DataHash);
         _out.WriteLine($"saved data hash {saved:X16}, shipped {TestSim.Data.ContentHash():X16}");

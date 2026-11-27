@@ -247,7 +247,7 @@ without the step at 985 s, the economy manager's house rule placing the 12th Bil
 opening: at the hard cap it costs nothing, and on a seed where the second Keep does not stand it fills the cap.
 
 **Spending on the menu's map (D21, 2026-10-18, gathering gold 0.85 / wood 0.75 a second; `Content/AiSpendingReportTests.GeneratedNormal_Spending_Report`).**
-Against an idle seat, 12 forests and 8 mines (the menu's), 20 minutes. Normal, seed 1 (the smallest seed in 1-50 whose Normal pick is this opening): the idle base falls at 455 s; in hand at 5 min 498 gold / 45 wood; the first wave at 320 s; Age II in at 538 s (re-printed 2026-11-16 for the sim's M6-S12; was: the idle base falls at 465 s; in hand at 5 min 258 gold / 20 wood; the first wave at 338 s; Age II in at 502 s). Easy, seed 1 (Easy always plays the first opening): the idle base falls at 491 s; in hand at 5 min 192 gold / 25 wood; the first wave at 310 s; Age II in at 563 s (re-printed 2026-11-16 for the sim's M6-S12; was: the idle base falls at 478 s; in hand at 5 min 192 gold / 5 wood; the first wave at 314 s; Age II in at 539 s). Age II comes in about 2 minutes after its step is
+Against an idle seat, 12 forests and 8 mines (the menu's), 20 minutes. Normal, seed 1 (the smallest seed in 1-50 whose Normal pick is this opening): the idle base falls at 455 s; in hand at 5 min 498 gold / 45 wood; the first wave at 320 s; Age II in at 538 s (re-printed 2026-11-16 for the sim's M6-S12; was: the idle base falls at 465 s; in hand at 5 min 258 gold / 20 wood; the first wave at 338 s; Age II in at 502 s). Easy, seed 1 (Easy always plays the first opening): the idle base falls at 474 s; in hand at 5 min 192 gold / 25 wood; the first wave at 310 s; Age II in at 563 s (re-printed 2026-11-26 for the sim's M6-S14; was: the idle base falls at 491 s; in hand at 5 min 192 gold / 25 wood; the first wave at 310 s; Age II in at 563 s) (re-printed 2026-11-16 for the sim's M6-S12; was: the idle base falls at 478 s; in hand at 5 min 192 gold / 5 wood; the first wave at 314 s; Age II in at 539 s). Age II comes in about 2 minutes after its step is
 due at 6:30: the army is wave-sized by then (the first wave left at 338 s), so the reserve (above) holds the gold for it. Re-printed 2026-10-26 for M5-4g:
 before it Age II came in at 938 s (Normal) and 844 s (Easy), about 8 minutes after its step, and the Normal run razed
 the idle base at 498 s; the 5-minute banks and the first waves did not move. The reserve costs army against an active
@@ -309,8 +309,9 @@ standard (23 in Age I): two Ranges and a crossbow army eat the wood.
 | 26 | time 570 | research | `moranth_supply` | 1 | The faction upgrade (Catapult range + 4 m) |
 
 **Houses at the cap (D21, 2026-10-18; `QA/Content/AiHouseRuleReportTests.MenuMapNormal_HouseSources_Report`).** On the
-menu's map (20 minutes, the other seat idle): Normal, seed 5: the cap reaches 100 at 711 s; the last Billet step (step
-19) is done at a cap of 100; skipped at the hard cap: steps 18, 19; 10 Billets stand at 20:00, 0 past the cap. Re-printed 2026-11-16 for the sim's M6-S12: the cap reached 100 at 798 s with step 19 skipped and 11 Billets. Re-printed 2026-11-15 for the sim's M6-SH2: the cap reached 100 at 708 s with steps 18 and 19 skipped and 10 Billets.
+menu's map (20 minutes, the other seat idle): Normal, seed 5: the cap reaches 100 at 795 s; the last Billet step (step
+19) is done at a cap of 100; skipped at the hard cap: step 19; 11 Billets stand at 20:00, 1 past the cap. Re-printed
+2026-11-26 for the sim's M6-S14: the cap reached 100 at 711 s with steps 18 and 19 skipped and 10 Billets. Re-printed 2026-11-16 for the sim's M6-S12: the cap reached 100 at 798 s with step 19 skipped and 11 Billets. Re-printed 2026-11-15 for the sim's M6-SH2: the cap reached 100 at 708 s with steps 18 and 19 skipped and 10 Billets.
 Re-printed 2026-10-26 for M5-4g: before it the cap reached 100 at 650 s, step 19 was done at a cap of 98, no step was
 skipped and 12 Billets stood.
 
@@ -551,15 +552,24 @@ number of waves), Age II, the defeat, and the largest army it had (read once a s
 
 | minArmyPop / minArmyCost | seed | waved at (waves) | Age II at | defeated at | peak army pop |
 | --- | --- | --- | --- | --- | --- |
-| 18 / 1,332 | 7 | 8:20 (4) | 8:13 | never | 55 |
-| 18 / 1,332 | 8 | 9:59 (3) | 8:41 | never | 21 |
-| 18 / 1,332 | 14 | never (0) | 8:52 | 11:21 | 9 |
-| 16 / 1,184 | 7 | 7:50 (4) | 8:13 | never | 52 |
-| 16 / 1,184 | 8 | 7:48 (4) | 8:41 | never | 26 |
-| 16 / 1,184 | 14 | never (0) | 8:52 | 11:21 | 9 |
-| 14 / 1,036 | 7 | 6:47 (5) | 8:13 | never | 60 |
-| 14 / 1,036 | 8 | 7:18 (1) | 8:33 | 13:09 | 16 |
-| 14 / 1,036 | 14 | never (0) | 8:52 | 11:21 | 9 |
+| 18 / 1,332 | 7 | 8:36 (4) | 8:13 | never | 57 |
+| 18 / 1,332 | 8 | 7:32 (4) | 8:35 | never | 29 |
+| 18 / 1,332 | 14 | never (0) | 8:23 | 11:17 | 9 |
+| 16 / 1,184 | 7 | 8:05 (3) | 8:13 | never | 49 |
+| 16 / 1,184 | 8 | 7:02 (1) | 8:14 | 17:49 | 19 |
+| 16 / 1,184 | 14 | never (0) | 8:23 | 11:17 | 9 |
+| 14 / 1,036 | 7 | 6:47 (4) | 8:13 | never | 65 |
+| 14 / 1,036 | 8 | 6:56 (1) | 8:15 | 16:21 | 17 |
+| 14 / 1,036 | 14 | never (0) | 8:23 | 11:17 | 9 |
+
+Re-printed 2026-11-26 for the sim's M6-S14 (docs/03 "Implementation (M6-S14)"; no data changed but `ai.minWorkers`).
+**The rule no longer picks the shipped 16 (BUG-1851, for the data track's re-measure after M6-S14):** at 16 pop seed 8
+now sends one wave (7:02) and is destroyed at 17:49, so 16 fails "no seed that stands at 20:00 at 18 is destroyed", as
+14 does (seed 8 destroyed at 16:21); the rule keeps 18. The prose below and its pin
+(`QA/Content/DR35ProsePinQaTests.Malazan_Bug0982Prose_MatchesTheThresholdTable`) and the report's pick
+(`Content/AiOpeningPairsReportTests.Bug0982_*`) are skipped with BUG-1851 until then; no number was tuned here. The D33
+table read: 18 pop 8:20 (4) / 9:59 (3) / never, Age II 8:13 / 8:41 / 8:52, seed 14 destroyed 11:21, peaks 55 / 21 / 9; 16
+pop 7:50 (4) / 7:48 (4), seed 8 standing, peaks 52 / 26; 14 pop 6:47 (5) / 7:18 (1), seed 8 destroyed 13:09, peaks 60 / 16.
 
 Re-measured 2026-11-17 by D33 on the sim of M6-S12 (docs/03 "Implementation (M6-S12)"), before any D33 data change
 (the table sets `cadre_rush`'s wave itself, so the shipped number does not move it). Seeds 7 and 8 wave at every
@@ -627,7 +637,7 @@ every Malazan opening against every Whirlwind opening on the pairing's three sma
 `QA/Content/D21OpeningsQaTests`'; each run pins its cell here and on the Whirlwind page's twin table. Since the sim's
 M6-S10 (2026-11-15, the gather change) the Malazans reach Age II on 26 of the 27 sides; the one that doesn't is
 `crossbow_push` seed 19, BUG-1010's beaten side, now defeated at 16:10. Three sides fall: seed 19, `cadre_rush` seed 14
-at 11:34 (after its Age II, at 8:19) and `cadre_rush` seed 27 at 18:32. `crossbow_push` seed 32 reaches Age II at 15:01 and stands at 20:00 (since the sim's M6-S12; 12:21 under M6-S10 and M6-SH2). Before M6-S10 the count was 23 of 27: `standard` seed 2 and `cadre_rush` seed 14 were defeated
+at 11:34 (after its Age II, at 8:19) and `cadre_rush` seed 27 at 18:32. `crossbow_push` seed 32 reaches Age II at 13:01 and stands at 20:00 (since the sim's M6-S14; 15:01 under M6-S12 and D33, 12:21 under M6-S10 and M6-SH2). Before M6-S10 the count was 23 of 27: `standard` seed 2 and `cadre_rush` seed 14 were defeated
 first, seed 19 stood at 20:00 without Age II, and `crossbow_push` seed 32 was defeated at 17:12 (16:54 before the sim's
 M5-9a). Under M5-4g alone seed 32 stood at 20:00 (3 pop, no pop building left; 794 gold and 5 wood in hand; docs/03
 "Implementation (M5-4g)") until M5-4d's hunt (the AI hunts the last units once it knows no enemy building) finished it,
@@ -636,15 +646,15 @@ and seed 19 with it; from M5-4d slice 2 (the AI rebuilds what it loses) until M6
 
 | Malazan opening | Whirlwind opening | 1st seed | 2nd seed | 3rd seed |
 | --- | --- | --- | --- | --- |
-| `standard` | `standard` | seed 1: 10:19 | seed 22: 15:25 | seed 26: 11:16 |
-| `standard` | `raider_rush` | seed 2: 13:07 | seed 10: never (defeated 12:38) | seed 21: 8:14 |
-| `standard` | `holy_war` | seed 3: 9:34 | seed 4: 11:24 | seed 6: 11:01 |
-| `crossbow_push` | `standard` | seed 9: 11:23 | seed 32: 15:01 | seed 37: 9:52 |
-| `crossbow_push` | `raider_rush` | seed 5: 9:50 | seed 11: 9:28 | seed 19: 11:31 |
-| `crossbow_push` | `holy_war` | seed 12: 11:20 | seed 45: 8:40 | seed 71: never (defeated 17:49) |
+| `standard` | `standard` | seed 1: 9:34 | seed 22: 14:11 | seed 26: 11:18 |
+| `standard` | `raider_rush` | seed 2: never (defeated 16:27) | seed 10: never (defeated 12:38) | seed 21: 8:14 (defeated 16:28) |
+| `standard` | `holy_war` | seed 3: 9:34 | seed 4: 11:14 | seed 6: 11:08 |
+| `crossbow_push` | `standard` | seed 9: 13:09 | seed 32: 13:01 | seed 37: 8:41 |
+| `crossbow_push` | `raider_rush` | seed 5: 9:53 | seed 11: 9:28 | seed 19: never (defeated 18:20) |
+| `crossbow_push` | `holy_war` | seed 12: 10:56 | seed 45: 8:40 | seed 71: never (defeated 17:28) |
 | `cadre_rush` | `standard` | seed 13: 6:05 | seed 16: 8:11 | seed 17: 8:08 |
-| `cadre_rush` | `raider_rush` | seed 7: 8:13 | seed 8: 8:41 | seed 14: 8:52 (defeated 11:21) |
-| `cadre_rush` | `holy_war` | seed 20: 8:16 | seed 24: 8:26 | seed 27: 8:42 |
+| `cadre_rush` | `raider_rush` | seed 7: 8:13 | seed 8: 8:14 (defeated 17:49) | seed 14: 8:23 (defeated 11:17) |
+| `cadre_rush` | `holy_war` | seed 20: 8:16 | seed 24: 8:28 | seed 27: 8:51 |
 
 Re-printed 2026-11-15 for the sim's M6-S10 (docs/03 "Implementation (M6-S10)"): `crossbow_push` against `holy_war` seed 45 reaches Age II at 8:40 (was 9:28) and stands at 20:00 again (was defeated at 19:02 from the sim's M5-H6; Age II at 8:42 under M6-S10 and M6-SH2, 8:38 under M6-S12, 8:40 since D33); `cadre_rush`
 against `raider_rush` seed 8 reaches Age II at 8:22 (was 8:41) and stands at 20:00 (was destroyed at 13:47), and seed 14
@@ -673,6 +683,9 @@ at 9:28 and fell at 16:14). Three sides fall: those two and `cadre_rush` against
 Age II at 8:52). `cadre_rush` against `holy_war` seed 27 now stands at 20:00 (Age II at 8:42; it fell at 19:41), and
 `crossbow_push` against `holy_war` seed 12 reaches Age II at 11:20 (was 17:04). The three paragraphs above describe the
 M6-S10, M6-SH2 and M6-S12 runs.
+
+
+Re-printed 2026-11-26 for the sim's M6-S14 (the AI-play session: the hunt's resume, the worker floor, the rally search's memory, the blind re-scout's count, the rally point's memory; docs/03 "Implementation (M6-S14)"; cells moved on every seed): 23 of the 27 Malazan sides reach Age II; the four that don't: `standard` against `raider_rush` seed 2 (defeated 16:27); `standard` against `raider_rush` seed 10 (defeated 12:38); `crossbow_push` against `raider_rush` seed 19 (defeated 18:20); `crossbow_push` against `holy_war` seed 71 (defeated 17:28). 7 sides fall: `standard` against `raider_rush` seed 2 (16:27); `standard` against `raider_rush` seed 10 (12:38); `standard` against `raider_rush` seed 21 (16:28, after its Age II at 8:14); `crossbow_push` against `raider_rush` seed 19 (18:20); `crossbow_push` against `holy_war` seed 71 (17:28); `cadre_rush` against `raider_rush` seed 8 (17:49, after its Age II at 8:14); `cadre_rush` against `raider_rush` seed 14 (11:17, after its Age II at 8:23). The paragraphs above describe the M6-S10, M6-SH2, M6-S12 and D33 runs. The old cells (D33): `standard` v `standard` seeds 1 / 22 / 26 10:19 / 15:25 / 11:16, `standard` v `raider_rush` seed 2 13:07, `crossbow_push` v `standard` seed 9 11:23, `crossbow_push` v `raider_rush` seed 5 9:50, `crossbow_push` v `holy_war` seed 12 11:20, `standard` v `raider_rush` seed 21 8:14, `standard` v `holy_war` seeds 4 / 6 11:24 / 11:01, `crossbow_push` v `standard` seeds 32 / 37 15:01 / 9:52, `crossbow_push` v `raider_rush` seed 19 11:31, `crossbow_push` v `holy_war` seed 71 never (defeated 17:49), `cadre_rush` v `raider_rush` seeds 8 / 14 8:41 / 8:52 (defeated 11:21), `cadre_rush` v `holy_war` seeds 24 / 27 8:26 / 8:42.
 
 ## Questions for the Producer (D-R39, 2026-11-15)
 

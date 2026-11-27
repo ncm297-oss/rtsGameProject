@@ -178,7 +178,9 @@ public class RetrainQaTests
     /// <summary>
     /// The camping enemy (QA focus 1): two Whirlwind raiders held at the Keep's south-east corner, the seat with no worker and
     /// 1,000 gold, 24,000 ticks (20 min). Measured: Laborers trained and lost, gold spent. The seat may not end with negative
-    /// gold, more than one Laborer queued at once, or a queue of Laborers while it has a worker alive.
+    /// gold, more than one Laborer queued at once, or a queue of Laborers while it has a worker alive. M6-S14 (BUG-1660): the
+    /// retrain is a floor now (<c>ai.minWorkers</c>, shipped 4), so up to that many Laborers may wait in the queue at once (one
+    /// sent a think while live + queued are under it); the "one at a time" bound is the floor's.
     /// </summary>
     [Fact]
     public void ACampingEnemy_TheDrainMeasured()
@@ -217,6 +219,6 @@ public class RetrainQaTests
         int trains = log.Count(c => c.Tick > start && c.Kind == CommandKind.Train && c.TypeId == Laborer);
         int otherTrains = log.Count(c => c.Tick > start && c.Kind == CommandKind.Train && c.TypeId != Laborer);
         _out.WriteLine($"camping enemy, 24,000 ticks: Laborer Trains sent {trains}, Laborers seen {seen.Count}, lost {died}, alive {Workers(w, 0)}; other Trains {otherTrains}; gold {startGold} -> {w.Gold[0]} (gathered {w.GatheredGold[0]}), wood {w.Wood[0]}; max Laborers queued at once {maxQueued}; match over {sim.MatchOver}");
-        Assert.True(maxQueued <= 1, $"{maxQueued} Laborers queued at once");
+        Assert.True(maxQueued <= w.Data.AiRules.MinWorkers, $"{maxQueued} Laborers queued at once (the floor {w.Data.AiRules.MinWorkers}; M6-SH2's bound was 1)");
     }
 }

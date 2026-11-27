@@ -56,12 +56,14 @@ public class ReservePairingsStressTests
     /// </summary>
     internal static readonly (int Malazan, int Whirlwind, int Nth, int Player)[] KnownNoAgeTwo =
     {
+        // M6-S14 (the AI-play session, re-measured once): (2, 0, 1, 1) is out (cadre_rush v standard seed 13's Whirlwind side
+        // now reaches Age II or is defeated, the row's own "take it out"); no side alive at 20:00 lacks Age II (0 of 43).
         // M6-S12 (re-measured once on the M6-S12 tree: the rally point off one-cell passages, a rebalance measured from the
         // drop-off, the blind seat's re-scout): (0, 1, 1, 0) is out (standard v raider_rush seed 2's Malazan side now reaches
         // Age II at 13:07, the row's own "take it out"); one new side is in.
         // cadre_rush v standard seed 13, Whirlwind: never reaches Age II and stands at 20:00 (under M6-SH2 it was defeated at
         // 15:19 without it; listed until M6-SH2 for "no gold node known by 20:00"). The pages' Age II tables print it.
-        (2, 0, 1, 1),
+        // (2, 0, 1, 1) was here (out in M6-S14).
         // M6-SH2 fix round (BUG-1535, re-measured once on the M6-SH2 tree: a site is no drop-off, the retrain, BUG-1151's
         // mark): the four sides below now reach Age II or are defeated, so they are out; one new side is in.
         // standard v raider_rush seed 2, Malazan: raided all match (63 units lost by 20:00, its workers 19 at 10:00 and 4 at
@@ -85,8 +87,12 @@ public class ReservePairingsStressTests
     /// 14): no-wave sides 2 -> 1 (the <c>holy_war</c> side of <c>standard</c> v <c>holy_war</c> seed 3 now waves: BUG-1553's
     /// cure; the one left is <c>cadre_rush</c> v <c>raider_rush</c> seed 14's Malazan side, BUG-0982), Malazan waves 96, Whirlwind
     /// waves 128, defeats 3 / 2, alive without Age II 1 of 49; the three bounds unchanged.
+    /// M6-S14 (the AI-play session, a re-measure, rule 43): no-wave sides 1 -> 2 (<c>standard</c> v <c>raider_rush</c> seed 2's
+    /// Malazan side is defeated at 16:27 without a wave, peak army 14; the other is still <c>cadre_rush</c> v
+    /// <c>raider_rush</c> seed 14's, BUG-0982), Malazan waves 90, Whirlwind waves 121, defeats 7 / 4, alive without Age II 0
+    /// of 43; the three bounds unchanged (all met).
     /// </summary>
-    internal const int NoWaveSides = 1, MinMalazanWaves = 79, MaxMalazanDefeats = 8, MaxWhirlwindDefeats = 5; // D33: NoWaveSides was 2
+    internal const int NoWaveSides = 2, MinMalazanWaves = 79, MaxMalazanDefeats = 8, MaxWhirlwindDefeats = 5; // M6-S14: NoWaveSides was 1 (D33: was 2)
 
     /// <summary>The 27 rows' results, by (Malazan, Whirlwind, nth); the row that completes the set asserts the totals (the rows of one class run one at a time).</summary>
     private static readonly SortedDictionary<int, Result> s_pairings = new();

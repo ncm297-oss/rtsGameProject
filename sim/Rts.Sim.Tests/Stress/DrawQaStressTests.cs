@@ -43,12 +43,15 @@ public class DrawQaStressTests
     /// A stalled four-seat AI match on the shipped data (Pale Hills free-for-all seed 6, the developer's "draw at 51,216, 5
     /// restarts"): the independent oracle agrees with the clock and every seat's answer on every tick, and the counters equal a
     /// scan, to the draw. Re-measures the developer's row with a second reading of the rule.
+    /// M6-S14 (the AI-play session; a re-stage, the checks unchanged, the name kept): seed 6 is never spent now (over at
+    /// 81,444, seat 1 the winner), so the row plays seed 1 (spent from 26,961, drawn at 58,257: <c>HuntStressTests</c>' seed-1
+    /// row). Was seed 6.
     /// </summary>
     [Fact]
     [Trait("Category", "Stress")]
     public void PaleHillsSeed6_FourSeats_TheOracleAgreesEveryTick_ToTheDraw()
     {
-        Simulation sim = DrawStalledRowsReportTests.Build("pale_hills", 6, 4, null);
+        Simulation sim = DrawStalledRowsReportTests.Build("pale_hills", 1, 4, null); // M6-S14: was seed 6
         var oracle = new DrawQaOracle(sim);
         int firstSpent = -1;
         while (!sim.MatchOver && sim.TickNumber < 144_000)

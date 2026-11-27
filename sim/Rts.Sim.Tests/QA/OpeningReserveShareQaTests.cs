@@ -316,7 +316,7 @@ public class OpeningReserveShareQaTests
         reference.Tick(); // one tick into the held reserve
         byte[] bytes = SaveTestRun.Save(reference);
         Assert.Equal(SaveFormat.CurrentVersion, BitConverter.ToInt32(bytes, SaveFormat.MagicLength));
-        Assert.Equal(10, SaveFormat.CurrentVersion);
+        Assert.Equal(11, SaveFormat.CurrentVersion); // M6-S14: format 11 (was 10)
         Assert.Equal(SaveError.DataMismatch, SaveTestRun.TryLoad(TestSim.Data, bytes));
         Simulation loaded = SaveTestRun.Load(d, bytes);
         for (int p = 0; p < 2; p++) SaveTestRun.AssertSameAi(reference.AiOf(p), loaded.AiOf(p), $"saved at {reference.TickNumber}: seat {p}");

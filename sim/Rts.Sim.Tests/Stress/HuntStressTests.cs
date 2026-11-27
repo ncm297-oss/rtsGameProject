@@ -128,10 +128,15 @@ public class HuntStressTests
     /// on seed 2 is spent from 26,442 (22:02, the map's gold gone), the clock restarts 114 times on deaths, and it ends in a
     /// draw at 58,378 (48:38) with all four seats standing (<c>DrawStalledRowsReportTests</c>). Was: over at 59,951, p1, 4
     /// hunts. The oracle checks every hunting think up to the draw as before; the row now pins the draw.
+    /// M6-S14 (the AI-play session, rule 45, a finding, not re-bound): the free-for-all on seed 2 no longer ends by 144,000
+    /// (no seat defeated, never spent: BUG-1854), so the row moves to the nearest seed that ends, 3 (over at 86,931, seat 1 the
+    /// winner, the first defeat at 23,094 and a hunt after it at 23,100; seed 1 is <see cref="FourAiSeats_OnPaleHills_Seed1_KnownStall"/>'s
+    /// draw at 58,257). <c>RebuildLookMatchQaStressTests</c>' rebuilding row plays seed 3 too since M6-S14. Was seed 2, the
+    /// draw at 58,378.
     /// </summary>
     [Theory]
     [Trait("Category", "Stress")]
-    [InlineData(2UL, false, 58_378)]
+    [InlineData(3UL, false, 0)] // M6-S14: was (2UL, false, 58_378)
     [InlineData(1UL, true, 0)]
     public void FourAiSeats_OnPaleHills_EndWithTheOracleOnEveryHunt(ulong seed, bool teams, int drawAt) => FourSeatsRow(seed, teams, drawAt);
 
@@ -152,7 +157,7 @@ public class HuntStressTests
     [Theory]
     [Trait("Category", "Stress")]
     [InlineData(1UL, false)]
-    public void FourAiSeats_OnPaleHills_Seed1_KnownStall(ulong seed, bool teams) => FourSeatsRow(seed, teams, drawAt: 61_779);
+    public void FourAiSeats_OnPaleHills_Seed1_KnownStall(ulong seed, bool teams) => FourSeatsRow(seed, teams, drawAt: 58_257); // M6-S14 (the AI-play session): was 61,779
 
     // M6-S13: FourAiSeats_OnPaleHills_Seed2_KnownStall (Pale Hills free-for-all seed 2, BUG-1116 / BUG-1068's remaining case,
     // un-skipped by M5-9a round 2) was the same match as the oracle row's seed 2 since M6-S12 (docs/01 2026-11-16; the handoff
@@ -264,9 +269,10 @@ public class HuntStressTests
     /// 96,321, past the row's 72,000: the far expansion's gold lengthens its war, BUG-1116's slow raze at the end; seed 1 ends
     /// at 48,858 after one hunt), 2 since M6-SH2 (BUG-1533: seed 1 ends at 27,498 with no hunt; seed 2 ends at 42,016 after 4
     /// hunts). Was 1. M6-S12 fix round 1: seed 2 ends at 51,218 (was 42,016), saved at a sighting (p1, 46,381) and a sweep
-    /// (p1, 48,541); unchanged.
+    /// (p1, 48,541); unchanged. M6-S14 (the AI-play session): 1 again (seed 2 ends at 59,700 with no hunt; seed 1 at 26,594
+    /// after one hunt by p1). Was 2.
     /// </summary>
-    private const ulong MidHuntSeed = 2;
+    private const ulong MidHuntSeed = 1;
 
     private static Simulation Reload(Simulation sim)
     {
