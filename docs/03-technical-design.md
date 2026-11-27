@@ -14628,7 +14628,10 @@ inside the lower building's footprint at the lane's east mouth; at tick 20, befo
 - **Closed, as the seat knows it** (`PlayerView.IsKnownClosed(x, y)`, new, read-only): off the map; terrain (cliff, border,
   pocket, as `CanPlace` judges it); a building it knows (its own, one it sees, a ghost of the same building: `CanPlace`'s
   rule); a live node on ground it has explored. A building it never saw reads open; a node felled out of its sight reads open
-  (the cell's truth, not its memory: the rally search reads only the ground round its own point, near its base).
+  (the cell's truth, not its memory: the rally search reads only the ground round its own point, near its base). **Since
+  M6-S14 (BUG-1555) it reads the memory instead:** a ghost's footprint (also of a building razed out of sight) and a
+  remembered node's footprint (also of one felled out of sight) are closed until a fog update shows that ground again
+  ("Implementation (M6-S14)", item C).
 - **A one-cell passage cell** (`NarrowWithin`): an open cell closed on both sides along one axis and open on both sides
   along the other (a lane one cell wide; a dead end, closed on three sides, is not one).
 - **The rule:** when a passage cell's centre lies within `ai.rallyReach` (6 m) of the nominal point (`ai.rallyDistance`,
@@ -14819,7 +14822,10 @@ move. Allocation: `Ai/RallyPassageTests.TheRallySearch_AllocatesNothing` (20 thi
    dedicated knob (`ai.rallyClearance`) would let the two differ. Recommendation: no new knob until a map shows the need.
 3. **The rally rule reads known buildings, not just terrain**, since Raraku's lane is between the seat's own buildings. Its
    one fog edge: a node felled out of sight reads open (the cell's truth). Recommendation: accept (the search reads only the
-   ground round the seat's own point).
+   ground round the seat's own point). **Corrected (M6-S14, BUG-1555, the Producer's ruling of 2026-11-16-2036):** there were
+   two fog edges, not one: a building razed out of sight read open too, though its ghost was still remembered. Both now read
+   the seat's memory, as `CanPlace` does: a remembered ghost's or node's footprint is closed until the seat sees that ground
+   again ("Implementation (M6-S14)", item C).
 4. **The re-scout takes only a worker the economy left idle** (it runs after the economy). A seat short of wood that knows a
    gold mine puts every worker on gold and never re-scouts. Recommendation: keep it (QA's guard row lost 16 scouts when a
    gatherer could be taken); if the Producer wants gatherers taken, a cap per window is a new number.

@@ -126,20 +126,108 @@ public sealed class PlayerView
     /// M6-S12 (BUG-1461): whether the player knows cell (<paramref name="x"/>, <paramref name="y"/>) is closed to ground units:
     /// off the map; closed by the terrain (a cliff, the border, a pocket, as <see cref="CanPlace"/> judges them); covered by a
     /// building it knows (its own, one it sees, a ghost of the same building: the rule <see cref="CanPlace"/> uses); or by a
-    /// live node on ground it has explored (it saw it: no match spawns nodes later). A building it never saw reads open, and so
-    /// does a node felled out of its sight (the cell's truth, not the player's memory; the AI's rally search alone reads this,
-    /// near its own base). Read-only and allocation-free.
+    /// live node on ground it has explored (it saw it: no match spawns nodes later). M6-S14 (BUG-1555): and, as
+    /// <see cref="CanPlace"/> does, by what it remembers: the whole footprint of a ghost (also of a building razed out of its
+    /// sight) and of a node it remembers (also one felled out of its sight), as a building it knows closes its whole footprint,
+    /// until a fog update shows it that ground again (the fog drops the memory then). A building it never saw reads open.
+    /// Read-only and allocation-free; the memory is walked only for a cell its truth does not close.
+    /// <see cref="KnownClosedWindow"/> answers a block of cells with one walk of the memory.
     /// </summary>
     public bool IsKnownClosed(int x, int y)
     {
         NavGrid g = _world.NavGrid;
         if (!g.InBounds(x, y)) return true;
+        int cell = y * g.Width + x;
+        return TruthKnownClosed(g, x, y, cell) || RemembersClosed(x, y, 1, 1, default, g.Width);
+    }
+
+    /// <summary>
+    /// M6-S14 (BUG-1555): <see cref="IsKnownClosed"/> for every cell of the <paramref name="width"/> x <paramref name="height"/>
+    /// block whose top-left cell is (<paramref name="x0"/>, <paramref name="y0"/>), written row by row into
+    /// <paramref name="closed"/> (at least <c>width x height</c> long; a cell off the map is closed). The same answers as
+    /// <see cref="IsKnownClosed"/> cell by cell (a test holds them equal), with the memory walked once for the block instead
+    /// of once a cell: the rally search reads up to 21 x 21 cells a think. Allocates nothing.
+    /// </summary>
+    public void KnownClosedWindow(int x0, int y0, int width, int height, Span<bool> closed)
+    {
+        NavGrid g = _world.NavGrid;
+        bool open = false; // a cell its truth does not close: only then is the memory walked
+        for (int dy = 0; dy < height; dy++)
+            for (int dx = 0; dx < width; dx++)
+            {
+                int x = x0 + dx, y = y0 + dy, i = dy * width + dx;
+                if (!g.InBounds(x, y))
+                {
+                    closed[i] = true;
+                    continue;
+                }
+                int cell = y * g.Width + x;
+                closed[i] = TruthKnownClosed(g, x, y, cell);
+                open |= !closed[i];
+            }
+        if (open) RemembersClosed(x0, y0, width, height, closed, g.Width);
+    }
+
+    /// <summary>
+    /// The part of <see cref="IsKnownClosed"/> read from the cell's truth (M6-S12): the terrain, a building the player knows,
+    /// a live node on explored ground. Cell (<paramref name="x"/>, <paramref name="y"/>) on the map.
+    /// </summary>
+    private bool TruthKnownClosed(NavGrid g, int x, int y, int cell)
+    {
         NavFlags f = g.FlagsAt(x, y);
         if ((f & NavFlags.Blocked) == 0) return false;
-        if ((f & NavFlags.Resource) != 0) return _fog.IsExplored(_player, y * g.Width + x);
+        if ((f & NavFlags.Resource) != 0) return _fog.IsExplored(_player, cell);
         if ((f & NavFlags.Building) == 0) return true; // terrain or a pocket
         int k = _buildings.SlotAt(x, y);
         return k >= 0 && KnowsBuilding(k);
+    }
+
+    /// <summary>
+    /// M6-S14 (BUG-1555): <see cref="CheckPlace"/>'s two memory loops (the ghosts in use, the node slots ever used: a node
+    /// remembered, live or gone) over the block at (<paramref name="x0"/>, <paramref name="y0"/>) of <paramref name="width"/> x
+    /// <paramref name="height"/> cells. With an empty <paramref name="closed"/>: whether anything remembered covers the block
+    /// (a one-cell block is a cell). Otherwise every cell of it a footprint covers is set closed in
+    /// <paramref name="closed"/> (row by row), and the result is whether any was. Allocates nothing.
+    /// </summary>
+    private bool RemembersClosed(int x0, int y0, int width, int height, Span<bool> closed, int mapWidth)
+    {
+        bool any = false;
+        int left = _fog.GhostCount(_player);
+        if (left > 0)
+        {
+            ReadOnlySpan<BuildingGhost> list = _fog.Ghosts(_player);
+            for (int s = 0; s < list.Length && left > 0; s++)
+            {
+                BuildingGhost gh = list[s];
+                if (!gh.Known) continue;
+                left--;
+                BuildingDef gd = _data.Buildings[gh.TypeId];
+                if (!Overlaps(gh.Cell, gd.FootprintWidth, gd.FootprintHeight, x0, y0, width, height, mapWidth)) continue;
+                if (closed.IsEmpty) return true;
+                any |= Mark(gh.Cell, gd.FootprintWidth, gd.FootprintHeight, x0, y0, width, height, closed, mapWidth);
+            }
+        }
+        int nodes = _resources.HighWater; // no node was ever past it
+        for (int s = 0; s < nodes; s++)
+        {
+            NodeMemory m = _fog.NodeAt(_player, s);
+            if (!m.Known) continue; // live or gone: the node it saw there (a live one's explored cells its truth closes too)
+            ResourceDef rd = _data.Resources[m.TypeId];
+            if (!Overlaps(m.Cell, rd.FootprintWidth, rd.FootprintHeight, x0, y0, width, height, mapWidth)) continue;
+            if (closed.IsEmpty) return true;
+            any |= Mark(m.Cell, rd.FootprintWidth, rd.FootprintHeight, x0, y0, width, height, closed, mapWidth);
+        }
+        return any;
+    }
+
+    /// <summary>Sets closed every cell of the block (see <see cref="RemembersClosed"/>) a footprint at <paramref name="cell"/> covers (the caller found they overlap); true.</summary>
+    private static bool Mark(int cell, int fw, int fh, int x0, int y0, int width, int height, Span<bool> closed, int mapWidth)
+    {
+        int ax = cell % mapWidth, ay = cell / mapWidth;
+        int xa = Math.Max(ax, x0), xb = Math.Min(ax + fw, x0 + width), ya = Math.Max(ay, y0), yb = Math.Min(ay + fh, y0 + height);
+        for (int y = ya; y < yb; y++)
+            for (int x = xa; x < xb; x++) closed[(y - y0) * width + (x - x0)] = true;
+        return true;
     }
 
     // ---------- the start list (M5-9b): map data every seat is given, so no fog ----------

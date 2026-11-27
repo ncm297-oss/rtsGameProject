@@ -162,21 +162,25 @@ internal static class MilitaryManager
     /// and open on both sides along the other (a lane one cell wide: a gap in a cliff, between two buildings, or between a
     /// building and a tree line). A dead end (closed on three sides) is not a passage. An army parked there blocks the lane
     /// for its own workers, and a shove cannot move a soldier along it (BUG-0033's rule): Raraku seed 1's worker held from
-    /// tick 5,131. At most (2 x reach / cell + 3)^2 cells, five reads each; allocates nothing.
+    /// tick 5,131. At most (2 x reach / cell + 3)^2 cells, read once as a block (M6-S14, <see cref="PlayerView.KnownClosedWindow"/>:
+    /// the seat's memory walked once, BUG-1555) into a stack buffer of at most 21 x 21 (<c>ai.rallyReach</c> at its 16 m
+    /// bound); allocates nothing.
     /// </summary>
     internal static bool NarrowWithin(AiPlayer ai, Vector2 p)
     {
-        PlayerView v = ai.View;
         float reach = ai.Rules.RallyReach, cell = MapConstants.CellSize;
         int r = (int)MathF.Ceiling(reach / cell) + 1;
         int cx = (int)(p.X / cell), cy = (int)(p.Y / cell);
+        int x0 = cx - r - 1, y0 = cy - r - 1, side = 2 * r + 3;
+        Span<bool> closed = stackalloc bool[side * side];
+        ai.View.KnownClosedWindow(x0, y0, side, side, closed);
         for (int y = cy - r; y <= cy + r; y++)
             for (int x = cx - r; x <= cx + r; x++)
             {
                 Vector2 centre = new((x + 0.5f) * cell, (y + 0.5f) * cell);
-                if (Vector2.DistanceSquared(centre, p) > reach * reach || v.IsKnownClosed(x, y)) continue;
-                bool west = v.IsKnownClosed(x - 1, y), east = v.IsKnownClosed(x + 1, y);
-                bool north = v.IsKnownClosed(x, y - 1), south = v.IsKnownClosed(x, y + 1);
+                int i = (y - y0) * side + (x - x0);
+                if (Vector2.DistanceSquared(centre, p) > reach * reach || closed[i]) continue;
+                bool west = closed[i - 1], east = closed[i + 1], north = closed[i - side], south = closed[i + side];
                 if (west && east && !north && !south || north && south && !west && !east) return true;
             }
         return false;

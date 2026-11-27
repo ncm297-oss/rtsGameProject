@@ -361,12 +361,13 @@ public class M6S12AiRulesQaTests(ITestOutputHelper output)
 
     /// <summary>
     /// <see cref="PlayerView.IsKnownClosed"/> against the fog: player 1's building on ground player 0 never explored reads open;
-    /// once a unit of player 0 has seen it, closed; after the unit walks away (a ghost), still closed. BUG-1555: razed while out of
-    /// player 0's sight, its ghost stays (player 0 still remembers it, as <see cref="PlayerView.CanPlace"/> does) but the cell reads
-    /// open: the rally search learns of a death it did not see. Today's answer is pinned at the end.
+    /// once a unit of player 0 has seen it, closed; after the unit walks away (a ghost), still closed. BUG-1555 (M6-S14, flipped:
+    /// before, the cell read open here): razed while out of player 0's sight, its ghost stays (player 0 still remembers it, as
+    /// <see cref="PlayerView.CanPlace"/> does) and the cell still reads closed, so the rally search learns of no death it did not
+    /// see; once a unit of player 0 sees the ground again (the fog drops the ghost), it reads open.
     /// </summary>
     [Fact]
-    public void IsKnownClosed_FollowsTheFog_ButARazeOutOfSight_Leaks_Bug1555()
+    public void IsKnownClosed_FollowsTheFog_AndARazeOutOfSight_StaysClosedUntilSeen_Bug1555()
     {
         PlayerSeat[] seats = AiScenes.Seats(AiDifficulty.Normal, SeatController.Ai, SeatController.Human);
         Simulation sim = AiScenes.Flat(seats, s_quietAi.Value, explored: false);
@@ -391,11 +392,17 @@ public class M6S12AiRulesQaTests(ITestOutputHelper output)
         w.Fog.Update();
         bool ghostAfter = w.Fog.Ghosts(0)[hidden.Index].Generation == hidden.Generation;
         bool razedUnseen = v.IsKnownClosed(cx, cy);
-        output.WriteLine($"never seen {never}; seen {seen}; ghost {ghost} (ghost kept {ghostLeft}); razed out of sight: closed {razedUnseen}, ghost still remembered {ghostAfter}");
+        CombatScenes.Place(sim, 0, w.Data.FindUnit("malazan_laborer"), w.NavGrid.CellCenter(30, 50));
+        w.Fog.Update();
+        bool ghostGone = w.Fog.Ghosts(0)[hidden.Index].Generation == 0;
+        bool seenAgain = v.IsKnownClosed(cx, cy);
+        output.WriteLine($"never seen {never}; seen {seen}; ghost {ghost} (ghost kept {ghostLeft}); razed out of sight: closed {razedUnseen}, ghost still remembered {ghostAfter}; seen again: closed {seenAgain}, ghost dropped {ghostGone}");
         Assert.False(never);
         Assert.True(seen);
         Assert.True(ghost);
         Assert.True(ghostAfter, "precondition: player 0 still remembers the building it did not see die");
-        Assert.False(razedUnseen); // BUG-1555: the leak as built; expected true (the remembered footprint, as CanPlace)
+        Assert.True(razedUnseen); // BUG-1555: the remembered footprint, as CanPlace (before M6-S14: open, the leak)
+        Assert.True(ghostGone, "precondition: the ground seen again drops the ghost");
+        Assert.False(seenAgain);
     }
 }
