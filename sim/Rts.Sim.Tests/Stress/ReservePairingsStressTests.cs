@@ -193,7 +193,7 @@ public class ReservePairingsStressTests
         Assert.Contains("side 1 alive at 20:00 without Age II", fails);
         Assert.DoesNotContain("side 0", fails);
         Assert.Contains(printed, l => l.Contains("KNOWN"));
-        Assert.Single(KnownNoAgeTwo); // M6-SH2 fix round (BUG-1535): 4 -> 1, re-measured
+        Assert.Empty(KnownNoAgeTwo); // M6-S14: 1 -> 0, the (2, 0, 1, 1) side now reaches Age II; M6-SH2 fix round (BUG-1535): 4 -> 1
     }
 
     /// <summary>BUG-1010's six seeds: <c>cadre_rush</c> v <c>raider_rush</c> 8, 14, 18, 23; <c>crossbow_push</c> v <c>raider_rush</c> 19, 25 (printed).</summary>

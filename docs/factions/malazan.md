@@ -371,7 +371,7 @@ Range waits for Age II, so Age I trains Heavy Infantry only.
 | 25 | time 570 | research | `moranth_supply` | 1 | The faction upgrade, at the Armory |
 
 **Houses at the cap (D21, 2026-10-18; `QA/Content/AiHouseRuleReportTests.MenuMapNormal_HouseSources_Report`).** On the
-menu's map (20 minutes, the other seat idle): Normal, seed 7: the cap reaches 100 at 807 s; the last Billet step (step 16) is done at a cap of 100; skipped at the hard cap: step 16; 11 Billets stand at 20:00, 0 past the cap. Re-printed 2026-11-17 for D33's 16-pop wave: the cap reached 100 at 779 s, steps 15 and 16 were skipped and 10 Billets stood. Re-printed 2026-11-16 for the sim's M6-S12: 777 s. Re-printed 2026-11-15 for the sim's M6-SH2: the cap reached 100 at 811 s and step 16 was never done.
+menu's map (20 minutes, the other seat idle): Normal, seed 7: the cap reaches 100 at 756 s; the last Billet step (step 16) is done at a cap of 100; skipped at the hard cap: steps 15, 16; 10 Billets stand at 20:00, 0 past the cap. Re-printed 2026-11-26 for the sim's M6-S14: the cap reached 100 at 807 s, only step 16 was skipped and 11 Billets stood. Re-printed 2026-11-17 for D33's 16-pop wave: the cap reached 100 at 779 s, steps 15 and 16 were skipped and 10 Billets stood. Re-printed 2026-11-16 for the sim's M6-S12: 777 s. Re-printed 2026-11-15 for the sim's M6-SH2: the cap reached 100 at 811 s and step 16 was never done.
 Re-printed 2026-10-26 for M5-4g: before it the cap reached 100 at 835 s, step 16 was done at a cap of 98, no step was
 skipped and 12 Billets stood.
 
