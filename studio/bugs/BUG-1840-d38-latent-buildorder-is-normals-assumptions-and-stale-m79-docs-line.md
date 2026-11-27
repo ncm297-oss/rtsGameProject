@@ -3,7 +3,7 @@
 | Field | Value |
 | --- | --- |
 | Severity | S4 |
-| Status | open (items 1-2 fixed by QA in the D38 inspection; items 3-4 open) |
+| Status | open (items 1-2 fixed by QA in the D38 inspection; item 4, the stale docs/03 sentence, fixed by the Producer at the 2026-11-26-0717 ACCEPT and checked at the 1847 PLAN; item 3 open: `AiContentQaTests` in D39, `D21OpeningsQaTests` in the data task after it) |
 | Found | 2026-11-26-0717, task D38 (QA) |
 | System | content tests (`sim/Rts.Sim.Tests/QA/Content/`), docs/03 "For the data track (M7-9)" |
 | Fixed by | items 1-2: QA D38 inspection (`QA/Content/AiContentQaTests.cs`, `QA/Content/AiHouseRuleReportTests.cs`) |

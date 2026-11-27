@@ -1,5 +1,324 @@
 # Handoff: brief for the next session
 
+## Current session plan (2026-11-26-1847, session 3 / 8 of 2026-11-26; written at the PLAN)
+
+Sim **M6-S14** GO (feature, QA full, the one pin move, the one data-hash move, one save-format bump in the AI's
+parts only) · view **M6-VH10** GO (hardening, QA standard) · data **D39** GO (feature, QA light, no game data).
+Bug ids: sim 1850-1869, view 1870-1879, data 1880-1889.
+
+**Decisions at this PLAN (handoff "At the PLAN" items 5-6):**
+- **The save-format riders leave the AI-play session.** BUG-1490 and Request 60 change no AI play and no pin, so
+  they move to the sim's hardening (next session, with BUG-1730 / 1731: all four touch the draw part or the order
+  queue), where the view re-checks its save scenes in the same session (rule 50). The re-scout count of BUG-1554 /
+  1556 stays here: it is AI play, and it is saved in the AI's own parts.
+- **"Press the attack while the draw clock runs" is not in this session** (new behaviour with no design; it goes
+  to the sim's queue).
+- **D39 is cut so no file is shared with the sim's hand-over (rule 68):** `QA/Content/D21OpeningsQaTests`,
+  malazan.md's Age II paragraph and teblor.md move to the data task after this one (the re-measure).
+- The producer's grep for rule 74 is in the scratchpad file named in the sim brief (a superset, 150 files).
+
+### Track sim: M6-S14, cure the computer player's stalls (the AI-play session)
+
+Goal: Every open defect that changes how a Normal computer player plays is cured in one session, so the pinned
+test matches are re-measured once: a hunt that forgets its sweep (BUG-1661), a seat that never rebuilds its workers
+(BUG-1660), a fog leak in the rally search (BUG-1555), the blind re-scout's two halves (BUG-1554 / 1556) and the
+rally point's edge cases (BUG-1558). Read first: docs/03 "Implementation (M7-8)" (the Vathar trace and the cures),
+"Implementation (M6-S12)" (the rally, rebalance and re-scout rules), "Implementation (M6-S13)" (how the last pin
+move was reported), docs/02 "AI opponent", docs/01 rows 2026-11-17 (3)-(4) and 2026-11-24 (2), and the six bug
+files in `studio/bugs/`.
+
+Scope, in this commit order. Each lettered item is its own commit, and after A and after B you measure before
+going on (rule 70): the Vathar Crossing four-seat seed 2 match (`Stress/VatharStallTraceTests`) and
+`MatchCriterionTests`' rows, end tick before and after, written into docs/03.
+- **A. BUG-1661, first and alone.** When a hunt turned into a wave on a building it found and that wave razed the
+  building, the next hunt keeps the last hunt's visited marks and resumes nearest-first from where the building
+  stood. The free starts come first only for a hunt with no such find within `ai.huntMemory`. `MilitaryManager`
+  (`BeginHunt` / `NextSweep` / `NextHuntStart`). Derive the resume from saved state if you can; if it needs a new
+  saved value it goes in the `HUNT` part (see "Save format" below).
+- **B. BUG-1660.** The zero-worker retrain becomes a floor: new `game/data/common/rules.json` `ai.minWorkers`,
+  shipped value **4** (Producer's value). A seat with a finished hall and fewer live + queued workers than the
+  floor sends one worker Train a think when the bank and the population allow. Loader, validation (an integer
+  from 1 to a `DataLimits` bound; 1 is today's behaviour and a test proves that on a copy), `DataValidationTests`,
+  the content hash. **This is the session's one data-hash move:** regenerate the golden replay's header and
+  checksum once, say why in the `GatherWedgeQaTests` comment, and the four golden-header rows must follow without
+  an edit (`FactionOrderTests.TheShippedContentHash_IsTheGoldenHeaders`,
+  `QA/PackQaTests.TheShippedDataHash_IsTheGoldenHeaders`, `StillStealthLoaderTests.TheHash_*`,
+  `Data/MaxAliveLoaderTests.TheHash_*`). No new test pins the hash or save bytes as a literal (rules 49 / 73).
+- **C. BUG-1555.** `PlayerView.IsKnownClosed` answers from the seat's memory: a cell under a remembered ghost is
+  closed until the seat sees the ground again, and a node reads through the per-player node memory, both as
+  `CanPlace` does. `M6S12AiRulesQaTests.IsKnownClosed_FollowsTheFog_ButARazeOutOfSight_Leaks_Bug1555` flips to
+  the cured answer and loses "Leaks" from its name. Correct docs/03 M6-S12 Q3 for the node case.
+- **D. BUG-1554 / 1556** (the ruling in docs/01 2026-11-17 (3)). The seat counts the blind re-scouts it has lost.
+  While that count is below `ai.scoutReplacements`, a blind seat with no idle worker may take a gatherer of the
+  kind it knows (still one at a time, one per `ai.scoutAfter` window). At the count, blind re-scouting stops for
+  good. The count is saved and hashed with the AI's state.
+  `M6S12AiRulesQaTests.KnowsGold_NeverSawATree_ShortOfWood_NoIdleWorker_NeverRescouts_Bug1554` flips (it
+  re-scouts), and `M6S12AiRulesQaStressTests.EveryScoutKilledAtOnce_TheBlindSeatsDrain_20Minutes_Report` gains
+  asserts: blind re-scouts lost equals `ai.scoutReplacements`, and the seat still has workers and gold at 20
+  minutes. `ReachRuleQaTests.EveryScoutKilledAtOnce_TheSeatDoesNotFeedItsWorkersToTheScoutRole` must stay green.
+  If it cannot with its bound as written, do not change the rule: report the measured loss, and the bound may be
+  raised by at most `ai.scoutReplacements` with a comment naming BUG-1556. Update docs/02's re-scout sentence.
+- **E. BUG-1558, items 2 and 3 only.** The rally point is kept while it is still acceptable (no move because the
+  nominal target flickered), and when no point is acceptable the last acceptable point is kept instead of the
+  nominal one. Whatever must outlive a think is saved and hashed. Item 1 (6 m from the hall) is "measure and
+  report" on `Stress/M6S12RallySurveyQaStressTests`' columns, before against after; no rule for it.
+- **F. The pin move, once, after E.** Re-measure every pinned AI match, old value in a "was" comment, and docs/03's
+  M5-5 table (rule 43). Un-skip `FarExpandProbeQaStressTests.VatharCrossingSeed2_FourSeats_FarFogOracleAndExtraOracles`
+  if the match now ends and its oracles pass; if not, it stays skipped with its ids and the new trace. Correct
+  `AiDeterminismTests`' stale comment (BUG-1700). Drop the `FourAiSeats_OnPaleHills_Seed2_KnownStall` twin of
+  `HuntStressTests`' oracle row.
+- **G. Docs.** docs/03 "Implementation (M6-S14)": each cure, the per-item measurements, the pin list (below), a
+  "Questions for the Producer" part (rule 67). Write the Producer's answers to M8-4's Questions 1-4 (docs/01, the
+  fourth 2026-11-26 row, (1): keep all four) into docs/03 "Implementation (M8-4)". docs/02 "AI opponent" for B, D
+  and E. A bug patch for `studio/bugs/` in the scratchpad (you cannot write `studio/**`).
+
+Save format: a new saved value goes at the end of an AI part (`AIST`, `HUNT`, `CTRM`), `SaveFormat.CurrentVersion`
+goes up once for the whole task, and the header and every other part stay byte for byte (a differential row
+against the base on test data proves it, `StillStealthSaveBytesTests` is the model). Keep the meaning of
+`SaveFormat.HuntMaplessVersion` and `CurrentVersion` as the view's scenes read them. These view scenes must pass
+on your branch un-edited (you may not edit `game/**`; run each alone): `SaveLoadTest`, `AiSeatTest`,
+`TeamFilesTest`, `ReplayPlaybackTest`, `QaM6V14Test`, `QaM6V16Test`, `QaM6V17Test`, `QaM6V18Test`, `QaM6V18bTest`,
+`QaM6V29Test`, `DrawViewTest`. A red one is reported by name in the first lines of your report.
+
+Out of scope: BUG-1490, Request 60, BUG-1730, BUG-1731 (the sim's next session); "press the attack while the draw
+clock runs"; Request 56 G5-G8; movement (BUG-1463); any byte under `game/data/factions/**` or `game/**` outside
+`game/data/common/rules.json`; tuning a data value to make a row end; any other `ai` knob.
+
+The pin list (rule 71; your report and docs/03 carry this list one class a line with "re-measured: yes / moved to
+... / unchanged / cannot move: why"). Step zero: reconcile it with the Producer's grep in
+`C:\Users\Nick\AppData\Local\Temp\claude\162c01fae57881b0\d373c799-79df-4407-8f0a-5b163940ef62\scratchpad\prod1847-ai-match-classes.txt`
+(a superset of every test file that seats a computer player; a class that plays a whole match and is missing
+below is added, rule 74).
+- Default loop: `Ai/MatchCriterionTests` (and `HalfWay`)
+- `StandardPresetPinQaTests`
+- `QA/NonHardMatchPinQaTests`
+- `CounterCompositionTests.TheNonHardPins_*` (eight)
+- `ReserveTwinTests`
+- `SharedVisionFfaPinTests`
+- `OutcomePinM73bQaTests`
+- `HardKnobsPinTests`
+- `AiVersusAiTests`
+- `Ai/OpeningReserveShareTests`
+- `Draw/DrawRuleTests`, `Draw/DrawSaveReplayTests`, `Draw/DrawCostTests`, `QA/DrawRuleQaTests`
+- `Cli/CliTests.Match_TheLiteralRow_*`
+- the premap AI replay, `save_ai_seed2`, `seed21_playable.replay`, the golden (human seats: only its header moves)
+- Stress: `AiDeterminismTests`
+- Stress: `HuntStressTests`
+- Stress: `M6Sh2DeterminismStressTests`
+- Stress: `M6Sh2QaStressTests`
+- Stress: `StarvedSaveTwoProcessQaStressTests`
+- Stress: `ReservePairingsStressTests`
+- Stress: `MatchRowsM6S10Report`
+- Stress: `MatchCriterionSweepQaStressTests`
+- Stress: `FarExpandProbeQaStressTests`
+- Stress: `HardVersusNormalTallyQaStressTests`
+- Stress: `TeamAiSoakStressTests`
+- Stress: `DefeatAiStressTests`
+- Stress: `MapSlice2StressTests`
+- Stress: `DrawStalledRowsReportTests`
+- Stress: `EndGameHardeningTests`
+- Stress: `M78ReserveSwitchQaStressTests`, `M78ShippedDigestQaStressTests`, `ShippedDigestReportTests`,
+  `ReserveSwitchReportTests`
+- Handed over from the data track by name (rule 68; you may re-pin these classes and the page cells they read,
+  rule 40, and nothing else in the data track's folders): `Content/AiOpeningPairsReportTests`,
+  `Content/HolyWarFirstWaveReportTests`, `Content/AiSpendingReportTests`, `QA/Content/DR35ProsePinQaTests`,
+  `QA/Content/TeblorOpeningQaTests`, `QA/Content/D21OpeningsQaTests`, `QA/Content/D20PinQaTests`,
+  `QA/Content/AiHouseRuleReportTests`. Not re-pinned by you: `Content/D38ShippedOrdersReportTests` and
+  `QA/Content/D38ShippedOrdersQaStressTests`: run them; if Teblor play moved, skip them with
+  `Skip = "BUG-<id>: re-measured by the data track after M6-S14"` and put the bug in your patch. The data track's
+  hour-long Teblor report classes are not run.
+
+Acceptance criteria:
+1. A: a scene test that fails on the base: a hunt finds a building, its wave razes it, a second enemy building
+   stands within 60 m, and the next hunt's first sweep target is the unvisited point nearest the razed building,
+   not a free start. A hunt with no find within `ai.huntMemory` still goes to the free starts first (a row that
+   passes on the base and after).
+2. A, measure and report: the Vathar four-seat seed 2 end tick before (88,998) and after A alone.
+3. B: a seat with a finished hall, 1 worker and the gold trains up to `ai.minWorkers` live + queued, one Train a
+   think (fails on the base). With `ai.minWorkers` 1 on a copy, a pinned two-seat match's state hash at its end
+   tick equals the base's. A seat with no hall, no gold or no population room sends no Train and does not throw.
+4. B: `rules.json` without `ai.minWorkers`, or with 0 or a value above the bound, fails to load with an error
+   naming the field. The shipped value is 4.
+5. C: the BUG-1555 row reads closed for a ghost razed out of sight and open again once the seat sees the ground;
+   the same for a node felled out of sight.
+6. D: the BUG-1554 row re-scouts; the 20-minute drain row loses exactly `ai.scoutReplacements` blind re-scouts and
+   ends with workers alive and gold above 0. The count survives a save and load (a twin row: save mid-match, load,
+   both runs' hashes equal to the end).
+7. E: on the staged flicker (a target seen on one think and gone the next) the rally point does not change while
+   it is acceptable; with none acceptable the point stays the last acceptable one. A save / load twin row.
+8. Determinism: every new rule has a same-seed twin row and a save-mid-match twin row; `AiDeterminismTests`
+   green; the golden replay's outcome and checkpoint hashes equal the base's (only the header's data hash moves).
+9. No allocation in the AI's think for the new code (the existing allocation rows green; a new saved array is
+   allocated at seat creation).
+10. The pin list is in docs/03 "Implementation (M6-S14)" in rule 71's form, every class marked; every re-pinned
+    value carries its old value.
+11. Measure and report, not pass / fail (rule 48: this task may not tune data): the Hard v Normal tally per map
+    (was 34 / 5 / 3), Normal v Normal seeds 1-8 on the three maps (all ended), the four-seat Pale Hills rows.
+12. Rule 45: when a pinned criterion row stops ending, the row moves to the nearest seed that ends (say whether
+    another row already plays that seed), a bug with the trace goes in the patch, and no bound is raised to make it
+    pass. A `MatchCriterionTests` map with no ending seed in 1-8 is a finding in the first lines of the report.
+13. The default loop (`Category!=Perf&Category!=Stress&Category!=Soak`) is green after the last edit, the handed
+    classes included; the Stress category is green apart from rows skipped with a bug id; `dotnet build
+    RtsGame.sln --no-incremental` 0 errors / 0 warnings; smoke PASS; the eleven view scenes above pass.
+14. docs/02, docs/03 as in G. The report says in its first lines: saves and recordings from before stop loading
+    (the data hash moved; the save format went up if it did).
+
+Design references: docs/02 "AI opponent" (the hunt finishes the match; the AI keeps an economy; the re-scout
+sentence); docs/03 "Implementation (M7-8)" (the cures and the trace), "(M6-S12)" items 1-6 and Q3-Q4, "(M5-5)"
+(the table), "Save format"; `rules.json` `ai`: `huntMemory` 120, `scoutReplacements` 2, `scoutAfter` 15,
+`rallyReach` 6, `rallyDistance` 12; new `minWorkers` 4.
+
+Tests required: the scene rows of criteria 1, 3-7 (each failing first where it says so), the twin rows of 8, the
+loader rows of 4, the differential save row; the re-measured pins.
+
+Constraints: the AI reads the world only through its fog-filtered view and acts only through commands (rule 3);
+no `Dictionary` / `HashSet` iteration that orders results, no LINQ or `new` in a think; no stat or threshold as a
+C# literal (the floor is data); a test helper that forges an `ai` field tolerates the shipped data already
+carrying it (rule 58); `AiScenes.SetBuildOrder` for any forged order; record the PID of every `dotnet test` /
+Godot you start and end only those (rules 52 / 69); scratch folders start with `m6s14-` (rule 63); run the full
+default loop after your last edit (rule 62). Size: the cures about 800 lines without re-pins and docs; if D or E
+cannot be finished cleanly, land A-C and F whole and say so in the first lines, never a half-built rule.
+
+QA focus (sim, full): (1) Determinism of each new rule: same-seed twins, save / load twins at an awkward tick
+(mid-hunt between a razed find and the next hunt; the tick a floor Train is queued; the think after the last
+allowed blind re-scout dies), two-process rows. (2) The floor: a seat at the population cap, a seat with a hall
+under construction only, two halls, a worker killed every think for 20 minutes (does it drain the bank, and is
+that bounded by anything but gold: report), Easy and Hard seats, a Teblor seat (pack and carry rules), a seat
+whose draw clock runs (does a floor Train with gold left restart or block the draw: report against BUG-1731).
+(3) The hunt resume: a razed find with nothing near it (does the hunt still cover the map), two finds in a row,
+a find razed by an ally, four seats and 2v2; run the four-seat rows on all three maps seeds 1-8 and print which
+end, against the base. (4) The fog: can the rally search or the re-scout learn anything the seat never saw
+(BUG-1555's family: build, raze and fell out of sight in every order). (5) The re-scout cap against a camping
+enemy for 20 minutes on each difficulty: workers lost, gold spent. (6) The pin list: check it against a grep of
+your own for classes that play a whole AI match (rule 74) and run the whole Stress category on the branch;
+then Perf alone (rule 42). (7) Rule 58: apply `ai.minWorkers` 1 and 8 on a scratch clone and run the default
+loop's AI classes. Rehearse nothing the loader refuses (rule 80). After a tests-only fix round, no Stress
+re-run (rule 72).
+
+### Track view: M6-VH10, the view's hardening
+
+Goal: The view track's fourth session since its last clean-up works its debt: a drawn two-sided match must read
+Draw however it is reached, and five small defects and two docs items are closed. Read first: docs/03
+"Implementation (M6-V29)" and "(M6-V30)", docs/01 the second and fourth 2026-11-26 rows, and the bug files
+BUG-1790, 1792, 1710, 1831, 1830.
+
+Scope:
+- **1. BUG-1790, the two-sided half.** A drawn match with exactly two sides reads Draw for both sides whoever is
+  out now: live, after loading a save taken after a later fall, and in playback (`Match.ResultFor`).
+  `QaM6V29Test`'s `KNOWN BUG-1790` row becomes a passing row for two sides and stays a printed known row for
+  three or more sides (Request 60, the sim's next session).
+- **2.** Correct docs/03 "Implementation (M6-V29)" Question 1 ("a recording watched past it reads Defeat";
+  measured: Draw).
+- **3. BUG-1792.** The draw notice stays centred and on screen for a long text (grows both ways or wraps) at
+  1152 x 648; correct the stale 640 px comment.
+- **4. BUG-1710.** The lost-cast cue neither sounds nor shows in replay playback.
+- **5. BUG-1831.** `tools/import-assets.ps1` fails (non-zero exit, no PASS line) when its Godot import exits
+  non-zero or is killed; a test row proves it in seconds with a stand-in for the Godot exe, not a real hang.
+- **6. BUG-1830.** The Stone Cairn's team colour reads for the Iron player: a larger team part or a wall tint,
+  your choice, said in docs/03. Pictures of the Cairn in all eight colours go to a
+  scratchpad folder `m6vh10-pictures` named in your report (you cannot write `studio/**`; the Producer copies
+  them to `studio/review/2026-11-26-1847/`). Every other model file stays byte for byte.
+- **7.** Write the Producer's answers to M6-V30's Questions 1-5 (docs/01, the fourth 2026-11-26 row, (2)) into
+  docs/03 "Implementation (M6-V30)" (rule 67).
+
+Yours: `game/**` except `game/data/**`, `tools/import-assets.ps1`, `tools/asset-manifest.json`, `tools/art/**`.
+Out of scope: new models, the Whirlwind's tents, anything in `sim/**` (no ViewApi change is needed), `game/data/**`
+(if item 3 or 4 needs a text, say so under Questions instead), Request 60's three-sided case, save or replay
+formats. The sim track moves the data hash and the save format version this session: read
+`SaveFormat.CurrentVersion`, never a literal, and add no stored save fixture.
+
+Acceptance criteria:
+1. A scene row: a two-sided match drawn, then one side's last building razed; `ResultFor` reads Draw for both
+   sides live, after a save and load taken after the fall, and in playback of the recording. It fails on the base
+   for the load case.
+2. A three-sided drawn match still prints `KNOWN BUG-1790` and the scene stays green; `--strict` fails it.
+3. The notice with a 120-character text is centred within 2 px and wholly inside 1152 x 648; the shipped text is
+   drawn where it was (a pixel or position row).
+4. In playback, a lost cast produces no cue sound and no cue visual; live it still does (both rows).
+5. `tools/import-assets.ps1` with a stand-in that exits 1, and one that is killed, exits non-zero and prints no
+   PASS line; with the real Godot it still passes and a re-run leaves `git status` clean.
+6. The Cairn: on the picture, the Iron player's team part differs from the wall by at least 40 luminance levels
+   (it is 113 against 135 today) or covers at least twice today's area; say which. All eight colours pictured.
+   `git diff --stat` shows no other model binary changed.
+7. Bench, only because item 6 changes a model (rules 61 / 77): 400 figures + 60 building models, 400 capsules and
+   1,000 figures, run alone after the other tracks' suites have ended when you can; report against 6.43 / 0.82 /
+   16.57 ms. Measure and report; over 16.7 ms at 400 is a finding.
+8. The scene loop is green (130 scenes plus any you add; `BenchTest`, `QaM27Test`, `QaH1Test`, `QaV3Test` may be
+   re-run alone, `QaV3Test` with `-TimeoutSec 1200`); the default loop
+   (`Category!=Perf&Category!=Stress&Category!=Soak`) green; `dotnet build RtsGame.sln --no-incremental` 0 / 0;
+   smoke PASS.
+9. docs/03 items 2 and 7 written; BUG-1792's comment corrected; a bug patch in the scratchpad.
+
+Design references: docs/02 "Game flow" (the result screen, Draw), docs/03 "Implementation (M6-V29)" (the notice,
+`hud.draw_countdown`), "(M6-V30)" (team faces, `FitTo`), docs/04 (the import pipeline, team colour).
+Tests required: scene rows for criteria 1-4, the script row for 5, the picture for 6.
+Constraints: views hold no gameplay state (the result is read from the sim, not latched in a way a load loses);
+player-facing text only from data; no GDScript; record the PID of every Godot / `dotnet test` you start and end
+only those; scratch folders start with `m6vh10-`; after an import check `git status` and file hashes, not the
+PASS line; the full default loop after your last edit.
+
+QA focus (view, standard): the Draw result in every order of events (draw then fall, fall then draw is a
+defeat and must stay one, save before and after each, playback, 2 sides and 3-4 sides, teams 2v2 counted as two
+sides); the notice at 1152 x 648 and 1920 x 1080 with short, shipped and very long texts; the cue in playback at
+speed x4 and after a seek to the end; the import script with a stand-in exe that exits 1, exits 0 with an ERROR
+line, and is killed, then one real import with hashes before and after; the Cairn in eight colours at the
+default zoom and zoomed out; the scene loop, the default loop, the bench last and alone.
+
+### Track data: D39, the Shadow page after the unit limit, and BUG-1840's static checks
+
+Goal: Keep the Shadow page ready for its roster: the Hounds' "at most 7" is now a rule the sim has (M8-4), so the
+page lists it as built and a content check reads the number from the field. Close what is left of BUG-1840 in
+one QA class. No game data changes. Read first: docs/03 "For the data track (M8-4)" and "Implementation (M8-4)",
+docs/factions/shadow.md (Unit notes, Schema gaps G1-G8, the pin tables), D35's `Content/UnitHitBonusText` and its
+tests (the model), BUG-1840.
+
+Scope:
+- **1. `docs/factions/shadow.md`:** G4 listed as built (`units.json` `maxAlive` 7 on the Hound; live plus queued
+  count; training only, a summon is never refused; the computer player trains other types at the limit), every
+  sentence that says "no field holds it yet" corrected, the Hound's row and its "at most 7" description sentence
+  pin-ready. G5-G8 stay open.
+- **2. A content check** in `sim/Rts.Sim.Tests/Content/` that reads the limit from the unit's `maxAlive` and
+  fails when a description's "at most N" differs from it or the field is missing, on forged test data only (use
+  `Economy/UnitLimitTests.s_capped` / `s_pack` or your own forge that strips a shipped `maxAlive` first, rule 58).
+- **3. BUG-1840, in `QA/Content/AiContentQaTests` only:** the static checks (a-d, g) read every list a seat can
+  play (`buildOrder` and each `buildOrders` entry).
+
+Yours: `docs/factions/shadow.md`, `sim/Rts.Sim.Tests/Content/**` (new files), `sim/Rts.Sim.Tests/QA/Content/AiContentQaTests.cs`.
+Out of scope (the sim track holds them this session, rule 68): `QA/Content/D21OpeningsQaTests`, `DR35ProsePinQaTests`,
+`TeblorOpeningQaTests`, `D20PinQaTests`, `AiHouseRuleReportTests`, `Content/AiOpeningPairsReportTests`,
+`HolyWarFirstWaveReportTests`, `AiSpendingReportTests`, the D38 classes, malazan.md, whirlwind.md, teblor.md; any
+byte under `game/data/**`; any measurement of AI play (rule 41: the sim moves it this session); any C# outside
+the two test folders.
+
+Acceptance criteria:
+1. shadow.md says G4 is built with the four facts above, and no sentence on the page says the cap has no field.
+2. The content check passes on a forged Hound with `maxAlive` 7 and the page's sentence, and fails (shown by rows)
+   with `maxAlive` 6, with no `maxAlive`, and with "at most 8" in the text.
+3. A row proves the page's pinned Hound limit equals the forged field both ways (page to data, data to page), as
+   D35's pins do.
+4. `AiContentQaTests` (a-d, g) run over every list of every shipped opening; a forged opening whose `hard` entry
+   breaks check (a) fails with the entry named. They pass on the shipped data.
+5. `git diff --stat` against the base shows nothing under `game/data/**`, and only the files listed under Yours.
+6. `dotnet test sim/Rts.Sim.Tests --filter "Category!=Perf&Category!=Stress&Category!=Soak"` green after your
+   last edit; `dotnet build RtsGame.sln --no-incremental` 0 / 0. No test pins the data hash as a literal (the
+   sim moves it this session).
+7. A "Questions for the Producer (D39)" part on shadow.md if you have any (rule 67); a bug patch in the
+   scratchpad. No owner review table is needed (no game data and no new player-facing text ships).
+
+Design references: docs/factions/shadow.md (the Hound of Shadow, G4, the description sentences), docs/02
+"Factions" (Shadow), docs/03 "For the data track (M8-4)".
+Tests required: criteria 2-4's rows.
+Constraints: no C# outside the content test folders; numbers on the page match the docs/03 section exactly;
+scratch folders start with `d39-`; record and end only your own test processes.
+
+QA focus (data, light; filter `Category!=Perf&Category!=Stress&Category!=Soak`, never the full suite): the
+content check against a forged Hound with `spawnCount` above 1 and `maxAlive` 7 (the page's wording about packs);
+the page against docs/03 "Implementation (M8-4)" fact by fact; `AiContentQaTests` on a forged opening with an
+entry for one, two and (refused by the loader, so not rehearsed: rule 80) three difficulties; docs conformance;
+the diff's file list.
+
+---
+
 Written by the Producer at the ACCEPT of session **2026-11-26-0717** (session 2 / 8 of 2026-11-26, started 07:17).
 Sim **M8-4** ACCEPT (feature, 0 fix rounds, QA full PASS_WITH_ISSUES), view **M6-V30** ACCEPT (feature, 0, QA
 standard PASS_WITH_ISSUES), data **D38** ACCEPT (feature, 0, QA standard PASS_WITH_ISSUES; **the data hash moved:
