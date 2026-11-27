@@ -148,6 +148,63 @@ public class UnitLimitPinTests
         Assert.True(problems.Count == 0, string.Join("\n", problems));
     }
 
+    // ---------- D-H11 (BUG-1880 edge 1): a count of the unit, not of its targets ----------
+
+    /// <summary>A real limit in three wordings (the number alone, the unit's own name, "of them") reads its number on the War-dog, and passes at the field's 7.</summary>
+    [Theory]
+    [InlineData("No more than 7 can live at once.")]
+    [InlineData("At most 7 War-dogs at once.")]
+    [InlineData("Up to 7 of them may be alive.")]
+    [InlineData("A big dog. Never more than 7 living, each worth a horse.")]
+    public void ALimitSentence_InAnyWording_ReadsItsNumber(string text)
+    {
+        Assert.Equal(new[] { 7 }, UnitLimitText.Stated(text, "War-dog").Select(s => s.Limit));
+        List<string> problems = UnitLimitText.Problems(DogOf(Of("page")), text);
+        Assert.True(problems.Count == 0, string.Join("\n", problems));
+    }
+
+    /// <summary>A count of targets or projectiles "at once" reads no limit, even with the unit's name, an "alive" word or a bare "at once" in the sentence, and passes on a unit with no field.</summary>
+    [Theory]
+    [InlineData("Strikes up to 3 foes at once.")]
+    [InlineData("Throws at most 2 spears at once.")]
+    [InlineData("Bites no more than 4 enemies at once.")]
+    [InlineData("A War-dog mauls up to 3 riders at once.")]
+    [InlineData("Keeps at most 2 alive targets at once.")]
+    [InlineData("Hits up to 3 at once while it is alive.")]
+    public void ATargetCountSentence_InAnyWording_ReadsNone(string text)
+    {
+        Assert.Empty(UnitLimitText.Stated(text, "War-dog"));
+        List<string> problems = UnitLimitText.Problems(DogOf(Of("none")), text);
+        Assert.True(problems.Count == 0, string.Join("\n", problems));
+    }
+
+    /// <summary>The unit's name is its words up to the head noun: "Hounds (of Shadow)" and "Edur Warriors" name the unit; another word of the name ("shadow bolts") does not.</summary>
+    [Theory]
+    [InlineData("Hound of Shadow", "At most 7 Hounds of Shadow at once.", 7)]
+    [InlineData("Hound of Shadow", "At most 7 Hounds at once.", 7)]
+    [InlineData("Hound of Shadow", "Hurls up to 3 shadow bolts at once.", 0)]
+    [InlineData("Edur Warrior", "No more than 5 Edur Warriors at once.", 5)]
+    [InlineData("Edur Warrior", "Spears up to 2 Warriors at once.", 0)]
+    [InlineData("War-dog", "Drags up to 2 dogs at once.", 0)]
+    public void TheUnitsName_IsItsWordsUpToTheHeadNoun(string unitName, string text, int limit)
+    {
+        int[] read = UnitLimitText.Stated(text, unitName).Select(s => s.Limit).ToArray();
+        Assert.Equal(limit == 0 ? Array.Empty<int>() : new[] { limit }, read);
+    }
+
+    /// <summary>A description with both a target count and a limit (two sentences, or one sentence with a comma) reads the limit only.</summary>
+    [Theory]
+    [InlineData("Bites up to 3 foes at once. No more than 7 can live at once.")]
+    [InlineData("Bites up to 3 foes at once, and no more than 7 can live at once.")]
+    [InlineData("No more than 7 War-dogs live at once; each throws at most 2 spears at once.")]
+    public void ADescriptionWithBoth_ReadsTheLimit(string text)
+    {
+        Assert.Equal(new[] { 7 }, UnitLimitText.Stated(text, "War-dog").Select(s => s.Limit));
+        Assert.Empty(UnitLimitText.Problems(DogOf(Of("page")), text));
+        Assert.Contains("teblor_war_dog description maxAlive: 'no more than 7' reads as the unit limit, data 6",
+            UnitLimitText.Problems(DogOf(Of("six")), text.Replace("No more than", "no more than", StringComparison.Ordinal)));
+    }
+
     /// <summary>
     /// Criterion 2's failing rows: the page's sentence on a field of 6 or on no field, and "at most 8" (or "No more than 8")
     /// on the field of 7, each naming the unit, the field and both numbers; a field the text does not state fails too.

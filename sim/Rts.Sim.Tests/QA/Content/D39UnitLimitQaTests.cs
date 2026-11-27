@@ -69,7 +69,7 @@ public class D39UnitLimitQaTests
     }
 
     /// <summary>A count of targets or projectiles "at once" on a unit with no limit is not a unit limit.</summary>
-    [Theory(Skip = "BUG-1880: UnitLimitText reads any 'up to / at most N ... at once' as a unit limit")]
+    [Theory]
     [InlineData("Strikes up to 3 foes at once.")]
     [InlineData("Throws at most 2 spears at once.")]
     public void ATargetCountAtOnce_IsNotAUnitLimit(string text)
@@ -82,7 +82,7 @@ public class D39UnitLimitQaTests
     /// BUG-1840 per list: a forged <c>hard</c> entry that never researches Age II. The loader takes it (no order rule); the
     /// oracle should name the entry, and must not throw.
     /// </summary>
-    [Fact(Skip = "BUG-1880: CompositionProblems throws 'Sequence contains no elements' on a list without the Age II research")]
+    [Fact]
     public void AHardEntryWithoutTheAgeResearch_LoadsAndTheCompositionOracleDoesNotThrow()
     {
         string age2 = DataLimits.AgeTechIds[0];

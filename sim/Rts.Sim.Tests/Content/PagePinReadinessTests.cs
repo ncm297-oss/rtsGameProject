@@ -131,6 +131,8 @@ public class PagePinReadinessTests
         // D35 (M8-3): the units.json rows a page carries in "Schema gaps" (shadow.md's G2 / G3) against its own unit notes,
         // both ways for a page written ahead of its data, so the roster lands as the notes the pins compare say.
         problems.AddRange(HitBonusPagePin.RowProblems(page, lines, ahead: !ContentFactions.Keys.Contains(faction)));
+        // D-H11 (D39 Q2): the same for the unit limit's rows (shadow.md's G4) against the unit notes and Owner review sentences.
+        problems.AddRange(UnitLimitPagePin.RowProblems(page, lines, ahead: !ContentFactions.Keys.Contains(faction)));
 
         // AbilityContentTests: the shared header (columns by name).
         int abilities = Section("## Abilities", "AbilityContentTests");
@@ -514,6 +516,39 @@ public class PagePinReadinessTests
         edited[i] = lines[i].Replace(find, replace, StringComparison.Ordinal);
         List<string> problems = Problems("shadow", edited);
         Assert.Contains($"shadow.md Unit notes '{unit}' passive '{name}': its wording names no trigger the sim has and no stand-still stealth (PassiveContentTests)", problems);
+    }
+
+    /// <summary>
+    /// D-H11 (D39 Q2): the unit limit's page pin is part of the readiness check. shadow.md as shipped is ready; with its G4
+    /// row's limit, its Hound note's limit or its Owner review sentence's limit moved off the others, the check names the gap,
+    /// the unit and both numbers (red if <see cref="UnitLimitPagePin.RowProblems"/> is not called from <see cref="Problems"/>).
+    /// </summary>
+    [Theory]
+    [InlineData("`\"maxAlive\": 7`", "`\"maxAlive\": 8`", "shadow.md Schema gaps G4 `shadow_hound` maxAlive: row 8, the 'Hound of Shadow' note 7")]
+    [InlineData("**At most 7 Hounds alive**", "**At most 6 Hounds alive**", "shadow.md Schema gaps G4 `shadow_hound` maxAlive: row 7, the 'Hound of Shadow' note 6")]
+    [InlineData("No more than 7 can live at once. |", "No more than 9 can live at once. |", "shadow.md Schema gaps G4 `shadow_hound` maxAlive: row 7, the Owner review description 'No more than 9'")]
+    public void AShadowLimitDisagreeingWithItsUnitNote_IsAReadinessProblem(string find, string replace, string expected)
+    {
+        string[] lines = PageTables.FactionLines("shadow");
+        Assert.Empty(Problems("shadow", lines));
+        int[] hits = Enumerable.Range(0, lines.Length).Where(i => lines[i].Contains(find, StringComparison.Ordinal)).ToArray();
+        Assert.True(hits.Length == 1, $"shadow.md has '{find}' on {hits.Length} lines, expected 1");
+        string[] edited = (string[])lines.Clone();
+        edited[hits[0]] = lines[hits[0]].Replace(find, replace, StringComparison.Ordinal);
+        List<string> problems = Problems("shadow", edited);
+        Assert.True(problems.Contains(expected), $"expected '{expected}', got:\n{string.Join("\n", problems)}");
+    }
+
+    /// <summary>The readiness check is empty on every shipped page with the limit pin wired in (the data's pages and the pages ahead).</summary>
+    [Fact]
+    public void EveryShippedPage_IsReady_WithTheLimitPinWiredIn()
+    {
+        foreach (string faction in ContentFactions.Pages)
+        {
+            Assert.Empty(UnitLimitPagePin.RowProblems(faction + ".md", PageTables.FactionLines(faction), ahead: !ContentFactions.Keys.Contains(faction)));
+            List<string> problems = Problems(faction, PageTables.FactionLines(faction));
+            Assert.True(problems.Count == 0, $"{faction}.md:\n" + string.Join("\n", problems));
+        }
     }
 
     /// <summary>A pin's typed per-faction table fails naming the table and the page when the data ships a faction it lacks.</summary>

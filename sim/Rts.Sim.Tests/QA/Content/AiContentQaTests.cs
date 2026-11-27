@@ -141,8 +141,13 @@ public class AiContentQaTests
         string who = Who(faction, o, list);
         ImmutableArray<AiStep> order = StepsOf(o, list);
         int age2 = d.FindTech(DataLimits.AgeTechIds[0]);
-        AiStep ageStep = order.Single(s => s.Action == AiStepAction.Research && s.Target == age2);
-        var ageOne = order.Where(s => s.Action == AiStepAction.Build && (s.Trigger != AiStepTrigger.Time || s.At < ageStep.At))
+        // D-H11 (BUG-1880): a list without the Age II research (a short Easy entry that never ages up) is a named problem,
+        // not a LINQ throw; every build step of it then counts as Age I, so the unit checks below still run.
+        AiStep[] ageSteps = order.Where(s => s.Action == AiStepAction.Research && s.Target == age2).ToArray();
+        if (ageSteps.Length == 0) problems.Add($"{who}: no {DataLimits.AgeTechIds[0]} research step (the Age I mix is read against every build step)");
+        else if (ageSteps.Length > 1) problems.Add($"{who}: {ageSteps.Length} {DataLimits.AgeTechIds[0]} research steps, expected 1 (the first is read)");
+        AiStep? ageStep = ageSteps.Length > 0 ? ageSteps[0] : null;
+        var ageOne = order.Where(s => s.Action == AiStepAction.Build && (ageStep == null || s.Trigger != AiStepTrigger.Time || s.At < ageStep.Value.At))
             .Select(s => s.Target).ToHashSet();
         AiComposition one = o.Compositions[0], two = o.Compositions[1];
         for (int j = 0; j < one.Units.Length; j++)
@@ -582,6 +587,32 @@ public class AiContentQaTests
             });
             Assert.Contains(OrderProblems(d, faction, k), p => p.StartsWith($"{faction} {o.Id} step 1 ({s.TargetKey}): needs ", StringComparison.Ordinal));
         }
+    }
+
+    // ---------- D-H11 (BUG-1880 edge 2): a list without the Age II research ----------
+
+    /// <summary>
+    /// Every shipped opening with a forged <c>hard</c> entry that copies its <c>buildOrder</c> minus the Age II research (the
+    /// loader takes it: no order rule): the Age I oracle returns one line naming the faction, the opening and
+    /// <c>buildOrders.hard</c> instead of throwing, and <c>buildOrder</c> still passes.
+    /// </summary>
+    [Theory]
+    [MemberData(nameof(Openings))]
+    public void AListWithoutTheAgeResearch_IsANamedProblem_NotAThrow(string faction, int k)
+    {
+        string age2 = DataLimits.AgeTechIds[0];
+        GameData d = AiScenes.DataWithAi(faction, root =>
+        {
+            JsonObject o = AiScenes.Opening(root.AsObject(), k).AsObject();
+            JsonArray steps = JsonNode.Parse(o["buildOrder"]!.ToJsonString())!.AsArray();
+            foreach (JsonNode? s in steps.Where(s => (string)s!["do"]! == "research" && (string?)s["id"] == age2).ToArray()) steps.Remove(s);
+            o["buildOrders"] = new JsonObject { ["hard"] = steps }; // any shipped entries replaced whole (rule 79)
+        });
+        AiOpening o = d.Ai[d.FindFaction(faction)].Openings[k];
+        Assert.Equal(new[] { MainList, EntryPrefix + "hard" }, ListsOf(o));
+        List<string> hard = CompositionProblems(d, faction, k, EntryPrefix + "hard");
+        Assert.Contains($"{faction} {o.Id} buildOrders.hard: no {age2} research step (the Age I mix is read against every build step)", hard);
+        Assert.Empty(CompositionProblems(d, faction, k));
     }
 
     // ---------- D39 (BUG-1840 item 3): a forged opening with entries for one or two difficulties ----------

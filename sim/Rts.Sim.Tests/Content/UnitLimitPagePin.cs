@@ -106,11 +106,17 @@ public static class UnitLimitPagePin
     {
         var problems = new List<string>();
         List<LimitRow> rows = Rows(lines, page, problems);
-        if (Array.IndexOf(lines, "## Units") < 0) return problems;
+        // D-H11: called from the readiness check too, which names a missing Units section or table itself, so neither throws here.
+        int units = Array.IndexOf(lines, "## Units");
+        if (units < 0) return problems;
+        int t = units + 1;
+        while (t < lines.Length && !lines[t].StartsWith('|') && !lines[t].StartsWith("## ", StringComparison.Ordinal)) t++;
+        if (t >= lines.Length || !lines[t].StartsWith('|')) return problems;
         (string[] header, List<string[]> table) = PageTables.NamedTable(lines, "Units", page);
         int idCol = Array.IndexOf(header, "Id"), nameCol = Array.IndexOf(header, "Unit");
         if (idCol < 0 || nameCol < 0) return problems;
-        var nameOf = table.Where(r => r.Length == header.Length).ToDictionary(r => r[idCol], r => r[nameCol], StringComparer.Ordinal);
+        var nameOf = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (string[] r in table.Where(r => r.Length == header.Length)) nameOf.TryAdd(r[idCol], r[nameCol]); // a repeated id is UnitContentTests'
         List<(string Unit, string Text)> notes = HitBonusPagePin.Notes(lines);
         Dictionary<string, string> descriptions = OwnerReviewUnitDescriptions(lines);
 
@@ -123,7 +129,7 @@ public static class UnitLimitPagePin
             else if (said.Value != r.MaxAlive) problems.Add($"{where}: row {r.MaxAlive}, the '{name}' note {said}");
             if (descriptions.TryGetValue(r.Unit, out string? text))
             {
-                List<(int Limit, string Token)> stated = UnitLimitText.Stated(text);
+                List<(int Limit, string Token)> stated = UnitLimitText.Stated(text, name);
                 if (stated.Count == 0) problems.Add($"{where}: row {r.MaxAlive}, the Owner review description states no limit ('{text}')");
                 foreach ((int n, string token) in stated)
                     if (n != r.MaxAlive) problems.Add($"{where}: row {r.MaxAlive}, the Owner review description '{token}'");
@@ -136,7 +142,7 @@ public static class UnitLimitPagePin
             if (LimitIn(text) != null && !rows.Any(r => r.Unit == Id(unit)))
                 problems.Add($"{page} Unit notes '{unit}': states a limit, but no Schema gaps row carries `{Id(unit)}`'s \"maxAlive\": ...");
         foreach ((string id, string text) in descriptions)
-            if (UnitLimitText.Stated(text).Count > 0 && !rows.Any(r => r.Unit == id))
+            if (UnitLimitText.Stated(text, nameOf.GetValueOrDefault(id)).Count > 0 && !rows.Any(r => r.Unit == id))
                 problems.Add($"{page} Owner review `{id}`: the description states a limit, but no Schema gaps row carries `{id}`'s \"maxAlive\": ...");
         return problems;
     }

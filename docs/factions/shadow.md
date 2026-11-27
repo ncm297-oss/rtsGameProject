@@ -410,7 +410,10 @@ has the field or the sentence has first-shot or pack words ("other ... within", 
 slow or a frenzy ("each bite slows by 20%") is left to the passive and status pins. Since D39 the content checks read the
 limit too: a unit with `maxAlive` must state it after "at most" or "no more than" in a sentence about living at once ("No
 more than 7 can live at once"), and a sentence stating a limit needs the field, with the field's number
-(`Content/UnitLimitText`); the Hound's sentence below passes it.
+(`Content/UnitLimitText`); the Hound's sentence below passes it. Since D-H11 (BUG-1880) the number must count the unit
+itself: the number alone, "of them" or the unit's own name, said to be alive ("At most 7 War-dogs at once" also reads), so a
+count of targets or projectiles ("strikes up to 3 foes at once") is not read as a limit. Since D-H11 the readiness check
+(`Content/PagePinReadinessTests`) holds the G4 row to the Hound's note and this sentence too.
 
 | File | Id | Name (`displayName`) | Description (`description`) |
 | --- | --- | --- | --- |
@@ -506,11 +509,14 @@ Raised by D39 (the unit limit as built, BUG-1840 item 3), each with the develope
    Since D39 `Content/UnitLimitText` reads the limit in a unit's description and holds it to `maxAlive`, both ways. It is
    the sim track's page, outside D39's files. Recommendation: the sim's next docs edit says "`Content/UnitLimitText` (D39)
    reads it: a stated limit must be the field's number, and a unit with the field must state it".
+   **Answer** (docs/01 2026-11-27 (5)): docs/03 gains the sentence at the sim's clean-up.
 2. **The limit's page pin is not in the readiness check.** `Content/UnitLimitPagePin.RowProblems` (the G4 row against the
    Hound's note and its Owner review sentence) runs in its own class, `Content/UnitLimitPinTests`; wiring it into
    `PagePinReadinessTests.Problems`, as D35 did for `HitBonusPagePin`, edits an existing file, outside this task's "new
    files" scope. Recommendation: the next data task that touches the readiness check adds the one line.
+   **Done in D-H11** (docs/01 2026-11-27 (5)): `PagePinReadinessTests.Problems` calls `UnitLimitPagePin.RowProblems`.
 3. **A pack with a limit never reaches it by training when the limit is not a multiple of the pack.** With `spawnCount` 3
    and `maxAlive` 7, training stops at 6 (6 + 3 is above 7), so "No more than 7 can live at once" is true but only a summon
    could make the seventh. The Hound's `spawnCount` is 1, so nothing on this page changes. Recommendation: no rule now; a
    future pack unit with a limit takes a multiple of its pack, or its description names the trained number.
+   **Answer** (docs/01 2026-11-27 (5)): no rule now; the Hound's pack size is 1.
