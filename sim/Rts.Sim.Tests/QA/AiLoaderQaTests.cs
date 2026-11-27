@@ -118,7 +118,7 @@ public class AiLoaderQaTests
             var steps = new JsonArray();
             for (int i = 0; i < DataLimits.MaxAiBuildOrderSteps; i++)
                 steps.Add(JsonNode.Parse($$"""{ "at": { "time": {{i}} }, "do": "train", "id": "malazan_laborer", "count": {{DataLimits.MaxAiStepCount}} }"""));
-            AiScenes.Opening(root)["buildOrder"] = steps;
+            AiScenes.SetBuildOrder(AiScenes.Opening(root), steps);
             root["difficulties"]!["easy"]!["waveSizeMultiplier"] = DataLimits.MaxAiWaveSizeMultiplier;
             root["difficulties"]!["easy"]!["gatherBonus"] = 1;
             root["difficulties"]!["easy"]!["thinkInterval"] = 0.05; // exactly one tick
@@ -144,7 +144,7 @@ public class AiLoaderQaTests
         {
             var list = new JsonArray();
             for (int i = 0; i <= DataLimits.MaxAiBuildOrderSteps; i++) list.Add(JsonNode.Parse($$"""{ "at": { "workers": {{i}} }, "do": "expand" }"""));
-            AiScenes.Opening(root)["buildOrder"] = list;
+            AiScenes.SetBuildOrder(AiScenes.Opening(root), list);
         });
         Assert.Equal("openings[0].buildOrder", Assert.Single(steps.Errors).Path);
         DataLoadResult count = LoadWith(root => AiScenes.Opening(root)["buildOrder"]![0]!["count"] = DataLimits.MaxAiStepCount + 1);

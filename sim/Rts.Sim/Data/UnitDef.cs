@@ -106,6 +106,13 @@ public sealed class UnitDef
     /// </summary>
     public int SpawnCount { get; init; } = 1;
     /// <summary>
+    /// M8-4 (Request 56 G4): the most units of this type a player may have, its live units plus those its queued items will
+    /// spawn (<c>maxAlive</c>, optional, <see cref="SpawnCount"/> to <see cref="DataLimits.MaxUnitMaxAlive"/>; the Hound of
+    /// Shadow: 7); 0 without the field (no limit). It gates training only (<see cref="Economy.TrainError.LimitReached"/>). In
+    /// <see cref="GameData.ContentHash"/> only when set.
+    /// </summary>
+    public int MaxAlive { get; init; }
+    /// <summary>
     /// M7-7 (Request 48): resources this worker carries a trip (<c>carry</c>, optional, a whole number 1 to
     /// <see cref="DataLimits.MaxInteger"/>, a worker's only); 0 when the file leaves it out, and <c>rules.json</c>
     /// <c>workerCarry</c> applies (<see cref="GameData.CarryOf"/>). In <see cref="GameData.ContentHash"/> only when set.

@@ -52,6 +52,8 @@ public class DataNullPolicyTests
     {
         new object[] { "common/rules.json", "", "gatherOverlap", "gatherOverlap" },
         new object[] { "factions/teblor/units.json", "units[id=teblor_gatherer]", "carry", "units[{0}].carry" },
+        // M8-4: a unit type's limit written null is an error (leave the field out for no limit).
+        new object[] { "factions/malazan/units.json", "units[id=malazan_heavy_infantry]", "maxAlive", "units[{0}].maxAlive" },
         new object[] { "factions/malazan/ai.json", "openings[id=standard].attack", "reserveArmyShare", "openings[{0}].attack.reserveArmyShare" },
         // M7-9: an opening's per-difficulty build orders written null is an error (leave the field out for "no entry").
         new object[] { "factions/teblor/ai.json", "openings[id=standard]", "buildOrders", "openings[{0}].buildOrders" },

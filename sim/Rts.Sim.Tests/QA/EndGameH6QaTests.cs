@@ -45,7 +45,7 @@ public class EndGameH6QaTests
         {
             foreach (JsonNode? o in root["openings"]!.AsArray())
             {
-                o!["buildOrder"] = AiScenes.BuildOrder(("time", 3600, "train", "malazan_laborer", 1));
+                AiScenes.SetBuildOrder(o, AiScenes.BuildOrder(("time", 3600, "train", "malazan_laborer", 1)));
                 o["attack"] = new JsonObject { ["minArmyPop"] = 2, ["minArmyCost"] = 0 };
             }
         })));
@@ -296,7 +296,7 @@ public class EndGameH6QaTests
         for (int k = 0; k < tents; k++) steps[k] = ("time", k, "build", "whirlwind_tent", 0);
         foreach (JsonNode? o in root["openings"]!.AsArray())
         {
-            o!["buildOrder"] = AiScenes.BuildOrder(steps);
+            AiScenes.SetBuildOrder(o, AiScenes.BuildOrder(steps));
             o["attack"] = new JsonObject { ["minArmyPop"] = 200, ["minArmyCost"] = 0 };
         }
     });
@@ -451,7 +451,7 @@ public class EndGameH6QaTests
             dir.EditJson($"factions/{f}/ai.json", root =>
             {
                 foreach (JsonNode? o in root["openings"]!.AsArray())
-                    o!["buildOrder"] = AiScenes.BuildOrder(("time", 3600, "build", AiScenes.BuildingKey(f, BuildingSlot.House), 0));
+                    AiScenes.SetBuildOrder(o, AiScenes.BuildOrder(("time", 3600, "build", AiScenes.BuildingKey(f, BuildingSlot.House), 0)));
             });
         dir.EditJson("common/rules.json", r => r["ai"]!["starvedWaveAfter"] = 0);
     }));
@@ -678,7 +678,7 @@ public class EndGameH6QaTests
                 dir.EditJson($"factions/{f}/ai.json", root =>
                 {
                     foreach (JsonNode? o in root["openings"]!.AsArray())
-                        o!["buildOrder"] = AiScenes.BuildOrder(("time", 3600, "build", AiScenes.BuildingKey(f, BuildingSlot.House), 0));
+                        AiScenes.SetBuildOrder(o, AiScenes.BuildOrder(("time", 3600, "build", AiScenes.BuildingKey(f, BuildingSlot.House), 0)));
                 });
             dir.EditJson("common/rules.json", r => { r["ai"]!["starvedWaveAfter"] = 0; r["ai"]!["farExpandReach"] = Math.Round(reach, 1); });
         });

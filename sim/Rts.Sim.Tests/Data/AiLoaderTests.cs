@@ -72,7 +72,7 @@ public class AiLoaderTests
     [Fact]
     public void EveryTriggerAndAction_Resolves()
     {
-        GameData d = LoadWith(root => AiScenes.Opening(root)["buildOrder"] = JsonNode.Parse("""
+        GameData d = LoadWith(root => AiScenes.SetBuildOrder(AiScenes.Opening(root), JsonNode.Parse("""
             [
               { "at": { "time": 12.5 }, "do": "build", "id": "malazan_billet", "count": 2 },
               { "at": { "workers": 8 }, "do": "train", "id": "malazan_laborer", "count": 4 },
@@ -80,7 +80,7 @@ public class AiLoaderTests
               { "at": { "pop": 20 }, "do": "research", "id": "moranth_supply" },
               { "at": { "time": 300 }, "do": "expand" }
             ]
-            """));
+            """)));
         var steps = d.Ai[d.FindFaction("malazan")].Openings[0].BuildOrder;
         Assert.Equal(5, steps.Length);
         Assert.Equal((AiStepTrigger.Time, 250, AiStepAction.Build, d.FindBuilding("malazan_billet"), 2), (steps[0].Trigger, steps[0].At, steps[0].Action, steps[0].Target, steps[0].Count));
@@ -162,7 +162,7 @@ public class AiLoaderTests
     [InlineData("null", "openings[0].buildOrder[0]", "missing required field")]
     public void ABrokenStep_IsOneErrorAtIt(string step, string path, string message)
     {
-        IReadOnlyList<DataError> errors = ErrorsWith(root => AiScenes.Opening(root)["buildOrder"] = new JsonArray(JsonNode.Parse(step)));
+        IReadOnlyList<DataError> errors = ErrorsWith(root => AiScenes.SetBuildOrder(AiScenes.Opening(root), new JsonArray(JsonNode.Parse(step))));
         DataError e = Assert.Single(errors);
         Assert.Equal(path, e.Path);
         Assert.Contains(message, e.Message);
@@ -172,7 +172,7 @@ public class AiLoaderTests
     [Fact]
     public void ADuplicateStep_IsTheSameAtDoAndId_WhateverTheCount()
     {
-        DataError e = Assert.Single(ErrorsWith(root => AiScenes.Opening(root)["buildOrder"] = JsonNode.Parse("""
+        DataError e = Assert.Single(ErrorsWith(root => AiScenes.SetBuildOrder(AiScenes.Opening(root), JsonNode.Parse("""
             [
               { "at": { "workers": 4 }, "do": "train", "id": "malazan_laborer", "count": 1 },
               { "at": { "workers": 4 }, "do": "train", "id": "malazan_heavy_infantry" },
@@ -180,7 +180,7 @@ public class AiLoaderTests
               { "at": { "pop": 4 }, "do": "train", "id": "malazan_laborer" },
               { "at": { "workers": 4 }, "do": "train", "id": "malazan_laborer", "count": 3 }
             ]
-            """)));
+            """))));
         Assert.Equal("openings[0].buildOrder[4]", e.Path);
         Assert.Contains("the same step as openings[0].buildOrder[0]", e.Message);
     }
@@ -193,7 +193,7 @@ public class AiLoaderTests
         {
             var steps = new JsonArray();
             for (int i = 0; i < 10_000; i++) steps.Add(JsonNode.Parse($$"""{ "at": { "time": {{i}} }, "do": "expand" }"""));
-            AiScenes.Opening(root)["buildOrder"] = steps;
+            AiScenes.SetBuildOrder(AiScenes.Opening(root), steps);
         }));
         Assert.Equal("openings[0].buildOrder", many.Path);
         Assert.Contains("10000 steps is above the maximum 256", many.Message);

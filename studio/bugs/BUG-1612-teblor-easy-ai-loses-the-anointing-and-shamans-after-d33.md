@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S3 (QA's rating, kept: a real loss for Easy and Hard outside D33's criteria, which were Normal and Hard unit counts) |
-| Status | open, half fixed (Producer, 2026-11-18-0926 ACCEPT): **the Anointing half is fixed by D34** (Easy 1 -> 28 of 64, Normal 11 -> 17, Hard 18 -> 23; `QA/Content/D34QaTests`, `Content/TeblorOpeningFixtureTests.TheShippedOpening_IsTheD34Fixture`). **What stays open: the unit mix.** Shamans Easy 34 -> 16 (51 before D33), Normal 25 -> 15, Hard 25 -> 22; D34 also cost Easy its Riders (36 -> 4) and War-dogs (51 -> 27). Order alone cannot give both; waits for Request 55 (the sim's AI follow-up), then one data re-measure |
+| Status | fixed (D38, 2026-11-26-0717): the three Teblor orders D37 measured ship through M7-9's `buildOrders` (Normal M1RS as `buildOrder`, Easy K9KC10S and Hard QRD1 as entries); measured on the shipped file, every difficulty meets every figure of the bar (docs/01 2026-11-24 ACCEPT (3)(c)) and equals D37's rows cell for cell. Before: open, half fixed (Producer, 2026-11-18-0926 ACCEPT): the Anointing half fixed by D34; the unit mix open through D-H10, D36 and D37 |
 | Found | 2026-11-17-0816, task D33 (the developer; measured against `main` by QA's `D33TeblorRowQaStressTests`; file written by the Producer) |
 | System | data: `game/data/factions/teblor/ai.json` `standard` (step order against the reserve) |
-| Fixed by | |
+| Fixed by | D38 (data track, 2026-11-26-0717): `game/data/factions/teblor/ai.json` `standard` (`buildOrder` = M1RS, `buildOrders` = { easy: K9KC10S, hard: QRD1 }); `Content/D38ShippedOrdersTests`, `Content/D38ShippedOrdersReportTests` (Stress) |
 
 ## Repro
 1. `dotnet test sim/Rts.Sim.Tests --filter "FullyQualifiedName~D33TeblorRowQaStressTests"` (64 seats, four maps, seeds 1-8, to 15:00).
@@ -59,3 +59,16 @@ The new train steps should not cost Easy and Hard the faction's one upgrade.
 - For the Producer (teblor.md "Questions for the Producer (D36)" 1): one order meets every Easy figure (K9KC10S), one
   every Hard figure (QRD1), one every Normal figure but the Anointing (RSC). Recommendation: an opening per difficulty
   (sim schema request). Status stays open.
+
+## D38 (2026-11-26-0717): the three orders ship; fixed
+- `game/data/factions/teblor/ai.json`, the `standard` opening only: `buildOrder` = M1RS (the D37 Normal fixture's), new
+  `buildOrders` = { "easy": K9KC10S, "hard": QRD1 } (the D37 Easy and Hard fixtures'), written from the fixtures, step for
+  step, switches included; description, compositions, wave, difficulties and retreat unchanged. Data hash moved once
+  (header of the golden regenerated; no literal in a test).
+- Measured on the shipped file itself (`Content/D38ShippedOrdersReportTests`, Stress; D34's row, 64 seats a difficulty,
+  192 matches in 318 s), defeated / 2nd Longhouse / Shaman / Breaker / Rider / War-dog / Anointing, D34's order -> D38:
+  - Easy (K9KC10S): 1/0/16/30/4/27/28 -> 1/0/38/28/34/42/22
+  - Normal (M1RS): 9/23/15/14/22/37/17 -> 9/23/23/18/30/40/18
+  - Hard (QRD1): 11/23/22/39/33/46/23 -> 11/23/23/40/42/47/25
+- Every cell equals D37's row for that order; every figure of the bar is met on all three difficulties (0 misses).
+  teblor.md "The unit mix, shipped (BUG-1612, D38)".

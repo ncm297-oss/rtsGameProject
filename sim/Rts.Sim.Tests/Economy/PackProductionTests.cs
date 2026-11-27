@@ -279,7 +279,7 @@ public class PackProductionTests
         dir.EditJson("factions/malazan/ai.json", root =>
         {
             foreach (JsonNode? o in root["openings"]!.AsArray())
-                o!["buildOrder"] = AiScenes.BuildOrder(("pop", 5, "build", "malazan_armory", 0));
+                AiScenes.SetBuildOrder(o, AiScenes.BuildOrder(("pop", 5, "build", "malazan_armory", 0)));
         });
     }));
 

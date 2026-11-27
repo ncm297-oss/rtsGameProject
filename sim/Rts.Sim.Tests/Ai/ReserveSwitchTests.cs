@@ -45,7 +45,7 @@ public class ReserveSwitchTests
             {
                 var order = new JsonArray();
                 foreach (JsonObject s in steps) order.Add(s.DeepClone());
-                o!["buildOrder"] = order;
+                AiScenes.SetBuildOrder(o, order);
                 o["compositions"] = JsonNode.Parse("""[{ "age": 1, "units": { "malazan_heavy_infantry": 1 } }, { "age": 2, "units": { "malazan_heavy_infantry": 1 } }]""");
             }
             if (expandNow) foreach (string k in new[] { "easy", "normal", "hard" }) root["difficulties"]![k]!["expandAfter"] = 0;

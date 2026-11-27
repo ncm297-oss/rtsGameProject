@@ -490,6 +490,9 @@ public sealed class PlayerView
     /// </summary>
     public bool CanTrain(int buildingSlot, int unitTypeId, out TrainError reason) => _world.CanTrain(_player, buildingSlot, unitTypeId, out reason);
 
+    /// <summary>M8-4 (Request 56 G4): the player's own count of <paramref name="unitTypeId"/> against its <c>maxAlive</c> (<see cref="World.UnitLimit"/>: own state only); false, both 0, for a type without a limit.</summary>
+    public bool UnitLimit(int unitTypeId, out int count, out int limit) => _world.UnitLimit(_player, unitTypeId, out count, out limit);
+
     /// <summary>Whether the player may queue tech <paramref name="techId"/> at its own building in slot <paramref name="buildingSlot"/> now: <see cref="World.CanResearch"/> (own state only, as <see cref="CanTrain"/>).</summary>
     public bool CanResearch(int buildingSlot, int techId, out ResearchError reason) => _world.CanResearch(_player, buildingSlot, techId, out reason);
 

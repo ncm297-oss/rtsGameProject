@@ -30,7 +30,7 @@ public class ReserveTests
         {
             foreach (JsonNode? o in root["openings"]!.AsArray())
             {
-                o!["buildOrder"] = order.DeepClone();
+                AiScenes.SetBuildOrder(o, order.DeepClone());
                 o["compositions"] = JsonNode.Parse($$"""[{ "age": 1, "units": { "{{unit}}": 1 } }, { "age": 2, "units": { "{{unit}}": 1 } }]""");
             }
         });
@@ -264,7 +264,7 @@ public class ReserveTests
         {
             foreach (JsonNode? o in root["openings"]!.AsArray())
             {
-                o!["buildOrder"] = AiScenes.BuildOrder(("time", 0, "expand", null, 0));
+                AiScenes.SetBuildOrder(o, AiScenes.BuildOrder(("time", 0, "expand", null, 0)));
                 o["compositions"] = JsonNode.Parse("""[{ "age": 1, "units": { "malazan_heavy_infantry": 1 } }, { "age": 2, "units": { "malazan_heavy_infantry": 1 } }]""");
             }
             foreach (string k in new[] { "easy", "normal", "hard" }) root["difficulties"]![k]!["expandAfter"] = 0;
@@ -311,7 +311,7 @@ public class ReserveTests
         {
             foreach (JsonNode? o in root["openings"]!.AsArray())
             {
-                o!["buildOrder"] = AiScenes.BuildOrder(("time", 0, "train", "malazan_laborer", 4), ("time", 60, "research", "age_ii", 0));
+                AiScenes.SetBuildOrder(o, AiScenes.BuildOrder(("time", 0, "train", "malazan_laborer", 4), ("time", 60, "research", "age_ii", 0)));
                 o["compositions"] = JsonNode.Parse("""[{ "age": 1, "units": { "malazan_heavy_infantry": 2, "malazan_crossbowman": 1 } }, { "age": 2, "units": { "malazan_heavy_infantry": 1 } }]""");
             }
         });

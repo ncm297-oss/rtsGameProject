@@ -18,7 +18,8 @@ namespace Rts.Sim.Ai;
 /// <item><c>train</c>: <c>count</c> Train commands accepted over the step's life, one per think; <c>build</c>,
 /// <c>research</c> and <c>expand</c>: complete on the first accepted command (a research also once the tech is researched or
 /// queued by anyone). D15 C (M5-4f): a <c>build</c> step of the faction's House is complete, no command sent, once the
-/// player's population cap is the hard cap (<c>popCap</c>).</item>
+/// player's population cap is the hard cap (<c>popCap</c>). M8-4: likewise a <c>train</c> step whose type is at its
+/// <c>maxAlive</c> (<see cref="AiPlayer.AtUnitLimit"/>).</item>
 /// <item>A command is judged at the first think after it applied (<see cref="PendingOrder"/>); until then the step sends
 /// nothing. A refused one is sent again at a later think (a refused Build's anchor gets a retry mark, so the site search moves
 /// on); a step that can't act (no gold, no site, no building, no worker) simply waits (one whose site search found nothing
@@ -83,6 +84,13 @@ internal static class BuildOrderExecutor
             }
             // D15 option C (the owner, 2026-10-14): a house adds nothing at the hard cap, so its step is done unsent.
             if (step.Action == AiStepAction.Build && step.Target == ai.HouseType && ai.View.HalfPopCap >= ai.Data.Rules.HalfPopCap)
+            {
+                board.StepDone[i] = true;
+                continue;
+            }
+            // M8-4 (Request 56 G4, D15 C's precedent): a train step whose type is at its maxAlive is done unsent, so it is
+            // never due for ever (a step of 9 on a type limited to 7 ends at the limit).
+            if (step.Action == AiStepAction.Train && ai.AtUnitLimit(step.Target))
             {
                 board.StepDone[i] = true;
                 continue;

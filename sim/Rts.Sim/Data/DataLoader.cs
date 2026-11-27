@@ -837,6 +837,7 @@ public static partial class DataLoader
             Scale = (float)scale,
             SpawnCount = spawnCount,
             Carry = OptionalCarry(c, u.Carry, p + ".carry", slot == (int)UnitSlot.Worker, u.Id),
+            MaxAlive = OptionalMaxAlive(c, u.MaxAlive, p + ".maxAlive", spawnCount, u.Id), // M8-4
             StillStealthStatus = stillStatus,
             StillStealthDelayTicks = stillDelay,
         };
@@ -874,6 +875,38 @@ public static partial class DataLoader
             if (ticks < 1) c.Error(p + ".delay", $"{unit}: delay {d} s rounds to {ticks} ticks");
             else delayTicks = ticks;
         }
+    }
+
+    /// <summary>
+    /// M8-4 (Request 56 G4): a unit type's limit, optional: a whole number from 1 to <see cref="DataLimits.MaxUnitMaxAlive"/>,
+    /// not below the type's <paramref name="spawnCount"/> (a pack bigger than the limit could never be trained); 0 (no limit)
+    /// when absent or refused. A JSON null, a string, a fraction, zero, a negative, a value above the bound or below the
+    /// spawn count is one error at <paramref name="path"/> naming the unit.
+    /// </summary>
+    private static int OptionalMaxAlive(Checker c, RawValue? raw, string path, int spawnCount, string? id)
+    {
+        if (raw == null) return 0;
+        if (raw.Token == System.Text.Json.JsonTokenType.Null)
+        {
+            c.Error(path, $"{id}: null is not a maxAlive (leave the field out for no limit)");
+            return 0;
+        }
+        if (raw.Number is not double value)
+        {
+            c.Error(path, $"{id}: wrong type of value for maxAlive: expected a whole number 1-{DataLimits.MaxUnitMaxAlive}");
+            return 0;
+        }
+        if (!(value >= 1 && value <= DataLimits.MaxUnitMaxAlive && value == Math.Floor(value)))
+        {
+            c.Error(path, $"{id}: maxAlive {value.ToString(CultureInfo.InvariantCulture)} is not a whole number 1-{DataLimits.MaxUnitMaxAlive}");
+            return 0;
+        }
+        if (value < spawnCount)
+        {
+            c.Error(path, $"{id}: maxAlive {value.ToString(CultureInfo.InvariantCulture)} is below spawnCount {spawnCount}: one queue item could never be trained");
+            return 0;
+        }
+        return (int)value;
     }
 
     /// <summary>

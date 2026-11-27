@@ -10,6 +10,10 @@ namespace Rts.Sim.Tests;
 /// that means "no switch" reads, whatever the data track ships); "shipped" is the file as it is; "A" adds
 /// <c>throughReserve</c> on the Destrier Rider, War-dog and Shaman train steps; "B" adds to A <c>noReserve</c>
 /// on the expand step. Read by <c>Stress/ReserveSwitchReportTests</c> and <see cref="ReserveSwitchDeterminismTests"/>.
+/// M8-4 (BUG-1771, rule 79): "none", A and B are built on D34's order (<see cref="D34Order"/>, the order M7-8 measured), written
+/// with <see cref="AiScenes.SetBuildOrder"/> so the shipped file's <c>buildOrders</c> (D38) are taken out and every seat plays
+/// the forged list; while the shipped <c>buildOrder</c> is D34's (<c>Content/TeblorOpeningFixtureTests</c>) the copies are
+/// the ones they were.
 /// </summary>
 internal static class TeblorSwitchOrders
 {
@@ -21,12 +25,28 @@ internal static class TeblorSwitchOrders
     /// <summary>A copy of the shipped data whose Teblor <c>standard</c> opening carries order <paramref name="name"/> (one of <see cref="Names"/>).</summary>
     internal static GameData Data(string name) => name switch
     {
-        "none" => AiScenes.DataWithAi("teblor", root => RemoveSwitches(Standard(root))),
+        "none" => AiScenes.DataWithAi("teblor", root => RemoveSwitches(OnD34Order(root))),
         "shipped" => TestSim.Data,
-        "A" => AiScenes.DataWithAi("teblor", root => Apply(Standard(root), noReserveExpand: false)),
-        "B" => AiScenes.DataWithAi("teblor", root => Apply(Standard(root), noReserveExpand: true)),
+        "A" => AiScenes.DataWithAi("teblor", root => Apply(OnD34Order(root), noReserveExpand: false)),
+        "B" => AiScenes.DataWithAi("teblor", root => Apply(OnD34Order(root), noReserveExpand: true)),
         _ => throw new ArgumentOutOfRangeException(nameof(name)),
     };
+
+    /// <summary>
+    /// M8-4: the <c>buildOrder</c> of <c>Content/Fixtures/teblor_standard_d34.json</c> (read only; a fresh copy), the Teblor
+    /// order the M7-8 and M7-9 helpers were measured on, so their forged copies do not move when the shipped order does.
+    /// </summary>
+    internal static JsonArray D34Order() =>
+        JsonNode.Parse(File.ReadAllText(Path.Combine(TestDataDir.RepoRoot(), "sim", "Rts.Sim.Tests", "Content", "Fixtures", "teblor_standard_d34.json")))!
+            ["buildOrder"]!.AsArray().DeepClone().AsArray();
+
+    /// <summary>M8-4: the <c>standard</c> opening of a Teblor ai.json root with D34's order written on it (its <c>buildOrders</c> taken out).</summary>
+    internal static JsonObject OnD34Order(JsonNode root)
+    {
+        JsonObject standard = Standard(root);
+        AiScenes.SetBuildOrder(standard, D34Order());
+        return standard;
+    }
 
     /// <summary>The opening with id <c>standard</c> in a Teblor ai.json root.</summary>
     internal static JsonObject Standard(JsonNode root)

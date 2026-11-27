@@ -28,7 +28,7 @@ internal static class HardKnobsScenes
         {
             foreach (JsonNode? o in root["openings"]!.AsArray())
             {
-                o!["buildOrder"] = AiScenes.BuildOrder(("time", 3600, "train", "malazan_laborer", 1));
+                AiScenes.SetBuildOrder(o, AiScenes.BuildOrder(("time", 3600, "train", "malazan_laborer", 1)));
                 o["attack"] = new JsonObject { ["minArmyPop"] = 4 * half / 2.0, ["minArmyCost"] = 0 };
             }
             root["difficulties"]!["normal"]!["waveSizeMultiplier"] = 1;

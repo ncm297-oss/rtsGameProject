@@ -78,10 +78,12 @@ public class M79PerDifficultyLoaderQaTests
             """, out int i);
         _out.WriteLine(Show(r));
         Assert.Null(r.Data);
-        // Ruling (a) also fires: three keys are written, one null. Both errors are the file's real problems.
+        // Since M8-4 (BUG-1770) ruling (a) no longer fires here: the null entry is not an entry, so only two difficulties have
+        // one. The null entry and the bad id are the file's real problems, and the only ones.
         string p = $"openings[{i}].buildOrders";
         Assert.Contains(r.Errors, e => e.Path == p + ".normal");
         Assert.Contains(r.Errors, e => e.Path == p + ".hard[1].id");
+        Assert.DoesNotContain(r.Errors, e => e.Path == p);
         Assert.DoesNotContain(r.Errors, e => e.Path.StartsWith(p + ".easy", StringComparison.Ordinal));
         Assert.All(r.Errors, e => Assert.Equal(MalazanAi, e.File));
     }

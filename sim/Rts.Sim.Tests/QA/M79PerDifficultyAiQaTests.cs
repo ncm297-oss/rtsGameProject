@@ -251,7 +251,7 @@ public class M79PerDifficultyAiQaTests
         {
             JsonObject o = TeblorSwitchOrders.Standard(root);
             o.Remove("buildOrders");
-            o["buildOrder"] = order.DeepClone();
+            AiScenes.SetBuildOrder(o, order.DeepClone());
         });
         GameData none = AiScenes.DataWithAi("teblor", root => TeblorSwitchOrders.Standard(root).Remove("buildOrders"));
         // Not a vacuous twin: both measured orders differ from the opening's buildOrder.

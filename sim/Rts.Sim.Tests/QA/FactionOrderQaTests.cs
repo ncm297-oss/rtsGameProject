@@ -473,7 +473,7 @@ public class FactionOrderQaTests(ITestOutputHelper output)
             dir.EditJson("factions/malazan/ai.json", root =>
             {
                 foreach (JsonNode? o in root["openings"]!.AsArray())
-                    o!["buildOrder"] = AiScenes.BuildOrder(("time", 0, "train", "malazan_heavy_infantry", 5));
+                    AiScenes.SetBuildOrder(o, AiScenes.BuildOrder(("time", 0, "train", "malazan_heavy_infantry", 5)));
             });
         });
         int heavy = d.FindUnit("malazan_heavy_infantry");

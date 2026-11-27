@@ -121,6 +121,45 @@ public class PerDifficultyBuildOrderLoaderTests
         Assert.Contains(string.Format(message, i), e.Message);
     }
 
+    /// <summary>
+    /// M8-4 (BUG-1770): a <c>null</c> or <c>[]</c> entry beside two real ones is one error at the entry's path and does not count
+    /// toward ruling (a) ("an entry for every difficulty"): leaving that key out, as the error says, gives a file that loads.
+    /// </summary>
+    [Theory]
+    [InlineData("easy", "null", "null is not a build order")]
+    [InlineData("easy", "[]", "the build order has no steps")]
+    [InlineData("normal", "null", "null is not a build order")]
+    [InlineData("normal", "[]", "the build order has no steps")]
+    [InlineData("hard", "null", "null is not a build order")]
+    [InlineData("hard", "[]", "the build order has no steps")]
+    public void ANullOrEmptyEntry_BesideTwoRealOnes_IsOneError_AndNotEveryDifficulty(string key, string entry, string message)
+    {
+        var map = new JsonObject();
+        foreach (string id in DataLimits.AiDifficultyIds)
+            map[id] = id == key ? JsonNode.Parse(entry) : JsonNode.Parse($"[ {Train} ]");
+        DataLoadResult r = Load(map.ToJsonString(), out int i);
+        DataError e = Assert.Single(r.Errors);
+        Assert.Equal($"openings[{i}].buildOrders.{key}", e.Path);
+        Assert.Contains(message, e.Message);
+        Assert.DoesNotContain(r.Errors, x => x.Message.Contains("every difficulty", StringComparison.Ordinal));
+        // Fixed as the error says (the key left out), the file loads.
+        map.Remove(key);
+        Assert.True(Load(map.ToJsonString(), out _).Ok);
+    }
+
+    /// <summary>M8-4 (BUG-1770): an entry that holds only <c>null</c> / <c>[]</c> keys is their errors alone, not "no entries" too.</summary>
+    [Theory]
+    [InlineData("""{ "easy": null, "hard": [] }""", 2)]
+    [InlineData("""{ "easy": null, "normal": null, "hard": null }""", 3)]
+    [InlineData("""{ "easy": [], "normal": [], "hard": [] }""", 3)]
+    public void OnlyBrokenEntries_AreTheirOwnErrors(string json, int count)
+    {
+        DataLoadResult r = Load(json, out int i);
+        Assert.Equal(count, r.Errors.Count);
+        Assert.All(r.Errors, e => Assert.StartsWith($"openings[{i}].buildOrders.", e.Path, StringComparison.Ordinal));
+        Assert.DoesNotContain(r.Errors, x => x.Message.Contains("every difficulty", StringComparison.Ordinal) || x.Message.Contains("no entries", StringComparison.Ordinal));
+    }
+
     /// <summary>A step error names the opening and the step (M7-8's message) under the entry too.</summary>
     [Fact]
     public void ASwitchOnTheWrongAction_NamesTheOpeningAndTheStep()

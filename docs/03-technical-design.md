@@ -5821,7 +5821,7 @@ preallocated, not hashed, not saved. An entry is `(Unit, Owner, Kind, Placement,
   tick. Nothing reads the list inside the sim; a match's state hashes are unchanged (criterion 7's digests). 100 ticks that
   each drop an order allocate nothing (`DroppedOrderTests.ATickThatDropsAnOrder_AllocatesNothing`).
 
-**For the data track (M7-8).** No shipped opening carries a switch. To cure the Teblor unit mix (BUG-1612, BUG-1421
+**For the data track (M7-8).** Since D38 (2026-11-26) the Teblor `standard`'s three lists carry `throughReserve` on some train steps; no other shipped opening carries a switch. To cure the Teblor unit mix (BUG-1612, BUG-1421
 item 1) in the Teblor's own file, write the switch on the step itself in `factions/teblor/ai.json` `standard`:
 
 ```json
@@ -5997,7 +5997,7 @@ row, the allocation row), `Ai/PerDifficultySaveTests` (saves, determinism; the t
   (Easy, Normal, Hard, Hard) twice in one process (24 checkpoints to 12,000) and across two processes (Stress) give the
   same hashes.
 
-**For the data track (M7-9).** No shipped opening carries the field. To give a difficulty its own build order, write it
+**For the data track (M7-9).** Since D38 (2026-11-26) one shipped opening carries the field: the Teblor `standard` (`buildOrder` is Normal's list, `buildOrders` holds `easy` and `hard`); no other does. To give a difficulty its own build order, write it
 inside the opening beside `buildOrder`:
 
 ```json
@@ -6028,6 +6028,108 @@ inside the opening beside `buildOrder`:
    needed until D38's rows show a difficulty's army mix, not its order, is what misses a target.
 4. An entry equal to `buildOrder` loads and moves the hash (ruling (d)). Recommendation: keep; a data-track content test
    may flag it as dead weight if the Producer wants files lean.
+
+**The Producer's answers (docs/01, the second 2026-11-26 row, (1); written in by M8-4 under rule 67; all four "keep").**
+(1) An `easy` entry on an opening other than the first loads and is never played (Easy always plays the first opening);
+documented in the table above, not an error, so a later pick rule for Easy needs no schema change. (2) An unknown key under
+`buildOrders` gets the loader's ordinary unknown-property error: one policy for every file. (3) `compositions`, `attack` and
+`description` stay one per opening; a per-difficulty army mix is built only if D38's rows show the mix, not the order,
+misses a target. (4) An entry equal to `buildOrder` is allowed and moves the hash. **Since M8-4 (BUG-1770):** a `null` or
+`[]` entry is its own error only: it no longer counts toward ruling (a) ("an entry for every difficulty"), and a field
+whose keys are all `null` / `[]` no longer also reports "no entries" (that error is for `{}`). **And BUG-1771:** a sim test
+that replaces an opening's `buildOrder` goes through `AiScenes.SetBuildOrder`, which takes `buildOrders` out too (a source
+row, `BuildOrderHelperSourceTests`, pins it); the Teblor test orders (`TeblorSwitchOrders` none / A / B,
+`PerDifficultyOrders` A-C) are built on D34's order read from `Content/Fixtures/teblor_standard_d34.json`, not on the
+shipped file's, so they do not move when the data track ships another order; a test that reads a seat's steps reads
+`AiPlayer.Steps`, never `Opening.BuildOrder`.
+
+### Implementation (M8-4)
+
+Request 56 G4 (docs/factions/shadow.md "Unit notes", the Hound of Shadow's "at most 7 alive"; Schema gaps G4; "Decisions
+(D-R38)": alive plus queued; docs/01, the third 2026-11-26 row, (1)) as a generic unit field, built and tested on test data
+only: no shipped unit carries it, so no shipped match, data hash, pin, golden, save format (10) or replay format (9) moved.
+Before it, BUG-1771 (the test helpers and `buildOrders`, its own commit) and BUG-1770 (above, "Implementation (M7-9)").
+Code: `UnitDef.MaxAlive`, `UnitJson.MaxAlive` (`DataJson.cs`), `DataLoader.OptionalMaxAlive`, `DataLimits.MaxUnitMaxAlive`,
+`GameData.ContentHash`; `TrainError.LimitReached`, `ProductionSystem.Check`; `PlayerLedger.Limits.cs` (the kept count),
+its hooks `PlayerLedger.AddLiveUnit` / `AddQueuedUnit` (`BuildingStore.Enqueue` / `Shift` now pass the item's type);
+`World.UnitLimit` (public) and `World.LimitedCount`, `PlayerView.UnitLimit`; the AI's `AiPlayer.AtUnitLimit`, read by
+`AiPlayer.TryTrain`, `ProductionManager.Pick` and `BuildOrderExecutor.Run`. The one view-data row: `game/data/common/ui.json`
+`train.limit_reached` "Limit reached" (the view's text loader demands a text for every `TrainError`; `ui.json` is not in
+the data hash).
+
+- **Schema.** `units.json` optional `maxAlive`: a whole number from 1 to `DataLimits.MaxUnitMaxAlive` (1,000), not below
+  the type's `spawnCount` (a pack bigger than its limit could never be trained). Read raw, so a JSON `null`, a string, a
+  bool or a list is one error by name, as zero, a negative, a fraction, a value above 1,000 or below `spawnCount` are; each
+  is one error at `units[i].maxAlive` naming the unit. Left out: no limit (`UnitDef.MaxAlive` 0), today's behaviour.
+- **The count.** Per player and type: the player's live units of the type, made any way (trained, an ability's `spawn`,
+  the dev `SpawnUnit`; a summon counts while it lives), plus the units its queued items of the type will spawn (items x
+  `spawnCount`, the head in training included), over all its buildings. Kept in the ledger beside the M6-S13 draw counts:
+  +1 / -1 where a unit is counted live at its spawn and released at its free, +/- `spawnCount` where a unit item joins or
+  leaves a queue (trained, cancelled, or its building freed). A pack's spawn moves it by 0 (+3 units, -3 queued). Kept only
+  for types with a limit, and only when the data has one (otherwise the array is empty: one length test per spawn, free and
+  queue change). Derived from the stores: never saved, never hashed; a load rebuilds it (`PlayerLedger.RecountLimits`,
+  called by `RecountDraw`, which a test that writes store arrays directly calls too). No `Dictionary`, no walk per check.
+- **The rule.** A Train is refused, `TrainError.LimitReached`, when count + the item's `spawnCount` &gt; `maxAlive`. The
+  value is appended last to the enum (no value moves; saves and replays hold none) but checked after
+  `LockedByRequirement` and before `QueueFull` and `CannotAfford`, so the button reads "Limit reached" rather than "Can't
+  afford". It is judged when the Train applies, as every train rule: several Trains in one tick apply in order and only the
+  surplus is refused; a refused Train charges nothing and leaves every queue as it was. A CancelTrain or a death frees a
+  place at once (a Cancel before a Train in the same tick lets the Train in; after it, not). An item already queued always
+  completes, even when an ability's spawn took the count past the limit meanwhile; a unit made another way is never
+  refused (the limit gates training only, the Producer's ruling).
+- **Reading it.** `World.CanTrain` gives the reason (the command card shows `ui.json` `train.limit_reached`).
+  `World.UnitLimit(player, type, out count, out limit)`: true with the count and the limit for a type with one; false,
+  (0, 0), for a type without one or a bad id. One read, allocation-free: the view can draw "5 / 7" every frame.
+- **The computer player.** `AiPlayer.AtUnitLimit(type)`: the view's count plus this think's Trains of the type not yet
+  applied (a per-type scratch keyed by the think's tick: a Train applies the next tick and a seat thinks again later, so
+  only this think's sends are missing; never saved) plus one item's `spawnCount` passes the limit. Production skips such a
+  type and trains the next by share (it never waits on the capped type); `TryTrain` refuses it, so a spend-down think with
+  several producers sends no Train the limit would refuse; a build-order `train` step of a type at its limit is done
+  unsent (D15 C's house-at-the-cap precedent), so a step of 9 on a type limited to 7 ends at the limit and is never due
+  for ever. A `train` step is not reopened when its units die (no step is; unchanged). Reachable only with the field.
+- **Tests.** `Data/MaxAliveLoaderTests` (criteria 6-7: the values that load, each refusal by path and name, the hash
+  absent / present / per value / per unit), `Data/DataNullPolicyTests` and `DataContentHashTests` (the field),
+  `Economy/UnitLimitTests` (criteria 8-9: the boundary, a pack, per player, cancel, death, several Trains in one tick, a
+  queued item after a summon, nothing charged, the check order, the accessor, a destroyed building),
+  `UnitLimitAllocationTests` (the check allocates nothing), `Ai/UnitLimitAiTests` (criterion 10, Easy / Normal / Hard and a
+  spend-down variant), `Economy/UnitLimitMatchTests` (criteria 12-13: a save at the limit with an item queued, a replay, the
+  match twice; the two-process row is Stress), `Stress/UnitLimitFuzzStressTests` (criterion 15: 20 seeds of random Trains,
+  cancels and kills, packs on the odd seeds, a save midway), `Economy/UnitLimitPerfTests` (Perf, a report: 1,000 checks
+  beside 6,000 live units). Test data: `UnitLimitTests.s_capped` / `s_pack` (Malazan Heavy Infantry limited to 7, the pack
+  copy with `spawnCount` 3), each stripping every shipped `maxAlive` first (rule 58).
+- **Known limits.** (1) The draw rule's "can still train" (M6-S13, `World.CanStillTrain`) does not read the limit: it
+  compares the seat's gold with its cheapest unit, so a seat whose every trainable type were at its limit would still count
+  as able to train while it holds that gold (BUG-1731's family; no designed faction has only limited types). (2) A seat whose composition is only the capped type has nothing else to pick at the limit, but it does not sit on its gold
+  (BUG-1810, measured by QA's `Stress/UnitLimitAiQaStressTests.OnlyTheCappedTypeInTheComposition_Report`: over 12,000 ticks the
+  most gold in hand was 418-522 on Easy / Normal / Hard; the seat attacks, loses units and retrains as places free). A
+  designed opening still lists other units beside the Hound, so the army is more than seven.
+
+**For the data track (M8-4).** The Hound's row, when the Shadow roster lands (docs/factions/shadow.md, the Hound of
+Shadow), beside its other fields:
+
+```json
+{ "id": "shadow_hound", "...": "...", "maxAlive": 7 }
+```
+
+| Rule | What it means for the file |
+| --- | --- |
+| Value | A whole number from the unit's `spawnCount` (1 when left out) to 1,000. `null`, a string, 0, a fraction: load errors. Leave the field out for no limit |
+| What counts | The player's live units of the type, however made (a summon included), plus those its queued items will spawn; a pack item counts its whole pack |
+| What it stops | Training only: a Train that would pass it is refused (nothing paid; the button reads "Limit reached"). A summon is never stopped |
+| The computer player | Trains other composition units at the limit; a `train` step of the type counts as done at the limit (so a step's `count` above the limit is harmless). List other units beside a limited one in each age's composition, or the army is only the limited type (the seat still attacks and retrains as places free; it does not bank its gold: BUG-1810) |
+| Hash | The field moves the data hash once when it lands; land it with the Shadow roster |
+| Descriptions | "At most 7" in a `description` is the data track's text; no content check reads it yet |
+
+**Questions for the Producer (M8-4, rule 67), each with the developer's recommendation.**
+
+1. A summoned unit of a limited type counts toward the limit (the ruling: "counts as alive"), so a summon can hold
+   training shut for its lifetime. No designed summon makes a limited type (the Wraith is not a Hound). Recommendation: keep.
+2. The draw rule's "can still train" ignores the limit (Known limits (1)), so a seat with only limited types, all at
+   their limits, and gold in the bank keeps a passive match from drawing. Recommendation: keep; only an all-limited
+   faction meets it, and the draw rule's own "can still train" decision (BUG-1731) is the sim's next hardening.
+3. `DataLimits.MaxUnitMaxAlive` is 1,000 (a format bound, far above any design). Recommendation: keep.
+4. The refusal text is one line, "Limit reached", with no count; the count is for the roster's "5 / 7" (the view's next
+   step, `World.UnitLimit`). Recommendation: keep the button short and show the count beside the portrait.
 
 ## Data format
 

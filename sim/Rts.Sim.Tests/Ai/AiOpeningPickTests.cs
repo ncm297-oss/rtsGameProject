@@ -226,9 +226,9 @@ public class AiOpeningPickTests
 
     /// <summary>Two openings whose first (and only) step differs: A trains a worker at once, B builds a billet at once.</summary>
     private static readonly Lazy<GameData> s_twoOrders = new(() => WithOpenings(2, (k, o) =>
-        o["buildOrder"] = k == 0
+        AiScenes.SetBuildOrder(o, k == 0
             ? AiScenes.BuildOrder(("time", 0, "train", "malazan_laborer", 1))
-            : AiScenes.BuildOrder(("time", 0, "build", "malazan_billet", 0))));
+            : AiScenes.BuildOrder(("time", 0, "build", "malazan_billet", 0)))));
 
     /// <summary>The flat-scene seed (from 1 up) whose Normal seat 0 picks opening <paramref name="index"/>.</summary>
     private static ulong SeedPicking(GameData data, int index)
@@ -262,7 +262,7 @@ public class AiOpeningPickTests
     /// <summary>Two openings with different attack thresholds: A waits for 100 pop, B goes at 1 pop and no cost.</summary>
     private static readonly Lazy<GameData> s_twoAttacks = new(() => WithOpenings(2, (k, o) =>
     {
-        o["buildOrder"] = AiScenes.BuildOrder(("time", 3600, "train", "malazan_laborer", 1));
+        AiScenes.SetBuildOrder(o, AiScenes.BuildOrder(("time", 3600, "train", "malazan_laborer", 1)));
         o["attack"] = new JsonObject { ["minArmyPop"] = k == 0 ? 100 : 1, ["minArmyCost"] = 0 };
     }));
 
@@ -301,7 +301,7 @@ public class AiOpeningPickTests
     {
         GameData data = WithOpenings(2, (k, o) =>
         {
-            o["buildOrder"] = AiScenes.BuildOrder(("time", 3600, "train", "malazan_laborer", 1));
+            AiScenes.SetBuildOrder(o, AiScenes.BuildOrder(("time", 3600, "train", "malazan_laborer", 1)));
             string unit = k == 0 ? "malazan_heavy_infantry" : "malazan_crossbowman";
             o["compositions"] = JsonNode.Parse($$"""[{ "age": 1, "units": { "{{unit}}": 1 } }, { "age": 2, "units": { "{{unit}}": 1 } }]""");
         });

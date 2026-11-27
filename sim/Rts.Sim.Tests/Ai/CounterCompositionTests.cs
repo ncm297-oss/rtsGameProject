@@ -259,7 +259,7 @@ public class CounterCompositionTests
     {
         foreach (JsonNode? o in root["openings"]!.AsArray())
         {
-            o!["buildOrder"] = AiScenes.BuildOrder(("time", 3600, "build", "malazan_billet", 0));
+            AiScenes.SetBuildOrder(o, AiScenes.BuildOrder(("time", 3600, "build", "malazan_billet", 0)));
             o["compositions"] = new JsonArray(
                 new JsonObject { ["age"] = 1, ["units"] = new JsonObject { ["malazan_heavy_infantry"] = 35, ["malazan_crossbowman"] = 30 } },
                 new JsonObject { ["age"] = 2, ["units"] = new JsonObject { ["malazan_heavy_infantry"] = 35, ["malazan_crossbowman"] = 30 } });

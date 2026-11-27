@@ -131,7 +131,7 @@ public class M78ReserveSwitchQaStressTests(ITestOutputHelper output)
             {
                 if (second[p] < 0 && halls[p] >= 2) second[p] = sim.TickNumber;
                 AiPlayer ai = sim.AiOf(p)!;
-                var steps = ai.Opening.BuildOrder;
+                var steps = ai.Steps;
                 for (int i = 0; i < steps.Length; i++)
                     if (steps[i].Action == AiStepAction.Expand && ai.Board.StepDone[i] && expandDone[p] < 0) expandDone[p] = sim.TickNumber;
             }

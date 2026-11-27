@@ -31,6 +31,7 @@
     "wrong_faction": "Not your faction's unit",
     "not_trained_here": "Not trained here",
     "locked_by_requirement": "Locked",
+    "limit_reached": "Limit reached",
     "queue_full": "Queue full",
     "cannot_afford": "Can't afford",
     "requires": "Locked"

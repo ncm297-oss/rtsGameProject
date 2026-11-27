@@ -240,7 +240,7 @@ public sealed partial class BuildingStore
         _queueTypeId[slot * EconomyConstants.ProductionQueueCapacity + n] = type;
         _queueIsTech[slot * EconomyConstants.ProductionQueueCapacity + n] = tech;
         _queueCount[slot] = n + 1;
-        if (!tech) _ledger?.AddQueuedUnit(_owner[slot], 1); // M6-S13: the draw rule's count
+        if (!tech) _ledger?.AddQueuedUnit(_owner[slot], type, 1); // M6-S13: the draw rule's count; M8-4: a limited type's
     }
 
     /// <summary>
@@ -284,7 +284,7 @@ public sealed partial class BuildingStore
     private void Shift(int slot, int item)
     {
         int head = slot * EconomyConstants.ProductionQueueCapacity, n = _queueCount[slot];
-        if (!_queueIsTech[head + item]) _ledger?.AddQueuedUnit(_owner[slot], -1); // M6-S13: the draw rule's count
+        if (!_queueIsTech[head + item]) _ledger?.AddQueuedUnit(_owner[slot], _queueTypeId[head + item], -1); // M6-S13: the draw rule's count; M8-4: a limited type's
         for (int k = item + 1; k < n; k++)
         {
             _queueTypeId[head + k - 1] = _queueTypeId[head + k];

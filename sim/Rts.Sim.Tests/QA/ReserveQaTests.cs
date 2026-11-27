@@ -35,7 +35,7 @@ public class ReserveQaTests
         {
             foreach (JsonNode? o in root["openings"]!.AsArray())
             {
-                o!["buildOrder"] = order.DeepClone();
+                AiScenes.SetBuildOrder(o, order.DeepClone());
                 o["compositions"] = JsonNode.Parse($$"""[{ "age": 1, "units": { "{{unit}}": 1 } }, { "age": 2, "units": { "{{unit}}": 1 } }]""");
             }
         });
@@ -400,7 +400,7 @@ public class ReserveQaTests
                 JsonArray order = AiScenes.BuildOrder(steps.ToArray());
                 dir.EditJson($"factions/{f}/ai.json", root =>
                 {
-                    foreach (JsonNode? o in root["openings"]!.AsArray()) o!["buildOrder"] = order.DeepClone();
+                    foreach (JsonNode? o in root["openings"]!.AsArray()) AiScenes.SetBuildOrder(o, order.DeepClone());
                     foreach (string d in new[] { "easy", "normal", "hard" })
                     {
                         root["difficulties"]![d]!["expandAfter"] = 0;
@@ -471,7 +471,7 @@ public class ReserveQaTests
                 sim.Tick();
             }
             double avg = times.Average(), worst = times.Max();
-            _out.WriteLine($"{times.Count} thinks: avg {avg:F3} ms, worst {worst:F3} ms; reserve held {string.Join(", ", held)} thinks (steps {string.Join(", ", step)} of {ais[0].Opening.BuildOrder.Length} / {ais[1].Opening.BuildOrder.Length}); commands sent {ais.Sum(a => a.CommandsSent)}");
+            _out.WriteLine($"{times.Count} thinks: avg {avg:F3} ms, worst {worst:F3} ms; reserve held {string.Join(", ", held)} thinks (steps {string.Join(", ", step)} of {ais[0].Steps.Length} / {ais[1].Steps.Length}); commands sent {ais.Sum(a => a.CommandsSent)}");
             Assert.True(held.All(h => h > 0), "a seat never named a reserve: the scene doesn't reach the reserve's path");
             for (int p = 0; p < 4; p++) ais[p].ThoughtForTests = null;
             while (sim.TickNumber % think != 0) sim.Tick();

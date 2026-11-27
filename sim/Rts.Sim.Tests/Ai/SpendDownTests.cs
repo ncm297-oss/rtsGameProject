@@ -22,10 +22,10 @@ public class SpendDownTests
         {
             foreach (JsonNode? o in root["openings"]!.AsArray())
             {
-                o!["buildOrder"] = AiScenes.BuildOrder(
+                AiScenes.SetBuildOrder(o, AiScenes.BuildOrder(
                     ("time", 0, "train", "malazan_laborer", 30),  // 0: the build order sends at every think
                     ("time", 600, "build", "malazan_billet", 0),  // 1: due at 10:00 by the clock
-                    ("time", 700, "build", "malazan_billet", 0)); // 2: due at 11:40 by the clock
+                    ("time", 700, "build", "malazan_billet", 0))); // 2: due at 11:40 by the clock
                 o["compositions"] = JsonNode.Parse("""[{ "age": 1, "units": { "malazan_heavy_infantry": 1 } }, { "age": 2, "units": { "malazan_heavy_infantry": 1 } }]""");
             }
         });
