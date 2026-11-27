@@ -100,6 +100,13 @@ public class GatherWedgeQaTests
     // field holds Easy's K9KC10S and Hard's QRD1 (M7-9; the field and each step's switches are in GameData.ContentHash). The
     // golden's one seat is a Malazan human seat, so its k lines are byte for byte as before (header data-hash and checksum
     // only; checksum 1708E5EC501A353D -> C7D815619BB83C73).
+    // M6-S14 (sim track, the session's one hash move; BUG-0750's rule): regenerated once more, B7947DC602B1E11B ->
+    // 3BB926FD74795B9E, because the AI's worker floor shipped (BUG-1660): common/rules.json ai gains "minWorkers": 4
+    // (AiRulesDef.MinWorkers, in GameData.ContentHash when it is not 1, after a marker: data with the floor at 1, the old
+    // rule, hashes as before). The golden's one seat is a Malazan human seat, which no AI rule touches, so its k lines are
+    // byte for byte as before (header data-hash and checksum only; checksum C7D815619BB83C73 -> C304BF4537406081). Item B's
+    // commit wrote F498968DB96D5F07 (the field hashed unconditionally); item F made the term conditional and wrote the header
+    // once more: one shipped value, one move from B7947DC602B1E11B.
 
     /// <summary>
     /// Ticks the replay must still match its recorded checkpoints: all of them (M4-H1, BUG-0211; before the re-recording

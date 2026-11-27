@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S3 (a Stress row red before M8-3; no shipped-data behaviour changed by M8-3) |
-| Status | open |
+| Status | fixed by measurement (M6-S14, session 2026-11-26-1847: the worker floor and the hunt's resume) |
 | Found | 2026-11-18-0926, task M8-3 (reported by the developer without an id; reproduced by QA on base and branch) |
 | System | AI end game / AI think cadence (the four-seat Vathar Crossing FFA, same match as BUG-1610) |
-| Fixed by | |
+| Fixed by | M6-S14 (A, B) |
 
 ## Repro
 1. `dotnet test sim/Rts.Sim.Tests --no-build --filter "DisplayName~AProbedMatch&DisplayName~players: 4"`
@@ -44,3 +44,6 @@ Seat 2 (and seat 3 by 1,139) goes silent for 6,780 ticks (30,781-37,561); the ma
 Never spent under the draw rule: won by p3 at 88,998 (74:09); p3 keeps 8,020 gold and 26 workers with 15,457 gold left
 on the map, so "can still train" holds throughout. The Stress row stays skipped with its ids (seat 2's silence and the
 hunt's length are AI-play items, BUG-1660 / BUG-1661).
+
+## Fix (M6-S14)
+The far-expand probe's Vathar seed 2 row is un-skipped (the match ends at 47,412).

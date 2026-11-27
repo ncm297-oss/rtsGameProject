@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S3 (a pinned AI match stands; the criterion row moved to seed 1 by rule 45; no bound raised) |
-| Status | open |
+| Status | fixed by measurement (M6-S14, session 2026-11-26-1847: the hunt's resume and the worker floor) |
 | Found | 2026-11-17-0816, task D33 (the developer; confirmed by QA alone; file written by the Producer at the ACCEPT) |
 | System | AI end game (the four-seat stall family: BUG-1068 / 1116 / 1536) |
-| Fixed by | |
+| Fixed by | M6-S14 (A, B) |
 
 ## Repro
 1. `D33_ROWS=vathar_crossing:2:4 dotnet test sim/Rts.Sim.Tests --filter "FullyQualifiedName~D33BalanceReportTests.CriterionRows_Report"`
@@ -34,3 +34,6 @@ The match ends inside the 60-minute bound, as it did before D33 (38,690 after M6
 Never spent under the draw rule: won by p3 at 88,998 (74:09); p3 keeps 8,020 gold and 26 workers with 15,457 gold left
 on the map, so "can still train" holds throughout. The Stress row stays skipped with its ids (seat 2's silence and the
 hunt's length are AI-play items, BUG-1660 / BUG-1661).
+
+## Fix (M6-S14)
+The Vathar Crossing four-seat seed 2 match ends at 47,412 (seat 3); `FarExpandProbeQaStressTests.VatharCrossingSeed2_FourSeats_FarFogOracleAndExtraOracles` un-skipped.

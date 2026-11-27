@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S3 |
-| Status | open (Producer ruling 2026-11-16-2036: a fog leak, small; the rally search must read the seat's memory (a remembered ghost closed, a remembered node closed); first item of the sim's next task that touches the AI, at the latest its next hardening) |
+| Status | fixed (M6-S14 item C, session 2026-11-26-1847; QA verified, accepted 2026-11-26-1847) |
 | Found | 2026-11-16-2036, task M6-12 (M6-S12), QA full |
 | System | AI `PlayerView` (the rally search's map read, `MilitaryManager.NarrowWithin` / `Acceptable`) |
-| Fixed by | |
+| Fixed by | M6-S14 (C) |
 
 ## Repro
 1. `dotnet test sim/Rts.Sim.Tests --filter "FullyQualifiedName~M6S12AiRulesQaTests.IsKnownClosed_FollowsTheFog_ButARazeOutOfSight_Leaks_Bug1555"`.
@@ -31,3 +31,6 @@ open) is documented as intended (docs/03 M6-S12 Q3); the ghost case is not docum
 - Cure: for a cell with no `Building` bit, also answer true when a ghost of player 0 covers it (the `CanPlace` loop over
   ghosts), and for nodes read the per-player node memory (`FogStore.NodeAt`), as `CanPlace` does.
 - The row pins today's answer (`Assert.False(razedUnseen)`) and flips with the cure.
+
+## Fix (M6-S14)
+`PlayerView.IsKnownClosed` closes a remembered ghost's or node's footprint until a fog update shows that ground again; `KnownClosedWindow` for the rally search. The QA row flipped (`IsKnownClosed_FollowsTheFog_AndARazeOutOfSight_StaysClosedUntilSeen_Bug1555`); the node: `Ai/KnownClosedMemoryTests`. docs/03 M6-S12 Q3 corrected.

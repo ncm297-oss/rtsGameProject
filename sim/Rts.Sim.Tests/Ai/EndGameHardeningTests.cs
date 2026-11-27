@@ -332,6 +332,9 @@ public class EndGameHardeningTests
     /// is defeated (the AI stands down once the match is over), so there is no hunt past a defeat to save in. The row is about
     /// the hunt and determinism past a defeat, not the result, so it plays on the shipped data with the draw block taken out
     /// (<c>DrawScenes.Off</c>): the match it played before, tick for tick.
+    /// M6-S14 (the AI-play session; a re-stage, the checks unchanged, the name kept): seed 2 defeats no seat by 100,000 any
+    /// more, so the row plays seed 3 (the first defeat at 23,094, a seat hunting past it at 23,100, over at 86,931; never spent,
+    /// so the draw block's absence changes nothing there). Was seed 2.
     /// </summary>
     [Fact]
     [Trait("Category", "Stress")]
@@ -340,7 +343,7 @@ public class EndGameHardeningTests
         var seats = new PlayerSeat[4];
         for (int p = 0; p < 4; p++) seats[p] = new PlayerSeat(p % 2, SeatController.Ai, AiDifficulty.Normal);
         GameData data = Draw.DrawScenes.Off;
-        Simulation sim = Stress.DrawStalledRowsReportTests.Build("pale_hills", 2, 4, null, data);
+        Simulation sim = Stress.DrawStalledRowsReportTests.Build("pale_hills", 3, 4, null, data); // M6-S14: was seed 2
         World w = sim.World;
         bool child = Environment.GetEnvironmentVariable(FourSeatChild) == "1";
         var h = new Determinism.StateHasher();

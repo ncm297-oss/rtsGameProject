@@ -212,7 +212,8 @@ public class ReachRuleQaTests
     /// <summary>
     /// Every scout killed the moment it is sent (an enemy camped at the hall's door, the worst case for "a lost scout is
     /// replaced"): how many workers the seat feeds to the scout role by tick 6,000. Before M6-S7 a dead scout was never
-    /// replaced (1 worker); the rule must not bleed the seat's economy dry. Bound: at most 4 scouts lost. BUG-1052: 9 scouts
+    /// replaced (1 worker); the rule must not bleed the seat's economy dry. Bound: at most 4 scouts lost (M6-S14, BUG-1556:
+    /// plus <c>ai.scoutReplacements</c>, the blind re-scouts a seat may now lose). BUG-1052: 9 scouts
     /// lost on every seed, the seat at 0 workers and 0 wood by tick 6,000 (ab54ddb: 1 scout, 18-19 workers). Un-skipped in
     /// M6-SH1 (ai.scoutReplacements 2: three scouts at most), with the brief's bounds: workers at least 15, some wood, and no
     /// gatherer sent more than 150 m from the hall once the capped reach has lifted.
@@ -226,7 +227,11 @@ public class ReachRuleQaTests
         Run r = Play(seed, 0f, 6000, killAt: 0, killEvery: true);
         Run calm = Play(seed, 0f, 6000);
         _out.WriteLine($"seed {seed}: scouts lost {r.ScoutsLost} (sent {r.ScoutsSent}); lifted {r.Lifted}; workers at 6000 {r.WorkersAt} (unharmed run {calm.WorkersAt}); wood {r.Wood} (unharmed {calm.Wood}), a forest known {r.KnowsWood}; farthest gather target {r.FarthestAny:F1} m (unharmed {calm.FarthestAny:F1} m)");
-        Assert.True(r.ScoutsLost <= 4, $"{r.ScoutsLost} scouts sent to die by tick 6,000");
+        // M6-S14 (BUG-1556, the brief's allowance): a blind seat may now send a gatherer on its re-scout until it has lost
+        // ai.scoutReplacements of them (docs/01 2026-11-17 (3)), so the bound is 4 + that cap (seed 1 measured 5: three
+        // scouts and two blind re-scouts; seeds 2 and 3 unchanged at 3). The rule was not changed to fit the old bound.
+        int bound = 4 + TestSim.Data.AiRules.ScoutReplacements;
+        Assert.True(r.ScoutsLost <= bound, $"{r.ScoutsLost} scouts sent to die by tick 6,000 (bound {bound})");
         Assert.True(r.WorkersAt >= 15, $"{r.WorkersAt} workers at tick 6,000");
         // Seed 1's hall and workers see no tree from home (the unharmed run's wood lies up to 71 m off, found by its scout):
         // with every scout dead on its first tick the seat never learns of one, whatever the cap, so its wood stays 0

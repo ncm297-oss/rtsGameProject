@@ -34,13 +34,25 @@ internal static class DrawScenes
 
     /// <summary>
     /// Takes the <c>draw</c> block out of a data copy: for a test that rebuilds the data of a tree from before M6-S13 (the
-    /// golden header of D32 / D33 / D34) from the shipped files, as M6-S10's rows took <c>gatherOverlap</c> back out.
+    /// golden header of D32 / D33 / D34) from the shipped files, as M6-S10's rows took <c>gatherOverlap</c> back out. M6-S14:
+    /// such a tree had no worker floor either, so <c>ai.minWorkers</c> is set to 1 (the M6-SH2 rule, which hashes as the
+    /// data before the field: <c>GameData.AddAi</c>; the loader requires the field, so it cannot be taken out).
     /// </summary>
-    internal static void TakeOutDraw(TestDataDir dir) => dir.EditJson("common/rules.json", r => r.Remove("draw"));
+    internal static void TakeOutDraw(TestDataDir dir)
+    {
+        dir.EditJson("common/rules.json", r => r.Remove("draw"));
+        BeforeWorkerFloor(dir);
+    }
 
-    /// <summary>The shipped data without the draw block and with <paramref name="opening"/> as the Teblor's first opening: a pre-M6-S13 Teblor fixture's data.</summary>
+    /// <summary>M6-S14: sets <c>ai.minWorkers</c> to 1 on a data copy, the rule and the hash of the data before the worker floor (BUG-1660).</summary>
+    internal static void BeforeWorkerFloor(TestDataDir dir) => dir.EditJson("common/rules.json", r => r["ai"]!["minWorkers"] = 1);
+
+    /// <summary>The shipped data without the draw block (and, M6-S14, with the floor at 1) and with <paramref name="opening"/> as the Teblor's first opening: a pre-M6-S13 Teblor fixture's data.</summary>
     internal static GameData TeblorOpeningBeforeDraw(System.Text.Json.Nodes.JsonObject opening) => DataWith(null, dir =>
-        dir.EditJson("factions/teblor/ai.json", root => root["openings"]![0] = System.Text.Json.Nodes.JsonNode.Parse(opening.ToJsonString())));
+    {
+        BeforeWorkerFloor(dir);
+        dir.EditJson("factions/teblor/ai.json", root => root["openings"]![0] = System.Text.Json.Nodes.JsonNode.Parse(opening.ToJsonString()));
+    });
 
     /// <summary>The shipped data with <c>draw.afterSeconds</c> = <paramref name="seconds"/> (null: the block removed), edited further by <paramref name="also"/>.</summary>
     internal static GameData DataWith(double? seconds, Action<TestDataDir>? also = null) => AiScenes.DataWith(dir =>

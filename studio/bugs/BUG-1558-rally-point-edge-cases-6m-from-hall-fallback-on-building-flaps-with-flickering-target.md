@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S4 |
-| Status | open |
+| Status | items 2 and 3 fixed (M6-S14 item E, session 2026-11-26-1847; QA verified, accepted 2026-11-26-1847); item 1 measured, open |
 | Found | 2026-11-16-2036, task M6-12 (M6-S12), QA full |
 | System | AI military (`MilitaryManager.RallyPoint` / `OffThePassage`) |
-| Fixed by | |
+| Fixed by | M6-S14 (E, items 2-3) |
 
 ## Repro
 `dotnet test sim/Rts.Sim.Tests --filter "FullyQualifiedName~M6S12RallySurveyQaStressTests"` (Stress, about 45 min): every
@@ -41,3 +41,6 @@ closed ground; no back-and-forth while the target holds). Three edges remain:
   placement-and-raze loop costing player 2 its gold each time; worth one trace (not traced here).
 - Cheap cures if wanted: keep the current point while it is still acceptable; never step back past `ai.rallyDistance` minus
   the hall's half-size plus a cell; with none acceptable keep the last acceptable point rather than the nominal one.
+
+## Fix (M6-S14)
+The point in use is kept while acceptable and within `ai.rallyReach` of the nominal one; with none acceptable the last acceptable one is kept. Test: `Ai/RallyKeepTests`. Item 1 measured (QA's survey, base -> M6-S14): the point nearest a hall 6.0 m -> 4.5 m, the 4.5 m a kept point laid on the line of a hall that moved (generated, four seats, seed 2, p3, tick 8,160); flaps 61 -> 5, changes 630 -> 315 (docs/03 "Implementation (M6-S14)").

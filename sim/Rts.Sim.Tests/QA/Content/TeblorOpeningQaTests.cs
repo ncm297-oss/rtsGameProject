@@ -73,8 +73,8 @@ public class TeblorOpeningQaTests
     // matches stand; the old figures stay in its bracket as history.
     internal static readonly (string Opponent, int FirstWave, int AgeTwo, int Fell)[] OpponentRows =
     {
-        ("whirlwind", 6401, 8501, -1), // M6-S12 (handed): wave 320 s (was 6421, 321 s), Age II 425 s, stands at 20:00; M6-SH2: 321 / 425 s (M6-S10: 316 / 429 s, beaten 1022 s)
-        ("malazan", 6401, 8501, -1),   // M6-S12 (handed): wave 320 s (was 6421, 321 s), Age II 425 s, stands at 20:00; M6-SH2: 321 / 425 s (M6-S10: 323 / 448 s)
+        ("whirlwind", 6401, 8501, -1), // M6-S14 (handed): unchanged. M6-S12 (handed): wave 320 s (was 6421, 321 s), Age II 425 s, stands at 20:00; M6-SH2: 321 / 425 s (M6-S10: 316 / 429 s, beaten 1022 s)
+        ("malazan", 6401, 8501, 21129), // M6-S14 (handed): the Teblor defeated at 1,056 s (was -1, standing at 20:00), wave and Age II unchanged; M6-S12 (handed): wave 320 s (was 6421, 321 s), Age II 425 s, stands at 20:00; M6-SH2: 321 / 425 s (M6-S10: 323 / 448 s)
     };
 
     public static TheoryData<string, int, int, int> Opponents()

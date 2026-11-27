@@ -15,19 +15,20 @@ namespace Rts.Sim.Tests.Save;
 public class SaveFormatTests
 {
     [Fact]
-    public void CurrentVersion_Is10_ForEverySave_AndNoOlderFormatReads()
+    public void CurrentVersion_Is11_ForEverySave_AndNoOlderFormatReads()
     {
         // M6-S3: the AI seats' section bumped the format to 2 (rule 36); M6-S4: a team byte per seat to 3; M6-S6: the
         // starting-resources preset to 4; M6-S7: the map id to 5 (a generated map's save stayed 4); M5-4d: HUNT, 6 / 7 with an
         // AI seat; M5-9a: CTRM, 8 / 9. M7-1: the unit store's regeneration part (REGN) is in every save, so every save is
-        // format 10 (the map id always written, "" for a generated map) and every older format is refused.
-        Assert.Equal(10, SaveFormat.CurrentVersion);
-        Assert.Equal(10, SaveFormat.OldestReadVersion);
-        Assert.Equal((10, 10, 10), (SaveFormat.HuntMaplessVersion, SaveFormat.MapVersion, SaveFormat.MaplessVersion));
-        Assert.Equal((10, 10, 10, 10), (SaveHeader.VersionFor(false, false), SaveHeader.VersionFor(true, false), SaveHeader.VersionFor(false, true), SaveHeader.VersionFor(true, true)));
+        // format 10 (the map id always written, "" for a generated map) and every older format is refused. M6-S14: new values
+        // at the end of the AI parts (AIST, HUNT), so every save is format 11 (was 10 in every row below).
+        Assert.Equal(11, SaveFormat.CurrentVersion);
+        Assert.Equal(11, SaveFormat.OldestReadVersion);
+        Assert.Equal((11, 11, 11), (SaveFormat.HuntMaplessVersion, SaveFormat.MapVersion, SaveFormat.MaplessVersion));
+        Assert.Equal((11, 11, 11, 11), (SaveHeader.VersionFor(false, false), SaveHeader.VersionFor(true, false), SaveHeader.VersionFor(false, true), SaveHeader.VersionFor(true, true)));
         foreach (bool ai in new[] { false, true })
-            Assert.Equal(10, BitConverter.ToInt32(SaveBytes.Small(ai), SaveFormat.MagicLength));
-        Assert.Equal(10, BitConverter.ToInt32(SaveTestRun.Save(new Simulation(TestSim.Config(7, 2, 64, 64) with { MapId = "raraku" })), SaveFormat.MagicLength));
+            Assert.Equal(11, BitConverter.ToInt32(SaveBytes.Small(ai), SaveFormat.MagicLength));
+        Assert.Equal(11, BitConverter.ToInt32(SaveTestRun.Save(new Simulation(TestSim.Config(7, 2, 64, 64) with { MapId = "raraku" })), SaveFormat.MagicLength));
     }
 
     /// <summary>
@@ -262,10 +263,16 @@ public class SaveFormatTests
     public void AGeneratedMatch_SavesFormat4_ByteForByte_AsBeforeMapFiles(string name)
     {
         (string _, int length, ulong digest) = PreMapFixtures.SaveDigests.Single(d => d.Name == name);
-        byte[] bytes = SaveTestRun.Save(PreMapFixtures.SaveScene(name));
+        Simulation sim = PreMapFixtures.SaveScene(name);
+        byte[] bytes = SaveTestRun.Save(sim);
         // save_menu_seed1 seats no AI (format 4 without REGN); save_ai_seed2 does (format 8 without REGN: 4 plus HUNT plus CTRM).
         Assert.Equal(SaveFormat.CurrentVersion, BitConverter.ToInt32(bytes, SaveFormat.MagicLength));
-        byte[] normalized = PreMapFixtures.Normalize(name == "save_ai_seed2" ? PreMapFixtures.WithoutHunt(bytes) : PreMapFixtures.WithoutRegen(bytes));
+        // M6-S14: an AI save's format-11 values cut first (Format11SaveBytesTests.AsFormat10), so the digest still reads the
+        // fixture's layout: the pin did not move with the format. The image keeps the current number, which is what
+        // PreMapFixtures' chain (REGN, CTRM, HUNT out) starts from for the M7-1 layout.
+        byte[] ai = name == "save_ai_seed2" ? Format11SaveBytesTests.AsFormat10(sim, bytes) : bytes;
+        System.Buffers.Binary.BinaryPrimitives.WriteInt32LittleEndian(ai.AsSpan(SaveFormat.MagicLength), SaveFormat.CurrentVersion);
+        byte[] normalized = PreMapFixtures.Normalize(name == "save_ai_seed2" ? PreMapFixtures.WithoutHunt(ai) : PreMapFixtures.WithoutRegen(bytes));
         Assert.Equal(length, normalized.Length);
         Assert.Equal(digest, PreMapFixtures.Digest(normalized));
     }

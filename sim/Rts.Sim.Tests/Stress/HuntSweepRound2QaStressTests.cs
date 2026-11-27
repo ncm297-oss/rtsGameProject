@@ -387,8 +387,9 @@ public class HuntSweepRound2LegQaTests
     public void ForgedLegFields_AreMalformed()
     {
         byte[] good = SaveBytes.SmallAi();
-        int end = Rts.Sim.Tests.Save.PreMapFixtures.CountersAt(good, 1);
-        Assert.Equal("CTRM"u8.ToArray(), good[end..(end + 4)]);
+        int part = Rts.Sim.Tests.Save.PreMapFixtures.CountersAt(good, 1);
+        Assert.Equal("CTRM"u8.ToArray(), good[part..(part + 4)]);
+        int end = part - Rts.Sim.Tests.Save.Format11SaveBytesTests.HuntTail; // M6-S14: the hunt's find (13 bytes) follows the count
         Simulation loaded = SaveTestRun.Load(TestSim.Data, good);
         AiPlayer ai = loaded.AiOf(0)!;
         int len = ai.Board.HuntVisited.Length;

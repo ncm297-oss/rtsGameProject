@@ -88,7 +88,8 @@ public class ScoutReplacementTests
 
     /// <summary>
     /// <c>ai.scoutReplacements</c> 0, 1, 2, 4: every scout killed its first tick out, the seat loses exactly n + 1 scouts by
-    /// tick 6,000 (the cap is the losses, every one of them a scout here), then the sweep ends with the reach lifted.
+    /// tick 6,000 (the cap is the losses, every one of them a scout here), then the sweep ends with the reach lifted. M6-S14:
+    /// and then n blind re-scouts (the count of blind re-scouts lost stops at the same cap), 2n + 1 in all.
     /// </summary>
     [Theory]
     [InlineData(0)]
@@ -106,7 +107,10 @@ public class ScoutReplacementTests
             if (KillScout(sim)) killed++;
         }
         _out.WriteLine($"scoutReplacements {replacements}: killed {killed}; own unit losses {sim.World.UnitLosses[0]}; phase {ai.Board.ScoutPhase}; lifted {ai.ReachLifted()}");
-        Assert.Equal(replacements + 1, killed);
+        // M6-S14 (BUG-1554 / 1556, docs/01 2026-11-17 (3)): the seat, blind to wood once the sweep has ended, then sends blind
+        // re-scouts until it has lost as many as the cap; killed too, they add n (was: n + 1 in all).
+        Assert.Equal(replacements + 1 + replacements, killed);
+        Assert.Equal(replacements, ai.Board.BlindScoutsLost);
         Assert.Equal(2, ai.Board.ScoutPhase);
         Assert.True(ai.ReachLifted());
     }

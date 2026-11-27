@@ -591,7 +591,8 @@ public class DataContentHashTests
             "DefendRatio", "DefendMinValue", "RecallHallHp", "ReserveShift", "ReserveArmyShare", "GatherReach",
             "ScoutReplacements", "SpendDownQueue", "HuntMemoryTicks", "FocusReach", "CounterMemoryTicks", "CounterMasks",
             "StarvedWaveAfterTicks", "StarvedMinArmy", // M5-9a round 2: the starved wave's knobs
-            "FarExpandReach" }) // M5-9b: the far expansion's knob
+            "FarExpandReach", // M5-9b: the far expansion's knob
+            "MinWorkers" }) // M6-S14 (BUG-1660): the worker floor
             Assert.Contains($"AiRulesDef.{f}", checkedFields);
         for (int slot = 0; slot < d.Ai.Length; slot++)
             Check(d.Ai[slot], x => With(d, ai: x, aiSlot: slot));
@@ -965,6 +966,8 @@ public class DataContentHashTests
     [InlineData("starvedMinArmy", 3)]
     [InlineData("farExpandReach", 256)] // M5-9b
     [InlineData("farExpandReach", 0)]
+    [InlineData("minWorkers", 1)] // M6-S14, BUG-1660
+    [InlineData("minWorkers", 5)]
     public void AnAiRulesFieldEdit_ChangesTheHash(string field, double value)
     {
         using TestDataDir dir = TestDataDir.CopyOfShipped();

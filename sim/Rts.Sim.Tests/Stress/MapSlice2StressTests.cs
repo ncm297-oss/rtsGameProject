@@ -88,7 +88,9 @@ public class MapSlice2StressTests
 
     /// <summary>
     /// Every scout of both seats killed the tick it is seen out, to tick 8,000, on a new map with seed 1-10: each seat loses
-    /// at most <c>ai.scoutReplacements</c> + 1 scouts, and no unit other than scouts is killed by the test.
+    /// at most <c>ai.scoutReplacements</c> + 1 scouts, and no unit other than scouts is killed by the test. M6-S14 (BUG-1556):
+    /// plus the blind re-scouts a seat may now lose, up to the same cap, so 2 x <c>ai.scoutReplacements</c> + 1 (the name's
+    /// "three" is the old bound).
     /// </summary>
     [Theory]
     [Trait("Category", "Stress")]
@@ -116,7 +118,10 @@ public class MapSlice2StressTests
         for (int p = 0; p < 2; p++)
         {
             Assert.True(killed[p] >= 1, $"seat {p}: no scout went out");
-            Assert.True(killed[p] <= sim.AiOf(p)!.Rules.ScoutReplacements + 1, $"seat {p}: {killed[p]} scouts fed to the door");
+            // M6-S14 (BUG-1556, docs/01 2026-11-17 (3)): once the sweep has ended blind, the seat sends blind re-scouts until it
+            // has lost ai.scoutReplacements of them; all 20 rows measured 5 a seat (2 + 1 + 2). Was: replacements + 1.
+            int bound = 2 * sim.AiOf(p)!.Rules.ScoutReplacements + 1;
+            Assert.True(killed[p] <= bound, $"seat {p}: {killed[p]} scouts fed to the door (bound {bound})");
         }
     }
 

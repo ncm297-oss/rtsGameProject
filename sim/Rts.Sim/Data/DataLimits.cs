@@ -268,6 +268,12 @@ public static class DataLimits
     /// <summary>M5-9a round 2: the most <c>rules.json</c> <c>ai.starvedMinArmy</c> may be (the brief's range).</summary>
     public const int MaxAiStarvedMinArmy = 50;
 
+    /// <summary>
+    /// M6-S14 (BUG-1660): the most <c>rules.json</c> <c>ai.minWorkers</c> may be (a developer default: half of the shipped 100
+    /// population cap; a floor above it would keep a seat training workers while its army waits).
+    /// </summary>
+    public const int MaxAiMinWorkers = 50;
+
     /// <summary>M5-9b (BUG-1068 (a)): the most <c>rules.json</c> <c>ai.farExpandReach</c> may be, in meters (the brief's range; 0 turns the rule off).</summary>
     public const double MaxAiFarExpandReach = 512;
 

@@ -347,6 +347,9 @@ public class FarExpandTests
         w.Ledger.Gold[0] = 0;
         AiPlayer ai = sim.AiOf(0)!;
         ai.Board.ScoutPhase = 2;
+        // M6-S14 (BUG-1554 / 1556): a seat blind to gold may now send a wood gatherer on the blind re-scout; the row is about
+        // the far leg, so the re-scout is spent (its count at the cap) and every Move would be the leg's.
+        ai.Board.BlindScoutsLost = ai.Rules.ScoutReplacements;
         var moves = AiScenes.Log(sim, 0);
         while (sim.TickNumber < 400) sim.Tick();
         Assert.Equal(FarExpansion.Armed, ai.Board.FarPhase);

@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S4 |
-| Status | open |
+| Status | fixed (M6-S14 item F, session 2026-11-26-1847) |
 | Found | 2026-11-25-0924, task M7-H3 (QA standard) |
 | System | tests (comment only): `sim/Rts.Sim.Tests/Ai/AiDeterminismTests.cs`, `TwoAiSeats_Waves_TwoRuns_SameHashEveryTick` |
-| Fixed by | |
+| Fixed by | M6-S14 (F) |
 
 ## Repro
 1. The comment above `TwoAiSeats_Waves_TwoRuns_SameHashEveryTick` (lines 61-62 on head b44a987) reads: "the Easy seat's
@@ -27,3 +27,6 @@ the 6,000-tick run, seed 2's two seats within it), so the row is right and only 
 ## Notes
 - Comment only; no rule, pin or threshold involved. One line for the next sim hardening: "seed 1: Hard 3,821, Easy 8,041
   (past the run); seed 2: 4,071 and 4,041 (M7-H3 QA, 2026-11-25)".
+
+## Fix (M6-S14)
+The comment re-measured on the M6-S14 tree: seed 1 Hard 3,821, Easy 7,881; seed 2 4,071 / 4,041; seed 7 4,351 / 5,201.

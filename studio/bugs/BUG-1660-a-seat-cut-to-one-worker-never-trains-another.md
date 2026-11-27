@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S3 (a beaten seat never recovers or acts; it is the silent seat of BUG-1621) |
-| Status | open (traced in M7-8; the cure waits for the AI-play session, docs/01 2026-11-24 (2)) |
+| Status | fixed (M6-S14 item B, session 2026-11-26-1847; QA verified, accepted 2026-11-26-1847) |
 | Found | 2026-11-24-1431, task M7-8 (the developer's trace of BUG-1621; QA re-ran the trace and filed it) |
 | System | AI economy (`BuildOrderExecutor.Retrain`, the build order's worker `train` steps) |
-| Fixed by | |
+| Fixed by | M6-S14 (B) |
 
 ## Repro
 1. `dotnet test sim/Rts.Sim.Tests --filter "FullyQualifiedName~VatharStallTraceTests"` (Stress; 8-9 minutes under load).
@@ -27,3 +27,6 @@ gold), so the bank never holds the wood the reopened build steps need either.
 - Cure (recommended, not built): the retrain becomes a floor, `rules.json` `ai.minWorkers` (the Producer's value; the
   trace suggests 4): fewer live + queued workers than that and the bank pays one, one Train at a hall a think. About 15
   lines and a hashed rules field. Moves every AI pin where a seat falls under the floor (docs/03 "Implementation (M7-8)").
+
+## Fix (M6-S14)
+The retrain is a floor: `rules.json` `ai.minWorkers` (shipped 4, 1-50; 1 is the M6-SH2 rule and hashes as the old data). Test: `Ai/RetrainTests.OneWorker_AKeepAndGold_TrainsUpToTheFloor_OneATrainAThink` (red on the base). The session's one data-hash move.
