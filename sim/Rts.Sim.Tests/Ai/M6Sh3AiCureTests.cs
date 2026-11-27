@@ -1,3 +1,4 @@
+using System.Numerics;
 using System.Text.Json.Nodes;
 using Rts.Sim.Ai;
 using Rts.Sim.Commands;
@@ -185,6 +186,72 @@ public class M6Sh3AiCureTests
             if (t % think == 0) Assert.Equal(a.StateHash(), b.StateHash());
         }
         Assert.Equal(a.AiOf(0)!.Board.NodeDropped, b.AiOf(0)!.Board.NodeDropped);
+    }
+
+    // ---------------------------------------------------------------- Q7: the kept rally point and the hall point
+
+    /// <summary>
+    /// <see cref="RallyKeepTests"/>' fall-back scene (the kept point (28, 64) m in force, no point of the line acceptable), then
+    /// player 0's Keep is freed between thinks, so its hall point moves to its next building (the Billet).
+    /// </summary>
+    private static (Simulation Sim, Vector2 HallBefore) HallMovedScene()
+    {
+        (Simulation sim, _) = RallyKeepTests.ToTheFallBack();
+        World w = sim.World;
+        AiPlayer ai = sim.AiOf(0)!;
+        Assert.True(ai.Board.HasRallyKept, "the scene: a kept point in force");
+        Vector2 before = ai.HallPoint;
+        // Two more Billets over cells 21-24 x 31-32, past the passage on the new hall's line, so no point of that line is
+        // acceptable (back toward the hall: the passage; out past the nominal point: the Billets) and the fall-back decides.
+        int billet = w.Data.FindBuilding("malazan_billet");
+        Assert.True(w.Buildings.Spawn(0, billet, 31 * AiScenes.FlatSize + 21, out _));
+        Assert.True(w.Buildings.Spawn(0, billet, 31 * AiScenes.FlatSize + 23, out _));
+        int keep = w.Data.FindBuilding("malazan_garrison_keep");
+        for (int k = 0; k < w.Buildings.Capacity; k++)
+            if (w.Buildings.Alive[k] && w.Buildings.Owner[k] == 0 && w.Buildings.TypeId[k] == keep) Assert.True(w.Buildings.Free(w.Buildings.HandleOf(k)));
+        return (sim, before);
+    }
+
+    /// <summary>
+    /// Q7 (docs/01 2026-11-27 first row (3); red on the base: the kept point outlived the move): the hall point changes and the
+    /// kept rally point is dropped on the next think; a think with the hall point unchanged keeps it (the M6-S14 rows,
+    /// <see cref="RallyKeepTests"/>).
+    /// </summary>
+    [Fact]
+    public void TheHallPointChanges_TheKeptRallyPoint_IsDroppedOnTheNextThink()
+    {
+        (Simulation sim, Vector2 before) = HallMovedScene();
+        AiPlayer ai = sim.AiOf(0)!;
+        Assert.True(ai.Board.HasRallyKept, "kept until the next think");
+        RallyKeepTests.NextThink(sim);
+        _out.WriteLine($"hall {before} -> {ai.HallPoint} (has hall {ai.HasHall}); kept {ai.Board.HasRallyKept} {ai.Board.RallyKept}; rally {ai.Board.Rally}");
+        Assert.NotEqual(before, ai.HallPoint);
+        Assert.True(!ai.Board.HasRallyKept || ai.Board.RallyKept != new Vector2(28f, 64f), "the old hall's kept point survived the move");
+        Assert.NotEqual(new Vector2(28f, 64f), ai.Board.Rally); // the base fell back to it (inside the new hall's own Billet)
+        // From here the point is kept again only as the M6-S14 rule keeps it, on the new hall's line.
+        Vector2 hall = ai.HallPoint;
+        RallyKeepTests.NextThink(sim);
+        Assert.Equal(hall, ai.HallPoint);
+    }
+
+    /// <summary>Q7's twin and save: the scene twice is hash-equal for 1,000 ticks; a save taken between the Keep's fall and the next think loads equal and follows the run.</summary>
+    [Fact]
+    public void TheHallPointChanges_Twins_AndASaveBeforeTheThinkFollowsTheRun()
+    {
+        (Simulation a, _) = HallMovedScene();
+        (Simulation b, _) = HallMovedScene();
+        byte[] bytes = Save.SaveTestRun.Save(a);
+        Simulation load = Save.SaveTestRun.Load(RallyKeepTests.s_quiet.Value, bytes);
+        Save.SaveTestRun.AssertSameState(a, load, "before the think");
+        for (int t = 0; t < 1000; t++)
+        {
+            a.Tick();
+            b.Tick();
+            load.Tick();
+            Assert.True(a.StateHash() == b.StateHash(), $"twins diverged at tick {a.TickNumber}");
+            Assert.True(a.StateHash() == load.StateHash(), $"the load diverged at tick {a.TickNumber}");
+        }
+        Assert.Equal(a.AiOf(0)!.Board.HasRallyKept, load.AiOf(0)!.Board.HasRallyKept);
     }
 
     /// <summary>BUG-1857's twin: the room-for-two scene twice, hash-equal every think for 60 thinks.</summary>

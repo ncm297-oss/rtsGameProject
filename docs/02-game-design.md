@@ -571,7 +571,9 @@ match's draw clock runs, its countdown line sits at the top centre under the ale
   M6-S12, BUG-1461, Producer decision 2026-11-16; [03 Implementation (M6-S12)](03-technical-design.md#implementation-m6-s12)).
   The point it parks at is kept while it is still such a point and within `ai.rallyReach` of the first point, so an enemy
   building glimpsed one moment and gone the next no longer moves the army back and forth; a target elsewhere still moves
-  it (M6-S14, BUG-1558; [03 Implementation (M6-S14)](03-technical-design.md#implementation-m6-s14)).
+  it (M6-S14, BUG-1558; [03 Implementation (M6-S14)](03-technical-design.md#implementation-m6-s14)). The last such point
+  is forgotten when the Town Hall it measures from changes (a hall lost, another building taken as its base), so the army
+  never parks on the new hall's doorstep by a point laid for the old one (M6-SH3, Q7).
 - The AI keeps about `rules.json` `ai.goldShare` (0.6) of its gatherers on gold, leaning toward what its build order is
   saving for. An idle worker goes to the known gold mine or forest nearest it. When no worker is idle and the split is off,
   one gatherer a think moves to the other resource, and it goes to the known node of that resource nearest the drop-off it

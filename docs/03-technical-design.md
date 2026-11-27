@@ -15492,6 +15492,17 @@ brief's "staged Moving worker" row could not fail on the base; the regression ro
 every node gone out of sight, its workers Idle with full gold loads; red on the base: 349 Gathers in 80 thinks, 80 to one
 node by one worker, 12 of 16 nodes marked; now 55, at most one per worker and node, all 16 marked within 40 thinks) and its twin.
 
+**C3. The kept rally point is forgotten when the hall point changes (Q7, docs/01 2026-11-27 first row (3); `AiPlayer.Census`).**
+M6-S14 E's fall-back point (`Blackboard.RallyKept`) was kept across a move of the seat's hall point (a hall lost, another
+building taken as the hall), so the point could stand by the new hall (QA's survey: 4.5 m). The census now compares the hall
+point (and whether there is one) with the last think's, both saved (`AiPlayer.HasHall`, `HallPoint`), and on a change drops
+the kept point (`HasRallyKept` false, `RallyKept` zero) before the military manager runs; from there the point is kept again
+only as M6-S14 E keeps it, on the new hall's line. No new saved field. Tests: `Ai/M6Sh3AiCureTests.TheHallPointChanges_*`
+(`RallyKeepTests`' fall-back scene with the kept point (28, 64) m in force, two more Billets past the passage so no point of
+the new line is acceptable, the Keep freed: on the next think the kept point is gone and the rally is the new nominal point
+(40, 64) m; red on the base: the point fell back to (28, 64) m, inside the new hall's own Billet), its twin and a save taken
+between the fall and the think. The M6-S14 rally rows (`RallyKeepTests`, `RallyPassageTests`) are green unchanged.
+
 ## Testing strategy
 
 | Test kind | What it proves | Runs |

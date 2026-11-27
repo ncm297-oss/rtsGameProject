@@ -591,8 +591,18 @@ internal sealed partial class AiPlayer
         IntruderWorth = 0;
         // M5-4b: the buildings first, so the units' pass knows the hall (the intruders are counted round it).
         Buildings();
+        bool hadHall = HasHall;
+        Vector2 hallBefore = HallPoint;
         HasHall = TryHallPoint(out Vector2 hall, out int hallSlot);
         HallPoint = hall;
+        // M6-SH3 (Q7, docs/01 2026-11-27 first row (3)): the kept rally point (MilitaryManager's fall-back, laid on the old
+        // hall's line) is forgotten when the hall point changes: kept across the move it stood 4.5 m from the new hall (QA's
+        // survey). HasHall and HallPoint are saved, so the comparison holds across a load.
+        if (Board.HasRallyKept && (HasHall != hadHall || hall != hallBefore))
+        {
+            Board.HasRallyKept = false;
+            Board.RallyKept = Vector2.Zero;
+        }
         HallSlot = hallSlot;
         float defend = Rules.DefendRadius * Rules.DefendRadius;
         int s = -1, enemies = 0;
