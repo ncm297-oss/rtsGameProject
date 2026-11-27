@@ -533,9 +533,9 @@ public class DrawRuleQaTests
     /// <summary>
     /// A forged DRAW part the developer's refusal list does not hold: a clock running on a match already won (the result flag
     /// set, not drawn). The sim never writes it (a won tick sets the clock to 0), so a strict reader refuses it. Red on the
-    /// M6-S13 head (loads with SaveError.None): BUG-1730.
+    /// M6-S13 head (loads with SaveError.None): BUG-1730; refused since M6-SH3 (World.ReadDraw).
     /// </summary>
-    [Fact(Skip = "BUG-1730 (open, S4): a DRAW part with a running clock on a won (latched, not drawn) match is accepted")]
+    [Fact]
     public void AForgedClock_OnAWonMatch_IsRefused()
     {
         Simulation sim = DrawScenes.Spent(DrawScenes.Short);

@@ -166,7 +166,8 @@ public sealed partial class World
     /// <summary>
     /// Reads what <see cref="WriteDraw"/> wrote, after the result flag. A part on data without a draw rule, one that holds
     /// nothing (clock 0, not drawn), a clock below 0 or above the wait, a clock at the wait without the draw, a draw whose
-    /// clock is not the wait or a draw without the result flag is refused, never trusted.
+    /// clock is not the wait, a draw without the result flag or (M6-SH3, BUG-1730) a running clock with the result flag is
+    /// refused, never trusted.
     /// </summary>
     private void ReadDraw(SaveReader r)
     {
@@ -177,7 +178,9 @@ public sealed partial class World
         int clock = r.ReadInt32();
         bool drawn = r.ReadBool();
         if (!r.Check(wait > 0 && clock >= 0 && clock <= wait && (clock != 0 || drawn))) return;
-        if (!r.Check(drawn ? clock == wait && _matchOverLatched : clock < wait)) return;
+        // M6-SH3 (BUG-1730): a running clock on a match already won (the result latched, not drawn) is refused too: the sim
+        // never writes it (a won tick is not spent, so the clock is 0 between ticks).
+        if (!r.Check(drawn ? clock == wait && _matchOverLatched : clock < wait && !_matchOverLatched)) return;
         _drawClock = clock;
         _drawn = drawn;
     }

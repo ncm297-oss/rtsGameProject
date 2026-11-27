@@ -13073,7 +13073,8 @@ late. Then the far expansion's own two bugs (BUG-1158, BUG-1159). Code: `Militar
   data edit, a balance change or a rename, refuses old replays. A test changes every field of every
   def type in turn, so a new field that isn't hashed fails it. Optional fields added later enter the
   hash only when set (a marker, then the value), so data without them hashes as before: `maxAlive`,
-  `buildOrders`, and since M6-S14 `ai.minWorkers` when it is not 1 (the old rule; marker -14).
+  `buildOrders`, and since M6-S14 `ai.minWorkers` when it is not 1 (the old rule; marker -14). `ai.minWorkers` enters the
+  hash only when it is not 1, so data with the floor at 1 hashes as the data before M6-S14 (docs/01 2026-11-27, Q3).
 - **Save file:** a versioned binary snapshot of the full `World` (stores, RNG states, pending
   commands, AI blackboards) plus the replay log so far. Loading restores the snapshot directly. M6-S2 (slice 1) built it
   for human seats, M6-S3 (slice 2) added the AI seats; the format, the entry points and the refusals are in "Save format
@@ -15502,6 +15503,29 @@ only as M6-S14 E keeps it, on the new hall's line. No new saved field. Tests: `A
 the new line is acceptable, the Keep freed: on the next think the kept point is gone and the rally is the new nominal point
 (40, 64) m; red on the base: the point fell back to (28, 64) m, inside the new hall's own Billet), its twin and a save taken
 between the fall and the think. The M6-S14 rally rows (`RallyKeepTests`, `RallyPassageTests`) are green unchanged.
+
+**D. Small, no behaviour.**
+- **BUG-1862:** `SaveHeader.TryRead`'s summary names `SaveFormat.CurrentVersion` (every older format is refused
+  `FormatVersionMismatch` before it) instead of "10".
+- **BUG-1730:** `World.ReadDraw` refuses a running clock on a match whose result is latched and not drawn (one condition:
+  the not-drawn branch also needs `!_matchOverLatched`; the sim never writes such a part, since a won tick is not spent). A
+  refusal (`Malformed`), not a format step: format 11 kept, every save the sim writes still loads.
+  `QA/DrawRuleQaTests.AForgedClock_OnAWonMatch_IsRefused` un-skipped and green.
+- **The two docs sentences:** the content hash's paragraph ("Replay format", data hash) now says `ai.minWorkers` enters the
+  hash only when it is not 1; "For the data track (M8-4)"'s table already said `Content/UnitLimitText` (D39) reads the
+  description's limit (written in by D39), so it is unchanged.
+- **BUG-1149's test branch narrowed** (`Stress/M5H5HuntAfterDefeatQaTests`), as BUG-1861's allowance was: a defending seat's
+  order onto an ally's building is counted, not red, only when it is an AttackMove whose point has an enemy unit within 1 m
+  (the defense sends its defenders to the enemy it sees); a cast, or an AttackMove to a point no enemy stands on, is red.
+  The strict row (`A2v2_TheDefenseToo_*`) stays skipped with BUG-1149 (the defense still aims at the enemy's position).
+- **Vathar Crossing seed 6, four seats (the look, reported, not cured):** the two rows are different matches.
+  `M5H5HuntAfterDefeatQaTests` plays teams 1 / 2 / 1 / 2 (a 2v2); QA's four-seat table (`M6S14FourSeatQaStressTests`) passes
+  teams 0 / 1 / 0 / 1, and team 0 is "no team", so seats 0 and 2 are each a side of their own against the team of seats 1
+  and 3 (a 1v1v2). Measured on the base (`DrawStalledRowsReportTests.Build` / `Play`): the 2v2 has seats 1 and 2 out and seat 3
+  holding a producing building with no unit and 0 gold at 72,000, and ends at 79,351 (team of seat 0) when its last building
+  falls; the 1v1v2 ends at 23,820 (seats 1 + 3). The 2v2 is slow because one side's last seat keeps a building nobody near it
+  finds for 7,000 ticks after 72,000 (a hunt question, BUG-1855's family), not because of the draw rule (never spent).
+  QA's table calls its rows "2v2": BUG-1892 (S4, a test-name finding: the table's team row is a 1v1v2).
 
 ## Testing strategy
 

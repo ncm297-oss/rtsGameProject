@@ -17,7 +17,8 @@ namespace Rts.Sim.Tests.Stress;
 /// seat remembers this think is an enemy unit a fresh view shows; the <see cref="PlayerViewOracle"/> at every think of a
 /// hunting seat and at every 10th think of every seat; and (2v2) no AttackMove or cast within 0.5 m of an allied
 /// building, the team soak's strict oracle (BUG-1120's exemption gone), with BUG-1861's one allowance: a cast whose ability
-/// cannot touch an ally (by its data) at an enemy inside its radius. Saves: at the first think a seat hunts after a
+/// cannot touch an ally (by its data) at an enemy inside its radius, and (M6-SH3) BUG-1149's narrowed to a defending seat's
+/// AttackMove at an enemy unit's position. Saves: at the first think a seat hunts after a
 /// defeat, and at the first think a hunt's point is not its last sighting (pushed off an ally, or a newer sighting within reach), each loaded and followed hash for hash 2,000 ticks.
 /// </summary>
 public class M5H5HuntAfterDefeatQaTests
@@ -69,6 +70,26 @@ public class M5H5HuntAfterDefeatQaTests
         return false;
     }
 
+    /// <summary>
+    /// BUG-1149's allowance, narrowed in M6-SH3 as BUG-1861's was: a defending seat's AttackMove whose point is an enemy unit's
+    /// position (an enemy unit within <see cref="DefensePointSlack"/> of the point on the send tick: the defense sends its
+    /// defenders to the enemy it sees). Such an order by an ally's building is the defense answering an enemy that stands
+    /// there, not an order onto the building. Any other order onto an ally's building while defending (a cast, an AttackMove
+    /// to a point no enemy stands on) is red.
+    /// </summary>
+    private static bool DefenseAtAnEnemy(World w, int p, Command c)
+    {
+        if (c.Kind != CommandKind.AttackMove) return false;
+        UnitStore u = w.Units;
+        const float r2 = DefensePointSlack * DefensePointSlack;
+        for (int j = 0; j < u.Capacity; j++)
+            if (u.Alive[j] && u.Owner[j] != p && w.IsEnemy(p, u.Owner[j]) && Vector2.DistanceSquared(u.Position[j], c.Position) <= r2) return true;
+        return false;
+    }
+
+    /// <summary>How far (m) from an enemy unit a defense AttackMove's point may lie and still be "at the enemy": the point is the enemy's position as the seat saw it this think, so 0 in practice; 1 m covers a point clamped into the map.</summary>
+    private const float DefensePointSlack = 1f;
+
     [Theory]
     [Trait("Category", "Stress")]
     [MemberData(nameof(Rows))]
@@ -114,8 +135,9 @@ public class M5H5HuntAfterDefeatQaTests
                         Blackboard bb = sim.AiOf(player)!.Board;
                         string what = $"tick {sim.TickNumber}: seat {player} {c.Kind} onto an ally's building at {c.Position} (wave {bb.WaveActive}, hunting {bb.Hunting}, defending {bb.Defending})";
                         // BUG-1149 (pre-existing at cdbe6ca): the defense's AttackMove to an enemy hitting an ally's building. Counted
-                        // and printed here (its own skipped row below is strict); anything else is red.
-                        if (!strictDefense && bb.Defending && !(bb.WaveActive && bb.Hunting))
+                        // and printed here (its own skipped row below is strict); anything else is red. M6-SH3: narrowed to an
+                        // AttackMove at an enemy unit's position (DefenseAtAnEnemy), as BUG-1861's allowance is.
+                        if (!strictDefense && bb.Defending && !(bb.WaveActive && bb.Hunting) && DefenseAtAnEnemy(w, player, c))
                         {
                             if (defenseOntoAlly++ == 0) firstDefenseOntoAlly = what;
                         }
