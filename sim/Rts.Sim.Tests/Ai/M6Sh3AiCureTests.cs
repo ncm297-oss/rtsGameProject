@@ -105,6 +105,88 @@ public class M6Sh3AiCureTests
         Assert.Equal(0, waiting);
     }
 
+    // ---------------------------------------------------------------- BUG-1852: a Gather refused at a gone node
+
+    /// <summary>A quiet Malazan order (one step an hour away) and <c>ai.gatherReach</c> at its maximum, so every remembered node is a candidate (QA's BUG-0570 scene's data).</summary>
+    private static readonly Lazy<GameData> s_quietAnyReach = new(() => AiScenes.DataWith(dir =>
+    {
+        dir.EditJson("factions/malazan/ai.json", root =>
+            AiScenes.SetBuildOrder(AiScenes.Opening(root), AiScenes.BuildOrder(("time", 3600, "train", "malazan_laborer", 1))));
+        dir.EditJson("common/rules.json", r => r["ai"]!["gatherReach"] = 512);
+    }));
+
+    /// <summary>
+    /// The state BUG-1852's trace found (Raraku seed 3, unit 45 at 34,021: Idle, a full load of gold, its Town Hall standing,
+    /// every Gather to the remembered mine refused <c>NoResourceNode</c>): a Hard Malazan AI seat on the flat map keeps its
+    /// hall; every node of the map is taken out before the first think, so the seat remembers the far ones (out of its sight)
+    /// and they are gone; its workers stand Idle, each with a full load of gold.
+    /// </summary>
+    private static Simulation LoadedIdleWorkersScene(out int remembered)
+    {
+        PlayerSeat[] seats = AiScenes.Seats(AiDifficulty.Hard, SeatController.Ai, SeatController.Human);
+        Simulation sim = AiScenes.Flat(seats, s_quietAnyReach.Value);
+        World w = sim.World;
+        ResourceStore r = w.Resources;
+        for (int k = 0; k < r.Capacity; k++)
+            if (r.Alive[k]) r.Take(new EntityHandle(k, r.Generation[k]), int.MaxValue);
+        UnitStore u = w.Units;
+        for (int i = 0; i < u.Capacity; i++)
+        {
+            if (!u.Alive[i] || u.Owner[i] != 0 || !w.Data.Units[u.TypeId[i]].IsWorker) continue;
+            u.CargoKind[i] = ResourceKind.Gold;
+            u.Cargo[i] = w.Data.CarryOf(u.TypeId[i]);
+        }
+        w.RecountDraw();
+        sim.Tick(); // tick 0: the fog, the first think
+        var view = new PlayerView(w, 0);
+        remembered = 0;
+        int s = -1;
+        while (view.NextResource(ref s, out SeenResource n)) remembered++;
+        Assert.True(remembered > 0, "precondition: the seat remembers gone nodes");
+        return sim;
+    }
+
+    /// <summary>
+    /// BUG-1852 (red on the base: the same Gathers every think, the loaded workers never judged because of BUG-0574's full-load
+    /// exemption): each worker's Gather to a gone node is refused at most once for that node, every remembered node ends marked
+    /// dropped, and once all are marked no Gather is sent.
+    /// </summary>
+    [Fact]
+    public void ALoadedIdleWorker_AGatherToAGoneNode_IsRefusedAtMostOnceForThatNode()
+    {
+        Simulation sim = LoadedIdleWorkersScene(out int remembered);
+        World w = sim.World;
+        AiPlayer ai = sim.AiOf(0)!;
+        List<Command> log = AiScenes.Log(sim, 0);
+        int think = ai.ThinkTicks;
+        for (int t = 0; t < 40 * think; t++) sim.Tick();
+        int early = log.Count(c => c.Kind == CommandKind.Gather);
+        for (int t = 0; t < 40 * think; t++) sim.Tick();
+        var gathers = log.Where(c => c.Kind == CommandKind.Gather).ToList();
+        var perTarget = gathers.GroupBy(c => (c.Unit, c.Position)).Select(g => g.Count()).DefaultIfEmpty(0).Max();
+        int marked = 0;
+        foreach (int m in ai.Board.NodeDropped) if (m != 0) marked++;
+        _out.WriteLine($"remembered gone {remembered}; Gathers after 40 thinks {early}, after 80 {gathers.Count}; most to one node by one worker {perTarget}; marked {marked}");
+        Assert.True(gathers.Count > 0, "the scene sent no Gather: it does not test the rule");
+        Assert.True(perTarget <= 1, $"a worker's Gather to one gone node was sent {perTarget} times");
+        Assert.Equal(early, gathers.Count); // all marked within 40 thinks: none after
+    }
+
+    /// <summary>BUG-1852's twin: the scene twice, hash-equal every think, the same marks.</summary>
+    [Fact]
+    public void ALoadedIdleWorker_RunTwice_SameHashesAndMarks()
+    {
+        Simulation a = LoadedIdleWorkersScene(out _), b = LoadedIdleWorkersScene(out _);
+        int think = a.AiOf(0)!.ThinkTicks;
+        for (int t = 0; t < 40 * think; t++)
+        {
+            a.Tick();
+            b.Tick();
+            if (t % think == 0) Assert.Equal(a.StateHash(), b.StateHash());
+        }
+        Assert.Equal(a.AiOf(0)!.Board.NodeDropped, b.AiOf(0)!.Board.NodeDropped);
+    }
+
     /// <summary>BUG-1857's twin: the room-for-two scene twice, hash-equal every think for 60 thinks.</summary>
     [Fact]
     public void Floor_RoomForTwo_RunTwice_SameHashes()

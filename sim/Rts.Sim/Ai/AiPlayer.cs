@@ -208,6 +208,12 @@ internal sealed partial class AiPlayer
     /// <summary>M5-3 (BUG-0574): whether the player has a finished drop-off building.</summary>
     internal bool HasDropOff { get; private set; }
 
+    /// <summary>
+    /// M6-SH3 (BUG-1852): <see cref="HasDropOff"/> as the last think's census found it (the think that sent the Gathers judged
+    /// now). Taken from the saved <see cref="HasDropOff"/> at the start of the census, so nothing new is saved.
+    /// </summary>
+    internal bool HadDropOff { get; private set; }
+
     /// <summary>The player's buildings (sites included), slot order (first <see cref="OwnBuildingCount"/>): slot, type, anchor and whether a site.</summary>
     internal int[] OwnBuildingSlots { get; }
 
@@ -565,6 +571,7 @@ internal sealed partial class AiPlayer
         FocusTarget = default;
         Array.Clear(CounterShare); // M5-9a: think scratch, as the reserve
         WaitingWorkerHalfPop = 0; // M6-SH3 (BUG-1857): think scratch too, so a loaded seat equals the saved one
+        HadDropOff = false; // M6-SH3 (BUG-1852): likewise
         return true;
     }
 
@@ -578,6 +585,7 @@ internal sealed partial class AiPlayer
         OwnBuildingCount = 0;
         // M5-4d slice 2: a hall seen last think is remembered (LostHallCell) until the buildings' pass finds one again.
         if (TownHallCell >= 0) TownHallCell = -TownHallCell - 2;
+        HadDropOff = HasDropOff; // M6-SH3 (BUG-1852)
         HasDropOff = false;
         IntruderCount = 0;
         IntruderWorth = 0;

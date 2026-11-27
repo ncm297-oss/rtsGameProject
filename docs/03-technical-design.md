@@ -15474,6 +15474,24 @@ base: 3 Trains; now 2 at 2,001 and 2,021, no paid worker waiting); `Ai/M6Sh3AiCu
 2, 3 Laborers: at most that many Trains and never a paid worker waiting at the cap; room for 2 red on the base: 3 Trains, a
 paid worker waiting 721 ticks) and its twin.
 
+**C2. A loaded idle worker's Gather to a gone node is judged (BUG-1852; `EconomyManager.NoteDroppedGather`,
+`AiPlayer.HadDropOff`).** The path that re-sent it, traced on Raraku seed 4 (seeds 3 / 4 / 6 are one match): the worker is
+**not Moving** as the bug guessed but **Idle with a full load of gold** (unit 45 at (228, 228) m, 10 gold, from before 33,800),
+its Town Hall standing. Every think the economy sends it, as an idle worker, to the nearest remembered gold node, a mine
+gone out of its sight (slot 5, generation 1, `Remaining` -1); the Gather is refused `NoResourceNode` and the worker stays
+Idle. `NoteDroppedGather` should then mark the node (BUG-0570), but BUG-0574's guard skipped every worker carrying a full load
+of the kind it was sent to (meant for a seat with no drop-off, whose loaded worker's Gather ends at once with the node
+alive), so the node was never marked. With a finished drop-off standing a Gather that applies sends a full load home (the
+worker is Moving or Returning at the next think, never Idle), so an Idle loaded worker had its Gather refused. Cure: the
+full-load guard holds only when the seat had no finished drop-off at the think that sent the Gather (`AiPlayer.HadDropOff`,
+the last census's `HasDropOff`, taken at the start of the census from the saved value and cleared at the end of the think:
+nothing new saved); BUG-0574's row (`QA/AiGatherMarkQaTests.ALiveMine_IsNotMarked_WhenALoadedWorkerHasNoDropOff`) stays green.
+No AI path sends a Gather to a Moving worker (the idle loop takes Idle workers, the rebalance Gathering ones), so the
+brief's "staged Moving worker" row could not fail on the base; the regression row stages the traced state instead:
+`Ai/M6Sh3AiCureTests.ALoadedIdleWorker_AGatherToAGoneNode_IsRefusedAtMostOnceForThatNode` (a Hard Malazan seat with its hall,
+every node gone out of sight, its workers Idle with full gold loads; red on the base: 349 Gathers in 80 thinks, 80 to one
+node by one worker, 12 of 16 nodes marked; now 55, at most one per worker and node, all 16 marked within 40 thinks) and its twin.
+
 ## Testing strategy
 
 | Test kind | What it proves | Runs |
