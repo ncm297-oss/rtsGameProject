@@ -522,7 +522,9 @@ match's draw clock runs, its countdown line sits at the top centre under the ale
   once it reaches the map's edge it walks the whole border round once), and turns at once toward any enemy unit it sees.
   From its second hunt of the match on, it first looks at the start locations no player holds (or a defeated player's),
   nearest first, where a beaten side's last depot and workers often stand, then an enemy's own start (M5-H6, BUG-1157 /
-  BUG-1162). In a team match a
+  BUG-1162). A hunt that begins within `ai.huntMemory` (120 s) of the last hunt's find going (a building it found and razed)
+  keeps the places the last hunt already looked at and looks round where that building stood first, not at the start
+  locations (M6-S14, BUG-1661: a remnant beside the find used to wait for a whole new lap of the map). In a team match a
   sighting on or right beside an ally's building is aimed just off that building, on the army's side. A hunt ends like a wave (heavy losses, nobody busy for a while,
   a raid at home), and becomes a wave again on the first enemy building it finds. So a beaten side's last unit hiding in
   the woods is found, and AI-against-AI matches end (built in M5-4d, BUG-1068; hardened in M5-H5, BUG-1119 / BUG-1120;
@@ -535,8 +537,8 @@ match's draw clock runs, its countdown line sits at the top centre under the ale
   every free combat unit in a wave whatever the wave threshold (or hunts, if it knows no enemy building), again after each
   wave's cooldown, at every difficulty; a raid on its base resets the clock, and 0 turns the rule off (built in M5-9a
   round 2, BUG-1153; [03 Implementation (M5-9a)](03-technical-design.md#implementation-m5-9a)). Waiting for that unit
-  never stops the worker retrain below: a starved side with no worker left still trains one, since a worker is its only
-  way back to the resource it lacks (M6-SH2, BUG-1534, the Producer's ruling).
+  never stops the worker floor below: a starved side short of workers still trains them, since a worker is its only
+  way back to the resource it lacks (M6-SH2, BUG-1534, the Producer's ruling; a floor since M6-S14).
 - When its own gold is spent the AI expands to the far mines with a depot: short of gold for the unit it would train next,
   with no worker on gold and no gold mine it knows, it sends a worker to look at the start locations no player took, and
   once it has seen a free mine within `rules.json` `ai.farExpandReach` (384 m) of its Town Hall with no enemy drop-off by
@@ -552,11 +554,13 @@ match's draw clock runs, its countdown line sits at the top centre under the ale
   new one by, and never at the hard cap (M5-H6, BUG-1116: a beaten side no longer rebuilds houses it doesn't need). With no Town Hall left and a worker alive, the Town Hall comes
   before every other step: on its old spot when that is free, else as near it as a site is, banking for it when it can't
   pay yet (army production spends only what is above its cost). A lost expansion is not rebuilt yet (built in M5-4d
-  slice 2; [03 Implementation (M5-4d slice 2)](03-technical-design.md#implementation-m5-4d-slice-2)). A side left with no
-  worker (none alive and none in training) trains one first thing at a finished building that trains workers, when it
-  has the population room and the gold for one, whatever its build order says and even while its base is under attack;
-  with no gold for one it sends nothing (M6-SH2, BUG-1465: a beaten side used to sit on its gold with a finished Town Hall
-  for good; [03 Implementation (M6-SH2)](03-technical-design.md#implementation-m6-sh2)).
+  slice 2; [03 Implementation (M5-4d slice 2)](03-technical-design.md#implementation-m5-4d-slice-2)). A side left with
+  fewer workers (alive and in training) than `rules.json` `ai.minWorkers` (4) trains one a think at a finished building
+  that trains workers, when it has the gold for one and, with any worker left, the population room, whatever its build
+  order says and even while its base is under attack; with no gold for one it sends nothing (M6-SH2, BUG-1465: a beaten
+  side used to sit on its gold with a finished Town Hall for good; [03 Implementation (M6-SH2)](03-technical-design.md#implementation-m6-sh2);
+  the floor since M6-S14, BUG-1660: a side cut down to one worker never trained another while it lived;
+  [03 Implementation (M6-S14)](03-technical-design.md#implementation-m6-s14)).
 - The AI parks its army at a rally point `rules.json` `ai.rallyDistance` (12 m) from its Town Hall toward the nearest
   enemy building it knows (toward the map's centre while it knows none). A point in or at the mouth of a one-cell passage
   (a lane one cell wide between cliffs, buildings or trees, as far as the AI knows them) moves to the nearest point on the
