@@ -182,7 +182,7 @@ public class M6S14AiPlayQaTests
     /// may sit in a queue unable to start for want of room. A worker in a queue that has not started reserves no population
     /// (<c>ProductionSystem.TryStart</c>), so the room test reads the same room on the next think (BUG-1857).
     /// </summary>
-    [Fact(Skip = "BUG-1857: the floor's room test does not count workers queued but not started (QA measured 3 Trains with room for 2, a paid worker waiting at the cap 2,091 ticks); un-skip with the fix")]
+    [Fact] // BUG-1857 fixed in M6-SH3: the room test counts the worker items queued and not started (AiPlayer.WaitingWorkerHalfPop)
     public void Floor_RoomForTwoWorkers_SendsAtMostTwo_NoPaidWorkerWaitsAtTheCap()
     {
         Simulation sim = FloorScene();

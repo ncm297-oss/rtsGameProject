@@ -15462,6 +15462,18 @@ within five quiet minutes of one (the `Draw/*` rows, the four-seat rows, any mat
 it never changes how a seat plays before that (no AI code reads the rule). On these trees it moved none: in every drawing
 match above the new rule found the match spent on the same ticks as the old.
 
+**C1. The worker floor's room counts the queued workers (BUG-1857; `BuildOrderExecutor.Retrain`, `AiPlayer.Buildings`).** A
+unit's population is reserved only when its item starts (`ProductionSystem.TryStart`), so with one floor Train started and a
+second waiting behind it the room test read the same room at the next think and sent a third (QA: three Trains with room
+for two, a paid Laborer waiting at the cap for 2,091 ticks). The census now sums the half-pop of the worker items in the
+seat's queues that have not started (`AiPlayer.WaitingWorkerHalfPop`: a head with progress 0, or any item behind a head), and
+the floor's room test (above zero workers) is `HalfPop + WaitingWorkerHalfPop + ItemHalfPop <= HalfPopCap`. The value is think
+scratch (cleared at the end of every think, as the reserve is), so nothing new is saved and a loaded seat equals the saved
+one. Tests: `QA/M6S14AiPlayQaTests.Floor_RoomForTwoWorkers_SendsAtMostTwo_NoPaidWorkerWaitsAtTheCap` un-skipped (red on the
+base: 3 Trains; now 2 at 2,001 and 2,021, no paid worker waiting); `Ai/M6Sh3AiCureTests.Floor_WithRoomForN_*` (room for 0, 1,
+2, 3 Laborers: at most that many Trains and never a paid worker waiting at the cap; room for 2 red on the base: 3 Trains, a
+paid worker waiting 721 ticks) and its twin.
+
 ## Testing strategy
 
 | Test kind | What it proves | Runs |

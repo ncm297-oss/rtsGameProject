@@ -164,6 +164,13 @@ internal sealed partial class AiPlayer
     /// <summary>Per unit type, the units in the player's queues (the head in progress included).</summary>
     internal int[] Queued { get; }
 
+    /// <summary>
+    /// M6-SH3 (BUG-1857): the half-pop of the worker items in the player's queues that have not started (a head whose progress is
+    /// 0, or any item behind a head): a unit's population is reserved only when its item starts, so the worker floor's room test
+    /// adds this to the population in use. Census scratch, recounted every think; not saved.
+    /// </summary>
+    internal int WaitingWorkerHalfPop { get; private set; }
+
     // M8-4 (Request 56 G4): per unit type with a limit, the units this think's Trains will add (spawnCount each) and the think
     // they were sent at. A Train applies the tick after its think and a seat thinks again at least a tick later, so only this
     // think's sends are missing from the world's count. Scratch keyed by the think's tick: not saved, not hashed.
@@ -557,6 +564,7 @@ internal sealed partial class AiPlayer
         ClearReserve();
         FocusTarget = default;
         Array.Clear(CounterShare); // M5-9a: think scratch, as the reserve
+        WaitingWorkerHalfPop = 0; // M6-SH3 (BUG-1857): think scratch too, so a loaded seat equals the saved one
         return true;
     }
 
@@ -564,6 +572,7 @@ internal sealed partial class AiPlayer
     {
         Array.Clear(Live);
         Array.Clear(Queued);
+        WaitingWorkerHalfPop = 0;
         WorkerCount = 0;
         ArmyCount = 0;
         OwnBuildingCount = 0;
@@ -882,7 +891,11 @@ internal sealed partial class AiPlayer
             }
             int n = View.QueueCount(s);
             for (int item = 0; item < n; item++)
-                if (View.TryGetQueueItem(s, item, out int type, out bool isTech) && !isTech) Queued[type] += Data.Units[type].SpawnCount; // M7-3: a pack is its units
+            {
+                if (!View.TryGetQueueItem(s, item, out int type, out bool isTech) || isTech) continue;
+                Queued[type] += Data.Units[type].SpawnCount; // M7-3: a pack is its units
+                if (IsWorkerType[type] && (item > 0 || View.QueueProgress(s) == 0)) WaitingWorkerHalfPop += Data.Units[type].ItemHalfPop; // M6-SH3 (BUG-1857)
+            }
         }
         s = -1;
         while (View.NextGhost(ref s, out Vision.BuildingGhost g))

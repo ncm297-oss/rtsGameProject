@@ -556,7 +556,8 @@ match's draw clock runs, its countdown line sits at the top centre under the ale
   pay yet (army production spends only what is above its cost). A lost expansion is not rebuilt yet (built in M5-4d
   slice 2; [03 Implementation (M5-4d slice 2)](03-technical-design.md#implementation-m5-4d-slice-2)). A side left with
   fewer workers (alive and in training) than `rules.json` `ai.minWorkers` (4) trains one a think at a finished building
-  that trains workers, when it has the gold for one and, with any worker left, the population room, whatever its build
+  that trains workers, when it has the gold for one and, with any worker left, the population room (counting the workers
+  already waiting in its queues, M6-SH3, BUG-1857, so it never pays for a worker that cannot start), whatever its build
   order says and even while its base is under attack; with no gold for one it sends nothing (M6-SH2, BUG-1465: a beaten
   side used to sit on its gold with a finished Town Hall for good; [03 Implementation (M6-SH2)](03-technical-design.md#implementation-m6-sh2);
   the floor since M6-S14, BUG-1660: a side cut down to one worker never trained another while it lived;
