@@ -54,6 +54,9 @@ public partial class QaGhostViewTest : Node
         try
         {
             GetTree().Root.Size = new Vector2I(1152, 648);
+            // M6-V31: the rows pin a ghost's box (GhostBoxOf); the Whirlwind hall here is a model now (remembered models:
+            // BuildingModelTest).
+            BuildingViews.UseModels = false;
             await Frame();
             DataLoadResult loaded = DataLoader.LoadAll(ProjectSettings.GlobalizePath("res://data"));
             if (!loaded.Ok) throw new InvalidOperationException("data failed to load");
@@ -71,6 +74,7 @@ public partial class QaGhostViewTest : Node
         }
         foreach (string f in _failures.Take(60)) GD.Print($"QA GHOST VIEW TEST FAIL: {f}");
         if (_failures.Count == 0) GD.Print("QA GHOST VIEW TEST PASS");
+        BuildingViews.UseModels = true;
         SceneExit.Quit(this, _failures.Count == 0 ? 0 : 1);
     }
 

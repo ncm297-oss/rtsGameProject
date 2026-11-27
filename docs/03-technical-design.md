@@ -5229,6 +5229,73 @@ tests, the import tooling, the Cairn's two model files and docs; no sim, `ViewAp
      the import script itself). Recommendation: a brief that changes `tools/import-assets.ps1` names it, as smoke is named
      for `game/`.
 
+### Implementation (M6-V31)
+
+The Whirlwind's buildings as kit-bashed tents: all ten Whirlwind types are models (docs/04 "Building models, as built
+(M6-V31)": the parts, triangles, sizes, palette, the tower pick and the team-colour table). Tooling (the builder's kit),
+the manifest, the ten model files, view tests and docs; no sim, `ViewApi`, data, save or replay format changed, and no
+view code: a kit model is a building model like any other (one surface, one `team` material, one atlas, found by id), so
+`BuildingModels`, the fit, picking (`BuildingOnRay`, `HiddenByBuilding`), the bar and the tower's shot height take it as
+they are. 24 of 30 building types are models.
+
+- **The builder (`tools/art/build_building.py`).** An entry may carry `kit` (parts the builder makes: box, ridge prism,
+  pyramid, cone, cylinder, pole, awning, each with a size, a position, an optional turn and a role), with or without a pack
+  `source`, and `keep` (a box that crops the source to the faces inside it). A part's role is a material of the entry:
+  `team` roles (the cloth) land on the team tile, `colours` roles are flat colours. The parts are wound outward (every shape
+  is convex) and join the source's faces before the hidden-face pass, so everything after it is the M6-V26 path. A kit with
+  no source is in meters and checked against the building's footprint from the data (`FitMargin` inside); a bad kit fails
+  with a named `FAIL` line and writes nothing (`tools/art/test-kit-errors.ps1`: ten bad entries and one good, about a
+  minute with Blender). An entry with neither `kit` nor `keep` runs no new line: two full re-imports
+  (`tools/import-assets.ps1`) left all 139 pre-existing model, atlas, library and `.import` files byte for byte (SHA-256 of
+  each before and after each run) and the 40 new files the same on both runs; `git status` clean after the second.
+  `tools/import-assets.ps1` prints a kit's parts and triangles (its one change); `tools/art/test-import-exit.ps1` and
+  `tools/qa/import-exit-extra.ps1` pass.
+- **The manifest order:** the Holy Camp is the first Whirlwind entry (the Malazan Keep and the Teblor Longhouse are their
+  factions' first too): `BuildingModelTest`'s match rows spawn the manifest's types in order for player 0, and a player whose
+  first building trains nothing (a lone Tent) is out of the match at once (docs/02 "Game flow" 4).
+- **Tests.** New `game/tests/WhirlwindBuildingsTest` (headless, in the loop; the Whirlwind model types read from the
+  manifest): (M) each model's triangles (at most 5,000), one surface, the one `team` material, a 64 x 64 or 128 x 128 atlas;
+  (H) each drawn at M6-V26's fit recomputed from its file, `FitMargin` inside its footprint, base on the ground; (T) each at
+  a terrace's foot and edge (an anchor that would seal ground off is refused by the never-seal rule and the next is tried):
+  inside its footprint, base on the ground, the bar over the drawn top; (P) a Camp Follower in front of each selected by a
+  click at zoom 20, 40 and 60, every 12th model pixel at zoom 40 selects the building (29 to 99 pixels a type), the bar on
+  screen over the drawn top at the closest zoom; (S) a Tent site drawn as its box with its bar over the box on every sync
+  while a site (399 of 399), the model on the sync of the tick it finishes, and the Lookout Tower's shot height
+  `ModelShotShare` of its drawn top (7.48 of 8.80 m); (F) models off and files missing give the box, an LFS pointer for the
+  Holy Camp gives its box and exactly one warning; (3) a Malazan, a Whirlwind and a Teblor seat with every type of each: a
+  type is its model exactly when its file is there (24 models, 6 boxes). Windowed with `-- --shots <dir>` it saves the
+  pictures and prints the luminance table (`LUMA` lines). `tools/art/test-kit-errors.ps1` (above).
+- **Scenes adapted, no row deleted (criterion 8).** `BuildingModelTest` (every manifest building; the Whirlwind pass is its
+  third): the Whirlwind's ten triangle-per-tile pins; its finished and remembered rows wrap after eight types (the first
+  eight keep their spots; ten in one row ran off the open ground) and the site rows take a second column after eight; the
+  fallback sim places twelve a row (24 in one row ran off the map); a site player 0 can no longer pay for twice (ten
+  Whirlwind sites and ten cancelled ones are mostly wood) is built by player 1, seen through a player-0 house as player 2's
+  Age II sites are; the "type without a model stays a box" row is skipped for a faction with no box type (the Whirlwind) and
+  at least one faction's pass must run it; a site type's required buildings (the Horse Lines need a Raider Camp) are spawned
+  for its builder when it has none. `QaM6V26Test` (QA's, run per faction with models; the Whirlwind's is its third pass): its
+  reuse row takes another faction's box type when the faction has none, and its razed-site row spawns a type's required
+  buildings for the builder. `ViewHardenVh9Test` (P3) takes the model types in manifest order (the first fourteen keep their
+  order and spots; the Whirlwind's ten came between them in data order) and the fifteenth on at the first of a list of spare
+  spots that takes it (the west block's third row and a fourth row east are not open ground on seed 1). `FogViewTest` and
+  `QaGhostViewTest` pin a remembered building's box (`GhostBoxOf`) and the hall they remember is a Whirlwind Holy Camp, now a
+  model: they set `BuildingViews.UseModels = false` (remembered models are `BuildingModelTest`'s rows). `TeblorBuildingsTest`
+  (3) already read the files (its "the Whirlwind's are boxes" comment now says they are models); its (H) row now fits 24
+  manifest types. The scene loop is 134 scenes.
+- **Questions for the Producer (rule 67), each with a recommendation:**
+  1. **The Lookout Tower is `WatchTower_FirstAge_Level3` with a cloth canopy, not "the Second Age's tower"** (docs/04, the
+     M6-V30 paragraph's proposal): every Second Age tower is the Malazan Watchtower's grey stone. It is 8.80 m tall on 2 x 2
+     (the Malazan Watchtower 4.9 m) and, being the First Age's timber, shares the Teblor Cairn's build (a stacked timber
+     tower), told apart by its sun-bleached tint, its two stages and the player-coloured canopy. Recommendation: keep; a
+     lower tower is a kit tower (poles and a platform) in a later look task if the owner finds it too tall.
+  2. **Bone on the Holy Camp is 11 levels from the canvas walls** (docs/04's table; every other colour 43 or more). The
+     canvas is bleached on purpose (the faction palette's "bleached white", and the only wall tone that keeps the seven other
+     colours over 30). Recommendation: keep; the camp is mostly cloth (the walls are 7 % of its pixels) and reads by shape.
+  3. **The props are small at zoom 40** (1-1.5 m: the spear rack, targets, rail, ram frame; the camps' tents are one shape).
+     They tell the camps apart at 40 m, the spear rack least. Recommendation: keep; larger props are a manifest edit (sizes
+     only) if the owner wants the camps louder.
+  4. **The Supply Cache is one stall cropped from `Market_FirstAge_Level2`** (`keep`, new): the whole market on 2 x 2 is
+     1.0-1.2 m tall. Recommendation: keep.
+
 ## Vision, detection, fog
 
 Fog of war and the high-ground rule are in since M4-3a (`sim/Rts.Sim/Vision/`); the last-known building ghosts, buildings

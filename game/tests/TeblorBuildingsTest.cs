@@ -42,7 +42,8 @@ namespace Rts.Game.Tests;
 /// Teblor building is its box, <see cref="BuildingViews.DrawnHeight"/> (3 m x <c>scale</c>) tall with its bar over it; a Git
 /// LFS pointer in place of one file gives that box and exactly one warning (the loop reads the log for <c>ERROR</c>).</item>
 /// <item>(3) Three factions in one match (Malazan, Whirlwind, Teblor), every building type of each: drawn as its model exactly
-/// when its file is there (the Whirlwind's are boxes), a model at its fitted height x its faction's <c>scale</c>.</item>
+/// when its file is there (M6-V31: the Whirlwind's are models too; the count is read from the files, never a literal), a model
+/// at its fitted height x its faction's <c>scale</c>.</item>
 /// </list>
 /// Windowed with <c>-- --shots &lt;dir&gt;</c> it saves <c>m6v30-&lt;id&gt;-40m</c> / <c>-20m</c> for each Teblor model (a
 /// Gatherer and a Warrior before it), <c>m6v30-base-40m</c> / <c>-40m-gray</c> / <c>-60m</c> (one Teblor base, Warriors beside
@@ -558,7 +559,7 @@ public partial class TeblorBuildingsTest : Node
     // ---- (3) three factions in one match ----
 
     // A Malazan, a Whirlwind and a Teblor seat each with every building type of its faction: a type is drawn as its model
-    // exactly when its file is there (the Malazan and Teblor models; the Whirlwind's boxes), each model at its faction's height.
+    // exactly when its file is there (M6-V31: the Whirlwind's ten are models too), each model at its faction's height.
     private async Task ThreeFactionRow()
     {
         string[] keys = { "malazan", "whirlwind", "teblor" };
