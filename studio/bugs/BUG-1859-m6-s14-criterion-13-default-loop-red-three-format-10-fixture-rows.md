@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S2 (an acceptance criterion not met) |
-| Status | open |
+| Status | fixed (verified by QA re-check round 1, 2026-11-26-1847: default loop 10,854 / 0 failed / 22 skipped of 10,876; the three rows green, `Bug0982_KeepEighteen_*` skipped with BUG-1851) |
 | Found | 2026-11-26-1847, task M6-S14 (QA, tier full; the developer's report names the same rows as BUG-1850, S3) |
 | System | tests: `Content/D32PreFixtureTests`, `QA/Content/D31LandingQaTests` (data track's folders); save format 11 |
-| Fixed by | |
+| Fixed by | M6-S14 fix round 1 (session 2026-11-26-1847, sim track): tests only. `Content/D32PreFixtureTests` and `QA/Content/D31LandingQaTests` assert `FormatVersionMismatch` on the raw fixture, then relabel to `SaveFormat.CurrentVersion` + re-checksum for the `DataMismatch` proof; `OnTheDiffBasesData_BothFixturesLoad` loads the relabelled bytes; `QA/Content/DH6ThresholdQaTests.Bug0982_KeepEighteen_HoldsOnTwoMoreSeeds` skipped with BUG-1851. |
 
 ## Repro
 1. On `0058e09d`: `dotnet test sim/Rts.Sim.Tests --filter "Category!=Perf&Category!=Stress&Category!=Soak"`.

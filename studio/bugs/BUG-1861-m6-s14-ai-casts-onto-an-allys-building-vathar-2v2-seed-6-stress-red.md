@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S2 (a Stress row red on the branch, green on the base, not in the developer's report; an AI team rule broken) |
-| Status | open |
+| Status | fixed (Cure A, verified by QA re-check round 1, 2026-11-26-1847: `FourNormalSeats_To72000` 24 / 24, the allowance used only by Vathar 2v2 seed 6 (4 casts); two mutations of it, radius 0 and `affects` != enemy units, turn that row red at tick 25,280 again) |
 | Found | 2026-11-26-1847, task M6-S14 (QA, tier full: the whole Stress category on a fresh clone) |
 | System | AI (team play: a cast's point; the hunt / wave / defense together), `Stress/M5H5HuntAfterDefeatQaTests` |
-| Fixed by | |
+| Fixed by | M6-S14 fix round 1 (session 2026-11-26-1847, sim track): Cure A, tests only. Trace: seat 2's `malazan_cadre_mage` cast `telas_fire` (target ground, affects enemy units, one status effect, no damage, no friendly fire, hitsBuildings false) at three of seat 3's `whirlwind_raider` inside its 3 m, standing at ally p0's `malazan_armory`; no ally unit inside. `Stress/M5H5HuntAfterDefeatQaTests` got a named allowance (`HarmlessToAlliesWithAnEnemyInside`, read from data); no production change. |
 
 ## Repro
 1. `dotnet test sim/Rts.Sim.Tests --filter "FullyQualifiedName~M5H5HuntAfterDefeatQaTests.FourNormalSeats_To72000"`

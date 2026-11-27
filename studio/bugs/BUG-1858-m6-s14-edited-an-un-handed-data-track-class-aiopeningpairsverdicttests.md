@@ -3,7 +3,7 @@
 | Field | Value |
 | --- | --- |
 | Severity | S2 (a change outside the track's files: producer.md "Tracks", rule 68) |
-| Status | open (cure: a Producer ruling at the ACCEPT, no code change) |
+| Status | wontfix (the Producer's ruling for M6-S14 fix round 1: the edit stands, no code change) |
 | Found | 2026-11-26-1847, task M6-S14 (QA, tier full) |
 | System | process / track ownership (`sim/Rts.Sim.Tests/Content/` is the data track's) |
 | Fixed by | |
