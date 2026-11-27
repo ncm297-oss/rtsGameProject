@@ -1,3 +1,4 @@
+using System.Collections.Immutable;
 using System.Globalization;
 using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
@@ -20,6 +21,14 @@ namespace Rts.Sim.Tests.QA.Content;
 /// <para>
 /// D21 (2026-10-18): every row runs for every opening of each file (<c>openings[k]</c>, k = 0-2 today), never for the first
 /// only; the problems name the opening (<c>"malazan crossbow_push step 4: ..."</c>).
+/// </para>
+/// <para>
+/// D39 (BUG-1840 item 3, rule 79): the static checks (a)-(d) and (g), and the oracles of <c>Shipped_PassesEveryOracle</c>,
+/// run over every list a seat can play: <c>buildOrder</c> and each <c>buildOrders</c> entry (<see cref="ListsOf"/>; the
+/// Teblor <c>standard</c> ships <c>easy</c> and <c>hard</c> entries since D38). A problem in an entry names it after the
+/// opening (<c>"teblor standard buildOrders.hard step 3 ..."</c>); one in <c>buildOrder</c> reads as before. The forged rows
+/// <c>AnEntryForOneOrTwoDifficulties_*</c> write entries on a copy of every opening (any shipped <c>buildOrders</c>
+/// replaced whole) and break the <c>hard</c> one alone.
 /// </para>
 /// </summary>
 public class AiContentQaTests
@@ -66,20 +75,54 @@ public class AiContentQaTests
 
     private static JsonArray Steps(JsonObject root, int k) => AiScenes.Opening(root, k)["buildOrder"]!.AsArray();
 
-    /// <summary>The index of the first step of <paramref name="action"/> (and id, when given) in opening <paramref name="k"/> of the file.</summary>
-    private static int StepIndex(JsonObject root, int k, string action, string? id = null)
+    /// <summary>D39: the list every difficulty without its own entry plays (the loader's field name, and its path's).</summary>
+    internal const string MainList = "buildOrder";
+
+    private const string EntryPrefix = "buildOrders.";
+
+    /// <summary>D39: every list a seat of opening <paramref name="o"/> can play: <see cref="MainList"/>, then each <c>buildOrders</c> entry in difficulty order, as <c>"buildOrders.&lt;difficulty&gt;"</c> (the loader's path).</summary>
+    internal static List<string> ListsOf(AiOpening o)
     {
-        JsonArray steps = Steps(root, k);
+        var lists = new List<string> { MainList };
+        for (int d = 0; d < o.BuildOrders.Length; d++)
+            if (o.BuildOrders[d].Length > 0) lists.Add(EntryPrefix + DataLimits.AiDifficultyIds[d]);
+        return lists;
+    }
+
+    /// <summary>D39: the loaded steps of <paramref name="list"/> (a <see cref="ListsOf"/> key) in opening <paramref name="o"/>.</summary>
+    internal static ImmutableArray<AiStep> StepsOf(AiOpening o, string list) =>
+        list == MainList ? o.BuildOrder : o.BuildOrders[DataLimits.AiDifficultyIds.IndexOf(list[EntryPrefix.Length..])];
+
+    /// <summary>D39: the file's steps of <paramref name="list"/> in opening <paramref name="k"/>.</summary>
+    private static JsonArray Steps(JsonObject root, int k, string list) =>
+        list == MainList ? Steps(root, k) : AiScenes.Opening(root, k)["buildOrders"]![list[EntryPrefix.Length..]]!.AsArray();
+
+    /// <summary>D39: how a problem names the opening and the list ("malazan crossbow_push" for <c>buildOrder</c>, "teblor standard buildOrders.hard" for an entry).</summary>
+    private static string Who(string faction, AiOpening o, string list) => list == MainList ? $"{faction} {o.Id}" : $"{faction} {o.Id} {list}";
+
+    /// <summary>The index of the first step of <paramref name="action"/> (and id, when given) in <paramref name="list"/> of opening <paramref name="k"/> of the file.</summary>
+    private static int StepIndex(JsonObject root, int k, string action, string? id = null, string list = MainList)
+    {
+        JsonArray steps = Steps(root, k, list);
         for (int i = 0; i < steps.Count; i++)
             if ((string)steps[i]!["do"]! == action && (id == null || (string?)steps[i]!["id"] == id)) return i;
-        Assert.Fail($"opening {k}: no '{action}' step{(id == null ? "" : " for " + id)}");
+        Assert.Fail($"opening {k} {list}: no '{action}' step{(id == null ? "" : " for " + id)}");
         return -1;
     }
 
     private static JsonObject Shipped(string faction) =>
         JsonNode.Parse(File.ReadAllText(Path.Combine(TestDataDir.Shipped, AiFile(faction))))!.AsObject();
 
-    private static int StepIndex(string faction, int k, string action, string? id = null) => StepIndex(Shipped(faction), k, action, id);
+    private static int StepIndex(string faction, int k, string action, string? id = null, string list = MainList) => StepIndex(Shipped(faction), k, action, id, list);
+
+    /// <summary>D39: every (faction, opening index, list) of the shipped files (<see cref="ListsOf"/>).</summary>
+    public static TheoryData<string, int, string> Lists()
+    {
+        var rows = new TheoryData<string, int, string>();
+        foreach ((string faction, int k) in Openings().Select(r => ((string)r[0], (int)r[1])))
+            foreach (string list in ListsOf(Opening(faction, k))) rows.Add(faction, k, list);
+        return rows;
+    }
 
     private static JsonObject Composition(JsonObject root, int k, int age) =>
         AiScenes.Opening(root, k)["compositions"]!.AsArray().Single(c => (int)c!["age"]! == age)!["units"]!.AsObject();
@@ -89,16 +132,17 @@ public class AiContentQaTests
     /// <summary>
     /// Opening <paramref name="k"/>'s Age I mix names only units the Age I steps can train (no Age II on the unit or its
     /// building, the building placed by a step due before the Age II research); Age II keeps Age I's units at the same
-    /// weights and sums to 100.
+    /// weights and sums to 100. D39: "the Age I steps" are <paramref name="list"/>'s (a <see cref="ListsOf"/> key).
     /// </summary>
-    internal static List<string> CompositionProblems(GameData d, string faction, int k)
+    internal static List<string> CompositionProblems(GameData d, string faction, int k, string list = MainList)
     {
         var problems = new List<string>();
         AiOpening o = d.Ai[d.FindFaction(faction)].Openings[k];
-        string who = $"{faction} {o.Id}";
+        string who = Who(faction, o, list);
+        ImmutableArray<AiStep> order = StepsOf(o, list);
         int age2 = d.FindTech(DataLimits.AgeTechIds[0]);
-        AiStep ageStep = o.BuildOrder.Single(s => s.Action == AiStepAction.Research && s.Target == age2);
-        var ageOne = o.BuildOrder.Where(s => s.Action == AiStepAction.Build && (s.Trigger != AiStepTrigger.Time || s.At < ageStep.At))
+        AiStep ageStep = order.Single(s => s.Action == AiStepAction.Research && s.Target == age2);
+        var ageOne = order.Where(s => s.Action == AiStepAction.Build && (s.Trigger != AiStepTrigger.Time || s.At < ageStep.At))
             .Select(s => s.Target).ToHashSet();
         AiComposition one = o.Compositions[0], two = o.Compositions[1];
         for (int j = 0; j < one.Units.Length; j++)
@@ -116,38 +160,40 @@ public class AiContentQaTests
         return problems;
     }
 
-    /// <summary>Every research step of opening <paramref name="k"/>: its tech is common or the faction's, at a building slot some build step (or the hall) fills.</summary>
-    internal static List<string> ResearchProblems(GameData d, string faction, int k)
+    /// <summary>Every research step of opening <paramref name="k"/>'s <paramref name="list"/>: its tech is common or the faction's, at a building slot some build step of the list (or the hall) fills.</summary>
+    internal static List<string> ResearchProblems(GameData d, string faction, int k, string list = MainList)
     {
         var problems = new List<string>();
         AiOpening o = d.Ai[d.FindFaction(faction)].Openings[k];
-        var slots = o.BuildOrder.Where(s => s.Action == AiStepAction.Build).Select(s => d.Buildings[s.Target].Slot).ToHashSet();
+        ImmutableArray<AiStep> order = StepsOf(o, list);
+        var slots = order.Where(s => s.Action == AiStepAction.Build).Select(s => d.Buildings[s.Target].Slot).ToHashSet();
         slots.Add(BuildingSlot.TownHall);
-        for (int i = 0; i < o.BuildOrder.Length; i++)
+        for (int i = 0; i < order.Length; i++)
         {
-            AiStep s = o.BuildOrder[i];
+            AiStep s = order[i];
             if (s.Action != AiStepAction.Research) continue;
             TechDef t = d.Techs[s.Target];
-            if (!slots.Contains(t.ResearchedAtSlot)) problems.Add($"{faction} {o.Id} step {i + 1} ({s.TargetKey}): no step places a {t.ResearchedAtSlot}");
+            if (!slots.Contains(t.ResearchedAtSlot)) problems.Add($"{Who(faction, o, list)} step {i + 1} ({s.TargetKey}): no step places a {t.ResearchedAtSlot}");
         }
         return problems;
     }
 
     /// <summary>
-    /// D21 (the brief's criterion 1, restated for any data): every build or research step of opening <paramref name="k"/>
-    /// whose required building or tech no earlier step (or the hall) gives, as "faction id step n (key): needs X".
+    /// D21 (the brief's criterion 1, restated for any data): every build or research step of opening <paramref name="k"/>'s
+    /// <paramref name="list"/> whose required building or tech no earlier step (or the hall) gives, as "faction id step n (key): needs X".
     /// </summary>
-    internal static List<string> OrderProblems(GameData d, string faction, int k)
+    internal static List<string> OrderProblems(GameData d, string faction, int k, string list = MainList)
     {
         var problems = new List<string>();
         int f = d.FindFaction(faction);
         AiOpening o = d.Ai[f].Openings[k];
+        ImmutableArray<AiStep> order = StepsOf(o, list);
         var built = new HashSet<int> { d.Buildings.Select((b, i) => (b, i)).Single(x => x.b.Faction == f && x.b.Slot == BuildingSlot.TownHall).i };
         var researched = new HashSet<int>();
-        for (int i = 0; i < o.BuildOrder.Length; i++)
+        for (int i = 0; i < order.Length; i++)
         {
-            AiStep s = o.BuildOrder[i];
-            string where = $"{faction} {o.Id} step {i + 1} ({s.TargetKey})";
+            AiStep s = order[i];
+            string where = $"{Who(faction, o, list)} step {i + 1} ({s.TargetKey})";
             if (s.Action == AiStepAction.Build)
             {
                 foreach (int t in d.Buildings[s.Target].RequiresTechs) if (!researched.Contains(t)) problems.Add($"{where}: needs {d.Techs[t].Key}");
@@ -190,27 +236,45 @@ public class AiContentQaTests
         return o.AttackMinCost == recomputed ? null : $"{faction} {o.Id}: minArmyCost {o.AttackMinCost} vs recomputed {recomputed}";
     }
 
+    /// <summary>D39: every oracle over every list a seat can play (<see cref="Lists"/>).</summary>
     [Theory]
-    [MemberData(nameof(Openings))]
-    public void Shipped_PassesEveryOracle(string faction, int k)
+    [MemberData(nameof(Lists))]
+    public void Shipped_PassesEveryOracle(string faction, int k, string list)
     {
-        List<string> problems = CompositionProblems(Data, faction, k).Concat(ResearchProblems(Data, faction, k)).Concat(OrderProblems(Data, faction, k)).ToList();
+        List<string> problems = CompositionProblems(Data, faction, k, list).Concat(ResearchProblems(Data, faction, k, list)).Concat(OrderProblems(Data, faction, k, list)).ToList();
         Assert.True(problems.Count == 0, string.Join("\n", problems));
+    }
+
+    /// <summary>D39: the theory data covers every list: one row per opening for <c>buildOrder</c>, plus one per entry, counted from the loaded data (rule 59: no literal).</summary>
+    [Fact]
+    public void Lists_AreEveryListOfEveryShippedOpening()
+    {
+        int want = 0;
+        foreach (string faction in FactionIds)
+            foreach (AiOpening o in Data.Ai[Data.FindFaction(faction)].Openings)
+            {
+                want += 1;
+                for (int d = 0; d < o.BuildOrders.Length; d++)
+                    if (o.BuildOrders[d].Length > 0) want++;
+                foreach (AiDifficulty diff in Enum.GetValues<AiDifficulty>())
+                    Assert.Contains(ListsOf(o), l => StepsOf(o, l) == o.BuildOrderFor(diff)); // every seat's list is one of them
+            }
+        Assert.Equal(want, Lists().Count());
     }
 
     // ---------- (a) another faction's id ----------
 
-    public static TheoryData<string, string, int> ActionsPerOpening()
+    public static TheoryData<string, string, int, string> ActionsPerOpening()
     {
-        var rows = new TheoryData<string, string, int>();
-        foreach ((string faction, int k) in Openings().Select(r => ((string)r[0], (int)r[1])))
-            foreach (string action in new[] { "build", "train", "research" }) rows.Add(faction, action, k);
+        var rows = new TheoryData<string, string, int, string>();
+        foreach ((string faction, int k, string list) in Lists().Select(r => ((string)r[0], (int)r[1], (string)r[2])))
+            foreach (string action in new[] { "build", "train", "research" }) rows.Add(faction, action, k, list);
         return rows;
     }
 
     [Theory]
     [MemberData(nameof(ActionsPerOpening))]
-    public void A_AStepNamingTheOtherFactionsId_IsRefusedAtItsId(string faction, string action, int k)
+    public void A_AStepNamingTheOtherFactionsId_IsRefusedAtItsId(string faction, string action, int k, string list)
     {
         int other = Data.FindFaction(Other(faction));
         (string kind, string id) = action switch
@@ -220,9 +284,9 @@ public class AiContentQaTests
             _ => ("tech", Data.Techs.First(t => t.Faction == other).Key),
         };
         // The research step swapped is the faction's own tech's, so the order stays one step per (at, do, id).
-        int i = StepIndex(faction, k, action, action == "research" ? Data.Techs.First(t => t.Faction == Data.FindFaction(faction)).Key : null);
-        DataLoadResult r = LoadWithAi(faction, root => Steps(root, k)[i]!["id"] = id);
-        AssertRefused(r, faction, $"openings[{k}].buildOrder[{i}].id", $"{kind} '{id}' belongs to faction '{Other(faction)}', not '{faction}'");
+        int i = StepIndex(faction, k, action, action == "research" ? Data.Techs.First(t => t.Faction == Data.FindFaction(faction)).Key : null, list);
+        DataLoadResult r = LoadWithAi(faction, root => Steps(root, k, list)[i]!["id"] = id);
+        AssertRefused(r, faction, $"openings[{k}].{list}[{i}].id", $"{kind} '{id}' belongs to faction '{Other(faction)}', not '{faction}'");
     }
 
     [Theory]
@@ -237,73 +301,75 @@ public class AiContentQaTests
 
     // ---------- (b) an Age II unit in the Age I mix ----------
 
-    public static TheoryData<string, int, string> AgeTwoOnlyUnits()
+    /// <summary>D39: per list, the Age II units no Age I step of that list can train.</summary>
+    public static TheoryData<string, int, string, string> AgeTwoOnlyUnits()
     {
-        var rows = new TheoryData<string, int, string>();
-        foreach ((string faction, int k) in Openings().Select(r => ((string)r[0], (int)r[1])))
+        var rows = new TheoryData<string, int, string, string>();
+        foreach ((string faction, int k, string list) in Lists().Select(r => ((string)r[0], (int)r[1], (string)r[2])))
         {
             AiOpening o = Opening(faction, k);
+            ImmutableArray<AiStep> order = StepsOf(o, list);
             foreach (int u in o.Compositions[1].Units.Except(o.Compositions[0].Units))
                 if (Data.Units[u].RequiresTechs.Length > 0 || Data.Buildings[Data.Units[u].TrainedAtTypeId].RequiresTechs.Length > 0
-                    || !o.BuildOrder.Any(s => s.Action == AiStepAction.Build && s.Target == Data.Units[u].TrainedAtTypeId && s.Trigger == AiStepTrigger.Pop))
-                    rows.Add(faction, k, Data.Units[u].Key);
+                    || !order.Any(s => s.Action == AiStepAction.Build && s.Target == Data.Units[u].TrainedAtTypeId && s.Trigger == AiStepTrigger.Pop))
+                    rows.Add(faction, k, list, Data.Units[u].Key);
         }
         return rows;
     }
 
-    /// <summary>The loader takes it (a faction unit); the Age I oracle names it, and the page-file pin names the opening's Age I table.</summary>
+    /// <summary>The loader takes it (a faction unit); the Age I oracle names it on the list, and the page-file pin names the opening's Age I table.</summary>
     [Theory]
     [MemberData(nameof(AgeTwoOnlyUnits))]
-    public void B_AnAgeIIUnitInTheAgeIMix_FailsNamingIt(string faction, int k, string unit)
+    public void B_AnAgeIIUnitInTheAgeIMix_FailsNamingIt(string faction, int k, string list, string unit)
     {
         GameData d = AiScenes.DataWithAi(faction, root => Composition(root.AsObject(), k, 1)[unit] = 10);
-        string who = $"{faction} {Opening(faction, k).Id}";
-        Assert.Contains(CompositionProblems(d, faction, k), p => p.StartsWith($"{who} Age I {unit}:", StringComparison.Ordinal));
+        AiOpening o = Opening(faction, k);
+        Assert.Contains(CompositionProblems(d, faction, k, list), p => p.StartsWith($"{Who(faction, o, list)} Age I {unit}:", StringComparison.Ordinal));
         Assert.Contains(AiContentTests.Problems(d, faction, PageTables.FactionLines(faction)),
-            p => p.StartsWith($"{who} composition age 1:", StringComparison.Ordinal));
+            p => p.StartsWith($"{faction} {o.Id} composition age 1:", StringComparison.Ordinal));
     }
 
     // ---------- (c) the same at + do + id twice ----------
 
-    public static TheoryData<string, string, int> AllActionsPerOpening()
+    public static TheoryData<string, string, int, string> AllActionsPerOpening()
     {
-        var rows = new TheoryData<string, string, int>();
-        foreach ((string faction, int k) in Openings().Select(r => ((string)r[0], (int)r[1])))
-            foreach (string action in new[] { "train", "build", "research", "expand" }) rows.Add(faction, action, k);
+        var rows = new TheoryData<string, string, int, string>();
+        foreach ((string faction, int k, string list) in Lists().Select(r => ((string)r[0], (int)r[1], (string)r[2])))
+            foreach (string action in new[] { "train", "build", "research", "expand" }) rows.Add(faction, action, k, list);
         return rows;
     }
 
     [Theory]
     [MemberData(nameof(AllActionsPerOpening))]
-    public void C_AStepWrittenTwice_IsRefusedAtTheSecond(string faction, string action, int k)
+    public void C_AStepWrittenTwice_IsRefusedAtTheSecond(string faction, string action, int k, string list)
     {
-        int i = StepIndex(faction, k, action), n = -1;
+        int i = StepIndex(faction, k, action, list: list), n = -1;
         DataLoadResult r = LoadWithAi(faction, root =>
         {
-            JsonNode copy = JsonNode.Parse(Steps(root, k)[i]!.ToJsonString())!;
+            JsonNode copy = JsonNode.Parse(Steps(root, k, list)[i]!.ToJsonString())!;
             if (action == "train") copy["count"] = 1; // another count is still the same step
-            Steps(root, k).Add(copy);
-            n = Steps(root, k).Count - 1;
+            Steps(root, k, list).Add(copy);
+            n = Steps(root, k, list).Count - 1;
         });
-        AssertRefused(r, faction, $"openings[{k}].buildOrder[{n}]", $"the same step as openings[{k}].buildOrder[{i}]");
+        AssertRefused(r, faction, $"openings[{k}].{list}[{n}]", $"the same step as openings[{k}].{list}[{i}]");
     }
 
     // ---------- (d) a pop off the half-pop grid ----------
 
     [Theory]
-    [MemberData(nameof(Openings))]
-    public void D_APopNotAMultipleOfAHalf_IsRefusedAtItsField(string faction, int k)
+    [MemberData(nameof(Lists))]
+    public void D_APopNotAMultipleOfAHalf_IsRefusedAtItsField(string faction, int k, string list)
     {
         JsonObject shipped = Shipped(faction);
-        int i = Enumerable.Range(0, Steps(shipped, k).Count).First(j => Steps(shipped, k)[j]!["at"]!["pop"] != null);
-        double pop = (double)Steps(shipped, k)[i]!["at"]!["pop"]!;
-        AssertRefused(LoadWithAi(faction, root => Steps(root, k)[i]!["at"]!["pop"] = pop + 0.25), faction, $"openings[{k}].buildOrder[{i}].at.pop",
+        int i = Enumerable.Range(0, Steps(shipped, k, list).Count).First(j => Steps(shipped, k, list)[j]!["at"]!["pop"] != null);
+        double pop = (double)Steps(shipped, k, list)[i]!["at"]!["pop"]!;
+        AssertRefused(LoadWithAi(faction, root => Steps(root, k, list)[i]!["at"]!["pop"] = pop + 0.25), faction, $"openings[{k}].{list}[{i}].at.pop",
             $"{Num(pop + 0.25)} is not a multiple of 0.5");
         double army = Opening(faction, k).AttackMinHalfPop / 2.0 + 0.25;
         AssertRefused(LoadWithAi(faction, root => AiScenes.Opening(root, k)["attack"]!["minArmyPop"] = army), faction, $"openings[{k}].attack.minArmyPop",
             $"{Num(army)} is not a multiple of 0.5");
         // The control: half a pop is on the grid.
-        Assert.True(LoadWithAi(faction, root => Steps(root, k)[i]!["at"]!["pop"] = pop + 0.5).Ok);
+        Assert.True(LoadWithAi(faction, root => Steps(root, k, list)[i]!["at"]!["pop"] = pop + 0.5).Ok);
     }
 
     // ---------- (e) a research no step can act on ----------
@@ -432,10 +498,14 @@ public class AiContentQaTests
                 Assert.Contains(AiContentTests.Problems(Data, faction, edited), p => p.StartsWith($"{who} composition age {age}:", StringComparison.Ordinal));
             }
 
-        // The file side: an Age I weight edited alone breaks the subset rule and the page.
+        // The file side: an Age I weight edited alone breaks the subset rule (D39: read with every list's Age I steps) and the page.
         string first = Data.Units[o.Compositions[0].Units[0]].Key;
         GameData d = AiScenes.DataWithAi(faction, root => Composition(root.AsObject(), k, 1)[first] = (double)Composition(root.AsObject(), k, 1)[first]! + 1);
-        Assert.Contains(CompositionProblems(d, faction, k), p => p.StartsWith($"{who} Age I {first}: weight", StringComparison.Ordinal));
+        foreach (string list in ListsOf(o))
+        {
+            Assert.Empty(CompositionProblems(Data, faction, k, list)); // the control: the shipped list passes
+            Assert.Contains(CompositionProblems(d, faction, k, list), p => p.StartsWith($"{Who(faction, o, list)} Age I {first}: weight", StringComparison.Ordinal));
+        }
         Assert.Contains(AiContentTests.Problems(d, faction, lines), p => p.StartsWith($"{who} composition age 1:", StringComparison.Ordinal));
     }
 
@@ -511,6 +581,122 @@ public class AiContentQaTests
                 steps.Insert(0, moved);
             });
             Assert.Contains(OrderProblems(d, faction, k), p => p.StartsWith($"{faction} {o.Id} step 1 ({s.TargetKey}): needs ", StringComparison.Ordinal));
+        }
+    }
+
+    // ---------- D39 (BUG-1840 item 3): a forged opening with entries for one or two difficulties ----------
+
+    /// <summary>
+    /// Opening <paramref name="k"/> of the file with <c>buildOrders</c> written as one entry per difficulty id in
+    /// <paramref name="entries"/>, each a copy of its <c>buildOrder</c> (any shipped <c>buildOrders</c> replaced whole: rule 79).
+    /// An entry for all three difficulties is refused by the loader (ruling (a)), so the shapes are one entry and two.
+    /// </summary>
+    private static void WriteEntries(JsonObject root, int k, string entries)
+    {
+        JsonObject o = AiScenes.Opening(root, k).AsObject();
+        var lists = new JsonObject();
+        foreach (string e in entries.Split(',')) lists[e] = JsonNode.Parse(o["buildOrder"]!.ToJsonString());
+        o["buildOrders"] = lists;
+    }
+
+    /// <summary>Every shipped opening with each forged shape: a <c>hard</c> entry alone, and beside a <c>normal</c> or an <c>easy</c> one.</summary>
+    public static TheoryData<string, int, string> ForgedEntryShapes()
+    {
+        var rows = new TheoryData<string, int, string>();
+        foreach ((string faction, int k) in Openings().Select(r => ((string)r[0], (int)r[1])))
+            foreach (string entries in new[] { "hard", "normal,hard", "easy,hard" }) rows.Add(faction, k, entries);
+        return rows;
+    }
+
+    /// <summary>The forged copy loads, <see cref="ListsOf"/> names <c>buildOrder</c> and each entry, and every oracle passes on each list.</summary>
+    [Theory]
+    [MemberData(nameof(ForgedEntryShapes))]
+    public void AnEntryForOneOrTwoDifficulties_LoadsAndEveryListPassesTheOracles(string faction, int k, string entries)
+    {
+        GameData d = AiScenes.DataWithAi(faction, root => WriteEntries(root.AsObject(), k, entries));
+        AiOpening o = d.Ai[d.FindFaction(faction)].Openings[k];
+        Assert.Equal(new[] { MainList }.Concat(entries.Split(',').Select(e => EntryPrefix + e)), ListsOf(o));
+        foreach (string list in ListsOf(o))
+        {
+            List<string> problems = CompositionProblems(d, faction, k, list).Concat(ResearchProblems(d, faction, k, list)).Concat(OrderProblems(d, faction, k, list)).ToList();
+            Assert.True(problems.Count == 0, $"{list}:\n" + string.Join("\n", problems));
+        }
+    }
+
+    /// <summary>Check (a) on the <c>hard</c> entry alone: another faction's building, unit or tech there is refused at the entry's path, naming the entry.</summary>
+    [Theory]
+    [MemberData(nameof(ForgedEntryShapes))]
+    public void AnEntryForOneOrTwoDifficulties_ItsHardEntryNamingTheOtherFactionsId_IsRefusedNamingTheEntry(string faction, int k, string entries)
+    {
+        int other = Data.FindFaction(Other(faction));
+        string ownTech = Data.Techs.First(t => t.Faction == Data.FindFaction(faction)).Key;
+        foreach ((string action, string kind, string id) in new[]
+        {
+            ("build", "building", Data.Buildings.First(b => b.Faction == other && b.Slot == BuildingSlot.House).Key),
+            ("train", "unit", Data.Units.First(u => u.Faction == other && u.Slot == UnitSlot.Worker).Key),
+            ("research", "tech", Data.Techs.First(t => t.Faction == other).Key),
+        })
+        {
+            int i = StepIndex(faction, k, action, action == "research" ? ownTech : null);
+            DataLoadResult r = LoadWithAi(faction, root =>
+            {
+                WriteEntries(root, k, entries);
+                Steps(root, k, EntryPrefix + "hard")[i]!["id"] = id;
+            });
+            AssertRefused(r, faction, $"openings[{k}].buildOrders.hard[{i}].id", $"{kind} '{id}' belongs to faction '{Other(faction)}', not '{faction}'");
+        }
+    }
+
+    /// <summary>Checks (c) and (d) on the <c>hard</c> entry alone: a step written twice and a pop off the half-pop grid, each refused at the entry's path.</summary>
+    [Theory]
+    [MemberData(nameof(ForgedEntryShapes))]
+    public void AnEntryForOneOrTwoDifficulties_ItsHardEntryWithAStepTwiceOrAnOffGridPop_IsRefusedNamingTheEntry(string faction, int k, string entries)
+    {
+        const string hard = EntryPrefix + "hard";
+        int i = StepIndex(faction, k, "build"), n = -1;
+        DataLoadResult twice = LoadWithAi(faction, root =>
+        {
+            WriteEntries(root, k, entries);
+            Steps(root, k, hard).Add(JsonNode.Parse(Steps(root, k, hard)[i]!.ToJsonString()));
+            n = Steps(root, k, hard).Count - 1;
+        });
+        AssertRefused(twice, faction, $"openings[{k}].{hard}[{n}]", $"the same step as openings[{k}].{hard}[{i}]");
+
+        JsonObject shipped = Shipped(faction);
+        int p = Enumerable.Range(0, Steps(shipped, k).Count).First(j => Steps(shipped, k)[j]!["at"]!["pop"] != null);
+        double pop = (double)Steps(shipped, k)[p]!["at"]!["pop"]!;
+        DataLoadResult offGrid = LoadWithAi(faction, root =>
+        {
+            WriteEntries(root, k, entries);
+            Steps(root, k, hard)[p]!["at"]!["pop"] = pop + 0.25;
+        });
+        AssertRefused(offGrid, faction, $"openings[{k}].{hard}[{p}].at.pop", $"{Num(pop + 0.25)} is not a multiple of 0.5");
+    }
+
+    /// <summary>
+    /// The oracle of (b) / (g) on the <c>hard</c> entry alone: the entry loses every step that places an Age I unit's
+    /// building, so the Age I oracle names that unit on <c>buildOrders.hard</c> while <c>buildOrder</c> and any other
+    /// entry still pass (the loader has no order rule, so the copy loads).
+    /// </summary>
+    [Theory]
+    [MemberData(nameof(ForgedEntryShapes))]
+    public void AnEntryForOneOrTwoDifficulties_ItsHardEntryPlacingNoAgeIBuilding_FailsTheAgeIOracleNamingTheEntry(string faction, int k, string entries)
+    {
+        AiOpening shipped = Opening(faction, k);
+        UnitDef unit = shipped.Compositions[0].Units.Select(u => Data.Units[u]).First(u => Data.Buildings[u.TrainedAtTypeId].Slot != BuildingSlot.TownHall);
+        GameData d = AiScenes.DataWithAi(faction, root =>
+        {
+            WriteEntries(root.AsObject(), k, entries);
+            JsonArray steps = Steps(root.AsObject(), k, EntryPrefix + "hard");
+            foreach (JsonNode? s in steps.Where(s => (string)s!["do"]! == "build" && (string?)s["id"] == unit.TrainedAt).ToArray()) steps.Remove(s);
+        });
+        AiOpening o = d.Ai[d.FindFaction(faction)].Openings[k];
+        foreach (string list in ListsOf(o))
+        {
+            List<string> problems = CompositionProblems(d, faction, k, list);
+            if (list == EntryPrefix + "hard")
+                Assert.Contains($"{faction} {o.Id} buildOrders.hard Age I {unit.Key}: no step before Age II places {unit.TrainedAt}", problems);
+            else Assert.True(problems.Count == 0, $"{list}:\n" + string.Join("\n", problems));
         }
     }
 }

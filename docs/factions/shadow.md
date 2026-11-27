@@ -79,8 +79,10 @@ the Shadow are drawn at the template's size). The Hound of Shadow needs Age II (
   blackwood and dark sailcloth (saves art time).
 - **Hound of Shadow (unique, Age II):** Passive **Pack Hunter**: +10% damage for each other Hound of Shadow within 8 m
   (max +30%): its owner's own Hounds only, at most three counted. **At most 7 Hounds alive** at once, as in the legend.
-  The pack bonus has its field since M8-3 (`passives` `nearbyOwn`, Schema gaps G3), the cap has none (G4); neither is in
-  the data yet.
+  The pack bonus has its field since M8-3 (`passives` `nearbyOwn`, Schema gaps G3) and the limit since M8-4 (`units.json`
+  `maxAlive`, G4: the Hounds alive plus those queued count, and it stops training only, never a summon); neither is in the
+  data yet (the Hound's row lands with the roster). The limit check reads the number in the Hound's description from the
+  field (D39, `Content/UnitLimitText`).
 
 ### Summoned unit
 
@@ -287,7 +289,9 @@ them: two early, then one every 7 pop from pop 20, twelve in all.
 
 **Army composition (`compositions`), weights by pop.** Age I lists only the units the Age I steps can train (the Hound
 waits for Age II, the K'risnan Sorcerer and the Edur Ram for their halls), so its weights sum to 65. Hounds at 20% of an
-army of 70 pop are about 5 (15 pop), under the cap of 7, which no field holds yet (G4).
+army of 70 pop are about 5 (15 pop), under the limit of 7 (`maxAlive`, G4, built by M8-4). At the limit the computer player
+trains the other units of the Age II mix instead (it never waits on the Hound), so the army goes on growing; not measured
+for the Shadow.
 
 | Unit | Age I | Age II |
 | --- | --- | --- |
@@ -347,7 +351,7 @@ bonus** is extra gather rate (docs/02: Hard's 40%); **expands after** is the ear
 ## Schema gaps (D-R38)
 
 What each mechanic on this page needs from the loader on `main` (2026-11-14; G1 re-read 2026-11-18 by D34: built by
-M8-2; G2 and G3 re-read 2026-11-24 by D35: built by M8-3). Every mechanic of the faction bonus, the unit notes, the summoned unit, the abilities, the techs and the AI
+M8-2; G2 and G3 re-read 2026-11-24 by D35: built by M8-3; G4 re-read 2026-11-26 by D39: built by M8-4). Every mechanic of the faction bonus, the unit notes, the summoned unit, the abilities, the techs and the AI
 sketch is listed once: either the field that holds it today,
 or a gap row below with the field the data track would want (a proposal; the sim track names the real one).
 
@@ -363,7 +367,7 @@ or a gap row below with the field the data track would want (a proposal; the sim
 | Stand-still stealth anywhere (Shadow Archer) | Unit notes | `units.json` `stillStealth` `{ status, delay }` (M8-2; gap G1, built) |
 | First shot from stealth +50% (Shadow Archer) | Unit notes | `units.json` `attack.fromStealthBonus` (M8-3; gap G2, built) |
 | Pack Hunter: +10% per other Hound within 8 m, max +30% | Unit notes | `units.json` `passives` `{ trigger: nearbyOwn, units, radius, damageBonus, maxStacks }` (M8-3; gap G3, built) |
-| At most 7 Hounds alive | Unit notes | gap G4 |
+| At most 7 Hounds alive | Unit notes | `units.json` `maxAlive` (M8-4; gap G4, built) |
 | Shadow-step: group teleport, siege excepted, formation kept, snap to free cells | Abilities | gap G5 (`teleport` is planned, refused) |
 | Summon Wraiths: 3 units beside the caster for 20 s, 1.0 s cast, 50 s cooldown | Abilities | `kind` `summon`, effect `spawn` `{ unit, count, lifetime }` (M4-4b-3b) |
 | Wraith has a unit row with no slot and no producer | Summoned unit | gap G6 |
@@ -380,7 +384,7 @@ or a gap row below with the field the data track would want (a proposal; the sim
 | G1 | Shadow Archer: Stealthed after 3 s without moving or attacking, anywhere | **Built (M8-2, 2026-11-17):** the field is on `main` (docs/03 "Implementation (M8-2)"), on test data only; no shipped unit carries it. Before M8-2, `forestStealth` was faction-wide and needed a tree, and no unit field gave a stealth | `units.json` `stillStealth { "status": "stealthed", "delay": 3 }` (docs/03 "For the data track (M8-2)"): held while the unit has not moved, attacked or cast, or lost hp for `delay`; the Archer's row carries it when the roster lands |
 | G2 | Shadow Archer: the first shot from stealth deals +50% | **Built (M8-3, 2026-11-20):** the field is on `main` (docs/03 "Implementation (M8-3)"), on test data only; no shipped unit carries it. Before M8-3 no attack field read the attacker's stealth (`damageBonus` was a status's, frenzied kind) | `units.json` `shadow_archer` `"attack": { "fromStealthBonus": 0.5 }`, beside its other attack fields (docs/03 "For the data track (M8-3)"): a hit whose attacker is Stealthed, and not Revealed, when its damage is worked out (an arrow when it lands) deals ×1.5, from any stealth; the Archer's row carries it when the roster lands |
 | G3 | Pack Hunter: +10% damage per other Hound within 8 m, max +30% | **Built (M8-3, 2026-11-20):** the trigger is on `main` (docs/03 "Implementation (M8-3)"), on test data only; no shipped unit carries it. Before M8-3 the passive triggers were `whenBelowHp`, `onDeath`, `onHit`, and nothing counted nearby friends | `units.json` `shadow_hound` `"passives": [{ "trigger": "nearbyOwn", "units": ["shadow_hound"], "radius": 8, "damageBonus": 0.1, "maxStacks": 3 }]` (docs/03 "For the data track (M8-3)"; the page proposed `nearbyAllies`): the owner's other live Hounds whose centre is within 8 m, counted when the hit's damage is worked out, at most 3; the Hound's row carries it when the roster lands |
-| G4 | At most 7 Hounds alive at once | No per-type cap; only the population cap limits training | `units.json` `maxAlive` 7: live units plus queue items count, a train command at the cap is refused (and the AI skips the unit while at it) |
+| G4 | At most 7 Hounds alive at once | **Built (M8-4, 2026-11-26):** the field is on `main` (docs/03 "Implementation (M8-4)"), on test data only; no shipped unit carries it. Before M8-4 there was no per-type limit, and only the population cap limited training | `units.json` `shadow_hound` `"maxAlive": 7`, beside its other fields (docs/03 "For the data track (M8-4)"): the player's live Hounds, however made (a summon included), plus those its queued items will spawn (a pack item counts its whole pack; the Hound's `spawnCount` is 1); a Train that would pass 7 is refused, nothing paid (the button reads "Limit reached"). Training only: a summon is never refused. The computer player trains the other units of its mix at the limit, and a `train` step of Hounds counts as done there. The Hound's row carries it when the roster lands |
 | G5 | Shadow-step: the caster and own non-siege units within 4 m move to the point, keeping their formation; blocked cells snap to the nearest free one | `teleport` is in `PlannedAbilityEffectKindIds`: refused "not supported yet" | effect `{ "kind": "teleport", "exceptSlots": ["siege"] }` on a `targetGround` ability, its `radius` the gather radius, `affects` `own_units`; formation kept and the snap as the rule, not fields |
 | G6 | The Wraith as a unit type with no slot, no producer, no cost or train time | `units.json` takes one unit per template slot (`CheckSlots`) and requires `trainedAt`, `cost`, `pop`, `trainTime`; docs/03's M4-4b-3b example names `shadow_wraith` as "an ordinary units.json entry", which the slot rule refuses | `"slot": "summoned"`: outside the one-per-slot rule, no `trainedAt` / `cost` / `pop` / `trainTime` (refused if given), usable only as a `spawn` effect's `unit` |
 | G7 | Wraith-binding: K'risnan Sorcerers gain Summon Wraiths | Tech `stat`s are `attack`, `armor`, `range`, `hp`, `abilityCooldown`, `statusDuration`; an ability has no `requires` | `abilities.json` `requires` `["shadow_wraith_binding"]` (the cast refused, the button disabled, until researched), as units' `requires` works |
@@ -398,12 +402,15 @@ The words the Shadow files would carry, for the owner to read (codenames, as the
 are the table above, and none of them appears here). Each description is one or two short sentences of at most 144
 characters, names only Shadow things, and says "needs X" exactly for a building's requirements (the content pins' rules
 for every faction). The Archer's, the Hound's and the two abilities' numbers are the page's; they are copied only once
-their schema exists (G1-G7). G1-G3 exist (M8-2, M8-3), and since D35 the content checks read the two bonuses in a unit's
-description: a unit with `attack.fromStealthBonus` must state it ("50% more damage" in its first-shot sentence), one with
-a `nearbyOwn` passive its per-Hound percent, its cap and its reach (`Content/UnitHitBonusText`); the Archer's and the
+their schema exists (G1-G7). G1-G4 exist (M8-2, M8-3, M8-4), and since D35 the content checks read the two bonuses in a
+unit's description: a unit with `attack.fromStealthBonus` must state it ("50% more damage" in its first-shot sentence), one
+with a `nearbyOwn` passive its per-Hound percent, its cap and its reach (`Content/UnitHitBonusText`); the Archer's and the
 Hound's sentences below pass it. Since D-H10 (BUG-1690) that check reads a percentage as a hit bonus only when the unit
 has the field or the sentence has first-shot or pack words ("other ... within", "each other"), so a sentence stating a
-slow or a frenzy ("each bite slows by 20%") is left to the passive and status pins.
+slow or a frenzy ("each bite slows by 20%") is left to the passive and status pins. Since D39 the content checks read the
+limit too: a unit with `maxAlive` must state it after "at most" or "no more than" in a sentence about living at once ("No
+more than 7 can live at once"), and a sentence stating a limit needs the field, with the field's number
+(`Content/UnitLimitText`); the Hound's sentence below passes it.
 
 | File | Id | Name (`displayName`) | Description (`description`) |
 | --- | --- | --- | --- |
@@ -463,7 +470,7 @@ order; the last is Q4. Where the page already reads that way, the line says wher
 - The Hound of Shadow's `scale` is 1. Already so: the Units table's Scale column.
 - Losing hit points breaks the Shadow Archer's stand-still stealth, and the +50% first shot is the Archer's alone, from
   either stealth (forest or stand-still). Already so: Schema gaps G1 and G2.
-- The 7-Hound cap counts Hounds alive plus queued. Already so: Schema gap G4.
+- The 7-Hound cap counts Hounds alive plus queued. Already so: Schema gap G4 (built so by M8-4).
 - Shadow-step carries own units only: siege stays, Wraiths go. Already so: "own non-siege units" (Abilities, G5).
 - The faction's `displayName` is "Shadow" and its bonus "Children of Shadow" (the owner's taste: it starts like the
   Teblor's "Children of the Mountains"). Already so: "Owner review (D-R38, proposed)".
@@ -490,3 +497,20 @@ the Archer and the Hound read this way:
   this game step joins the count one step later.
 - **The bonuses multiply** (a status's damage bonus x the first shot x the pack), each read fresh for every hit; none is
   stored.
+
+## Questions for the Producer (D39, 2026-11-26)
+
+Raised by D39 (the unit limit as built, BUG-1840 item 3), each with the developer's recommendation.
+
+1. **docs/03 "For the data track (M8-4)" still says "no content check reads it yet"** (the table's Descriptions row).
+   Since D39 `Content/UnitLimitText` reads the limit in a unit's description and holds it to `maxAlive`, both ways. It is
+   the sim track's page, outside D39's files. Recommendation: the sim's next docs edit says "`Content/UnitLimitText` (D39)
+   reads it: a stated limit must be the field's number, and a unit with the field must state it".
+2. **The limit's page pin is not in the readiness check.** `Content/UnitLimitPagePin.RowProblems` (the G4 row against the
+   Hound's note and its Owner review sentence) runs in its own class, `Content/UnitLimitPinTests`; wiring it into
+   `PagePinReadinessTests.Problems`, as D35 did for `HitBonusPagePin`, edits an existing file, outside this task's "new
+   files" scope. Recommendation: the next data task that touches the readiness check adds the one line.
+3. **A pack with a limit never reaches it by training when the limit is not a multiple of the pack.** With `spawnCount` 3
+   and `maxAlive` 7, training stops at 6 (6 + 3 is above 7), so "No more than 7 can live at once" is true but only a summon
+   could make the seventh. The Hound's `spawnCount` is 1, so nothing on this page changes. Recommendation: no rule now; a
+   future pack unit with a limit takes a multiple of its pack, or its description names the trained number.
