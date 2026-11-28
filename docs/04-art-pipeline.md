@@ -722,7 +722,13 @@ types are models; the boxes left are the Malazan Wickan Corral, Armory, Cadre To
   - **Refused with a `FAIL` line, no model written:** no parts, an unknown shape, a size not three numbers over 0, an awning
     thicker than 0.3, a role with no colour and not a team part, a part under the ground, a kit part outside the footprint, a
     `keep` box holding no face or with no `source`, an entry with neither `source` nor `kit` (`tools/art/test-kit-errors.ps1` proves each, and a
-    good kit, with Blender in about a minute). An entry without `kit` or `keep` runs no new line: a full re-import, two runs,
+    good kit, with Blender in about a minute). Since M6-V32 (BUG-1911) also: a size, `at` or `rotate` number that is not
+    finite (`NaN`, `Infinity`: `json.load` reads both, and every comparison with NaN passed, so the part vanished from a
+    written model) or a `true` / `false` in place of a number; a part key the builder does not know (`turn` for `rotate` was
+    ignored); `sides` under 3 or not whole, a `top` under 0, an `axis` the shape does not take; an entry with no `colours`
+    map (was a bare `KeyError`; `{}` when every part is a team part); and a colour or team role no kit part uses on an entry
+    with no source now reads "no kit part has role ..." (was "not in the source"). Every line names the entry and, for a
+    part, its index, shape and role. An entry without `kit` or `keep` runs no new line: a full re-import, two runs,
     left all 139 pre-existing model, atlas, library and `.import` files byte for byte (SHA-256 before and after each run).
   - `tools/import-assets.ps1` prints a kit's part and triangle counts (`kit: 15 parts, 174 triangles`).
 - **The types** (developer's design, owner may revisit). Every camp is one ridge tent (back left, door to the camera) and the

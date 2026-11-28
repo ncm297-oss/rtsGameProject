@@ -3,17 +3,17 @@
 # as NaN), built by Blender into a scratch repo root holding a copy of the Whirlwind's buildings.json; nothing under the
 # real repo is written. A "FAIL" case wants a FAIL line holding its text, a non-zero exit and no model written; a "RESULT"
 # case wants a model. Cases:
-#   nocolours   a kit of team parts only and no "colours" key at all          -> FAIL (any line), no model
+#   nocolours   a kit of team parts only and no "colours" key at all          -> FAIL ... has no "colours" map (BUG-1911), no model
 #   badhex      a colour "#zz0000"                                             -> FAIL, no model
-#   nan         a part whose size holds NaN (json.load reads it)               -> FAIL, no model
-#   inf         a part whose position holds Infinity                           -> FAIL, no model
+#   nan         a part whose size holds NaN (json.load reads it)               -> FAIL ... finite (BUG-1911), no model
+#   inf         a part whose position holds Infinity                           -> FAIL ... finite (BUG-1911), no model
 #   noat        a part with no "at"                                            -> FAIL ... at
 #   sides2      a cylinder with 2 sides                                        -> FAIL ... at least 3 sides
 #   turned      a part inside the footprint unturned, outside when turned 45   -> FAIL ... outside its
 #   notbuilding an id the data does not hold                                    -> FAIL ... not a building of
-#   unusedcol   a colour no part uses (a kit with no source)                   -> FAIL (the existing source rule), no model
-#   typo        a part with "turn" (not "rotate") and "role" right             -> measured: RESULT means the unknown key is ignored
-#   boolsize    a size [true, 1, 1]                                            -> measured: RESULT means a bool is read as 1
+#   unusedcol   a colour no part uses (a kit with no source)                   -> FAIL ... no kit part has role brass (BUG-1911)
+#   typo        a part with "turn" (not "rotate") and "role" right             -> FAIL ... unknown key turn (BUG-1911; was ignored)
+#   boolsize    a size [true, 1, 1]                                            -> FAIL ... finite sizes (BUG-1911; was read as 1)
 # Needs Blender 5.2 (as tools/import-assets.ps1 finds it).
 # Usage: powershell -File tools/qa/kit-errors-extra.ps1 [-Work <dir>]   prints KIT ERRORS EXTRA PASS / FAIL lines; exit 0 / 1.
 param([string]$Blender = '', [string]$Work = '')
@@ -41,17 +41,17 @@ function Entry([string]$id, [string]$colours, [string]$parts, [string]$dst = $de
 }
 $pole = '"#5a4330"'
 $cases = [ordered]@{
-    nocolours   = @{ want = 'FAIL'; text = ''; json = (Entry 'whirlwind_tent' '' $cloth) }
+    nocolours   = @{ want = 'FAIL'; text = 'whirlwind_tent: the entry has no "colours" map'; json = (Entry 'whirlwind_tent' '' $cloth) }
     badhex      = @{ want = 'FAIL'; text = ''; json = (Entry 'whirlwind_tent' '{ "pole": "#zz0000" }' "$cloth, { `"shape`": `"pole`", `"size`": [0.1, 1, 0.1], `"at`": [0, 0, 0], `"role`": `"pole`" }") }
-    nan         = @{ want = 'FAIL'; text = ''; json = (Entry 'whirlwind_tent' "{ `"pole`": $pole }" "$cloth, { `"shape`": `"box`", `"size`": [NaN, 1, 0.2], `"at`": [0, 0, 0], `"role`": `"pole`" }") }
-    inf         = @{ want = 'FAIL'; text = ''; json = (Entry 'whirlwind_tent' "{ `"pole`": $pole }" "$cloth, { `"shape`": `"box`", `"size`": [0.2, 1, 0.2], `"at`": [Infinity, 0, 0], `"role`": `"pole`" }") }
+    nan         = @{ want = 'FAIL'; text = 'whirlwind_tent: kit part 1 (box, role pole): size * is not three finite sizes over 0'; json = (Entry 'whirlwind_tent' "{ `"pole`": $pole }" "$cloth, { `"shape`": `"box`", `"size`": [NaN, 1, 0.2], `"at`": [0, 0, 0], `"role`": `"pole`" }") }
+    inf         = @{ want = 'FAIL'; text = 'whirlwind_tent: kit part 1 (box, role pole): at * is not three finite numbers'; json = (Entry 'whirlwind_tent' "{ `"pole`": $pole }" "$cloth, { `"shape`": `"box`", `"size`": [0.2, 1, 0.2], `"at`": [Infinity, 0, 0], `"role`": `"pole`" }") }
     noat        = @{ want = 'FAIL'; text = 'at'; json = (Entry 'whirlwind_tent' "{ `"pole`": $pole }" "$cloth, { `"shape`": `"box`", `"size`": [0.2, 1, 0.2], `"role`": `"pole`" }") }
     sides2      = @{ want = 'FAIL'; text = 'at least 3 sides'; json = (Entry 'whirlwind_tent' "{ `"pole`": $pole }" "$cloth, { `"shape`": `"cylinder`", `"sides`": 2, `"size`": [0.2, 1, 0.2], `"at`": [0, 0, 0], `"role`": `"pole`" }") }
     turned      = @{ want = 'FAIL'; text = 'outside its'; json = (Entry 'whirlwind_tent' "{ `"pole`": $pole }" "{ `"shape`": `"box`", `"size`": [3.4, 1, 3.4], `"at`": [0, 0, 0], `"rotate`": [0, 45, 0], `"role`": `"cloth`" }, { `"shape`": `"pole`", `"size`": [0.1, 1, 0.1], `"at`": [0, 0, 0], `"role`": `"pole`" }") }
     notbuilding = @{ want = 'FAIL'; text = 'not a building of'; json = (Entry 'whirlwind_bazaar' "{ `"pole`": $pole }" "$cloth, { `"shape`": `"pole`", `"size`": [0.1, 1, 0.1], `"at`": [0, 0, 0], `"role`": `"pole`" }" '"destination": "game/assets/models/whirlwind/whirlwind_bazaar/whirlwind_bazaar.glb"') }
-    unusedcol   = @{ want = 'FAIL'; text = ''; json = (Entry 'whirlwind_tent' "{ `"pole`": $pole, `"brass`": `"#b08d57`" }" "$cloth, { `"shape`": `"pole`", `"size`": [0.1, 1, 0.1], `"at`": [0, 0, 0], `"role`": `"pole`" }") }
-    typo        = @{ want = 'MEASURE'; text = ''; json = (Entry 'whirlwind_tent' "{ `"pole`": $pole }" "$cloth, { `"shape`": `"box`", `"size`": [0.2, 1, 0.6], `"at`": [0, 0, 0], `"turn`": [0, 90, 0], `"role`": `"pole`" }") }
-    boolsize    = @{ want = 'MEASURE'; text = ''; json = (Entry 'whirlwind_tent' "{ `"pole`": $pole }" "$cloth, { `"shape`": `"box`", `"size`": [true, 1, 0.2], `"at`": [0, 0, 0], `"role`": `"pole`" }") }
+    unusedcol   = @{ want = 'FAIL'; text = 'whirlwind_tent: colour brass: no kit part has role brass'; json = (Entry 'whirlwind_tent' "{ `"pole`": $pole, `"brass`": `"#b08d57`" }" "$cloth, { `"shape`": `"pole`", `"size`": [0.1, 1, 0.1], `"at`": [0, 0, 0], `"role`": `"pole`" }") }
+    typo        = @{ want = 'FAIL'; text = 'whirlwind_tent: kit part 1 (box, role pole): unknown key turn'; json = (Entry 'whirlwind_tent' "{ `"pole`": $pole }" "$cloth, { `"shape`": `"box`", `"size`": [0.2, 1, 0.6], `"at`": [0, 0, 0], `"turn`": [0, 90, 0], `"role`": `"pole`" }") }
+    boolsize    = @{ want = 'FAIL'; text = 'whirlwind_tent: kit part 1 (box, role pole): size * is not three finite sizes over 0'; json = (Entry 'whirlwind_tent' "{ `"pole`": $pole }" "$cloth, { `"shape`": `"box`", `"size`": [true, 1, 0.2], `"at`": [0, 0, 0], `"role`": `"pole`" }") }
 }
 $failures = New-Object System.Collections.Generic.List[string]
 foreach ($name in $cases.Keys) {

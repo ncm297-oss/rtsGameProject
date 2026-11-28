@@ -154,6 +154,10 @@ def mark_team_faces(b, bm, me, names):
 # ---- M6-V31: the kit ----
 
 KIT_SHAPES = ("box", "ridge", "pyramid", "cone", "cylinder", "pole", "awning")
+# BUG-1911: every key a part may carry; any other (a typo: "turn" for "rotate") is refused, not ignored.
+KIT_KEYS = ("shape", "size", "at", "role", "rotate", "sides", "axis", "top")
+# The axes a shape takes (shape_geometry): a ridge's ridge line, a cylinder's axis.
+KIT_AXES = {"ridge": ("x", "z"), "cylinder": ("x", "y", "z")}
 # The gap the view keeps between a fitted model and each footprint edge (game/scripts/BuildingModels.cs FitMargin). A kit
 # with no source is drawn in meters at that fit, so its parts must stay inside it.
 FIT_MARGIN = 0.25
@@ -238,23 +242,40 @@ def kit_part_matrix(part):
     return Matrix.Translation(Vector([float(a) for a in part["at"]])) @ rot
 
 
+def is_number(x):
+    """A finite JSON number: not a bool (Python's bool is an int), not NaN or Infinity (json.load reads both)."""
+    return isinstance(x, (int, float)) and not isinstance(x, bool) and math.isfinite(x)
+
+
 def check_kit(b, footprint):
-    """Fails with a clear line on a bad kit: no parts, an unknown shape, a size not three positive numbers, an awning
-    thicker than AWNING_MAX, a role with no colour, a part below the ground or (a kit with no source, drawn in meters)
-    outside its footprint less FIT_MARGIN."""
+    """Fails with a clear line on a bad kit: no parts, a part key the builder does not know (a typo would be ignored),
+    an unknown shape, a size not three finite numbers over 0, an at or rotate not three finite numbers (BUG-1911: NaN
+    passes every comparison, and the part vanished from the model), an awning thicker than AWNING_MAX, a role with no
+    colour, a part below the ground or (a kit with no source, drawn in meters) outside its footprint less FIT_MARGIN."""
     parts = b["kit"]
     if not isinstance(parts, list) or not parts:
         fail(f"{b['id']}: kit has no parts")
     roles = set(b.get("colours", {})) | set(b.get("team", []))
     for i, p in enumerate(parts):
         label = f"{b['id']}: kit part {i} ({p.get('shape', '?')}, role {p.get('role', '?')})"
+        unknown = sorted(k for k in p if k not in KIT_KEYS)
+        if unknown:
+            fail(f"{label}: unknown key {', '.join(unknown)} (a part takes {', '.join(KIT_KEYS)})")
         if p.get("shape") not in KIT_SHAPES:
             fail(f"{label}: shape not one of {', '.join(KIT_SHAPES)}")
-        size, at = p.get("size"), p.get("at")
-        if not isinstance(size, list) or len(size) != 3 or any(not isinstance(s, (int, float)) or s <= 0 for s in size):
-            fail(f"{label}: size {size} is not three sizes over 0")
-        if not isinstance(at, list) or len(at) != 3 or any(not isinstance(a, (int, float)) for a in at):
-            fail(f"{label}: at {at} is not three numbers")
+        size, at, rotate = p.get("size"), p.get("at"), p.get("rotate", [0, 0, 0])
+        if not isinstance(size, list) or len(size) != 3 or any(not is_number(s) or s <= 0 for s in size):
+            fail(f"{label}: size {size} is not three finite sizes over 0")
+        if not isinstance(at, list) or len(at) != 3 or any(not is_number(a) for a in at):
+            fail(f"{label}: at {at} is not three finite numbers")
+        if not isinstance(rotate, list) or len(rotate) != 3 or any(not is_number(a) for a in rotate):
+            fail(f"{label}: rotate {rotate} is not three finite numbers")
+        if "top" in p and (not is_number(p["top"]) or p["top"] < 0):
+            fail(f"{label}: top {p['top']} is not a finite number of at least 0")
+        if "sides" in p and (not isinstance(p["sides"], int) or isinstance(p["sides"], bool) or p["sides"] < 3):
+            fail(f"{label}: sides {p['sides']}: a part needs a whole number of at least 3 sides")
+        if "axis" in p and p["axis"] not in KIT_AXES.get(p["shape"], ()):
+            fail(f"{label}: axis {p['axis']} is not one of {', '.join(KIT_AXES.get(p['shape'], ())) or 'none (this shape has no axis)'}")
         if p["shape"] == "awning" and size[1] > AWNING_MAX:
             fail(f"{label}: an awning {size[1]} thick, over {AWNING_MAX}: a box, not an awning")
         if p.get("role") not in roles:
@@ -369,6 +390,10 @@ def build_building(manifest, b, src_root, repo, work):
         fail(f"{b['id']}: neither a source nor a kit")
     if b.get("keep") and not b.get("source"):
         fail(f"{b['id']}: a keep box crops a source, and there is none")
+    if not isinstance(b.get("colours"), dict):
+        # BUG-1911: was a bare KeyError.
+        fail(f"{b['id']}: the entry has no \"colours\" map; every building entry needs one (its non-team materials and kit "
+             f"roles to their colours, {{}} when every part is a team part)")
     if kit is not None:
         # M6-V31: a kit with no source is drawn in meters, so it is checked against the building's footprint.
         check_kit(b, None if b.get("source") else footprint_of(b, repo))
@@ -402,7 +427,10 @@ def build_building(manifest, b, src_root, repo, work):
             fail(f"{b['id']}: source material {name} has no colour and is not a team part")
     for name in list(colours) + list(team) + [n for rule in b.get("teamFaces", []) for n in rule["materials"]]:
         if name not in names:
-            fail(f"{b['id']}: manifest names material {name}, not in the source")
+            if not b.get("source"):
+                # BUG-1911: a kit alone has no source to blame; the colour (or team role) is simply unused.
+                fail(f"{b['id']}: {'colour' if name in colours else 'team role'} {name}: no kit part has role {name}")
+            fail(f"{b['id']}: manifest names material {name}, not in the source{' or the kit' if kit is not None else ''}")
     if b.get("teamFaces"):
         team.add(TEAM_FACES)
 
