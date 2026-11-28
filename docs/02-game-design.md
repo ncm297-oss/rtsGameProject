@@ -705,13 +705,18 @@ match's draw clock runs, its countdown line sits at the top centre under the ale
    its owner and **nobody's kill** (Producer decision 2026-10-27, BUG-1044; built in M6-S5).
 
    **A spent match ends in a draw** (owner decision 2026-11-25, design in docs/01's 2026-11-25-1437 row; built in M6-S13;
-   "can still train" made exact in M6-SH3, docs/01's second 2026-11-27 row). A match is *spent* when at least two sides that
+   "can still train" made exact in M6-SH3, docs/01's second 2026-11-27 row; the drop-off clause added in M6-S15). A match is *spent* when at least two sides that
    ever built are still in, and no player still in can still train a unit. A player can still train when a unit of theirs
    is being trained, or one is waiting in a production queue and there is population room for it now (a paid unit stuck at
    the population cap does not count by itself); or when they can produce (a finished unit-producing hall, or a worker) and
    can pay for at least one unit type of their faction, in gold **and** in wood, that is not at its unit limit. What they
    can pay with is their bank, plus, **only if they have a worker and a finished drop-off building of their own** (a site
-   does not count, nor does an ally's), what their units are carrying and what is left of it on the map. Population room is
+   does not count, nor does an ally's), what their units are carrying and what is left of it on the map. A player with a
+   worker and **no** finished drop-off of their own also counts what their units carry and what is left on the map **if
+   their bank pays for one of their faction's drop-off buildings, and what is left of the bank after that price, plus the
+   carried and map resources, pays for a unit** (they can build the drop-off and then mine; the drop-off's requirements
+   are not asked: no shipped drop-off has any; M6-S15, BUG-1893, docs/01's 2026-11-27-1857 row (2)). A site, or the
+   refund a cancel would give, still does not count. Population room is
    not asked here: a rich player at the population cap is not spent (they can build houses or lose units). A faction with a
    unit that costs nothing can always train. When a match has been
    spent for **5 game minutes** in a row (`rules.json` `draw.afterSeconds` 300), it ends in a **draw**: nobody is

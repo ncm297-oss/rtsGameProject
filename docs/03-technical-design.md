@@ -15759,6 +15759,47 @@ in the three sub-scenes that stage that worker; the scene then passes alone (`DR
 6. **The pin move ran after D,** not between C and D: D changes no behaviour (a comment, a save refusal no sim writes, a test
    allowance), so the pins measured on D's tree are C's. Recommendation: accept.
 
+### Implementation (M6-S15)
+
+The sim's computer-player task "spends what it has and finishes its hunt" with the draw rule's drop-off clause first
+(docs/01 2026-11-27-1857, (1)-(5); the brief in `studio/handoff.md`, session 2026-11-27-1857). Items in commit order, each
+its own commit and each measured apart from the others (rule 70); the pin move once, after the last item.
+
+**A. The draw rule's drop-off clause (BUG-1893; docs/02 "Game flow" 4).** `World.CanStillTrain` (`World.Draw.cs`), clause
+(b): a seat with a live worker and **no** finished drop-off of its own, whose bank alone pays for no unit, also counts its
+carried and the map's resources when, for some drop-off building type of its faction (`BuildingDef.DropOff`; every drop-off
+type for a seat with no faction, test data), the bank pays that building's gold and wood **and** the bank less that price,
+plus what its units carry and what is left on the map, pays a unit type not at its `maxAlive` in gold and in wood. The
+drop-off's `requires` is not asked (no shipped drop-off has any: the three halls 275 / 275, the three small ones 0 / 75).
+Nothing else changes: a site is no drop-off, the refund of a waiting item or a site is not counted, population room is not
+asked. The drop-off types per seat are listed once at construction (`_drawDropOffs`, as `_drawUnits`); the check reads
+counters and loops over at most the faction's drop-off types times its unit types (`PaysForAUnit`); nothing allocated,
+saved or hashed (no save-format step, no data hash move, the golden's body unchanged). Cost (`Draw/DrawCostTests`): 0 bytes
+over 10,000 checks on every path, the clause holding and the clause walked to its end without holding added; one check on
+the clause's path with 8 seats and 2,000 units 1.4 us (0.4 us with 8 units and four seats; the old path at 2,000 units
+0.41 us).
+
+Tests: `Draw/DropOffClauseTests` (criterion 1; red on the base d26338d3: the BUG-1893 scene on shipped data, a Malazan
+seat with a Laborer, a Barracks, no drop-off, a gold mine and 35 gold / 100 wood; the Whirlwind and Teblor seats one gold
+short of their cheapest unit with their small drop-off's 75 wood; a forged seat whose only drop-off type is the hall (the
+Depot no drop-off, every unit 300 gold) and whose bank pays it; the forged ten-wood row; a save in a state only the clause
+decides loads to the same hash and answer and plays 1,000 ticks alike through the Depot's Build. Green on the base, the
+guards: 74 wood is spent; the worker dead is spent from that tick (the clock starts on the tick after the death, which
+sets it back); exactly the Depot's price with no wood on the map and no unit free of wood (forged: the Laborer 10 wood) is
+spent; a paid Depot site with an empty bank is spent until the tick it is finished; and the twin). Property rows
+(`Draw/DrawReachPropertyTests`, criterion 2): `Draw/DrawReachScan` keeps M6-SH3's scan as `Sh3Of` / `Sh3Can` and scans the
+clause alone (`DropOffClause`); over the draw fuzz's states "M6-SH3 can" implies "now can", "now can and M6-SH3 cannot"
+implies the clause's condition, and the sim's answer equals the scan on every state. The fuzz gained batches 4 and 5 (seeds
+201-300), whose seats get their faction's cheapest drop-off's wood on top of the fuzz's bank about half the time (a separate
+RNG stream), so the clause is reached: 600 and 32 seat-states widened (batches 0-3, M6-SH3's states unchanged, widen none:
+their banks hold at most the cheapest unit's wood, under the Depot's 75). **M6-SH3's row "M6-S13-spent implies spent" (new
+can implies M6-S13 can) still holds and is kept as it was:** the clause counts the carried and map gold only with a live
+worker, which M6-S13's rule always counted, and only after a drop-off price of at least 0 is taken off the bank. QA's
+`Bug1893_*` row is re-pinned to the new rule (`Bug1893_ABankThatBuysADropOff_IsReach_TheClockDoesNotRun`: the clock does
+not run while the bank can buy the Depot; once the Laborer builds it, the paid site and the 25 wood left are spent for the
+528 ticks it is a site, then not).
+
+
 ## Testing strategy
 
 | Test kind | What it proves | Runs |

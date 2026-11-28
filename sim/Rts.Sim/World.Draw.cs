@@ -18,6 +18,9 @@ public sealed partial class World
     // data) and whether one of them costs nothing (gold and wood 0: the seat always can). Derived from the data and the seats.
     private int[][] _drawUnits = System.Array.Empty<int[]>();
     private bool[] _drawFree = System.Array.Empty<bool>();
+    // M6-S15 (BUG-1893): per seat, the drop-off building types the clause looks at (its faction's; every drop-off type for a
+    // seat with no faction, test data). Derived from the data and the seats, as _drawUnits is.
+    private int[][] _drawDropOffs = System.Array.Empty<int[]>();
 
     /// <summary>M6-S13: the wait in ticks the match must stay spent before it is drawn (<c>rules.json</c> <c>draw.afterSeconds</c>); 0 = the data has no draw rule.</summary>
     public int DrawWaitTicks => Data.Rules.DrawAfterTicks;
@@ -45,9 +48,17 @@ public sealed partial class World
     {
         _drawUnits = new int[config.PlayerCount][];
         _drawFree = new bool[config.PlayerCount];
+        _drawDropOffs = new int[config.PlayerCount][];
         for (int p = 0; p < config.PlayerCount; p++)
         {
             int faction = FactionOf(p);
+            int dropOffs = 0;
+            foreach (Data.BuildingDef b in Data.Buildings)
+                if (b.DropOff && (faction < 0 || b.Faction == faction)) dropOffs++;
+            _drawDropOffs[p] = new int[dropOffs];
+            dropOffs = 0;
+            foreach (Data.BuildingDef b in Data.Buildings)
+                if (b.DropOff && (faction < 0 || b.Faction == faction)) _drawDropOffs[p][dropOffs++] = b.Id;
             int[] units;
             if (faction >= 0) units = System.Linq.ImmutableArrayExtensions.ToArray(Data.Factions[faction].Units);
             else
@@ -68,14 +79,16 @@ public sealed partial class World
     /// population room for it now; or (b) it can produce (a finished unit-producing building or a live worker) and, for at least
     /// one unit type of its faction not at its <c>maxAlive</c> limit, its gold reach is at least the type's gold cost and its
     /// wood reach at least its wood cost. A resource's reach is the bank, plus, only with a live worker and a finished drop-off
-    /// of its own, what its units carry and what is left on the map. Population room is not asked in (b). A faction with a
+    /// of its own, what its units carry and what is left on the map. M6-S15 (BUG-1893, docs/01 2026-11-27-1857 (2)): a seat
+    /// with a live worker and no finished drop-off also counts the carried and map resources when, for one drop-off type of
+    /// its faction, the bank pays that building and the bank less its price, plus the carried and map resources, pays a unit
+    /// type not at its limit (the drop-off's requirements are not asked). Population room is not asked in (b). A faction with a
     /// unit that costs nothing always can. Reads counters only; allocates nothing.
     /// </summary>
     public bool CanStillTrain(int player)
     {
         if (!_ledger.Has(player)) return false;
         if (_drawFree[player] || _ledger.TrainingUnits[player] > 0) return true;
-        int[] units = _drawUnits[player];
         Data.GameData data = Data;
         // (a) a waiting item with room now: any waiting unit type whose item fits under the cap.
         if (_ledger.QueuedUnits[player] > _ledger.TrainingUnits[player])
@@ -89,13 +102,28 @@ public sealed partial class World
         if (!worker && _ledger.ProductionBuildings[player] == 0) return false;
         long gold = _ledger.Gold[player], wood = _ledger.Wood[player];
         if (worker && _ledger.FinishedDropOffs[player] > 0)
+            return PaysForAUnit(player, gold + _ledger.CarriedGold[player] + Resources.GoldLeft, wood + _ledger.CarriedWood[player] + Resources.WoodLeft);
+        if (PaysForAUnit(player, gold, wood)) return true;
+        if (!worker) return false;
+        // M6-S15 (BUG-1893): no finished drop-off, a worker: a drop-off the bank pays for, then a unit from what is left.
+        int[] dropOffs = _drawDropOffs[player];
+        for (int k = 0; k < dropOffs.Length; k++)
         {
-            gold += _ledger.CarriedGold[player] + Resources.GoldLeft;
-            wood += _ledger.CarriedWood[player] + Resources.WoodLeft;
+            Data.BuildingDef def = data.Buildings[dropOffs[k]];
+            if (gold < def.CostGold || wood < def.CostWood) continue;
+            if (PaysForAUnit(player, gold - def.CostGold + _ledger.CarriedGold[player] + Resources.GoldLeft,
+                    wood - def.CostWood + _ledger.CarriedWood[player] + Resources.WoodLeft)) return true;
         }
+        return false;
+    }
+
+    /// <summary>Whether <paramref name="gold"/> and <paramref name="wood"/> pay for one of <paramref name="player"/>'s unit types not at its <c>maxAlive</c>.</summary>
+    private bool PaysForAUnit(int player, long gold, long wood)
+    {
+        int[] units = _drawUnits[player];
         for (int k = 0; k < units.Length; k++)
         {
-            Data.UnitDef def = data.Units[units[k]];
+            Data.UnitDef def = Data.Units[units[k]];
             if (gold < def.CostGold || wood < def.CostWood) continue;
             if (def.MaxAlive > 0 && _ledger.LimitedCount(player, units[k]) + def.SpawnCount > def.MaxAlive) continue;
             return true;
