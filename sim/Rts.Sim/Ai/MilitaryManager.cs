@@ -312,7 +312,10 @@ internal static class MilitaryManager
         board.WaveTarget = default;
         board.WaveTargetType = board.WaveTargetCell = -1;
         board.WaveMinHalfPop = board.WaveMinCost = 0f;
-        bool resume = board.HuntFindTick >= 0 && ai.Now - board.HuntFindTick <= ai.Rules.HuntMemoryTicks;
+        // M6-S15 D (BUG-1855): a hunt the defense cut short (MarkCut) is measured from the defense's end, not from the cut.
+        bool cut = WasCut(board);
+        int since = cut ? board.DefendTick + ai.Rules.DefendForTicks : board.HuntFindTick;
+        bool resume = board.HuntFindTick >= 0 && ai.Now - since <= ai.Rules.HuntMemoryTicks;
         if (!resume)
         {
             board.HuntFindTick = -1; // too old: forgotten, so this hunt sweeps as before (the free starts first from the second)
@@ -323,13 +326,37 @@ internal static class MilitaryManager
         board.HuntRingLeft = 0;
         board.HuntsStarted++;
         if (Fresh(ai)) HuntTarget(ai, board.EnemyUnitPoint, -1, army);
-        else StartSweep(ai, resume ? board.HuntFindPoint : army);
+        else StartSweep(ai, resume && !cut ? board.HuntFindPoint : army); // M6-S15 D: a cut hunt from where the army stands
+    }
+
+    /// <summary>
+    /// M6-S15 D (BUG-1855): <see cref="Blackboard.HuntFindPoint"/>'s mark of a hunt the defense cut short: off the map, so never
+    /// a building's centre (a find's point). Kept in the saved find fields (format 11 unchanged): <see cref="Blackboard.HuntFindTick"/>
+    /// the cut's tick, the point this mark.
+    /// </summary>
+    internal static readonly Vector2 CutPoint = new(-1f, -1f);
+
+    /// <summary>Whether the last hunt was cut short by the defense (<see cref="MarkCut"/>) and not yet forgotten.</summary>
+    internal static bool WasCut(Blackboard board) => board.HuntFindTick >= 0 && board.HuntFindPoint == CutPoint;
+
+    /// <summary>
+    /// M6-S15 D (BUG-1855, docs/01 2026-11-27-1857 (5)): the defense ends the hunt in progress (<c>DefenseManager.Recall</c>):
+    /// it is remembered as cut, so a hunt that begins within <c>ai.huntMemory</c> of the defense's end (its last trigger plus
+    /// <c>ai.defendFor</c>) is resumed (<see cref="BeginHunt"/>): the visited marks and the pass kept, the sweep nearest-first
+    /// from where the army stands, the free starts not first (<see cref="Resumes"/>); later, forgotten as before. Why: the
+    /// trace (Pale Hills seed 7) re-sent the same far first leg after every raid, 14 times to one point, and never got past it.
+    /// </summary>
+    internal static void MarkCut(AiPlayer ai)
+    {
+        ai.Board.HuntFindTick = ai.Now;
+        ai.Board.HuntFindPoint = CutPoint;
     }
 
     /// <summary>
     /// M6-S14 (BUG-1661): whether the hunt in progress resumes the last hunt's sweep: it began within <c>ai.huntMemory</c> of
     /// a building a hunt found going (<see cref="Blackboard.HuntFindTick"/>, kept for the whole hunt), so it looks round
-    /// where that building stood first and never at the free starts first (<see cref="NextSweep"/>).
+    /// where that building stood first and never at the free starts first (<see cref="NextSweep"/>). M6-S15 D: or of the end
+    /// of a defense that cut the last hunt short (<see cref="MarkCut"/>); then it sweeps from where the army stands.
     /// </summary>
     internal static bool Resumes(AiPlayer ai) => ai.Board.HuntFindTick >= 0;
 

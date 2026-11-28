@@ -524,7 +524,11 @@ match's draw clock runs, its countdown line sits at the top centre under the ale
   nearest first, where a beaten side's last depot and workers often stand, then an enemy's own start (M5-H6, BUG-1157 /
   BUG-1162). A hunt that begins within `ai.huntMemory` (120 s) of the last hunt's find going (a building it found and razed)
   keeps the places the last hunt already looked at and looks round where that building stood first, not at the start
-  locations (M6-S14, BUG-1661: a remnant beside the find used to wait for a whole new lap of the map). In a team match a
+  locations (M6-S14, BUG-1661: a remnant beside the find used to wait for a whole new lap of the map). Likewise a hunt that
+  a raid on its base calls home is resumed, not restarted, when the next hunt begins within `ai.huntMemory` of the raid's
+  end: the places it already looked at stay looked at and it goes on nearest-first from where the army stands, not at the
+  start locations (M6-S15, BUG-1855: a side raided every few minutes used to send its hunt to the same far point again and
+  again). In a team match a
   sighting on or right beside an ally's building is aimed just off that building, on the army's side. A hunt ends like a wave (heavy losses, nobody busy for a while,
   a raid at home), and becomes a wave again on the first enemy building it finds. So a beaten side's last unit hiding in
   the woods is found, and AI-against-AI matches end (built in M5-4d, BUG-1068; hardened in M5-H5, BUG-1119 / BUG-1120;

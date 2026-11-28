@@ -15856,6 +15856,29 @@ bank but not above the reserve, is trained. Guards (green on the base): the same
 filled) holds it, no Train in four thinks; a gold mine left (a node of the short kind) waits for the Heavy. The twin (1,000
 ticks hash-equal) and a save between two thinks that follows the run for 1,000 ticks.
 
+**D. "Finishes its hunt" (BUG-1855; docs/01 2026-11-27-1857 (5); `MilitaryManager.MarkCut` / `WasCut` / `BeginHunt`,
+`DefenseManager.Recall`).** On the base a hunt the defense recalled (`Recall` -> `End`) was begun again as a new hunt: its
+marks cleared, its pass 0, and from the match's second hunt on the free starts first, so the same far first leg was re-sent
+after every raid (A's trace in M6-SH3: 14 times to sweep point 200). Now `Recall` marks a hunt it ends as **cut**, in the
+fields the save already holds: `HuntFindTick` the cut's tick and `HuntFindPoint` the mark `CutPoint` (-1, -1), off the map
+and so never a find's point (a building's centre). `BeginHunt` resumes a cut hunt when it begins within `ai.huntMemory` of
+**the defense's end** (`DefendTick + ai.defendFor`: the last trigger plus the hold, both saved), not of the cut: the visited
+marks and the pass are kept, the sweep starts nearest-first from where the army stands (the origin is the army: no find
+point), and the free starts are not first (`Resumes`, M6-S14's rule, kept for the whole hunt). A fresh enemy sighting still
+comes first (the raid's own raiders are such a sighting when the hunt begins within `ai.huntMemory` of seeing them). A
+hunt that begins later forgets as before (`HuntFindTick` -1, marks cleared, pass 0, the free starts first). A find (M6-S14)
+overwrites a cut mark and a cut overwrites a find's. **No new saved field and no format step** (`SaveFormat.CurrentVersion`
+11): a save made on `main` has no cut mark (its point is a centre or zero) and plays as before; a branch save with a cut
+mark loads on `main` and reads it as an old find with a point off the map (forgotten after `ai.huntMemory` as any find).
+
+Tests: `Ai/HuntCutResumeTests` (criterion 7; `HuntResumeTests`' free-start map, four Heavy Infantry hunting the match's
+second hunt, twelve Raiders put inside the Keep's sight, which the defense answers with a recall). Red on the C tree (as
+the base): the hunt begun within the memory keeps its five marks and pass 0 and goes to the unvisited point nearest the
+army (point 14), not the leg it was on (point 71, the free start's proxy); the fresh-sighting row (the raiders' sighting
+first, the marks kept). Green on the base, the guard: begun later than the memory it forgets as before (find tick -1, pass
+0, the free start first). The twin and a save between the cut and the resume (loads equal, saves to the same bytes, follows
+the run for 1,000 ticks past the resume). M6-S14's `Ai/HuntResumeTests` green unchanged.
+
 
 ## Testing strategy
 

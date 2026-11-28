@@ -122,6 +122,7 @@ internal static class DefenseManager
         Blackboard board = ai.Board;
         board.DefendAll = true;
         if (!board.WaveActive) return;
+        if (board.Hunting) MilitaryManager.MarkCut(ai); // M6-S15 D (BUG-1855): a hunt cut short is resumed, not restarted
         MilitaryManager.End(ai);
         board.WaveCooldownUntil = ai.Now + ai.Rules.WaveCooldownTicks;
         board.WaveRecalls++;
