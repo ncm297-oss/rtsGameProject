@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S4 |
-| Status | open |
+| Status | fixed (2026-11-27-1857, M6-V32: the Cairn is rebuilt as dark stacked stones with team cloth) |
 | Found | 2026-11-26-1847, task M6-VH10 |
 | System | building models (view), `tools/asset-manifest.json` `teblor_stone_cairn` colours; docs/03 "Implementation (M6-VH10)" |
-| Fixed by | |
+| Fixed by | M6-V32 (view branch 9cdbe850): docs/04 "Building models, as built (M6-V32)", the luminance table; QA re-measured with its own method (`QaM6V32Test` `QALUMA`) |
 
 ## Repro
 1. Windowed: `& $env:GODOT --path game res://tests/ViewHardenVh10Test.tscn -- --shots <dir>` (QA's run:
@@ -45,3 +45,5 @@ this is disclosed. The defect is the wrong justification sentence, and the trade
   or pick a wall luminance between the dark and the light team colours. Wall luminance of about 140-150 keeps Iron at
   30 or more but not at 40. The Producer or owner can choose to accept the trade-off until the Cairn becomes stacked rocks
   (docs/03 M6-V30 answer 2).
+
+- M6-V32 (2026-11-27-1857): by the brief's measure (team part against the largest non-team part, `Stone` at 50) no colour is under 30: Iron 46, Ochre 115, Crimson 37, Cobalt 31, Jade 103, Violet 48, Rose 76, Bone 171. QA, against all non-team pixels (mode 58): Cobalt 23, Crimson 29; all eight read clearly by hue in the pictures. Closed by the Producer at the ACCEPT; Cobalt is the marginal one if the owner asks for more.

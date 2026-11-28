@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S4 (a test's naming; numbers are right for the match it plays) |
-| Status | open |
+| Status | fixed (2026-11-27-1857, M6-S15 F) |
 | Found | 2026-11-27-0817, task M6-SH3 (D, the Vathar Crossing seed 6 look) |
 | System | tests (`Stress/M6S14FourSeatQaStressTests`) |
-| Fixed by | |
+| Fixed by | M6-S15 F (e55178fe): the rows print "1v1v2", the parameter is `oneVsOneVsTwo`; no row deleted |
 
 ## Repro
 `M6S14FourSeatQaStressBase.FourSeats_Report(map, teams: true)` passes teams `{ 0, 1, 0, 1 }`. Team 0 means "no team"

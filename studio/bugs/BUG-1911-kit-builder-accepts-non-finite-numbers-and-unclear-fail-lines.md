@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S4 |
-| Status | open |
+| Status | fixed (2026-11-27-1857, M6-V32; two more inputs left: BUG-1952) |
 | Found | 2026-11-27-0817, task M6-V31 |
 | System | import tooling: `tools/art/build_building.py` `check_kit` / `build_building` (M6-V31 kit path) |
-| Fixed by | |
+| Fixed by | M6-V32 (view branch 99d9e928): `tools/art/test-kit-errors.ps1` 18 rows PASS, `tools/qa/kit-errors-extra.ps1` exits 0 |
 
 ## Repro
 `powershell -File tools/qa/kit-errors-extra.ps1` (Blender 5.2; scratch manifests, nothing under the repo is written):

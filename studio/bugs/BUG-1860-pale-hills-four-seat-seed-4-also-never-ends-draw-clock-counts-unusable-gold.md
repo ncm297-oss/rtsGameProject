@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S3 (measure and report under criterion 11 / rule 48; not a criterion row) |
-| Status | open (M6-SH3 B: p1's half fixed, the draw rule exact; the match is held by the AI: BUG-1890 / 1891) |
+| Status | fixed (2026-11-27-1857, M6-S15 C: the match ends at 47,612, p0) |
 | Found | 2026-11-26-1847, task M6-S14 (QA, tier full; QA focus 3) |
 | System | AI end game + the draw rule (`World.CanStillTrain`, docs/02 "Game flow" 4) |
-| Fixed by | |
+| Fixed by | M6-S15 C (773cecec); `Stress/M6S14FourSeatQaStressTests` FFA seed 4 |
 
 ## Repro
 1. `Stress/M6S14FourSeatQaStressTests` (any seed class, `FourSeats_Report(map: "pale_hills", teams: False)`), or
@@ -45,3 +45,5 @@ p0 (52 gold, 11,155 wood; 726 gold left on the map within reach of 26 workers an
 carried, two drop-offs) can still pay for units and neither trains nor mines the 726 gold: BUG-1890 (production) and
 BUG-1891 (the gold left unmined / undelivered). After B the match is unchanged (no end by 144,000, same end hash
 28B445B7F11EC069).
+
+- M6-S15 (2026-11-27-1857): the match ends at 47,612 (p0) with "spends what it has". What the trace found beside it is filed apart: BUG-1930 (seat 0 never finds the last mine), BUG-1931 (seat 3 hauls 351 m).

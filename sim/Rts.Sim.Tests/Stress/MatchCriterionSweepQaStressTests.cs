@@ -84,6 +84,13 @@ public class MatchCriterionSweepQaStressTests
         // M6-SH3 C2 (BUG-1852 fixed: an Idle worker with a full load, its Gather to the gone mine judged and the mine marked):
         // seeds 3, 4 and 6 end at 35,551 (seat 1) with every oracle clean (refused Gather:NoResourceNode 20, longest run 1), so
         // their entries [("raraku", 3 / 4 / 6)] = "BUG-1852" are out.
+        // M6-S15 (C: the AI spends what it has, BUG-1890; rule 45, a finding, no bound raised): Pale Hills seed 2 (green on the
+        // base d26338d3: ends at 59,700, p0) now ends at 48,914 (p1) and fails the silent-seat oracle: p0 sent nothing for 7,819
+        // ticks (40,541..48,360). Diagnosis (a probe every 1,000 ticks): p0 lost its Depot about 40,000, its only other
+        // drop-off is a Keep site no worker builds (the site join rule's three joins spent), and its last Laborer stands
+        // Returning with 10 wood for the rest of the match, waiting for a finished drop-off (bank 1,935 gold / 45 wood, under the
+        // Depot's 75, so A2's small drop-off is not bought). Not stuck and not a wedge: BUG-1934.
+        [("pale_hills", 2)] = "BUG-1934",
     };
 
     /// <summary>The extra oracles' state over one match.</summary>

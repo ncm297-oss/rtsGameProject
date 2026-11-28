@@ -524,7 +524,11 @@ match's draw clock runs, its countdown line sits at the top centre under the ale
   nearest first, where a beaten side's last depot and workers often stand, then an enemy's own start (M5-H6, BUG-1157 /
   BUG-1162). A hunt that begins within `ai.huntMemory` (120 s) of the last hunt's find going (a building it found and razed)
   keeps the places the last hunt already looked at and looks round where that building stood first, not at the start
-  locations (M6-S14, BUG-1661: a remnant beside the find used to wait for a whole new lap of the map). In a team match a
+  locations (M6-S14, BUG-1661: a remnant beside the find used to wait for a whole new lap of the map). Likewise a hunt that
+  a raid on its base calls home is resumed, not restarted, when the next hunt begins within `ai.huntMemory` of the raid's
+  end: the places it already looked at stay looked at and it goes on nearest-first from where the army stands, not at the
+  start locations (M6-S15, BUG-1855: a side raided every few minutes used to send its hunt to the same far point again and
+  again). In a team match a
   sighting on or right beside an ally's building is aimed just off that building, on the army's side. A hunt ends like a wave (heavy losses, nobody busy for a while,
   a raid at home), and becomes a wave again on the first enemy building it finds. So a beaten side's last unit hiding in
   the woods is found, and AI-against-AI matches end (built in M5-4d, BUG-1068; hardened in M5-H5, BUG-1119 / BUG-1120;
@@ -539,6 +543,13 @@ match's draw clock runs, its countdown line sits at the top centre under the ale
   round 2, BUG-1153; [03 Implementation (M5-9a)](03-technical-design.md#implementation-m5-9a)). Waiting for that unit
   never stops the worker floor below: a starved side short of workers still trains them, since a worker is its only
   way back to the resource it lacks (M6-SH2, BUG-1534, the Producer's ruling; a floor since M6-S14).
+- A side spends what it has (M6-S15, BUG-1890, docs/01's 2026-11-27-1857 row (4)): when the unit it would train next can
+  never be paid for (the same test as above: short of a resource no income can bring, whatever its army's size and whether
+  or not its base is raided), it trains instead the most wanted unit of its army mix it can pay for now, and with none of
+  those any unit of its faction a free building of its own can train now, the worker included (one a think, as usual).
+  Money it is saving for a build-order step or the Town Hall holds these buys only while it could ever fill that saving (a
+  resource it knows where to gather and somewhere to deliver it); a side that still knows a mine or forest of the resource
+  it lacks waits for its unit as before.
 - When its own gold is spent the AI expands to the far mines with a depot: short of gold for the unit it would train next,
   with no worker on gold and no gold mine it knows, it sends a worker to look at the start locations no player took, and
   once it has seen a free mine within `rules.json` `ai.farExpandReach` (384 m) of its Town Hall with no enemy drop-off by
@@ -553,7 +564,10 @@ match's draw clock runs, its countdown line sits at the top centre under the ale
   rebuilt only when the population is within `rules.json` `ai.houseWhenPopWithin` (2) of its cap, the test it builds a
   new one by, and never at the hard cap (M5-H6, BUG-1116: a beaten side no longer rebuilds houses it doesn't need). With no Town Hall left and a worker alive, the Town Hall comes
   before every other step: on its old spot when that is free, else as near it as a site is, banking for it when it can't
-  pay yet (army production spends only what is above its cost). A lost expansion is not rebuilt yet (built in M5-4d
+  pay yet (army production spends only what is above its cost). If it cannot pay for the Town Hall yet and has no finished
+  drop-off and none being built, it first builds its faction's cheapest drop-off it can pay for (the Depot, Supply Cache or
+  Woodcutters' Lodge) by the nearest resource it knows, so its workers can deliver again while it saves for the hall
+  (M6-S15, docs/01's 2026-11-27-1857 row (3)). A lost expansion is not rebuilt yet (built in M5-4d
   slice 2; [03 Implementation (M5-4d slice 2)](03-technical-design.md#implementation-m5-4d-slice-2)). A side left with
   fewer workers (alive and in training) than `rules.json` `ai.minWorkers` (4) trains one a think at a finished building
   that trains workers, when it has the gold for one and, with any worker left, the population room (counting the workers
@@ -705,13 +719,18 @@ match's draw clock runs, its countdown line sits at the top centre under the ale
    its owner and **nobody's kill** (Producer decision 2026-10-27, BUG-1044; built in M6-S5).
 
    **A spent match ends in a draw** (owner decision 2026-11-25, design in docs/01's 2026-11-25-1437 row; built in M6-S13;
-   "can still train" made exact in M6-SH3, docs/01's second 2026-11-27 row). A match is *spent* when at least two sides that
+   "can still train" made exact in M6-SH3, docs/01's second 2026-11-27 row; the drop-off clause added in M6-S15). A match is *spent* when at least two sides that
    ever built are still in, and no player still in can still train a unit. A player can still train when a unit of theirs
    is being trained, or one is waiting in a production queue and there is population room for it now (a paid unit stuck at
    the population cap does not count by itself); or when they can produce (a finished unit-producing hall, or a worker) and
    can pay for at least one unit type of their faction, in gold **and** in wood, that is not at its unit limit. What they
    can pay with is their bank, plus, **only if they have a worker and a finished drop-off building of their own** (a site
-   does not count, nor does an ally's), what their units are carrying and what is left of it on the map. Population room is
+   does not count, nor does an ally's), what their units are carrying and what is left of it on the map. A player with a
+   worker and **no** finished drop-off of their own also counts what their units carry and what is left on the map **if
+   their bank pays for one of their faction's drop-off buildings, and what is left of the bank after that price, plus the
+   carried and map resources, pays for a unit** (they can build the drop-off and then mine; the drop-off's requirements
+   are not asked: no shipped drop-off has any; M6-S15, BUG-1893, docs/01's 2026-11-27-1857 row (2)). A site, or the
+   refund a cancel would give, still does not count. Population room is
    not asked here: a rich player at the population cap is not spent (they can build houses or lose units). A faction with a
    unit that costs nothing can always train. When a match has been
    spent for **5 game minutes** in a row (`rules.json` `draw.afterSeconds` 300), it ends in a **draw**: nobody is

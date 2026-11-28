@@ -374,14 +374,15 @@ public class M6Sh3DrawQaTests
     }
 
     /// <summary>
-    /// BUG-1893 (S3, a limit of docs/01 2026-11-27 (1): "a player who could still buy a new drop-off from the bank is not looked
-    /// at (the bank is then nearly always enough for a unit anyway)"), pinned as built so a change of the rule is seen. Shipped
-    /// costs: a Malazan seat with a Laborer, its Infantry Hall (a producer), no drop-off, gold on the map and a bank of one gold
-    /// under its cheapest unit and the Depot's wood: it is spent, and the clock runs, although its Laborer can build the Depot
-    /// from the bank and then mine the gold. Once the Depot is finished it is not spent (the clock stops).
+    /// BUG-1893 (S3, a limit of docs/01 2026-11-27 (1)), first pinned as built (the seat was spent and the clock ran although
+    /// its Laborer could build the Depot from the bank and then mine the gold). M6-S15 A re-pins it to the drop-off clause
+    /// (docs/01 2026-11-27-1857 (2)): shipped costs, a Malazan seat with a Laborer, its Infantry Hall (a producer), no
+    /// drop-off, gold on the map and a bank of one gold under its cheapest unit and 100 wood is not spent and the clock does
+    /// not run. Once its Laborer is sent to build the Depot, the paid site is no drop-off and the bank's 25 wood pays no
+    /// second one, so the clock runs while it stands as a site (as for any site), and stops when it is finished.
     /// </summary>
     [Fact]
-    public void Bug1893_ABankThatBuysADropOff_IsNotReach_TheSeatIsSpentUntilTheDropOffIsFinished()
+    public void Bug1893_ABankThatBuysADropOff_IsReach_TheClockDoesNotRun()
     {
         Simulation sim = Base(TestSim.Data); // the shipped 300 s wait
         World w = sim.World;
@@ -398,18 +399,25 @@ public class M6Sh3DrawQaTests
         EntityHandle worker = DrawScenes.Unit(sim, 0, 20, 14, UnitSlot.Worker);
         w.Ledger.Gold[0] = cheapestGold - 1;
         w.Ledger.Wood[0] = Math.Max(dd.CostWood, 100);
-        Assert.False(w.CanStillTrain(0), "as built: the bank's Depot is not reach");
-        Assert.True(w.MatchSpent);
+        Assert.True(w.CanStillTrain(0), "M6-S15: the bank's Depot is reach"); // was: Assert.False (as built, M6-SH3)
+        Assert.False(w.MatchSpent);
+        for (int t = 0; t < 200; t++)
+        {
+            sim.Tick();
+            Assert.Equal(0, w.DrawClock);
+        }
         sim.Enqueue(Command.Build(0, worker, depot, w.NavGrid.CellCenter(22, 10)));
         int spentTicks = 0;
-        while (!sim.MatchOver && sim.TickNumber < 3000 && !w.CanStillTrain(0))
+        while (!sim.MatchOver && sim.TickNumber < 3200 && w.Ledger.FinishedDropOffs[0] == 0)
         {
             sim.Tick();
             if (w.DrawClock > 0) spentTicks++;
         }
-        _out.WriteLine($"{dd.Key} ({dd.CostGold} gold / {dd.CostWood} wood, {dd.BuildTicks} ticks) bought from a bank of {cheapestGold - 1} gold; spent {spentTicks} ticks until it stood (tick {sim.TickNumber}); drawn {w.MatchDrawn}");
+        _out.WriteLine($"{dd.Key} ({dd.CostGold} gold / {dd.CostWood} wood, {dd.BuildTicks} ticks) bought from a bank of {cheapestGold - 1} gold; spent {spentTicks} ticks while it was a site (to tick {sim.TickNumber}); drawn {w.MatchDrawn}");
         Assert.True(w.CanStillTrain(0), "the finished Depot makes the map's gold reach");
         Assert.Equal(1, w.Ledger.FinishedDropOffs[0]);
+        sim.Tick();
+        Assert.Equal(0, w.DrawClock);
     }
 
     private const string ChildVariable = "RTS_M6SH3_QA_DRAW_CHILD";

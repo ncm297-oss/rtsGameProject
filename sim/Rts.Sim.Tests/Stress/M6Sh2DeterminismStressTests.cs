@@ -24,12 +24,15 @@ namespace Rts.Sim.Tests.Stress;
 /// M6-S14 (BUG-1660, the worker floor): the retrain path is the floor's (<c>ai.minWorkers</c>), so the row watches for the first
 /// worker Train sent with fewer live workers than the floor (with the floor at 4 no seat on seed 5 fell to zero workers:
 /// "no seat retrained a worker"); seed and checks unchanged.
+/// M6-S15 (C: the AI spends what it has, BUG-1890; a re-stage, the checks unchanged): seed 5 now ends at 25,913 with no seat
+/// under the floor ("no seat retrained a worker"). It plays seed 1, the lowest Raraku seed whose seat retrains (a worker
+/// Train sent for 24,781 with fewer live workers than the floor; seeds 2-8 retrain nowhere on M6-S15's tree). Was seed 5.
 /// </summary>
 [Trait("Category", "Stress")]
 public class M6Sh2DeterminismStressTests(ITestOutputHelper output)
 {
     private const int After = 2000, Limit = 45_000;
-    private const ulong Seed = 5; // D33: was 3 (no retrain there since D33's waves)
+    private const ulong Seed = 1; // M6-S15: was 5 (no retrain there since C); D33: was 3 (no retrain there since D33's waves)
 
     [Fact]
     public void Raraku_TheRetrain_TwinsSaveAndReplay()

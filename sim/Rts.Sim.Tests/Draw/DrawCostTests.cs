@@ -32,7 +32,14 @@ public class DrawCostTests
         for (int k = 0; k < reach.World.Buildings.Capacity; k++)
             if (reach.World.Buildings.Alive[k] && reach.World.Buildings.UnderConstruction[k]) reach.World.Buildings.SetWork(k, reach.World.Buildings.WorkNeeded(reach.World.Buildings.TypeId[k]));
         Assert.True(reach.World.CanStillTrain(0));
-        foreach (Simulation s in new[] { spent, rich, off, drawn, counts, reach }) { s.World.UpdateDraw(); _ = s.World.MatchSpent; }
+        // M6-S15 (BUG-1893): the drop-off clause holding (a bank that pays the Depot) and walked to the end without holding (the
+        // Depot's wood and no gold anywhere: the price paid, nothing left for a unit).
+        Simulation clause = DropOffClauseTests.ClauseScene(100, out _);
+        Assert.True(clause.World.CanStillTrain(0) && !DrawReachScan.Sh3Can(clause.World, 0));
+        Simulation walked = DropOffClauseTests.ClauseScene(75, out _, node: false);
+        walked.World.Ledger.Gold[0] = 0;
+        Assert.False(walked.World.CanStillTrain(0));
+        foreach (Simulation s in new[] { spent, rich, off, drawn, counts, reach, clause, walked }) { s.World.UpdateDraw(); _ = s.World.MatchSpent; }
         long before = GC.GetAllocatedBytesForCurrentThread();
         bool any = false;
         for (int k = 0; k < 10_000; k++)
@@ -43,7 +50,9 @@ public class DrawCostTests
             drawn.World.UpdateDraw();
             counts.World.UpdateDraw();
             reach.World.UpdateDraw();
-            any |= spent.World.MatchSpent | rich.World.CanStillTrain(1) | off.World.MatchSpent | counts.World.MatchSpent | reach.World.CanStillTrain(0);
+            clause.World.UpdateDraw();
+            walked.World.UpdateDraw();
+            any |= clause.World.CanStillTrain(0) | walked.World.MatchSpent | spent.World.MatchSpent | rich.World.CanStillTrain(1) | off.World.MatchSpent | counts.World.MatchSpent | reach.World.CanStillTrain(0);
         }
         long bytes = GC.GetAllocatedBytesForCurrentThread() - before;
         Assert.True(any);
@@ -70,6 +79,34 @@ public class DrawCostTests
         double large = Time(big);
         _out.WriteLine($"one draw check: {small * 1000:F3} us with 8 units, {large * 1000:F3} us with 2,000 (four seats)");
         Assert.True(large < 20 * small + 0.002, $"the check grew with the units: {small * 1000:F3} -> {large * 1000:F3} us");
+    }
+
+    /// <summary>
+    /// M6-S15: the check on the drop-off clause's path at 8 seats and 2,000 units: every seat an Infantry Hall and a worker, no
+    /// drop-off, its small drop-off's wood in the bank and no gold anywhere, so the clause is walked to its end for every seat
+    /// on every check (spent; the clock runs). Printed beside the 8-unit check; it must not grow with the units.
+    /// </summary>
+    [Fact]
+    public void TheDropOffClausePath_AtEightSeatsAndTwoThousandUnits_DoesNotScanTheUnits()
+    {
+        double small = Time(DrawScenes.Spent(DrawScenes.OutOfReach, players: 4, soldiers: 2));
+        Simulation big = DrawScenes.Empty(DrawScenes.OutOfReach, 8, size: 128, units: 2048);
+        for (int p = 0; p < 8; p++)
+        {
+            DrawScenes.Building(big, p, 6 + 14 * p, 6);
+            DrawScenes.Unit(big, p, 6 + 14 * p, 12, Data.UnitSlot.Worker);
+        }
+        int placed = 8;
+        for (int y = 30; y < 110 && placed < 2000; y++)
+            for (int x = 10; x < 118 && placed < 2000; x++, placed++)
+                DrawScenes.Unit(big, placed % 8, x, y);
+        DrawScenes.Broke(big);
+        for (int p = 0; p < 8; p++) big.World.Ledger.Wood[p] = DropOffClauseTests.SmallDropOff(big.World.Data, big.World.FactionOf(p)).CostWood;
+        Assert.True(big.World.MatchSpent);
+        Assert.Equal(2000, big.World.Units.Count);
+        double large = Time(big);
+        _out.WriteLine($"one draw check: {small * 1000:F3} us with 8 units (four seats); {large * 1000:F3} us on the drop-off clause's path, 2,000 units, eight seats");
+        Assert.True(large < 20 * small + 0.004, $"the check grew with the units: {small * 1000:F3} -> {large * 1000:F3} us");
     }
 
     /// <summary>Milliseconds per draw check on a spent world whose wait is out of reach (the clock runs, the full check every call).</summary>

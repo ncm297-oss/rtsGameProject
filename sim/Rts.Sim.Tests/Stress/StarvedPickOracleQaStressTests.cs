@@ -15,6 +15,10 @@ namespace Rts.Sim.Tests.Stress;
 /// lacked for the pick rose since its last think (income of a kind the rule called unobtainable).
 /// M6-SH2 fix round 2 (BUG-1534, the Producer's ruling: the retrain wins): a worker-type Train sent while the seat has no
 /// live worker is exempt (the docs/02 retrain; Raraku seed 5's seat 0 at tick 27,960 is the case), and nothing else is.
+/// M6-SH3 / M6-S15 C (BUG-1890, docs/01 2026-11-27-1857 (4)): the oracle is re-stated to what now holds. A starved seat's
+/// pick can never be paid for, so production now buys instead what it can pay for (another unit of its mix, else any unit
+/// of its faction, the worker included): a stamped think may send such a Train, counted and printed. What stays an error:
+/// a stamped think that sends a Train of the pick itself (the unit the stamp says it cannot pay for and never will).
 /// </summary>
 [Trait("Category", "Stress")]
 public class StarvedPickOracleQaStressTests
@@ -26,7 +30,8 @@ public class StarvedPickOracleQaStressTests
     private sealed class Seat
     {
         public int Thinks, StampedThinks, TrainsThisThink, TrainsOnStamped, FirstStamp = -1, Rose, PrevGold = -1, PrevWood = -1;
-        public int RetrainsThisThink, RetrainsOnStamped;
+        public int RetrainsThisThink, RetrainsOnStamped, SpentInstead;
+        public List<int> TrainedTypes = new();
         public bool PrevStamped, PrevShortGold, PrevShortWood;
         public string? Error;
     }
@@ -55,7 +60,11 @@ public class StarvedPickOracleQaStressTests
             World w = sim.World;
             if (c.TypeId >= 0 && c.TypeId < w.Data.Units.Length && w.Data.Units[c.TypeId].Slot == UnitSlot.Worker && LiveWorkers(w, p) == 0)
                 s.RetrainsThisThink++;
-            else s.TrainsThisThink++;
+            else
+            {
+                s.TrainsThisThink++;
+                s.TrainedTypes.Add(c.TypeId);
+            }
         };
         ai.ThoughtForTests = a =>
         {
@@ -69,7 +78,11 @@ public class StarvedPickOracleQaStressTests
                 if (s.TrainsThisThink > 0)
                 {
                     s.TrainsOnStamped++;
-                    s.Error ??= $"seat {p} tick {a.Now}: stamped starved (since {a.Board.StarvedSince}) but sent {s.TrainsThisThink} Train; gold {a.Gold}, wood {a.Wood}, pick {ProductionManager.Pick(a)}";
+                    // M6-S15 C: a buy instead of the pick is the rule (was: any Train here was an error).
+                    int pickNow = ProductionManager.Pick(a);
+                    if (pickNow >= 0 && s.TrainedTypes.Contains(pickNow))
+                        s.Error ??= $"seat {p} tick {a.Now}: stamped starved (since {a.Board.StarvedSince}) but sent a Train of its pick {pickNow}; gold {a.Gold}, wood {a.Wood}";
+                    else s.SpentInstead += s.TrainsThisThink;
                 }
                 if (s.PrevStamped && (s.PrevShortGold && a.Gold > s.PrevGold || s.PrevShortWood && a.Wood > s.PrevWood)) s.Rose++;
                 int pick = ProductionManager.Pick(a);
@@ -86,6 +99,7 @@ public class StarvedPickOracleQaStressTests
             s.PrevWood = a.Wood;
             s.TrainsThisThink = 0;
             s.RetrainsThisThink = 0;
+            s.TrainedTypes.Clear();
         };
     }
 
@@ -118,7 +132,7 @@ public class StarvedPickOracleQaStressTests
         for (int p = 0; p < players; p++)
         {
             Seat s = seats[p];
-            _out.WriteLine($"  seat {p}: {s.Thinks} thinks, {s.StampedThinks} stamped (first {s.FirstStamp}), Train on a stamped think {s.TrainsOnStamped}, "
+            _out.WriteLine($"  seat {p}: {s.Thinks} thinks, {s.StampedThinks} stamped (first {s.FirstStamp}), Train on a stamped think {s.TrainsOnStamped} (M6-S15 C's buys instead of the pick: {s.SpentInstead} Trains), "
                 + $"worker retrain on a stamped think {s.RetrainsOnStamped} (exempt, BUG-1534), lacked kind rose while stamped {s.Rose}; {(s.Error ?? "clean")}");
         }
         foreach (Seat s in seats) Assert.True(s.Error == null, s.Error);

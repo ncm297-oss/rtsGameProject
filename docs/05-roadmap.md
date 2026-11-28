@@ -908,6 +908,11 @@ open S1 / S2. Retro below; open S3 / S4 listed there.)_
       a pavilion, props; no pack file), the Supply Cache one stall cropped from the pack's market, the Lookout Tower
       the pack's First Age timber tower under a cloth canopy. 24 of 30 building types are models; 400 figures with 60 building models 6.54 ms a frame alone (boxes 6.45; no type more than 0.15 ms over its box).
       **Not ticked:** six building types (four Malazan, two Teblor) and the six capsules.
+      **M6-V32, 2026-11-27-1857:** the last six box buildings are models (Malazan Wickan Corral, Armory, Cadre Tower,
+      Engineers' Yard; Teblor Stables & Kennels, Breaker's Hall: a pack file each with studio-made kit parts) and the
+      Stone Cairn is rebuilt as dark stacked stones with team cloth. **All 30 building types are models**; 400 figures
+      with 60 building models 6.50 ms a frame on a quiet window (main 6.54; no type more than 0.05 ms over its box).
+      **Not ticked:** the six unit types still drawn as capsules (the mounted units and machines: the owner's packs).
 - [ ] Real SFX and placeholder music; alerts with sound. (M6-V12, 2026-10-17-2344: **real SFX and the alerts are in**: 16 clips cut from
       the owner's Sonniss GDC 2026 bundle (`tools/audio/trim-wav.ps1` + `sfx-manifest.json`, LFS, docs/04 licensing rows) for 12 events
       (`SfxEvent`); world sounds only for what the local player sees on screen, at most 4 per 100 ms; attack alerts (`ViewApi/AttackAlerts`
@@ -1035,6 +1040,9 @@ open S1 / S2. Retro below; open S3 / S4 listed there.)_
       is met on Easy, Normal and Hard (BUG-1612 fixed). **M6-V30, the same session:** eight of the ten Teblor
       buildings are models. **Not ticked:** the Rider and War-dog models (the owner's packs), the two box buildings,
       the balance pass's remaining steps (a re-measure after the sim's AI-play session).
+      **M6-V32, 2026-11-27-1857: the two box buildings are models** (Stables & Kennels, Breaker's Hall) and the Stone
+      Cairn is stacked rocks; all ten Teblor buildings are models. **Not ticked:** the Rider and War-dog models (the
+      owner's packs), the re-measure of the plans on the computer player after M6-S15 (D40, next session).
 
 ## M8 — Shadow
 

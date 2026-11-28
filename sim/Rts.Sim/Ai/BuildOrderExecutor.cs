@@ -232,6 +232,7 @@ internal static class BuildOrderExecutor
         int lost = ai.LostHallCell, centre = RebuildCentre(ai, lost);
         if (centre < 0) return false;
         BuildingDef d = ai.Data.Buildings[ai.TownHallType];
+        if (!ai.CanAfford(d.CostGold, d.CostWood) && SmallDropOff(ai, centre, ref pending)) return true; // M6-S15 A2
         ai.NoSiteFound = false;
         if (ai.TryBuild(ai.TownHallType, centre, lost, ref pending))
         {
@@ -242,6 +243,46 @@ internal static class BuildOrderExecutor
         if (ai.NoSiteFound || !PlaceableButForCost(ai, ai.TownHallType) || !Fillable(ai, d.CostGold, d.CostWood)) return false;
         ai.SetHallReserve(d.CostGold, d.CostWood); // short of its cost, or no builder free this think
         return true;
+    }
+
+    /// <summary>
+    /// M6-S15 A2 (docs/01 2026-11-27-1857 (3), the computer player's side of BUG-1893's clause): a seat that rebuilds its hall
+    /// (so it has no hall, finished or a site), cannot pay for the hall now, and has no finished drop-off and none being built
+    /// builds the cheapest drop-off type of its faction it can pay for now (gold, then wood, then data order), placed round
+    /// the known node it may gather nearest <paramref name="centre"/> (the rebuild centre; round the centre with none known),
+    /// from the whole bank: the hall's reserve, named after this, does not hold it. Its Build rides
+    /// <see cref="Blackboard.HousePending"/> as the hall's does (one base Build at a time; judged at the next think, when its
+    /// site already counts as one being built). True when it was sent. Before it, the seat banked for the hall for good
+    /// while its gatherers had nowhere to deliver (docs/03 "Implementation (M6-S15)" A2).
+    /// </summary>
+    private static bool SmallDropOff(AiPlayer ai, int centre, ref PendingOrder pending)
+    {
+        if (ai.HasDropOff) return false;
+        GameData data = ai.Data;
+        for (int k = 0; k < ai.OwnBuildingCount; k++)
+            if (ai.OwnBuildingSites[k] && data.Buildings[ai.OwnBuildingTypes[k]].DropOff) return false;
+        int pick = -1;
+        for (int t = 0; t < data.Buildings.Length; t++)
+        {
+            BuildingDef b = data.Buildings[t];
+            if (b.Faction != ai.Faction || !b.DropOff || !ai.CanAfford(b.CostGold, b.CostWood)) continue;
+            BuildingDef best = pick >= 0 ? data.Buildings[pick] : b;
+            if (pick < 0 || b.CostGold < best.CostGold || b.CostGold == best.CostGold && b.CostWood < best.CostWood) pick = t;
+        }
+        if (pick < 0) return false;
+        int gold = NearestNode(ai, ResourceKind.Gold, centre, -1, skipDropped: true), wood = NearestNode(ai, ResourceKind.Wood, centre, -1, skipDropped: true);
+        int at = gold < 0 || wood >= 0 && CellDistance(ai, wood, centre) < CellDistance(ai, gold, centre) ? wood : gold;
+        ai.NoSiteFound = false;
+        if (!ai.TryBuild(pick, at >= 0 ? at : centre, ref pending)) return false;
+        ai.ExecutorSent = true;
+        return true;
+    }
+
+    private static long CellDistance(AiPlayer ai, int a, int b)
+    {
+        int w = ai.View.MapWidth;
+        long dx = a % w - b % w, dy = a / w - b / w;
+        return dx * dx + dy * dy;
     }
 
     /// <summary>

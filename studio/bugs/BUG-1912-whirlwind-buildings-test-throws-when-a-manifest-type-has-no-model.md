@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S4 |
-| Status | open |
+| Status | fixed (2026-11-27-1857, M6-V32; the same pattern in `TeblorBuildingsTest` is BUG-1953) |
 | Found | 2026-11-27-0817, task M6-V31 |
 | System | view tests: `game/tests/WhirlwindBuildingsTest.cs` (`ScreenRect`, `ModelPixels`) |
-| Fixed by | |
+| Fixed by | M6-V32 (view branch 538adad2): QA, fresh clone, the Archer Camp `.glb` as LFS pointer text: FAIL lines for that type, no exception, (S), (F), (3) run |
 
 ## Repro
 In a scratch clone (QA's: `<scratchpad>\m6v31-qa-clone`, imported), replace

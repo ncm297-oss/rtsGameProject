@@ -12,7 +12,8 @@ namespace Rts.Sim.Ai;
 /// order sent, one Train per producer, at producers whose queue holds fewer than <see cref="AiRulesDef.SpendDownQueue"/> (<c>ai.spendDownQueue</c>), until the bank
 /// is down to the threshold or nothing more can be trained. M5-9a: each composition weight is shifted toward what counters the
 /// enemy units the AI remembers seeing: weight x (1 + <c>counterStrength</c> x <see cref="AiPlayer.CounterShare"/> of the
-/// unit's slot); no unit is added and none weighted below the opening's own.
+/// unit's slot); no unit is added and none weighted below the opening's own. M6-S15 C (BUG-1890): when the pick can never be
+/// paid for (income cannot close the gap), it buys instead what it can (<see cref="SpendInstead"/>).
 /// </summary>
 internal static class ProductionManager
 {
@@ -28,9 +29,29 @@ internal static class ProductionManager
     private static bool TrainOne(AiPlayer ai)
     {
         int pick = Pick(ai);
-        if (pick < 0) return false;
         // Not judged: the next think simply looks at the queues again. M5-4g: only above the build order's reserve.
-        return ai.TryTrain(pick, emptyQueueOnly: !ai.SpendingDown, ref ai.Board.ProductionPending, aboveReserve: true);
+        if (pick >= 0 && ai.TryTrain(pick, emptyQueueOnly: !ai.SpendingDown, ref ai.Board.ProductionPending, aboveReserve: true)) return true;
+        return ai.PickNeverPayable() && SpendInstead(ai);
+    }
+
+    /// <summary>
+    /// M6-S15 C (BUG-1890, docs/01 2026-11-27-1857 (4)): production's pick can never be paid for
+    /// (<see cref="AiPlayer.PickNeverPayable"/>), so instead it trains (1) the most under-weighted unit of the current
+    /// composition it can pay for now (<see cref="Pick"/>'s share order, producer test and unit limit), else (2) the first unit
+    /// type of its faction in data order, the worker included, that it can pay for now at a finished own building with an
+    /// empty queue (population room and the unit limit as the train check has them). A reserve holds these buys only while
+    /// the seat could ever fill it (<see cref="AiPlayer.ReserveFillable"/>). One Train; true when it was sent.
+    /// </summary>
+    private static bool SpendInstead(AiPlayer ai)
+    {
+        bool hold = ai.ReserveFillable;
+        int pick = Pick(ai, payableOnly: true, holdReserve: hold);
+        if (pick >= 0 && ai.TryTrain(pick, emptyQueueOnly: !ai.SpendingDown, ref ai.Board.ProductionPending, aboveReserve: hold)) return true;
+        if ((uint)ai.Faction >= (uint)ai.Data.Factions.Length) return false;
+        var units = ai.Data.Factions[ai.Faction].Units;
+        for (int k = 0; k < units.Length; k++)
+            if (ai.TryTrain(units[k], emptyQueueOnly: true, ref ai.Board.ProductionPending, aboveReserve: hold)) return true;
+        return false;
     }
 
     /// <summary>
@@ -39,7 +60,10 @@ internal static class ProductionManager
     /// cheaper one, so M5-9a round 2's starved check (<see cref="AiPlayer.Starved"/>, BUG-1154) judges the seat on it too.
     /// Allocates nothing.
     /// </summary>
-    internal static int Pick(AiPlayer ai)
+    internal static int Pick(AiPlayer ai) => Pick(ai, payableOnly: false, holdReserve: false);
+
+    /// <summary>See <see cref="Pick(AiPlayer)"/>; M6-S15 C: with <paramref name="payableOnly"/> only an entry the seat can pay for now (above the reserve with <paramref name="holdReserve"/>).</summary>
+    private static int Pick(AiPlayer ai, bool payableOnly, bool holdReserve)
     {
         var compositions = ai.Opening.Compositions; // M5-8a: the picked opening's
         if (compositions.Length == 0) return -1;
@@ -58,6 +82,7 @@ internal static class ProductionManager
             // M8-4 (Request 56 G4): a type at its maxAlive (this think's Trains counted) is skipped, so the next by share is
             // trained rather than the seat waiting on it.
             if (share >= pickShare || ai.AtUnitLimit(type) || !CanTrainSomewhere(ai, type)) continue;
+            if (payableOnly && !(holdReserve ? ai.CanAffordAboveReserve(def.CostGold, def.CostWood) : ai.CanAfford(def.CostGold, def.CostWood))) continue;
             pick = type;
             pickShare = share;
         }

@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S3 (two four-seat AI matches never end; measure and report rows, not criterion rows) |
-| Status | open (a finding for the next AI task) |
+| Status | fixed (2026-11-27-1857, M6-S15 C; one shape left: BUG-1935) |
 | Found | 2026-11-27-0817, task M6-SH3 (B's pre-trace) |
 | System | AI production (`ProductionManager.Pick`: "it waits rather than buy a cheaper one") |
-| Fixed by | |
+| Fixed by | M6-S15 C (773cecec): `ProductionManager.SpendInstead`, `AiPlayer.PickNeverPayable`, `AiPlayer.ReserveFillable`; `Ai/SpendWhatItHasTests` (red on the A2 tree) |
 
 ## Repro
 1. `dotnet test sim/Rts.Sim.Tests --filter "FullyQualifiedName~DrawReachPreTraceTests"` (Category Stress; base 0159c425 and
@@ -29,3 +29,5 @@ train (they can), so the matches never become spent and never end (seed 2 and 4:
   can never close the gap to the pick), production buys the most under-weighted composition unit it can pay for now. One
   Crossbowman each would make seed 2 spent within a few thinks (p0 4 gold, p2 14 gold left).
 - With BUG-1891 on seed 4.
+
+- M6-S15 (2026-11-27-1857): Pale Hills four-seat FFA seed 2 now draws at 58,341 and seed 4 ends at 47,612 (p0). QA's sitting-seat oracle over 104 matches: seats that could plainly train and sat at the end, base 6, branch 0; longest plain-sitting span 119,240 -> 12,440 ticks. Left: a seat with no drop-off and none it can pay for that knows a node (BUG-1935); a match C made longer (BUG-1933).

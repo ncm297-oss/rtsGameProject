@@ -153,11 +153,13 @@ public class HuntStressTests
     /// M6-S13 (the owner's draw rule, docs/02 "Game flow" 4): un-skipped. The match is spent from 35,541 (29:37: the map's gold
     /// gone, no seat can train), the clock restarts 69 times on deaths, and it ends in a draw at 61,779 (51:28), p3 out and
     /// p0, p1, p2 standing (<c>DrawStalledRowsReportTests</c>). Was: no result by 144,000 (skipped, BUG-1068 / 1116 / 1559).
+    /// M6-S15 (C, BUG-1890: production buys what it can once its pick is out of reach for good): the draw comes at 46,217
+    /// (was 58,257), the seats spending their last gold sooner (docs/03 "Implementation (M6-S15)").
     /// </summary>
     [Theory]
     [Trait("Category", "Stress")]
     [InlineData(1UL, false)]
-    public void FourAiSeats_OnPaleHills_Seed1_KnownStall(ulong seed, bool teams) => FourSeatsRow(seed, teams, drawAt: 58_257); // M6-S14 (the AI-play session): was 61,779
+    public void FourAiSeats_OnPaleHills_Seed1_KnownStall(ulong seed, bool teams) => FourSeatsRow(seed, teams, drawAt: 46_217); // M6-S15 (C: the AI spends what it has, BUG-1890): was 58,257; M6-S14 (the AI-play session): was 61,779
 
     // M6-S13: FourAiSeats_OnPaleHills_Seed2_KnownStall (Pale Hills free-for-all seed 2, BUG-1116 / BUG-1068's remaining case,
     // un-skipped by M5-9a round 2) was the same match as the oracle row's seed 2 since M6-S12 (docs/01 2026-11-16; the handoff

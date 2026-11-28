@@ -209,6 +209,9 @@ public class M6Sh3AiCureTests
         int keep = w.Data.FindBuilding("malazan_garrison_keep");
         for (int k = 0; k < w.Buildings.Capacity; k++)
             if (w.Buildings.Alive[k] && w.Buildings.Owner[k] == 0 && w.Buildings.TypeId[k] == keep) Assert.True(w.Buildings.Free(w.Buildings.HandleOf(k)));
+        // M6-S15 (A2, staging only): the seat's wood below the Depot's price, so the hall-less seat does not build the small
+        // drop-off, whose site would take the freed Keep's slot and so the hall point (the first own building) a think later.
+        BuildMaps.SetTotals(sim, 0, w.Gold[0], Math.Min(w.Wood[0], w.Data.Buildings[w.Data.FindBuilding("malazan_depot")].CostWood - 1));
         return (sim, before);
     }
 
