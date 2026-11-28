@@ -15879,6 +15879,37 @@ first, the marks kept). Green on the base, the guard: begun later than the memor
 0, the free start first). The twin and a save between the cut and the resume (loads equal, saves to the same bytes, follows
 the run for 1,000 ticks past the resume). M6-S14's `Ai/HuntResumeTests` green unchanged.
 
+**B. BUG-1891, traced, not cured (`Stress/GoldLeftTraceTests`, Category Stress, by name).** The Pale Hills four-seat FFA
+seed 4 (`DrawStalledRowsReportTests.Build`) from 48,000 to 72,000, every 6,000 ticks, at each seat's think: every live gold
+node, and per seat whether its view has explored and knows the node, its dropped mark, its gather reach, the distance to its
+nearest finished drop-off, the defense, `KnowsNode(gold)`, the scout's and far expansion's phases, its workers by state and
+the kind last sent, and each loaded worker. Run on the base d26338d3 (it reads only what the base has; 2 min Release). The
+map's gold is **one mine**, slot 14 at cell (167, 49), (334, 98) m: 926 gold at 48,000, 726 at 72,000.
+
+*Why seat 0 (26 workers, four drop-offs) mines none of it:* **it does not know the mine.** The mine's cell is unexplored
+by seat 0 for the whole span (`IsExplored` false, no record in its view), although it lies 65 m from seat 0's nearest
+finished drop-off; so `KnowsNode(gold)` is false and the economy sends no gatherer. Not the reach (in reach, the reach
+lifted), not the defense (not defending), not a dropped mark (none). Seat 0 is short of gold for its pick and does look:
+its blind re-scout (M6-S12, a gatherer taken while it knows only wood) is out from before 48,000 to about 70,000 and its far
+expansion is armed (phase 1) all along, but the re-scout walks the scout grid (51 m cells, 14 m sight), whose route never
+passes within sight of that cell, and the far expansion looks only at the start locations. So seat 0's 26 workers stay on
+wood (11,155 wood at 72,000) with 52 gold. **BUG-1930** (S3, new): a seat blind to gold re-scouts on the coarse grid and can
+miss a mine 65 m from its own drop-off for the whole match; the cure is in how the re-scout or the far expansion chooses
+where to look (unexplored ground near home, the map's mine spots), new behaviour beyond this task's 30 lines.
+
+*Why seat 3's 30 gold "is never delivered":* **it is delivered, slowly.** The mine is the only gold left and stands 351 m
+from seat 3's only drop-off, so each load is a round trip of about 700 m; at every sample three or four workers are Moving
+with 10 gold on that walk (266, 335, 223 m from home at 54,000), and at 72,000 two are Returning 12-13 m from the drop-off.
+Seat 3's bank goes 30 -> 0 -> 70 -> 30 -> 40 gold as loads arrive and are spent (its two Trains from 48,000). M6-SH3's
+pre-trace read "carries 30 gold" at one tick as "never". Seat 3 builds no depot by the mine because the far expansion arms
+only with no gold node known (it knows this one): **BUG-1931** (S4, new; a known far mine is hauled from 351 m for good).
+Seat 1 (Whirlwind, one Camp Follower, no drop-off, 21 gold / 75 wood) holds a full load idle by the mine and is sent 375
+Gathers from 48,000 (BUG-0574's guard: a loaded worker with no drop-off), the state A2 now ends: its 75 wood pays a Supply
+Cache, which it builds.
+
+No cure under the 30-line rule: seat 0's is new looking behaviour, seat 3's is not a fault of an existing rule. Measured:
+the four-seat seed 4 row under each item in the table below.
+
 
 ## Testing strategy
 
