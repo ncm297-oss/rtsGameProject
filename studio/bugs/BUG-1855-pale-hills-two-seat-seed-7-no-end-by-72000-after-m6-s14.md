@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S4 (a report row; not a criterion row) |
-| Status | open (re-stated with M6-SH3 A's trace; a finding for the next AI task) |
+| Status | fixed (2026-11-27-1857: the match ends at 60,387, seat 0, through M6-S15 C; the traced hunt loop itself is BUG-1932) |
 | Found | 2026-11-26-1847, task M6-S14 (`Stress/MatchRowsM6S10Report`, the session's two-seat probe) |
 | System | AI end game (two seats) |
-| Fixed by | |
+| Fixed by | M6-S15 C (773cecec); `Stress/MatchRowsM6S10Report` Pale Hills seeds 7 / 8. Not by D (2f6c2733), which leaves the match unchanged |
 
 ## Repro
 1. `Stress/MatchRowsM6S10Report` or `MapFileTests.MapMatch("pale_hills", 7, ...)` to 72,000: `ROW pale_hills seed 7, 2 seats:
@@ -32,3 +32,5 @@ is reached and re-sent after each defense to the same point (14 timeline entries
 is at about (322, 398) m, the other way. Once seat 1's army is gone (its starved wave at 69,240) the sweep moves on (202-206 by
 71,941). Cure (not done: more than 30 lines of new hunt behaviour): a hunt that resumes after a defense should keep the
 points it passed or sweep from where the army stands rather than re-send the same leg.
+
+- M6-S15 (2026-11-27-1857): D (a hunt the defense recalls is resumed: `MilitaryManager.MarkCut`) is built as specified, but the traced loop is not a recalled hunt (hunts 2 for the whole span, never recalled): the hunt chases each raid's sighting at its own base and restarts its leg to point 200 from home. That loop is BUG-1932. The match ends because seat 1 no longer sits on its bank (C).

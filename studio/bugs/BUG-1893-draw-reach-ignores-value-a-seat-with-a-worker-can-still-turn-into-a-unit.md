@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S3 (as specified in docs/01 2026-11-27 second row (1), so not an acceptance-criterion miss; but the spec's stated reason does not hold on shipped costs, and the Producer's QA focus calls a wrongly early draw S2: the Producer's call) |
-| Status | open |
+| Status | fixed (2026-11-27-1857, M6-S15 A) |
 | Found | 2026-11-27-0817, task M6-SH3 (QA, focus 1) |
 | System | draw rule (`World.CanStillTrain`, docs/02 "Game flow" 4) |
-| Fixed by | |
+| Fixed by | M6-S15 A (e7e39dee): `Draw/DropOffClauseTests` (red on d26338d3), the property rows in `Draw/DrawReachPropertyTests` (batches 4-5 reach the clause), `QA/M6Sh3DrawQaTests.Bug1893_ABankThatBuysADropOff_IsReach_TheClockDoesNotRun` |
 
 ## Repro
 1. `dotnet test sim/Rts.Sim.Tests --filter "FullyQualifiedName~M6Sh3DrawQaTests.Bug1893_"` (a pin of the rule as built; it passes).
@@ -50,3 +50,5 @@ meant to judge.
 
 ## Producer ruling (ACCEPT of 2026-11-27-0817)
 S3 stands, not S2: the code does what docs/01's PLAN row said, the state needs a seat with no finished hall and no depot, and the countdown shows for five minutes and stops when a drop-off is finished. The PLAN row's reason was wrong on shipped prices (every small drop-off costs 0 gold / 75 wood), so the rule gains one clause: **a seat with a live worker and no finished drop-off whose bank pays for one of its faction's drop-off buildings counts carried and map resources as reach** (docs/01 2026-11-27, the ACCEPT row, (1)). First item of the sim's next task; `M6Sh3DrawQaTests.Bug1893_*` is re-pinned then. The refunds of a waiting item or a site stay out (the player must cancel; the clock stops on that tick).
+
+- M6-S15 (2026-11-27-1857): `World.CanStillTrain` (b) gained the clause as docs/01 2026-11-27-1857 (2) states it (the drop-off's price is taken off the bank first). QA's own fuzz: the sim's answer = M6-SH3's scan OR the clause on about 277,000 seat-states. The computer player's side (A2): a hall-less seat builds its small drop-off first. Not added, as ruled: the refund of a waiting item or a site.

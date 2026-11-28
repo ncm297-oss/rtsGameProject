@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S3 (a pinned Stress row stopped ending; moved by rule 45) |
-| Status | open (M6-SH3 B: the draw rule is exact; the match is held by the AI: BUG-1890) |
+| Status | fixed (2026-11-27-1857, M6-S15 C: the match draws at 58,341) |
 | Found | 2026-11-26-1847, task M6-S14 (the pin move: `Stress/HuntStressTests.FourAiSeats_OnPaleHills_EndWithTheOracleOnEveryHunt`) |
 | System | AI end game (four seats) |
-| Fixed by | |
+| Fixed by | M6-S15 C (773cecec); `Stress/M6S14FourSeatQaStressTests` FFA seed 2, `Ai/SpendWhatItHasTests` |
 
 ## Repro
 1. `Stress/DrawStalledRowsReportTests` row (pale_hills, 2, 4, ""): `first spent never, restarts 0, ... no end by 144000
@@ -32,3 +32,5 @@ The draw rule now counts wood and asks for a finished drop-off before counting c
 Crossbowman and p2 (50 gold) for a Crossbowman or a Laborer, by the old and the new rule alike, and neither sends a Train from
 48,000: production waits for its pick (BUG-1890). After B the match is unchanged (no end by 144,000, same end hash
 381F5ED6CBDF4F93). Not a draw-rule fault any more; left open for BUG-1890's cure.
+
+- M6-S15 (2026-11-27-1857): with "spends what it has" (BUG-1890) the two seats that sat on 40-50 gold buy what they can pay for, and the match is spent and drawn at 58,341 (the base before M6-S14 drew at 58,378).

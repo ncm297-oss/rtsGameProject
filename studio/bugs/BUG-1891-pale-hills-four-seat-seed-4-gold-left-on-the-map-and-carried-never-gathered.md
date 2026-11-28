@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S4 (a measure-and-report row; the match never ends with BUG-1890) |
-| Status | open (not traced further) |
+| Status | fixed (2026-11-27-1857: traced and split into BUG-1930 / BUG-1931; the match ends through M6-S15 C) |
 | Found | 2026-11-27-0817, task M6-SH3 (B's pre-trace) |
 | System | AI economy (gather reach / delivery) |
-| Fixed by | |
+| Fixed by | M6-S15 B (fc87a5c4, the trace `Stress/GoldLeftTraceTests`) and C (773cecec, the match ends at 47,612) |
 
 ## Repro
 `Stress/DrawReachPreTraceTests` (seed 4) at 72,000, base 0159c425 and after M6-SH3 B alike: 726 gold left on the map;
@@ -23,3 +23,5 @@ so the match is never spent (with BUG-1890: the seats also never spend their ban
 ## Notes
 - Not traced in M6-SH3 (out of scope: an economy question). First suspects: the mine is out of every seat's known nodes or
   beyond `ai.gatherReach`, or marked dropped; p3's loaded workers may be stuck or Idle with full loads.
+
+- M6-S15 (2026-11-27-1857): seat 0 never explored the last mine (cell (167, 49), 65 m from its drop-off; its blind re-scout's grid route misses it): BUG-1930. Seat 3's "30 gold never delivered" is delivered, slowly, over a 351 m haul: BUG-1931. Seat 1's idle loaded worker with no drop-off now builds a Supply Cache (A2).
