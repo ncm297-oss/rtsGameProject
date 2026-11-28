@@ -1,6 +1,8 @@
 # Handoff: brief for the next session
 
-Written by the Producer at the ACCEPT of session **2026-11-27-0817** (session 1 / 8 of 2026-11-27; about nine
+**Amended at the PLAN of session 2026-11-27-1857 (the session plan below replaces the proposed briefs: sim
+M6-S15 the computer-player task with the draw clause, view M6-V32, data STOP; the teleport and the data's
+re-measure move to the next session).** Written by the Producer at the ACCEPT of session **2026-11-27-0817** (session 1 / 8 of 2026-11-27; about nine
 hours). Sim **M6-SH3** ACCEPT (hardening, 0 fix rounds, QA full PASS_WITH_ISSUES), view **M6-V31** ACCEPT
 (feature, 0, QA standard PASS_WITH_ISSUES), data **D-H11** ACCEPT (hardening, 0, QA light PASS_WITH_ISSUES).
 **M5 8 / 9 (criterion 6 owner-only), M6 5 / 10, M7 3 / 4, M8 0 / 3.** Counters: **sim 0 / 4, view 1 / 4, data
@@ -36,6 +38,330 @@ tick before"; (5) **rule 41 for the data brief:** M8-5 must move no AI play (the
 spent; teleport is test data), so the data track may measure; if the sim's brief grows an AI item, the data
 track goes static instead; (6) the data re-measure runs hour-long report classes: tell QA which run by name and
 that the sim's QA full runs beside it (session length).
+
+## Current session plan (2026-11-27-1857, session 2 / 8; written at the PLAN)
+
+**Sim GO, view GO, data STOP.** Base `1df37150`. Bug ids: **sim 1930-1949** (a pin move: rule 71), **view
+1950-1959**, data 1960-1969 unused. **The order of the sim's next two tasks is swapped** (docs/01, the
+2026-11-27-1857 row, (1)): the computer-player task runs now and carries the draw rule's drop-off clause; the
+Shadow's teleport is the sim task after it. So the data track's re-measure (D40) is made once, next session, on
+the final computer player; this session it cannot measure (rule 41) and has no other unblocked work. No track
+moves the data hash or the save format this session. The Producer's list of test files that seat an AI (rules
+74 / 83), 308 files, 58 under `Stress/`:
+`C:\Users\Nick\AppData\Local\Temp\claude\162c01fae57881b0\d9c61ef4-693f-4440-b4d4-9132119945e3\scratchpad\prod1857-plan\prod1857-ai-match-grep.txt`
+(remake it with `grep -rlE "MapMatch|AiDifficulty|AddAi|AiScenes|AiPlayer" sim/Rts.Sim.Tests --include=*.cs`).
+
+### Sim track: M6-S15, the computer player spends what it has and finishes its hunt; the draw rule's drop-off clause (feature, QA full)
+
+**Goal.** Three AI-against-AI test matches never end: Pale Hills four-seat free-for-all seeds 2 and 4, and
+Pale Hills two-seat seed 7 (seed 8 is the same match). M6-SH3 showed the draw rule is right and the computer
+player is at fault: it sits for ever on money that pays for a unit, and its hunt starts over after every raid
+on its base. Cure both, add the draw rule's decided missing clause (BUG-1893) with the computer player's side
+of it, and re-measure every pinned AI match once. Decisions: docs/01, the 2026-11-27-1857 row, (2)-(5).
+
+**Scope, in this order, each item its own commit, each measured apart from the others (rule 70):**
+
+- **A. The draw rule's drop-off clause (BUG-1893).** In `World.CanStillTrain` (`sim/Rts.Sim/World.Draw.cs`),
+  clause (b): a seat with a live worker and **no** finished drop-off of its own also counts carried and map
+  resources when, for some drop-off building type of its faction (`BuildingDef.DropOff`; every drop-off type
+  for a seat with no faction, test data), the bank pays that building's gold and wood, **and** the bank less
+  that price, plus what its units carry and what is left on the map, pays a unit type not at its `maxAlive`
+  in gold and in wood. A drop-off's `requires` is not asked (no shipped drop-off has any: the three halls cost
+  275 / 275, the three small ones 0 gold / 75 wood). Nothing else of the rule changes: a site is still no
+  drop-off, the refund of a waiting item or of a site is still not counted, population room is still not
+  asked. Counters only (the drop-off types per seat are listed once at construction, as `_drawUnits` is);
+  nothing allocated per tick, nothing saved or hashed. docs/02 "Game flow" 4 gains the clause in plain words.
+- **A2. The computer player's side of the clause.** First say what an AI seat does today with a live worker,
+  no finished drop-off, no drop-off site and a bank that pays for its faction's small drop-off but not for the
+  hall rebuild (`BuildOrderExecutor`'s rebuild, `HallReserved`). If it never builds the small drop-off: it now
+  does. Rule: a seat with a live worker, no finished drop-off and none being built, which cannot pay for the
+  hall rebuild now, builds the cheapest drop-off type of its faction it can pay for (gold, then wood, then
+  data order), placed by the executor's existing placement near the nearest node it knows and may gather
+  (else round the rebuild centre); the hall rebuild's reserve does not hold this one build. With a bank that
+  pays for the hall it rebuilds the hall as today. If this takes more than about 60 lines or a new saved
+  field, stop the item, land A alone and report (A is the rule a human player sees; an AI seat that then
+  holds a match open is a finding with a bug id).
+- **B. BUG-1891, trace first.** Pale Hills four-seat FFA seed 4 from 48,000 to 72,000
+  (`Stress/DrawReachPreTraceTests` is the start): why seat 0 (26 workers, four drop-offs) mines none of the
+  726 gold left, and why seat 3's workers never deliver the 30 gold they carry: is the node known, may the
+  seat gather it (`KnowsNode`, `ai.gatherReach`, the defended-point filter, a dropped mark), what state are
+  the loaded workers in. Write the answer in docs/03. Cure it only if the cure is about 30 lines or fewer
+  inside an existing rule; else leave the trace and the finding.
+- **C. BUG-1890, "spends what it has".** `ProductionManager` (and whatever it needs of `AiPlayer.Starved`'s
+  parts (i) and (ii): `ShortForPick`, `CanEverPay`). When production's pick cannot be paid for now **and
+  income can never close the gap for it** (part (ii) as `Starved` reads it; **not** part (iii), the army
+  size, and say whether a defended base should switch it off: my default is that it does not), production
+  trains instead, one Train a think as today:
+  1. the most under-weighted unit of the current composition (the same share order, the same producer test,
+     the unit limit respected) that the seat can pay for now; with none,
+  2. the first unit type of its faction in data order, the worker included, that it can pay for now and that
+     a finished building of its own with an empty queue may train (population room and the unit limit as the
+     train check has them).
+  A reserve (a build-order step's or the hall rebuild's) holds these buys only while the seat could ever pay
+  the reserved cost; a reserve it can never fill does not. A seat that is short for its pick but knows a node
+  it may gather of the short kind waits exactly as today. Nothing new is saved (think scratch only).
+  Why part 2 (rule 84, checked on the shipped prices): a seat can hold the price of a worker and of no unit
+  of its mix (Laborer 50 gold against Heavy Infantry 54; Camp Follower 40 against Raider 48; Gatherer 75
+  against Warrior 120), the draw rule rightly says it can still train, and without part 2 it never does.
+- **D. BUG-1855, "finishes its hunt".** `MilitaryManager` (`BeginHunt`, `StartSweep`, `NextSweep`, the
+  defense's interruption). Today a hunt cut short by a defense begins again as a new hunt: marks cleared, and
+  from the match's second hunt on the free starts first, so the same far first leg is re-sent after every
+  raid (the trace: 14 times to sweep point 200). Rule: a hunt cut short by a defense is **resumed** when the
+  next hunt begins within `ai.huntMemory` of the defense ending: the visited marks and the pass are kept, and
+  it sweeps nearest-first from where the army stands, the free starts not first. A fresh enemy sighting still
+  comes first; a hunt that begins later than that forgets as today. **Use only what the save already holds**
+  (`HuntVisited`, `HuntPass`, `HuntFindTick`, `HuntFindPoint`, or think scratch rebuilt on load); if the rule
+  needs a new saved field, stop the item, write the design into docs/03 and report (no save-format step this
+  session). Measure on `Stress/PaleHillsStallTraceTests`.
+  **Cut rule:** if D does not fit, drop it whole before the pin move and say so in the first lines of the
+  report; A-C and the pin move then stand alone.
+- **E. The pin move, once, after D** (rules 43 / 45 / 71 / 74 / 83): criteria 10-12.
+- **F. Small, no behaviour:** BUG-1892 (QA's four-seat table calls its 0 / 1 / 0 / 1 rows "2v2": name them
+  1v1v2, or add true 2v2 rows with teams 1 / 2 / 1 / 2 beside them; no row deleted).
+
+**Out of scope:** any save-format step (BUG-1490 and Request 60 wait; `SaveFormat.CurrentVersion` stays 11);
+every byte under `game/data/**` (no new `ai` knob: if an item needs a number, use one the data already has or
+stop the item and report); the Shadow's teleport and Request 56; movement and pathfinding; "press the attack
+while the draw clock runs"; BUG-1894; `game/**` except the hand-over in criterion 13; the data track's files
+except the hand-over below.
+
+**Acceptance criteria.**
+1. A: unit tests in `Draw/`. Red on the base: the BUG-1893 scene on shipped data (a Malazan seat with a
+   Laborer, a finished unit-producing building, no drop-off, a gold mine on the map, bank 35 gold / 100 wood)
+   is **not** spent; the same for a Whirlwind and a Teblor seat with their small drop-off's price; a forged
+   seat whose only drop-off type is hall-priced and whose bank pays it. Guards (green on the base, say so):
+   the same scene with 74 wood is spent; with the worker dead it is spent from that tick; with exactly the
+   drop-off's price, no wood left on the map and no unit free of wood (forged) it is spent; a paid drop-off
+   site with an empty bank is spent until the tick it is finished.
+2. A: the property rows. Over the draw fuzz's states: "M6-SH3's rule says can" implies "the new rule says
+   can"; "the new rule says can and M6-SH3's says cannot" implies the clause's own condition, scanned
+   test-side (`Draw/DrawReachScan` keeps M6-SH3's scan under its own name); the sim's counter answer equals
+   the scan on every state. M6-SH3's row "M6-S13-spent implies spent" is re-stated to what now holds, with the
+   reason written beside it; no row is deleted.
+3. A: `QA/M6Sh3DrawQaTests.Bug1893_*` is re-pinned to the new rule (the clock does not run), a save in a
+   state that uses the clause loads to the same hash and answer, and `Draw/DrawCostTests` holds at 0 bytes on
+   the new path; the check's cost at 8 seats / 2,000 units is reported.
+4. A2: what the AI does today is written in docs/03. If the rule is built: a test, red on the base, for each
+   shipped faction: an AI seat with a worker, no drop-off, no hall, a known gold node and a bank that pays
+   the small drop-off but not the hall sends that Build and its worker delivers there; a guard that a bank
+   which pays for the hall rebuilds the hall as today. If it is not built: the report says so in its first
+   lines and the four-seat table of criterion 9 shows what A alone does.
+5. B: docs/03 "Implementation (M6-S15)" says in plain words why the 726 gold is not mined and the 30 gold not
+   delivered. Measure and report; a cure is optional under the 30-line rule, with a test red on the base.
+6. C: tests in `Ai/`, red on the base: a staged seat whose pick can never be paid for and whose bank pays for
+   another composition unit sends that Train within two thinks; one whose bank pays for no composition unit
+   but for its worker trains the worker; one held only by a reserve it can never fill trains. Guards: a seat
+   that knows a node it may gather of the short kind waits as today; a reserve it can fill still holds. A
+   determinism twin and a save between two such thinks (same hash 1,000 ticks on).
+7. D (if not cut): tests in `Ai/`, red on the base: a staged hunt cut by a defense and begun again within
+   `ai.huntMemory` keeps its visited marks and its next target is the nearest unvisited point from the army,
+   not the leg it was on before; begun again later than that it forgets as today (guard). A save between the
+   cut and the resume loads to the same hash and plays the same 1,000 ticks. `M6-S14`'s `Ai/HuntResumeTests`
+   stay green unchanged.
+8. No new saved field: `SaveFormat.CurrentVersion` is 11 and a save made on `main` loads on the branch.
+9. **Measure and report** (rule 48), a table in docs/03 with a column for the base and one after each of A,
+   A2, C and D: Pale Hills four-seat FFA seeds 1-8 and the 0 / 1 / 0 / 1 rows
+   (`Stress/M6S14FourSeatQaStressTests`, by name: it is Soak-tagged), `Stress/DrawStalledRowsReportTests`,
+   Pale Hills, Raraku and Vathar Crossing two-seat seeds 1-8 (`Stress/MatchRowsM6S10Report`): end tick and
+   result. That seeds 2 and 4 (four seats) and seed 7 (two seats) end is the hope, not a pass / fail line. A
+   row that ended on the base and no longer ends is a finding with a bug id, and the item that caused it is
+   named.
+10. The pin list is the one in docs/03 "Implementation (M6-SH3)" ("The pin list"), copied into
+    "Implementation (M6-S15)" one class a line with "re-measured: yes / moved to ... / unchanged" beside
+    each, the handed content classes included, old values kept in "was" comments, and docs/03's M5-5 table
+    re-printed.
+11. Every Stress class in the Producer's list file (above) is run on the final tree and the report names any
+    not run. A pinned criterion row that stops ending moves to the nearest seed 1-8 that ends inside its
+    bound, with a bug id; no bound is raised. If a map has no ending seed, revert the item that caused it
+    (they are measured apart) and report.
+12. Which rows can move, said in the report per item (rule 43). My expectation, to be checked: A moves only a
+    match that is drawn or comes near one; A2 only a seat that has lost every drop-off; C every match in
+    which a seat's pick becomes unpayable for good (the four-seat rows, the Hard v Normal tally's long rows,
+    the FFA and 2v2 criterion rows at 56,664 and 42,301); D every match with a hunt cut by a defense
+    (`HuntStressTests`, `AiDeterminismTests`' hunt row, Pale Hills rows); the four two-seat criterion rows
+    that end before 28,000 should not move, and if one does the report says which item moved it.
+13. The view's scene loop (`game/tests`, 135 scenes) is run once on the final branch. A scene red only
+    because a staged AI seat now buys or builds what this task makes it buy or build is handed to you for a
+    staging-only edit, named in the report, **unless** it is `BuildingModelTest`, `QaM6V26Test`,
+    `ViewHardenVh9Test`, `TeblorBuildingsTest`, `WhirlwindBuildingsTest`, `QaV4Test` or `TeblorViewTest`
+    (the view track edits those this session: report the row instead). No other file under `game/**` changes.
+14. No byte under `game/data/**` changes; the golden replay's body is unchanged (say so, or say why not).
+15. `dotnet build RtsGame.sln --no-incremental` 0 errors / 0 warnings after the last edit; the default loop
+    (`Category!=Perf&Category!=Stress&Category!=Soak`) green after the last edit with the skip list given by
+    name (base: 21 skipped); smoke PASS.
+
+**Handed over from the data track (rules 40 / 68), because your pin move re-prints their cells:**
+`Content/AiOpeningPairsReportTests`, `Content/HolyWarFirstWaveReportTests`, `Content/AiSpendingReportTests`,
+`Content/AiOpeningPairsVerdictTests`, `QA/Content/DR35ProsePinQaTests`, `QA/Content/TeblorOpeningQaTests`,
+`QA/Content/D21OpeningsQaTests`, `QA/Content/D20PinQaTests`, `QA/Content/AiHouseRuleReportTests`, and the
+cells they read on `docs/factions/malazan.md`, `whirlwind.md`, `teblor.md` (cells only, no prose). The six
+rows skipped with BUG-1851 / BUG-1853 / BUG-1920 stay skipped: the data track's re-measure is next session.
+The data track is stopped this session and edits nothing.
+
+**Design references.** docs/02 "Game flow" 4 and "AI opponent"; docs/01 2026-11-25 (the owner's draw
+decision), the three 2026-11-27 rows; docs/03 "Implementation (M6-SH3)" (A's trace, B's rule, the pre-trace,
+the pin list), "Implementation (M6-S14)" A (the hunt's resume from a find), "Implementation (M5-9a)" (the
+starved seat), "Implementation (M5-4d slice 2)" (the rebuild); BUG-1893, 1890, 1891, 1855, 1854, 1860, 1892.
+
+**Tests required.** As the criteria name; a determinism twin for A, C and D; the draw rule's invariant fuzz;
+every bug fix a regression test that failed first.
+
+**Constraints.** The AI reads the world only through its own view and sends commands (no `World` read from
+`Ai/`, and no AI code reads `CanStillTrain`); no allocation in per-tick or per-think code; no Dictionary /
+HashSet order; no wall clock; no stat in C#; docs in the same commit as behaviour. Write your questions for
+the Producer, the per-item measurements and the rule 71 list into docs/03 "Implementation (M6-S15)" (rules
+67 / 80). Record the PID of every `dotnet test` / Godot you start and end only those (rules 52 / 69). Scratch
+folders are new and named `m6s15-...` (rule 63); absolute paths inside your worktree only. Run the full
+default loop after your last edit or say in the first lines that you did not (rule 62). You cannot write
+`studio/**`: bug-file updates come as a patch in your scratch folder.
+
+**QA focus (full).** (1) The clause from both sides: a state it calls not spent in which the seat can in fact
+never field a unit (the bank pays the drop-off but what is left pays no unit and the map holds nothing it
+needs; the worker dies the tick before; the drop-off's price paid by wood the unit also needs), and a state
+still called spent in which a seat with a worker can plainly still field one. A wrongly early draw is S2.
+(2) The fuzz: M6-SH3-can implies new-can, and the difference is exactly the clause. (3) **A seat that sits:**
+an oracle over the four-seat tables, the two-seat seeds 1-8 on three maps and the Hard v Normal tally: at the
+end tick (or the bound) is there an AI seat that the draw rule says can still train, with a building free to
+train, that has sent no Train for 6,000 ticks? Report every one with its bank and why (measure and report,
+against the base). Try the shapes C names and the ones it does not: a seat at its population cap with a small
+bank, a seat whose only payable unit is at its unit limit, a seat with no building left but a worker, a
+Teblor seat with 75-119 gold and under 50 wood. (4) C must not change a healthy seat: a seat that is only
+briefly short (a node it may gather is known) plays tick for tick as on the base for 12,000 ticks on three
+seeds. (5) D: a hunt cut twice in a row, cut on the tick it reaches a point, cut then the match saved and
+loaded in another process; a hunt that resumes must not walk into an ally's base (`TeamAiSoakStressTests`'
+oracle) and must still end. (6) A2: the depot is built where the worker can reach it, on each of the three
+maps' bases; the seat with wood for the depot and no node known; two seats of one team. (7) The rule 71 list
+against the grep file: a Stress class that seats an AI and was not run. (8) Think cost and allocation of an AI
+think with the new rules (0 bytes), and the draw check's cost. Suites: the default loop with Stress on the
+commit that holds your files, then Perf alone (rule 42); after a tests-only fix round the touched classes and
+the default loop only (rule 72).
+
+### View track: M6-V32, the last six box buildings and the Stone Cairn as models (feature, QA standard)
+
+**Goal.** Six building types are still drawn as boxes: the Malazan Wickan Corral, Armory, Cadre Tower and
+Engineers' Yard and the Teblor Stables & Kennels and Breaker's Hall. Make them models, so that every finished
+building in the game is one, and rebuild the Stone Cairn as stacked rocks with the player's colour on cloth
+(its pale wall hides the Jade and Ochre players' colour: BUG-1870).
+
+**Scope.**
+- **First, two small fixes in their own commits,** since the task changes both files: **BUG-1911**
+  (`tools/art/build_building.py` `check_kit`: a size / at / rotate number that is not finite is refused; an
+  unknown key of a part is refused; an entry with no `colours` fails with its id and a plain sentence; an
+  unused colour on an entry with no source says "no kit part has role ..."; then
+  `tools/qa/kit-errors-extra.ps1` exits 0 and `tools/art/test-kit-errors.ps1` gains the rows) and
+  **BUG-1912** (`game/tests/WhirlwindBuildingsTest.cs`: a manifest type drawn as a box fails its own rows and
+  the scene goes on to (S), (F) and (3)).
+- **The six types,** through `tools/asset-manifest.json` `buildings` and the existing builder (a pack
+  `source`, a `kit`, or both; `keep` to crop). Your pick per building, said in the report and in docs/04. Each
+  must read as what it is and be unlike every other building of its faction at zoom 40. Starting points, not
+  orders: the Malazan four in the Second Age set's grey stone with the roof in the player's colour (Wickan
+  Corral: a fenced paddock with a hide tent or an open stable, `Farm_SecondAge_*` or kit rails; Armory:
+  `Storage_SecondAge_Level3` or `Market_SecondAge_*` with racks; Cadre Tower: `TowerHouse_SecondAge` or
+  `Temple_SecondAge_*`, plainly not the Watchtower; Engineers' Yard: a shed with a kit timber frame, a log
+  pile and a half-built engine); the Teblor two in the First Age set's timber at the data `scale` 1.25
+  (Stables & Kennels: `Farm_FirstAge_*` with a kit rail and kennel boxes; Breaker's Hall: a heavy hall,
+  `Barracks_FirstAge_Level3` or `Temple_FirstAge_*`, with kit boulders). No pack file that another building
+  of the same faction already uses with the same palette.
+- **The Stone Cairn** (`teblor_stone_cairn`, 2 x 2, `scale` 1.25): stacked rocks (the pack's `Rock*` /
+  `Resource_Rock_*` files, kit parts, or both) with a team part of cloth (a banner on a pole, a wrap) that
+  shows in all eight colours. It replaces the `WatchTower_FirstAge_Level1` model.
+- Pictures (windowed, `ModelShots` or a scene's `-- --shots <dir>`), into a new scratch folder
+  `m6v32-pictures`: every new or changed type at zoom 40 and at zoom 20, a whole Malazan base and a whole
+  Teblor base at zoom 40, the Cairn and one Malazan building in all eight player colours. Look at them before
+  reporting.
+- docs/04 "Building models, as built (M6-V32)" (sources or parts, triangles, fitted sizes, palette; a line in
+  the licensing log for every pack file newly used and "studio-made" for kit-only models) and docs/03
+  "Implementation (M6-V32)", with your questions for the Producer (rule 67).
+
+**Out of scope:** `sim/**` (no `ViewApi` change is expected), `game/data/**` (a building's model is found by
+id), unit models, BUG-1910 (the Bone camp's trim, the owner's to ask), any file under `game/scripts/` unless
+a criterion cannot be met without it (say why), stored save fixtures. `tools/**` other than `tools/art/**`,
+`tools/asset-manifest.json`, `tools/import-assets.ps1` and `tools/qa/kit-errors-extra.ps1` is the sim's.
+
+**Acceptance criteria.**
+1. BUG-1911: each of its four inputs (NaN in a size, Infinity in an `at`, no `colours`, an unused colour on a
+   source-less entry) and an unknown part key gives a `FAIL` line that names the entry and the part, and no
+   model is written; `tools/qa/kit-errors-extra.ps1` exits 0; `tools/art/test-kit-errors.ps1` passes with
+   the new rows. Its own commit.
+2. BUG-1912: with one manifest model replaced by its LFS pointer text, `WhirlwindBuildingsTest` prints its
+   FAIL lines for that type, throws nothing and still runs (S), (F) and (3). Its own commit.
+3. All 30 building types are models (the manifest lists 30; the report lists each of the seven new or changed
+   ones with its source or parts). Each new model: at most 5,000 triangles, one surface, one `team` material,
+   an atlas of 64 x 64 or 128 x 128. If a type cannot be made to read as what it is, it stays a box and the
+   report says why (then "30" above is the number reached).
+4. The import is deterministic: `tools/import-assets.ps1` run twice gives byte-identical new files, and every
+   pre-existing model, atlas, library and `.import` file other than the Stone Cairn's is byte for byte
+   unchanged (SHA-256 before and after); `git status` clean after the second run.
+5. A new headless scene in the loop, on the pattern of `WhirlwindBuildingsTest`, with the types read from the
+   manifest: each new model drawn at the M6-V26 fit inside its footprint by the fit margin, base on the
+   ground (the Teblor ones at `scale` 1.25); at a terrace's foot and edge; a worker in front of each is
+   selected by a click at zoom 20, 40 and 60 and model pixels select the building; the bar sits over the
+   drawn top; models off or a file missing gives the box, an LFS pointer gives the box and exactly one
+   warning; a three-faction match draws all 30 types as models. A site is still its box until finished.
+6. The pictures show it: in the two base pictures no two buildings of a faction look alike, and the report
+   says in one line per type what a player sees at zoom 40.
+7. Team colour, **measure and report:** for the Cairn and for one Malazan building of the six, in all eight
+   colours at zoom 40, the luminance gap (Rec. 709) between the team part and the largest non-team part next
+   to it, as a table in docs/04. A gap under 30 levels is named, not hidden. BUG-1870 is closed if the
+   Cairn's table has no colour under 30; otherwise it is re-stated with the new table.
+8. Frame time, on a quiet window (rule 77: after the sim's suites if you can, and say what else ran):
+   `ModelShots --bench 30 --vsync off` at 1600 x 900: 400 figures + 60 building models (`--bench-buildings 60
+   --bench-zoom 60`), 400 capsules from the same window, 1,000 figures, read in the "while 90 %+ alive" column
+   (`main`: 6.54 / 0.82 / 16.42 ms); and `--bench-building-types` for each new type against its box. More
+   than +1 ms for a type is a finding. Reported; judged by the Producer alone at ACCEPT.
+9. Scenes that pinned one of the six as a box, or the Cairn's tower shape, are adapted with no row deleted: a
+   site (always a box), `BuildingViews.UseModels = false`, or `ModelOf` / `BarY`; counts are read from the
+   manifest. Known: `BuildingModelTest`'s box-type row, `QaM6V26Test`, `ViewHardenVh9Test` P2 ("the
+   Stables"), `TeblorBuildingsTest`, `WhirlwindBuildingsTest`, `QaV4Test` and `TeblorViewTest` (they name the
+   six ids), `ViewHardenVh10Test` (the Cairn's colours); find the rest with the scene loop. The scene loop is
+   green, first pass, alone.
+10. If `tools/import-assets.ps1` changes: `tools/art/test-import-exit.ps1` and
+    `tools/qa/import-exit-extra.ps1` pass.
+11. `dotnet build RtsGame.sln --no-incremental` 0 / 0; the default loop
+    (`Category!=Perf&Category!=Stress&Category!=Soak`) green with 21 skipped; `tools/qa/smoke.ps1` PASS; new
+    binaries are Git LFS files of types already in `.gitattributes`; the report gives "the art pass's
+    binaries" size (`main`: 41,273,999 bytes).
+
+**Design references.** docs/04 "Humanoid base", "Building models, as built (M6-V26 / M6-V28 / M6-V30 /
+M6-V31)" (the kit's parts, roles and refusals), the style guide (grounded, not cartoonish), the licensing
+log; docs/03 "Implementation (M6-V26)", "(M6-V30)", "(M6-V31)", "(M6-VH9)" (picking follows the drawn shape),
+"(M6-VH10)" (the Cairn's colours); `docs/factions/malazan.md` and `teblor.md` for what each building is and
+trains; BUG-1870, BUG-1911, BUG-1912.
+
+**Tests required.** The new scene as criterion 5; the adapted scenes; the two-run import proof; the kit
+refusal rows.
+
+**Constraints.** Views hold no gameplay state; a click, a bar and a shot height follow the drawn model
+through the existing fit, with nothing computed per frame; no player-facing text in C#; never commit anything
+from `asset-sources/` (read it from the owner's main checkout, read-only; Blender 5.2) and log every pack
+file you use in docs/04 in the same commit. Record the PID of every Godot / Blender / `dotnet test` you start
+and end only those; a Godot `--import` can hang under load: time it out and re-run alone; after an import
+check `git status` and the file hashes (BUG-1831). Scratch folders are new and named `m6v32-...`; absolute
+paths inside your worktree only. The sim track may hand itself a staging-only edit of a scene under
+`game/tests` this session, never one of the seven scenes named in criterion 9. You cannot write `studio/**`.
+
+**QA focus (standard).** (1) Look at the pictures: does each of the seven read as what it is at zoom 40 and
+20, on grass and on sand; can the Cadre Tower be told from the Watchtower and the Corral from the Stables at
+a glance; is any part floating, sunken on a slope or outside its footprint at `scale` 1.25. (2) The Cairn in
+all eight colours beside a Jade and an Ochre player's other buildings; the luminance table re-measured from
+your own pictures. (3) Picking: a click between a fence rail and the building, through an open stable, on
+the rocks' gaps; a unit standing inside a paddock or behind the tower (`HiddenByBuilding`); drag-select
+round a yard. (4) The bar, the selection ring and the rally line on each new type at the closest zoom.
+(5) The kit refusals with inputs the developer did not list (a negative size, a string for a number, a
+`rotate` of NaN, two parts with one bad); the import twice on a fresh clone. (6) The fallback rows with one
+new file deleted and with an LFS pointer. (7) The bench alone, last, after the sim's suites end (rule 77);
+`BenchTest` and `QaV3Test` pass alone (`QaV3Test -TimeoutSec 1200` under load). Suites: the default loop,
+the scene loop, the `--no-incremental` build on the commit holding QA's files (rule 65).
+
+### Data track: STOP this session
+
+No brief. The data track's next task is the re-measure (D40), and it cannot be made while the sim changes
+how the computer player plays (rule 41); the pages and content classes it would touch are handed to the sim
+for the pin move (rule 68); no owner review tweak is waiting; the Shadow roster waits for Request 56 G5-G8.
+**Next session: D40 on the final computer player** (the three Teblor plans against the bar, the Malazan
+"keep 18" rule, BUG-1856, the last page sentences, BUG-1840's last file; a data change, if the numbers ask
+for one, is that session's one hash move, with the sim's pin classes handed by rules 51 / 76). Rule 57's
+clock for the five skipped rows ends with that task.
 
 ## Where things stand
 
@@ -522,7 +848,8 @@ state the trace finds", since the brief is written before the trace (M6-SH3 crit
 ## Sim track
 
 ### Current session plan
-None yet: the next PLAN writes it. Proposal below.
+**M6-S15** (2026-11-27-1857): see "Current session plan" above. The candidates below are as written at the
+last ACCEPT; candidates 1 and 2 are swapped (docs/01, the 2026-11-27-1857 row).
 
 ### Where we are
 M6-SH3 accepted: the draw rule's "can still train" is exact, BUG-1857 / 1852 / 1730 / 1862 / 1731 / 1153 are
@@ -558,7 +885,7 @@ row.
 ## View track
 
 ### Current session plan
-None yet: the next PLAN writes it. Proposal below.
+**M6-V32** (2026-11-27-1857): see "Current session plan" above.
 
 ### Where we are
 M6-V31 accepted: the Whirlwind's ten buildings are models, the kit path exists. Counter **1 / 4**. 15 of 21 unit
@@ -586,7 +913,8 @@ types and 24 of 30 building types are models. 135 scenes. Bench on a quiet windo
 ## Data track
 
 ### Current session plan
-None yet: the next PLAN writes it. Proposal below.
+**STOP this session** (2026-11-27-1857): the sim moves computer-player behaviour (rule 41). D40, the
+re-measure below, is next session's task, on the final computer player.
 
 ### Where we are
 D-H11 accepted: BUG-1880 fixed, the limit pin is in the readiness check, no game data changed. Counter **0 / 4**.

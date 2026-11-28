@@ -22,18 +22,18 @@ _Last updated: 2026-11-27 (session 2026-11-27-0817; sim + view + data, all accep
 | Field | Value |
 | --- | --- |
 | Sim: milestone | **M5 8 / 9** (left: your play); **M6 5 / 10**; **M7 3 / 4**; **M8 0 / 3**. Last: **M6-SH3** (ACCEPT, 0 fix rounds, QA full): the draw rule's "can still train" made exact; three computer-player fixes; every test match re-measured |
-| Sim: next task | **The draw rule's missing clause (BUG-1893: a bank that buys a depot counts as having one), then the Shadow's teleport rule on test data** (feature, QA full; changes no computer-player behaviour). After it: the computer player spends what it has and finishes its hunt (BUG-1890 / 1891 / 1855, the matches that do not end) |
+| Sim: next task | **In progress (session 2026-11-27-1857): M6-S15, the computer player spends what it has and finishes its hunt (BUG-1890 / 1891 / 1855, the test matches that never end), with the draw rule's missing clause (BUG-1893) first** (feature, QA full; every test match re-measured once). Order swapped at this PLAN (docs/01). After it: the Shadow's teleport rule on test data |
 | Sim: gate | **GO** |
 | View: milestone | **M6 5 / 10; M7 3 / 4.** Last: **M6-V31** (ACCEPT, 0 fix rounds, QA standard): the Whirlwind's ten buildings as models; 24 of 30 building types are models; 135 screen tests |
-| View: next task | **The last six box buildings and the Stone Cairn as stacked rocks, built in the import tool** (feature, QA standard), with two small tool fixes (BUG-1911, BUG-1912). Then mounted units and machines once packs are on disk |
+| View: next task | **In progress (session 2026-11-27-1857): M6-V32, the last six box buildings as models and the Stone Cairn as stacked rocks** (feature, QA standard), with two small tool fixes (BUG-1911, BUG-1912). Then mounted units and machines once packs are on disk |
 | View: gate | **GO** |
 | Data: milestone | M3 Done; D1-D39 and D-H11 on `main`. Last: **D-H11** (ACCEPT, 0 fix rounds, QA light): the limit reader's two edge cases, the limit check in the readiness test. No game data |
-| Data: next task | **The re-measure** (feature, QA standard): the three Teblor plans and the Malazan "keep 18" rule on today's computer player (BUG-1851 / 1853 / 1856; five checks wait switched off), the last page sentences. A data change, if one is needed, breaks old saves once more |
-| Data: gate | **GO** |
+| Data: next task | **Stopped for session 2026-11-27-1857** (it cannot measure while the sim changes the computer player). **Next session: the re-measure** (feature, QA standard): the three Teblor plans and the Malazan "keep 18" rule on the final computer player (BUG-1851 / 1853 / 1856; five checks wait switched off), the last page sentences. A data change, if one is needed, breaks old saves once more |
+| Data: gate | **GO** (next session) |
 | Build / tests | Producer, scratch clone of the three-way tree (sim f4c6ba3a + view 26c94844 + data 139b99bb): build `--no-incremental` **0 errors / 0 warnings**; everyday run **11,103 passed / 0 failed / 21 skipped of 11,124 in 24 m 5 s alone**; smoke **PASS**; screen tests **135 of 135, first pass, alone (29 m)**; frame time 6.54 ms a frame on a quiet PC for 400 figures with 60 building models (last session 6.54; 400 placeholder capsules 0.82, 1,000 figures 16.42). Long suite (QA, sim branch): 12,071 passed / 2 failed / 34 skipped of 12,107 with the everyday run inside it; the two red rows were QA's own new test in the wrong group, moved and green |
 | Open bugs | **S1 / S2: none.** S3 34, S4 37 (`studio/bugs/README.md`). Closed this session: BUG-1852, 1857, 1730, 1731, 1862, 1153, 1880. New open: BUG-1890, 1893, 1920 (S3), 1891, 1892, 1894, 1910, 1911, 1912, 1921 (S4) |
 | Data hash / saves | Data hash **3BB926FD74795B9E**, save format **11**: both unchanged this session |
-| Sessions today | **2026-11-27: 1 / 8 done (0817)**. Counters: **sim 0 / 4, view 1 / 4, data 0 / 4**. Usage 43 % of the week (stop at 95 %) |
+| Sessions today | **2026-11-27: 1 / 8 done (0817); 2 / 8 in progress (1857: sim + view, data stopped)**. Counters: **sim 0 / 4, view 1 / 4, data 0 / 4**. Usage 43 % of the week (stop at 95 %) |
 | Last session | **2026-11-27-0817** (08:17 to about 18:00): log `studio/sessions/2026-11-27-0817.md` |
 | Tools on this PC | Godot 4.7.2 .NET, .NET SDK 8.0.425, Git 2.53 + LFS 3.7, Blender 5.2.2; `GODOT` user variable set |
 
