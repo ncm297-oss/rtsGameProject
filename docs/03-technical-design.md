@@ -15585,6 +15585,11 @@ matches to 72,000): **32 / 4 / 0 / 6** (Hard / Normal / draw / none), unchanged 
 0 / 0, Pale Hills 6 / 2 / 0 / 6). **The four-seat Pale Hills rows** (FFA and 0 / 1 / 0 / 1, 144,000): every row as on the base and after B but **FFA seed 7: drawn at 59,184** (was 56,660; spent from 26,101 as before, 156
 restarts, was 158), moved by **C2** (measured on C1's tree: 56,660, hash-equal to the base; on C2's: 59,184; C3 equal to C2).
 Seeds 2 and 4 still no end by 144,000 (BUG-1890 / 1891); 0 / 1 / 0 / 1 seeds 1-8 unchanged.
+**Added at the ACCEPT from QA's base-against-head tables** (`studio/qa/2026-11-27-0817-M6-SH3.md`; this section's tables
+cover Pale Hills only): on Vathar Crossing the four-seat **FFA seed 3 moved too, p0 wins at 46,671 (was 85,836)**, a C item's
+move (B moves no AI play); Vathar FFA seeds 1, 2, 4-8 and every Vathar 0 / 1 / 0 / 1 row are identical to the base. The
+Producer's answers to the questions below are in docs/01's 2026-11-27 ACCEPT row; the draw rule gains one clause at the
+next sim task (BUG-1893: a bank that pays for a drop-off counts as having one).
 
 **The pin list (M6-S14 F's, one class a line, with what this task did).**
 Default loop:

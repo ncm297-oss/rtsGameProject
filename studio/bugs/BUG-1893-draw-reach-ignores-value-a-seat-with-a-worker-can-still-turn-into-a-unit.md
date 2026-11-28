@@ -47,3 +47,6 @@ meant to judge.
 - A cure inside the generic rule, if wanted: with a live worker and no finished drop-off, a seat whose bank pays for one of its
   faction's drop-off buildings counts the carried and map resources as reach (counters only: the drop-off types and costs are
   data). Same shape for a waiting item's or a site's refund. Owner / Producer decision; not built.
+
+## Producer ruling (ACCEPT of 2026-11-27-0817)
+S3 stands, not S2: the code does what docs/01's PLAN row said, the state needs a seat with no finished hall and no depot, and the countdown shows for five minutes and stops when a drop-off is finished. The PLAN row's reason was wrong on shipped prices (every small drop-off costs 0 gold / 75 wood), so the rule gains one clause: **a seat with a live worker and no finished drop-off whose bank pays for one of its faction's drop-off buildings counts carried and map resources as reach** (docs/01 2026-11-27, the ACCEPT row, (1)). First item of the sim's next task; `M6Sh3DrawQaTests.Bug1893_*` is re-pinned then. The refunds of a waiting item or a site stay out (the player must cancel; the clock stops on that tick).

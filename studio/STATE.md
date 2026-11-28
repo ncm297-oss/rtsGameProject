@@ -4,7 +4,7 @@ The dashboard. The Producer rewrites it at the end of every session. **Owner: re
 you" first.** "For your review" (further down) is non-blocking: what the studio built or decided
 on its own, explained in terms of what you'd see in the game.
 
-_Last updated: 2026-11-27 (session 2026-11-26-1847; sim + view + data, all accepted): sim **M6-S14** (the computer player rebuilds its workers and finishes its hunts sooner; three test matches stopped ending, next session's first job) · view **M6-VH10** (a drawn match reads Draw after a load too; five small fixes) · data **D39** (the Shadow page and its checks; no game data). **Saves and recordings from before this session no longer load.** Tests green: 11,017 passed / 0 failed / 24 skipped of 11,041 in 23 m 19 s; smoke PASS; screen tests 133 of 133, first pass._
+_Last updated: 2026-11-27 (session 2026-11-27-0817; sim + view + data, all accepted, no fix rounds): sim **M6-SH3** (the draw rule no longer counts gold or wood a player cannot use; three computer-player fixes; two test matches still do not end, cause found) · view **M6-V31** (the Whirlwind's ten buildings are tents and stalls in your colour) · data **D-H11** (two check fixes; no game data). **Your saves from this week still load.** Tests green: 11,103 passed / 0 failed / 21 skipped of 11,124 in 24 m 5 s; smoke PASS; screen tests 135 of 135, first pass._
 
 ## Waiting on you
 
@@ -12,29 +12,29 @@ _Last updated: 2026-11-27 (session 2026-11-26-1847; sim + view + data, all accep
 
 - **Your M5 playtest (20-30 min):** win a skirmish on Easy, then play a Whirlwind AI on Hard. Write "M5 play: won Easy, lost Hard" (or what happened) in the inbox; I sign M5 off that session.
 - **.NET 10 SDK** (`winget install Microsoft.DotNet.SDK.10`, then ".NET 10 installed" in the inbox): M6's ".NET revisit" item.
-- **Downloads (free, links in docs/04 "Asset sources"):** a horse and dog pack and a catapult kit (or "AI models ok"), for the mounted units and machines; music, a font and Godot's export templates, for M6's music and export items. Optional: a CC0 tent pack ("tent pack: <folder>"), else I build the Whirlwind's tents myself.
-- **New, 5 minutes, not blocking:** (1) delete old saves from Load Game (they are refused, not harmful); (2) look at the Stone Cairn in eight colours (`studio/review/2026-11-26-1847/`, `before-...` beside it) and write "cairn ok" or "cairn: darker wall".
+- **Downloads (free, links in docs/04 "Asset sources"):** a horse and dog pack and a catapult kit (or "AI models ok"), for the mounted units and machines; music, a font and Godot's export templates, for M6's music and export items.
+- **New, 5 minutes, not blocking:** look at the Whirlwind camp (`studio/review/2026-11-27-0817/`, start with `m6v31-base-40m.png`) and write "whirlwind buildings ok" or what to change ("lookout tower: lower", "camps: bigger props", "bone camp: add a dark trim"). Still open from last time: "cairn ok" or "cairn: darker wall".
 - **Answers still wanted (none blocks; each is a For your review entry):** "teblor buildings ok", "buildings ok", "whirlwind colours ok", the draw notice's wording, D33 / D34 / D38's tables, the D21 opening names, "models: bigger", the sounds, Shock pass / gold share / BUG-0780 / "densest cluster". The older wording of these asks is in `git show f40cb16e:studio/STATE.md`.
-- **Housekeeping:** For your review now holds about 240 entries (0.8 MB). I never drop one you have not answered; write **"review: archive before 2026-11-15"** (or another date) and I move older entries, whole, to `studio/review-archive.md`. Also: delete the empty `ModelShots.cs` and the file named with a yellow circle in your main project folder; `CLAUDE.md`'s "Current milestone" line is stale (yours or an interactive session's to edit).
+- **Housekeeping:** For your review now holds about 245 entries (0.8 MB). I never drop one you have not answered; write **"review: archive before 2026-11-15"** (or another date) and I move older entries, whole, to `studio/review-archive.md`. Also: delete the empty `ModelShots.cs` and the file named with a yellow circle in your main project folder; `CLAUDE.md`'s "Current milestone" line is stale (yours or an interactive session's to edit).
 
 ## Now
 
 | Field | Value |
 | --- | --- |
-| Sim: milestone | **M5 8 / 9** (left: your play); **M6 5 / 10**; **M7 3 / 4**; **M8 0 / 3**. Last: **M6-S14** (ACCEPT, 1 fix round, QA full): five cures to how the computer player plays; the stuck four-player Vathar match ends (74 -> 40 game minutes) |
-| Sim: next task | **The sim's clean-up (counter 4 / 4; QA full, one re-measure):** the three matches that stopped ending (BUG-1855 traced first; BUG-1854 / 1860 with BUG-1731: the draw clock counts gold a seat cannot use), BUG-1857, BUG-1852, the rally point after a hall moves, BUG-1730. **Running in session 2026-11-27-0817.** The save riders (BUG-1490, Request 60) wait for the next save-format step |
+| Sim: milestone | **M5 8 / 9** (left: your play); **M6 5 / 10**; **M7 3 / 4**; **M8 0 / 3**. Last: **M6-SH3** (ACCEPT, 0 fix rounds, QA full): the draw rule's "can still train" made exact; three computer-player fixes; every test match re-measured |
+| Sim: next task | **The draw rule's missing clause (BUG-1893: a bank that buys a depot counts as having one), then the Shadow's teleport rule on test data** (feature, QA full; changes no computer-player behaviour). After it: the computer player spends what it has and finishes its hunt (BUG-1890 / 1891 / 1855, the matches that do not end) |
 | Sim: gate | **GO** |
-| View: milestone | **M6 5 / 10; M7 3 / 4.** Last: **M6-VH10** (ACCEPT, 0 fix rounds, QA standard): Draw after a load for two sides, the long draw notice, no lost-cast cue in replays, the import tool's exit check, the paler Cairn; 133 screen tests |
-| View: next task | **The Whirlwind's buildings as tents built in the import tool (feature, QA standard)**, with the wrong Cairn sentence in docs/03 (BUG-1870). **Running in session 2026-11-27-0817.** Then the Cairn as stacked rocks; mounted units and machines once packs are on disk |
+| View: milestone | **M6 5 / 10; M7 3 / 4.** Last: **M6-V31** (ACCEPT, 0 fix rounds, QA standard): the Whirlwind's ten buildings as models; 24 of 30 building types are models; 135 screen tests |
+| View: next task | **The last six box buildings and the Stone Cairn as stacked rocks, built in the import tool** (feature, QA standard), with two small tool fixes (BUG-1911, BUG-1912). Then mounted units and machines once packs are on disk |
 | View: gate | **GO** |
-| Data: milestone | M3 Done; D1-D39 on `main`. Last: **D39** (ACCEPT, 0 fix rounds, QA light): the Shadow page lists the Hounds' limit as built, a check reads the number, the opening checks read every difficulty's list. No game data |
-| Data: next task | **The data's clean-up (counter 4 / 4; QA light, nothing measured):** BUG-1880, the limit pin in the readiness check. **Running in session 2026-11-27-0817.** After the sim's clean-up (with BUG-1840's last file): the Teblor plans and the Malazan "keep 18" rule re-measured (BUG-1851 / 1853 / 1856; five rows wait skipped) |
+| Data: milestone | M3 Done; D1-D39 and D-H11 on `main`. Last: **D-H11** (ACCEPT, 0 fix rounds, QA light): the limit reader's two edge cases, the limit check in the readiness test. No game data |
+| Data: next task | **The re-measure** (feature, QA standard): the three Teblor plans and the Malazan "keep 18" rule on today's computer player (BUG-1851 / 1853 / 1856; five checks wait switched off), the last page sentences. A data change, if one is needed, breaks old saves once more |
 | Data: gate | **GO** |
-| Build / tests | Producer, scratch clone of the three-way tree (sim c13c5fcb + view ac83a4dd + data 458ac8cf): build `--no-incremental` **0 errors / 0 warnings**; everyday run **11,017 passed / 0 failed / 24 skipped of 11,041 in 23 m 19 s**; smoke **PASS**; screen tests **133 of 133, first pass**; frame time 6.54 ms a frame on a quiet PC (last session 6.43; 400 placeholder capsules 0.82, 1,000 figures 16.53). Long suite (QA, sim branch): 996 passed / 2 failed / 11 skipped before the fix round; both red rows cured or skipped with a bug id, re-run by name green |
-| Open bugs | **S1 / S2: none.** S3 35, S4 34 (`studio/bugs/README.md`). Closed this session: 16 (one by ruling). New open: BUG-1851, 1852, 1854, 1855, 1857, 1860 (S3), 1853, 1856, 1862, 1870, 1880 (S4) |
-| Data hash / saves | Data hash **3BB926FD74795B9E** (was B7947DC602B1E11B: `ai.minWorkers`); save format **11** (was 10). Older saves and recordings are refused |
-| Sessions today | **2026-11-27: 1 / 8, running (0817)** (2026-11-26 ran 3: 0207, 0717, 1847). Counters: **sim 4 / 4 (clean-up next), view 0 / 4, data 4 / 4 (clean-up next)**. Usage 38 % of the week (stop at 95 %) |
-| Last session | **2026-11-26-1847** (18:47 to about 07:00 the next day): log `studio/sessions/2026-11-26-1847.md` |
+| Build / tests | Producer, scratch clone of the three-way tree (sim f4c6ba3a + view 26c94844 + data 139b99bb): build `--no-incremental` **0 errors / 0 warnings**; everyday run **11,103 passed / 0 failed / 21 skipped of 11,124 in 24 m 5 s alone**; smoke **PASS**; screen tests **135 of 135, first pass, alone (29 m)**; frame time 6.54 ms a frame on a quiet PC for 400 figures with 60 building models (last session 6.54; 400 placeholder capsules 0.82, 1,000 figures 16.42). Long suite (QA, sim branch): 12,071 passed / 2 failed / 34 skipped of 12,107 with the everyday run inside it; the two red rows were QA's own new test in the wrong group, moved and green |
+| Open bugs | **S1 / S2: none.** S3 34, S4 37 (`studio/bugs/README.md`). Closed this session: BUG-1852, 1857, 1730, 1731, 1862, 1153, 1880. New open: BUG-1890, 1893, 1920 (S3), 1891, 1892, 1894, 1910, 1911, 1912, 1921 (S4) |
+| Data hash / saves | Data hash **3BB926FD74795B9E**, save format **11**: both unchanged this session |
+| Sessions today | **2026-11-27: 1 / 8 done (0817)**. Counters: **sim 0 / 4, view 1 / 4, data 0 / 4**. Usage 43 % of the week (stop at 95 %) |
+| Last session | **2026-11-27-0817** (08:17 to about 18:00): log `studio/sessions/2026-11-27-0817.md` |
 | Tools on this PC | Godot 4.7.2 .NET, .NET SDK 8.0.425, Git 2.53 + LFS 3.7, Blender 5.2.2; `GODOT` user variable set |
 
 ## Milestone progress
@@ -42,10 +42,10 @@ _Last updated: 2026-11-27 (session 2026-11-26-1847; sim + view + data, all accep
 | Milestone | Criteria met | Status |
 | --- | --- | --- |
 | M0-M4 | all required | **Done** (2026-10-03, 10-06, 10-07, 10-08, 10-11; retros in docs/05) |
-| M5 AI opponent | **8 / 9** | Left: criterion 6, your playtest. After M6-S14 the 20-minute AI-against-AI match ends at 19:02 (Vathar Crossing seed 1); Hard beats Normal in 32 of 42 test matches (4 lost, 6 undecided; was 34 / 5 / 3) |
-| M6 Game shell and real art | **5 / 10** | Left: the art pass (15 of 21 unit types and 14 of 30 building types are models; the rest wait for packs or the tents), music, the export script, the .NET revisit, the friend test |
-| M7 Teblor | **3 / 4** | Left for criterion 4: the plans re-measured after the computer-player changes, the Rider and War-dog models (your packs), two box buildings |
-| M8 Shadow | **0 / 3** | Rules built on test data: both stealth kinds, the first shot, the pack bonus, the limit of 7. Missing before a roster ships: teleport, the Wraith, ability requirements (Request 56 G5-G8) |
+| M5 AI opponent | **8 / 9** | Left: criterion 6, your playtest. The 20-minute AI-against-AI match ends at 19:02 (Vathar Crossing seed 1); Hard beats Normal in 32 of 42 test matches (4 lost, 6 undecided) |
+| M6 Game shell and real art | **5 / 10** | Left: the art pass (15 of 21 unit types and 24 of 30 building types are models; the rest wait for packs or the next view task), music, the export script, the .NET revisit, the friend test |
+| M7 Teblor | **3 / 4** | Left for criterion 4: the plans re-measured after the computer-player changes (next session), the Rider and War-dog models (your packs), two box buildings (next session) |
+| M8 Shadow | **0 / 3** | Rules built on test data: both stealth kinds, the first shot, the pack bonus, the limit of 7. Missing before a roster ships: teleport (next session), the Wraith, ability requirements (Request 56 G5-G8) |
 | M9 Tiste Andii | - | Planned |
 
 ## For your review
@@ -53,6 +53,70 @@ _Last updated: 2026-11-27 (session 2026-11-26-1847; sim + view + data, all accep
 Non-blocking. Each entry says what was built or decided, what you'd notice in the game, and how
 to change it. To change anything, write it in `studio/inbox.md`, for example "use formations
 instead of clusters" or "make giving up take 2 seconds".
+
+### The draw rule no longer counts gold or wood a player cannot use, and three small computer-player fixes; two test matches still do not end, for a different reason (sim track, M6-SH3, the sim's clean-up, 2026-11-27-0817, ACCEPTED, 0 fix rounds)
+
+**What was built.** The sim's clean-up after last session's computer-player changes.
+
+1. **Your draw rule is exact about "can still train".** A match is drawn after five quiet minutes in which nobody can make a unit any more. Until now the rule only looked at gold, and it counted all the gold left in the ground for anyone with a worker. Now a player can still train only if a unit of theirs is being trained (or is queued with population room for it), or they have a unit building or a worker **and** can pay for at least one unit of their faction in gold **and** wood. What they can pay with is their bank, plus what their workers carry and what is left on the map, but only if they have a worker and a finished hall or depot of their own to carry it to.
+2. **The "four workers" rule no longer pays for a worker that cannot appear.** With the population nearly full the computer player sometimes queued one worker too many, which then sat paid in the queue (BUG-1857).
+3. **A worker with a full load no longer stands idle for the rest of the match.** The computer player kept sending it to a mine that was already empty, every second, for ever (BUG-1852). Now it notices after one try and sends it elsewhere.
+4. **The army's parking spot is forgotten when the hall it belonged to is lost,** so the army never parks on the doorstep of the building that takes the hall's place.
+5. A tampered save file with a running draw countdown on a match that was already won is refused.
+
+**What you will see in the game.**
+- **A draw comes when it should.** Examples of matches that used to hang for ever and now count down to a draw: both sides have gold for a soldier but no wood for it and no way to get any; a player has a worker and gold in the ground but no hall or depot left to carry it to; a paid soldier sits in a queue at the population cap with an empty bank behind it.
+- **A draw does not come when it should not.** A rich player sitting at the population cap is never "spent" (they can build houses or lose units), so a long stand-off between two rich sides still never draws. A unit you can pay for in gold but that is at its unit limit does not count; another you can pay for does.
+- Three test matches between computer players on Raraku that tripped an error check after 28 game minutes now finish cleanly at 30. A four-player test match on Vathar Crossing ends after 39 game minutes instead of 72.
+- **Your saves and recordings from this week still load.** No game data and no save layout changed.
+
+**The honest result.** The two four-player test matches on Pale Hills that stopped ending last session **still do not end**, and neither does the two-player one. I had hoped the draw rule's fix would end them; the trace shows the rule is right and the computer player is at fault:
+- In the four-player matches two computer players sit on 40 to 50 gold and thousands of wood. A Crossbowman costs 36 gold, so they *can* still train, and the rule rightly does not call a draw. But they never buy it: they wait for ever for a dearer unit they prefer (BUG-1890). In one match 726 gold also lies unmined (BUG-1891).
+- In the two-player match the stronger side hunts for the enemy's base, but every enemy raid calls its army home and the hunt then starts again from its first search point, 14 times in 20 minutes (BUG-1855).
+- Both are **the sim's task after next**: a computer player that cannot afford its favourite unit buys the best one it can, and an interrupted hunt resumes where it was.
+
+**Decisions I made (you may revisit).**
+- **One more clause for the draw rule, built next session (BUG-1893, found by QA).** As built today, a player who has lost their hall and every depot, but still has a worker, wood and a unit building, is called "spent" although they could build a new depot (75 wood, no gold) and mine again. The countdown shows for five minutes and stops when the depot stands, so nobody is drawn without warning, but the rule should not start the countdown at all there. I had left this case out at planning with a wrong reason (I assumed a bank that buys a depot also buys a unit; depots cost no gold, units do). The fix: a bank that pays for a depot counts as having one.
+- **An ally's depot does not count** as yours for the draw rule, because your workers cannot deliver to it. If you want allies to share drop-offs, that is a new rule: write "allies share drop-offs".
+- **Not counted, on purpose:** the refund you would get by cancelling a paid unit stuck at the population cap. You must cancel it yourself; the countdown stops the moment you do.
+
+**Rough edges.** BUG-1893 (the clause above; first item next session). BUG-1890, BUG-1891, BUG-1855 (matches that do not end: the computer-player task after that). BUG-1894 (four rare cases where a draw comes later than it should or never, for example a finished unit with no free ground to appear on; none seen in a match; a later clean-up). Five balance checks of the data track are still switched off until the plans are re-measured (BUG-1851, BUG-1853): next session.
+
+**How to change it.** The five minutes: `game/data/common/rules.json`, `draw` -> `afterSeconds`. Anything about what counts: an inbox note, for example "draw: count an ally's depot".
+
+### The Whirlwind's base is a desert camp now: all ten buildings are tents, stalls and a timber tower in your colour (view track, M6-V31, 2026-11-27-0817, ACCEPTED, 0 fix rounds)
+
+**What was built.** The Whirlwind was the last faction whose base was all placeholder boxes. All ten of its buildings are models now. Eight are built from simple shapes by the studio's own import tool (no downloaded pack: tents, poles, awnings, props); the Supply Cache is one market stall cut from the building pack you downloaded; the Lookout Tower is that pack's timber tower with a cloth canopy added. 24 of the game's 30 building types are models now.
+
+**What you will see in the game.** Play the Whirlwind, or against it. Pictures: `studio/review/2026-11-27-0817/` (`m6v31-base-40m.png` is a whole base; one close-up per building).
+- **Holy Camp** (the hall): a round pavilion of bleached canvas under a cone roof in your colour, with a pennant, an entrance awning and four small tents at its corners.
+- **Tent** (the house): one ridge tent in your colour with a dark doorway, a rug and a clay jar.
+- **The four troop camps** share one tent and differ by what stands beside it: the **Raider Camp** has a rack of spears and shields and a straw training dummy; the **Archer Camp** has two straw targets with white-and-red faces; the **Horse Lines** have a long tether rail, a water trough and hay; the **Ram Yard** has a ram log slung in two A-frames and a pile of logs.
+- **Smithy:** an open lean-to in your colour over a woodpile, with a stone hearth with glowing coals, an anvil and a barrel in front.
+- **Shrine of the Whirlwind:** a sandstone platform with a twisting ochre spire and four tall banners in your colour.
+- **Supply Cache:** a market stall with goods on the counter under an awning in your colour.
+- **Lookout Tower:** a tall, sun-bleached timber tower under a canopy in your colour. It is 8.8 m tall, clearly taller than the Malazan Watchtower (4.9 m) and built of wood where that one is grey stone (`m6v31-towers-40m.png` shows both beside the Teblor Cairn).
+- Clicking works on what you see: a click on any part of a tent or its prop selects the building, a click on a unit you can see through a gap selects the unit. A building under construction is still its box until it is finished.
+
+**Decisions I made (you may revisit; each is a small edit of one file, no code).**
+- **The cloth is your colour, the pavilion's walls are plain bleached canvas.** That reads well in seven of the eight colours. For a **Bone** (off-white) player the cloth and the canvas are nearly the same shade, so a Bone Holy Camp reads as one pale shape, told by its outline only (BUG-1910; picture `m6v31-holy-camp-colours-5-8-40m.png`, far right). The alternative, darker walls, would dull the other seven. If it bothers you, write "bone camp: add a dark trim".
+- **The tower is tall.** The pack's lower towers are either the Malazan one's grey stone or the Teblor Cairn's shape. Write "lookout tower: lower" and I build one from poles and a platform instead.
+- **The camps' props are small** (1 to 1.5 m). At the normal zoom the targets and the tether rail read best, the spear rack least. Write "camps: bigger props" to make them louder.
+- **The Supply Cache is one stall, not the whole market:** the whole market squeezed onto the building's ground would be knee-high.
+
+**Rough edges.** BUG-1910 (the Bone camp, above). BUG-1911 and BUG-1912 are in the studio's own tools and tests, not in the game (the model builder accepts a nonsense number and drops the part silently; one test crashes instead of reporting when a model file is missing): the view's next clean-up. Still boxes: four Malazan buildings (Wickan Corral, Armory, Cadre Tower, Engineers' Yard) and two Teblor ones (Stables & Kennels, Breaker's Hall), waiting for a source.
+
+**Measured.** On a quiet PC, drawing 400 figures with 60 building models takes 6.54 ms a frame, the same as last session (limit 16.7 ms); 400 placeholder capsules 0.82, 1,000 figures 16.42. A screen full of Whirlwind tents costs the same as a screen full of boxes (6.42 against 6.49 ms); no single building type costs more than 0.15 ms over its box.
+
+**Please answer when you have looked:** "whirlwind buildings ok", or what to change.
+
+### The check that reads a unit's limit from its description no longer mistakes "strikes up to 3 foes" for a limit; no game data changed (data track, D-H11, the data's clean-up, 2026-11-27-0817, ACCEPTED, 0 fix rounds)
+
+**What was built.** Paperwork for the Shadow faction's arrival. A check reads sentences like "No more than 7 can live at once" in a unit's description and compares the number with the unit's data. It used to read any "up to N ... at once" as such a limit, so "Strikes up to 3 foes at once" would have raised a false alarm. Now a number is a limit only when it counts the unit itself. The check is also wired into the page's readiness test, and another check that crashed on a build list without an Age II step now reports the list by name.
+
+**What you will see in the game.** Nothing. No unit, number or text changed. No review table: no game data and no player-facing text shipped.
+
+**Rough edges.** BUG-1920: a few odd wordings are still misread ("Bites up to 3 foes living nearby" reads as a limit of 3). No text in the game is worded that way; it is fixed when the Shadow descriptions are written. BUG-1921: one sentence on the Shadow page explains the rule with a poor example.
 
 ### The computer player rebuilds its workers, finishes a hunt sooner and parks its army steadily; three test matches stopped ending (sim track, M6-S14, 2026-11-26-1847, ACCEPTED, 1 fix round)
 
@@ -84,6 +148,8 @@ instead of clusters" or "make giving up take 2 seconds".
 
 **Rough edges.** BUG-1855, 1854, 1860 (matches that do not end), BUG-1857, BUG-1852: the sim's next session. Five balance checks of the data track are switched off until they are re-measured on the new computer player (BUG-1851, BUG-1853): the session after.
 
+**Update, 2026-11-27-0817 (M6-SH3):** BUG-1857 and BUG-1852 are fixed, and the draw rule no longer counts gold a player cannot use. The three matches still do not end: the cause is the computer player, not the rule (BUG-1890, BUG-1855; see the newest sim entry above).
+
 ### A drawn match says "Draw" after you load it, and five small screen fixes (view track, M6-VH10, the view's clean-up, 2026-11-26-1847, ACCEPTED, 0 fix rounds)
 
 **What was built.** The view's clean-up session: six defects closed, no new feature.
@@ -99,6 +165,8 @@ instead of clusters" or "make giving up take 2 seconds".
 
 **Rough edges.** BUG-1870 (the above, plus one wrong sentence in the technical doc: first item of the next view task). A recording has no seek bar, so "jump to the end" could not be tested (it plays through).
 
+**Update, 2026-11-27-0817 (M6-V31):** the wrong sentence in the technical doc is corrected. The Cairn itself still waits for your "cairn ok" or its rebuild as stacked rocks (the next view task).
+
 **Measured.** Drawing 400 figures with 60 building models: 6.54 ms a frame on a quiet PC (last session 6.43; 400 placeholder capsules 0.82, 1,000 figures 16.53) (limit 16.7 ms a frame).
 
 ### The Shadow page lists the Hounds' limit of 7 as built, and the opening checks read every difficulty's list; no game data changed (data track, D39, 2026-11-26-1847, ACCEPTED, 0 fix rounds)
@@ -110,6 +178,8 @@ instead of clusters" or "make giving up take 2 seconds".
 **Decisions I made (you may revisit).** One oddity is recorded, not changed: a unit trained in packs can stop short of its limit (three dogs at a time with a limit of 7 stop at 6). The Hound is trained one at a time, so nothing in the planned roster is affected.
 
 **Rough edges.** BUG-1880 (two edge cases in the new checks: a sentence like "strikes up to 3 foes at once" would be misread as a limit; one check trips on a plan with no Age II step): the data track's clean-up, next session. No review table: no game data and no new player-facing text shipped.
+
+**Update, 2026-11-27-0817 (D-H11):** BUG-1880 is fixed (both edge cases); what is left of the misreadings is BUG-1920.
 
 ### Eight Teblor buildings are models: timber halls with your colour on the roofs (view track, M6-V30, 2026-11-26-0717, ACCEPTED, 0 fix rounds)
 
@@ -6668,12 +6738,13 @@ their full text is in `git show f40cb16e:studio/STATE.md`. Open:
   has no record of the order of the two events, so with three or more sides `Match.ResultFor` reads Defeat after a
   load. Wanted: saved with the `DRAW` part, which seats were undefeated on the draw tick (a mask, or the draw tick
   plus a defeat tick per seat), with a public read accessor. Also covers the dev-flag case QA noted (a third seat
-  that first builds after a draw). With the sim's next save-format change (its clean-up, with BUG-1490).
+  that first builds after a draw). With the sim's next save-format change (with BUG-1490).
 - **56 (from D-R38): the Shadow's schema gaps** (`docs/factions/shadow.md` "Schema gaps"). **G1-G4 built** (M8-2,
-  M8-3, M8-4). **Open: G5** a `teleport` effect with `exceptSlots` (Shadow-step), **G6** `"slot": "summoned"` with
-  no `trainedAt` (the Wraith), **G7** a tech that grants an ability (`abilities.json` `requires`), **G8** the AI
-  casts a summon; then G9-G13 (the Shadow AI) and G14 (a per-faction `counters` override). Test data only, one or
-  two a session. For the view, when the roster lands: the count ("5 / 7") beside a limited unit's button.
+  M8-3, M8-4). **Open: G5** a `teleport` effect with `exceptSlots` (Shadow-step; proposed for the next sim task),
+  **G6** `"slot": "summoned"` with no `trainedAt` (the Wraith), **G7** a tech that grants an ability
+  (`abilities.json` `requires`), **G8** the AI casts a summon; then G9-G13 (the Shadow AI) and G14 (a per-faction
+  `counters` override). Test data only, one or two a session. For the view, when the roster lands: the count
+  ("5 / 7") beside a limited unit's button.
 - **54 (from D32):** count only a real raid as "base defended" for the reserve rule (true in 14,088 of 22,926
   Teblor thinks to 15:00). Measure first; changes Normal AI play (a pin-move session).
 - **53, part two:** a cast condition for a buff on the caster's own fighters; a reading only so far.
@@ -6681,67 +6752,61 @@ their full text is in `git show f40cb16e:studio/STATE.md`. Open:
   at 16, retreat below 40% HP). Measure which the balance pass needs before building any.
 - **46 / G14:** a per-faction override of `ai.counters`. **45:** a queue preference so the counter shift shows
   while the producer limits (BUG-1156); not planned until measured to matter.
-- **New, from D39 (docs only, done at this ACCEPT):** docs/03 "For the data track (M8-4)" now names
-  `Content/UnitLimitText`.
 
 ## Feature queue: sim track
 
-Trimmed 2026-11-27 (history: `git show f40cb16e:studio/STATE.md` and the session logs).
-
-1. **The sim's clean-up (next; counter 4 / 4; QA full; one pin re-measure; proposal in `studio/handoff.md`).**
-   The matches that stopped ending: BUG-1855 traced first; BUG-1854 / 1860 with BUG-1731 ("can still train"
-   means could pay for and place a unit now: wood, a drop-off, population room, the unit limit). BUG-1857,
-   BUG-1852, docs/03 M6-S14 Q7 (the kept rally point forgotten when the hall point changes), BUG-1862. If they
-   fit: the save riders BUG-1490, Request 60, BUG-1730 (one format step; the view re-checks its save scenes).
-2. Request 56 G5-G8 (the missing Shadow rules), one or two a session.
-3. "Press the attack while the draw clock runs" (needs a short design first). Requests 54, 53 part two, 51.
+1. **M8-5 (next; QA full; no computer-player change):** BUG-1893's clause for the draw rule first (decided:
+   docs/01 2026-11-27 ACCEPT row), then Request 56 G5 (teleport) on test data, G6 if it fits.
+2. **The computer-player task (the session after; QA full; one pin re-measure; the data track static):**
+   BUG-1890 (a starved seat buys the best unit it can pay for), BUG-1891 (traced first), BUG-1855 (an
+   interrupted hunt resumes).
+3. The save riders BUG-1490 and Request 60 (one format step; the view re-checks its save scenes).
+4. Request 56 G6-G8. "Press the attack while the draw clock runs" (needs a short design first). Requests 54,
+   53 part two, 51.
 
 ## Feature queue: view track
 
-1. **The Whirlwind's buildings as kit-bashed tents** (built in `tools/art/`; or the owner's CC0 tent pack if one
-   is on disk), pictures at zoom 40 and 20, the bench alone. Rider: the wrong sentence in docs/03
-   "Implementation (M6-VH10)" (BUG-1870).
-2. The Stone Cairn as stacked rocks (ends BUG-1870); the two Teblor box buildings and four Malazan ones when a
-   source exists.
-3. The mounted units and machines once packs are on disk (owner). The "5 / 7" count on a limited unit's button
-   with the Shadow roster. BUG-1790's three-sided half after Request 60.
+1. **M6-V32 (next):** the last six box buildings (four Malazan, two Teblor) and the Stone Cairn as stacked
+   rocks, built with the kit; BUG-1911 and BUG-1912 folded in. Pictures at zoom 40 and 20, the bench alone.
+2. The mounted units and machines once packs are on disk (owner). The "5 / 7" count on a limited unit's button
+   with the Shadow roster. BUG-1790's three-sided half after Request 60. BUG-1910 if the owner asks.
 
 ## Feature queue: data track (owner reviews every landed task)
 
 0. Owner review tweaks from the inbox, whenever present (before roadmap work).
-1. **The data's clean-up (next; counter 4 / 4; QA light; nothing measured, no byte under `game/data/`):**
-   BUG-1880, BUG-1840's last file (`QA/Content/D21OpeningsQaTests`), the limit's page pin in
-   `PagePinReadinessTests`, stale page sentences.
-2. **After the sim's clean-up: the re-measure** (QA standard): the three Teblor plans on the new computer
-   player (BUG-1853; the D38 rows re-pointed), the Malazan "keep 18" rule against `cadre_rush` 16 (BUG-1851),
-   BUG-1856, malazan.md's Age II paragraph, teblor.md; the hour-long Teblor report classes D38 did not run.
-3. The Shadow roster as its rules reach `main`.
+1. **D40 (next; QA standard), the re-measure:** the three Teblor plans on today's computer player (BUG-1853;
+   the D38 rows re-pointed), the Malazan "keep 18" rule against `cadre_rush` 16 (BUG-1851), BUG-1856,
+   malazan.md's Age II paragraph, teblor.md, BUG-1840's last file; BUG-1920 / 1921 if they fit.
+2. The Shadow roster as its rules reach `main`.
 
-## Debt backlog (all tracks; the index is `studio/bugs/README.md`: S3 35, S4 34 open)
+## Debt backlog (all tracks; the index is `studio/bugs/README.md`: S3 34, S4 37 open)
 
-Trimmed 2026-11-27: one line per open item that a next task names; everything else open is in the index.
+One line per open item that a next task names; everything else open is in the index.
 
-- **Sim (counter 4 / 4):** BUG-1855, 1854, 1860 (S3, matches that do not end), BUG-1857 (S3, the floor's room
-  test), BUG-1852 (S3, a Gather to a gone node; BUG-1151's family), BUG-1558 item 1 / Q7, BUG-1862 (S4), BUG-1731,
-  BUG-1730, BUG-1490 (S4), BUG-1149 (S3, a defending seat may order onto an ally's building; its test branch lets
-  any command through), BUG-1153 (stale: Pale Hills seed 1 ends at 26,594 now; close or re-state), BUG-1116 /
-  1068 (the Pale Hills four-seat family, re-read after the draw clock's cure).
-- **View (counter 0 / 4):** BUG-1870 (S4), BUG-1790's three-sided half (S3, waits for Request 60). Notes: playback
-  has no seek; `tools/art/test-import-exit.ps1` and `tools/qa/import-exit-extra.ps1` are in no loop (name them in
-  a brief that changes the import script).
-- **Data (counter 4 / 4):** BUG-1880 (S4), BUG-1840's last file (S4), BUG-1851 (S3), BUG-1853, BUG-1856 (S4). Five
-  rows skipped with ids: `DH6ThresholdQaTests.Bug0982_KeepEighteen_*`, `AiOpeningPairsReportTests.Bug0982_*`,
-  `DR35ProsePinQaTests.Malazan_Bug0982Prose_*` (BUG-1851), the two D38 shipped-order rows (BUG-1853).
+- **Sim (counter 0 / 4):** BUG-1893 (S3, the draw rule's missing clause; next task, first), BUG-1890 (S3),
+  BUG-1855 (S3), BUG-1854 / 1860 (S3, the two matches BUG-1890 holds), BUG-1891 (S4), BUG-1894 (S4, later-draw
+  edges), BUG-1892 (S4, QA's "2v2" rows are 1v1v2), BUG-1490 (S4), BUG-1149 (S3, its strict row stays skipped),
+  BUG-1116 / 1068 (the Pale Hills four-seat family).
+- **View (counter 1 / 4):** BUG-1870 (S4, ends with the Cairn's rework), BUG-1910 (S4, the Bone camp), BUG-1911
+  (S4, the kit builder's non-finite numbers; `tools/qa/kit-errors-extra.ps1` exits 1 until fixed and is in no
+  gate), BUG-1912 (S4, a test's crash on a box), BUG-1790's three-sided half (S3, waits for Request 60). Notes:
+  playback has no seek; the `tools/art/test-*.ps1` and `tools/qa/*-extra.ps1` scripts are in no loop (name them
+  in a brief that changes the import script or the builder).
+- **Data (counter 0 / 4):** BUG-1851 (S3), BUG-1920 (S3, test-only: odd wordings the limit reader misreads),
+  BUG-1853, BUG-1856, BUG-1921, BUG-1840's last file (S4). Five rows skipped with ids
+  (`DH6ThresholdQaTests.Bug0982_KeepEighteen_*`, `AiOpeningPairsReportTests.Bug0982_*`,
+  `DR35ProsePinQaTests.Malazan_Bug0982Prose_*`: BUG-1851; the two D38 shipped-order rows: BUG-1853) and one with
+  BUG-1920. Rule 57's two-session clock for the five started 2026-11-27-0817.
 
 ## Recent sessions
 
 | Date | Session | Tasks | Result |
 | --- | --- | --- | --- |
+| 2026-11-27 | [2026-11-27-0817](sessions/2026-11-27-0817.md) | sim **M6-SH3** clean-up (the draw rule's exact "can still train", three AI cures, one pin re-measure) · view **M6-V31** the Whirlwind's ten building models · data **D-H11** clean-up | ACCEPT x3 (0 / 0 / 0) |
 | 2026-11-26 | [2026-11-26-1847](sessions/2026-11-26-1847.md) | sim **M6-S14** the AI-play session (hunt resume, worker floor, rally memory, re-scout count; data hash and save format moved) · view **M6-VH10** the clean-up · data **D39** shadow.md after the unit limit | ACCEPT x3 (fix rounds 1 / 0 / 0) |
 | 2026-11-26 | [2026-11-26-0717](sessions/2026-11-26-0717.md) | sim **M8-4** the unit limit · view **M6-V30** eight Teblor building models · data **D38** the three Teblor plans shipped | ACCEPT x3 (0 / 0 / 0) |
 | 2026-11-26 | [2026-11-26-0207](sessions/2026-11-26-0207.md) | sim **M7-9** a build order per difficulty · view **M6-V29** the draw on screen · data **D37** the Teblor plans measured | ACCEPT x3 (0 / 0 / 0) |
 | 2026-11-25 | [2026-11-25-1437](sessions/2026-11-25-1437.md) | sim **M6-S13** the owner's draw rule · view **M6-V28** four Malazan building models · data **D36** | ACCEPT x3 (0 / 0 / 0) |
 | 2026-11-25 | [2026-11-25-0924](sessions/2026-11-25-0924.md) | sim **M7-H3** clean-up · view **M6-V27** the dropped-order notice · data **D-H10** clean-up | ACCEPT x3 (0 / 0 / 0) |
-| 2026-11-24 | [2026-11-24-1431](sessions/2026-11-24-1431.md) | sim **M7-8** reserve switches · view **M6-VH9** clean-up · data **D35** | ACCEPT x3 (0 / 1 / 0) |
 
 Older sessions: the files in `studio/sessions/`.
