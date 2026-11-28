@@ -1,5 +1,14 @@
 # Handoff: brief for the next session
 
+**PLAN of session 2026-11-28-0327 written 2026-11-28 03:30 (1 / 8 of the day): sim M8-5 GO, view M6-V33 GO,
+data D40 GO. The three briefs are under each track's "Current session plan"; everything else below is the
+2026-11-27-1857 ACCEPT's brief, still current.** Checks at this PLAN: inbox empty; `main` (6db9701e) build
+0 / 0 `--no-incremental`, default loop 11,161 passed / 0 failed / 22 skipped of 11,183 in 25 m 15 s (beside the
+rehearsal's scenes), smoke PASS; verified claim: all 30 building types have a manifest entry and a model file;
+open S1 / S2 none. New at this
+PLAN: docs/01 row 2026-11-28 (b) (machines as studio-made kit models; the teleport rule's defaults; D40 ships
+no data byte). Rehearsal clone `prod0327-rigid` and loop clone `prod0327-plan` are in this session's scratchpad.
+
 Written by the Producer at the ACCEPT of session **2026-11-27-1857** (session 2 / 8 of 2026-11-27; 18:57 to
 about 02:50, about eight hours). Sim **M6-S15** ACCEPT (feature, 0 fix rounds, QA full PASS with S3 / S4), view
 **M6-V32** ACCEPT (feature, 0, QA standard PASS with S4), data **stopped** (no task).
@@ -545,7 +554,116 @@ Producer at the ACCEPT; the session log says who did.
 ## Sim track
 
 ### Current session plan
-None yet: written at the next PLAN. Proposal below.
+**Session 2026-11-28-0327 (1 / 8 of 2026-11-28), planned 03:30. M8-5: build the Shadow's teleport rule on test
+data (Request 56 G5). Feature, QA full. Bug ids 1936-1949. Base 6db9701e.**
+
+Goal: Shadow-step needs a `teleport` ability effect: the caster and its owner's nearby units move to a point in
+one tick, keeping their formation. Build the schema, its validation and the rule on test data only, so the Shadow
+roster can ship later as data. Nothing in the shipped game changes: no shipped data byte, no computer-player
+behaviour, no save-format step.
+
+Scope:
+- **Schema (the sim owns it).** `teleport` leaves `DataLimits.PlannedAbilityEffectKindIds` and becomes an
+  `AbilityEffectKind`. Wanted shape (shadow.md "Schema gaps" G5): `{ "kind": "teleport", "exceptSlots": ["siege"] }`
+  on a `targetGround` ability with `affects` `own_units`; the ability's `radius` is the gather radius.
+  `exceptSlots` is optional and validated as `faction.json` `forestStealth.exceptSlots` is (unknown or repeated
+  slot name = a load error). Load errors, each with the file path and field: teleport on any other ability kind
+  or `affects`; any other effect field on a teleport effect; a teleport effect together with any other effect on
+  one ability (refused "not supported yet": Producer decision, keeps this slice to one rule).
+- **The rule, at the cast's resolve (Producer decisions, docs/01 2026-11-28 (b)):**
+  1. Carried: the caster (always, whatever its slot) and every live unit of the caster's owner whose centre is
+     within `radius` of the caster's position at the resolve and whose slot is not in `exceptSlots`. Own units
+     only (no ally's), workers and summoned units included, no buildings.
+  2. Wanted point: the caster's is the cast point; every other unit's is the cast point plus its offset from the
+     caster (formation kept, facing kept).
+  3. A unit whose wanted point lies inside the map on a cell it may stand on (walkable for its radius class, no
+     building) lands exactly there. Otherwise it lands on the centre of the nearest such cell, ring by ring round
+     the wanted cell, out to a fixed number of rings (a sim constant beside `SummonSystem.SearchRings`; a
+     mechanic bound, not a stat), ties in a fixed documented order, never a cell this cast already gave to
+     another snapped unit. Any height level (the spell crosses cliffs). No such cell: that unit stays where it is.
+  4. Order: the caster first, then the others by ascending unit index. If the caster cannot be placed, nothing
+     moves; the cooldown is spent as for any resolved cast.
+  5. After the move: `Position` and `PrevPosition` both hold the new point (so the view's interpolation does not
+     slide the unit across the map; no view change is needed), the spatial hash holds the units where they stand
+     before any later resolve of the tick, and every per-unit movement cache that assumes continuity is reset
+     (list each in docs/03). **Orders are kept:** a marching unit goes on to its goal from the new place, an
+     attacker keeps its target, a gatherer keeps its loop.
+  6. Stealth: a teleport counts as moving for stand-still stealth (the delay starts again) and is neither an
+     attack nor damage for forest stealth; the caster's cast counts as any cast does today. Statuses travel with
+     the unit; zones act by position as they do for a walking unit.
+- **The AI never casts an ability that holds a teleport effect** (until Request 56 G12): one guard in
+  `Ai/AbilityManager`, unreachable on shipped data.
+- docs/03 "Implementation (M8-5)" with "For the data track (M8-5)" (the exact rows Shadow-step will be) and
+  "Questions for the Producer" (each with your recommendation: rule 67); docs/02's ability vocabulary sentence if
+  it needs a word.
+- **Out of scope:** any file under `game/data/**` (test data lives in the test project); `docs/factions/**`;
+  `sim/Rts.Sim.Tests/Content/**` and `QA/Content/**` (the data track measures in them this session); Request 56
+  G6-G8 and G12; any view code; the save format (stays 11); the golden replay; every pinned match; a
+  `World`-level teleport event for the view (later, with the roster).
+
+Acceptance criteria:
+1. Loader: the wanted shape loads on a forged ability; each load error above has a test naming path and field;
+   `PlannedAbilityEffectKindIds` no longer lists `teleport`; the sim's own rows that pinned "teleport is refused"
+   (`Data/AbilityLoaderTests` and any other your grep finds) are re-stated, none deleted.
+2. Formation: on open ground a caster and N carried units (N = 0, 1, 12, 40) land with every offset from the
+   caster equal to before the cast within 0.0001 m (not bit for bit: the sum rounds), and the caster exactly on
+   the cast point.
+3. Who goes: units outside `radius`, in an excepted slot, of an ally, of an enemy, dead, and buildings stay; a
+   caster whose own slot is excepted still goes; a summoned unit and a worker in the radius go.
+4. Snap: a wanted point on a cliff cell, in a building's footprint, in a forest cell the unit may not stand on
+   and off the map each lands on the nearest standable cell by the documented order; two units snapping toward
+   the same cell get different cells; a unit with no standable cell within the rings stays; a caster that cannot
+   be placed moves nothing and the cooldown is spent. Rows for radius classes 0.4, 0.75 and 0.9.
+5. After any teleport, for every carried unit: inside the map, on a cell standable for its radius class,
+   `PrevPosition == Position` on the tick of the move, and the spatial hash equals a fresh rebuild.
+6. Orders kept: a carried unit with a move order arrives at its goal; one attacking keeps its target; a gatherer
+   on a loop delivers again; a unit carried while it is itself mid-cast: report what happens and why (written in
+   docs/03; a ruling at ACCEPT if it surprises).
+7. Stealth: a forged stand-still-stealth unit that is hidden and carried is shown and hides again only after its
+   full delay; a forged forest-stealth unit carried from one forest edge to another stays hidden.
+8. The AI: a forged AI seat holding a teleport ability with enemies clumped in range sends no cast of it in
+   2,400 ticks. Say in the report whether the test is red without the guard; if today's rules already never
+   pick it, add no guard and keep the test.
+9. Determinism: a 2,000-tick match on test data with at least 20 teleports hashes the same on two runs, the same
+   after a save and load taken mid-cast (during `castTime`) and one taken on the tick after a resolve, and the
+   same from its replay.
+10. No allocation at the resolve (a 40-unit teleport, measured as the repo's other allocation rows are, in the
+    serial collection); a Perf row for a 200-unit teleport, **measure and report** (no threshold invented).
+11. Nothing shipped moves: `git diff 6db9701e -- game/data docs/factions sim/Rts.Sim.Tests/Content
+    sim/Rts.Sim.Tests/QA/Content` is empty; `SaveFormat.CurrentVersion` is 11; the golden replay, its header and
+    every pin class are unedited and green; a save of a shipped-data match is byte for byte the base's (proven
+    in-session against 6db9701e and kept as a differential row: `StillStealthSaveBytesTests` is the model).
+12. `dotnet build RtsGame.sln --no-incremental` 0 errors / 0 warnings after the last edit; the default loop
+    (`Category!=Perf&Category!=Stress&Category!=Soak`) green after the last edit: expect 11,161 passed plus your
+    rows / 0 failed / 22 skipped by name (the data track may un-skip five on its own branch); smoke PASS.
+13. docs/03 as under Scope, including the reset list of item 5 and the tie order of item 3.
+
+Design references: `docs/factions/shadow.md` "Abilities" (Shadow-step: range 12, radius 4, cast 1.0 s, cooldown
+40 s) and "Schema gaps" G5; docs/02 "Abilities" (the effect vocabulary); docs/03 "Implementation (M4-4b-3b)"
+(the summon's placement, `FreeCellSearch`) and "Implementation (M8-1)" (`exceptSlots`); docs/01 2026-11-28 (b).
+
+Tests required: `Data/` loader rows (1); `Abilities/TeleportTests` (2-7); an `Ai/` row (8); determinism, save
+and replay rows (9); allocation and Perf rows (10); the differential save row (11).
+
+Constraints: no Godot in `Rts.Sim`; no stat in C# (range, radius, cooldown, slots come from data; only the ring
+bound is a constant); no allocation at the resolve (scratch on `World`, as the summon uses); no `Dictionary` /
+`HashSet` iteration where order matters; warnings are errors. Rule 58: a test helper that forges the ability
+looks the id up first. Rule 62: the full default loop after your last edit. Rule 64: `--no-incremental`. Rule
+69: record the PID of every `dotnet test` you start and end only those. Rule 63: scratch folders start `m85-`.
+You cannot write `studio/**`: bug-file changes come as a patch in the scratchpad (`m85-bugs.patch`).
+
+**QA focus (full).** Attack the snap and the bookkeeping. A fuzz of at least 20,000 casts on the three shipped
+maps and generated ones: random groups of 1-60 units of the three radius classes, cast points at map edges and
+corners, on cliffs, inside bases packed with buildings, into forests and onto other units; after each cast
+check criterion 5's invariants, no NaN, no two snapped units in one cell, and that nobody is left on a cell
+with no walkable neighbour when the wanted point itself was standable. Then: carried units that are mid-attack
+wind-up, carrying resources, building, queued (Shift orders), stealthed by either rule, burning or slowed,
+standing in a zone, the target of a projectile in flight; a caster that dies during `castTime`; two casters
+resolving on one tick with overlapping groups (index order decides: is it deterministic and documented?); a
+cast point 0 m away. Determinism: criterion 9 in two processes. Shipped play: run the Stress category (rule 53
+full, then Perf alone under rule 42) and confirm no pin class was edited. Rule 65: end with the
+`--no-incremental` build on the commit that holds your files. Scratch folders start `m85-qa-`. Apply the
+developer's `m85-bugs.patch`.
 
 ### Where we are
 M6-S15 accepted: the draw rule's drop-off clause (BUG-1893), the AI's small drop-off (A2), "spends what it has"
@@ -587,7 +705,96 @@ that does not: BUG-1490, Request 60, BUG-1149's strict row.
 ## View track
 
 ### Current session plan
-None yet: written at the next PLAN. Proposal below.
+**Session 2026-11-28-0327, planned 03:30. M6-V33: draw the Malazan Catapult as a studio-made rigid model (first
+slice of the machines). Feature, QA standard. Bug ids 1954-1959. Base 6db9701e.**
+
+Rehearsal at the PLAN (rule 80, scratch clone `prod0327-rigid`: the Engineers' Yard's `.glb` and atlas copied to
+`game/assets/models/malazan/malazan_catapult/malazan_catapult.glb`): it imports, smoke PASS, the unit view draws
+it (16 model types, no `ERROR` line; `ProjectileViewTest`, `ScaleViewTest`, `QaV7Test`, `QaM7V2Test` pass).
+What is missing: (a) a model with no skeleton still gets the humanoid clips, and Godot prints `couldn't resolve
+track` WARNING lines without end (236,240 log lines in `ModelViewTest`); (b) `ModelViewTest` pins the six
+capsule types and "one model per manifest `models` entry"; (c) the import tooling builds kit parts only as
+buildings (fitted to a footprint); (d) with no skeleton the bars sit at the capsule's height. Two systems change
+(tooling, the model loader), so this is the first slice only: one machine, standing and moving.
+
+Goal: the Catapult stops being a capsule: a wheeled timber frame with a throwing arm in the player's colour,
+built by the import tooling from kit parts (docs/04's fallback for the Catapult; no pack is on disk). It stands,
+drives and turns as a rigid shape; nothing on it moves yet.
+
+Scope:
+- **Tooling** (`tools/asset-manifest.json`, `tools/art/**`, `tools/import-assets.ps1` are the view's): a way to
+  build a unit model wholly from `kit` parts: one mesh, one `team` surface, the atlas and its layout in the
+  extras, as a building's file; no skeleton, no clip map; the origin on the ground under the centre, the front
+  along the direction a figure faces; its size in metres as kitted (no footprint fit). Reuse
+  `build_building.py`'s kit code and `check_kit`; do not copy it.
+- **The Catapult's kit**: a frame, four wheels, two uprights, an arm with a bucket or sling, a team-coloured
+  part that reads at zoom 40 (cloth, a painted beam or a shield on the frame). It must fit the unit: data
+  `radius` 0.9, `scale` absent.
+- **`game/scripts/UnitModels.cs` / `UnitViews.cs`**: a model type with no skeleton gets no animation library
+  and no clip is played on it; its bars and marks sit over the drawn mesh's top. No unit id and no "catapult"
+  in C#: the rule is "no skeleton" (or a manifest / extras mark), so the Battering Ram is data next session.
+- `game/tests/**`: a new scene for the rigid model; `ModelViewTest` and any scene your run shows red re-stated
+  (capsule set five, read from the manifest; the 1.8 m figure row applies to skinned types only), no row deleted.
+- docs/04: "Unit models, as built", the coverage row, the licensing log line (studio-made, same commit).
+- **Out of scope:** the Battering Ram (next session); turning wheels, a moving arm, any attack or death motion;
+  the mounted units and the War-dog; `sim/**` (no ViewApi need is known: if one appears, stop and write it as a
+  request); `game/data/**`; how skinned figures are drawn or scheduled (`CrowdAnimator`) beyond the one branch.
+
+Acceptance criteria:
+1. `tools/import-assets.ps1 -Only malazan_catapult` builds `game/assets/models/malazan/malazan_catapult/
+   malazan_catapult.glb` and its atlas from the manifest's kit parts alone; a second run is byte-identical; a
+   full import leaves every other tracked output unchanged (`git status` and file hashes: BUG-1831's watch-out).
+2. `check_kit`'s refusals hold for a unit kit (one row each for a non-finite number, an unknown key, a missing
+   `colours` map: `tools/art/test-kit-errors.ps1` or a sibling).
+3. In a match the Catapult is drawn as the model: `ModelViewTest` prints 16 models and the capsule set is
+   exactly the other five; with `--placeholder-art` / `UseModels = false`, with the file missing and with an LFS
+   pointer in its place it is its capsule with at most one warning and no `ERROR` line.
+4. **No `couldn't resolve track` line in any scene's log** (the scene loop's logs, grepped), and a rigid model's
+   slot holds no playing clip in the states idle, moving, attacking.
+5. Size at scale 1, read from the mesh: longest ground extent 1.5 to 2.3 m, height 1.0 to 2.5 m, triangles at
+   most the largest figure's in the manifest (report all three).
+6. Facing: a Catapult ordered east, then north, shows its front within 5 degrees of the sim's interpolated
+   facing at rest, and turns through the same interpolation a figure does.
+7. Team colour: for each player colour the game offers (the count read from the game, not a literal) a pixel of the team part reads that colour's hue (the
+   buildings' pixel rows are the model); a second player's Catapult beside it differs.
+8. Bars and marks: the health bar's height above the ground is the drawn mesh's top plus the gap a figure's bar
+   has, at data scale 1 and at a forged scale 1.5; the selection ring keeps the sim radius.
+9. Fog, stealth and death behave as for a figure (one row each: hidden when unseen, gone on the death event,
+   slot reuse rigid -> skinned -> capsule -> rigid leaves no stale mesh, material or player).
+10. Bench (rules 61 / 77), alone, capsules from the same window: 400 figures + 60 building models, 400
+    capsules, 1,000 figures, and 400 figures with 40 Catapults among them. Pass / fail: the 400-figure row is
+    within 0.3 ms of the base's on the same window. The rest is **measure and report** (the 1,000-figure row
+    sits at the 16.7 ms line: a second session above it is a finding, not this task's failure).
+11. Pictures in the scratchpad folder `m6v33-pictures` (named here: rule 80), looked at before the report: the
+    Catapult at zoom 20 and zoom 40 in four player colours, beside a Heavy Infantry figure and the Engineers'
+    Yard (rule 56: the shipped data, not a forged copy), and one from the firing side during an attack.
+12. Smoke PASS; the scene loop green, alone (137 scenes plus yours); the default sim loop green (11,161 / 0 /
+    22 skipped: you change no sim file); `dotnet build RtsGame.sln --no-incremental` 0 / 0 after the last edit.
+13. docs/04 as under Scope, and "Questions for the Producer" there (rule 67) with your recommendation on: the
+    arm's motion on attack, wheels, what a dying machine shows.
+
+Design references: docs/04 "Coverage plan" (Catapult: fallback "Kit-bash in Blender"), "Team color", "Unit
+models, as built", the M6-V31 / M6-V32 kit notes and the Engineers' Yard row (its half-built catapult is the
+look to match); `docs/factions/malazan.md` "Art notes" (dark steel grey, oxblood cloth, dull bronze); docs/01
+2026-11-28 (b). The unit's numbers: `game/data/factions/malazan/units.json` `malazan_catapult`.
+
+Tests required: the new scene (criteria 3-9), the kit error rows (2), `ModelViewTest` re-stated (3).
+
+Constraints: views hold no gameplay state; player-facing text only from data; no unit id in C#; binaries are
+Git LFS (`.glb` / `.png` are already in `.gitattributes`: check before the first commit); nothing from
+`asset-sources/` is committed. The import needs Blender 5.2 and the main checkout's `asset-sources/`. Rule 62
+(full loops after the last edit), 64, 69 (record PIDs; end only your own Godot / `testhost`), 63 (scratch
+folders start `m6v33-`). Bug-file changes as `m6v33-bugs.patch` in the scratchpad.
+
+**QA focus (standard).** Look at the pictures first: does it read as a catapult at zoom 40, is the team part
+visible in every player colour (the dull ones against timber), does it sit on the ground on a
+slope and on a plateau edge. Then: 40 Catapults driving in a crowd with figures (clipping, bars, rings),
+selection by click and by box, a Catapult under a Sandstorm or other status marks (where do marks sit with no
+head bone), slot reuse in every order, a save loaded mid-match, a replay, game speed 0 / 2x / pause (nothing
+may animate or warn). Grep every scene log for `couldn't resolve track`, `WARNING` counts against the base's.
+The kit tooling: BUG-1952's shapes of bad input on a unit kit. Run the bench last, after the other tracks'
+suites have ended if you can (rule 77), and say what else was running. Rule 65. Scratch folders start
+`m6v33-qa-`. Apply the developer's `m6v33-bugs.patch`.
 
 ### Where we are
 M6-V32 accepted: all 30 building types are models; BUG-1870, 1911, 1912 closed. Counter **2 / 4**. 15 of 21
@@ -627,7 +834,84 @@ unit types are models. 137 scenes. Bench on a quiet window (QA, 01:27-01:44): 40
 ## Data track
 
 ### Current session plan
-None yet: written at the next PLAN. Proposal below.
+**Session 2026-11-28-0327, planned 03:30. D40: re-measure the Teblor plans and the Malazan "keep 18" rule on
+today's computer player. Feature, QA standard, "measure and report". Bug ids 1960-1969. Base 6db9701e.**
+
+Goal: the computer player changed twice (M6-S14, M6-S15) since the Teblor plans and three Malazan balance rows
+were last measured; five checks have waited switched off since. Measure them on `main` as it is, make every
+waiting check true again, and bring a recommendation with its numbers. **No game data changes this session**
+(Producer decision, docs/01 2026-11-28 (b)): a value that should change is proposed with its table and ships
+in a session where the match pins move.
+
+Scope (your files: `docs/factions/**`, `sim/Rts.Sim.Tests/Content/**`, `sim/Rts.Sim.Tests/QA/Content/**`):
+- **BUG-1853.** Run the three shipped Teblor orders on the full 64 seats per difficulty
+  (`Content/D38ShippedOrdersReportTests`; QA's twin `QA/Content/D38ShippedOrdersQaStressTests`). Write the 21
+  figures as a new dated table in teblor.md with the commit measured on, re-point both rows at it and un-skip
+  them. Judge each difficulty against the bar (teblor.md, "The bar": docs/01 2026-11-24 ACCEPT (3)(c)): met /
+  not met per figure. A figure under the bar is a new bug with the row (S3), not a data change.
+- **BUG-1851.** Re-print malazan.md "Fast Age II against the raider rush" on this commit (14 / 16 / 18 pop,
+  seeds 7, 8, 14) and run the two-more-seeds row (`QA/Content/DH6ThresholdQaTests.Bug0982_KeepEighteen_*`) at 16
+  and at 18. Levers to vary (rule 78): `attack.minArmyPop` 14 / 16 / 18 with its `minArmyCost` only; say so.
+  Then state what the rule picks and what ships (16), and write your recommendation under the table: keep 16
+  and re-state the rule, or ship the rule's pick, with what each costs on `Content/AiOpeningPairsReportTests`'
+  `cadre_rush` pairs (first wave time, waves, defeats) at both values. Un-skip the three rows
+  (`AiOpeningPairsReportTests.Bug0982_*`, `QA/Content/DR35ProsePinQaTests.Malazan_Bug0982Prose_*`,
+  `DH6ThresholdQaTests.Bug0982_KeepEighteen_*`) so each asserts what is true today: the table, the prose, and
+  "the rule picks X, the file ships 16" as one named, exact allowance carrying BUG-1851 (it must go red when
+  either side changes).
+- **BUG-1856.** Row (0, 1) seed 2 of `AiOpeningPairsReportTests`: if the Malazan side now sends a wave, take it
+  out of `DefeatedBeforeDue` (and `AiOpeningPairsVerdictTests`' pin); else keep it with today's figures.
+- **Pages.** malazan.md's Age II paragraph still says "defeated 16:27" where its table says 16:52; fix every
+  dated sentence in malazan.md and teblor.md whose figure the tables no longer show, or mark it with the commit
+  it was measured on.
+- **BUG-1840**, the last file: `QA/Content/D21OpeningsQaTests` reads what a seat plays
+  (`AiOpening.BuildOrderFor(difficulty)`), not `buildOrder`.
+- If the measuring runs leave time (said done or not done in the report, not judged): BUG-1920 (the limit
+  reader's two phrasings; un-skip `DH11LimitReaderQaTests`' theory) and BUG-1921 (shadow.md's reader paragraph).
+- **Out of scope:** every file under `game/data/**`; any C# outside the two content test folders; the golden
+  replay; sim-owned pin classes; shadow.md's teleport text (the sim builds it this session; your next task).
+
+Acceptance criteria:
+1. teblor.md holds the new 3 x 7 table with its commit; both D38 rows are un-skipped, read that table and pass.
+2. The bar's verdict per difficulty and figure is in teblor.md under the table; each miss has a bug file in
+   your patch.
+3. malazan.md's threshold table is re-printed from this commit and pinned cell for cell by the report row; the
+   two-more-seeds figures at 16 and 18 are in the page.
+4. The three BUG-1851 rows are un-skipped and pass as stated in Scope; the allowance is one constant, named,
+   with the bug id; forging the shipped value to the rule's pick on a JSON copy turns the allowance row red
+   (shown once in the report).
+5. The recommendation for BUG-1851 is in malazan.md under the table, with the pairs figures at both values and
+   the levers not varied (rule 78). It is the owner-review table's source; no data byte ships.
+6. BUG-1856 is closed or re-stated with today's figures, the two pins agreeing.
+7. No sentence in malazan.md or teblor.md states a figure that differs from the table it cites (list each
+   sentence changed in the report; `QA/Content/DR35ProsePinQaTests` green).
+8. `QA/Content/D21OpeningsQaTests` no longer reads `buildOrder` for "what a seat plays" (BUG-1840 closed).
+9. `git diff 6db9701e -- game/data sim/Rts.Sim sim/Rts.Sim.Tests/Replays` is empty and no file outside your
+   folders changed.
+10. The default loop (`dotnet test sim/Rts.Sim.Tests --filter "Category!=Perf&Category!=Stress&Category!=Soak"`)
+    green after the last edit: 0 failed, skips down from 22 by the default-loop rows you un-skipped, each named;
+    the Stress rows you touched run by name and green; `dotnet build RtsGame.sln --no-incremental` 0 / 0.
+11. Everything the report claims is also in the pages or in the scratchpad file `d40-report.md` (rule 80).
+
+Design references: `docs/factions/teblor.md` (the three build orders, "The bar", D37's table);
+`docs/factions/malazan.md` "Fast Age II against the raider rush" and the Age II tables; docs/02 "AI opponent";
+docs/03 "Implementation (M6-S14)" F and "(M6-S15)" (what moved and why); docs/01 2026-11-28 (b).
+
+Tests required: the un-skipped rows above; no new report class unless a table needs one.
+
+Constraints: the hour-long classes are Stress-tagged: run them **by name**
+(`--filter "FullyQualifiedName~D38ShippedOrders"`, `~Bug0982`, `~AiOpeningPairs`), never the whole Stress
+category (rule 53). The sim's QA runs its full suite beside you: a wall-clock limit that fails is re-run alone
+before it is a finding. Rules 62, 64, 69 (record PIDs), 63 (scratch folders start `d40-`). You cannot write
+`studio/**`: bug-file changes as `d40-bugs.patch` in the scratchpad.
+
+**QA focus (standard).** Re-derive, do not re-read: run the D38 twin and one difficulty of the threshold table
+yourself on a clean clone of the branch and compare every cell with the pages. Check the allowance row is
+exact (forge 18, forge 14: red both times) and that no un-skipped row was loosened into "always true" (read
+each assertion). Read every changed sentence against its table. Try the recommendation: is there a seed among
+the pairs where the other value is clearly better or worse than the report says (rule 75: both difficulties
+the bug is about)? Suites: the task's filters, the default loop, the Stress rows the task touched, the
+`--no-incremental` build (rule 65). Scratch folders start `d40-qa-`. Apply the developer's `d40-bugs.patch`.
 
 ### Where we are
 Stopped for session 2026-11-27-1857 (rule 41). D-H11 is the last task. Counter **0 / 4**. The Teblor plans and

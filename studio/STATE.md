@@ -22,18 +22,18 @@ _Last updated: 2026-11-28 (session 2026-11-27-1857; sim + view accepted, no fix 
 | Field | Value |
 | --- | --- |
 | Sim: milestone | **M5 8 / 9** (left: your play); **M6 5 / 10**; **M7 3 / 4**; **M8 0 / 3**. Last: **M6-S15** (ACCEPT, 0 fix rounds, QA full): the computer player spends what it has, builds a small depot when it has lost its hall, resumes a hunt a raid cut short; the draw rule's missing clause; every test match re-measured |
-| Sim: next task | **The Shadow's teleport rule on test data** (Request 56 G5; feature, QA full; changes no computer-player behaviour). After it: the second computer-player task (BUG-1935 / 1932 / 1933 / 1934 / 1930) |
+| Sim: next task | **Running (session 2026-11-28-0327): M8-5, the Shadow's teleport rule on test data** (Request 56 G5; feature, QA full; changes no computer-player behaviour). After it: the second computer-player task (BUG-1935 / 1932 / 1933 / 1934 / 1930) |
 | Sim: gate | **GO** |
 | View: milestone | **M6 5 / 10; M7 3 / 4.** Last: **M6-V32** (ACCEPT, 0 fix rounds, QA standard): the last six box buildings and the Stone Cairn as models; all 30 building types are models; 137 screen tests |
-| View: next task | **The two machines (Catapult, Battering Ram) as studio-made models**, if the planning check shows the unit view can draw a rigid model; otherwise a short clean-up (BUG-1952, BUG-1953, an import self-check). The three mounted units and the War-dog wait for your packs |
+| View: next task | **Running (session 2026-11-28-0327): M6-V33, the Catapult as a studio-made rigid model** (feature, QA standard). The planning check passed with two gaps to close first, so this session is the Catapult alone, standing and driving; the Battering Ram and the arm's motion follow, then the clean-up (BUG-1952, BUG-1953, an import self-check). The three mounted units and the War-dog wait for your packs |
 | View: gate | **GO** |
 | Data: milestone | M3 Done; D1-D39 and D-H11 on `main`. Last: **D-H11** (2026-11-27-0817). Paused for session 2026-11-27-1857 (it cannot measure while the sim changes the computer player) |
-| Data: next task | **The re-measure** (feature, QA standard): the three Teblor plans and the Malazan "keep 18" rule on today's computer player (BUG-1851 / 1853 / 1856; five checks wait switched off), the last page sentences. A data change, if one is needed, breaks old saves once more |
+| Data: next task | **Running (session 2026-11-28-0327): D40, the re-measure** (feature, QA standard): the three Teblor plans and the Malazan "keep 18" rule on today's computer player (BUG-1851 / 1853 / 1856; five checks switched back on), the last page sentences. **No game data changes this session**: a value that should change comes to you as a proposal with its table |
 | Data: gate | **GO** |
 | Build / tests | Producer, scratch clone of the merged tree (sim fbba712d + view 5b1b17f5): build `--no-incremental` **0 errors / 0 warnings**; everyday run **11,161 passed / 0 failed / 22 skipped of 11,183 in 25 m 3 s alone**; smoke **PASS**; screen tests **137 of 137, first pass, alone (32 m)**; frame time 6.51 ms a frame on a quiet PC for 400 figures with 60 building models (last session 6.54; 400 placeholder capsules 0.84, 1,000 figures 16.5 to 16.7, at the 16.7 limit: watched). Long suite (QA, sim branch): 12,282 passed / 1 failed / 34 skipped of 12,317 with the everyday run inside it; the one red row was QA's own new test in the wrong group, moved and green |
 | Open bugs | **S1 / S2: none.** S3 34, S4 36 (`studio/bugs/README.md`). Closed this session: BUG-1893, 1890, 1891, 1892, 1854, 1855, 1860 (sim), 1870, 1911, 1912 (view). New open: BUG-1930, 1932, 1933, 1934, 1935 (S3), 1931, 1951, 1952, 1953 (S4) |
 | Data hash / saves | Data hash **3BB926FD74795B9E**, save format **11**: both unchanged this session |
-| Sessions today | **2026-11-27: 2 / 8 done (0817, 1857). 2026-11-28: 0 / 8.** Counters: **sim 1 / 4, view 2 / 4, data 0 / 4**. Usage: the weekly window reset during the session (stop at 95 %) |
+| Sessions today | **2026-11-27: 2 / 8 done (0817, 1857). 2026-11-28: session 1 / 8 running (0327).** Counters: **sim 1 / 4, view 2 / 4, data 0 / 4**. Usage: the weekly window reset during the session (stop at 95 %) |
 | Last session | **2026-11-27-1857** (18:57 to about 02:50): log `studio/sessions/2026-11-27-1857.md` |
 | Tools on this PC | Godot 4.7.2 .NET, .NET SDK 8.0.425, Git 2.53 + LFS 3.7, Blender 5.2.2; `GODOT` user variable set |
 
@@ -53,6 +53,14 @@ _Last updated: 2026-11-28 (session 2026-11-27-1857; sim + view accepted, no fix 
 Non-blocking. Each entry says what was built or decided, what you'd notice in the game, and how
 to change it. To change anything, write it in `studio/inbox.md`, for example "use formations
 instead of clusters" or "make giving up take 2 seconds".
+
+### Three decisions behind today's plan: machines made in-house, how Shadow-step behaves, and no data change while measuring (all tracks, planned 2026-11-28-0327; the work is this session's)
+
+Non-blocking; each is mine to make under your standing rule and yours to overturn with one inbox line.
+
+1. **The Catapult and the Battering Ram will be studio-made models, the Catapult first (view track).** No catapult kit is on disk, and the art plan already names "build it from simple parts in Blender" as the fallback, the way the Whirlwind tents were made. **What you will see** once it lands: a wheeled timber frame with a throwing arm and a part in your colour where the grey capsule is today. In this first step nothing on it moves (no swinging arm, no turning wheels); it drives and turns as one piece. The alternative was to wait for your download and leave capsules in every siege. To change: drop a catapult pack in `asset-sources/` or write "machines: wait for a pack".
+2. **How Shadow-step will behave (sim track; the rule only, no unit in your game has it yet).** The sorcerer and your soldiers within 4 m of it appear at the chosen point in the same formation; siege stays behind; workers and summoned Wraiths go along. A soldier whose spot would be inside a cliff or a building lands on the nearest free ground instead. **They keep their orders:** select 12 Warriors and a sorcerer, order an attack on an enemy mage, then cast Shadow-step behind the enemy line: the Warriors arrive and carry on attacking the mage without a new order. The alternative (they arrive and stand still) would make you re-issue the order you teleported for. A Shadow Archer that was hidden by standing still must stand its 3 seconds again after the jump. The computer player will not cast it until it has a rule of its own for it. To change any of this: an inbox note, e.g. "shadow-step: clear orders on arrival".
+3. **The data track measures today and changes no numbers.** The checks may say the Malazan "Fast Age II" computer player should attack with 18 soldiers again instead of 16 (BUG-1851). If so you get the proposal with its table, and the change ships in a session where the test matches are re-measured anyway, not on a computer player that changes again in the next sim task. Your saves keep loading today.
 
 ### The computer player spends what it has: the three test matches that never ended now end, and your draw rule has its missing clause (sim track, M6-S15, 2026-11-27-1857, ACCEPTED, 0 fix rounds)
 

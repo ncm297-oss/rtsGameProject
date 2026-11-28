@@ -140,8 +140,9 @@ Outfits – Fantasy edition in `asset-sources/` (Standard and Source) holds **tw
 female, as whole outfits and as modular parts: arms, body, legs, feet, the Ranger's hood and pauldron), and no animal
 pack is on disk. Producer default until the owner says otherwise: workers wear the Peasant, ranged units the Ranger,
 and the other slots are those two outfits recoloured to the faction palette with weapons, shields and props kit-bashed
-in Blender for the silhouette; horses, dogs and siege engines stay placeholders until a source is chosen (the owner's
-download or an AI-generated model, "Coverage plan" below).
+in Blender for the silhouette; horses and dogs stay placeholders until a source is chosen (the owner's
+download or an AI-generated model, "Coverage plan" below). The two siege engines are studio-made kit models, the
+Catapult first (Producer decision 2026-11-28 (b), docs/01; M6-V33), unless the owner supplies a pack.
 
 | Pack | Source | Use |
 | --- | --- | --- |
