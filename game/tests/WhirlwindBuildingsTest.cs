@@ -266,6 +266,9 @@ public partial class WhirlwindBuildingsTest : Node
             W.Units.Free(new EntityHandle(unit, W.Units.Generation[unit])); // staging between ticks
             _sim.Tick();
             _views.Sync(W);
+            // BUG-1912: a type drawn as its box (its file missing or an LFS pointer) has no model pixels and no drawn top: it
+            // fails here, once, and the scene goes on to its other types and rows (it threw, and (S), (F), (3) never ran).
+            if (!Check(_views.ModelOf(slot) != null, $"(P) {def.Key}: not drawn as its model, so no model pixels or bar over a drawn top")) continue;
             _camera.SetZoom(CameraLimits.DefaultZoom);
             _camera.SetFocus(c.X, c.Y);
             await Frames(2);
@@ -647,6 +650,7 @@ public partial class WhirlwindBuildingsTest : Node
 
     private void LumaRow(Image img, int slot, string colour)
     {
+        if (!Check(_views.ModelOf(slot) != null, $"(luma) {colour}: the Holy Camp is not drawn as its model")) return; // BUG-1912
         MeshInstance3D m = _views.ModelOf(slot)!;
         UnitModels.Atlas atlas = _views.Models!.AtlasOf(B.TypeId[slot])!;
         Godot.Collections.Array arrays = m.Mesh.SurfaceGetArrays(0);
