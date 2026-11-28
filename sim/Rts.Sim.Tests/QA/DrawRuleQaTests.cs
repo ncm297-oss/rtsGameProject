@@ -37,6 +37,7 @@ public class DrawRuleQaTests
         Simulation sim = DrawScenes.Empty(data, players, 48, teams, seed: seed);
         World w = sim.World;
         var banks = new int[players];
+        var woods = new int[players];
         for (int p = 0; p < players; p++)
         {
             (int x, int y) = DrawScenes.Corner(sim, p);
@@ -51,11 +52,18 @@ public class DrawRuleQaTests
             int cheapest = DrawScenes.Cheapest(sim, p);
             int roll = rng.NextInt(0, 20);
             banks[p] = roll < 10 ? 0 : roll < 15 ? cheapest - 1 : roll < 17 ? cheapest : rng.NextInt(0, 2 * cheapest);
+            // M6-SH3: wood is counted now; the bank holds the cheapest unit's wood, one short, or none.
+            int wood = Draw.DrawReachTests.CheapestByGold(w, p).CostWood, woodRoll = rng.NextInt(0, 3);
+            woods[p] = woodRoll == 0 ? 0 : woodRoll == 1 ? wood - 1 : wood;
         }
         int nodes = rng.NextInt(0, 3) == 0 ? 1 : 0;
         for (int n = 0; n < nodes; n++) DrawScenes.GoldNode(sim, 18 + 6 * n, 22, 1 + rng.NextInt(0, 30));
         DrawScenes.Broke(sim);
-        for (int p = 0; p < players; p++) w.Ledger.Gold[p] = banks[p];
+        for (int p = 0; p < players; p++)
+        {
+            w.Ledger.Gold[p] = banks[p];
+            w.Ledger.Wood[p] = woods[p];
+        }
         return sim;
     }
 
@@ -141,6 +149,11 @@ public class DrawRuleQaTests
         var workers = new int[n];
         var queued = new int[n];
         var carried = new long[n];
+        var carriedWood = new long[n];
+        var training = new int[n];
+        var dropOffs = new int[n];
+        int types = w.Data.Units.Length;
+        var waiting = new int[n * types];
         for (int i = 0; i < u.Capacity; i++)
         {
             if (!u.Alive[i]) continue;
@@ -148,23 +161,41 @@ public class DrawRuleQaTests
             if ((uint)o >= (uint)n) continue;
             if (w.Data.Units[u.TypeId[i]].IsWorker) workers[o]++;
             if (u.CargoKind[i] == ResourceKind.Gold) carried[o] += u.Cargo[i];
+            else carriedWood[o] += u.Cargo[i];
         }
         for (int k = 0; k < b.Capacity; k++)
         {
             if (!b.Alive[k] || (uint)b.Owner[k] >= (uint)n) continue;
+            if (!b.UnderConstruction[k] && w.Data.Buildings[b.TypeId[k]].DropOff) dropOffs[b.Owner[k]]++;
             for (int q = 0; q < b.QueueCount[k]; q++)
-                if (!b.QueueIsTechAt(k, q)) queued[b.Owner[k]]++;
+            {
+                if (b.QueueIsTechAt(k, q)) continue;
+                queued[b.Owner[k]]++;
+                if (q == 0 && b.Progress[k] > 0) training[b.Owner[k]]++;
+                else waiting[b.Owner[k] * types + b.QueueTypeAt(k, q)]++;
+            }
         }
-        long goldLeft = 0;
+        long goldLeft = 0, woodLeft = 0;
         for (int r = 0; r < w.Resources.Capacity; r++)
-            if (w.Resources.Alive[r] && w.Data.Resources[w.Resources.TypeId[r]].Resource == ResourceKind.Gold) goldLeft += w.Resources.Remaining[r];
+        {
+            if (!w.Resources.Alive[r]) continue;
+            if (w.Data.Resources[w.Resources.TypeId[r]].Resource == ResourceKind.Gold) goldLeft += w.Resources.Remaining[r];
+            else woodLeft += w.Resources.Remaining[r];
+        }
         for (int p = 0; p < n; p++)
         {
             if (workers[p] != w.Ledger.LiveWorkers[p]) return $"p{p} workers counted {w.Ledger.LiveWorkers[p]}, scanned {workers[p]}";
             if (queued[p] != w.Ledger.QueuedUnits[p]) return $"p{p} queued counted {w.Ledger.QueuedUnits[p]}, scanned {queued[p]}";
             if (carried[p] != w.Ledger.CarriedGold[p]) return $"p{p} carried counted {w.Ledger.CarriedGold[p]}, scanned {carried[p]}";
+            // M6-SH3: the counts the exact rule added.
+            if (carriedWood[p] != w.Ledger.CarriedWood[p]) return $"p{p} carried wood counted {w.Ledger.CarriedWood[p]}, scanned {carriedWood[p]}";
+            if (training[p] != w.Ledger.TrainingUnits[p]) return $"p{p} training counted {w.Ledger.TrainingUnits[p]}, scanned {training[p]}";
+            if (dropOffs[p] != w.Ledger.FinishedDropOffs[p]) return $"p{p} finished drop-offs counted {w.Ledger.FinishedDropOffs[p]}, scanned {dropOffs[p]}";
+            for (int t = 0; t < types; t++)
+                if (waiting[p * types + t] != w.Ledger.WaitingUnits(p, t)) return $"p{p} waiting of type {t} counted {w.Ledger.WaitingUnits(p, t)}, scanned {waiting[p * types + t]}";
         }
         if (goldLeft != w.Resources.GoldLeft) return $"gold left counted {w.Resources.GoldLeft}, scanned {goldLeft}";
+        if (woodLeft != w.Resources.WoodLeft) return $"wood left counted {w.Resources.WoodLeft}, scanned {woodLeft}";
         return null;
     }
 
@@ -313,11 +344,13 @@ public class DrawRuleQaTests
         for (int i = 0; i < w.Units.Capacity; i++)
             if (w.Units.Alive[i] && w.Units.Owner[i] == 3) w.Units.Free(new EntityHandle(i, w.Units.Generation[i]));
         w.Ledger.Gold[3] = DrawScenes.Cheapest(sim, 3);
+        w.Ledger.Wood[3] = Draw.DrawReachTests.CheapestByGold(w, 3).CostWood; // M6-SH3: wood is counted
         var o = new DrawQaOracle(sim);
         Run(sim, o, 50);
         Assert.Equal(0, w.DrawClock);
         Assert.False(w.MatchSpent);
         w.Ledger.Gold[3] = 0;
+        w.Ledger.Wood[3] = 0;
         Run(sim, o, 20);
         Assert.Equal(20, w.DrawClock);
         int hall3 = -1;
@@ -411,6 +444,7 @@ public class DrawRuleQaTests
         DrawScenes.Broke(sim);
         int cheapest = DrawScenes.Cheapest(sim, 0);
         w.Ledger.Gold[0] = cheapest - 2;
+        w.Ledger.Wood[0] = Draw.DrawReachTests.CheapestByGold(w, 0).CostWood; // M6-SH3: wood is counted (the Town Hall is the drop-off)
         EntityHandle node = DrawScenes.GoldNode(sim, 20, 9, 2);
         EntityHandle worker = DrawScenes.Unit(sim, 0, 18, 10, UnitSlot.Worker);
         sim.Enqueue(Command.Gather(0, worker, new Vector2(21f, 10f) * Map.MapConstants.CellSize));
@@ -499,9 +533,9 @@ public class DrawRuleQaTests
     /// <summary>
     /// A forged DRAW part the developer's refusal list does not hold: a clock running on a match already won (the result flag
     /// set, not drawn). The sim never writes it (a won tick sets the clock to 0), so a strict reader refuses it. Red on the
-    /// M6-S13 head (loads with SaveError.None): BUG-1730.
+    /// M6-S13 head (loads with SaveError.None): BUG-1730; refused since M6-SH3 (World.ReadDraw).
     /// </summary>
-    [Fact(Skip = "BUG-1730 (open, S4): a DRAW part with a running clock on a won (latched, not drawn) match is accepted")]
+    [Fact]
     public void AForgedClock_OnAWonMatch_IsRefused()
     {
         Simulation sim = DrawScenes.Spent(DrawScenes.Short);

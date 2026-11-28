@@ -164,6 +164,13 @@ internal sealed partial class AiPlayer
     /// <summary>Per unit type, the units in the player's queues (the head in progress included).</summary>
     internal int[] Queued { get; }
 
+    /// <summary>
+    /// M6-SH3 (BUG-1857): the half-pop of the worker items in the player's queues that have not started (a head whose progress is
+    /// 0, or any item behind a head): a unit's population is reserved only when its item starts, so the worker floor's room test
+    /// adds this to the population in use. Census scratch, recounted every think; not saved.
+    /// </summary>
+    internal int WaitingWorkerHalfPop { get; private set; }
+
     // M8-4 (Request 56 G4): per unit type with a limit, the units this think's Trains will add (spawnCount each) and the think
     // they were sent at. A Train applies the tick after its think and a seat thinks again at least a tick later, so only this
     // think's sends are missing from the world's count. Scratch keyed by the think's tick: not saved, not hashed.
@@ -200,6 +207,12 @@ internal sealed partial class AiPlayer
 
     /// <summary>M5-3 (BUG-0574): whether the player has a finished drop-off building.</summary>
     internal bool HasDropOff { get; private set; }
+
+    /// <summary>
+    /// M6-SH3 (BUG-1852): <see cref="HasDropOff"/> as the last think's census found it (the think that sent the Gathers judged
+    /// now). Taken from the saved <see cref="HasDropOff"/> at the start of the census, so nothing new is saved.
+    /// </summary>
+    internal bool HadDropOff { get; private set; }
 
     /// <summary>The player's buildings (sites included), slot order (first <see cref="OwnBuildingCount"/>): slot, type, anchor and whether a site.</summary>
     internal int[] OwnBuildingSlots { get; }
@@ -557,6 +570,8 @@ internal sealed partial class AiPlayer
         ClearReserve();
         FocusTarget = default;
         Array.Clear(CounterShare); // M5-9a: think scratch, as the reserve
+        WaitingWorkerHalfPop = 0; // M6-SH3 (BUG-1857): think scratch too, so a loaded seat equals the saved one
+        HadDropOff = false; // M6-SH3 (BUG-1852): likewise
         return true;
     }
 
@@ -564,18 +579,30 @@ internal sealed partial class AiPlayer
     {
         Array.Clear(Live);
         Array.Clear(Queued);
+        WaitingWorkerHalfPop = 0;
         WorkerCount = 0;
         ArmyCount = 0;
         OwnBuildingCount = 0;
         // M5-4d slice 2: a hall seen last think is remembered (LostHallCell) until the buildings' pass finds one again.
         if (TownHallCell >= 0) TownHallCell = -TownHallCell - 2;
+        HadDropOff = HasDropOff; // M6-SH3 (BUG-1852)
         HasDropOff = false;
         IntruderCount = 0;
         IntruderWorth = 0;
         // M5-4b: the buildings first, so the units' pass knows the hall (the intruders are counted round it).
         Buildings();
+        bool hadHall = HasHall;
+        Vector2 hallBefore = HallPoint;
         HasHall = TryHallPoint(out Vector2 hall, out int hallSlot);
         HallPoint = hall;
+        // M6-SH3 (Q7, docs/01 2026-11-27 first row (3)): the kept rally point (MilitaryManager's fall-back, laid on the old
+        // hall's line) is forgotten when the hall point changes: kept across the move it stood 4.5 m from the new hall (QA's
+        // survey). HasHall and HallPoint are saved, so the comparison holds across a load.
+        if (Board.HasRallyKept && (HasHall != hadHall || hall != hallBefore))
+        {
+            Board.HasRallyKept = false;
+            Board.RallyKept = Vector2.Zero;
+        }
         HallSlot = hallSlot;
         float defend = Rules.DefendRadius * Rules.DefendRadius;
         int s = -1, enemies = 0;
@@ -882,7 +909,11 @@ internal sealed partial class AiPlayer
             }
             int n = View.QueueCount(s);
             for (int item = 0; item < n; item++)
-                if (View.TryGetQueueItem(s, item, out int type, out bool isTech) && !isTech) Queued[type] += Data.Units[type].SpawnCount; // M7-3: a pack is its units
+            {
+                if (!View.TryGetQueueItem(s, item, out int type, out bool isTech) || isTech) continue;
+                Queued[type] += Data.Units[type].SpawnCount; // M7-3: a pack is its units
+                if (IsWorkerType[type] && (item > 0 || View.QueueProgress(s) == 0)) WaitingWorkerHalfPop += Data.Units[type].ItemHalfPop; // M6-SH3 (BUG-1857)
+            }
         }
         s = -1;
         while (View.NextGhost(ref s, out Vision.BuildingGhost g))

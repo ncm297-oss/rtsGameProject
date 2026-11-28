@@ -63,6 +63,9 @@ Garrison Keep and the Barracks; "Building models, as built" below. M6-V28 (devel
 on the Billet, the Depot, the Crossbow Range and the Watchtower too. M6-V30 (developer's pick, owner may revisit): on the
 Teblor buildings the timber roofs and tower tops (picked by the manifest's `teamFaces` rule: the First Age draws its roofs
 in the walls' material), the banners and the Javelin Ground's awning, and the Bloodwood Carver's two stall awnings.
+M6-V31 (developer's pick, owner may revisit): on the Whirlwind buildings the cloth: every tent, the Holy Camp's cone roof,
+pennant and entrance awning, the Smithy's lean-to sheet, the Shrine's banners and runner, the Supply Cache's stall awning, the
+Lookout Tower's canopy and banners (the pavilion's walls are bleached canvas, not team).
 **One material per model since M6-V24.** A unit model is one surface with one material, still named `team`, drawing one
 atlas: a 512² tile per role texture (the team part's brightness, outfit, skin, head, hair) and a tile of the props' flat
 colours; the atlas **alpha is the team mask** (0.5 on the team tile, 0.75 on the props' tile, 1 elsewhere). The same
@@ -689,7 +692,105 @@ building, the four Malazan box types of M6-V28 (Wickan Corral, Armory, Cadre Tow
   colour): one builder feature, low-poly tents that read as a camp; (c) **a tent pack** (the owner's download, or an
   AI-generated set, docs/04 "AI-generated models"), imported through this path unchanged. Recommendation: (c) if the owner
   has or picks a CC0 tent / desert camp pack, else (b) for the Tent, Holy Camp and the four camps, with the Market stalls for
-  the Supply Cache and the Second Age's tower for the Lookout Tower; not (a).
+  the Supply Cache and the Second Age's tower for the Lookout Tower; not (a). **Decided (docs/03 "Implementation (M6-V30)",
+  the Producer's answer 3): (b), built by M6-V31 below** (the Lookout Tower from the First Age's tower instead: see there).
+
+**Building models, as built (M6-V31).** The Whirlwind's ten buildings are models: eight **kit-bashed** in the builder from
+simple parts (no pack file), and two from the building pack with kit parts or a crop. A Whirlwind base reads as a desert camp
+of player-coloured tents round an octagonal pavilion (`m6v31-base-40m.png`), not as a second Malazan town. 24 of 30 building
+types are models; the boxes left are the Malazan Wickan Corral, Armory, Cadre Tower and Engineers' Yard and the Teblor Stables
+& Kennels and Breaker's Hall (and every site).
+
+- **The kit (builder feature, `tools/art/build_building.py`).** A `buildings` entry may carry `kit`: a list of parts, each
+  `{ "shape", "size": [w, h, d], "at": [x, y, z], "role" }` with optional `rotate` [x, y, z] degrees (x first, about the
+  part's base centre), `sides` (cone / cylinder, default 8), `axis` (ridge: `"z"` the ridge runs front to back, the gable
+  faces the camera, or `"x"`; cylinder: `"y"` standing, `"x"` / `"z"` lying, a log) and `top` (cone: a cut cone whose top
+  ring is that share of the base). Shapes: `box`, `ridge` (a tent's prism), `pyramid`, `cone`, `cylinder`, `pole` (a box, for
+  reading) and `awning` (a box at most 0.3 thick). Axes are Godot's: x east, y up, z toward the camera (the front); every
+  shape fills `[-w/2, w/2] x [0, h] x [-d/2, d/2]` round its base centre `at`. A part's `role` is a material: one of the
+  entry's `team` (the **cloth**, on the team tile, as `teamFaces` are) or a key of `colours` (frames, poles, props: flat
+  colours). The parts are made with outward faces and then go through exactly the path a pack file's faces do (the
+  hidden-face pass, the atlas, one surface, one `team` material, the export), so the view needs nothing new: a model is found
+  by id under `game/assets/models/whirlwind/<id>/`.
+  - **A kit with no `source` is drawn in meters**: the builder reads the building's footprint from
+    `game/data/factions/<faction>/buildings.json` and refuses a part outside it less `FitMargin` (0.25 m); the view's fit
+    then scales it by at most a few percent (the plan's longer side to the footprint less the margin).
+  - **A kit with a `source`** (an entry may mix them) is in the source's units, counted from the (cropped) source's ground
+    plan centre at its lowest point.
+  - **`keep`** `{ "min": [x, y, z], "max": [x, y, z] }` (Godot's axes, the source's units) keeps only the source's faces whose
+    centre lies inside the box: one stall of the pack's four-stall market.
+  - **Refused with a `FAIL` line, no model written:** no parts, an unknown shape, a size not three numbers over 0, an awning
+    thicker than 0.3, a role with no colour and not a team part, a part under the ground, a kit part outside the footprint, a
+    `keep` box holding no face or with no `source`, an entry with neither `source` nor `kit` (`tools/art/test-kit-errors.ps1` proves each, and a
+    good kit, with Blender in about a minute). An entry without `kit` or `keep` runs no new line: a full re-import, two runs,
+    left all 139 pre-existing model, atlas, library and `.import` files byte for byte (SHA-256 before and after each run).
+  - `tools/import-assets.ps1` prints a kit's part and triangle counts (`kit: 15 parts, 174 triangles`).
+- **The types** (developer's design, owner may revisit). Every camp is one ridge tent (back left, door to the camera) and the
+  prop that says what it trains; the tent cloth is the team part, as a Malazan roof is.
+
+  | Building | Made of | What a player sees at zoom 40 | Triangles (kit or source, built; team) | Fitted (w x d x h) | Footprint |
+  | --- | --- | --- | --- | --- | --- |
+  | Holy Camp | kit, 15 parts | an octagonal pavilion of bleached canvas under a player-coloured cone roof with a finial and pennant, an entrance awning on poles, a crimson rug, four small tents at the corners | 174, **122**; 48 | 7.47 x 7.5 x 4.92 m | 8 x 8 m |
+  | Tent | kit, 6 parts | one ridge tent, gable to the camera, a dark door, a rug and a clay jar | 72, **55**; 6 | 2.99 x 3.5 x 2.63 m | 4 x 4 m |
+  | Raider Camp | kit, 19 parts | the tent; a weapon rack of five spears and two round shields; a straw training dummy | 276, **229**; 6 | 5.48 x 5.5 x 2.90 m | 6 x 6 m |
+  | Archer Camp | kit, 17 parts | the tent; two straw butts with white-and-red target faces; a rack of arrows behind | 324, **297**; 6 | 5.5 x 4.96 x 2.89 m | 6 x 6 m |
+  | Horse Lines | kit, 15 parts | the tent; a long tether rail on four posts across the front, a water trough, stacked hay | 172, **141**; 6 | 5.5 x 5.47 x 2.75 m | 6 x 6 m |
+  | Ram Yard | kit, 13 parts | the tent; a ram log with an iron head slung in two A-frames; a pile of three logs | 214, **193**; 6 | 5.5 x 5.42 x 2.81 m | 6 x 6 m |
+  | Smithy | kit, 17 parts | an open lean-to (a player-coloured sheet on four poles) over a woodpile, a stone chimney; in front a stone hearth with glowing coals, an anvil on a stump, a quench barrel, a tool rack | 268, **224**; 10 | 5.5 x 5.05 x 3.98 m | 6 x 6 m |
+  | Shrine of the Whirlwind | kit, 14 parts | a sandstone platform with steps, a three-tier ochre spire twisting upward (each tier turned 22.5 degrees), four tall poles with player-coloured banners, a player-coloured runner to the steps | 202, **146**; 40 | 4.97 x 5.5 x 5.32 m | 6 x 6 m |
+  | Supply Cache | `Market_FirstAge_Level2`, cropped (`keep`) to its front-left stall | a market stall under a player-coloured awning, sacks and baskets of goods on the counter | 6,064, **734**; 312 | 3.5 x 3.35 x 3.03 m | 4 x 4 m |
+  | Lookout Tower | `WatchTower_FirstAge_Level3` + a kit canopy (5 parts) | a tall, sun-bleached timber tower of two stages under a player-coloured pyramid canopy on four posts, the pack's banners player-coloured | 1,324, **960**; 57 | 3.5 x 3.34 x 8.80 m | 4 x 4 m |
+
+  Every atlas is 128 x 128 (4 x 4 tiles of 32) but the Shrine's and the Lookout Tower's, 64 x 64 (2 x 2). Triangles are
+  "before the hidden faces, built; on the team tile".
+  - **The four camps told apart** (`m6v31-whirlwind_*-40m.png`): the same tent, but a different prop no other camp has,
+    at the tent's right or in front: the spear rack and dummy, the target butts, the tether rail with trough and hay, the ram
+    in its frames. At zoom 40 the props are small (1-1.5 m tall); the targets' white faces and the rail's length read best,
+    the spear rack least (thin poles).
+  - **The Supply Cache is one stall, not the market.** The whole `Market_FirstAge_Level1` (the Teblor Bloodwood Carver) or
+    `_Level2` on a 2 x 2 footprint is 1.2 / 1.0 m tall (the stalls fitted to 3.5 m: the awnings under a figure's head);
+    one stall cropped from Level 2 is 3.03 m, a stall a figure stands under. Its striped awning (`Gold` and `White`) is the
+    team part whole.
+  - **The Lookout Tower is `WatchTower_FirstAge_Level3`, not the Second Age tower the M6-V30 paragraph proposed:** the
+    Second Age's towers are the grey stone the Malazan Watchtower is (`WatchTower_SecondAge_Level1`; Level 2 / 3 are the same
+    stone with crenellations), so in any tint they read as the Malazan tower. The First Age's Level 3 is a timber tower of two
+    stages (Level 1 is the Teblor Cairn; Level 2 is 9.9 m tall on 2 x 2), sun-bleached (`Wood` `#8a7256`, `Wood_Light`
+    `#a38c6c`) under a kit cloth canopy (a pyramid on four posts) in the player colour (`m6v31-towers-40m.png`: beside the
+    Malazan Watchtower and the Teblor Cairn). It stands 8.80 m (the Malazan Watchtower 4.9 m, the Cairn 7.05 m): a lookout. Its
+    shot leaves at `ModelShotShare` of its top, 7.48 m.
+- **The palette** (toward docs/04's Whirlwind palette: ochre, sand, bleached white, crimson): `canvas` bleached `#d6cbb2`,
+  `dark` (door openings) `#2e241c`, `pole` `#5a4330`, `wood` / `log` `#7a5c3e`, `rug` crimson `#6b2a24`, `clay` `#9a6a44`,
+  `straw` `#b49a5a`, `metal` `#8a8780` (blades) / `#4f4d4a` (the anvil), `water` `#3d5560`, `stone` sandstone `#8a7d68` /
+  `#9a8a6c`, `ember` `#c0602a`, `spire` ochre `#a7783f`; the Supply Cache's `Wood` `#6b5238`, `Wood_Light` `#8a6d4a`, `Red`
+  `#7a3027`, `Yellow` `#b8984f`, `Green` `#6b6a3a`.
+- **Team colour: the cloth.** In all eight setup colours (`m6v31-holy-camp-colours-1-4-40m.png`, `-5-8-40m.png`) the cloth
+  takes the colour. Measured on the Holy Camp, each colour alone on the same spot under the same camera at zoom 40
+  (`m6v31-holy-camp-<colour>-40m.png`; `WhirlwindBuildingsTest` windowed prints the `LUMA` lines): each pixel told by the atlas
+  tile of the model triangle its ray meets first, the Rec. 709 luminance (0-255) most common on the team pixels and on the
+  model's largest non-team part on screen (the bleached canvas walls, 838 pixels against 11,597 team pixels):
+
+  | Colour | Team (cloth) | Canvas | Gap |
+  | --- | --- | --- | --- |
+  | Iron | 113 | 224 | 111 |
+  | Ochre | 181 | 224 | 43 |
+  | Crimson | 101 | 224 | 123 |
+  | Cobalt | 95 | 224 | 129 |
+  | Jade | 170 | 224 | 54 |
+  | Violet | 113 | 224 | 111 |
+  | Rose | 142 | 224 | 82 |
+  | Bone | 235 | 224 | **11** |
+
+  **Bone is under 30 levels:** a Bone player's Holy Camp is bleached cloth on bleached canvas, one pale shape
+  (`m6v31-holy-camp-bone-40m.png`); its tents and roofs still read by shape and by the crimson rugs and dark doors, and the
+  camp is mostly cloth (the canvas is 7 % of its pixels). A darker canvas would drop Ochre, Jade and Rose under 30 instead
+  (they sit at 140-181); docs/03 "Implementation (M6-V31)" question 2.
+- **Sizes (Git LFS):** the ten `.glb` 6,312 (Tent) + 11,556 (Holy Camp) + 17,916 (Raider Camp) + 21,372 (Archer Camp) +
+  12,392 (Horse Lines) + 15,428 (Ram Yard) + 17,396 (Smithy) + 12,428 (Shrine) + 58,644 (Supply Cache) + 83,884 (Lookout
+  Tower) and the ten atlases 8,195 in all: **265,523 bytes (0.25 MB)**. The art pass's generated binaries: **41,273,999 bytes
+  (39.4 MB), was 41,008,476 (39.1 MB)**.
+- **Cost** (the table and the window in docs/03 "Implementation (M6-V31)"): 400 figures with 60 building models of the 24
+  types 6.64 ms while 90 %+ alive (the same as boxes 6.76), 400 capsules 0.86, 1,000 figures 16.77 ms; each Whirlwind type
+  alone within +0.26 ms of its boxes on a repeatable pass.
 
 **Audio (SFX, M6-V12).** Sources are long, mostly 96 kHz / 24-bit stereo files; only short cuts enter the repo.
 
@@ -851,7 +952,8 @@ Every third-party asset in the repo gets a row, added in the same commit that im
 | Quaternius – Universal Base Characters (Standard) | Quaternius | <https://quaternius.com/packs/universalbasecharacters.html> | CC0 1.0 (pack's `License_Standard.txt`) | Standard (free) edition, no version number; downloaded 2026-10-08 | Look test (M6-V10): `Superhero_Male_FullBody.gltf` + `.bin` + 7 textures in `game/assets/models/looktest/`, from `asset-sources/Universal Base Characters[Standard]/Universal Base Characters[Standard]/Base Characters/Godot - UE/`. **M6-V20:** the head of `SuperHero_Male` (the vertices weighted to `Head` / `neck_01`, decimated) and its base colour texture cut to 512² (`<id>_head.png`), inside `malazan_laborer.glb` and `malazan_crossbowman.glb` (`tools/asset-manifest.json`; the licence file is read at each import). **M6-V21:** the same head and texture inside `malazan_heavy_infantry.glb`, `whirlwind_camp_follower.glb`, `whirlwind_raider.glb` and `whirlwind_desert_archer.glb` (no new source file). **M7-V5:** the same head inside the five `game/assets/models/teblor/<id>/<id>.glb`, and a new file from the same pack and licence: `Hairstyles/Rigged to Head Bone/glTF (Godot -Unreal)/Hair_Long.gltf` (+ `.bin`, `T_Hair_2_BaseColor.png`), decimated, moved onto the male `Head`, its texture cut to 512² and darkened (`<id>_hair.png`) |
 | Quaternius – Universal Animation Library 1 and 2 (Standard) | Quaternius | <https://quaternius.com/packs/universalanimationlibrary.html> | CC0 1.0 (each pack's `License.txt`) | UAL1 Standard and UAL2 Standard, no version numbers; downloaded 2026-10-08 | Look test (M6-V10): `UAL1_Standard.glb` (no root motion), from `asset-sources/Universal Animation Library[Standard]/Universal Animation Library[Standard]/Unreal-Godot/`. **M6-V20:** six clips re-exported into `game/assets/animations/universal_humanoid.glb`: `Idle_Loop`, `Walk_Loop`, `Pistol_Shoot`, `Fixing_Kneeling` from `UAL1_Standard.glb`, `Farm_Harvest`, `TreeChopping_Loop` from `asset-sources/Universal Animation Library 2[Standard]/Universal Animation Library 2[Standard]/Unreal-Godot/UAL2_Standard.glb`; the `Pistol_Shoot` pose also places the crossbow (licence files read at each import). **M6-V21:** `Sword_Attack` from the same `UAL1_Standard.glb` added to the library as `attack_melee` (seven clips); its first frame places the Heavy Infantry's sword and the Raider's blade, `Idle_Loop`'s the shield and helmet, `Pistol_Shoot`'s the bow (no new source file). **M7-V5:** `Spell_Simple_Shoot` from `UAL1_Standard.glb` as `attack_cast` and `OverhandThrow` from `UAL2_Standard.glb` as `attack_throw` (nine clips); `TreeChopping_Loop`, `Sword_Attack`, `OverhandThrow` and `Idle_Loop` poses place the Teblor props (no new source file) |
 | Quaternius – Modular Character Outfits – Fantasy (Standard) | Quaternius | <https://quaternius.com/packs/modularcharacteroutfitsfantasy.html> | CC0 1.0 (pack's `License_Standard.txt`, read at each import by `tools/import-assets.ps1`) | Standard (free) edition, no version number; downloaded 2026-10-08 | M6-V20: from `asset-sources/Modular Character Outfits - Fantasy[Standard]/Modular Character Outfits - Fantasy[Standard]/Exports/glTF (Godot-Unreal)/Outfits/`: `Male_Peasant.gltf` (body, arms, legs, feet) in `game/assets/models/malazan/malazan_laborer/malazan_laborer.glb`; `Male_Ranger.gltf` (body, hood, pauldron, arms, legs, boots; not the bracers or belts) in `.../malazan_crossbowman/malazan_crossbowman.glb`; **M6-V21:** from the same two files (no new source file), `Male_Ranger.gltf` (body, pauldron, arms, **bracers**, legs, boots) in `.../malazan_heavy_infantry/malazan_heavy_infantry.glb`, (body, hood, arms, legs, boots) in `game/assets/models/whirlwind/whirlwind_raider/whirlwind_raider.glb`, (body, hood, pauldron, arms, legs, boots) in `.../whirlwind_desert_archer/whirlwind_desert_archer.glb`, and `Male_Peasant.gltf` (body, arms, legs, feet) in `.../whirlwind_camp_follower/whirlwind_camp_follower.glb`; **M7-V5:** from the same two files (no new source file), `Male_Peasant.gltf` (body, arms, legs, feet) in `game/assets/models/teblor/teblor_gatherer/` and `.../teblor_shaman/`, `Male_Ranger.gltf` (body, pauldron, arms, legs, boots) in `.../teblor_warrior/`, (body, arms, legs, boots) in `.../teblor_javelin_thrower/`, (body, pauldron, arms, bracers, legs, boots) in `.../teblor_breaker/`; decimated, textures (`T_Peasant_BaseColor`, `T_Ranger_BaseColor`, `T_Regular_Male_Dark_BaseColor`) cut from 4096² / 2048² to 512², tinted, and a grey team copy; the extracted `<id>_<role>.png` beside each model |
-| Quaternius – Ultimate Fantasy RTS | Quaternius | <https://quaternius.com/packs/ultimatefantasyrts.html> | CC0 1.0 (pack's `License.txt`; its header says "Ultimate Platformer Pack", a slip in the pack) | Aug 2022 (folder `quaternius-ultimate-fantasy-rts-2022-08`) | Look test (M6-V10): `Barracks_FirstAge_Level1.fbx`, from `asset-sources/quaternius-ultimate-fantasy-rts-2022-08/Ultimate Fantasy RTS - Aug 2022/FBX/`. **M6-V26:** from `asset-sources/quaternius-ultimate-fantasy-rts-2022-08/Ultimate Fantasy RTS - Aug 2022/glTF/`, `Barracks_SecondAge_Level3.gltf` in `game/assets/models/malazan/malazan_garrison_keep/malazan_garrison_keep.glb` and `Barracks_SecondAge_Level1.gltf` in `game/assets/models/malazan/malazan_barracks/malazan_barracks.glb` (hidden faces dropped, the Keep's roof decimated, the pack's flat colours replaced by the Malazan palette and a team grey in one 128² atlas, `<id>_atlas.png` beside each; `tools/asset-manifest.json` `buildings`); the pack's `License.txt` is read at each import (`licences`). **M6-V28:** from the same `glTF/` folder, `Houses_SecondAge_1_Level1.gltf` in `game/assets/models/malazan/malazan_billet/malazan_billet.glb`, `Storage_SecondAge_Level2.gltf` in `.../malazan_depot/malazan_depot.glb` (its roof decimated), `Archery_SecondAge_Level1.gltf` in `.../malazan_crossbow_range/malazan_crossbow_range.glb` and `WatchTower_SecondAge_Level1.gltf` in `.../malazan_watchtower/malazan_watchtower.glb`, built the same way (`<id>_atlas.png` beside each) |
+| Quaternius – Ultimate Fantasy RTS | Quaternius | <https://quaternius.com/packs/ultimatefantasyrts.html> | CC0 1.0 (pack's `License.txt`; its header says "Ultimate Platformer Pack", a slip in the pack) | Aug 2022 (folder `quaternius-ultimate-fantasy-rts-2022-08`) | Look test (M6-V10): `Barracks_FirstAge_Level1.fbx`, from `asset-sources/quaternius-ultimate-fantasy-rts-2022-08/Ultimate Fantasy RTS - Aug 2022/FBX/`. **M6-V26:** from `asset-sources/quaternius-ultimate-fantasy-rts-2022-08/Ultimate Fantasy RTS - Aug 2022/glTF/`, `Barracks_SecondAge_Level3.gltf` in `game/assets/models/malazan/malazan_garrison_keep/malazan_garrison_keep.glb` and `Barracks_SecondAge_Level1.gltf` in `game/assets/models/malazan/malazan_barracks/malazan_barracks.glb` (hidden faces dropped, the Keep's roof decimated, the pack's flat colours replaced by the Malazan palette and a team grey in one 128² atlas, `<id>_atlas.png` beside each; `tools/asset-manifest.json` `buildings`); the pack's `License.txt` is read at each import (`licences`). **M6-V28:** from the same `glTF/` folder, `Houses_SecondAge_1_Level1.gltf` in `game/assets/models/malazan/malazan_billet/malazan_billet.glb`, `Storage_SecondAge_Level2.gltf` in `.../malazan_depot/malazan_depot.glb` (its roof decimated), `Archery_SecondAge_Level1.gltf` in `.../malazan_crossbow_range/malazan_crossbow_range.glb` and `WatchTower_SecondAge_Level1.gltf` in `.../malazan_watchtower/malazan_watchtower.glb`, built the same way (`<id>_atlas.png` beside each) **M6-V30** (logged by M6-V31; the M6-V30 commit missed this row): from the same folder, `Houses_FirstAge_2_Level3.gltf`, `Houses_FirstAge_1_Level1.gltf`, `Storage_FirstAge_Level1.gltf`, `Barracks_FirstAge_Level2.gltf`, `Archery_FirstAge_Level1.gltf`, `WatchTower_FirstAge_Level1.gltf`, `Market_FirstAge_Level1.gltf` and `Temple_FirstAge_Level1.gltf` in `game/assets/models/teblor/<id>/<id>.glb` (the Longhouse, Hut, Woodcutters' Lodge, War Lodge, Javelin Ground, Stone Cairn, Bloodwood Carver, Shaman's Circle), built the same way. **M6-V31:** from the same folder, `Market_FirstAge_Level2.gltf` cropped to one stall in `game/assets/models/whirlwind/whirlwind_supply_cache/whirlwind_supply_cache.glb` and `WatchTower_FirstAge_Level3.gltf` with a studio-made cloth canopy in `.../whirlwind_lookout_tower/whirlwind_lookout_tower.glb`, built the same way |
+| Studio-made kit models (M6-V31) | this project (made by `tools/art/build_building.py` from the `kit` parts in `tools/asset-manifest.json`) | — | the project's own; no third-party file | 2026-11-27 | The Whirlwind's Holy Camp, Tent, Raider Camp, Archer Camp, Horse Lines, Ram Yard, Smithy and Shrine of the Whirlwind: `game/assets/models/whirlwind/<id>/<id>.glb` and `<id>_atlas.png`, every face made by the builder from boxes, ridge prisms, pyramids, cones, cylinders, poles and awnings (no pack file is read for them). The Supply Cache and Lookout Tower take their pack files from the Ultimate Fantasy RTS row above |
 | Epic Stock Media – Board Game: Sound Set Kit for Tabletop and Digital Games (Sonniss GDC 2026) | Epic Stock Media | <https://sonniss.com/gameaudiogdc> | Sonniss GDC Game Audio Bundle licence: royalty-free, commercial use, no attribution; raw files not redistributed or resold (bundle's `License - GDC Game Audio.pdf`, `Readme.txt`) | GDC 2026 bundle, downloaded 2026-10-08 (`asset-sources/sonniss-gdc-2026/`) | SFX (M6-V12): `ui/select_1.wav` from `UIClick_UI Button Analog Vintage Double Click Neutral Dry Press 11_ESM_BG.wav`; `building/building_done_1.wav` from `GAMEBoard_Event Board Reset Organic Multiple Pieces Wood Small 02_ESM_BG.wav` |
 | Cinematic Sound Design – UI Interaction Elements (Sonniss GDC 2026) | Cinematic Sound Design | <https://sonniss.com/gameaudiogdc> | Sonniss GDC Game Audio Bundle licence: royalty-free, commercial use, no attribution; raw files not redistributed or resold (bundle's `License - GDC Game Audio.pdf`, `Readme.txt`) | GDC 2026 bundle, downloaded 2026-10-08 (`asset-sources/sonniss-gdc-2026/`) | SFX (M6-V12): `ui/command_1.wav` from `Accept Boing Crunch.wav`; `ui/refused_1.wav` from `Deny Muted.wav`; `ui/ready_2.wav` from `Ting Coins.wav` |
 | CB_Sounddesign – Applicable Sounds: Organic UI and Building Games SFX (Sonniss GDC 2026) | CB_Sounddesign | <https://sonniss.com/gameaudiogdc> | Sonniss GDC Game Audio Bundle licence: royalty-free, commercial use, no attribution; raw files not redistributed or resold (bundle's `License - GDC Game Audio.pdf`, `Readme.txt`) | GDC 2026 bundle, downloaded 2026-10-08 (`asset-sources/sonniss-gdc-2026/`) | SFX (M6-V12): `ui/ready_1.wav` from `UIMisc_Kalimba 3 Up_CB Sounddesign_APPlicable Sounds.wav` |

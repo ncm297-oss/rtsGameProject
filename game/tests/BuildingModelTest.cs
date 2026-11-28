@@ -49,6 +49,10 @@ namespace Rts.Game.Tests;
 /// M6-V30 (the Teblor models): the match rows run once per faction the manifest's buildings belong to, every seat of that
 /// faction, with its own worker (builder and scout), line unit (the razing party), house (the watcher) and halls (Age II),
 /// all found by the data's slots, so no faction's unit or building is named here.
+/// M6-V31 (the Whirlwind's ten models, 24 manifest types): the finished and remembered rows wrap after eight types (the
+/// first eight keep their spots), the site rows take a second column after eight, the fallback sim places twelve a row;
+/// the Whirlwind pass has no box type (every type is a model), so the "type without a model stays a box" row runs in the
+/// other passes and at least one pass must run it.
 /// Windowed with <c>-- --shots &lt;dir&gt;</c> it also saves the pictures of criterion 7 (default zoom and close up, two and
 /// four player colours, a Laborer and a Heavy Infantry beside each building, a site, and the remembered models under the fog).
 /// </remarks>
@@ -58,6 +62,13 @@ public partial class BuildingModelTest : Node
 
     // docs/04's building budget, and the brief's largest texture.
     private const int BuildingTriangleBudget = 5000, MaxTexture = 1024;
+
+    // M6-V31: the match rows' rows wrap after this many types (the Teblor's eight keep their spots), WrapStep m north.
+    private const int RowLength = 8;
+    private const float WrapStep = 18f;
+
+    // M6-V31: match passes that ran the box-type row (a faction whose every type has a model has none).
+    private int _boxRows;
 
     // The brief's bound: no part beyond the footprint's edge by more than this.
     private const float EdgeSlack = 0.25f;
@@ -85,6 +96,17 @@ public partial class BuildingModelTest : Node
         ["teblor_stone_cairn"] = new() { ["team"] = 59, ["Wood"] = 336, ["Wood_Light"] = 37 },
         ["teblor_bloodwood_carver"] = new() { ["team"] = 528, ["Wood"] = 1147, ["Wood_Light"] = 720, ["Yellow"] = 160 },
         ["teblor_shamans_circle"] = new() { ["team"] = 536, ["Wood"] = 2256, ["Wood_Light"] = 44 },
+        // M6-V31: the Whirlwind's kit-bashed tents (the team tile: the cloth parts) and its two pack types.
+        ["whirlwind_holy_camp"] = new() { ["team"] = 48, ["canvas"] = 16, ["dark"] = 18, ["pole"] = 30, ["rug"] = 10 },
+        ["whirlwind_tent"] = new() { ["team"] = 6, ["dark"] = 5, ["pole"] = 20, ["rug"] = 8, ["clay"] = 16 },
+        ["whirlwind_raider_camp"] = new() { ["team"] = 6, ["dark"] = 5, ["pole"] = 54, ["rug"] = 78, ["metal"] = 50, ["straw"] = 36 },
+        ["whirlwind_archer_camp"] = new() { ["team"] = 6, ["dark"] = 5, ["pole"] = 50, ["rug"] = 128, ["straw"] = 20, ["canvas"] = 88 },
+        ["whirlwind_horse_lines"] = new() { ["team"] = 6, ["dark"] = 5, ["pole"] = 60, ["wood"] = 20, ["water"] = 10, ["straw"] = 40 },
+        ["whirlwind_ram_yard"] = new() { ["team"] = 6, ["dark"] = 5, ["pole"] = 68, ["log"] = 106, ["metal"] = 8 },
+        ["whirlwind_smithy"] = new() { ["team"] = 10, ["pole"] = 45, ["stone"] = 20, ["ember"] = 10, ["wood"] = 99, ["metal"] = 40 },
+        ["whirlwind_shrine"] = new() { ["team"] = 40, ["stone"] = 18, ["spire"] = 48, ["pole"] = 40 },
+        ["whirlwind_supply_cache"] = new() { ["team"] = 312, ["Green"] = 40, ["Yellow"] = 160, ["Red"] = 120, ["Wood"] = 92, ["Wood_Light"] = 10 },
+        ["whirlwind_lookout_tower"] = new() { ["team"] = 57, ["Wood"] = 721, ["Wood_Light"] = 150, ["pole"] = 32 },
     };
 
     private readonly List<string> _failures = new();
@@ -122,6 +144,7 @@ public partial class BuildingModelTest : Node
             Check(_entries.Count > 0, "the manifest lists no building");
             FileRows(data);
             foreach (int faction in ManifestFactions(data)) await MatchRows(data, faction);
+            Check(_boxRows > 0, "no faction's pass drew a type without a model as its box");
             FallbackRows(data);
             if (_shots != null)
                 foreach (int faction in ManifestFactions(data)) await Pictures(data, faction);
@@ -331,20 +354,29 @@ public partial class BuildingModelTest : Node
 
         // Finished models: the fit, the ground, the bar, the click (criteria 3 and 5).
         var finished = new List<int>();
-        float x = -6f;
-        foreach (int type in types)
+        float x = -6f, rowZ = 0f;
+        for (int i = 0; i < types.Length; i++)
         {
-            int slot = Spawn(0, type, west + new NVector2(x, 0f));
+            int type = types[i];
+            // M6-V31: a row of more than RowLength types (the Whirlwind's ten ran off the open ground) wraps north.
+            if (i > 0 && i % RowLength == 0) { x = -6f; rowZ -= WrapStep; }
+            int slot = Spawn(0, type, west + new NVector2(x, rowZ));
             x -= data.Buildings[type].FootprintWidth * MapConstants.CellSize + 4f;
             if (Check(slot >= 0, $"{data.Buildings[type].Key}: not spawned")) finished.Add(slot);
         }
-        int boxSlot = boxType >= 0 ? Spawn(0, boxType, west + new NVector2(x, 0f)) : -1;
+        int boxSlot = boxType >= 0 ? Spawn(0, boxType, west + new NVector2(x, rowZ)) : -1;
         _views.Sync(W);
         await Frames(1);
         foreach (int slot in finished) await FitRow(slot);
-        if (Check(boxSlot >= 0, $"no {key} type without a model to spawn"))
+        // M6-V31: every Whirlwind type has a model, so its pass has no box type; the row runs in the passes of the factions
+        // that have one, and at least one pass must (checked after the passes).
+        if (boxType < 0) GD.Print($"  every {key} building type has a model: the box-type row is checked for another faction");
+        else if (Check(boxSlot >= 0, $"no {key} type without a model to spawn"))
+        {
             Check(_views.IsShown(boxSlot) && !_views.ShownAsModel(boxSlot) && _views.BoxOf(boxSlot).Visible && _views.ModelOf(boxSlot) == null,
                 $"{data.Buildings[boxType].Key} (no model file): not its box");
+            _boxRows++;
+        }
 
         // Criterion 4: a site of each model type rises as the box and is the model from the frame after the tick it finishes.
         // M6-V28: a type that needs Age II (the Watchtower) is built by player 2, which researches it first: player 0's stock
@@ -352,8 +384,21 @@ public partial class BuildingModelTest : Node
         foreach (int type in types)
         {
             int pl = Aged(data, type) ? 2 : 0;
+            // M6-V31: ten sites and ten cancelled sites (the Whirlwind's, mostly wood) outrun player 0's stock: a site player 0
+            // can no longer pay twice for is built by player 1 (seen through a player-0 house, as player 2's are).
+            BuildingDef cost = data.Buildings[type];
+            if (pl == 0 && (W.Gold[0] < 2 * cost.CostGold || W.Wood[0] < 2 * cost.CostWood)) pl = 1;
+            // M6-V31: and the buildings the type requires (the Horse Lines need a Raider Camp), spawned for the builder.
+            foreach (int need in cost.RequiresBuildings)
+            {
+                bool have = false;
+                for (int i = 0; i < B.Capacity && !have; i++) have = B.Alive[i] && B.Owner[i] == pl && !B.UnderConstruction[i] && B.TypeId[i] == need;
+                if (!have) Check(Spawn(pl, need, west + new NVector2(-30f, 135f)) >= 0, $"{cost.Key}: its prerequisite {data.Buildings[need].Key} not spawned for player {pl}");
+            }
             if (pl != 0) AgeTwo(data, pl, west + new NVector2(-30f, 110f));
-            SiteRow(data, type, west + new NVector2(0f, 26f + 12f * Array.IndexOf(types, type)), pl);
+            // M6-V31: after RowLength types a second column 24 m east (the eighth row met the Age II halls' spot).
+            int k = Array.IndexOf(types, type);
+            SiteRow(data, type, west + new NVector2(k / RowLength * 24f, 26f + 12f * (k % RowLength)), pl);
         }
 
         // A hurt model's hit-point bar over its top (criterion 5), and a destroyed one leaves nothing drawn (criterion 4).
@@ -583,10 +628,12 @@ public partial class BuildingModelTest : Node
     {
         NVector2 far = west + new NVector2(60f, 0f);
         var enemy = new List<int>();
-        float dx = 0f;
-        foreach (int type in types)
+        float dx = 0f, dz = 0f;
+        for (int i = 0; i < types.Length; i++)
         {
-            int slot = Spawn(1, type, far + new NVector2(dx, 0f));
+            int type = types[i];
+            if (i > 0 && i % RowLength == 0) { dx = 0f; dz -= WrapStep; } // M6-V31: as the finished row
+            int slot = Spawn(1, type, far + new NVector2(dx, dz));
             dx += data.Buildings[type].FootprintWidth * MapConstants.CellSize + 4f;
             if (Check(slot >= 0, $"{data.Buildings[type].Key}: enemy not spawned")) enemy.Add(slot);
         }
@@ -726,12 +773,9 @@ public partial class BuildingModelTest : Node
     {
         var sim = new Simulation(new SimConfig(1, 2, 8, 4096) { Data = data, Combat = false });
         int[] types = ModelTypes(data);
-        NVector2 p = new(40f, 40f);
-        foreach (int type in types)
-        {
-            sim.Enqueue(Command.SpawnBuilding(0, type, p));
-            p += new NVector2(14f, 0f);
-        }
+        // M6-V31: twelve a row, 14 m apart (24 types in one row ran off the map).
+        for (int i = 0; i < types.Length; i++)
+            sim.Enqueue(Command.SpawnBuilding(0, types[i], new NVector2(40f + 14f * (i % 12), 40f + 14f * (i / 12))));
         sim.Tick();
         sim.Tick();
         var views = new BuildingViews();

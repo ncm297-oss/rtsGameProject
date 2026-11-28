@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S3 |
-| Status | open |
+| Status | fixed |
 | Found | 2026-11-26-1847, task M6-S14 (QA, tier full) |
 | System | AI (`BuildOrderExecutor.Retrain`, the worker floor, BUG-1660) |
-| Fixed by | |
+| Fixed by | M6-SH3 C1 (`AiPlayer.WaitingWorkerHalfPop` in `BuildOrderExecutor.Retrain`'s room test; QA's row un-skipped; `Ai/M6Sh3AiCureTests.Floor_WithRoomForN_*`) |
 
 ## Repro
 1. Un-skip `QA/M6S14AiPlayQaTests.Floor_RoomForTwoWorkers_SendsAtMostTwo_NoPaidWorkerWaitsAtTheCap` and run

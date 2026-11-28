@@ -11,6 +11,12 @@
 # one material is "team" and the atlas alpha marks the team texels, exactly as a unit model's since M6-V24, so
 # team_colour.gdshader draws it with no change. The atlas layout rides in the file as glTF extras on the mesh node.
 # Prints one "RESULT {json}" line the PowerShell script reads; exits 1 with a "FAIL <why>" line on any problem.
+#
+# M6-V31: an entry may also (or instead of a `source`) carry a `kit`: a list of simple parts (boxes, ridge prisms,
+# pyramids, cones, cylinders, poles, flat awnings) the builder makes here, each with a size, a position and a role. A role
+# is a material: one of the entry's `team` (cloth, drawn in the player colour) or `colours` (frames, poles, props). The
+# parts then go through the same hidden-face pass, atlas and export as a pack source's faces. A `keep` box crops a source
+# to the faces inside it (one market stall of the pack's four). An entry with neither runs no new line.
 import bmesh
 import bpy
 import json
@@ -145,6 +151,189 @@ def mark_team_faces(b, bm, me, names):
     return moved
 
 
+# ---- M6-V31: the kit ----
+
+KIT_SHAPES = ("box", "ridge", "pyramid", "cone", "cylinder", "pole", "awning")
+# The gap the view keeps between a fitted model and each footprint edge (game/scripts/BuildingModels.cs FitMargin). A kit
+# with no source is drawn in meters at that fit, so its parts must stay inside it.
+FIT_MARGIN = 0.25
+CELL_SIZE = 2.0  # meters a map cell (Rts.Sim MapConstants.CellSize)
+# The thickest an awning may be: it is a flat sheet; a thicker one is a box.
+AWNING_MAX = 0.3
+
+
+def godot_to_blender(v):
+    """A point in Godot's axes (x east, y up, z toward the camera: a building's front) in Blender's (x, -z, y): the glTF
+    exporter turns Blender's z-up back into Godot's y-up. The map is a proper rotation, so a face's winding is kept."""
+    return Vector((v[0], -v[2], v[1]))
+
+
+def blender_to_godot(v):
+    return Vector((v[0], v[2], -v[1]))
+
+
+def ring(n, rx, rz, y):
+    """`n` points round an ellipse of radii rx (x) and rz (z) at height y, the first on +x, counter-clockwise from above."""
+    return [Vector((rx * math.cos(2.0 * math.pi * k / n), y, -rz * math.sin(2.0 * math.pi * k / n))) for k in range(n)]
+
+
+def shape_geometry(part):
+    """A part's corners and faces in its own frame (Godot's axes, meters or source units): every shape fills the box
+    x in [-w/2, w/2], y in [0, h], z in [-d/2, d/2] of its `size` [w, h, d], its base centre at the origin. Faces are lists
+    of corner indices; their winding is set outward by the caller (every shape is convex)."""
+    w, h, d = (float(s) for s in part["size"])
+    x, z = w / 2.0, d / 2.0
+    shape = part["shape"]
+    if shape in ("box", "pole", "awning"):
+        v = [Vector((sx * x, sy * h, sz * z)) for sy in (0, 1) for sz in (-1, 1) for sx in (-1, 1)]
+        f = [(0, 1, 3, 2), (4, 5, 7, 6), (0, 1, 5, 4), (2, 3, 7, 6), (0, 2, 6, 4), (1, 3, 7, 5)]
+        return v, f
+    if shape == "ridge":
+        # A tent's prism: the ridge line at the top runs along `axis` ("z": front to back, the gable faces the camera; "x").
+        base = [Vector((-x, 0, -z)), Vector((x, 0, -z)), Vector((x, 0, z)), Vector((-x, 0, z))]
+        if part.get("axis", "z") == "z":
+            v = base + [Vector((0, h, -z)), Vector((0, h, z))]
+            f = [(0, 1, 2, 3), (0, 3, 5, 4), (1, 2, 5, 4), (0, 1, 4), (3, 2, 5)]
+        else:
+            v = base + [Vector((-x, h, 0)), Vector((x, h, 0))]
+            f = [(0, 1, 2, 3), (0, 1, 5, 4), (3, 2, 5, 4), (0, 3, 4), (1, 2, 5)]
+        return v, f
+    if shape == "pyramid":
+        v = [Vector((-x, 0, -z)), Vector((x, 0, -z)), Vector((x, 0, z)), Vector((-x, 0, z)), Vector((0, h, 0))]
+        return v, [(0, 1, 2, 3), (0, 1, 4), (1, 2, 4), (2, 3, 4), (3, 0, 4)]
+    n = int(part.get("sides", 8))
+    if n < 3:
+        fail(f"a {shape} part needs at least 3 sides, has {n}")
+    if shape == "cone":
+        # `top` > 0: a cut cone (a frustum) whose top ring is that share of the base's.
+        top = float(part.get("top", 0.0))
+        v = ring(n, x, z, 0.0)
+        f = [tuple(range(n))]
+        if top <= 0.0:
+            v.append(Vector((0, h, 0)))
+            f += [(k, (k + 1) % n, n) for k in range(n)]
+        else:
+            v += ring(n, x * top, z * top, h)
+            f += [tuple(range(n, 2 * n))] + [(k, (k + 1) % n, n + (k + 1) % n, n + k) for k in range(n)]
+        return v, f
+    # cylinder: its axis "y" (standing), "x" or "z" (lying, a log); the round section fills the other two sizes.
+    axis = part.get("axis", "y")
+    if axis == "y":
+        v = ring(n, x, z, 0.0) + ring(n, x, z, h)
+    else:
+        v = []
+        for end in (-1, 1):
+            for k in range(n):
+                a, b = math.cos(2.0 * math.pi * k / n), math.sin(2.0 * math.pi * k / n)
+                v.append(Vector((end * x, h / 2.0 + a * h / 2.0, b * z)) if axis == "x" else Vector((a * x, h / 2.0 + b * h / 2.0, end * z)))
+    f = [tuple(range(n)), tuple(range(n, 2 * n))] + [(k, (k + 1) % n, n + (k + 1) % n, n + k) for k in range(n)]
+    return v, f
+
+
+def kit_part_matrix(part):
+    """The part's frame to its parent's (Godot's axes): turned by `rotate` [x, y, z] degrees (x first) about its base
+    centre, then moved to `at`."""
+    rx, ry, rz = (math.radians(float(a)) for a in part.get("rotate", [0, 0, 0]))
+    rot = Matrix.Rotation(rz, 4, 'Z') @ Matrix.Rotation(ry, 4, 'Y') @ Matrix.Rotation(rx, 4, 'X')
+    return Matrix.Translation(Vector([float(a) for a in part["at"]])) @ rot
+
+
+def check_kit(b, footprint):
+    """Fails with a clear line on a bad kit: no parts, an unknown shape, a size not three positive numbers, an awning
+    thicker than AWNING_MAX, a role with no colour, a part below the ground or (a kit with no source, drawn in meters)
+    outside its footprint less FIT_MARGIN."""
+    parts = b["kit"]
+    if not isinstance(parts, list) or not parts:
+        fail(f"{b['id']}: kit has no parts")
+    roles = set(b.get("colours", {})) | set(b.get("team", []))
+    for i, p in enumerate(parts):
+        label = f"{b['id']}: kit part {i} ({p.get('shape', '?')}, role {p.get('role', '?')})"
+        if p.get("shape") not in KIT_SHAPES:
+            fail(f"{label}: shape not one of {', '.join(KIT_SHAPES)}")
+        size, at = p.get("size"), p.get("at")
+        if not isinstance(size, list) or len(size) != 3 or any(not isinstance(s, (int, float)) or s <= 0 for s in size):
+            fail(f"{label}: size {size} is not three sizes over 0")
+        if not isinstance(at, list) or len(at) != 3 or any(not isinstance(a, (int, float)) for a in at):
+            fail(f"{label}: at {at} is not three numbers")
+        if p["shape"] == "awning" and size[1] > AWNING_MAX:
+            fail(f"{label}: an awning {size[1]} thick, over {AWNING_MAX}: a box, not an awning")
+        if p.get("role") not in roles:
+            fail(f"{label}: role has no colour and is not a team part")
+        m = kit_part_matrix(p)
+        corners = [m @ c for c in shape_geometry(p)[0]]
+        if min(c.y for c in corners) < -1e-6:
+            fail(f"{label}: reaches {min(c.y for c in corners):.3f} under the ground")
+        if footprint is not None:
+            hx, hz = footprint[0] / 2.0 - FIT_MARGIN, footprint[1] / 2.0 - FIT_MARGIN
+            worst = max(max(abs(c.x) - hx, abs(c.z) - hz) for c in corners)
+            if worst > 1e-6:
+                fail(f"{label}: {worst:.3f} m outside its {footprint[0]:g} x {footprint[1]:g} m footprint less {FIT_MARGIN} m")
+
+
+def footprint_of(b, repo):
+    """The entry's building footprint in meters, from the data (game/data/factions/<faction>/buildings.json; the faction is
+    the destination's folder). A kit with no source is checked against it."""
+    faction = b["destination"].replace("\\", "/").split("/")[-3]
+    path = os.path.join(repo, "game", "data", "factions", faction, "buildings.json")
+    if not os.path.isfile(path):
+        fail(f"{b['id']}: no {path} to read its footprint from")
+    with open(path, encoding="utf-8") as f:
+        data = json.load(f)
+    row = next((r for r in data.get("buildings", []) if r.get("id") == b["id"]), None)
+    if row is None:
+        fail(f"{b['id']}: not a building of {path}")
+    return (row["footprint"]["width"] * CELL_SIZE, row["footprint"]["height"] * CELL_SIZE)
+
+
+def material_slot(me, name):
+    """The index of material `name` on mesh `me`, added when it has none (a kit role the source lacks)."""
+    for i, m in enumerate(me.materials):
+        if m.name.split(".")[0] == name:
+            return i
+    me.materials.append(bpy.data.materials.new(name))
+    return len(me.materials) - 1
+
+
+def add_kit(b, bm, me, origin):
+    """Adds the kit's parts to `bm` (Blender's axes), each part's faces on its role's material, `origin` (Blender's axes)
+    the point the kit's positions count from. Faces wound outward (every shape is convex), then triangulated. Returns the
+    triangles added."""
+    slots = {p["role"]: material_slot(me, p["role"]) for p in b["kit"]}
+    added = []
+    for p in b["kit"]:
+        m = kit_part_matrix(p)
+        local, faces = shape_geometry(p)
+        size = [float(s) for s in p["size"]]
+        centre = godot_to_blender(m @ Vector((0.0, size[1] / 2.0, 0.0))) + origin
+        verts = [bm.verts.new(godot_to_blender(m @ c) + origin) for c in local]
+        for idx in faces:
+            pts = [verts[i].co for i in idx]
+            normal = (pts[1] - pts[0]).cross(pts[2] - pts[0])
+            mid = sum(pts, Vector()) / len(pts)
+            if normal.dot(mid - centre) < 0:
+                idx = tuple(reversed(idx))
+            face = bm.faces.new([verts[i] for i in idx])
+            face.material_index = slots[p["role"]]
+            added.append(face)
+    result = bmesh.ops.triangulate(bm, faces=added)
+    return len(result["faces"])
+
+
+def crop(b, bm):
+    """`keep`: only the source's faces whose centre lies inside the box (`min` / `max`, Godot's axes, source units) stay."""
+    lo, hi = (Vector([float(a) for a in b["keep"][k]]) for k in ("min", "max"))
+    out = []
+    for f in bm.faces:
+        c = blender_to_godot(f.calc_center_median())
+        if not all(lo[i] <= c[i] <= hi[i] for i in range(3)):
+            out.append(f)
+    if len(out) == len(bm.faces):
+        fail(f"{b['id']}: keep box {list(lo)} - {list(hi)} holds no face of {b['source']}")
+    bmesh.ops.delete(bm, geom=out, context='FACES')
+    loose = [v for v in bm.verts if not v.link_faces]
+    bmesh.ops.delete(bm, geom=loose, context='VERTS')
+
+
 def decimate_material(obj, material_name, target):
     """Decimates (collapse) the faces of one source material to `target` triangles: separated, decimated, joined back."""
     me = obj.data
@@ -175,19 +364,35 @@ def decimate_material(obj, material_name, target):
 
 def build_building(manifest, b, src_root, repo, work):
     reset()
-    objs = import_gltf(os.path.join(src_root, b["source"]))
-    meshes = [o for o in objs if o.type == 'MESH']
-    if len(meshes) != 1:
-        fail(f"{b['id']}: {len(meshes)} meshes in {b['source']}, want one")
-    obj = meshes[0]
-    remove_others = [o for o in objs if o is not obj]
-    for o in remove_others:
-        bpy.data.objects.remove(o, do_unlink=True)
-    obj.parent = None
-    obj.data.transform(obj.matrix_world)
-    obj.matrix_world = Matrix.Identity(4)
+    kit = b.get("kit")
+    if not b.get("source") and kit is None:
+        fail(f"{b['id']}: neither a source nor a kit")
+    if b.get("keep") and not b.get("source"):
+        fail(f"{b['id']}: a keep box crops a source, and there is none")
+    if kit is not None:
+        # M6-V31: a kit with no source is drawn in meters, so it is checked against the building's footprint.
+        check_kit(b, None if b.get("source") else footprint_of(b, repo))
+    if b.get("source"):
+        objs = import_gltf(os.path.join(src_root, b["source"]))
+        meshes = [o for o in objs if o.type == 'MESH']
+        if len(meshes) != 1:
+            fail(f"{b['id']}: {len(meshes)} meshes in {b['source']}, want one")
+        obj = meshes[0]
+        remove_others = [o for o in objs if o is not obj]
+        for o in remove_others:
+            bpy.data.objects.remove(o, do_unlink=True)
+        obj.parent = None
+        obj.data.transform(obj.matrix_world)
+        obj.matrix_world = Matrix.Identity(4)
+    else:
+        # M6-V31: a kit alone starts from an empty mesh.
+        obj = bpy.data.objects.new(b["id"], bpy.data.meshes.new(b["id"]))
+        bpy.context.scene.collection.objects.link(obj)
     me = obj.data
     source_triangles = triangles(obj)
+    if kit is not None:
+        for p in kit:
+            material_slot(me, p["role"])
 
     colours = b["colours"]
     team = set(b["team"])
@@ -205,8 +410,18 @@ def build_building(manifest, b, src_root, repo, work):
     # sees.
     bm = bmesh.new()
     bm.from_mesh(me)
+    if b.get("keep"):
+        crop(b, bm)
+    # M6-V31: a mixed entry's kit counts from the (cropped) source's ground-plan centre at its lowest point, in its units.
+    origin = Vector((0.0, 0.0, 0.0))
+    if kit is not None and bm.verts:
+        xs, ys, zs = ([v.co[i] for v in bm.verts] for i in range(3))
+        origin = Vector(((min(xs) + max(xs)) / 2.0, (min(ys) + max(ys)) / 2.0, min(zs)))
     bmesh.ops.remove_doubles(bm, verts=bm.verts, dist=1e-5)
     bmesh.ops.triangulate(bm, faces=bm.faces)
+    kit_triangles = add_kit(b, bm, me, origin) if kit is not None else 0
+    if not b.get("source"):
+        source_triangles = kit_triangles
     bm.normal_update()
     dead = hidden_faces(bm, b.get("viewElevationDegrees", 15))
     bmesh.ops.delete(bm, geom=dead, context='FACES_ONLY')
@@ -275,12 +490,17 @@ def build_building(manifest, b, src_root, repo, work):
                               export_morph=False, export_yup=True, export_apply=False, export_extras=True,
                               export_tangents=False, export_cameras=False, export_lights=False)
     # Blender's x / y / z are glTF's x / -z / y: width (x) and depth (y here) of the ground plan, the height.
-    return {"id": b["id"], "destination": b["destination"], "triangles": tris, "sourceTriangles": source_triangles,
-            "afterHiddenFaces": after_hidden, "decimated": decimated, "perMaterial": per_material,
-            "teamFaces": team_face_count,
-            "size": [round(float(hi[0] - lo[0]), 4), round(float(hi[1] - lo[1]), 4), round(float(hi[2] - lo[2]), 4)],
-            "feet": round(float(lo[2]), 4), "materials": sorted(m.name for m in me.materials),
-            "textures": {atlas.name: list(atlas.size)}, "atlas": layout}
+    result = {"id": b["id"], "destination": b["destination"], "triangles": tris, "sourceTriangles": source_triangles,
+              "afterHiddenFaces": after_hidden, "decimated": decimated, "perMaterial": per_material,
+              "teamFaces": team_face_count,
+              "size": [round(float(hi[0] - lo[0]), 4), round(float(hi[1] - lo[1]), 4), round(float(hi[2] - lo[2]), 4)],
+              "feet": round(float(lo[2]), 4), "materials": sorted(m.name for m in me.materials),
+              "textures": {atlas.name: list(atlas.size)}, "atlas": layout}
+    if kit is not None:
+        # M6-V31: the kit's parts and the triangles they added before the hidden-face pass.
+        result["kitParts"] = len(kit)
+        result["kitTriangles"] = kit_triangles
+    return result
 
 
 def build_atlas(b, obj, team, work):

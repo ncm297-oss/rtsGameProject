@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S4 (a design gap of the draw rule, found by QA as a note; no test red) |
-| Status | open (Producer triage at the 2026-11-25-1437 ACCEPT: keep the rule as designed for now; decide in the sim's next hardening) |
+| Status | fixed |
 | Found | 2026-11-25-1437, task M6-S13 (QA note, filed by the Producer) |
 | System | match end (`World.Draw.cs`, `CanStillTrain`) |
-| Fixed by | |
+| Fixed by | M6-SH3 B (`World.CanStillTrain` (a): a waiting item counts only with population room now; `Draw/DrawReachTests.AQueuedPaidItem_AtTheCap_*`) |
 
 ## Repro
 Two seats, no gold anywhere, each at its population cap with one paid unit in a production queue. Neither attacks.

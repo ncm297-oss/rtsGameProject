@@ -196,6 +196,10 @@ public partial class QaM6V26Test : Node
         int boxType = -1;
         for (int t = 0; t < data.Buildings.Length && boxType < 0; t++)
             if (data.Buildings[t].Faction == malazan && !_views.Models!.Has(t) && data.Buildings[t].FootprintWidth <= 3) boxType = t;
+        // M6-V31: every Whirlwind type is a model; the slot is then taken by another faction's box type (a spawn has no
+        // faction check, and the view draws a type by its own file whoever owns it).
+        for (int t = 0; t < data.Buildings.Length && boxType < 0; t++)
+            if (!_views.Models!.Has(t) && data.Buildings[t].FootprintWidth <= 3) boxType = t;
         if (!Check(boxType >= 0, "reuse: no box type")) return;
         NVector2 near = StartLayout.Block(W.NavGrid, 1, west: true, 1f)[0];
         int type = types[0];
@@ -261,6 +265,7 @@ public partial class QaM6V26Test : Node
                 if (pl != 0 && W.Units.Owner[i] == 0 && NVector2.Distance(W.Units.Position[i], at + new NVector2(0f, 3f)) < 1.5f) watcher = i;
             }
             if (!Check(builder >= 0 && (pl == 0 || watcher >= 0), $"{def.Key} razed site: no laborer")) continue;
+            Prerequisites(data, type, pl);
             for (int t = 0; t < 10; t++) _sim.Tick(); // the Laborer's sight explores the footprint (a site needs explored ground)
             _sim.Enqueue(Command.Build(pl, new EntityHandle(builder, W.Units.Generation[builder]), type, PlacementGhost.AnchorPoint(W.NavGrid, anchor)));
             int site = -1;
@@ -284,6 +289,19 @@ public partial class QaM6V26Test : Node
                 $"{def.Key} razed site: still drawn (shown {_views.IsShown(site)}, model {m?.Visible})");
             if (watcher >= 0 && W.Units.Alive[watcher]) W.Units.Free(new EntityHandle(watcher, W.Units.Generation[watcher])); // staging: the watcher goes
             GD.Print($"  {def.Key}: a site razed while a site leaves nothing drawn");
+        }
+    }
+
+    // M6-V31: a finished building of each type `type` requires (the Whirlwind's Horse Lines need a Raider Camp) for player
+    // `pl`, spawned away from the rows when it has none.
+    private void Prerequisites(GameData data, int type, int pl)
+    {
+        NVector2 block = StartLayout.Block(W.NavGrid, 1, west: true, 1f)[0];
+        foreach (int need in data.Buildings[type].RequiresBuildings)
+        {
+            bool have = false;
+            for (int i = 0; i < B.Capacity && !have; i++) have = B.Alive[i] && B.Owner[i] == pl && !B.UnderConstruction[i] && B.TypeId[i] == need;
+            if (!have) Check(Spawn(pl, need, block + new NVector2(-2f, 60f)) >= 0, $"{data.Buildings[type].Key}: its prerequisite {data.Buildings[need].Key} not spawned");
         }
     }
 

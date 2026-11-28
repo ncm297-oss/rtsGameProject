@@ -5,7 +5,9 @@
 #
 # M6-V26: and every static building model in the manifest's "buildings" (tools/art/build_building.py), imported like a unit
 # model (no animations, its atlas extracted beside it with the same texture settings). M6-V30: an entry's "teamFaces" rules
-# (roof faces to the team tile) are the builder's; this script only prints how many faces they moved.
+# (roof faces to the team tile) are the builder's; this script only prints how many faces they moved. M6-V31: so are an
+# entry's "kit" (parts the builder makes, with or without a pack "source") and "keep" (a crop of the source); it prints the
+# kit's part and triangle counts.
 #
 # Usage: powershell -File tools/import-assets.ps1 [-SourceRoot <dir>] [-Blender <blender.exe>] [-Only <model or building id>|library] [-NoGodot]
 #   Blender: -Blender, else $env:BLENDER (process, then user), else C:\Program Files\Blender Foundation\Blender 5.2\blender.exe.
@@ -217,6 +219,8 @@ foreach ($r in @($results) + @($buildingResults)) {
         foreach ($d in $r.decimated.PSObject.Properties) { Write-Host ("    decimated {0}: {1} -> {2} triangles" -f $d.Name, $d.Value[0], $d.Value[1]) }
         # M6-V30: the faces the entry's teamFaces rules moved to the team tile (its roofs).
         if ($r.teamFaces) { Write-Host ("    teamFaces: {0} faces moved to the team tile" -f $r.teamFaces) }
+        # M6-V31: the parts the entry's kit added (made by the builder, before the hidden faces).
+        if ($r.kitParts) { Write-Host ("    kit: {0} parts, {1} triangles" -f $r.kitParts, $r.kitTriangles) }
     } else {
         Write-Host ("{0}: {1} triangles, {2:0.00} m tall, feet at {3} m, materials [{4}]" -f $r.id, $r.triangles, $r.height, $r.feet, ($r.materials -join ' '))
     }

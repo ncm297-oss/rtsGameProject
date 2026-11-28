@@ -267,13 +267,23 @@ public partial class ViewHardenVh9Test : Node
         // (P3) every model type's pick box against its model (measured). M6-V28: six model types, two rows of three east of
         // the P1 column (one column 26 m a type ran off the open ground past the second).
         int p3 = 0;
-        for (int type = 0; type < _data.Buildings.Length; type++)
+        foreach (int type in ManifestModelTypes())
         {
-            if (!_views.Models!.Has(type)) continue;
             // M6-V30: the seventh type on (the Teblor's eight) in rows of three east of the first six, whose spots are unchanged
-            // (five rows south ran off the open ground).
-            NVector2 at = p3 < 6 ? near + new NVector2(26f * (p3 % 3), 26f * (p3 / 3)) : near + new NVector2(78f + 26f * ((p3 - 6) % 3), 26f * ((p3 - 6) / 3));
-            int slot = Spawn(0, type, at);
+            // (five rows south ran off the open ground). M6-V31: the types in manifest order (the first fourteen keep their
+            // order and spots; the Whirlwind's ten, between them in data order, come last) and the fifteenth on in rows of three
+            // west of the first six (a fourth row east ran off the open ground).
+            int slot;
+            if (p3 < 14)
+                slot = Spawn(0, type, p3 < 6 ? near + new NVector2(26f * (p3 % 3), 26f * (p3 / 3)) : near + new NVector2(78f + 26f * ((p3 - 6) % 3), 26f * ((p3 - 6) / 3)));
+            else
+            {
+                // The first of the spare spots (four columns west of the first six, three rows; then the east block's free
+                // corner) where the type is taken; on seed 1 the west block's third row is open only near the first six.
+                slot = -1;
+                for (int k = 0; k < SpareSpots.Length && slot < 0; k++)
+                    if (!_spareUsed[k] && (slot = Spawn(0, type, near + SpareSpots[k])) >= 0) _spareUsed[k] = true;
+            }
             p3++;
             if (!Check(slot >= 0, $"(P3) {_data.Buildings[type].Key} not spawned")) continue;
             _views.Sync(W);
@@ -325,6 +335,27 @@ public partial class ViewHardenVh9Test : Node
         }
         _camera.SetZoom(CameraLimits.DefaultZoom);
         await EndMatch();
+    }
+
+    // M6-V31: (P3)'s spots for the fifteenth model type on, offsets from its first spot, tried in order.
+    private static readonly NVector2[] SpareSpots =
+    {
+        new(-26f, 0f), new(-52f, 0f), new(-78f, 0f), new(-104f, 0f), new(-26f, 26f), new(-52f, 26f), new(-78f, 26f), new(-104f, 26f),
+        new(-26f, 52f), new(-52f, 52f), new(-78f, 52f), new(-104f, 52f), new(130f, 52f), new(130f, 78f), new(104f, 78f), new(78f, 78f),
+    };
+    private readonly bool[] _spareUsed = new bool[SpareSpots.Length];
+
+    // M6-V31: the building types drawn as models, in the manifest's order (its `buildings` entries).
+    private List<int> ManifestModelTypes()
+    {
+        JsonNode manifest = JsonNode.Parse(File.ReadAllText(Path.Combine(ProjectSettings.GlobalizePath("res://"), "..", "tools", "asset-manifest.json")))!;
+        var list = new List<int>();
+        foreach (JsonNode? e in manifest["buildings"]!.AsArray())
+        {
+            int t = _data.FindBuilding((string)e!["id"]!);
+            if (t >= 0 && _views.Models!.Has(t)) list.Add(t);
+        }
+        return list;
     }
 
     // (P3) measured: of the sampled pixels whose ray enters the building's pick box but meets none of its model's triangles, the share that selects it.

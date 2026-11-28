@@ -17,7 +17,8 @@ namespace Rts.Sim.Tests.Stress;
 /// seat remembers this think is an enemy unit a fresh view shows; the <see cref="PlayerViewOracle"/> at every think of a
 /// hunting seat and at every 10th think of every seat; and (2v2) no AttackMove or cast within 0.5 m of an allied
 /// building, the team soak's strict oracle (BUG-1120's exemption gone), with BUG-1861's one allowance: a cast whose ability
-/// cannot touch an ally (by its data) at an enemy inside its radius. Saves: at the first think a seat hunts after a
+/// cannot touch an ally (by its data) at an enemy inside its radius, and (M6-SH3) BUG-1149's narrowed to the defense's own
+/// AttackMove to its defense point. Saves: at the first think a seat hunts after a
 /// defeat, and at the first think a hunt's point is not its last sighting (pushed off an ally, or a newer sighting within reach), each loaded and followed hash for hash 2,000 ticks.
 /// </summary>
 public class M5H5HuntAfterDefeatQaTests
@@ -69,6 +70,15 @@ public class M5H5HuntAfterDefeatQaTests
         return false;
     }
 
+    /// <summary>
+    /// BUG-1149's allowance, narrowed in M6-SH3 as BUG-1861's was: only the defense's own order, an AttackMove of a defending
+    /// seat to its defense point (<c>Blackboard.DefensePoint</c>: the intruders' centroid or where it was hit, kept while the
+    /// threat stays within <c>ai.rallyReach</c>, so not an enemy's exact position). Such an order by an ally's building is the
+    /// defense answering a threat there, not an order onto the building. Any other order onto an ally's building while
+    /// defending (a cast, an AttackMove to another point) is red.
+    /// </summary>
+    private static bool TheDefensesOwnAttackMove(Blackboard bb, Command c) => c.Kind == CommandKind.AttackMove && c.Position == bb.DefensePoint;
+
     [Theory]
     [Trait("Category", "Stress")]
     [MemberData(nameof(Rows))]
@@ -114,8 +124,9 @@ public class M5H5HuntAfterDefeatQaTests
                         Blackboard bb = sim.AiOf(player)!.Board;
                         string what = $"tick {sim.TickNumber}: seat {player} {c.Kind} onto an ally's building at {c.Position} (wave {bb.WaveActive}, hunting {bb.Hunting}, defending {bb.Defending})";
                         // BUG-1149 (pre-existing at cdbe6ca): the defense's AttackMove to an enemy hitting an ally's building. Counted
-                        // and printed here (its own skipped row below is strict); anything else is red.
-                        if (!strictDefense && bb.Defending && !(bb.WaveActive && bb.Hunting))
+                        // and printed here (its own skipped row below is strict); anything else is red. M6-SH3: narrowed to the
+                        // defense's own AttackMove to its point (TheDefensesOwnAttackMove), as BUG-1861's allowance is narrow.
+                        if (!strictDefense && bb.Defending && !(bb.WaveActive && bb.Hunting) && TheDefensesOwnAttackMove(bb, c))
                         {
                             if (defenseOntoAlly++ == 0) firstDefenseOntoAlly = what;
                         }

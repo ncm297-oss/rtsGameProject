@@ -125,7 +125,7 @@ public static class EconomySystem
             int whole = progress >= int.MaxValue ? int.MaxValue : (int)progress;
             int taken = world.Resources.Take(node, Math.Min(whole, carry - u.Cargo[i]));
             u.Cargo[i] += taken;
-            if (u.CargoKind[i] == ResourceKind.Gold && taken != 0) world.Ledger.AddCarriedGold(owner, taken); // M6-S13
+            if (taken != 0) world.Ledger.AddCarried(owner, u.CargoKind[i], taken); // M6-S13; M6-SH3: wood too
             progress -= whole;
         }
         u.GatherProgress[i] = progress;
@@ -165,7 +165,7 @@ public static class EconomySystem
         UnitStore u = world.Units;
         // M6-S1: the delivery is the only gathered-resources count (refunds and starting totals add to the total only).
         world.Ledger.Deliver(u.Owner[i], u.CargoKind[i], u.Cargo[i]);
-        if (u.CargoKind[i] == ResourceKind.Gold && u.Cargo[i] != 0) world.Ledger.AddCarriedGold(u.Owner[i], -u.Cargo[i]); // M6-S13
+        if (u.Cargo[i] != 0) world.Ledger.AddCarried(u.Owner[i], u.CargoKind[i], -u.Cargo[i]); // M6-S13; M6-SH3: wood too
         u.Cargo[i] = 0;
         // M6-S11: the trip is done; with orders queued it does not walk out again: the loop ends and phase 7 starts them.
         if (u.QueueCount[i] > 0)
@@ -585,7 +585,7 @@ public static class EconomySystem
         ResourceKind kind = world.Data.Resources[world.Resources.TypeId[n]].Resource;
         if (u.CargoKind[i] != kind)
         {
-            if (u.CargoKind[i] == ResourceKind.Gold && u.Cargo[i] != 0) world.Ledger.AddCarriedGold(u.Owner[i], -u.Cargo[i]); // M6-S13
+            if (u.Cargo[i] != 0) world.Ledger.AddCarried(u.Owner[i], u.CargoKind[i], -u.Cargo[i]); // M6-S13; M6-SH3: wood too
             u.Cargo[i] = 0; // AoE II rule: a load of the other resource is dropped (docs/03 "Implementation (M3-2)")
             u.GatherProgress[i] = 0f;
             u.CargoKind[i] = kind;

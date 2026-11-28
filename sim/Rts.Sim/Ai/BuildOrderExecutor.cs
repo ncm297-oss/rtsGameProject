@@ -115,8 +115,8 @@ internal static class BuildOrderExecutor
     /// trains it now (cost and requires as the view's <c>CanTrain</c> reads them; paid from the whole bank, the reserve aside:
     /// with too few workers nothing else can be bought for long), whatever its opening's steps say and whether or not it
     /// defends; one a think, so the queued ones count toward the floor at the next. With a worker alive or queued it also
-    /// needs population room now (a Train at the cap would wait paid in the queue); with none, M6-SH2's rule had no such test
-    /// and has none. Worker types in data order. Its
+    /// needs population room now for it and for every worker item queued and not started (M6-SH3, BUG-1857; a Train at the
+    /// cap would wait paid in the queue); with none, M6-SH2's rule had no such test and has none. Worker types in data order. Its
     /// command rides <see cref="Blackboard.ProductionPending"/>, which nothing judges (no new saved state); the next think sees
     /// it in the queue. True when one was sent. With <c>minWorkers</c> 1 it is the M6-SH2 rule exactly (a worker only once
     /// none is alive or queued). Why: workers were trained only by the build order's <c>train</c> steps, so a seat whose workers
@@ -135,8 +135,10 @@ internal static class BuildOrderExecutor
         {
             if (!worker[t]) continue;
             // Above zero workers, only with room now: a Train accepted at the cap waits paid in the queue (BUG-1731), which
-            // helps no seat that still has a worker. At zero it is M6-SH2's rule as it was (the only way back).
-            if (workers > 0 && ai.View.HalfPop + ai.Data.Units[t].ItemHalfPop > ai.View.HalfPopCap) continue;
+            // helps no seat that still has a worker. At zero it is M6-SH2's rule as it was (the only way back). M6-SH3
+            // (BUG-1857): the room counts the worker items already queued that have not started (their population is reserved
+            // only when they start), so a second Train behind a started one no longer reads the same room and over-queues.
+            if (workers > 0 && ai.View.HalfPop + ai.WaitingWorkerHalfPop + ai.Data.Units[t].ItemHalfPop > ai.View.HalfPopCap) continue;
             if (ai.TryTrain(t, emptyQueueOnly: false, ref ai.Board.ProductionPending)) return true;
         }
         return false;

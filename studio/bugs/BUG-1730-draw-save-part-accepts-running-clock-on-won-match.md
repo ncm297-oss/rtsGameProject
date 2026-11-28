@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S4 |
-| Status | open |
+| Status | fixed |
 | Found | 2026-11-25-1437, task M6-S13 (QA) |
 | System | save/load (draw rule, `World.ReadDraw`) |
-| Fixed by | |
+| Fixed by | M6-SH3 D (`World.ReadDraw`: the not-drawn branch needs `!_matchOverLatched`; `QA/DrawRuleQaTests.AForgedClock_OnAWonMatch_IsRefused` un-skipped) |
 
 ## Repro
 1. Un-skip `QA/DrawRuleQaTests.AForgedClock_OnAWonMatch_IsRefused`.

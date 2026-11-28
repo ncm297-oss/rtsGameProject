@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S4 |
-| Status | open |
+| Status | fixed |
 | Found | 2026-11-26-1847, task D39 (QA) |
 | System | content tests (`sim/Rts.Sim.Tests/Content/UnitLimitText.cs`, `sim/Rts.Sim.Tests/QA/Content/AiContentQaTests.cs`) |
-| Fixed by | |
+| Fixed by | D-H11 (session 2026-11-27-0817, data branch e61b6920): `UnitLimitText` reads a number as a limit only when it counts the unit itself; `AiContentQaTests.CompositionProblems` returns a named line. Proof: `QA/Content/D39UnitLimitQaTests.ATargetCountAtOnce_IsNotAUnitLimit` and `AHardEntryWithoutTheAgeResearch_LoadsAndTheCompositionOracleDoesNotThrow` un-skipped, red on the base (QA re-checked both). What is left of the reader's misreadings is BUG-1920. |
 
 Two small edges in D39's test helpers, grouped. Neither touches shipped data or play; both fail loudly, never silently.
 

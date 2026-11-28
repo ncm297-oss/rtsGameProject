@@ -81,9 +81,9 @@ public class MatchCriterionSweepQaStressTests
         // at (86, 112) on its way to (164, 138)) to a node at (166, 150) that is gone, refused NoResourceNode 9 thinks in a row
         // (27 such refusals in the match); unchecked, the match ends at 39,630 (seat 1). Not traced in M6-S14 (which rule
         // re-sends it, and why the gone node is not marked dropped): BUG-1852 carries the trace.
-        [("raraku", 3)] = "BUG-1852",
-        [("raraku", 4)] = "BUG-1852",
-        [("raraku", 6)] = "BUG-1852",
+        // M6-SH3 C2 (BUG-1852 fixed: an Idle worker with a full load, its Gather to the gone mine judged and the mine marked):
+        // seeds 3, 4 and 6 end at 35,551 (seat 1) with every oracle clean (refused Gather:NoResourceNode 20, longest run 1), so
+        // their entries [("raraku", 3 / 4 / 6)] = "BUG-1852" are out.
     };
 
     /// <summary>The extra oracles' state over one match.</summary>

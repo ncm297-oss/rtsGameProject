@@ -39,3 +39,9 @@ Seat 0 is defending (no wave, no hunt); its defender is sent to an enemy unit st
 ## M6-S13 (2026-11-25-1437): measured, unchanged
 Never spent under the draw rule: team 1 (p0 + p2) wins at 42,081 (35:04), 3,100 gold left on the map. The row stays
 skipped (its fault is the defense's AttackMove onto an ally's building, not the end).
+
+## M6-SH3 D (2026-11-27-0817): the test branch narrowed
+`Stress/M5H5HuntAfterDefeatQaTests` now counts (not red) a defending seat's order onto an ally's building only when it is the
+defense's own AttackMove to its defense point (`TheDefensesOwnAttackMove`, as BUG-1861's allowance is narrow); any other such
+order (a cast, an AttackMove elsewhere) is red. The strict row stays skipped with this id (the defense still aims at the enemy's position). Measured on the
+final tree: see docs/03 "Implementation (M6-SH3)" D.

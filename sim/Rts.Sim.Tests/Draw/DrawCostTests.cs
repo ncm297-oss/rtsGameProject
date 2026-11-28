@@ -25,7 +25,14 @@ public class DrawCostTests
         Simulation drawn = DrawScenes.Spent(DrawScenes.Short);
         DrawScenes.RunToEnd(drawn, 2 * DrawScenes.ShortTicks);
         Assert.True(drawn.World.MatchDrawn);
-        foreach (Simulation s in new[] { spent, rich, off, drawn }) { s.World.UpdateDraw(); _ = s.World.MatchSpent; }
+        // M6-SH3: the exact rule's paths: an item waiting at the cap, a worker carrying wood, a drop-off site, gold on the map
+        // (every clause read, none holding), and the same with the site finished (the reach read, (b) holding).
+        Simulation counts = DrawReachPropertyTests.NewCountsScene();
+        Simulation reach = DrawReachPropertyTests.NewCountsScene();
+        for (int k = 0; k < reach.World.Buildings.Capacity; k++)
+            if (reach.World.Buildings.Alive[k] && reach.World.Buildings.UnderConstruction[k]) reach.World.Buildings.SetWork(k, reach.World.Buildings.WorkNeeded(reach.World.Buildings.TypeId[k]));
+        Assert.True(reach.World.CanStillTrain(0));
+        foreach (Simulation s in new[] { spent, rich, off, drawn, counts, reach }) { s.World.UpdateDraw(); _ = s.World.MatchSpent; }
         long before = GC.GetAllocatedBytesForCurrentThread();
         bool any = false;
         for (int k = 0; k < 10_000; k++)
@@ -34,7 +41,9 @@ public class DrawCostTests
             rich.World.UpdateDraw();
             off.World.UpdateDraw();
             drawn.World.UpdateDraw();
-            any |= spent.World.MatchSpent | rich.World.CanStillTrain(1) | off.World.MatchSpent;
+            counts.World.UpdateDraw();
+            reach.World.UpdateDraw();
+            any |= spent.World.MatchSpent | rich.World.CanStillTrain(1) | off.World.MatchSpent | counts.World.MatchSpent | reach.World.CanStillTrain(0);
         }
         long bytes = GC.GetAllocatedBytesForCurrentThread() - before;
         Assert.True(any);

@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S4 (a stale `///` comment; no behavior change) |
-| Status | open |
+| Status | fixed |
 | Found | 2026-11-26-1847, task M6-S14 (QA re-check, fix round 1) |
 | System | save format (`sim/Rts.Sim/Save/SaveHeader.cs`) |
-| Fixed by | |
+| Fixed by | M6-SH3 D (the summary names `SaveFormat.CurrentVersion`) |
 
 ## Repro
 1. Read `sim/Rts.Sim/Save/SaveHeader.cs`, the `///` summary on `TryRead` (around line 136):

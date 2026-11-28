@@ -18,7 +18,7 @@ namespace Rts.Sim.Tests;
 /// </summary>
 public class RallyKeepTests(ITestOutputHelper output)
 {
-    private static readonly Lazy<GameData> s_quiet = new(() => AiScenes.DataWithAi("malazan", root =>
+    internal static readonly Lazy<GameData> s_quiet = new(() => AiScenes.DataWithAi("malazan", root =>
         AiScenes.SetBuildOrder(AiScenes.Opening(root), AiScenes.BuildOrder(("time", 3600, "train", "malazan_laborer", 1)))));
 
     private static Heightmap Map(bool wall)
@@ -37,7 +37,7 @@ public class RallyKeepTests(ITestOutputHelper output)
         AiScenes.Flat(AiScenes.Seats(AiDifficulty.Normal, SeatController.Ai, SeatController.Human), s_quiet.Value, map: Map(wall));
 
     /// <summary>Ticks through player 0's next think (its rally is set by then).</summary>
-    private static void NextThink(Simulation sim)
+    internal static void NextThink(Simulation sim)
     {
         int think = sim.AiOf(0)!.ThinkTicks;
         do sim.Tick(); while ((sim.TickNumber - 1) % think != 0);
@@ -128,7 +128,7 @@ public class RallyKeepTests(ITestOutputHelper output)
     }
 
     /// <summary>The wall scene to the point at (28, 64) m, then a Billet of player 0 over cells 13-14 x 31-32 and two thinks; returns the sim and the version before the Billet.</summary>
-    private static (Simulation Sim, int Version) ToTheFallBack()
+    internal static (Simulation Sim, int Version) ToTheFallBack()
     {
         Simulation sim = Scene(wall: true);
         AiPlayer ai = sim.AiOf(0)!;
