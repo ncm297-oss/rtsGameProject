@@ -4,7 +4,8 @@ namespace Rts.Sim.Tests.Stress;
 
 /// <summary>
 /// QA, M6-S14 (session 2026-11-26-1847, QA focus 3; measure and report, rule 48): the four-seat Normal AI matches, free-for-all
-/// and 2v2 (teams 0 / 1 / 0 / 1), on the shipped four-start maps (Pale Hills, Vathar Crossing; Raraku has two starts, so the config refuses four
+/// and 1v1v2 (teams 0 / 1 / 0 / 1: team 0 is "no team", so seats 0 and 2 are each a side of their own against the team of
+/// seats 1 and 3; M6-S15, BUG-1892: the rows were called "2v2"), on the shipped four-start maps (Pale Hills, Vathar Crossing; Raraku has two starts, so the config refuses four
 /// seats there), seeds 1-8, the draw rule on, to 144,000 ticks, with
 /// <see cref="DrawStalledRowsReportTests"/>' builder and player. Each row prints one <c>QA4ROW</c> line (end, winner or draw,
 /// first spent tick, the end hash). Run on the branch and on its base to say which end, against the base. One class per seed so
@@ -29,12 +30,12 @@ public abstract class M6S14FourSeatQaStressBase
     [InlineData("vathar_crossing", false)]
     [InlineData("pale_hills", true)]
     [InlineData("vathar_crossing", true)]
-    public void FourSeats_Report(string map, bool teams)
+    public void FourSeats_Report(string map, bool oneVsOneVsTwo)
     {
-        Simulation sim = DrawStalledRowsReportTests.Build(map, Seed, 4, teams ? new[] { 0, 1, 0, 1 } : null);
+        Simulation sim = DrawStalledRowsReportTests.Build(map, Seed, 4, oneVsOneVsTwo ? new[] { 0, 1, 0, 1 } : null);
         DrawStalledRowsReportTests.Outcome o = DrawStalledRowsReportTests.Play(sim, Bound);
         string end = !o.Over ? $"NO END by {o.End}" : o.Drawn ? $"DRAW at {o.End} ({Clock(o.End)})" : $"WON by {o.Winner} at {o.End} ({Clock(o.End)})";
-        _out.WriteLine($"QA4ROW {map} {(teams ? "2v2" : "ffa")} seed {Seed}: {end}; first spent {(o.FirstSpent < 0 ? "never" : o.FirstSpent.ToString())}, restarts {o.Restarts}; gold left on the map {sim.World.Resources.GoldLeft}; hash {o.Hash:X16}");
+        _out.WriteLine($"QA4ROW {map} {(oneVsOneVsTwo ? "1v1v2" : "ffa")} seed {Seed}: {end}; first spent {(o.FirstSpent < 0 ? "never" : o.FirstSpent.ToString())}, restarts {o.Restarts}; gold left on the map {sim.World.Resources.GoldLeft}; hash {o.Hash:X16}");
         Assert.True(o.End > 0);
     }
 }
