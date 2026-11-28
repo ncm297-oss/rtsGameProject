@@ -114,9 +114,14 @@ public partial class QaM6V2Test : Node
         (Match match, SimRunner runner) = StartMatch(new[] { "--no-bases", "--ai", "hard", "--units", "10", "--mute", "--speed", "8" });
         Simulation sim = runner.Simulation!;
         Check(runner.Seats[1].Controller == SeatController.Ai, "--no-bases --ai hard: no AI seat");
+        // M6-S15 (sim A2, staging only): no base is spawned (no building on the first tick); the hall-less AI seat, whose dev
+        // army holds Laborers and whose bank pays its small drop-off, now builds that drop-off first, so buildings by tick 600
+        // are the AI's own and no longer zero. The match must still not end.
+        await UntilTick(sim, 1);
+        int atStart = sim.World.Buildings.Count;
         await UntilTick(sim, 600);
-        Check(match.MatchOverLines == 0 && sim.World.Buildings.Count == 0,
-            $"--no-bases --ai hard: {match.MatchOverLines} 'Match over:' lines, {sim.World.Buildings.Count} buildings by tick {sim.TickNumber}");
+        Check(match.MatchOverLines == 0 && atStart == 0,
+            $"--no-bases --ai hard: {match.MatchOverLines} 'Match over:' lines, {atStart} buildings at tick 1 ({sim.World.Buildings.Count} by tick {sim.TickNumber})");
         await EndMatch(match);
     }
 

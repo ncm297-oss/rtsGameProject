@@ -497,7 +497,7 @@ seed 11 at 18:34, without Age II, and `standard` against `cadre_rush` seed 17 at
 | Whirlwind opening | Malazan opening | 1st seed | 2nd seed | 3rd seed |
 | --- | --- | --- | --- | --- |
 | `standard` | `standard` | seed 1: 9:08 | seed 22: 11:06 | seed 26: 9:28 (defeated 18:50) |
-| `standard` | `crossbow_push` | seed 9: 10:16 | seed 32: 10:10 | seed 37: 10:46 |
+| `standard` | `crossbow_push` | seed 9: 10:16 | seed 32: 10:10 | seed 37: 10:46 (defeated 19:02) |
 | `standard` | `cadre_rush` | seed 13: never (defeated 17:03) | seed 16: 10:10 | seed 17: 9:34 (defeated 16:52) |
 | `raider_rush` | `standard` | seed 2: 9:52 | seed 10: 9:32 | seed 21: 11:07 |
 | `raider_rush` | `crossbow_push` | seed 5: 13:49 | seed 11: 16:16 | seed 19: 11:18 |
@@ -550,7 +550,7 @@ wave and the waves sent, its defeat and its largest army (read once a second).
 | `crossbow_push` | 45 | 5:40 | 6:10 | 6:10 (7) | never | 41 |
 | `crossbow_push` | 71 | 7:03 | 6:26 | 6:26 (4) | never | 46 |
 | `cadre_rush` | 20 | 8:56 | 6:38 | 6:38 (7) | never | 37 |
-| `cadre_rush` | 24 | 10:25 | 6:49 | 6:49 (4) | never | 21 |
+| `cadre_rush` | 24 | 10:25 | 6:49 | 6:49 (5) | never | 20 |
 | `cadre_rush` | 27 | 10:09 | 5:56 | 5:56 (4) | never | 32 |
 
 Re-printed 2026-11-26 for M6-S14 (the sim's AI-play session: the hunt's resume, the worker floor, the rally point's memory,

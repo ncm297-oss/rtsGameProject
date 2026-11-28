@@ -647,7 +647,7 @@ and seed 19 with it; from M5-4d slice 2 (the AI rebuilds what it loses) until M6
 | Malazan opening | Whirlwind opening | 1st seed | 2nd seed | 3rd seed |
 | --- | --- | --- | --- | --- |
 | `standard` | `standard` | seed 1: 9:34 | seed 22: 14:11 | seed 26: 11:18 |
-| `standard` | `raider_rush` | seed 2: never (defeated 16:27) | seed 10: never (defeated 12:38) | seed 21: 8:14 (defeated 16:28) |
+| `standard` | `raider_rush` | seed 2: never (defeated 16:52) | seed 10: never (defeated 12:38) | seed 21: 8:14 (defeated 16:28) |
 | `standard` | `holy_war` | seed 3: 9:34 | seed 4: 11:14 | seed 6: 11:08 |
 | `crossbow_push` | `standard` | seed 9: 13:09 | seed 32: 13:01 | seed 37: 8:41 |
 | `crossbow_push` | `raider_rush` | seed 5: 9:53 | seed 11: 9:28 | seed 19: never (defeated 18:20) |

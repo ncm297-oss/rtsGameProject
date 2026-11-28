@@ -12488,6 +12488,19 @@ tests `Ai/CriterionMatch.cs` (the harness), `Ai/MatchCriterionTests`, `CommandRe
 
   `HalfWay` 11,420. The Hard v Normal tally **32 / 4 / 0 / 6**, unchanged. Raraku seed 3 (the row's seed until M6-S14) now
   ends at 35,551, inside its 36,000 (BUG-1852 cured); the row stays on seed 2.
+  **Re-measured for M6-S15** (the draw rule's drop-off clause, a hall-less seat's small drop-off, "spends what it has", a
+  hunt the defense cuts is resumed; "Implementation (M6-S15)"): Raraku seed 2 and the FFA moved, the rest unchanged:
+
+  | Row | Map, seed | Ends (bound) | Winner | Waves | Hunts |
+  | --- | --- | --- | --- | --- | --- |
+  | literal | Vathar Crossing 1 | 22,840 = 19:02 (24,000) | seat 1 | 5 | 1 |
+  | | Raraku 2 | 27,074 = 22:33 (36,000; was 27,400, moved by C) | seat 0 | 10 | 0 |
+  | | Pale Hills 1 | 26,594 = 22:09 (72,000) | seat 1 | 8 | 1 |
+  | | generated 3 | 23,806 = 19:50 (24,000) | seat 0 | 8 | 1 |
+  | FFA | Vathar Crossing 1, 4 seats | 53,024 = 44:11 (72,000; was 56,664, moved by A2) | seat 2 | 13 | 4 |
+  | 2v2 | Vathar Crossing 1, 4 seats | 42,301 = 35:15 (72,000) | team 2 | 24 | 7 |
+
+  `HalfWay` 11,420, unchanged.
   **Re-measured for D33** (the data track's balance pass, 2026-11-17: the Malazan `cadre_rush` waves at 16 army pop / 1,184,
   was 18 / 1,332; the Whirlwind `holy_war` at 14 / 918, was 20 / 1,312; the Teblor `standard` opening's order, which no row
   plays; data hash B74DC7AE61B4862D -> 318E8C4256456C05): the literal row Vathar Crossing seed 1 23,244 (seat 1, 6 waves),
@@ -15879,6 +15892,19 @@ first, the marks kept). Green on the base, the guard: begun later than the memor
 0, the free start first). The twin and a save between the cut and the resume (loads equal, saves to the same bytes, follows
 the run for 1,000 ticks past the resume). M6-S14's `Ai/HuntResumeTests` green unchanged.
 
+*Measured on `Stress/PaleHillsStallTraceTests` (criterion 7), D alone on the base (a scratch tree of d26338d3 with D's two
+files): identical to the base, end hash 1C6909184F146EC1, no end by 72,000, 14 entries at "sweep 200".* **The traced loop is
+not a cut hunt:** seat 0's hunt is the match's second for the whole span (hunts 2 from before 48,000 to 72,000; never
+recalled: each raid is small enough that the defense picks a few defenders and the hunt goes on). Each raid gives the hunt a
+fresh sighting at seat 0's own base (target near cell (143, 155), "sweep -1"), the hunt follows it there, and when the
+sighting is forgotten the sweep starts again from the army, at home, to the nearest unvisited point, which is point 200,
+about 240 m east; the next raid comes before it is reached. The marks and the pass are never lost (pass 0 throughout).
+So D as specified (a hunt the defense **ends**) does not touch this match; the loop is the hunt chasing raid sightings at
+its own base. **BUG-1932** (S3, new): a hunt follows enemy sightings inside its own base's defend radius while the base is
+defended, so a side raided every few minutes never completes a sweep leg; a cure (the hunt ignores sightings the defense is
+answering, or keeps its leg target through them) is new hunt behaviour, for the Producer. C ends this match anyway (seat 0
+wins at 60,387: the C column below).
+
 **B. BUG-1891, traced, not cured (`Stress/GoldLeftTraceTests`, Category Stress, by name).** The Pale Hills four-seat FFA
 seed 4 (`DrawStalledRowsReportTests.Build`) from 48,000 to 72,000, every 6,000 ticks, at each seat's think: every live gold
 node, and per seat whether its view has explored and knows the node, its dropped mark, its gather reach, the distance to its
@@ -15909,6 +15935,147 @@ Cache, which it builds.
 
 No cure under the 30-line rule: seat 0's is new looking behaviour, seat 3's is not a fault of an existing rule. Measured:
 the four-seat seed 4 row under each item in the table below.
+
+**Measured per item (criterion 9, rule 48; rule 70: each item on a `git archive` of its own commit, Release, in a scratch
+folder; base d26338d3, A e7e39dee, A2 afc9dd69, C 773cecec, D 2f6c2733 (B and F change no play)).** `Stress/M6S14FourSeatQaStressTests`
+(by name, Soak, 144,000; the 0 / 1 / 0 / 1 rows, a 1v1v2, BUG-1892), `Stress/DrawStalledRowsReportTests` (144,000; its tally
+rows 72,000) and `Stress/MatchRowsM6S10Report` (72,000, every check on). Each cell is the end tick and the winner (or the
+draw), "=" when the end hash equals the column before's, "no end" at the bound. 81 of 81 passed on every tree.
+
+| Row | Base | A | A2 | C | D |
+| --- | --- | --- | --- | --- | --- |
+| Pale Hills 4 seats FFA seed 1 | draw 58,257 | = | = | draw 46,217 | = |
+| FFA seed 2 | no end | = | = (hash moved) | **draw 58,341** | = |
+| FFA seed 3 | p1 86,931 | = | p1 86,229 | = | = |
+| FFA seed 4 | no end | = | = (hash moved) | **p0 47,612** | = |
+| FFA seed 5 | draw 44,326 | = | = | draw 61,291 | = |
+| FFA seed 6 | p1 81,444 | = | p1 54,657 | = | = |
+| FFA seed 7 | draw 59,184 | = | draw 59,184 (hash moved) | draw 57,475 | = |
+| FFA seed 8 | draw 67,743 | = | p3 58,304 | draw 62,909 | = |
+| 1v1v2 (0/1/0/1) seed 1 | draw 52,377 | = | = | draw 47,997 | = |
+| 1v1v2 seed 2 | p1 55,423 | = | p1 56,580 | p1 56,283 | = |
+| 1v1v2 seeds 3 / 4 / 5 / 7 | p2 47,439 / p1+p3 42,141 / p1+p3 36,805 / p1+p3 36,359 | = | = | = | = |
+| 1v1v2 seed 6 | p2 63,736 | = | p2 40,509 | = | = |
+| 1v1v2 seed 8 | p1+p3 36,885 | = | p1+p3 33,887 | = | = |
+| Vathar Crossing 4 seats FFA seed 1 (the FFA criterion row) | p2 56,664 | = | p2 53,024 | = | = |
+| Vathar FFA seed 2 | p3 47,412 | = | = | = | **p3 64,084** |
+| Vathar FFA seed 4 | p3 66,077 | = | p3 102,759 | = | = |
+| Vathar FFA seeds 3, 5-8 | p0 46,671; p3 72,904; p2 37,472; p3 54,250; p3 54,842 | = | = | = | = |
+| Vathar 1v1v2 seed 1 / 5 / 6 | p1+p3 24,290 / 35,149 / 23,820 | = | 24,799 / 28,816 / 23,919 | = | = |
+| Vathar 1v1v2 seeds 2-4, 7, 8 | unchanged | = | = | = | = |
+| Stalled rows: Pale Hills 2v2 (1/2/1/2) seed 2 | p0+p2 36,390 | = | = | = | = |
+| Stalled rows: tally Pale Hills seed 2 Hard seat 0; seeds 7 / 8 Hard seat 0 | no end (72,000) | = | = | = | = |
+| Stalled rows: tally Pale Hills seeds 3 and 6 Hard seat 0 (one match) | p1 55,532 | = | = | **no end (BUG-1933)** | = |
+| Stalled rows: tally Pale Hills seeds 7 and 8 Hard seat 1 (one match) | no end | = | = | **p0 42,579** | = |
+| Stalled rows: tally Raraku seed 1 Hard seat 1 | p1 24,156 | = | = | p1 24,528 | = |
+| Stalled rows: the lone idle worker scene (BUG-1116) | no end by 20,000 | = | = | = | = |
+| Two seats Pale Hills seeds 1, 3, 4, 6 | p1 26,594; 23,807; 23,807; 23,807 | = | = | = | = |
+| Pale Hills seed 2 | p0 59,700 | = | = | p1 48,914 | = |
+| Pale Hills seed 5 | p1 47,547 | = | = | p1 44,500 | = |
+| **Pale Hills seeds 7 / 8** | no end | = | = | **p0 60,387** | = |
+| Raraku seed 1 | p0 34,444 | = | = | p0 38,663 | = |
+| Raraku seed 2 (a criterion row) | p0 27,400 | = | = | **p0 27,074** | = |
+| Raraku seeds 3 / 4 / 6 | p1 35,551 | = | = | p1 31,878 | = |
+| Raraku seed 5 | p1 24,859 | = | = | p1 25,913 | = |
+| Raraku seeds 7 / 8 | p1 25,235 | = | = | p1 25,235 (hash moved) | = |
+| Vathar Crossing seeds 1-8 (two seats) | 22,840; 26,195; 31,853; 31,853; 28,085; 31,853; 22,974; 22,974 | = | = | = | = |
+| generated seeds 1 / 2 / 4 / 5 / 6 | p0 34,769 / p0 42,446 / p1 22,782 / p1 22,014 / p1 30,119 | = | 6: 30,122 | 32,092 / 35,840 / 21,864 / 22,000 / 29,949 | = |
+| generated seed 3 (a criterion row) | p0 23,806 | = | = | = | = |
+| Vathar seed 1, 2v2 1/2/1/2 (the 2v2 criterion row) | t2 42,301 | = | = | = | = |
+| Vathar seed 2, 4 seats (`MatchRowsM6S10Report`) | p3 47,412 | = | = | = | p3 64,084 |
+
+**The hope came true:** the four-seat FFA seeds 2 and 4 end (seed 2 drawn at 58,341, seed 4 won by p0 at 47,612) and the
+two-seat Pale Hills seed 7 (and 8) ends at 60,387 (seat 0), all through **C**. **One row that ended on the base no longer
+ends: BUG-1933 (C)**, the Hard v Normal tally's Pale Hills seed 3 / 6 with the Hard seat 0 (the Normal seat won at 55,532 on
+the base): at 72,000 seat 0 (Hard) has 9 workers, no unit-producing building, 538 gold and can still train by the draw rule
+(a worker and a bank that pays a unit), seat 1 (Normal) 4 units, no worker and nothing that produces; neither finishes the
+other. It is not a pinned criterion row (the tally counts it; the tally itself is below in the pin list). Per item, which
+rows moved (rule 43): **A** none (every row hash-equal to the base: no match here has a seat with a worker, no drop-off and a
+bank for one at a tick that decides; the clause can only make a draw later). **A2** every match in which a seat loses its
+hall and drop-offs with wood for a small drop-off: 10 four-seat rows, the generated seed 6 two-seat row (3 ticks), and the
+Vathar FFA criterion row (56,664 -> 53,024, inside its 72,000); no two-seat criterion row. **C** every match in which a seat's
+pick becomes unpayable for good: the four-seat rows, most long two-seat rows on Pale Hills, Raraku and generated, the tally
+rows, and **the Raraku seed 2 criterion row (27,400 -> 27,074, inside its 36,000)**: of the four two-seat criterion rows
+that end before 28,000, that one moved, by C; Vathar seed 1, Pale Hills seed 1 and generated seed 3 did not move. **D** only
+the Vathar four-seat seed 2 (47,412 -> 64,084, inside 144,000 and 72,000): a hunt there is recalled by a raid and resumed
+from the army instead of restarting at the free starts. D moves no Pale Hills row (the BUG-1855 trace above).
+
+**The pin move (E; rules 43 / 45 / 71 / 74 / 83), once, on D's tree plus the re-pins; every old value in a "was"
+comment.** The default loop on D's tree: 11,130 passed / 4 failed / 21 skipped (the four below); the whole Stress category on
+the final tree (Release, 1 h 41 min): **998 passed / 19 failed / 12 skipped of 1,029** (the 19 below, each re-pinned or
+re-staged and re-run green: 97 of 97 rows, the sweep class 24 of 24); the Soak four-seat table by name (the per-item runs
+above, D's tree); `Stress/TeamAiSoakStressTests` (Soak) by name. The pin list of "Implementation (M6-SH3)", one class a line:
+
+Default loop:
+- `Ai/MatchCriterionTests` (and `HalfWay`): re-measured: yes; Raraku seed 2 moved to 27,074 (was 27,400; C) and the FFA to 53,024 (was 56,664; A2), both inside their bounds, which the class asserts (no pin edited); the rest unchanged; `HalfWay` 11,420 unchanged. The M5-5 table re-printed.
+- `StandardPresetPinQaTests`: re-measured: yes; unchanged (green with no edit).
+- `QA/NonHardMatchPinQaTests`: re-measured: yes; five rows moved (Stress-tagged rows): Raraku 1 Normal `6D5572D79F59A74E 36000 2140` (was 33D9D716C268A818 34444 1645), Raraku 1 Easy `ADAE5D544E5A5434 23684 1365` (was 212EC13B3160EBCC 23652 1362), Pale Hills 1 Easy `9242E9E5E0EDF1FE 36000 3197` (was 499535DA3C66F0F6 36000 3658), Pale Hills 3 Easy `5B8623A53F74A2CD 36000 3317` (was 405E5952D6D28032 36000 3586), Vathar 1 Easy `430A883A95D40471 29739 2163` (was 83EF643E7AE8B852 29664 2140); `FactionOrderTests`' row reads them (green).
+- `CounterCompositionTests.TheNonHardPins_*` (eight): re-measured: yes; four moved: Raraku 1 Normal `D370FF93D4B4E8D0 33086 1882` (was 8589A58ACAA74D65 34420 1624), Raraku 1 Easy `ADAE5D544E5A5434 23684 1365` (was 212EC13B3160EBCC 23652 1362), Pale Hills 1 Easy `6DB1B6DCDBB36D88 34105 2578` (was F58BA8995A84BAD0 34527 2788), Pale Hills 3 Easy `4761510001C9E292 36000 3344` (was E7A2F347C8B826DD 36000 3153); four unchanged.
+- `ReserveTwinTests`, `SharedVisionFfaPinTests`, `OutcomePinM73bQaTests`, `HardKnobsPinTests`, `AiVersusAiTests`, `Ai/OpeningReserveShareTests`: re-measured: yes; unchanged.
+- `Draw/DrawRuleTests`, `Draw/DrawSaveReplayTests`, `Draw/DrawCostTests`, `QA/DrawRuleQaTests`: re-measured: yes; `DrawCostTests` gained the clause's paths (A), the rest unchanged; `QA/M6Sh3DrawQaTests.Bug1893_*` re-pinned (A).
+- `Cli/CliTests.Match_TheLiteralRow_*`: re-measured: yes; unchanged.
+- The premap AI replay, `save_ai_seed2`, `seed21_playable.replay`, the golden: unchanged (the golden's file byte for byte: no k line, no data hash moved; `SaveFormat.CurrentVersion` 11).
+- `StarvedWaveTests.ASeat_WhosePickIsNeverPayable_*(True)`, `QA/StarvedWaveQaTests.APickHeldAtItsExactGoldCost_*(-1)` (added by rule 74, found by the loop): re-staged to C (the seat now buys the payable unit while still starved: the Crossbowman, the Laborer); was "it never trains".
+- `Ai/M6Sh3AiCureTests.TheHallPointChanges_*` (rule 74): re-staged for A2 (the seat's wood under the Depot's price).
+Stress:
+- `AiDeterminismTests`: re-measured: yes; green with no edit.
+- `HuntStressTests`: re-measured: yes; `FourAiSeats_OnPaleHills_Seed1_KnownStall` draws at 46,217 (was 58,257; C); the oracle rows green.
+- `M6Sh2DeterminismStressTests`: moved to Raraku seed 1 (was seed 5: no seat under the floor since C; seed 1 retrains at 24,781).
+- `M6Sh2QaStressTests`, `StarvedSaveTwoProcessQaStressTests`, `ReservePairingsStressTests`: re-measured: yes; green with no edit.
+- `MatchRowsM6S10Report`: re-measured: yes; the per-item table above.
+- `MatchCriterionSweepQaStressTests`: re-measured: yes; Pale Hills seed 2 added to `Known` with BUG-1934 (a finding; C moved the match); the rest green.
+- `FarExpandProbeQaStressTests`: re-measured: yes; unchanged (the Pale Hills FFA seed 2 row stays skipped, as on the base).
+- `HardVersusNormalTallyQaStressTests`: re-measured: yes; **32 / 5 / 0 / 5** (was 32 / 4 / 0 / 6): Pale Hills 6 / 3 / 0 / 5 (seeds 7 / 8 with the Hard seat 1 now a Normal win at 42,579; seeds 3 / 6 with the Hard seat 0 no longer end, BUG-1933), Raraku 14 / 0 / 0 / 0, Vathar Crossing 12 / 2 / 0 / 0 (the class prints, it does not pin the tally).
+- `TeamAiSoakStressTests` (Soak, by name), `DefeatAiStressTests`, `MapSlice2StressTests`: re-measured: yes; green.
+- `DrawStalledRowsReportTests`: re-measured: yes; the table above.
+- `EndGameHardeningTests` (Stress rows): re-measured: yes; green.
+- `M78ReserveSwitchQaStressTests`, `M78ShippedDigestQaStressTests`, `ShippedDigestReportTests`, `ReserveSwitchReportTests`: re-measured: yes; green with no edit.
+- `StarvedPickOracleQaStressTests` (rule 74): the oracle re-stated to C (a stamped think may buy instead of the pick; a Train of the pick itself stays an error); all six rows green.
+Handed over from the data track (rule 68):
+- `Content/AiOpeningPairsReportTests`: re-measured: yes; one cell moved: `malazan.md` Age II table, `standard` v `raider_rush` seed 2 "never (defeated 16:52)" (was 16:27); `Bug0982_*` stays skipped (BUG-1851).
+- `Content/HolyWarFirstWaveReportTests`: re-measured: yes; one row moved: `whirlwind.md`, `cadre_rush` seed 24 "6:49 (5) ... 20" (was "6:49 (4) ... 21").
+- `Content/AiSpendingReportTests`, `Content/AiOpeningPairsVerdictTests`: re-measured: yes; unchanged.
+- `QA/Content/DR35ProsePinQaTests`: re-measured: yes; unchanged (`Malazan_Bug0982Prose_*` stays skipped, BUG-1851).
+- `QA/Content/TeblorOpeningQaTests`, `QA/Content/D20PinQaTests`, `QA/Content/AiHouseRuleReportTests`: re-measured: yes; unchanged.
+- `QA/Content/D21OpeningsQaTests`: re-measured: yes; one cell moved: `whirlwind.md` Age II table, `standard` v `crossbow_push` seed 37 "10:46 (defeated 19:02)" (was "10:46").
+- `Content/D38ShippedOrdersReportTests`, `QA/Content/D38ShippedOrdersQaStressTests`, `QA/Content/DH6ThresholdQaTests`' row: run; stay skipped (BUG-1853 / 1851).
+Faction pages: three cells changed (above), no prose (the M6-S14 prose paragraph on `malazan.md` that names "defeated 16:27" is dated and left).
+Added by rule 74 / 83: every other class in the Producer's grep (313 files now, the five new ones of this task included) ran
+in the default loop or the Stress category on the final tree, green with no edit. Not run: the grep's Perf classes (Perf,
+not Stress; the AI ones were run by name after the last edit, below).
+
+**The view's scene loop (criterion 13)** on the branch: 133 of 135 passed first run. `QaM6V2Test` red ("--no-bases --ai
+hard: 0 'Match over:' lines, 3 buildings by tick 600"): its hall-less Hard seat, whose dev army holds Laborers and whose bank
+pays the Depot, now builds the Depot first (A2). Staging-only edit: the scene counts the buildings on tick 1 (no base
+spawned) and still requires no "Match over" line by tick 600; it passes alone. `BenchTest` red on time under the parallel
+Stress load ("--bench 2 took 10.9 s (limit 7 s)"); it passes alone (15 s, PASS), no edit. No other file under `game/**`
+changed. `tools/qa/smoke.ps1`: PASS.
+
+**Questions for the Producer (M6-S15, rule 67), each with the developer's recommendation.**
+
+1. **D did not cure BUG-1855's trace** (D, measured): the traced loop is a hunt that is never recalled and follows each
+   raid's sighting home (BUG-1932), not a hunt the defense ends. D is built as briefed and moves one row (the Vathar
+   four-seat seed 2, later). Recommendation: keep D (it is the briefed rule and harmless), and give BUG-1932 its own small
+   design decision (does a hunt chase sightings inside its own defended base?) at the next AI task; C already ends the
+   traced match.
+2. **C runs while the base is defended** (the Producer's default, kept): the walk then hides nodes by the defense point, so a
+   raid on the only mine can make the pick read "never" for the raid and production buys a payable mix unit meanwhile.
+   Recommendation: keep (a seat spending its bank during a raid is sound play; the starved stamp, which waves, still waits
+   for an undefended think).
+3. **"A reserve it can never fill" needs somewhere to deliver** (C): by known nodes alone every reserve the executor names
+   is fillable (`Fillable` gates it), so the clause would be a no-op; the seat that truly can never fill a reserve is one with
+   no drop-off and none being built. Recommendation: accept this reading (`ReserveFillable`).
+4. **BUG-1933 (C): the Pale Hills Hard v Normal tally match seed 3 / 6 (Hard seat 0) no longer ends by 72,000**: at 72,000
+   the Hard seat has 9 workers, 538 gold and no building that produces, the Normal seat 4 units and nothing else. The draw
+   rule calls the Hard seat able to train (a worker is a producer and the bank pays a unit) though no building of its can
+   train one: BUG-1894's family (the rule's "can produce" counts a worker that can only build). Recommendation: the next
+   draw-rule look reads "can produce" as "a finished building that trains a unit it can pay for, or a worker and a bank for
+   that building too" (a rule change: the owner's draw decision allows it); the tally's count moves by one row meanwhile.
+5. **The commit order** is A, A2, C, D, B, F, then the pin move (B, a trace, was written after D so its docs could cite D's
+   measurement; it changes no play). Recommendation: accept.
+6. **Two Raraku rows moved to later ends under C** (seed 1 two-seat 34,444 -> 38,663; seed 5 24,859 -> 25,913) and the
+   Raraku retrain row moved to seed 1 (seed 5 no longer drops a seat under the worker floor). Inside every bound; reported,
+   not a finding.
 
 
 ## Testing strategy

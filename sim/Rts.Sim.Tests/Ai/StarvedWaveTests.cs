@@ -288,7 +288,8 @@ public class StarvedWaveTests
     /// for its most under-weighted unit rather than buy a cheaper one, so the check reads that unit. The starved scene plus a
     /// finished Barracks and Crossbow Range, three Crossbowmen beside the three Heavy Infantry (so Heavy Infantry is the pick)
     /// and the bank held at 40 gold: a Crossbowman (36 g) is payable but never trained, a Heavy Infantry (54 g) never payable
-    /// (no gold ever again). Starved on the first think, waves at the window. The twin without the Barracks (the pick is then
+    /// (no gold ever again). Starved on the first think, waves at the window (M6-S15 C: and now buys the Crossbowman meanwhile,
+    /// BUG-1890). The twin without the Barracks (the pick is then
     /// the payable Crossbowman, which production trains) is never stamped.
     /// </summary>
     [Theory]
@@ -324,7 +325,10 @@ public class StarvedWaveTests
             Assert.Equal(0, watch.Stamp);
             Assert.Equal(-1, watch.ClearedAt);
             Assert.Equal(FirstThinkFrom(window, ai.ThinkTicks), watch.WaveAt);
-            Assert.Equal(0, trained); // it never bought the payable Crossbowman: why it is starved
+            // M6-S15 C (BUG-1890): the pick (the Heavy) can never be paid for, so production now buys the payable Crossbowman
+            // instead; the seat stays starved (its pick still never payable). Was: Assert.Equal(0, trained) ("it never bought
+            // the payable Crossbowman: why it is starved").
+            Assert.True(trained > 0, "M6-S15: the payable Crossbowman is bought while the pick is out of reach for good");
         }
         else
         {

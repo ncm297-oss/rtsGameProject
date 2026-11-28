@@ -365,7 +365,8 @@ public class StarvedWaveQaTests
     /// QA, fix round 1 (BUG-1154's corrected (i): the seat is judged on <see cref="ProductionManager.Pick"/>): the cost boundary.
     /// No gold mine left, a finished Barracks only (so the pick is Heavy Infantry, 54 g: the Crossbowman has no producer), wood
     /// held at 100 and gold held at the pick's exact cost every tick: payable, so never stamped and it trains; one gold under:
-    /// stamped on the first think, never trains, waves on the first think at the window.
+    /// stamped on the first think, waves on the first think at the window (M6-S15 C: and buys Laborers meanwhile; it never
+    /// trained before, BUG-1890).
     /// </summary>
     [Theory]
     [InlineData(0)]
@@ -406,7 +407,9 @@ public class StarvedWaveQaTests
         {
             Assert.Equal(heavy, pick);
             Assert.Equal(0, firstStamp);
-            Assert.Equal(0, trained);
+            // M6-S15 C (BUG-1890): the Heavy can never be paid for (no gold mine), so production buys what the bank pays
+            // instead: no other mix unit has a producer here, so a Laborer (50 gold) at the Keep. Was: Assert.Equal(0, trained).
+            Assert.True(trained > 0, "M6-S15: the payable Laborer is bought while the pick is out of reach for good");
             Assert.Equal(FirstThinkFrom(window, think), waveAt);
         }
     }
