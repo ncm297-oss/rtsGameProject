@@ -3,7 +3,7 @@
 | Field | Value |
 | --- | --- |
 | Severity | S3 (measure and report under criterion 11 / rule 48; not a criterion row) |
-| Status | open (with BUG-1854, for the sim's hardening beside BUG-1730 / 1731) |
+| Status | open (M6-SH3 B: p1's half fixed, the draw rule exact; the match is held by the AI: BUG-1890 / 1891) |
 | Found | 2026-11-26-1847, task M6-S14 (QA, tier full; QA focus 3) |
 | System | AI end game + the draw rule (`World.CanStillTrain`, docs/02 "Game flow" 4) |
 | Fixed by | |
@@ -38,3 +38,10 @@ QA's probe (state every 12,000 ticks from 60,000; nothing changes from about 72,
   counted for any seat with a worker, even one with no drop-off) turn them into matches that never end.
 - Candidate rules for the hardening: count wood for a unit that needs it; count the map's gold only for a seat with a
   finished drop-off (or able to pay for one).
+
+## M6-SH3 B (2026-11-27-0817)
+p1 (one worker, no drop-off, 21 gold + 10 carried) is now "cannot train" (the map's gold counts only with a finished drop-off).
+p0 (52 gold, 11,155 wood; 726 gold left on the map within reach of 26 workers and four drop-offs) and p3 (40 gold + 30
+carried, two drop-offs) can still pay for units and neither trains nor mines the 726 gold: BUG-1890 (production) and
+BUG-1891 (the gold left unmined / undelivered). After B the match is unchanged (no end by 144,000, same end hash
+28B445B7F11EC069).

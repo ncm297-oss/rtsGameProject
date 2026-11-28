@@ -3,7 +3,7 @@
 | Field | Value |
 | --- | --- |
 | Severity | S4 (a report row; not a criterion row) |
-| Status | open (a finding for the sim's next AI task) |
+| Status | open (re-stated with M6-SH3 A's trace; a finding for the next AI task) |
 | Found | 2026-11-26-1847, task M6-S14 (`Stress/MatchRowsM6S10Report`, the session's two-seat probe) |
 | System | AI end game (two seats) |
 | Fixed by | |
@@ -21,3 +21,14 @@ No end by 72,000; every check clean. Every other seed 1-8 on Raraku, Pale Hills 
 
 ## Notes
 - Not traced in M6-S14 (measure and report under rule 48).
+
+## M6-SH3 A (2026-11-27-0817): traced, not cured
+`Stress/PaleHillsStallTraceTests` (docs/03 "Implementation (M6-SH3)" A). The match is not spent and should not be: at 72,000
+seat 0 has 1,784 gold / 10,575 wood and seat 1 75 / 2,755, both can pay for units. Seat 0 (52 army units at its population
+cap, 6 paid units waiting at the cap) hunts from before 48,000 but never knows a seat-1 building: every one stands on ground it
+explored before it was built, so it has no ghost. Seat 1's waves (about every 2,900 ticks) pull seat 0's army home to defend,
+and the hunt's leg to its first sweep point (point 200, the east edge at (511, 179) m, about 370 m away) is given up before it
+is reached and re-sent after each defense to the same point (14 timeline entries at "sweep 200", 49,701-70,341). Seat 1's base
+is at about (322, 398) m, the other way. Once seat 1's army is gone (its starved wave at 69,240) the sweep moves on (202-206 by
+71,941). Cure (not done: more than 30 lines of new hunt behaviour): a hunt that resumes after a defense should keep the
+points it passed or sweep from where the army stands rather than re-send the same leg.

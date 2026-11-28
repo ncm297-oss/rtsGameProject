@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | S3 (a criterion check fails and the match runs past its bound; the seat keeps playing) |
-| Status | open (traced only as far as below) |
+| Status | fixed |
 | Found | 2026-11-26-1847, task M6-S14 (the pin move: `MatchCriterionTests`' Raraku row, `Stress/MatchCriterionSweepQaStressTests`) |
 | System | AI economy (`EconomyManager`, the Gather to a remembered node; `NoteDroppedGather` / `NoteDroppedRebalance`) |
-| Fixed by | |
+| Fixed by | M6-SH3 C2 (`EconomyManager.NoteDroppedGather`: the full-load guard only without a drop-off at the sending think, `AiPlayer.HadDropOff`; `Ai/M6Sh3AiCureTests.ALoadedIdleWorker_*`) |
 
 ## Repro
 1. `dotnet test sim/Rts.Sim.Tests --filter "FullyQualifiedName~MatchCriterionSweepQaStressTests&FullyQualifiedName~raraku"`
@@ -27,3 +27,10 @@ ends past the 36,000 bound).
 - Not traced in M6-S14: which path re-sends it (the worker is stuck Moving, so `NoteDroppedGather`, which judges an Idle
   worker, may never see it), and whether the base has the same path dormant. Probably not caused by an M6-S14 rule (none
   of them sends a Gather); the match reached the state through M6-S14's changed play.
+
+## M6-SH3 C2 (2026-11-27-0817): the path
+Not a Moving worker: unit 45 is Idle at (228, 228) m with a full load of gold (10) and its hall standing; the idle loop sends
+it every think to the remembered mine (slot 5, gone, out of sight); `NoteDroppedGather` skipped it because of BUG-0574's
+full-load guard. With a drop-off standing, a Gather that applies sends a full load home, so an Idle loaded worker had its Gather
+refused: the guard now holds only when the seat had no finished drop-off at the sending think. Raraku sweep re-measured:
+see docs/03 "Implementation (M6-SH3)" (the pin move).

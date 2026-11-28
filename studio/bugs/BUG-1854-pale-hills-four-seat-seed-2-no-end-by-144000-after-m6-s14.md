@@ -3,7 +3,7 @@
 | Field | Value |
 | --- | --- |
 | Severity | S3 (a pinned Stress row stopped ending; moved by rule 45) |
-| Status | open (a finding for the sim's next AI or hardening task; traced below as far as M6-S14 went) |
+| Status | open (M6-SH3 B: the draw rule is exact; the match is held by the AI: BUG-1890) |
 | Found | 2026-11-26-1847, task M6-S14 (the pin move: `Stress/HuntStressTests.FourAiSeats_OnPaleHills_EndWithTheOracleOnEveryHunt`) |
 | System | AI end game (four seats) |
 | Fixed by | |
@@ -25,3 +25,10 @@ moved to seed 3 too (their premises: a defeat, a lost hall).
 ## Notes
 - Not traced further in M6-S14. The draw rule's "can still train" (BUG-1731's family) and the worker floor (a seat with
   gold keeps training workers) are the first suspects: report against BUG-1731.
+
+## M6-SH3 B (2026-11-27-0817)
+The draw rule now counts wood and asks for a finished drop-off before counting carried and map resources (docs/03
+"Implementation (M6-SH3)" B). Pre-trace at 72,000 (`Stress/DrawReachPreTraceTests`): p0 (40 gold, 13,580 wood) can pay for a
+Crossbowman and p2 (50 gold) for a Crossbowman or a Laborer, by the old and the new rule alike, and neither sends a Train from
+48,000: production waits for its pick (BUG-1890). After B the match is unchanged (no end by 144,000, same end hash
+381F5ED6CBDF4F93). Not a draw-rule fault any more; left open for BUG-1890's cure.
