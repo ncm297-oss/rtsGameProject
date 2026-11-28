@@ -147,6 +147,7 @@ public partial class DrawViewTest : Node
         DrawNotice notice = match.DrawNotice!;
         Check(notice.TextLabel != null && !notice.Shown, "live: no notice label, or it shows before the match is spent");
         await Halls(sim, (0, g.Width / 4, g.Height / 2), (1, g.Width * 3 / 4, g.Height / 2));
+        DropOffFor0(sim); // M6-SH3: the worker player 0 gets below needs a drop-off of its own to count the mines' gold
         // Player 1's lone soldier, mid-map and far from both halls: the victim of the kills that restart the clock.
         Spawn(sim, 1, Unit(w, 1, UnitSlot.Line), g.Width / 2, g.Height * 3 / 4);
         await Ticks(sim, 2);
@@ -293,6 +294,7 @@ public partial class DrawViewTest : Node
         World w = sim.World;
         NavGrid g = w.NavGrid;
         await Halls(sim, (0, g.Width / 4, g.Height / 2), (1, g.Width / 2, g.Height / 5), (2, g.Width * 3 / 4, g.Height / 2));
+        DropOffFor0(sim); // M6-SH3: so the worker keeps player 0 able to train until it is knocked out
         Spawn(sim, 0, Unit(w, 0, UnitSlot.Worker), g.Width / 4, g.Height / 2 + 6);
         await Ticks(sim, 2);
         Check(w.CanStillTrain(0) && !w.MatchSpent, $"local out: player 0 can train {w.CanStillTrain(0)}, spent {w.MatchSpent}");
@@ -340,6 +342,7 @@ public partial class DrawViewTest : Node
         NavGrid g = w.NavGrid;
         Check(w.AreAllied(0, 1) && !w.AreAllied(0, 2), "teams: players 0 and 1 are not one team against 2");
         await Halls(sim, (0, g.Width / 4, g.Height / 2), (1, g.Width / 2, g.Height / 5), (2, g.Width * 3 / 4, g.Height / 2));
+        DropOffFor0(sim); // M6-SH3: so the worker keeps player 0 able to train until it is knocked out
         Spawn(sim, 0, Unit(w, 0, UnitSlot.Worker), g.Width / 4, g.Height / 2 + 6);
         await Ticks(sim, 2);
         await KnockOut(sim, killer: 2, victim: 0);
@@ -572,6 +575,20 @@ public partial class DrawViewTest : Node
     }
 
     private int Unit(World w, int player, UnitSlot slot) => StartBase.UnitOfSlot(_data, w.FactionOf(player), slot);
+
+    /// <summary>
+    /// M6-SH3 (the draw rule's reach, staging only): a finished drop-off (the faction's Camp-slot building) for player 0 beside
+    /// its hall, after <see cref="Halls"/>. Since M6-SH3 a seat's worker counts the gold left on the map only with a finished
+    /// drop-off of its own, and these scenes give player 0 a worker so that it can still train; with no worker the drop-off
+    /// changes nothing. It is not a unit-producing building, so it neither keeps the seat in the match nor is its hall.
+    /// </summary>
+    private void DropOffFor0(Simulation sim)
+    {
+        World w = sim.World;
+        NavGrid g = w.NavGrid;
+        int camp = StartBase.BuildingOfSlot(_data, w.FactionOf(0), BuildingSlot.Camp);
+        DefeatStaging.SpawnAt(sim, 0, camp, DefeatStaging.Anchor(w, 0, camp, g.Width / 4, g.Height / 2 - 8));
+    }
 
     private static void Spawn(Simulation sim, int player, int type, int x, int y)
     {

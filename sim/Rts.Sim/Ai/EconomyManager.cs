@@ -235,8 +235,9 @@ internal static class EconomyManager
     /// <c>Remaining</c>), had it dropped: the node is gone (a Gather to a live node never leaves the worker Idle out of the
     /// node's sight). The node is marked so no worker is sent there again; the player's memory forgets it once it sees the
     /// ground. A node in sight is never marked: what it shows is the truth. The worker is flagged to try the other kind first.
-    /// M5-3 (BUG-0574): not judged (and not marked) while the player has no finished drop-off or the worker carries a full
-    /// load of the kind it was sent to: such a Gather goes to a drop-off first and ends at once with none, the node aside.
+    /// M5-3 (BUG-0574): not judged (and not marked) while the player has no finished drop-off, or (M6-SH3, BUG-1852: only when
+    /// it had none at the last think) the worker carries a full load of the kind it was sent to: such a Gather goes to a
+    /// drop-off first and ends at once with none, the node aside.
     /// </summary>
     private static void NoteDroppedGather(AiPlayer ai, int slot, int generation)
     {
@@ -246,7 +247,12 @@ internal static class EconomyManager
         EntityHandle node = board.GatherNode[slot];
         if (node.Generation == 0) return;
         board.GatherNode[slot] = default; // judged once
-        if (!ai.HasDropOff || FullLoad(ai, slot, board.GatherKind[slot])) return;
+        // M6-SH3 (BUG-1852): a worker carrying a full load of the kind is judged too when a finished drop-off stood at the think
+        // that sent the Gather and stands now. With one, a Gather that applied sends the load home (Moving or Returning at the
+        // next think, never Idle), so an Idle loaded worker had its Gather refused: the node is gone. Exempt, such a worker (Idle
+        // with a full load, Raraku seed 3) was sent to the same gone node every think from 33,800 on. With no drop-off at the
+        // last think the load went nowhere and the Gather ended at once, the node aside (BUG-0574): still not judged.
+        if (!ai.HasDropOff || !ai.HadDropOff && FullLoad(ai, slot, board.GatherKind[slot])) return;
         if (!ai.View.TryGetResource(node.Index, out SeenResource seen) || seen.Handle != node || seen.Remaining >= 0) return;
         if (board.NodeDropped[node.Index] == 0) board.NodeMarks++;
         board.NodeDropped[node.Index] = node.Generation;

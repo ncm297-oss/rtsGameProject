@@ -904,6 +904,10 @@ open S1 / S2. Retro below; open S3 / S4 listed there.)_
       drawn on a model's height. 14 of 30 building types are models; 400 figures with 60 building models 6.4 ms a
       frame alone (the same as boxes). **Not ticked:** the other 16 building types (every
       Whirlwind building, four Malazan, two Teblor) and the six capsules.
+      **M6-V31, 2026-11-27-0817:** all ten Whirlwind buildings are models: eight kit-built in the import tool (tents,
+      a pavilion, props; no pack file), the Supply Cache one stall cropped from the pack's market, the Lookout Tower
+      the pack's First Age timber tower under a cloth canopy. 24 of 30 building types are models; 400 figures with 60 building models 6.54 ms a frame alone (boxes 6.45; no type more than 0.15 ms over its box).
+      **Not ticked:** six building types (four Malazan, two Teblor) and the six capsules.
 - [ ] Real SFX and placeholder music; alerts with sound. (M6-V12, 2026-10-17-2344: **real SFX and the alerts are in**: 16 clips cut from
       the owner's Sonniss GDC 2026 bundle (`tools/audio/trim-wav.ps1` + `sfx-manifest.json`, LFS, docs/04 licensing rows) for 12 events
       (`SfxEvent`); world sounds only for what the local player sees on screen, at most 4 per 100 ms; attack alerts (`ViewApi/AttackAlerts`

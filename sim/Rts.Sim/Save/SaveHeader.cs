@@ -138,7 +138,9 @@ internal static class SaveHeader
     /// (<see cref="SaveError.DataMismatch"/> against <paramref name="data"/>), then every field, each in its range
     /// (<see cref="SaveError.InvalidHeader"/>, an AI seat whose faction has no <c>ai.json</c> too, a team outside 0 to
     /// <see cref="PlayerSeat.MaxTeam"/>, a starting-resources preset the data lacks, and a map id the config refuses; M7-1:
-    /// only <paramref name="version"/> 10 reaches here, whose map id is always there, <c>""</c> for a generated map). On success
+    /// only <paramref name="version"/> = <see cref="SaveFormat.CurrentVersion"/> reaches here (every older format is refused
+    /// <see cref="SaveError.FormatVersionMismatch"/> before; M6-SH3, BUG-1862), whose map id is always there, <c>""</c> for a
+    /// generated map). On success
     /// <paramref name="config"/> is the match's config and <paramref name="tick"/> the tick number the save was made at.
     /// </summary>
     public static SaveError TryRead(SaveReader r, GameData data, int version, out SimConfig? config, out int tick)

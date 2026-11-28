@@ -177,7 +177,7 @@ internal sealed partial class PlayerLedger
 
     /// <summary>
     /// A finished building of <paramref name="type"/> in <paramref name="slot"/> starts (+1: spawned finished or completed)
-    /// or stops (-1: freed) counting for <paramref name="player"/> (M3-6), and in <see cref="ProductionBuildings"/> when its type trains units (M5-4e). Derived from the building store, so not hashed.
+    /// or stops (-1: freed) counting for <paramref name="player"/> (M3-6), and in <see cref="ProductionBuildings"/> when its type trains units (M5-4e), in <see cref="FinishedDropOffs"/> when it takes deliveries (M6-SH3). Derived from the building store, so not hashed.
     /// </summary>
     public void AddFinished(int player, int type, BuildingSlot slot, int delta)
     {
@@ -185,6 +185,7 @@ internal sealed partial class PlayerLedger
         _finishedOfType[player * _types + type] += delta;
         _finishedInSlot[player * SlotCount + (int)slot] += delta;
         if (_trainsUnits[type]) ProductionBuildings[player] += delta;
+        if (_dropOffType[type]) FinishedDropOffs[player] += delta; // M6-SH3: the draw rule's reach (PlayerLedger.Draw.cs)
     }
 
     /// <summary>How many finished buildings of <paramref name="type"/> <paramref name="player"/> owns; 0 for out-of-range ids.</summary>

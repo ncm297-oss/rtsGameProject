@@ -51,7 +51,7 @@ public class StandardPresetPinQaTests
         new object[] { "stealth_beside_detector", 0x1C2D174FA705C278UL },
         new object[] { "construction_and_queue", 0x69A2FE2D3AC47B7CUL }, // M7-3b (tech / ability ids by faction order; outcomes unchanged): was 0x5808EE95CC66BA62
         new object[] { "felled_tree_and_razed_building", 0xDB9C008D7897FE1EUL }, // M6-S10 (the Keep-corner cure, gatherOverlap 0.5): was 0x4D9635AD3817048C
-        new object[] { "defeated_seat", 0x7D61B9F483FC4098UL },
+        new object[] { "defeated_seat", 0x42A0EC44FD5ECB45UL }, // M6-SH3 B (the draw rule counts wood: from tick 247 the Whirlwind seat's 35 gold and 0 wood pay for no unit, so the match is spent and the clock runs, hashed; never drawn in the 3,000 ticks): was 0x7D61B9F483FC4098
     };
 
     [Theory]

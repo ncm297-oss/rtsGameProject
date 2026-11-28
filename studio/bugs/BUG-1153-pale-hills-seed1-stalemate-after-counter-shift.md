@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Severity | **S3** since M5-9b (the terminal rule's outcome (b): the row ends at 48,858, inside the 72,000 the rule sets). Was S2 (a pinned criterion row stops ending; QA focus 6 of M5-9a; since round 2 it ended at 68,664, outside 36,000) |
-| Status | open, S3 (M5-9b 2026-11-09-0426, outcome (b): the three 1v1 Pale Hills rows bound at 72,000, Producer decision 2026-11-08-1556; a hardening item: a slow end game on one map) |
+| Status | fixed (closed by measurement, M6-SH3) |
 | Found | 2026-11-08-1316, task M5-9a (developer, rule 43 re-measure) |
 | System | AI economy and waves (BUG-1068's gold exhaustion), surfaced by the counter shift |
-| Fixed by | |
+| Fixed by | measurement (M6-SH3, session 2026-11-27-0817): Pale Hills seed 1 Normal v Normal ends at 26,594 (seat 1), inside 36,000 |
 
 ## Repro
 1. On the M5-9a branch: `dotnet test sim/Rts.Sim.Tests --filter "FullyQualifiedName~MatchCriterionTests.EachOtherMap_NormalVersusNormal_EndsWithAWinnerInsideItsBound_WithoutErrors&DisplayName~pale_hills"`
@@ -158,3 +158,8 @@ green (ends inside 72,000, silent-seat oracle passes). The developer's fix round
   (`FourAiSeats_OnPaleHills_Seed1_KnownStall`).
 - Two other pinned rows stop ending inside 72,000 (rule 43, a finding: **BUG-1157**): Pale Hills seed 2 (79,504, decided by
   40:00) and seed 5 (96,321), both skipped with the measurement.
+
+## M6-SH3 (2026-11-27-0817): closed by measurement
+`MatchCriterionTests`' Pale Hills row (seed 1, two Normal seats, every check on) ends at **26,594 (22:09), seat 1**, every
+check clean, on the M6-SH3 tree (as on M6-S14's; M5-9b 48,858; the round-2 68,664 this bug was filed at), inside the 36,000
+it was first bound to. The row's bound stays 72,000 (the Producer's 2026-11-08 decision; no bound moved in M6-SH3).

@@ -122,7 +122,10 @@ public class WorkerCarryTests(ITestOutputHelper output)
     /// <c>NoteDroppedGather</c>) reads the worker's own carry. An idle Teblor worker (carry 15) whose last AI Gather went to a
     /// gold mine out of its seat's sight: holding the rules' full load (10, below its own 15) it is not full, so the Gather is
     /// judged dropped and the mine marked; holding 15 it is full, so the Gather is read as one that went home to deposit
-    /// first, and the mine is not marked. On the rules' value alone both loads would be full.
+    /// first, and the mine is not marked. On the rules' value alone both loads would be full. M6-SH3 (BUG-1852): the full-load
+    /// test now guards only a Gather sent while the seat had no finished drop-off (with one standing, a full load that went
+    /// home is never Idle at the next think), so the seat's Town Hall is taken away before the first think and stands again,
+    /// finished, before the second.
     /// </summary>
     [Theory]
     [InlineData(false)]
@@ -134,7 +137,15 @@ public class WorkerCarryTests(ITestOutputHelper output)
         Simulation sim = AiScenes.Flat(seats, d);
         World w = sim.World;
         AiPlayer ai = sim.AiOf(0)!;
-        sim.Tick(); // tick 0: the first think
+        int hallType = -1, hallCell = -1;
+        for (int k = 0; k < w.Buildings.Capacity; k++)
+            if (w.Buildings.Alive[k] && w.Buildings.Owner[k] == 0 && d.Buildings[w.Buildings.TypeId[k]].DropOff)
+            {
+                (hallType, hallCell) = (w.Buildings.TypeId[k], w.Buildings.Cell[k]);
+                Assert.True(w.Buildings.Free(w.Buildings.HandleOf(k)));
+            }
+        Assert.True(hallType >= 0, "precondition: the seat's drop-off");
+        sim.Tick(); // tick 0: the first think, with no drop-off
         int gold = -1, s = -1;
         while (ai.View.NextResource(ref s, out SeenResource n))
             if (n.Remaining < 0 && d.Resources[n.TypeId].Resource == ResourceKind.Gold) { gold = s; break; }
@@ -152,6 +163,7 @@ public class WorkerCarryTests(ITestOutputHelper output)
         output.WriteLine($"stopped by tick {sim.TickNumber}; thinks every {ai.ThinkTicks}");
         Assert.Equal(UnitState.Idle, u.State[worker]);
         Assert.True(sim.TickNumber < ai.ThinkTicks, "precondition: the second think is still to come");
+        Assert.True(w.Buildings.Spawn(0, hallType, hallCell, out _)); // the drop-off stands again before the second think
         // As if the AI's last order to it were a Gather of that mine (MarkOrdered), now applied; the load is set.
         ai.Board.UnitGeneration[worker] = u.Generation[worker];
         ai.Board.GatherKind[worker] = EconomyManager.Gold;

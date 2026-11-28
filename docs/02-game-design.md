@@ -556,7 +556,8 @@ match's draw clock runs, its countdown line sits at the top centre under the ale
   pay yet (army production spends only what is above its cost). A lost expansion is not rebuilt yet (built in M5-4d
   slice 2; [03 Implementation (M5-4d slice 2)](03-technical-design.md#implementation-m5-4d-slice-2)). A side left with
   fewer workers (alive and in training) than `rules.json` `ai.minWorkers` (4) trains one a think at a finished building
-  that trains workers, when it has the gold for one and, with any worker left, the population room, whatever its build
+  that trains workers, when it has the gold for one and, with any worker left, the population room (counting the workers
+  already waiting in its queues, M6-SH3, BUG-1857, so it never pays for a worker that cannot start), whatever its build
   order says and even while its base is under attack; with no gold for one it sends nothing (M6-SH2, BUG-1465: a beaten
   side used to sit on its gold with a finished Town Hall for good; [03 Implementation (M6-SH2)](03-technical-design.md#implementation-m6-sh2);
   the floor since M6-S14, BUG-1660: a side cut down to one worker never trained another while it lived;
@@ -570,7 +571,9 @@ match's draw clock runs, its countdown line sits at the top centre under the ale
   M6-S12, BUG-1461, Producer decision 2026-11-16; [03 Implementation (M6-S12)](03-technical-design.md#implementation-m6-s12)).
   The point it parks at is kept while it is still such a point and within `ai.rallyReach` of the first point, so an enemy
   building glimpsed one moment and gone the next no longer moves the army back and forth; a target elsewhere still moves
-  it (M6-S14, BUG-1558; [03 Implementation (M6-S14)](03-technical-design.md#implementation-m6-s14)).
+  it (M6-S14, BUG-1558; [03 Implementation (M6-S14)](03-technical-design.md#implementation-m6-s14)). The last such point
+  is forgotten when the Town Hall it measures from changes (a hall lost, another building taken as its base), so the army
+  never parks on the new hall's doorstep by a point laid for the old one (M6-SH3, Q7).
 - The AI keeps about `rules.json` `ai.goldShare` (0.6) of its gatherers on gold, leaning toward what its build order is
   saving for. An idle worker goes to the known gold mine or forest nearest it. When no worker is idle and the split is off,
   one gatherer a think moves to the other resource, and it goes to the known node of that resource nearest the drop-off it
@@ -701,11 +704,16 @@ match's draw clock runs, its countdown line sits at the top centre under the ale
    friendly-fire death (a unit killed by its own player's or an ally's splash, Cusser or other area effect) is a loss for
    its owner and **nobody's kill** (Producer decision 2026-10-27, BUG-1044; built in M6-S5).
 
-   **A spent match ends in a draw** (owner decision 2026-11-25, design in docs/01's 2026-11-25-1437 row; built in M6-S13).
-   A match is *spent* when at least two sides that ever built are still in, and no player still in can ever train another
-   unit: it has no unit waiting in a production queue, and its banked gold, plus the gold its units are carrying, plus (only
-   if it still has a worker) all the gold left in every mine on the map, is less than the gold price of its faction's
-   cheapest unit, or it has neither a finished unit-producing hall nor a worker. Wood does not count. When a match has been
+   **A spent match ends in a draw** (owner decision 2026-11-25, design in docs/01's 2026-11-25-1437 row; built in M6-S13;
+   "can still train" made exact in M6-SH3, docs/01's second 2026-11-27 row). A match is *spent* when at least two sides that
+   ever built are still in, and no player still in can still train a unit. A player can still train when a unit of theirs
+   is being trained, or one is waiting in a production queue and there is population room for it now (a paid unit stuck at
+   the population cap does not count by itself); or when they can produce (a finished unit-producing hall, or a worker) and
+   can pay for at least one unit type of their faction, in gold **and** in wood, that is not at its unit limit. What they
+   can pay with is their bank, plus, **only if they have a worker and a finished drop-off building of their own** (a site
+   does not count, nor does an ally's), what their units are carrying and what is left of it on the map. Population room is
+   not asked here: a rich player at the population cap is not spent (they can build houses or lose units). A faction with a
+   unit that costs nothing can always train. When a match has been
    spent for **5 game minutes** in a row (`rules.json` `draw.afterSeconds` 300), it ends in a **draw**: nobody is
    defeated by it, no building collapses, the match is simply over (and play goes on behind the result, as after a win).
    The 5 minutes start again from zero whenever a unit dies (a summoned unit's death or expiry does not count), whenever a
