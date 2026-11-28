@@ -53,6 +53,9 @@ namespace Rts.Game.Tests;
 /// first eight keep their spots), the site rows take a second column after eight, the fallback sim places twelve a row;
 /// the Whirlwind pass has no box type (every type is a model), so the "type without a model stays a box" row runs in the
 /// other passes and at least one pass must run it.
+/// M6-V32 (all 30 types models): no pass has a box type, so that row runs once more in a match whose model folder is empty
+/// (every type without a model file); the seven new or changed types' triangles per tile are pinned; a site's Age II halls
+/// come before its required buildings, and a spawn the sim refuses (the never-seal rule) tries the next open anchor.
 /// Windowed with <c>-- --shots &lt;dir&gt;</c> it also saves the pictures of criterion 7 (default zoom and close up, two and
 /// four player colours, a Laborer and a Heavy Infantry beside each building, a site, and the remembered models under the fog).
 /// </remarks>
@@ -93,7 +96,9 @@ public partial class BuildingModelTest : Node
         ["teblor_woodcutters_lodge"] = new() { ["team"] = 65, ["Wood"] = 1234, ["Wood_Light"] = 911 },
         ["teblor_war_lodge"] = new() { ["team"] = 272, ["Stone"] = 248, ["Stone_Light"] = 64, ["Wood"] = 777, ["Wood_Light"] = 76, ["Gold"] = 176, ["Metal_Light"] = 108, ["White"] = 158 },
         ["teblor_javelin_ground"] = new() { ["team"] = 286, ["Wood"] = 1218, ["Wood_Light"] = 319, ["White"] = 770, ["Red"] = 84 },
-        ["teblor_stone_cairn"] = new() { ["team"] = 59, ["Wood"] = 336, ["Wood_Light"] = 37 },
+        // M6-V32: the Cairn rebuilt as stacked rocks (Resource_Rock_1 and kit stones; the team tile: its cloth collar, cap and
+        // banners). M6-V30's tower pinned team 59, Wood 336, Wood_Light 37.
+        ["teblor_stone_cairn"] = new() { ["team"] = 35, ["Stone"] = 415, ["stone2"] = 28, ["pole"] = 20 },
         ["teblor_bloodwood_carver"] = new() { ["team"] = 528, ["Wood"] = 1147, ["Wood_Light"] = 720, ["Yellow"] = 160 },
         ["teblor_shamans_circle"] = new() { ["team"] = 536, ["Wood"] = 2256, ["Wood_Light"] = 44 },
         // M6-V31: the Whirlwind's kit-bashed tents (the team tile: the cloth parts) and its two pack types.
@@ -107,6 +112,14 @@ public partial class BuildingModelTest : Node
         ["whirlwind_shrine"] = new() { ["team"] = 40, ["stone"] = 18, ["spire"] = 48, ["pole"] = 40 },
         ["whirlwind_supply_cache"] = new() { ["team"] = 312, ["Green"] = 40, ["Yellow"] = 160, ["Red"] = 120, ["Wood"] = 92, ["Wood_Light"] = 10 },
         ["whirlwind_lookout_tower"] = new() { ["team"] = 57, ["Wood"] = 721, ["Wood_Light"] = 150, ["pole"] = 32 },
+        // M6-V32: the last six box types (pack sources with kit parts; the team tile: the roofs, the Armory's shields, the
+        // Cadre Tower's banners, the Teblor roofs picked by teamFaces).
+        ["malazan_wickan_corral"] = new() { ["team"] = 1151, ["Stone"] = 165, ["Stone_Light"] = 11, ["Walls"] = 12, ["Wood"] = 865, ["Wood_Light"] = 71, ["earth"] = 20, ["hay"] = 40, ["water"] = 10 },
+        ["malazan_armory"] = new() { ["team"] = 1491, ["Stone"] = 262, ["Stone_Light"] = 406, ["Walls"] = 16, ["Wood"] = 484, ["Wood_Light"] = 33, ["steel"] = 50, ["bronze"] = 30 },
+        ["malazan_cadre_tower"] = new() { ["team"] = 119, ["Stone"] = 101, ["Walls"] = 132, ["pole"] = 20 },
+        ["malazan_engineers_yard"] = new() { ["team"] = 657, ["Stone"] = 24, ["Walls"] = 8, ["Wood"] = 382, ["Wood_Light"] = 33, ["timber"] = 176, ["log"] = 140, ["rope"] = 8 },
+        ["teblor_stables"] = new() { ["team"] = 36, ["Wood"] = 154, ["Wood_Light"] = 28, ["post"] = 72, ["rail"] = 68, ["hide"] = 16, ["dark"] = 16, ["water"] = 10, ["hay"] = 10, ["earth"] = 10 },
+        ["teblor_breakers_hall"] = new() { ["team"] = 284, ["Stone"] = 22, ["Wood"] = 904, ["Wood_Light"] = 86, ["boulder"] = 68, ["maul"] = 10, ["iron"] = 12 },
     };
 
     private readonly List<string> _failures = new();
@@ -144,6 +157,9 @@ public partial class BuildingModelTest : Node
             Check(_entries.Count > 0, "the manifest lists no building");
             FileRows(data);
             foreach (int faction in ManifestFactions(data)) await MatchRows(data, faction);
+            // M6-V32: every type of every faction has a model now, so no pass has a box type; the row runs once more in a
+            // match whose model folder is empty, where every type is a type without a model file.
+            if (_boxRows == 0) await BoxTypeRow(data);
             Check(_boxRows > 0, "no faction's pass drew a type without a model as its box");
             FallbackRows(data);
             if (_shots != null)
@@ -330,6 +346,31 @@ public partial class BuildingModelTest : Node
         return -1;
     }
 
+    // M6-V32: the "type without a model stays a box" row of MatchRows, in a real match of the first manifest faction whose
+    // model folder holds no file (BuildingModels.ModelRoot at an empty scratch folder): its town hall is drawn as its box.
+    private async Task BoxTypeRow(GameData data)
+    {
+        int faction = ManifestFactions(data)[0];
+        _faction = faction;
+        string key = data.Factions[faction].Key;
+        BuildingModels.ModelRoot = Path.Combine(_scratch, "no-models").Replace('\\', '/') + "/";
+        StartMatch(data, "--players", "3", "--faction", "1", key, "--faction", "2", key, "--faction", "3", key, "--resources", "high",
+            "--zoom", CameraLimits.DefaultZoom.ToString(CultureInfo.InvariantCulture));
+        int boxType = BuildingOf(data, faction, BuildingSlot.TownHall);
+        int boxSlot = Spawn(0, boxType, StartLayout.Block(W.NavGrid, 1, west: true, 1f)[0] + new NVector2(-6f, 0f));
+        _views.Sync(W);
+        await Frames(1);
+        GD.Print($"  box-type row ({key}, no model files): {data.Buildings[boxType].Key} drawn as a model {boxSlot >= 0 && _views.ShownAsModel(boxSlot)}");
+        if (Check(boxSlot >= 0, $"no {key} type without a model to spawn"))
+        {
+            Check(_views.IsShown(boxSlot) && !_views.ShownAsModel(boxSlot) && _views.BoxOf(boxSlot).Visible && _views.ModelOf(boxSlot) == null,
+                $"{data.Buildings[boxType].Key} (no model file): not its box");
+            _boxRows++;
+        }
+        await EndMatch();
+        BuildingModels.ModelRoot = "res://assets/models/";
+    }
+
     // The faction of the match the rows run in (M6-V30), and the pictures' name prefix.
     private int _faction;
     private string _prefix = "";
@@ -388,14 +429,22 @@ public partial class BuildingModelTest : Node
             // can no longer pay twice for is built by player 1 (seen through a player-0 house, as player 2's are).
             BuildingDef cost = data.Buildings[type];
             if (pl == 0 && (W.Gold[0] < 2 * cost.CostGold || W.Wood[0] < 2 * cost.CostWood)) pl = 1;
+            // M6-V32: Age II (and with it the player's town hall and two halls) before the required buildings: player 1 first
+            // builds in the Teblor pass at the Stables, whose War Lodge its Age II halls hold.
+            if (pl != 0) AgeTwo(data, pl, west + new NVector2(-30f, 110f));
             // M6-V31: and the buildings the type requires (the Horse Lines need a Raider Camp), spawned for the builder.
             foreach (int need in cost.RequiresBuildings)
             {
                 bool have = false;
                 for (int i = 0; i < B.Capacity && !have; i++) have = B.Alive[i] && B.Owner[i] == pl && !B.UnderConstruction[i] && B.TypeId[i] == need;
-                if (!have) Check(Spawn(pl, need, west + new NVector2(-30f, 135f)) >= 0, $"{cost.Key}: its prerequisite {data.Buildings[need].Key} not spawned for player {pl}");
+                if (have) continue;
+                // M6-V32: the first spot that takes it; on seed 1's map the first (z +135) is past the south edge for the west
+                // block, so two spots west of the Age II halls follow.
+                bool placed = false;
+                foreach (NVector2 spot in new NVector2[] { new(-30f, 135f), new(-60f, 110f), new(-60f, 86f) })
+                    if (!placed) placed = Spawn(pl, need, west + spot) >= 0;
+                Check(placed, $"{cost.Key}: its prerequisite {data.Buildings[need].Key} not spawned for player {pl} (defeated {W.IsDefeated(pl)})");
             }
-            if (pl != 0) AgeTwo(data, pl, west + new NVector2(-30f, 110f));
             // M6-V31: after RowLength types a second column 24 m east (the eighth row met the Age II halls' spot).
             int k = Array.IndexOf(types, type);
             SiteRow(data, type, west + new NVector2(k / RowLength * 24f, 26f + 12f * (k % RowLength)), pl);
@@ -414,7 +463,7 @@ public partial class BuildingModelTest : Node
     // unit to start a fight with the builders).
     private void Watch(GameData data, BuildingDef def, NVector2 c) =>
         Check(Spawn(0, BuildingOf(data, _faction, BuildingSlot.House), c + new NVector2(def.FootprintWidth * MapConstants.CellSize / 2f + 4f, 0f)) >= 0,
-            $"{def.Key}: no watcher house beside {c}");
+            $"{def.Key}: no watcher house beside {c} (player 0 defeated {W.IsDefeated(0)})");
 
     // M6-V30: how far outside a footprint's front edge a builder is spawned: 0.8 m for a 0.4 m worker (the Malazan rows as
     // before), more for a wider one (a 0.75 m Teblor Gatherer at 0.8 m stood in the footprint: "UnitInTheWay").
@@ -938,21 +987,30 @@ public partial class BuildingModelTest : Node
     }
 
     // A building of `type` for `player` with its anchor at the first open spot near `near`; its slot or -1.
+    // M6-V32: an anchor the sim refuses (the never-seal rule: with thirty model types the rows stand closer) is skipped and
+    // the next open one tried, at most eight; a spawn taken at its first anchor is placed exactly as before.
     private int Spawn(int player, int type, NVector2 near)
     {
         BuildingDef def = W.Data.Buildings[type];
-        int anchor = OpenAnchor(def, near);
-        if (anchor < 0) return -1;
-        _sim.Enqueue(Command.SpawnBuilding(player, type, PlacementGhost.AnchorPoint(W.NavGrid, anchor)));
-        _sim.Tick();
-        _sim.Tick(); // a command applies at the start of the tick after the one it was queued for
-        int slot = B.SlotAt(anchor % W.NavGrid.Width, anchor / W.NavGrid.Width);
-        return slot >= 0 && B.Cell[slot] == anchor && B.TypeId[slot] == type ? slot : -1;
+        var refused = new HashSet<int>();
+        for (int tries = 0; tries < 8; tries++)
+        {
+            int anchor = OpenAnchor(def, near, skip: refused);
+            if (anchor < 0) return -1;
+            _sim.Enqueue(Command.SpawnBuilding(player, type, PlacementGhost.AnchorPoint(W.NavGrid, anchor)));
+            _sim.Tick();
+            _sim.Tick(); // a command applies at the start of the tick after the one it was queued for
+            int slot = B.SlotAt(anchor % W.NavGrid.Width, anchor / W.NavGrid.Width);
+            if (slot >= 0 && B.Cell[slot] == anchor && B.TypeId[slot] == type) return slot;
+            if (slot >= 0) return -1; // something else stands there now: not a refusal to step past
+            refused.Add(anchor);
+        }
+        return -1;
     }
 
     // M6-V30: `clearOfUnits` also skips an anchor with a live unit on or within 1.5 m of the footprint (a site row's builders
     // and explorers stay where they stood; a 0.75 m Teblor Gatherer left by the row before made the next site "UnitInTheWay").
-    private int OpenAnchor(BuildingDef def, NVector2 near, bool clearOfUnits = false)
+    private int OpenAnchor(BuildingDef def, NVector2 near, bool clearOfUnits = false, HashSet<int>? skip = null)
     {
         int type = W.Data.FindBuilding(def.Key);
         for (int r = 0; r <= 8; r++)
@@ -964,7 +1022,7 @@ public partial class BuildingModelTest : Node
                     if (!W.NavGrid.WorldToCell(p, out int cx, out int cy)) continue;
                     int a = cy * W.NavGrid.Width + cx;
                     if (cx < 1 || cy < 1 || cx + def.FootprintWidth >= W.NavGrid.Width - 1 || cy + def.FootprintHeight >= W.NavGrid.Height - 1) continue;
-                    if (!B.Fits(type, a) || !FitsWithMargin(def, cx, cy)) continue;
+                    if ((skip != null && skip.Contains(a)) || !B.Fits(type, a) || !FitsWithMargin(def, cx, cy)) continue;
                     if (clearOfUnits && UnitNear(cx * MapConstants.CellSize, cy * MapConstants.CellSize,
                             (cx + def.FootprintWidth) * MapConstants.CellSize, (cy + def.FootprintHeight) * MapConstants.CellSize)) continue;
                     return a;

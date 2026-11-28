@@ -29,7 +29,8 @@ namespace Rts.Game.Tests;
 /// has room) and at the anchor nearest each map corner: its base on the ground, its height the fitted height x scale within
 /// 1 cm, its plan FitMargin inside the footprint, every corner inside the map.</item>
 /// <item>(C) A site finishing under the camera: a Gatherer builds each Teblor model type with the camera on it; on the first
-/// sync after the tick the sim finishes it, the model is shown at its scaled height on the ground (no box, no site).</item>
+/// sync after the tick the sim finishes it, the model is shown at its scaled height on the ground (no box, no site). M6-V32:
+/// a type's required buildings (the Stables' War Lodge) are spawned for the builder first.</item>
 /// <item>(G) The remembered model of a razed Teblor building in fog: seen by player 0, left, razed by player 2 out of sight:
 /// player 0 still draws its ghost model at the scaled height on the ground, the ghost's pick ray reaches the scaled top.</item>
 /// <item>(S) Save / load with Teblor models standing: every building drawn after the load as before (model, transform).</item>
@@ -288,6 +289,14 @@ public partial class QaM6V30Test : Node
                     for (int t = 0; t < 4000 && !W.HasTech(0, age); t++) _sim.Tick();
                 }
                 Check(W.HasTech(0, age), $"(C) {def.Key}: Age II not researched");
+            }
+            // M6-V32: and the buildings the type requires (the Stables & Kennels, a model now, need a War Lodge), spawned where
+            // the Age II halls stand in the aged types' matches.
+            foreach (int need in def.RequiresBuildings)
+            {
+                bool have = false;
+                for (int i = 0; i < B.Capacity && !have; i++) have = B.Alive[i] && B.Owner[i] == 0 && !B.UnderConstruction[i] && B.TypeId[i] == need;
+                if (!have) Check(Spawn(0, need, block + new NVector2(-16f, 60f)) >= 0, $"(C) {def.Key}: its required {_data.Buildings[need].Key} not spawned");
             }
             await SiteRow(type, block + new NVector2(-40f, 0f), gatherer);
             await EndMatch();

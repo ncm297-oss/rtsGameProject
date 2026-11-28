@@ -25,8 +25,10 @@ namespace Rts.Game.Tests;
 /// <item>Terraces: every anchor of each model type on the match map whose footprint borders another level or a ramp: the
 /// ground under the fitted model's whole plan is the height its base stands at (no part sunk or floating).</item>
 /// <item>Slot reuse: a model building destroyed and its slot taken by a box type before the view syncs draws the box (model
-/// hidden, bar over the box); the reverse draws the model (box hidden, bar over the model).</item>
-/// <item>A site of each model type razed while a site: its box until then, nothing after, no model.</item>
+/// hidden, bar over the box); the reverse draws the model (box hidden, bar over the model). M6-V32: with every type a model,
+/// the slot is taken by a site (always its box) of a model type.</item>
+/// <item>A site of each model type razed while a site: its box until then, nothing after, no model. M6-V32: a site player 0
+/// can no longer pay for is built by player 1.</item>
 /// <item>Zero allocation with remembered models drawn (the developer's row ran with none drawn).</item>
 /// <item>The bar on screen at the closest (BUG-1631, fixed in M6-VH9) and farthest zoom, the camera focused on the building.</item>
 /// <item>Picking (BUG-1630, fixed in M6-VH9): a click on any pixel the fitted model covers, at the closest, default and farthest zoom, selects
@@ -200,6 +202,14 @@ public partial class QaM6V26Test : Node
         // faction check, and the view draws a type by its own file whoever owns it).
         for (int t = 0; t < data.Buildings.Length && boxType < 0; t++)
             if (!_views.Models!.Has(t) && data.Buildings[t].FootprintWidth <= 3) boxType = t;
+        // M6-V32: every type of every faction is a model: the freed slot is then taken by a site (always drawn as its box) of
+        // the first model type of a 3 x 3 footprint or less.
+        bool asSite = boxType < 0;
+        if (asSite)
+        {
+            int k = Array.FindIndex(types, t => data.Buildings[t].FootprintWidth <= 3 && data.Buildings[t].RequiresTechs.Length == 0 && data.Buildings[t].RequiresBuildings.Length == 0);
+            boxType = k >= 0 ? types[k] : -1;
+        }
         if (!Check(boxType >= 0, "reuse: no box type")) return;
         NVector2 near = StartLayout.Block(W.NavGrid, 1, west: true, 1f)[0];
         int type = types[0];
@@ -208,8 +218,8 @@ public partial class QaM6V26Test : Node
         _views.Sync(W);
         Check(_views.ShownAsModel(slot), "reuse: the model building not drawn as its model");
         Raze(slot);
-        int reused = Spawn(0, boxType, near + new NVector2(0f, 20f));
-        if (!Check(reused == slot, $"reuse: the box type took slot {reused}, not the freed {slot}")) return;
+        int reused = asSite ? PlaceSite(data, boxType, near + new NVector2(0f, 20f)) : Spawn(0, boxType, near + new NVector2(0f, 20f));
+        if (!Check(reused == slot, $"reuse: the box {(asSite ? "site" : "type")} took slot {reused}, not the freed {slot}")) return;
         _views.Sync(W);
         await Frames(1);
         MeshInstance3D? m = _views.ModelOf(slot);
@@ -226,9 +236,39 @@ public partial class QaM6V26Test : Node
         Check(_views.ShownAsModel(slot) && m != null && m.Visible && !_views.BoxOf(slot).Visible,
             $"reuse box -> model: model visible {m?.Visible}, box visible {_views.BoxOf(slot).Visible}");
         Check(_views.BarY(slot) > _views.Models!.Top(type), $"reuse box -> model: bar at {_views.BarY(slot)} m under the model's top {_views.Models.Top(type)} m");
-        GD.Print($"  reuse: slot {slot} model -> {data.Buildings[boxType].Key} box -> model, each drawn right");
+        GD.Print($"  reuse: slot {slot} model -> {data.Buildings[boxType].Key} {(asSite ? "site " : "")}box -> model, each drawn right");
         Raze(slot);
         _views.Sync(W);
+    }
+
+    // M6-V32: a site of `type` for player 0 near `near` (a Laborer spawned before it builds; its sight explores the footprint),
+    // its builder gone once it is placed so it stays a site. The slot it took, or -1.
+    private int PlaceSite(GameData data, int type, NVector2 near)
+    {
+        BuildingDef def = data.Buildings[type];
+        int anchor = OpenAnchor(def, near);
+        if (anchor < 0) return -1;
+        int laborer = UnitOf(data, UnitSlot.Worker);
+        NVector2 at = StartBase.FootprintCenter(W.NavGrid, def, anchor) + new NVector2(0f, def.FootprintHeight * MapConstants.CellSize / 2f + 1f + data.Units[laborer].Radius);
+        _sim.Enqueue(Command.SpawnUnit(0, laborer, at));
+        _sim.Tick();
+        _sim.Tick();
+        int builder = -1;
+        for (int i = 0; i < W.Units.Capacity && builder < 0; i++)
+            if (W.Units.Alive[i] && W.Units.TypeId[i] == laborer && W.Units.Owner[i] == 0 && NVector2.Distance(W.Units.Position[i], at) < 1.5f) builder = i;
+        if (builder < 0) return -1;
+        for (int t = 0; t < 10; t++) _sim.Tick();
+        _sim.Enqueue(Command.Build(0, new EntityHandle(builder, W.Units.Generation[builder]), type, PlacementGhost.AnchorPoint(W.NavGrid, anchor)));
+        int site = -1;
+        for (int t = 0; t < 400 && site < 0; t++)
+        {
+            _sim.Tick();
+            int s = B.SlotAt(anchor % W.NavGrid.Width, anchor / W.NavGrid.Width);
+            if (s >= 0 && B.UnderConstruction[s]) site = s;
+        }
+        W.Units.Free(new EntityHandle(builder, W.Units.Generation[builder])); // staging: the builder goes so the site stays a site
+        _sim.Tick();
+        return site;
     }
 
     // A site of each model type destroyed by attack while still a site: drawn as the rising box until then, nothing after,
@@ -248,6 +288,10 @@ public partial class QaM6V26Test : Node
         {
             BuildingDef def = data.Buildings[type];
             int pl = def.RequiresTechs.Contains(age) ? 1 : 0;
+            // M6-V32: ten model types a faction (and the reuse row's site) outrun player 0's stock: a site player 0 can no longer
+            // pay for is built by player 1, seen through a player-0 Laborer as its Age II sites are (BuildingModelTest's rule;
+            // not player 2, whose infantry razes the sites).
+            if (pl == 0 && (W.Gold[0] < def.CostGold || W.Wood[0] < def.CostWood)) pl = 1;
             int anchor = OpenAnchor(def, near);
             near += new NVector2(16f, 0f);
             if (types.Length > 6 && Array.IndexOf(types, type) == 5) near += new NVector2(-96f, 20f); // M6-V30: wrap after six

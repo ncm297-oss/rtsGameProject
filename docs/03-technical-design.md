@@ -5317,6 +5317,97 @@ they are. 24 of 30 building types are models.
   4. **The Supply Cache is one stall cropped from `Market_FirstAge_Level2`** (`keep`, new): the whole market on 2 x 2 is
      1.0-1.2 m tall. Recommendation: keep.
 
+### Implementation (M6-V32)
+
+The last six box types as models and the Stone Cairn as stacked rocks: **all 30 building types are models** (docs/04
+"Building models, as built (M6-V32)": the picks, triangles, sizes, palette, the luminance table). Tooling (two bug fixes), the
+manifest, the seven model files, view tests and docs; no sim, `ViewApi`, data, save or replay format changed, and no file
+under `game/scripts/`: each model is one surface, one `team` material and one atlas found by id, so the fit, picking, the bar
+and the Cairn's shot height take them as they are.
+
+- **BUG-1911 (`tools/art/build_building.py` `check_kit`, its own commit).** A part's size, `at` or `rotate` number that is
+  not finite (`NaN`, `Infinity`: `json.load` reads both, every comparison with NaN is false, so the part passed every check
+  and vanished from the written model) or is a bool (Python's `true` is an int) is refused; so is a part key the builder does
+  not know (`turn` for `rotate` was ignored), `sides` not a whole number of at least 3, a `top` under 0 and an `axis` the
+  shape does not take. An entry with no `colours` map fails with its id and a sentence (was `KeyError: 'colours'`); a colour
+  or team role no kit part uses, on an entry with no source, reads "no kit part has role ..." (was "not in the source").
+  `tools/art/test-kit-errors.ps1` gains seven rows (nan, inf, rotnan, boolsize, unknownkey, nocolours, unusedcol; 18 in
+  all, PASS) and `tools/qa/kit-errors-extra.ps1` now wants a FAIL for its `typo` and `boolsize` cases and the new texts,
+  and exits 0 (KIT ERRORS EXTRA PASS). The real manifest's ten kit entries rebuilt byte for byte the same.
+- **BUG-1912 (`WhirlwindBuildingsTest`, its own commit).** The (P) row skips a type drawn as its box (its file missing or a
+  Git LFS pointer) with one FAIL line instead of reading its null model; the windowed `LUMA` row likewise. With the Archer
+  Camp's `.glb` replaced by its pointer text the scene threw a `NullReferenceException` in (P) and never ran (S), (F) or (3);
+  now it prints six FAIL lines for that type and runs every row after.
+- **The models:** seven `buildings` entries (six appended at the end of the list, so every earlier entry keeps its place;
+  the Cairn's replaced in place). Each is a pack file with kit parts: `keep` crops the Corral's farm to its barn and fence
+  (every furrow face lies under 0.052 units); the Stables and Breaker's Hall take `teamFaces` roofs as M6-V30's Teblor models;
+  the Cairn's cloth has `teamShade` 1.0 (question 1).
+- **Tests.** New `game/tests/LastBuildingsTest` (headless, in the loop; the types are the manifest's kit entries outside the
+  Whirlwind, no id literal): (M) triangles, one surface, the `team` material, a 64 / 128 atlas; (H) the M6-V26 fit
+  recomputed from each file, the Teblor height x 1.25, `FitMargin` inside the footprint, base on the ground; per faction (T)
+  each at a terrace's foot and edge, (P) its faction's worker in front selected by a click at zoom 20, 40 and 60, every 12th
+  model pixel at zoom 40 selecting the building (40 to 97 a type), the bar over the drawn top on screen at zoom 20, and (S) a
+  site of the first type that needs no tech (the Corral, the Stables; their required building spawned first) drawn as its box
+  with its bar on every sync while a site (905 / 908 of them) and the model on the sync it finishes, the Cairn's shot at
+  `ModelShotShare` of its 7.27 m top; (F) models off and files missing give the boxes, an LFS pointer for the Corral its box
+  and one warning; (3) a Malazan, a Whirlwind and a Teblor seat with every type of each: 30 buildings drawn as models and
+  every manifest type among them. Windowed with `-- --shots <dir>` it saves the pictures of criterion 6 and prints the
+  `LUMA` lines (mode and median).
+- **Scenes adapted, no row deleted (criterion 9).** `BuildingModelTest`: the seven types' triangles per tile pinned (the
+  Cairn's on purpose: M6-V30's tower had team 59, `Wood` 336, `Wood_Light` 37); the "type without a model stays a box" row,
+  which no faction's pass can run now, runs once more in a match whose model folder is empty; a site's Age II halls are
+  spawned before its required buildings (player 1's first Teblor site is the Stables, whose War Lodge they hold) with two
+  on-map spare spots (the old spot is past the map's south edge for the west block, never needed before); a spawn the sim
+  refuses tries the next open anchor (the Armory site's watcher house). `QaM6V26Test`: the reuse row's slot is taken by a
+  site (always its box) of a model type when no type is a box; a razed site player 0 can't pay for is built by player 1.
+  `ViewHardenVh9Test`: the box type's rows ((P1)'s second, (P1b), (P2)) run in a match of their own with
+  `BuildingViews.UseModels = false` on the same spots ((P2) takes the Longhouse again, its first runs' type), (P3) in a fresh
+  match with models and the five types no spot takes in one more, each fresh match and (K) with a keep-alive Garrison Keep
+  first (the data's first Malazan model type is now the Armory, which trains nothing: a player holding only it is out and
+  every later spawn was refused), and (K)'s fifteenth type on in rows north of the first. `TeblorBuildingsTest` (3): the
+  boxes are exactly the types the manifest does not list (it wanted some boxes). `WhirlwindBuildingsTest`, `QaV4Test`,
+  `TeblorViewTest` and `ViewHardenVh10Test` pass unchanged. The scene loop found one more: `QaM6V30Test` (C) builds every
+  Teblor model type, and the Stables' War Lodge was never spawned for its builder; it is now. The scene loop is 136 scenes.
+- **The import is deterministic (criterion 4).** Two full runs of `tools/import-assets.ps1` (3-4 minutes each): after the
+  first, all 177 pre-existing model, atlas, library and `.import` files but the Cairn's `.glb` and atlas were byte for byte
+  the same as before (SHA-256; the Cairn's two `.import` files too), with 24 new files; the second run left all 203 the same
+  as the first, and `git status` listed the same changes after it. `tools/import-assets.ps1` is unchanged (criterion 10 does
+  not apply).
+- **Cost** (rules 61 / 77; 1600 x 900, `ModelShots --bench 30 --vsync off`, the fifteen figure types mixed, the developer's
+  scene loop, test loop and smoke ended first). **Quiet window, 22:52-22:54** (no `testhost`, Godot or Blender running before
+  each run, checked by the runner): 400 figures + 60 building models of the 30 types at zoom 60 **6.61 ms** while 90 %+ alive
+  (worst 1 % 10.13, 902 draw calls; `main` 6.54 with 24 types), the same with boxes 6.52 ms (899), 400 capsules **0.82 ms**
+  (`main` 0.82). 43 of the 60 buildings were placed (the bench packs the 30 types' footprints round the crowds; all 43 on
+  screen and drawn as models). From 22:54 the sim track's `testhost`s ran without a gap (its long suites this session), so
+  the 1,000-figure row and the per-type rows are from a busy window: 1,000 figures **28.26 ms** (one `testhost`) and 29.80 ms
+  (two; 400 capsules beside it read 1.75, about x 2.1 the quiet window; `main` 16.42 quiet). Each new type alone, 60 of it
+  (`--bench-building-types`), run boxes, models, models, boxes back to back so the window's drift cancels (23:16-23:33, two
+  or three `testhost`s throughout), models / boxes, the mean of two each: Wickan Corral 12.91 / 13.15, Armory 13.02 / 13.18,
+  Cadre Tower 13.04 / 12.98, Engineers' Yard 13.72 / 13.29 (**+0.43**), Stables & Kennels 13.79 / 13.83, Breaker's Hall
+  13.39 / 13.64, Stone Cairn 13.14 / 13.17 ms. No type is near the +1 ms finding bar (at x 2.1 the largest, the Yard's +0.43,
+  is about +0.2 quiet). A first, one-way pass in a window whose load was falling read the Cairn +0.95 (7.56 / 6.61, the boxes
+  run last); the ABBA pass read it -0.03. The quiet-window 1,000-figure and per-type figures are the Producer's re-run at
+  the ACCEPT (rule 77). Nothing is computed per frame.
+- **Questions for the Producer (rule 67), each with a recommendation:**
+  1. **The Cairn's cloth is brighter than any other model's team part** (`teamShade` 1.0 against 0.8) and its stones nearly
+     black (lit to 50). At 0.8 the four dark colours read 72-87 on its mostly upright cloth, and no stone keeps all eight 30
+     levels away; at 1.0 with this stone the closest is Cobalt at 31. Recommendation: keep; the alternative is 0.8 with a
+     near-black stone (lit about 40), which loses the stones' shading.
+  2. **The Armory's (and every Malazan roof's) dark timber is within 30 levels of Iron, Crimson, Cobalt and Violet** (8-24 on
+     the median): the beams over its roofs are its largest non-team part. The roof reads against the grey stone and by hue.
+     Recommendation: accept for now; a lighter Malazan `Wood` is a manifest change to all ten Malazan models (a look task with
+     the owner's pictures).
+  3. **The Wickan Corral is the pack's farm barn with its fence, no hide tent:** the Wickan are steppe horsemen, and a hide
+     yurt beside the barn is a few kit parts. Recommendation: keep the barn (the Malazan grey stone the base shares); the tent
+     is a manifest edit if the owner wants the Wickan read.
+  4. **The Breaker's Hall carries the pack's flags on its deck, as the Javelin Ground's tower does.** Recommendation: keep;
+     the square hall, the boulders and the maul tell it apart at zoom 40.
+  5. **A first import of a new model once left its atlas `.import` as the import script's stub** (185 bytes: the Stables'
+     atlas on its first `-Only` run, the second Godot import did not fill it in) and the script still printed `IMPORT ASSETS
+     PASS`; the game then could not load the model. A second run fixed it. Not reproduced since (bug ids 1950-1959 are free
+     for it). Recommendation: QA or a later hardening task checks that every `.import` the script wrote has Godot's
+     `[deps]` section before `PASS`.
+
 ## Vision, detection, fog
 
 Fog of war and the high-ground rule are in since M4-3a (`sim/Rts.Sim/Vision/`); the last-known building ghosts, buildings

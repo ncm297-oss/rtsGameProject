@@ -43,7 +43,8 @@ namespace Rts.Game.Tests;
 /// LFS pointer in place of one file gives that box and exactly one warning (the loop reads the log for <c>ERROR</c>).</item>
 /// <item>(3) Three factions in one match (Malazan, Whirlwind, Teblor), every building type of each: drawn as its model exactly
 /// when its file is there (M6-V31: the Whirlwind's are models too; the count is read from the files, never a literal), a model
-/// at its fitted height x its faction's <c>scale</c>.</item>
+/// at its fitted height x its faction's <c>scale</c>; M6-V32: the boxes are exactly the types the manifest does not list (none:
+/// all 30 are models).</item>
 /// </list>
 /// Windowed with <c>-- --shots &lt;dir&gt;</c> it saves <c>m6v30-&lt;id&gt;-40m</c> / <c>-20m</c> for each Teblor model (a
 /// Gatherer and a Warrior before it), <c>m6v30-base-40m</c> / <c>-40m-gray</c> / <c>-60m</c> (one Teblor base, Warriors beside
@@ -591,8 +592,14 @@ public partial class TeblorBuildingsTest : Node
             Check(ok, $"(3) {def.Key} (player {B.Owner[i]}): drawn as model {_views.ShownAsModel(i)}, its file there {file}");
             if (file) models++; else boxes++;
         }
-        GD.Print($"(3) three factions in one match: {models} buildings drawn as models, {boxes} as boxes");
-        Check(models > 0 && boxes > 0, $"(3) {models} models and {boxes} boxes");
+        // M6-V32: the boxes are exactly the spawned types the manifest has no entry for (none since M6-V32: all 30 are models;
+        // before, the four Malazan and two Teblor box types, and this row wanted some).
+        var listed = new HashSet<string>();
+        foreach (JsonNode? e in _entries) listed.Add((string)e!["id"]!);
+        int unlisted = 0;
+        for (int i = 0; i < B.Capacity; i++) if (B.Alive[i] && !listed.Contains(_data.Buildings[B.TypeId[i]].Key)) unlisted++;
+        GD.Print($"(3) three factions in one match: {models} buildings drawn as models, {boxes} as boxes ({unlisted} of a type the manifest does not list)");
+        Check(models > 0 && boxes == unlisted, $"(3) {models} models and {boxes} boxes, {unlisted} of a type the manifest does not list");
         await EndMatch();
     }
 

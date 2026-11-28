@@ -26,6 +26,9 @@ namespace Rts.Game.Tests;
 /// unit selects, at the closest, default and farthest zoom; (P2) a box type at data scale 1.25 (a Teblor building) is picked
 /// at the height it is drawn (a click between the old 3 m box's top and its 3.75 m top selects it); (P3, measured) the share of
 /// the sampled pixels inside each model type's pick box but off its model that select it, at zoom 20, 40 and 60.
+/// M6-V32 (every type a model): the box type's rows ((P1)'s second, (P1b), (P2)) run in a match of their own with
+/// <see cref="BuildingViews.UseModels"/> off on the same spots, (P3) in a fresh match with models (and the types no spot takes
+/// in one more); a keep-alive Garrison Keep first in each fresh match and in (K), whose rows take the fifteenth type on north.
 /// (C) The asset manifest's colours against the setup's player colours (ui.json): the Priest's non-team tints and props are
 /// at least <see cref="MinDistance"/> (RGB 0-255, Euclidean) from the Bone colour its team parts take, and no non-team tint or
 /// prop of the Priest or the Zealot is within it of Crimson; every model type against every colour is printed (a table).
@@ -197,16 +200,30 @@ public partial class ViewHardenVh9Test : Node
 
     private async Task PickRows()
     {
-        StartMatch("--players", "2", "--no-fog", "--no-combat", "--faction", "1", "malazan", "--faction", "2", "teblor", "--resources", "high");
+        string[] matchArgs = { "--players", "2", "--no-fog", "--no-combat", "--faction", "1", "malazan", "--faction", "2", "teblor", "--resources", "high" };
+        StartMatch(matchArgs);
         int keep = _data.FindBuilding("malazan_garrison_keep");
         int boxType = -1;
         int malazan = _data.FindFaction("malazan");
         for (int t = 0; t < _data.Buildings.Length && boxType < 0; t++)
             if (_data.Buildings[t].Faction == malazan && !_views.Models!.Has(t) && _data.Buildings[t].FootprintWidth == 3) boxType = t;
+        // M6-V32: every Malazan type is a model, so the box type's rows ((P1)'s second, (P1b) and (P2)) take the first 3 x 3
+        // Malazan type and run in a match of their own with BuildingViews.UseModels off, on the same spots; (P3) then runs in a
+        // fresh match with models.
+        bool boxesOff = boxType < 0;
+        for (int t = 0; t < _data.Buildings.Length && boxType < 0; t++)
+            if (_data.Buildings[t].Faction == malazan && _data.Buildings[t].FootprintWidth == 3) boxType = t;
         if (!Check(keep >= 0 && _views.Models!.Has(keep) && boxType >= 0, "(P1) no Keep model or no box type")) { await EndMatch(); return; }
         NVector2 near = StartLayout.Block(W.NavGrid, 1, west: true, 1f)[0] + new NVector2(-30f, 0f);
         foreach (int type in new[] { keep, boxType })
         {
+            if (type == boxType && boxesOff)
+            {
+                await EndMatch();
+                BuildingViews.UseModels = false;
+                StartMatch(matchArgs);
+                KeepAlive0();
+            }
             BuildingDef def = _data.Buildings[type];
             int slot = Spawn(0, type, near);
             near += new NVector2(0f, 26f);
@@ -227,11 +244,12 @@ public partial class ViewHardenVh9Test : Node
                 if (!Check(_sel.TryScreenPosition(unit, out Vector2 p), $"(P1) {def.Key}: the unit is behind the camera")) continue;
                 Click(p);
                 bool picked = _sel.Selection.Contains(new EntityHandle(unit, W.Units.Generation[unit])) && _sel.SelectedBuilding < 0;
-                string msg = $"(P1) {def.Key} ({(_views.Models!.Has(type) ? "model" : "box")}) at zoom {zoom}: a click on the laborer standing in front selected "
+                string msg = $"(P1) {def.Key} ({(_views.ShownAsModel(slot) ? "model" : "box")}) at zoom {zoom}: a click on the laborer standing in front selected "
                              + (picked ? "the laborer" : _sel.SelectedBuilding == slot ? "the building" : $"{_sel.Selection.Count} units, building {_sel.SelectedBuilding}");
                 GD.Print($"  {msg}");
                 Check(picked, msg);
             }
+            if (type == boxType) Check(!_views.ShownAsModel(slot) && _views.BoxOf(slot).Visible, $"(P1) {def.Key}: not drawn as its box");
         }
         // (P1b) Partly hidden: a Laborer just behind the box type (north, away from the camera), the box covering its body
         // centre on the click's ray but its head showing over the box: a click on it is still the Laborer.
@@ -263,10 +281,18 @@ public partial class ViewHardenVh9Test : Node
                 Check(picked, $"(P1b) a laborer whose head shows over {def.Key} was not selected by a click on it");
             }
         }
+        if (boxesOff)
+        {
+            await ScaledBoxRow();
+            await EndMatch();
+            BuildingViews.UseModels = true;
+            StartMatch(matchArgs);
+        }
 
         // (P3) every model type's pick box against its model (measured). M6-V28: six model types, two rows of three east of
         // the P1 column (one column 26 m a type ran off the open ground past the second).
         int p3 = 0;
+        var later = new List<int>();
         foreach (int type in ManifestModelTypes())
         {
             // M6-V30: the seventh type on (the Teblor's eight) in rows of three east of the first six, whose spots are unchanged
@@ -275,7 +301,7 @@ public partial class ViewHardenVh9Test : Node
             // west of the first six (a fourth row east ran off the open ground).
             int slot;
             if (p3 < 14)
-                slot = Spawn(0, type, p3 < 6 ? near + new NVector2(26f * (p3 % 3), 26f * (p3 / 3)) : near + new NVector2(78f + 26f * ((p3 - 6) % 3), 26f * ((p3 - 6) / 3)));
+                slot = Spawn(0, type, P3Spot(near, p3));
             else
             {
                 // The first of the spare spots (four columns west of the first six, three rows; then the east block's free
@@ -285,21 +311,55 @@ public partial class ViewHardenVh9Test : Node
                     if (!_spareUsed[k] && (slot = Spawn(0, type, near + SpareSpots[k])) >= 0) _spareUsed[k] = true;
             }
             p3++;
+            // M6-V32: a type no spot of this match takes (thirty model types) is measured in a fresh match below.
+            if (slot < 0 && p3 > 14) { later.Add(type); continue; }
             if (!Check(slot >= 0, $"(P3) {_data.Buildings[type].Key} not spawned")) continue;
             _views.Sync(W);
             await ShareRow(slot);
         }
+        if (later.Count > 0)
+        {
+            // M6-V32: the rest at the first fourteen spots of a fresh match.
+            GD.Print($"  (P3) {later.Count} more model types in a fresh match: {string.Join(", ", later.ConvertAll(t => _data.Buildings[t].Key))}");
+            await EndMatch();
+            StartMatch(matchArgs);
+            KeepAlive0();
+            for (int j = 0; j < later.Count; j++)
+            {
+                int slot = j < 14 ? Spawn(0, later[j], P3Spot(near, j)) : -1;
+                if (!Check(slot >= 0, $"(P3) {_data.Buildings[later[j]].Key} not spawned")) continue;
+                _views.Sync(W);
+                await ShareRow(slot);
+            }
+        }
 
-        // (P2) The Teblor hall (data scale 1.25, a box; the type a player may spawn first): a click on its back edge between 3 m
-        // and its 3.75 m top selects it.
-        // M6-V30: the Longhouse is a model now, so the row takes the first Teblor type still drawn as a box at a scale above 1
-        // (the Stables & Kennels), after a Longhouse of player 1's away from the spot (a hall comes first).
+        if (!boxesOff) await ScaledBoxRow();
+        _camera.SetZoom(CameraLimits.DefaultZoom);
+        await EndMatch();
+    }
+
+    // M6-V32: a Garrison Keep for player 0 away from the rows, first in a fresh match: the first box or later type is one that
+    // trains nothing (the Armory), and a player whose only building trains nothing is out at once.
+    private void KeepAlive0() =>
+        Check(Spawn(0, _data.FindBuilding("malazan_garrison_keep"), StartLayout.Block(W.NavGrid, 1, west: true, 1f)[0] + new NVector2(-60f, -30f)) >= 0, "no keep-alive Garrison Keep");
+
+    // (P3)'s first fourteen spots: two rows of three east of the P1 column, then rows of three further east.
+    private static NVector2 P3Spot(NVector2 near, int i) =>
+        i < 6 ? near + new NVector2(26f * (i % 3), 26f * (i / 3)) : near + new NVector2(78f + 26f * ((i - 6) % 3), 26f * ((i - 6) / 3));
+
+    // (P2) The Teblor hall (data scale 1.25, a box; the type a player may spawn first): a click on its back edge between 3 m
+    // and its 3.75 m top selects it.
+    // M6-V30: the Longhouse is a model now, so the row takes the first Teblor type still drawn as a box at a scale above 1
+    // (the Stables & Kennels), after a Longhouse of player 1's away from the spot (a hall comes first). M6-V32: every Teblor
+    // type is a model; the row runs in (P1)'s models-off match, where the Longhouse is a box again (the first runs' row).
+    private async Task ScaledBoxRow()
+    {
         int scaled = -1;
         int teblor = _data.FindFaction("teblor");
         for (int t = 0; t < _data.Buildings.Length && scaled < 0; t++)
-            if (_data.Buildings[t].Faction == teblor && _data.Buildings[t].Slot == BuildingSlot.TownHall && _data.Buildings[t].Scale > 1.01f && !_views.Models!.Has(t)) scaled = t;
+            if (_data.Buildings[t].Faction == teblor && _data.Buildings[t].Slot == BuildingSlot.TownHall && _data.Buildings[t].Scale > 1.01f && _views.Models?.Has(t) != true) scaled = t;
         for (int t = 0; t < _data.Buildings.Length && scaled < 0; t++)
-            if (_data.Buildings[t].Faction == teblor && _data.Buildings[t].Scale > 1.01f && !_views.Models!.Has(t)) scaled = t;
+            if (_data.Buildings[t].Faction == teblor && _data.Buildings[t].Scale > 1.01f && _views.Models?.Has(t) != true) scaled = t;
         if (scaled >= 0 && _data.Buildings[scaled].Slot != BuildingSlot.TownHall)
             for (int t = 0; t < _data.Buildings.Length; t++)
                 if (_data.Buildings[t].Faction == teblor && _data.Buildings[t].Slot == BuildingSlot.TownHall)
@@ -315,6 +375,7 @@ public partial class ViewHardenVh9Test : Node
             if (Check(slot >= 0, $"(P2) {def.Key} not spawned"))
             {
                 _views.Sync(W);
+                Check(!_views.ShownAsModel(slot) && _views.BoxOf(slot).Visible, $"(P2) {def.Key}: not drawn as its box");
                 NVector2 c = Centre(slot);
                 float g = TerrainHeight.At(W.Heightmap, c.X, c.Y), drawn = BuildingViews.DrawnHeight(def);
                 float z0 = c.Y - def.FootprintHeight * MapConstants.CellSize / 2f;
@@ -333,8 +394,6 @@ public partial class ViewHardenVh9Test : Node
                 Check(!overHit, $"(P2) {def.Key}: a click 0.3 m over its drawn top picks it");
             }
         }
-        _camera.SetZoom(CameraLimits.DefaultZoom);
-        await EndMatch();
     }
 
     // M6-V31: (P3)'s spots for the fifteenth model type on, offsets from its first spot, tried in order.
@@ -477,14 +536,19 @@ public partial class ViewHardenVh9Test : Node
     {
         StartMatch("--players", "2", "--no-fog", "--no-combat", "--faction", "1", "malazan", "--resources", "high");
         NVector2 start = StartLayout.Block(W.NavGrid, 1, west: true, 1f)[0] + new NVector2(0f, 30f);
+        // M6-V32: a Garrison Keep first, away from the rows: the data's first Malazan model type is now the Armory, which
+        // trains nothing, and a player whose only building trains nothing is out at once (every later spawn refused).
+        Check(Spawn(0, _data.FindBuilding("malazan_garrison_keep"), start + new NVector2(-40f, -30f)) >= 0, "(K) no keep-alive Garrison Keep");
         int k0 = 0;
         for (int type = 0; type < _data.Buildings.Length; type++)
         {
             if (!_views.Models!.Has(type)) continue;
             BuildingDef def = _data.Buildings[type];
             // M6-V30: rows of seven, 26 m apart (fourteen model types in one row of 16 m steps ran off the map); the first six
-            // keep their spots.
-            int slot = Spawn(0, type, start + new NVector2(16f * (k0 % 7), 26f * (k0 / 7)));
+            // keep their spots. M6-V32: the first fourteen keep theirs; the fifteenth on (thirty model types) in rows of seven
+            // north of the first (a third row south runs off the map).
+            NVector2 spot = k0 < 14 ? start + new NVector2(16f * (k0 % 7), 26f * (k0 / 7)) : start + new NVector2(16f * (k0 % 7), -26f * ((k0 - 14) / 7 + 1));
+            int slot = Spawn(0, type, spot);
             k0++;
             if (!Check(slot >= 0, $"(K) {def.Key} not spawned")) continue;
             _views.Sync(W);
