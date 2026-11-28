@@ -15799,6 +15799,33 @@ worker, which M6-S13's rule always counted, and only after a drop-off price of a
 not run while the bank can buy the Depot; once the Laborer builds it, the paid site and the 25 wood left are spent for the
 528 ticks it is a site, then not).
 
+**A2. The computer player's side of the clause (docs/01 2026-11-27-1857 (3); `BuildOrderExecutor.HallFirst` /
+`SmallDropOff`).** *What an AI seat did on the base* with a live worker, no finished drop-off, no drop-off site and a bank
+that pays for its faction's small drop-off but not for the hall: the hall rebuild comes first (`HallFirst`: no hall, a
+worker alive); its Build fails on the cost, and while the hall's cost is fillable (each kind the bank lacks has a node the
+seat knows and may gather, `Fillable`; with no drop-off every known node is in reach) the hall's cost becomes the think's
+reserve (`HallReserved`) and `HallFirst` returns true, so no build-order step is worked (a reopened Depot step included),
+the house rule waits, and production spends only above the reserve. Its gatherers fill a load, find no drop-off, stand
+idle and are sent to gather again at every think (the trace in `Ai/SmallDropOffTests` on the base: Gathers only, no Build,
+6,000 ticks, all three factions). So it **never built the small drop-off** and never reached the hall's price: a seat the
+clause (A) calls able to train would have held a match open for good. Only with no node known of a kind the hall's cost
+lacks did `HallFirst` give up and let the steps run (then a reopened drop-off step could rebuild it).
+
+*The rule now:* inside `HallFirst`, after the pending hall / drop-off Build is judged and before the hall's own Build, a
+seat that cannot pay for the hall now, has no finished drop-off (`HasDropOff`) and no drop-off site of its own builds the
+cheapest drop-off type of its faction it can pay for now (gold, then wood, then data order), placed by the executor's
+placement (`TryBuild`, the ring search) round the known node it may gather (not marked dropped) nearest the rebuild centre,
+else round the rebuild centre; from the whole bank (the hall's reserve is named only after this and does not hold it). Its
+Build rides `Blackboard.HousePending` as the hall's does (one base Build at a time; judged at the next think, by when its
+site counts as a drop-off being built, so the hall's reserve takes over as before). With a bank that pays for the hall it
+rebuilds the hall as before. 45 lines; no new saved field (the pending Build is the saved `HousePending`).
+
+Tests: `Ai/SmallDropOffTests` (criterion 4): for each shipped faction, the flat scene's AI seat 0 loses its hall with five
+workers, both mines and the forest known, and a bank of the small drop-off's price plus 25 wood: the Build of the Depot /
+Supply Cache / Woodcutters' Lodge is sent at tick 1, the building stands at 501 and the bank's gold rises from 0 (110 to
+135 gold 2,000 ticks on: the workers deliver there); red on the base for all three (no Build in 6,000 ticks). Guard (green
+on the base): a bank of the hall's price plus some rebuilds the hall first, no small drop-off sent.
+
 
 ## Testing strategy
 

@@ -553,7 +553,10 @@ match's draw clock runs, its countdown line sits at the top centre under the ale
   rebuilt only when the population is within `rules.json` `ai.houseWhenPopWithin` (2) of its cap, the test it builds a
   new one by, and never at the hard cap (M5-H6, BUG-1116: a beaten side no longer rebuilds houses it doesn't need). With no Town Hall left and a worker alive, the Town Hall comes
   before every other step: on its old spot when that is free, else as near it as a site is, banking for it when it can't
-  pay yet (army production spends only what is above its cost). A lost expansion is not rebuilt yet (built in M5-4d
+  pay yet (army production spends only what is above its cost). If it cannot pay for the Town Hall yet and has no finished
+  drop-off and none being built, it first builds its faction's cheapest drop-off it can pay for (the Depot, Supply Cache or
+  Woodcutters' Lodge) by the nearest resource it knows, so its workers can deliver again while it saves for the hall
+  (M6-S15, docs/01's 2026-11-27-1857 row (3)). A lost expansion is not rebuilt yet (built in M5-4d
   slice 2; [03 Implementation (M5-4d slice 2)](03-technical-design.md#implementation-m5-4d-slice-2)). A side left with
   fewer workers (alive and in training) than `rules.json` `ai.minWorkers` (4) trains one a think at a finished building
   that trains workers, when it has the gold for one and, with any worker left, the population room (counting the workers
