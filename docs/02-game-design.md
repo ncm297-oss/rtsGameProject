@@ -539,6 +539,13 @@ match's draw clock runs, its countdown line sits at the top centre under the ale
   round 2, BUG-1153; [03 Implementation (M5-9a)](03-technical-design.md#implementation-m5-9a)). Waiting for that unit
   never stops the worker floor below: a starved side short of workers still trains them, since a worker is its only
   way back to the resource it lacks (M6-SH2, BUG-1534, the Producer's ruling; a floor since M6-S14).
+- A side spends what it has (M6-S15, BUG-1890, docs/01's 2026-11-27-1857 row (4)): when the unit it would train next can
+  never be paid for (the same test as above: short of a resource no income can bring, whatever its army's size and whether
+  or not its base is raided), it trains instead the most wanted unit of its army mix it can pay for now, and with none of
+  those any unit of its faction a free building of its own can train now, the worker included (one a think, as usual).
+  Money it is saving for a build-order step or the Town Hall holds these buys only while it could ever fill that saving (a
+  resource it knows where to gather and somewhere to deliver it); a side that still knows a mine or forest of the resource
+  it lacks waits for its unit as before.
 - When its own gold is spent the AI expands to the far mines with a depot: short of gold for the unit it would train next,
   with no worker on gold and no gold mine it knows, it sends a worker to look at the start locations no player took, and
   once it has seen a free mine within `rules.json` `ai.farExpandReach` (384 m) of its Town Hall with no enemy drop-off by

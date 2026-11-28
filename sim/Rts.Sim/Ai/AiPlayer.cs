@@ -378,6 +378,14 @@ internal sealed partial class AiPlayer
     internal bool ReserveShortWood { get; private set; }
 
     /// <summary>
+    /// M6-S15 C (BUG-1890): whether the seat could ever pay this think's reserved cost in full: each kind the bank lacks has a
+    /// node it knows and may gather (<see cref="KnowsNode"/>) and the seat has somewhere to deliver it (a finished drop-off of
+    /// its own, or a drop-off site); false with no reserve. Only a fillable reserve holds production's
+    /// fall-back buys (<see cref="ProductionManager"/>). Think scratch, as the reserve.
+    /// </summary>
+    internal bool ReserveFillable { get; private set; }
+
+    /// <summary>
     /// M5-4g (BUG-1021, BUG-1025): whether the build order may name a reserved step this think: while the base is not
     /// defended and the army is at least <c>ai.reserveArmyShare</c> of the opening's wave in both the wave's measures, its
     /// half-pop (<c>attack.minArmyPop</c>) and its gold + wood (<c>attack.minArmyCost</c>), each times the difficulty's
@@ -412,6 +420,7 @@ internal sealed partial class AiPlayer
         ReserveStep = -1;
         ReserveGold = ReserveWood = 0;
         ReserveShortGold = ReserveShortWood = false;
+        ReserveFillable = false;
         HallReserved = false;
         _knowsGold = _knowsWood = 0;
         _reachLifted = 0;
@@ -434,6 +443,18 @@ internal sealed partial class AiPlayer
         ReserveWood = woodKnown ? wood : 0;
         ReserveShortGold = goldKnown && Gold < gold;
         ReserveShortWood = woodKnown && Wood < wood;
+        // M6-S15 C: income can reach the cost only with a node to gather and somewhere to deliver (a finished drop-off of its
+        // own, or one being built); a seat with neither has no income at all, so its reserve can never be filled.
+        bool income = HasDropOff || HasDropOffSite();
+        ReserveFillable = (Gold >= gold || goldKnown && income) && (Wood >= wood || woodKnown && income);
+    }
+
+    /// <summary>M6-S15: whether a drop-off building of the seat's stands as a site (this think's census).</summary>
+    internal bool HasDropOffSite()
+    {
+        for (int k = 0; k < OwnBuildingCount; k++)
+            if (OwnBuildingSites[k] && Data.Buildings[OwnBuildingTypes[k]].DropOff) return true;
+        return false;
     }
 
     /// <summary>M5-4d slice 2: the think's reserve is the Town Hall rebuild's cost (<see cref="HallReserved"/>; the no-node guard as <see cref="SetReserve"/>'s).</summary>
@@ -738,6 +759,30 @@ internal sealed partial class AiPlayer
         for (int k = 0; k < mix.Units.Length; k++)
             if (CanEverPay(mix.Units[k], ref gold, ref wood)) return false;
         return true;
+    }
+
+    /// <summary>
+    /// M6-S15 C (BUG-1890, docs/01 2026-11-27-1857 (4)): whether production's pick can never be paid for: the seat is short for
+    /// it now (<see cref="ShortForPick"/>, <see cref="Starved"/>'s (i)) and income can never close the gap (<see cref="Starved"/>'s
+    /// (ii): that unit, or with no pick every entry of the current composition, short of a kind it can neither gather at nor
+    /// knows a node of it may gather). Not (iii), the army size, and not switched off while the base is defended. Walks the
+    /// nodes uncached (the census's gold walk is left as it was found); allocates nothing.
+    /// </summary>
+    internal bool PickNeverPayable()
+    {
+        if (!ShortForPick(out int pick)) return false;
+        byte census = _censusGoldWalk, gold = 0, wood = 0;
+        _censusGoldWalk = 0;
+        bool never = true;
+        if (pick >= 0) never = !CanEverPay(pick, ref gold, ref wood);
+        else
+        {
+            AiComposition mix = CurrentMix();
+            for (int k = 0; k < mix.Units.Length && never; k++)
+                if (CanEverPay(mix.Units[k], ref gold, ref wood)) never = false;
+        }
+        _censusGoldWalk = census;
+        return never;
     }
 
     /// <summary>

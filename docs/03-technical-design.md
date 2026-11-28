@@ -15826,6 +15826,36 @@ Supply Cache / Woodcutters' Lodge is sent at tick 1, the building stands at 501 
 135 gold 2,000 ticks on: the workers deliver there); red on the base for all three (no Build in 6,000 ticks). Guard (green
 on the base): a bank of the hall's price plus some rebuilds the hall first, no small drop-off sent.
 
+**C. "Spends what it has" (BUG-1890; docs/01 2026-11-27-1857 (4); `ProductionManager.SpendInstead`,
+`AiPlayer.PickNeverPayable`, `AiPlayer.ReserveFillable`).** When production's pick cannot be sent this think and it can
+never be paid for (`PickNeverPayable`: `ShortForPick`, `Starved`'s (i), and `Starved`'s (ii) as it reads it, `CanEverPay`:
+the pick, or with no pick every entry of the current composition, short of a kind with no own worker at it and no known
+node of it the seat may gather), production trains instead, one Train a think as before: (1) the most under-weighted
+composition entry it can pay for now (`Pick`'s share order, its producer test and the unit limit, plus "payable now"), else
+(2) the first unit type of its faction in data order, the worker included, that it can pay for now at a finished own
+building with an empty queue (`TryTrain` with an empty queue only: population room, requires and the unit limit as the
+train check has them). **Not** `Starved`'s (iii) (the army size). **A defended base does not switch it off** (the
+Producer's default, kept): the walk then hides nodes within `ai.workerFleeRadius` of the defense point (as `KnowsNode`
+does), so a raid on the only mine can make the pick read "never" for its length and production buys a payable unit of the
+mix instead of waiting; that is a seat spending its bank during a raid, which is play, not harm (question 2 below). A
+reserve holds these buys only while the seat could ever fill it (`ReserveFillable`, think scratch set by `SetReserve`):
+each kind the bank lacks of the reserved cost has a known node it may gather **and** the seat has somewhere to deliver (a
+finished drop-off or a drop-off site). The second half is the only way a reserve can be unfillable on today's code: a
+step's or the hall's reserve is named only when `Fillable` (a known node of each kind it lacks), so by nodes alone every
+named reserve is fillable; but a seat with no drop-off and none being built (one that cannot pay even the small drop-off,
+A2) has no income at all, and its reserve held its bank for good. A seat short for its pick that knows a node of the short
+kind it may gather waits as before. Nothing new saved (`ReserveFillable` cleared with the reserve; `PickNeverPayable`
+leaves the census's gold-walk cache as it found it).
+
+Tests: `Ai/SpendWhatItHasTests` (criterion 6; a Malazan Normal seat on the flat map, unexplored, every gold mine emptied,
+a Barracks, a Crossbow Range and a live Crossbowman, so the pick is the Heavy Infantry at 54 gold; red on the A2 tree,
+which plays as the base: production waited): 40 gold / 100 wood trains a Crossbowman at the first think; 50 gold / no wood
+(no mix unit payable) trains a Laborer; no hall and no drop-off (two Billets for the room), 74 wood (under the Depot), a
+Barracks step reserving 150 wood (build-order slack 0 so it reserves from the first think): the Crossbowman, which fits the
+bank but not above the reserve, is trained. Guards (green on the base): the same with the Keep standing (the reserve can be
+filled) holds it, no Train in four thinks; a gold mine left (a node of the short kind) waits for the Heavy. The twin (1,000
+ticks hash-equal) and a save between two thinks that follows the run for 1,000 ticks.
+
 
 ## Testing strategy
 
